@@ -20,11 +20,15 @@ state instead of re-deriving it, matching its style layout bit for bit so a
 pane's attributes cross as a `@bitCast`, putting the width tables behind a
 module seam. The parity gates would have forbidden all three.
 
-So this is a rewrite that steals selectively. One part of herdr could not be
-rewritten better, and that is the agent detection manifests in
-`data/agent-detection/`. They are gathered evidence rather than logic, so they
-come across verbatim with the rules that go with them. Everything else starts
-from nothing.
+So nothing comes across. herdr is AGPL-3.0-or-later and telar is MIT, which
+settles the question that judgement alone would have left open: reading it to
+learn what problem somebody hit is fine, and lifting a line is a licence
+violation.
+
+The detection manifests were the one thing worth copying, since they are
+gathered evidence rather than logic. They are gone too. telar will generate its
+own by watching agents run, which costs more up front and buys a better model
+than herdr's, where the maintainer tunes every manifest by hand and ships it.
 
 ## Scope
 
@@ -36,7 +40,7 @@ core that never turns into a product.
 - Run agents in panes, with a real terminal emulator behind each one
 - The sidebar: sessions, their state, their origin
 - Mouse and keyboard throughout, because this is a mouse-first TUI
-- Agent detection, driven by the manifests
+- Agent detection, from manifests telar generates by watching an agent run
 - Select and copy, including from a pane, unwrapped
 
 ### v1 does not
@@ -93,4 +97,7 @@ herdr for.
 
 ## Licence
 
-Not chosen yet.
+MIT. See `LICENSE`.
+
+telar carries no code from any copyleft project, which is what keeps that
+possible. `references/` explains the one place the question comes up.

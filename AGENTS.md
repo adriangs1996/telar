@@ -37,23 +37,32 @@ Where to look:
 - `src/platform/windows.rs` and `src/pty/`, for years of edge cases somebody hit.
   Read these before you write either. Guessing at pty and console behaviour is
   how you rediscover a bug somebody already paid for.
-- `src/detect/`, for how manifests are matched, and `CLAUDE.md` for the rules
-  that go with them.
+- `src/detect/`, for how manifests are matched and what a rule can gate on.
+  telar generates its own rather than shipping herdr's, so read this for the
+  shape of the problem and not for the answers.
 - `libghostty-vt.patches.md` and `vendor-patches/`, for which local patches
   exist against the emulator and what would make each one removable.
 - `migration/`, for the parity gates that were abandoned. Useful as a list of
   behaviours worth having, useless as a specification.
 
-Two things about the directory itself. It is **untracked**, so it may be absent
-on a fresh clone; `references/README.md` says how to recreate it. And herdr is
-**AGPL-3.0-or-later** while telar has no licence yet, which is why lifting a
-function across is a licensing decision and not a shortcut.
+The directory is **untracked**, so it may be absent on a fresh clone.
+`references/README.md` says how to recreate it.
 
-`data/agent-detection/` is the exception to all of this. Those manifests are
-copied verbatim and stay that way. They are evidence. Somebody drove each
-agent's real UI into each of its states and wrote down which controls are
-invariant. You cannot re-derive that at a desk, only re-gather it in front of a
-running agent.
+**There is no exception to this.** herdr is AGPL-3.0-or-later and telar is MIT,
+so copying a line across is a licence violation rather than a matter of taste.
+The detection manifests used to be the exception and are not any more: telar
+generates its own, from a running agent, and loads them from disk instead of
+compiling them in.
+
+## Licence
+
+telar is MIT, and stays that way by carrying nothing from a copyleft project.
+
+That is a constraint on what you add, not only on what you copy from herdr. A
+dependency under GPL, AGPL or MPL would make the combined work fall under that
+licence instead. Check before adding one. MIT, BSD, ISC, Apache-2.0 and the
+public domain are all fine; libghostty-vt is MIT, which is why it can be a
+dependency at all.
 
 ## Seams
 

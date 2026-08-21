@@ -32,13 +32,11 @@ itself), `website/`, `docs/`, `target/` and the `.git` directory.
 
 ## Licensing
 
-herdr is **AGPL-3.0-or-later**, dual-licensed with a commercial option. telar
-has not chosen a licence yet.
+herdr is **AGPL-3.0-or-later**, dual-licensed with a commercial option. telar is
+MIT. The two do not mix in one direction: AGPL material can absorb MIT material,
+never the reverse.
 
-Copying AGPL source into a public repository whose own licence is undecided is a
-decision to take deliberately, not one to arrive at through a convenient `cp`.
-So this directory stays untracked until Adrian decides otherwise.
-
-The same caution applies to the code itself: read herdr to learn what problem
-somebody hit and how they thought about it, then write telar's answer. Lifting a
-function across is how a rewrite quietly becomes a derivative work.
+So this directory stays untracked, and nothing in it travels into `src/`.
+Read herdr to learn what problem somebody hit and how they thought about it,
+then write telar's answer. Copying a function across is not a judgement call
+about originality any more. It is a licence violation.
