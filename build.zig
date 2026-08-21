@@ -31,6 +31,27 @@ pub fn build(b: *std.Build) void {
     telar.addImport("ghostty-vt", ghostty_vt);
     telar.addImport("unicode", unicode);
 
+    // The shipped binary. For this first milestone the runtime and client
+    // share one process, but the boundary already runs through a PTY and an
+    // emulated terminal rather than forwarding child output to the host.
+    const exe = b.addExecutable(.{
+        .name = "telar",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    exe.root_module.addImport("telar", telar);
+    exe.root_module.addImport("ghostty-vt", ghostty_vt);
+    b.installArtifact(exe);
+
+    const run_exe = b.addRunArtifact(exe);
+    run_exe.step.dependOn(b.getInstallStep());
+    if (b.args) |args| run_exe.addArgs(args);
+    b.step("run", "Run telar").dependOn(&run_exe.step);
+
     // ---------------------------------------------------------------------
     // The example
     // ---------------------------------------------------------------------
@@ -69,6 +90,8 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/edit.zig" },
         .{ .path = "src/select.zig" },
         .{ .path = "src/blit.zig", .vt = true, .libc = true },
+        .{ .path = "src/pty.zig", .libc = true },
+        .{ .path = "src/main.zig", .vt = true, .libc = true },
         .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
     };
     for (suites) |suite| {

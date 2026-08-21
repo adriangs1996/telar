@@ -60,6 +60,19 @@ pub const leave_sequence =
     "\x1b[?25h" ++
     "\x1b[?1049l";
 
+/// The host modes needed by a pane that currently owns all input. Mouse and
+/// paste modes stay off until telar can encode semantic input from the child's
+/// terminal modes. Forwarding either one unconditionally corrupts input for a
+/// program that did not request it.
+pub const pane_enter_sequence =
+    "\x1b[?1049h" ++
+    "\x1b[?25l" ++
+    "\x1b[2J";
+
+pub const pane_leave_sequence =
+    "\x1b[?25h" ++
+    "\x1b[?1049l";
+
 // The contract every platform file owes this one.
 //
 // A missing method on the *other* platform is otherwise invisible until
