@@ -1,13 +1,14 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const telar = @import("telar");
+const backend = @import("telar-backend");
+const frontend = @import("telar-frontend");
 
 const Io = std.Io;
 const File = Io.File;
-const platform = telar.platform;
-const pace = telar.pace;
-const term = telar.term;
-const pty = @import("pty.zig");
+const platform = frontend.platform;
+const pace = frontend.pace;
+const term = frontend.term;
+const pty = backend.pty;
 
 const version = "0.0.0";
 const output_chunk_size = 16 * 1024;
@@ -153,7 +154,7 @@ fn drawPane(
     force: bool,
 ) !void {
     try render_state.update(gpa, terminal);
-    _ = telar.blit.blit(screen.buffer(), screen.buffer().area(), render_state, .{
+    _ = backend.blit.blit(screen.buffer(), screen.buffer().area(), render_state, .{
         .cursor = true,
         .force = force,
     });

@@ -6,7 +6,7 @@
 //! the wrong answer has already been given.
 
 const std = @import("std");
-const Rect = @import("geometry.zig").Rect;
+const Rect = @import("telar-core").ui.Rect;
 
 // ---------------------------------------------------------------------------
 // Hit testing

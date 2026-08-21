@@ -2,7 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 const File = std.Io.File;
 
-const telar = @import("telar");
+const telar = @import("telar-frontend");
 const ui = telar.ui;
 const term = telar.term;
 const pace = telar.pace;

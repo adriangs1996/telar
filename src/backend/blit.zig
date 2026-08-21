@@ -1,7 +1,8 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const ui = @import("ui.zig");
-const sel = @import("select.zig");
+const core = @import("telar-core");
+const ui = core.ui;
+const sel = core.select;
 
 // Copying an emulated screen into our cell grid.
 //

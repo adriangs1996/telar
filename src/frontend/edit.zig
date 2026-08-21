@@ -18,7 +18,7 @@
 //! it, which is what lets every edge case be a two line test.
 
 const std = @import("std");
-const ui = @import("ui.zig");
+const ui = @import("telar-core").ui;
 
 /// A fixed capacity field.
 ///

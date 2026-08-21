@@ -44,21 +44,24 @@ focused, hover, scroll position, selection, what a modal is covering. All of it
 is disposable, because the runtime can rebuild everything that matters.
 
 `examples/sidebar.zig` is a mock of this against invented data. It is not the
-client, it is the thing that proved the drawing core can carry one.
+client, it proved the frontend can render core data.
 
-### The drawing core
+### Code packages
 
-Built already. Everything under `src/`, and none of it knows a runtime exists.
+The source tree enforces the process split before IPC exists. Both sides may
+import `telar-core`. Backend and frontend never import each other. `src/main.zig`
+is the temporary in-process bootstrap that composes them.
 
-|            |                                                                     |
-| ---------- | ------------------------------------------------------------------- |
-| `ui`       | rectangles, cells, the buffer, clipping, layered hit testing, focus |
-| `term`     | the cell diff, escape output, input parsing, OSC 52                 |
-| `pace`     | the frame budget, and which events fold into one frame              |
-| `edit`     | a text field, correct about clusters and columns                    |
-| `select`   | dragging text off the screen to copy it                             |
-| `blit`     | the adapter to libghostty-vt, the only file that knows both         |
-| `platform` | the only file that knows which operating system this is             |
+| Package          | Owns                                                               |
+| ---------------- | ------------------------------------------------------------------ |
+| `telar-core`     | cells, buffers, geometry, hit testing, focus, selection values    |
+| `telar-backend`  | child processes, PTYs, terminal emulation, VT-to-cell translation |
+| `telar-frontend` | host terminal, cell diff, input, pacing, editing, client platform  |
+
+The module roots are `src/core/root.zig`, `src/backend/root.zig` and
+`src/frontend/root.zig`. Put a type in core only when both processes need its
+data or operations. Ownership of a value still follows the runtime/client rule
+above; sharing its type does not make its state shared.
 
 ### One pane, end to end
 

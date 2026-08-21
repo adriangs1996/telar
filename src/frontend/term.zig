@@ -1,6 +1,6 @@
 const std = @import("std");
 const Io = std.Io;
-const ui = @import("ui.zig");
+const ui = @import("telar-core").ui;
 
 // The half of a TUI that speaks the terminal's language: the diff, the escape
 // sequences it turns into, and the parser for what comes back.

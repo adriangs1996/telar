@@ -14,22 +14,37 @@ pub fn build(b: *std.Build) void {
     // decides which implementation answers, which is what keeps the drawing
     // core liftable into a build with no emulator in it.
     const unicode = b.createModule(.{
-        .root_source_file = b.path("src/unicode.zig"),
+        .root_source_file = b.path("src/core/unicode.zig"),
         .target = target,
         .optimize = optimize,
     });
     unicode.addImport("ghostty-vt", ghostty_vt);
 
-    // The library itself, so the example consumes it the way anybody else
-    // would - which is the cheapest test there is of whether the public API is
-    // usable from outside.
-    const telar = b.addModule("telar", .{
-        .root_source_file = b.path("src/root.zig"),
+    // These module edges are the process boundary in code before IPC exists.
+    // Both sides may import core. They cannot import each other.
+    const core = b.addModule("telar-core", .{
+        .root_source_file = b.path("src/core/root.zig"),
         .target = target,
         .optimize = optimize,
     });
-    telar.addImport("ghostty-vt", ghostty_vt);
-    telar.addImport("unicode", unicode);
+    core.addImport("unicode", unicode);
+
+    const backend = b.addModule("telar-backend", .{
+        .root_source_file = b.path("src/backend/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    backend.addImport("telar-core", core);
+    backend.addImport("ghostty-vt", ghostty_vt);
+
+    const frontend = b.addModule("telar-frontend", .{
+        .root_source_file = b.path("src/frontend/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    frontend.addImport("telar-core", core);
 
     // The shipped binary. For this first milestone the runtime and client
     // share one process, but the boundary already runs through a PTY and an
@@ -43,7 +58,8 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    exe.root_module.addImport("telar", telar);
+    exe.root_module.addImport("telar-backend", backend);
+    exe.root_module.addImport("telar-frontend", frontend);
     exe.root_module.addImport("ghostty-vt", ghostty_vt);
     b.installArtifact(exe);
 
@@ -65,7 +81,7 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    sidebar.root_module.addImport("telar", telar);
+    sidebar.root_module.addImport("telar-frontend", frontend);
     b.installArtifact(sidebar);
 
     const run_sidebar = b.addRunArtifact(sidebar);
@@ -84,13 +100,14 @@ pub fn build(b: *std.Build) void {
         libc: bool = false,
     };
     const suites = [_]Suite{
-        .{ .path = "src/ui.zig" },
-        .{ .path = "src/term.zig", .libc = true },
-        .{ .path = "src/pace.zig" },
-        .{ .path = "src/edit.zig" },
-        .{ .path = "src/select.zig" },
-        .{ .path = "src/blit.zig", .vt = true, .libc = true },
-        .{ .path = "src/pty.zig", .libc = true },
+        .{ .path = "src/core/ui.zig" },
+        .{ .path = "src/core/select.zig" },
+        .{ .path = "src/frontend/ui.zig" },
+        .{ .path = "src/frontend/term.zig", .libc = true },
+        .{ .path = "src/frontend/pace.zig" },
+        .{ .path = "src/frontend/edit.zig" },
+        .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/pty.zig", .libc = true },
         .{ .path = "src/main.zig", .vt = true, .libc = true },
         .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
     };
@@ -104,7 +121,9 @@ pub fn build(b: *std.Build) void {
             }),
         });
         tests.root_module.addImport("unicode", unicode);
-        tests.root_module.addImport("telar", telar);
+        tests.root_module.addImport("telar-core", core);
+        tests.root_module.addImport("telar-backend", backend);
+        tests.root_module.addImport("telar-frontend", frontend);
         if (suite.vt) tests.root_module.addImport("ghostty-vt", ghostty_vt);
         test_step.dependOn(&b.addRunArtifact(tests).step);
     }
@@ -113,13 +132,13 @@ pub fn build(b: *std.Build) void {
     // the module seam is proven rather than asserted. Only this file's tests
     // run: the ones inside `ui.zig` assert real widths and cannot pass here.
     const unicode_fake = b.createModule(.{
-        .root_source_file = b.path("src/unicode_fake.zig"),
+        .root_source_file = b.path("src/core/unicode_fake.zig"),
         .target = target,
         .optimize = optimize,
     });
     const substitution = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/unicode_substitution_test.zig"),
+            .root_source_file = b.path("src/core/unicode_substitution_test.zig"),
             .target = target,
             .optimize = optimize,
         }),
@@ -212,7 +231,7 @@ pub fn build(b: *std.Build) void {
         const check = b.addObject(.{
             .name = b.fmt("platform-{s}", .{@tagName(query.os_tag.?)}),
             .root_module = b.createModule(.{
-                .root_source_file = b.path("src/platform.zig"),
+                .root_source_file = b.path("src/frontend/platform.zig"),
                 .target = b.resolveTargetQuery(query),
                 .optimize = .Debug,
             }),
