@@ -2,3 +2,9 @@
 zig-out/
 .DS_Store
 zig-pkg/
+
+# The herdr checkout under references/ is AGPL-3.0-or-later and belongs to
+# somebody else. It stays out of this repo's history on purpose; only the note
+# saying what it is and how to recreate it is tracked.
+references/*
+!references/README.md

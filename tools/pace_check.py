@@ -1,8 +1,16 @@
-"""Drives the real ui_spike binary through a pty and checks that a burst of
-input does not become a burst of frames."""
+"""Drives the built example through a pty and checks that a burst of input does
+not become a burst of frames.
+
+The unit tests use fake time, so they can prove the pacing arithmetic and
+nothing about the program. This drives the real binary over a real pty and reads
+the counters it prints on exit."""
 import os, pty, re, select, subprocess, sys, time
 
-BIN = "/Users/adriangonzalez/sandbox/mitm-spike/zig-out/bin/ui_spike"
+# Derived from this file, so the check cannot end up measuring some other
+# binary that happens to still be lying around - which is exactly what it did
+# when the path was absolute and the repo moved.
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BIN = os.path.join(REPO, "zig-out", "bin", "sidebar")
 FOOTER = re.compile(rb"frames=(\d+) absorbed=(\d+) dropped=(\d+) throttled=(\d+)")
 
 def run(burst, label):
