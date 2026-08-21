@@ -10,7 +10,7 @@ const Io = std.Io;
 pub const length_prefix_size = @sizeOf(u32);
 pub const max_frame_size = 2 * 1024 * 1024;
 
-pub const WriteFrameError = Io.Writer.Error || error{FrameTooLarge};
+pub const WriteFrameError = Io.Writer.Error || error{ FrameTooLarge, ConnectionClosed };
 
 pub const ReadFrameError = Io.Reader.Error || error{
     ConnectionClosed,
@@ -54,32 +54,42 @@ pub fn readFrame(reader: *Io.Reader, buffer: []u8) ReadFrameError![]u8 {
 /// another component.
 pub const SocketChannel = struct {
     stream: Io.net.Stream,
-    active: bool = true,
+    active: std.atomic.Value(bool) = .init(true),
 
     pub fn init(stream: Io.net.Stream) SocketChannel {
         return .{ .stream = stream };
     }
 
     pub fn send(channel: *SocketChannel, io: Io, payload: []const u8) WriteFrameError!void {
-        std.debug.assert(channel.active);
+        if (!channel.isActive()) return error.ConnectionClosed;
         var stream_writer = channel.stream.writer(io, &.{});
         try writeFrame(&stream_writer.interface, payload);
     }
 
     pub fn receive(channel: *SocketChannel, io: Io, buffer: []u8) ReadFrameError![]u8 {
-        std.debug.assert(channel.active);
+        if (!channel.isActive()) return error.ConnectionClosed;
         var stream_reader = channel.stream.reader(io, &.{});
         return readFrame(&stream_reader.interface, buffer);
     }
 
+    pub fn isActive(channel: *const SocketChannel) bool {
+        return channel.active.load(.acquire);
+    }
+
+    /// Interrupts pending reads and writes without releasing the descriptor.
+    /// The owner can wait for its I/O actors before calling `deinit`.
+    pub fn shutdown(channel: *SocketChannel, io: Io) void {
+        if (!channel.isActive()) return;
+        channel.stream.shutdown(io, .both) catch {};
+    }
+
     pub fn deinit(channel: *SocketChannel, io: Io) void {
-        if (!channel.active) return;
+        if (!channel.active.swap(false, .acq_rel)) return;
         // Closing a descriptor from another thread does not reliably wake a
         // blocking read on POSIX. Shutdown does, which lets a dead frontend
         // release its runtime connection while the reader actor is pending.
         channel.stream.shutdown(io, .both) catch {};
         channel.stream.close(io);
-        channel.active = false;
     }
 };
 

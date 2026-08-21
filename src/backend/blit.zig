@@ -22,12 +22,9 @@ const sel = core.select;
 //
 // What it must get right, and what a naive copy gets wrong:
 //
-//   - The pane has its own palette. An agent that runs OSC 4 changes what
-//     "colour 3" means inside its screen and nowhere else, so indices are
-//     resolved here rather than passed through for the outer terminal to
-//     interpret with its own table.
-//   - The pane has its own default foreground and background, which OSC 10/11
-//     can move. `.none` therefore resolves to the pane's defaults, not ours.
+//   - Unmodified defaults and palette entries stay semantic, so the outer
+//     terminal applies the user's theme. OSC 4/10/11 overrides become RGB here
+//     because they belong to this pane and must not leak into another one.
 //   - A wide character owns two columns and the emulator marks the second one
 //     `spacer_tail`. Emitting anything there prints half a glyph twice.
 
@@ -65,7 +62,13 @@ pub const Stats = struct {
 /// dirty are left untouched, which is what makes a mostly-still pane nearly
 /// free; the row flags are cleared as they are consumed, so a second blit with
 /// no intervening update copies nothing.
-pub fn blit(b: *ui.Buffer, area: ui.Rect, state: *vt.RenderState, opts: Options) Stats {
+pub fn blit(
+    b: *ui.Buffer,
+    area: ui.Rect,
+    terminal: *const vt.Terminal,
+    state: *vt.RenderState,
+    opts: Options,
+) Stats {
     var stats: Stats = .{};
 
     // `full` means global state moved - the palette, the default colours, the
@@ -90,7 +93,7 @@ pub fn blit(b: *ui.Buffer, area: ui.Rect, state: *vt.RenderState, opts: Options)
             stats.skipped += 1;
             continue;
         }
-        blitRow(b, area, y, row_cells[y].slice(), state.colors);
+        blitRow(b, area, y, row_cells[y].slice(), terminal, state.colors);
         if (opts.selection) |range| highlightRow(b, area, y, range);
         dirty[y] = false;
         stats.copied += 1;
@@ -100,7 +103,7 @@ pub fn blit(b: *ui.Buffer, area: ui.Rect, state: *vt.RenderState, opts: Options)
     // during a resize, and leaving the previous tenant's pixels there reads as
     // a rendering bug.
     while (y < area.h) : (y += 1) {
-        b.fill(area.row(y), " ", .{ .bg = rgb(state.colors.background) });
+        b.fill(area.row(y), " ", .{ .bg = defaultBackground(terminal, state.colors) });
     }
 
     // Applied after the rows, and to *every* row rather than only the dirty
@@ -159,6 +162,7 @@ fn blitRow(
     area: ui.Rect,
     y: u16,
     cells: std.MultiArrayList(vt.RenderState.Cell).Slice,
+    terminal: *const vt.Terminal,
     colors: vt.RenderState.Colors,
 ) void {
     const raws = cells.items(.raw);
@@ -175,6 +179,7 @@ fn blitRow(
         // memory.
         const style = translate(
             if (raw.style_id == 0) .{} else styles[x],
+            terminal,
             colors,
         );
 
@@ -212,7 +217,7 @@ fn blitRow(
             // without a style entry precisely because they are common, so the
             // colour comes off the cell itself.
             .bg_color_palette => b.setCell(area.x + x, area.y + y, " ", 1, .{
-                .bg = rgb(colors.palette[raw.content.color_palette.data]),
+                .bg = paletteColor(terminal, colors, raw.content.color_palette.data),
             }),
             .bg_color_rgb => {
                 const c = raw.content.color_rgb;
@@ -224,7 +229,9 @@ fn blitRow(
     // Columns the pane does not reach.
     var pad = width;
     while (pad < area.w) : (pad += 1) {
-        b.setCell(area.x + pad, area.y + y, " ", 1, .{ .bg = rgb(colors.background) });
+        b.setCell(area.x + pad, area.y + y, " ", 1, .{
+            .bg = defaultBackground(terminal, colors),
+        });
     }
 }
 
@@ -253,15 +260,19 @@ fn encode(out: *[ui.Cell.max_bytes]u8, base: u21, extra: []const u21) []const u8
 /// The attribute word is reinterpreted rather than copied field by field;
 /// `ui.Style.Flags` is declared to match it and a test in `ui.zig` fails if a
 /// libghostty-vt update moves a bit.
-fn translate(style: vt.Style, colors: vt.RenderState.Colors) ui.Style {
+fn translate(
+    style: vt.Style,
+    terminal: *const vt.Terminal,
+    colors: vt.RenderState.Colors,
+) ui.Style {
     return .{
-        .fg = resolve(style.fg_color, colors, colors.foreground),
-        .bg = resolve(style.bg_color, colors, colors.background),
+        .fg = resolve(style.fg_color, terminal, colors, .foreground),
+        .bg = resolve(style.bg_color, terminal, colors, .background),
         // Underline colour has no default of its own: unset means "use the
         // foreground", which the terminal already does when SGR 58 is absent.
         .underline_color = switch (style.underline_color) {
             .none => .default,
-            else => resolve(style.underline_color, colors, colors.foreground),
+            else => resolve(style.underline_color, terminal, colors, .foreground),
         },
         .flags = @bitCast(@as(u16, @bitCast(style.flags))),
     };
@@ -272,12 +283,41 @@ fn translate(style: vt.Style, colors: vt.RenderState.Colors) ui.Style {
 /// Passing an index through instead would let the outer terminal answer with
 /// its own palette, so an agent that recoloured its terminal would render in
 /// whatever the user's theme happens to map that slot to.
-fn resolve(c: vt.Style.Color, colors: vt.RenderState.Colors, fallback: vt.color.RGB) ui.Color {
+const DefaultColor = enum { foreground, background };
+
+fn resolve(
+    c: vt.Style.Color,
+    terminal: *const vt.Terminal,
+    colors: vt.RenderState.Colors,
+    default_color: DefaultColor,
+) ui.Color {
     return switch (c) {
-        .none => rgb(fallback),
-        .palette => |i| rgb(colors.palette[i]),
+        .none => switch (default_color) {
+            .foreground => defaultForeground(terminal, colors),
+            .background => defaultBackground(terminal, colors),
+        },
+        .palette => |i| paletteColor(terminal, colors, i),
         .rgb => |v| rgb(v),
     };
+}
+
+fn defaultForeground(terminal: *const vt.Terminal, colors: vt.RenderState.Colors) ui.Color {
+    if (terminal.modes.get(.reverse_colors)) return rgb(colors.foreground);
+    return if (terminal.colors.foreground.override) |color| rgb(color) else .default;
+}
+
+fn defaultBackground(terminal: *const vt.Terminal, colors: vt.RenderState.Colors) ui.Color {
+    if (terminal.modes.get(.reverse_colors)) return rgb(colors.background);
+    return if (terminal.colors.background.override) |color| rgb(color) else .default;
+}
+
+fn paletteColor(
+    terminal: *const vt.Terminal,
+    colors: vt.RenderState.Colors,
+    index: u8,
+) ui.Color {
+    if (terminal.colors.palette.mask.isSet(index)) return rgb(colors.palette[index]);
+    return .{ .indexed = index };
 }
 
 fn rgb(c: vt.color.RGB) ui.Color {
@@ -376,7 +416,7 @@ test "text lands in the cells the emulator put it in" {
     defer buf.deinit();
 
     try pane.write("hola");
-    _ = blit(&buf, .{ .x = 2, .y = 1, .w = 10, .h = 3 }, &pane.state, .{});
+    _ = blit(&buf, .{ .x = 2, .y = 1, .w = 10, .h = 3 }, &pane.term, &pane.state, .{});
 
     // Offset by the rectangle, not written at the origin: a pane is drawn
     // inside a layout, and getting this wrong is invisible until the pane is
@@ -393,7 +433,7 @@ test "a wide character owns two columns" {
     defer buf.deinit();
 
     try pane.write("漢字");
-    _ = blit(&buf, buf.area(), &pane.state, .{});
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
 
     // Width zero is how the diff knows to emit nothing for the trailing half.
     // Emitting there prints the glyph twice and shifts the rest of the row.
@@ -415,7 +455,7 @@ test "a grapheme cluster stays one cell" {
     // reassembling them is this file's job, and dropping the tail turns a
     // composed emoji into a different one.
     try pane.write("👨‍🚀");
-    _ = blit(&buf, buf.area(), &pane.state, .{});
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
 
     const cell = buf.at(0, 0).?;
     try testing.expect(cell.len > 4);
@@ -432,12 +472,48 @@ test "attributes survive the crossing" {
     // Bold, italic and curly underline: one from each half of the packed word,
     // so a misaligned bitcast cannot pass by accident.
     try pane.write("\x1b[1;3;4:3mx");
-    _ = blit(&buf, buf.area(), &pane.state, .{});
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
 
     const flags = buf.at(0, 0).?.style.flags;
     try testing.expect(flags.bold);
     try testing.expect(flags.italic);
     try testing.expectEqual(ui.Style.Underline.curly, flags.underline);
+}
+
+test "unmodified colours defer to the outer terminal theme" {
+    const gpa = testing.allocator;
+    var pane = try Pane.init(gpa, 10, 2);
+    defer pane.deinit();
+    var buf = try ui.Buffer.init(gpa, 10, 2);
+    defer buf.deinit();
+
+    try pane.write("\x1b[31mx");
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
+
+    const styled = buf.at(0, 0).?;
+    try testing.expect(styled.style.fg == .indexed);
+    try testing.expectEqual(@as(u8, 1), styled.style.fg.indexed);
+    try testing.expect(styled.style.bg == .default);
+    try testing.expect(buf.at(9, 1).?.style.bg == .default);
+}
+
+test "OSC default colour overrides stay inside the pane" {
+    const gpa = testing.allocator;
+    var pane = try Pane.init(gpa, 10, 2);
+    defer pane.deinit();
+    var buf = try ui.Buffer.init(gpa, 10, 2);
+    defer buf.deinit();
+
+    try pane.write("\x1b]11;rgb:12/34/56\x07x");
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
+    try testing.expectEqual(
+        ui.Color{ .rgb = .{ 0x12, 0x34, 0x56 } },
+        buf.at(0, 0).?.style.bg,
+    );
+
+    try pane.write("\x1b]111\x1b\\");
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{ .force = true });
+    try testing.expect(buf.at(0, 0).?.style.bg == .default);
 }
 
 test "palette colours are resolved with the pane's own palette" {
@@ -452,7 +528,7 @@ test "palette colours are resolved with the pane's own palette" {
     // whatever the user's theme maps slot 1 to, which is the bug this test
     // exists to prevent.
     try pane.write("\x1b]4;1;rgb:00/ff/00\x07\x1b[31mx");
-    _ = blit(&buf, buf.area(), &pane.state, .{});
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
 
     switch (buf.at(0, 0).?.style.fg) {
         .rgb => |c| try testing.expectEqual([3]u8{ 0x00, 0xff, 0x00 }, c),
@@ -468,19 +544,19 @@ test "clean rows are skipped and the caller can override that" {
     defer buf.deinit();
 
     try pane.write("uno\r\ndos\r\n");
-    const first = blit(&buf, buf.area(), &pane.state, .{});
+    const first = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
     try testing.expect(first.copied > 0);
 
     // Nothing was written to the pane in between, so a second blit is pure
     // waste. This is the whole reason a still pane costs nothing per frame.
-    const second = blit(&buf, buf.area(), &pane.state, .{});
+    const second = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
     try testing.expectEqual(@as(u16, 0), second.copied);
     try testing.expectEqual(@as(u16, 4), second.skipped);
 
     // But the emulator only knows about its own screen. When the destination
     // moved - a resize, a modal closing over the pane - the caller has to say
     // so, because no dirty flag will.
-    const forced = blit(&buf, buf.area(), &pane.state, .{ .force = true });
+    const forced = blit(&buf, buf.area(), &pane.term, &pane.state, .{ .force = true });
     try testing.expectEqual(@as(u16, 4), forced.copied);
 }
 
@@ -492,12 +568,12 @@ test "only the rows that changed are copied" {
     defer buf.deinit();
 
     try pane.write("a\r\nb\r\nc\r\n");
-    _ = blit(&buf, buf.area(), &pane.state, .{});
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
 
     // One character on one row. If this copies the whole pane, an agent
     // printing a spinner costs as much as an agent printing a full screen.
     try pane.write("Z");
-    const partial = blit(&buf, buf.area(), &pane.state, .{});
+    const partial = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
     try testing.expect(partial.copied < 4);
     try testing.expect(partial.skipped > 0);
 }
@@ -514,7 +590,7 @@ test "a pane smaller than its rectangle leaves nothing stale behind" {
     // read as a rendering bug.
     buf.fill(buf.area(), "#", .{});
     try pane.write("ab");
-    _ = blit(&buf, buf.area(), &pane.state, .{});
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
 
     try testing.expectEqualStrings("a", textOf(&buf, 0, 0));
     // Past the pane's last column, and past its last row.
@@ -530,7 +606,7 @@ test "the cursor inverts the cell it sits on rather than hiding it" {
     defer buf.deinit();
 
     try pane.write("ab\x1b[1;1H");
-    _ = blit(&buf, buf.area(), &pane.state, .{ .cursor = true });
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{ .cursor = true });
 
     // The character under the cursor must still be readable, and the cell to
     // its right must be untouched.
@@ -547,7 +623,7 @@ test "an unfocused pane draws no cursor" {
     defer buf.deinit();
 
     try pane.write("ab\x1b[1;1H");
-    _ = blit(&buf, buf.area(), &pane.state, .{ .cursor = false });
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{ .cursor = false });
     try testing.expect(!buf.at(0, 0).?.style.flags.inverse);
 }
 
@@ -560,7 +636,7 @@ test "a pane wider than its rectangle is clipped, not wrapped" {
 
     try pane.write("0123456789abcdefghij");
     // A rectangle narrower and shorter than the pane.
-    _ = blit(&buf, .{ .x = 0, .y = 0, .w = 5, .h = 1 }, &pane.state, .{});
+    _ = blit(&buf, .{ .x = 0, .y = 0, .w = 5, .h = 1 }, &pane.term, &pane.state, .{});
 
     try testing.expectEqualStrings("4", textOf(&buf, 4, 0));
     // Column five belongs to whatever is drawn next, not to the pane.
@@ -583,7 +659,7 @@ test "a steady frame allocates nothing" {
     defer buf.deinit();
 
     for (0..12) |_| try pane.write("warming the arenas up\r\n");
-    _ = blit(&buf, buf.area(), &pane.state, .{});
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
 
     var failing: std.testing.FailingAllocator = .init(gpa, .{ .fail_index = 0 });
     var stream = pane.term.vtStream();
@@ -591,7 +667,7 @@ test "a steady frame allocates nothing" {
     for (0..64) |_| {
         stream.nextSlice("steady output\r\n");
         try pane.state.update(failing.allocator(), &pane.term);
-        _ = blit(&buf, buf.area(), &pane.state, .{});
+        _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
     }
     try testing.expectEqual(@as(usize, 0), failing.allocations);
 }
@@ -643,7 +719,7 @@ test "highlighting a selection does not disturb the characters" {
     defer buf.deinit();
 
     try pane.write("hola");
-    _ = blit(&buf, buf.area(), &pane.state, .{
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{
         .selection = .{ .anchor = .{ .x = 1, .y = 0 }, .head = .{ .x = 2, .y = 0 } },
     });
 
@@ -666,13 +742,13 @@ test "dragging a selection repaints rows the emulator calls clean" {
     defer buf.deinit();
 
     try pane.write("aaa\r\nbbb\r\nccc");
-    _ = blit(&buf, buf.area(), &pane.state, .{
+    _ = blit(&buf, buf.area(), &pane.term, &pane.state, .{
         .selection = .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 2, .y = 0 } },
     });
     try testing.expect(!buf.at(1, 1).?.style.flags.inverse);
 
     // Nothing written to the pane in between: every row is clean.
-    const stats = blit(&buf, buf.area(), &pane.state, .{
+    const stats = blit(&buf, buf.area(), &pane.term, &pane.state, .{
         .selection = .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 2, .y = 1 } },
     });
     try testing.expectEqual(@as(u16, 0), stats.copied);

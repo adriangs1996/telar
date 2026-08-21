@@ -27,6 +27,8 @@ const RuntimeEvent = union(enum) {
     accepted: anyerror!core.transport.SocketChannel,
     client_message: anyerror![]u8,
     client_sent: anyerror!void,
+    control_message: anyerror![]u8,
+    control_sent: anyerror!void,
     pane_input_written: anyerror!void,
     pane_output: anyerror!Output,
     pane_exit: anyerror!pty.Exit,
@@ -37,6 +39,13 @@ const PendingFailure = struct {
     request_id: u64,
     code: schema.FailureCode,
     message: []const u8,
+};
+
+const ShutdownState = struct {
+    requested: bool = false,
+    primary_request: bool = false,
+    reply_pending: bool = false,
+    reply_in_flight: bool = false,
 };
 
 const OwnedCommand = struct {
@@ -83,6 +92,9 @@ const Pane = struct {
     screen: core.ui.Buffer,
     acknowledged: core.ui.Buffer,
     cursor: schema.frame.Cursor = .{},
+    foreground_override: ?vt.color.RGB = null,
+    background_override: ?vt.color.RGB = null,
+    semantic_colors_dirty: bool = false,
     next_frame_id: u64 = 1,
     acknowledged_frame_id: u64 = 0,
     outstanding_frame_id: u64 = 0,
@@ -117,6 +129,9 @@ const Pane = struct {
         pane.acknowledged = try .init(gpa, size.cols, size.rows);
         errdefer pane.acknowledged.deinit();
         pane.cursor = .{};
+        pane.foreground_override = pane.terminal.colors.foreground.override;
+        pane.background_override = pane.terminal.colors.background.override;
+        pane.semantic_colors_dirty = false;
         pane.next_frame_id = 1;
         pane.acknowledged_frame_id = 0;
         pane.outstanding_frame_id = 0;
@@ -142,6 +157,15 @@ const Pane = struct {
 
     fn ingest(pane: *Pane, bytes: []const u8) !void {
         pane.stream.nextSlice(bytes);
+        const foreground = pane.terminal.colors.foreground.override;
+        const background = pane.terminal.colors.background.override;
+        if (!std.meta.eql(pane.foreground_override, foreground) or
+            !std.meta.eql(pane.background_override, background))
+        {
+            pane.foreground_override = foreground;
+            pane.background_override = background;
+            pane.semantic_colors_dirty = true;
+        }
         pane.dirty = true;
     }
 
@@ -157,7 +181,15 @@ const Pane = struct {
 
     fn render(pane: *Pane, force: bool) !void {
         try pane.render_state.update(pane.gpa, &pane.terminal);
-        _ = blit.blit(&pane.screen, pane.screen.area(), &pane.render_state, .{ .force = force });
+        const force_all = force or pane.semantic_colors_dirty;
+        _ = blit.blit(
+            &pane.screen,
+            pane.screen.area(),
+            &pane.terminal,
+            &pane.render_state,
+            .{ .force = force_all },
+        );
+        pane.semantic_colors_dirty = false;
         const cursor = pane.render_state.cursor;
         pane.cursor = if (cursor.visible and cursor.viewport != null and
             cursor.viewport.?.x < pane.screen.w and cursor.viewport.?.y < pane.screen.h)
@@ -200,12 +232,13 @@ fn serveInternal(
     const input_buffer = try gpa.alloc(u8, schema.max_input_bytes);
     defer gpa.free(input_buffer);
 
-    var select_storage: [9]RuntimeEvent = undefined;
+    var select_storage: [11]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
 
     var connection: ?core.transport.SocketChannel = null;
+    var control_connection: ?core.transport.SocketChannel = null;
     var client_read_pending = false;
     var client_send_pending = false;
     var pane_input_pending = false;
@@ -214,12 +247,19 @@ fn serveInternal(
     var pending_opened: ?schema.PaneOpened = null;
     var pending_failure: ?PendingFailure = null;
     var snapshot_pending = false;
+    var shutdown: ShutdownState = .{};
     var pane: ?*Pane = null;
     var next_pane_id: u64 = 1;
+    var control_receive_buffer: [1]u8 = undefined;
+    var control_send_buffer: [1]u8 = undefined;
     defer {
+        listener.shutdown();
+        if (connection) |*active| active.shutdown(io);
+        if (control_connection) |*active| active.shutdown(io);
+        select.cancelDiscard();
         listener.deinit(io);
         if (connection) |*active| active.deinit(io);
-        select.cancelDiscard();
+        if (control_connection) |*active| active.deinit(io);
         if (pane) |active| active.destroy();
     }
 
@@ -232,7 +272,16 @@ fn serveInternal(
             };
             try select.concurrent(.accepted, acceptClient, .{ io, &listener });
             if (connection != null or pane_input_pending) {
-                accepted.deinit(io);
+                if (control_connection != null) {
+                    accepted.deinit(io);
+                    continue;
+                }
+                control_connection = accepted;
+                try select.concurrent(.control_message, receiveClient, .{
+                    io,
+                    &control_connection.?,
+                    &control_receive_buffer,
+                });
                 continue;
             }
             connection = accepted;
@@ -279,7 +328,9 @@ fn serveInternal(
                 &snapshot_pending,
                 input_buffer,
                 &pane_input_pending,
+                &shutdown,
             ) catch {
+                if (shutdown.primary_request) return;
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
                 attached_pane_id = 0;
@@ -298,7 +349,9 @@ fn serveInternal(
                 &pending_failure,
                 &snapshot_pending,
                 &exit_sent,
+                &shutdown,
             ) catch {
+                if (shutdown.primary_request) return;
                 closeClient(
                     io,
                     &connection,
@@ -309,7 +362,7 @@ fn serveInternal(
                 );
                 continue;
             };
-            if (!pane_input_pending) {
+            if (!pane_input_pending and !shutdown.requested) {
                 client_read_pending = true;
                 try select.concurrent(.client_message, receiveClient, .{
                     io,
@@ -320,7 +373,13 @@ fn serveInternal(
         },
         .client_sent => |result| {
             client_send_pending = false;
+            if (shutdown.reply_in_flight) {
+                shutdown.reply_in_flight = false;
+                _ = result catch {};
+                return;
+            }
             result catch {
+                if (shutdown.primary_request) return;
                 closeClient(
                     io,
                     &connection,
@@ -331,7 +390,7 @@ fn serveInternal(
                 );
                 continue;
             };
-            if (connection == null or !connection.?.active) {
+            if (connection == null or !connection.?.isActive()) {
                 if (!client_read_pending) connection = null;
                 continue;
             }
@@ -347,7 +406,9 @@ fn serveInternal(
                 &pending_failure,
                 &snapshot_pending,
                 &exit_sent,
+                &shutdown,
             ) catch {
+                if (shutdown.primary_request) return;
                 closeClient(
                     io,
                     &connection,
@@ -357,6 +418,39 @@ fn serveInternal(
                     &exit_sent,
                 );
             };
+        },
+        .control_message => |result| {
+            const payload = result catch {
+                control_connection.?.deinit(io);
+                control_connection = null;
+                continue;
+            };
+            const message = schema.decodeClient(payload) catch {
+                control_connection.?.deinit(io);
+                control_connection = null;
+                continue;
+            };
+            switch (message) {
+                .runtime_stop => {
+                    shutdown.requested = true;
+                    const reply = try schema.encodeRuntimeStopping(&control_send_buffer);
+                    select.concurrent(.control_sent, sendClient, .{
+                        io,
+                        &control_connection.?,
+                        reply,
+                    }) catch |err| {
+                        return err;
+                    };
+                },
+                else => {
+                    control_connection.?.deinit(io);
+                    control_connection = null;
+                },
+            }
+        },
+        .control_sent => |result| {
+            _ = result catch {};
+            return;
         },
         .pane_input_written => |result| {
             pane_input_pending = false;
@@ -385,7 +479,7 @@ fn serveInternal(
             active.output_pending = false;
             const output = result catch {
                 active.output_done = true;
-                pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent) catch {
+                pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown) catch {
                     closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
                 };
                 continue;
@@ -397,7 +491,7 @@ fn serveInternal(
                 active.output_pending = true;
                 try select.concurrent(.pane_output, readPane, .{ io, active.session.file() });
             }
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent) catch {
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown) catch {
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
             };
         },
@@ -405,7 +499,7 @@ fn serveInternal(
             const active = pane orelse continue;
             active.wait_pending = false;
             active.exit = try result;
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent) catch {
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown) catch {
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
             };
         },
@@ -426,6 +520,7 @@ fn dispatchClientMessage(
     snapshot_pending: *bool,
     input_buffer: []u8,
     input_pending: *bool,
+    shutdown: *ShutdownState,
 ) !void {
     switch (message) {
         .open_pane => |open| {
@@ -516,6 +611,11 @@ fn dispatchClientMessage(
             attached_pane_id.* = 0;
             exit_sent.* = false;
         },
+        .runtime_stop => {
+            shutdown.requested = true;
+            shutdown.primary_request = true;
+            shutdown.reply_pending = true;
+        },
     }
 }
 
@@ -587,8 +687,20 @@ fn pumpSend(
     pending_failure: *?PendingFailure,
     snapshot_pending: *bool,
     exit_sent: *bool,
+    shutdown: *ShutdownState,
 ) !void {
     if (connection == null or send_pending.*) return;
+
+    if (shutdown.reply_pending) {
+        const payload = try schema.encodeRuntimeStopping(buffer);
+        shutdown.reply_pending = false;
+        shutdown.reply_in_flight = true;
+        startSend(io, select, connection.?, payload, send_pending) catch |err| {
+            shutdown.reply_in_flight = false;
+            return err;
+        };
+        return;
+    }
 
     if (pending_failure.*) |failure| {
         const payload = try schema.encodeRequestFailed(buffer, .{
@@ -653,7 +765,7 @@ fn startSend(
 fn connectionPointer(
     connection: *?core.transport.SocketChannel,
 ) ?*core.transport.SocketChannel {
-    return if (connection.*) |*active| if (active.active) active else null else null;
+    return if (connection.*) |*active| if (active.isActive()) active else null else null;
 }
 
 fn closeClient(

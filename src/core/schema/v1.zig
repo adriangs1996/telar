@@ -23,6 +23,7 @@ pub const ClientTag = enum(u8) {
     frame_ack = 0x04,
     request_snapshot = 0x05,
     detach_pane = 0x06,
+    runtime_stop = 0x07,
 };
 
 pub const ServerTag = enum(u8) {
@@ -30,6 +31,7 @@ pub const ServerTag = enum(u8) {
     pane_frame = 0x82,
     pane_exited = 0x83,
     request_failed = 0x84,
+    runtime_stopping = 0x85,
 };
 
 pub const TerminalSize = struct {
@@ -161,6 +163,7 @@ pub const ClientMessage = union(enum) {
     frame_ack: FrameAck,
     request_snapshot: RequestSnapshot,
     detach_pane: DetachPane,
+    runtime_stop: void,
 };
 
 pub const PaneOpened = struct {
@@ -201,6 +204,7 @@ pub const ServerMessage = union(enum) {
     pane_frame: frame.FrameView,
     pane_exited: PaneExited,
     request_failed: RequestFailed,
+    runtime_stopping: void,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -277,6 +281,12 @@ pub fn encodeDetachPane(buffer: []u8, message: DetachPane) ![]const u8 {
     return encoder.finish();
 }
 
+pub fn encodeRuntimeStop(buffer: []u8) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.runtime_stop));
+    return encoder.finish();
+}
+
 pub fn decodeClient(payload: []const u8) !ClientMessage {
     var decoder = wire.Decoder.init(payload);
     const tag = try decodeClientTag(try decoder.readByte());
@@ -287,6 +297,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .frame_ack => .{ .frame_ack = try decodeFrameAck(&decoder) },
         .request_snapshot => .{ .request_snapshot = try decodeRequestSnapshot(&decoder) },
         .detach_pane => .{ .detach_pane = try decodeDetachPane(&decoder) },
+        .runtime_stop => .{ .runtime_stop = {} },
     };
     try decoder.ensureEnd();
     return message;
@@ -330,6 +341,12 @@ pub fn encodeRequestFailed(buffer: []u8, message: RequestFailed) ![]const u8 {
     return encoder.finish();
 }
 
+pub fn encodeRuntimeStopping(buffer: []u8) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.runtime_stopping));
+    return encoder.finish();
+}
+
 pub fn decodeServer(payload: []const u8) !ServerMessage {
     var decoder = wire.Decoder.init(payload);
     const tag = try decodeServerTag(try decoder.readByte());
@@ -338,6 +355,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .pane_frame => .{ .pane_frame = try frame.decodeBody(&decoder) },
         .pane_exited => .{ .pane_exited = try decodePaneExited(&decoder) },
         .request_failed => .{ .request_failed = try decodeRequestFailed(&decoder) },
+        .runtime_stopping => .{ .runtime_stopping = {} },
     };
     try decoder.ensureEnd();
     return message;
@@ -556,6 +574,7 @@ fn decodeClientTag(value: u8) !ClientTag {
         @intFromEnum(ClientTag.frame_ack) => .frame_ack,
         @intFromEnum(ClientTag.request_snapshot) => .request_snapshot,
         @intFromEnum(ClientTag.detach_pane) => .detach_pane,
+        @intFromEnum(ClientTag.runtime_stop) => .runtime_stop,
         else => error.UnknownMessage,
     };
 }
@@ -566,6 +585,7 @@ fn decodeServerTag(value: u8) !ServerTag {
         @intFromEnum(ServerTag.pane_frame) => .pane_frame,
         @intFromEnum(ServerTag.pane_exited) => .pane_exited,
         @intFromEnum(ServerTag.request_failed) => .request_failed,
+        @intFromEnum(ServerTag.runtime_stopping) => .runtime_stopping,
         else => error.UnknownMessage,
     };
 }
@@ -684,6 +704,8 @@ test "fixed client messages round trip" {
 
     const detach = (try decodeClient(try encodeDetachPane(&buffer, .{ .pane_id = 3 }))).detach_pane;
     try std.testing.expectEqual(@as(u64, 3), detach.pane_id);
+
+    try std.testing.expect((try decodeClient(try encodeRuntimeStop(&buffer))) == .runtime_stop);
 }
 
 test "fixed server messages round trip" {
@@ -710,6 +732,8 @@ test "fixed server messages round trip" {
     }))).request_failed;
     try std.testing.expectEqual(FailureCode.pane_not_found, failed.code);
     try std.testing.expectEqualStrings("pane 12 does not exist", failed.message);
+
+    try std.testing.expect((try decodeServer(try encodeRuntimeStopping(&buffer))) == .runtime_stopping);
 }
 
 test "pane frames use the server envelope" {

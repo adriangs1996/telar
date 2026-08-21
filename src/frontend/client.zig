@@ -168,6 +168,7 @@ pub fn run(
                     std.debug.print("telar runtime: {s}\n", .{failure.message});
                     return error.RuntimeRequestFailed;
                 },
+                .runtime_stopping => return error.UnexpectedRuntimeShutdown,
             }
             try select.concurrent(.server, receive, .{ io, connection, receive_buffer });
         },

@@ -165,6 +165,51 @@ test "backend explains incompatible protocol versions" {
     try std.testing.expectEqualDeep(client_response, worker.response.?);
 }
 
+test "runtime acknowledges a stop request and removes its endpoint" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema.v1;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(
+        &path_buffer,
+        "{s}/stoppable.sock",
+        .{directory_buffer[0..directory_len]},
+    );
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server_finished = false;
+    defer if (!server_finished) {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    };
+
+    var primary = try connectRuntimeForTest(io, path);
+    defer primary.deinit(io);
+    var connection = try connectRuntimeForTest(io, path);
+    defer connection.deinit(io);
+    var send_buffer: [1]u8 = undefined;
+    try connection.send(io, try schema.encodeRuntimeStop(&send_buffer));
+
+    var receive_buffer: [16]u8 = undefined;
+    try std.testing.expect(
+        (try schema.decodeServer(try connection.receive(io, &receive_buffer))) == .runtime_stopping,
+    );
+
+    try server.await(io);
+    server_finished = true;
+    try std.testing.expectError(
+        error.FileNotFound,
+        std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }),
+    );
+}
+
 test "runtime owns the PTY and streams pane frames to the client" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
@@ -249,6 +294,7 @@ test "runtime owns the PTY and streams pane frames to the client" {
                 std.debug.print("runtime integration failure: {s}\n", .{failure.message});
                 return error.RuntimeRequestFailed;
             },
+            .runtime_stopping => return error.UnexpectedRuntimeShutdown,
         }
     }
     return error.RuntimeDidNotExit;
@@ -295,6 +341,7 @@ test "pane keeps running while its client is disconnected" {
         switch (try schema.decodeServer(try first.receive(io, receive_buffer))) {
             .pane_opened => |opened| original_pane_id = opened.pane_id,
             .request_failed => return error.RuntimeRequestFailed,
+            .runtime_stopping => return error.UnexpectedRuntimeShutdown,
             else => {},
         }
     }
@@ -343,6 +390,7 @@ test "pane keeps running while its client is disconnected" {
                 return;
             },
             .request_failed => return error.RuntimeRequestFailed,
+            .runtime_stopping => return error.UnexpectedRuntimeShutdown,
         }
     }
     return error.RuntimeDidNotExit;

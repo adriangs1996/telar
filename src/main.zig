@@ -45,16 +45,28 @@ const ServerMode = enum {
     daemonized,
 };
 
+const ServerAction = enum {
+    run,
+    stop,
+};
+
 const ServerOptions = struct {
+    action: ServerAction = .run,
     mode: ServerMode = .foreground,
     socket: ?[*:0]const u8 = null,
 
     fn parse(args: []const [*:0]const u8) !ServerOptions {
         var options: ServerOptions = .{};
+        var action_explicit = false;
         var index: usize = 0;
         while (index < args.len) {
             const arg = std.mem.span(args[index]);
-            if (std.mem.eql(u8, arg, "--background")) {
+            if (std.mem.eql(u8, arg, "stop")) {
+                if (action_explicit) return error.DuplicateServerAction;
+                options.action = .stop;
+                action_explicit = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--background")) {
                 if (options.mode != .foreground) return error.ConflictingServerModes;
                 options.mode = .background_launcher;
                 index += 1;
@@ -71,6 +83,8 @@ const ServerOptions = struct {
                 return error.UnknownServerOption;
             }
         }
+        if (options.action == .stop and options.mode != .foreground)
+            return error.ConflictingServerAction;
         return options;
     }
 };
@@ -217,6 +231,8 @@ fn connectRuntime(
 
 fn runServer(init: std.process.Init, options: ServerOptions) !void {
     const endpoint = try resolveEndpoint(init, options.socket);
+    if (options.action == .stop) return stopRuntime(init, &endpoint);
+
     switch (options.mode) {
         .background_launcher => return launchDaemon(init, &endpoint),
         .foreground, .daemonized => {},
@@ -224,6 +240,31 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
 
     try prepareManagedDirectory(init.io, &endpoint);
     try backend.runtime.serve(init.io, init.gpa, endpoint.path());
+}
+
+fn stopRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !void {
+    const raw_connection = frontend.transport.local.connect(init.io, endpoint.path()) catch |err| switch (err) {
+        error.FileNotFound, error.ConnectionRefused => {
+            try File.stdout().writeStreamingAll(init.io, "telar runtime is not running\n");
+            return;
+        },
+        else => |other| return other,
+    };
+    var connection = try finishHandshake(init.io, raw_connection);
+    defer connection.deinit(init.io);
+
+    var send_buffer: [1]u8 = undefined;
+    try connection.send(init.io, try core.schema.v1.encodeRuntimeStop(&send_buffer));
+
+    var receive_buffer: [2048]u8 = undefined;
+    switch (try core.schema.v1.decodeServer(try connection.receive(init.io, &receive_buffer))) {
+        .runtime_stopping => try File.stdout().writeStreamingAll(init.io, "telar runtime stopped\n"),
+        .request_failed => |failure| {
+            std.debug.print("telar runtime: {s}\n", .{failure.message});
+            return error.RuntimeRequestFailed;
+        },
+        else => return error.UnexpectedRuntimeResponse,
+    }
 }
 
 fn defaultShell() !pty.Command {
@@ -267,6 +308,7 @@ fn runClient(
 const usage =
     \\Usage: telar [command [args...]]
     \\       telar server
+    \\       telar server stop
     \\
     \\Run an interactive shell inside telar's single-pane UI.
     \\With a command, run that command instead of $SHELL.
@@ -274,6 +316,7 @@ const usage =
     \\
     \\Commands:
     \\  server           Run the local runtime in the foreground
+    \\  server stop      Stop the local runtime
     \\
     \\Options:
     \\  -h, --help       Show this help
@@ -332,7 +375,21 @@ test "CLI recognizes the runtime server" {
     const args = [_][*:0]const u8{ "telar", "server" };
     const cli = try Cli.parse(&args);
     try std.testing.expect(cli == .server);
+    try std.testing.expectEqual(ServerAction.run, cli.server.action);
     try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
+}
+
+test "CLI recognizes runtime stop" {
+    const args = [_][*:0]const u8{ "telar", "server", "stop" };
+    const cli = try Cli.parse(&args);
+    try std.testing.expect(cli == .server);
+    try std.testing.expectEqual(ServerAction.stop, cli.server.action);
+    try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
+}
+
+test "runtime stop cannot use an internal launcher mode" {
+    const args = [_][*:0]const u8{ "telar", "server", "stop", "--background" };
+    try std.testing.expectError(error.ConflictingServerAction, Cli.parse(&args));
 }
 
 test "server socket and launcher mode are explicit" {

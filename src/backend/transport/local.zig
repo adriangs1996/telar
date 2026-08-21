@@ -47,10 +47,15 @@ pub const LocalListener = struct {
         // POSIX does not guarantee that close from another thread interrupts
         // accept. Shutdown does, and Server.accept documents it as the
         // concurrent cancellation mechanism.
-        _ = std.c.shutdown(listener.listener.socket.handle, std.posix.SHUT.RDWR);
+        listener.shutdown();
         listener.listener.deinit(io);
         removeIfOwned(io, listener.path[0..listener.path_len], listener.inode);
         listener.active = false;
+    }
+
+    pub fn shutdown(listener: *LocalListener) void {
+        if (!listener.active) return;
+        _ = std.c.shutdown(listener.listener.socket.handle, std.posix.SHUT.RDWR);
     }
 
     fn removeIfOwned(io: Io, path: []const u8, inode: Io.File.INode) void {
