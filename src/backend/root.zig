@@ -5,6 +5,8 @@
 
 pub const pty = @import("pty.zig");
 pub const blit = @import("blit.zig");
+pub const transport = @import("transport.zig");
+pub const runtime = @import("runtime.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

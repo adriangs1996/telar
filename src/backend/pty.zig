@@ -43,6 +43,7 @@ pub const Size = struct {
 pub const Command = struct {
     file: [*:0]const u8,
     argv: [max_args:null]?[*:0]const u8 = @splat(null),
+    cwd: ?[*:0]const u8 = null,
 
     pub fn fromArgv(args: []const [*:0]const u8) !Command {
         if (args.len == 0) return error.MissingCommand;
@@ -69,8 +70,7 @@ pub const Exit = union(enum) {
     }
 };
 
-/// The two resources whose lifetimes define the temporary, in-process runtime.
-/// A later runtime process can take this ownership without changing the client.
+/// The process and PTY master owned by one runtime pane.
 pub const Session = struct {
     master: std.c.fd_t,
     pid: std.c.pid_t,
@@ -156,6 +156,9 @@ fn childExec(
 
     _ = std.c.close(master);
     if (slave > std.c.STDERR_FILENO) _ = std.c.close(slave);
+    if (command.cwd) |cwd| {
+        if (std.c.chdir(cwd) != 0) std.c._exit(126);
+    }
 
     _ = execvp(command.file, &command.argv);
     std.c._exit(127);

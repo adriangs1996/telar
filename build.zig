@@ -46,9 +46,7 @@ pub fn build(b: *std.Build) void {
     });
     frontend.addImport("telar-core", core);
 
-    // The shipped binary. For this first milestone the runtime and client
-    // share one process, but the boundary already runs through a PTY and an
-    // emulated terminal rather than forwarding child output to the host.
+    // One shipped binary contains both the client and runtime entry points.
     const exe = b.addExecutable(.{
         .name = "telar",
         .root_module = b.createModule(.{
@@ -60,6 +58,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("telar-backend", backend);
     exe.root_module.addImport("telar-frontend", frontend);
+    exe.root_module.addImport("telar-core", core);
     exe.root_module.addImport("ghostty-vt", ghostty_vt);
     b.installArtifact(exe);
 
@@ -93,21 +92,40 @@ pub fn build(b: *std.Build) void {
     // ---------------------------------------------------------------------
 
     const test_step = b.step("test", "Run the tests");
+    const transport_test_step = b.step("test-transport", "Run the local transport tests");
+    const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
 
     const Suite = struct {
         path: []const u8,
         vt: bool = false,
         libc: bool = false,
+        transport: bool = false,
+        schema: bool = false,
     };
     const suites = [_]Suite{
         .{ .path = "src/core/ui.zig" },
         .{ .path = "src/core/select.zig" },
+        .{ .path = "src/core/transport.zig", .transport = true },
+        .{ .path = "src/core/endpoint.zig", .transport = true },
+        .{ .path = "src/core/schema/handshake.zig", .schema = true },
+        .{ .path = "src/core/schema_v1_test.zig", .schema = true },
         .{ .path = "src/frontend/ui.zig" },
         .{ .path = "src/frontend/term.zig", .libc = true },
         .{ .path = "src/frontend/pace.zig" },
         .{ .path = "src/frontend/edit.zig" },
+        .{ .path = "src/frontend/client.zig", .libc = true },
+        .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pty.zig", .libc = true },
+        .{ .path = "src/backend/runtime.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
+        .{
+            .path = "src/transport_integration_test.zig",
+            .vt = true,
+            .libc = true,
+            .transport = true,
+            .schema = true,
+        },
         .{ .path = "src/main.zig", .vt = true, .libc = true },
         .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
     };
@@ -125,7 +143,10 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addImport("telar-backend", backend);
         tests.root_module.addImport("telar-frontend", frontend);
         if (suite.vt) tests.root_module.addImport("ghostty-vt", ghostty_vt);
-        test_step.dependOn(&b.addRunArtifact(tests).step);
+        const run_tests = b.addRunArtifact(tests);
+        test_step.dependOn(&run_tests.step);
+        if (suite.transport) transport_test_step.dependOn(&run_tests.step);
+        if (suite.schema) schema_test_step.dependOn(&run_tests.step);
     }
 
     // The same drawing code against a width table that answers nonsense, so
