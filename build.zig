@@ -106,6 +106,74 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(substitution).step);
 
     // ---------------------------------------------------------------------
+    // The proxy example
+    // ---------------------------------------------------------------------
+
+    // Deliberately outside the default build and outside `test`. It needs
+    // sqlite3 and libnghttp2 from the system, and telar's whole point is that
+    // the core builds anywhere with nothing but a Zig compiler. Someone who
+    // wants the proxy asks for it.
+    const tls = b.dependency("tls", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("tls");
+
+    const nghttp2_prefix = b.option(
+        []const u8,
+        "nghttp2",
+        "Prefix of a libnghttp2 installation",
+    ) orelse "/opt/homebrew/opt/libnghttp2";
+
+    const proxyModule = struct {
+        fn make(
+            bb: *std.Build,
+            path: []const u8,
+            t: std.Build.ResolvedTarget,
+            o: std.builtin.OptimizeMode,
+            tls_mod: *std.Build.Module,
+            vt_mod: *std.Build.Module,
+            prefix: []const u8,
+        ) *std.Build.Module {
+            const mod = bb.createModule(.{
+                .root_source_file = bb.path(path),
+                .target = t,
+                .optimize = o,
+                .link_libc = true,
+            });
+            mod.addImport("tls", tls_mod);
+            mod.addImport("ghostty-vt", vt_mod);
+            mod.linkSystemLibrary("sqlite3", .{});
+            // HPACK only. Decoding a header block is the one part of HTTP/2
+            // that cannot be skipped by relaying frames untouched.
+            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ prefix, "include" }) });
+            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ prefix, "lib" }) });
+            mod.linkSystemLibrary("nghttp2", .{});
+            return mod;
+        }
+    }.make;
+
+    const proxy = b.addExecutable(.{
+        .name = "proxy",
+        .root_module = proxyModule(b, "examples/proxy/main.zig", target, optimize, tls, ghostty_vt, nghttp2_prefix),
+    });
+    const proxy_step = b.step("proxy", "Build the pty and TLS proxy example");
+    proxy_step.dependOn(&b.addInstallArtifact(proxy, .{}).step);
+
+    const proxy_test_step = b.step("test-proxy", "Run the proxy example's tests");
+    for ([_][]const u8{
+        "examples/proxy/ca.zig",
+        "examples/proxy/tls.zig",
+        "examples/proxy/http.zig",
+        "examples/proxy/h2.zig",
+        "examples/proxy/osc.zig",
+    }) |path| {
+        const tests = b.addTest(.{
+            .root_module = proxyModule(b, path, target, optimize, tls, ghostty_vt, nghttp2_prefix),
+        });
+        proxy_test_step.dependOn(&b.addRunArtifact(tests).step);
+    }
+
+    // ---------------------------------------------------------------------
     // Other targets
     // ---------------------------------------------------------------------
 

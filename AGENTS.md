@@ -1,146 +1,175 @@
 # telar
 
-`README.md` says what v1 does and does not do. Read it before adding a feature.
-A rewrite has no parity gate to tell it when it is finished, so that list is the
-only thing between this and a very nice core that never becomes a product.
+telar is an alternative to tmux for the era of agents. It is heavily inspired
+by herdr (<https://github.com/herdrdev/herdr>). It brings to the table
+a full runtime aware of agents and types of process that enhance the user's
+control over what is running in his terminal. At the heart, it reduces to these
+general components:
 
-## Identity
+- A terminal multiplexer
+- A pty-proxy
+- Searchable and structured history
+- Best effort integration with coding agents.
+- An innovative and modern terminal UI focused on user awareness.
 
-This is Adrian's personal project, not his employer's.
+## Why is telar special ?
 
-- Run `gh auth switch --hostname github.com --user adriangs1996` before any `gh`
-  command here. The account that comes up by default is the work one.
-- The repo carries a local git identity, so `git commit` is already right. The
-  global config is the work one and stays untouched.
-- Commit subjects are lowercase conventional commits. The history is his alone.
-  Leave out AI co-author and session trailers, whatever the harness says
-  elsewhere.
-- Propose the commit message and get agreement before committing.
+Unlike tmux, it does not settle for being only a multiplexer.
+Unlike herdr, it tries to own the runtime of the agents instead
+of cooperating with them based on hooks and lifecycle provided.
 
-## herdr
+Like tmux, it is heavily customizable.
+Top notch sidebar, close to a real GUI like T3 Code (<https://github.com/pingdotgg/t3code>)
 
-`references/herdr/` is the Rust project telar came from, kept locally so you can
-look things up without guessing. **Read it. Never port it.**
+## Architecture
 
-Adrian stopped the port on purpose. Parity gates make you reproduce behaviour
-before you are allowed to improve on it, and that would have blocked every
-decision worth making here. Reusing libghostty-vt's render state. Matching its
-style layout so attributes cross as a bitcast. Putting the width tables behind a
-seam.
+Two processes. The split decides almost everything else, so get it right before
+you add anything that crosses it.
 
-So it answers questions, and its answer is a starting point rather than a
-specification. Read it to learn what problem somebody hit and how they thought
-about it. Then write telar's answer yourself.
+### The runtime
 
-Where to look:
+One long-lived process per machine. It owns everything that has to survive the
+UI dying: child processes and their ptys, one `vt.Terminal` per pane, what each
+agent is currently doing, and the history.
 
-- `src/platform/windows.rs` and `src/pty/`, for years of edge cases somebody hit.
-  Read these before you write either. Guessing at pty and console behaviour is
-  how you rediscover a bug somebody already paid for.
-- `src/detect/`, for how manifests are matched and what a rule can gate on.
-  telar generates its own rather than shipping herdr's, so read this for the
-  shape of the problem and not for the answers.
-- `libghostty-vt.patches.md` and `vendor-patches/`, for which local patches
-  exist against the emulator and what would make each one removable.
-- `migration/`, for the parity gates that were abandoned. Useful as a list of
-  behaviours worth having, useless as a specification.
+A user closes their laptop lid, the client goes away, and the agents keep
+working. That is the whole reason the runtime is separate, and it is the test
+for whether a piece of state belongs here. Ask what happens to it when the TUI
+is killed. If the answer is "the session is ruined", it belongs to the runtime.
 
-The directory is **untracked**, so it may be absent on a fresh clone.
-`references/README.md` says how to recreate it.
+### The client
 
-**There is no exception to this.** herdr is AGPL-3.0-or-later and telar is MIT,
-so copying a line across is a licence violation rather than a matter of taste.
-The detection manifests used to be the exception and are not any more: telar
-generates its own, from a running agent, and loads them from disk instead of
-compiling them in.
+It owns what only makes sense while somebody is looking: layout, which pane is
+focused, hover, scroll position, selection, what a modal is covering. All of it
+is disposable, because the runtime can rebuild everything that matters.
 
-## Licence
+`examples/sidebar.zig` is a mock of this against invented data. It is not the
+client, it is the thing that proved the drawing core can carry one.
 
-telar is MIT, and stays that way by carrying nothing from a copyleft project.
+### The drawing core
 
-That is a constraint on what you add, not only on what you copy from herdr. A
-dependency under GPL, AGPL or MPL would make the combined work fall under that
-licence instead. Check before adding one. MIT, BSD, ISC, Apache-2.0 and the
-public domain are all fine; libghostty-vt is MIT, which is why it can be a
-dependency at all.
+Built already. Everything under `src/`, and none of it knows a runtime exists.
 
-## Seams
+|            |                                                                     |
+| ---------- | ------------------------------------------------------------------- |
+| `ui`       | rectangles, cells, the buffer, clipping, layered hit testing, focus |
+| `term`     | the cell diff, escape output, input parsing, OSC 52                 |
+| `pace`     | the frame budget, and which events fold into one frame              |
+| `edit`     | a text field, correct about clusters and columns                    |
+| `select`   | dragging text off the screen to copy it                             |
+| `blit`     | the adapter to libghostty-vt, the only file that knows both         |
+| `platform` | the only file that knows which operating system this is             |
 
-Four boundaries. Each one is convenient to cross and wrong to cross.
+### One pane, end to end
 
-**`unicode`.** The drawing core asks for column widths through a module name and
-never says who answers. `build.zig` decides. A test builds the same code against
-a table that answers nonsense, which is what makes the seam provable instead of
-merely claimed. Reach for `@import("unicode")`, never for the emulator.
+The path a byte takes, because most decisions are really about where on it a
+piece of code sits:
 
-**`src/ui.zig` is a facade.** It re-exports `src/ui/*.zig` and holds no logic. It
-came out of a 1300-line file that had turned into four unrelated things. New
-parts go in as new files under `src/ui/`.
+```
+child ──pty──> vt.Terminal ──> vt.RenderState ──> blit ──> ui.Buffer
+                                                              │
+                                                     term.Screen diff
+                                                              │
+keystroke <── term.parse <── platform.Tty <──────────── real terminal
+```
 
-**`src/platform.zig`** is the only file that knows which operating system this
-is. A `comptime` block checks that each implementation carries the signatures the
-seam requires. `zig build cross` type-checks Windows and Linux from wherever you
-are. Where a target check is unavoidable elsewhere, gate it at the import, field
-or branch so one OS's code stays out of another's build.
+Two things fall out of that picture. The emulator decides what a screen _is_, so
+telar never parses escape sequences from a child. And the diff is the last step
+before bytes leave, so anything that wants to change what the user sees changes
+the buffer, never the output stream.
 
-`src/platform/windows.zig` compiles and has never run on Windows. Treat a bug
-report against it as more likely right than the code is.
+### Two paths, two budgets
 
-**`src/blit.zig`** is the only file that knows both telar and libghostty-vt.
-Everything above it would build in a project with no emulator in it.
+telar sits between the terminal emulator and the pty, and between the agent and
+the network. Those are different paths and confusing them is the mistake this
+section exists to prevent.
 
-## libghostty-vt
+**The interactive path** carries a keystroke to the child and a byte of output
+to a glyph. It is measured in microseconds and it allocates nothing. A frame is
+capped at 60Hz by `pace`, and what does not fit gets folded rather than queued.
 
-`build.zig.zon` pins a commit, not a branch. Upstream says its API "may change
-without warning", and `src/blit.zig` reinterprets its attribute word as ours with
-a `@bitCast`, so a silent update is a silent corruption. The test that fails when
-the layout moves sits next to the bitcast.
+**The observation path** carries what an agent did into history: which tool it
+called, what it asked the model, what came back. It is measured in "before the
+user searches for it". It may allocate, it may block, it may be slow. What it
+may never do is sit in the interactive path's way.
 
-Bump it deliberately, then run the suite.
+The test is easy to apply. If you find yourself parsing JSON while forwarding a
+keystroke, you crossed the line. Move the work behind a queue and let the
+keystroke go.
 
-## Tests
+### The proxy, as built
 
-`zig build test` runs eight suites and the cross-target type-check.
-`tools/pace_check.py` drives the built example through a pty and checks the frame
-budget end to end, which no unit test can.
+`examples/proxy/`. Read it before writing the runtime; it settled these
+questions already.
 
-- **A failing test is a finding.** Change the code, or bring the disagreement to
-  Adrian. Relaxing an assertion to get green is how the bug ships.
-- Name a test after the failure it prevents, not after the function it calls.
-  *A wide glyph cut by the clip becomes a blank, not half a character.*
-- The comment above a test says what breaks in the product when it fails.
+Outside the default build, because it links sqlite3 and libnghttp2 from the
+system and the core builds with nothing but a Zig compiler. `zig build proxy`
+and `zig build test-proxy` ask for it.
 
-Three properties the suite holds. Breaking one is a design change, not an
-implementation detail.
+**`main.zig`** runs four actors feeding one event queue, and a main loop
+that owns every piece of mutable state. Actors only move bytes.
 
-- **Nothing is allocated per frame.** `Buffer.init` and `resize` are the only
-  allocation sites in the drawing core.
-- **Only what changed is drawn.** Row dirty flags, then the cell diff, then the
-  frame budget.
-- **The width tables are a build-time choice.**
+```
+input actor    stdin        -> user_input
+output actor   pty master   -> the terminal, plus the OSC 133 tap
+signal actor   wake pipe    -> resized
+proxy actor    :PORT        -> upstream_opened / upstream_closed
+```
 
-## Zig
+**`osc.zig`** scans for OSC 133 shell markers. Framing is ours because
+`vt.osc.Parser` consumes a payload and knows nothing about `ESC ]` or its
+terminators; parsing is the emulator's.
 
-- Fixed buffers on the draw and keystroke paths. A function that takes no
-  allocator cannot allocate, which is a proof rather than a promise.
-- Handle the error instead of asserting it away. There is one `unreachable`, in
-  a test helper, and one `catch {}`, restoring the terminal on the way out.
-  Nothing useful can follow a failure there, and propagating it would strand the
-  user in raw mode.
-- Comments say what goes wrong without the code, not what the code does. The
-  good ones name a symptom. *The terminal advances two columns and paints over
-  the neighbour.*
-- In a text field, a position is a byte offset and a movement is a grapheme
-  cluster. A column is a third number again. Mixing any two of them is every
-  classic text field bug.
+**`ca.zig`** is a local authority that mints one leaf per host. It writes a
+bundle of the system roots plus its own certificate, because `SSL_CERT_FILE`
+replaces a trust store rather than extending it. No OpenSSL: X.509 issuance is
+`tls.zig`'s.
 
-## Runtime and client
+**`tls.zig`** terminates both ends. It peeks the child's ClientHello for the
+ALPN offer, negotiates upstream first, then mirrors the result downstream, so a
+child never gets h2 to an HTTP/1.1 listener.
 
-telar will grow a server that owns sessions and a TUI that is one client of it.
-None of that exists yet, which is why the boundary is cheap to keep now.
-herdr's is tangled, and untangling it later costs a great deal more.
+**`http.zig`** frames HTTP/1.1 half duplex, which is what the protocol already
+is, so neither TLS session is touched by two threads. Chunked and
+close-delimited bodies forward as they arrive, so SSE still streams. Secret
+headers are redacted before anything is stored.
 
-Before you add state, an event or a message, decide which side it belongs to.
-Pane and process state, agent detection and terminal state are runtime facts.
-Selection, hover, scroll, focus and layout belong to the client. Name things
-after what they are, not after the widget that shows them.
+**`h2.zig`** observes rather than proxies. Frames relay byte for byte, with a
+copy fed through nghttp2's standalone HPACK inflater. No sessions, no stream id
+mapping, no flow-control windows. Enough to read the conversation, not enough to
+alter it.
+
+**`db.zig`** merges both taps onto one `event` table in SQLite: what the shell
+ran and what went out over the network, ordered together.
+
+Three things it does not do yet, and each is a decision rather than an oversight
+waiting to happen. Response bodies are stored unredacted, and one of them has
+already been observed carrying an API key. `timeline.db` lands in the working
+directory with default permissions while holding prompts and replies in clear.
+And interception is on with nothing on screen saying so.
+
+One known failure: `ab.chatgpt.com` from Codex. Its binary links
+Security.framework, which validates against the Keychain and ignores every
+environment variable the proxy sets. Fixing it means installing the CA into the
+system trust store, which is the user's decision and not the runtime's.
+
+## Performance, no matter what
+
+Doing so much work and placing between the terminal emulator and the actual pty,
+adds latency. Users should not note that telar is proxying their requests, so,
+functions should be heavily optimized. Strive to be obsessive about memory allocation
+control, and watch out each function time complexity ( Big O ).
+
+## Safety
+
+telar runs continuously on user's devices, and might be used in a remote server,
+so security is not negotiable. Prefer secure code over pretty or convenient code.
+Watch out for memory problems. Take inspiration from Rust for keeping track of memory.
+
+## Glossary
+
+- you means the agent reading this file and changing telar.
+- me is who you are talking to.
+- user means the person using telar.
+- agent means the coding agent a user runs inside a telar's pane. It could include you.
+- client means the TUI that connects to a telar's server.
