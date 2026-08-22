@@ -1,0 +1,662 @@
+//! Multi-pane client state and composition.
+
+const std = @import("std");
+const core = @import("telar-core");
+const frame_apply = @import("frame.zig");
+const layout_mod = @import("layout.zig");
+const term = @import("term.zig");
+
+const schema = core.schema.v2;
+const ui = core.ui;
+
+pub const max_panes = layout_mod.max_panes;
+
+const DamageRow = struct {
+    start: u16 = std.math.maxInt(u16),
+    end: u16 = 0,
+
+    fn mark(row: *DamageRow, start: u16, end: u16) void {
+        std.debug.assert(start < end);
+        row.start = @min(row.start, start);
+        row.end = @max(row.end, end);
+    }
+
+    fn clear(row: *DamageRow) void {
+        row.* = .{};
+    }
+
+    fn dirty(row: DamageRow) bool {
+        return row.start < row.end;
+    }
+};
+
+pub const Pane = struct {
+    gpa: std.mem.Allocator,
+    id: schema.PaneId,
+    location: schema.PaneLocation,
+    buffer: ui.Buffer,
+    damage_rows: []DamageRow,
+    attached: bool,
+    cursor: schema.frame.Cursor = .{},
+    applied_frame_id: u64 = 0,
+    pending_frame_id: u64 = 0,
+
+    fn init(
+        gpa: std.mem.Allocator,
+        pane_id: schema.PaneId,
+        location: schema.PaneLocation,
+        size: schema.TerminalSize,
+        attached: bool,
+    ) !Pane {
+        var buffer = try ui.Buffer.init(gpa, size.cols, size.rows);
+        errdefer buffer.deinit();
+        const damage_rows = try gpa.alloc(DamageRow, size.rows);
+        @memset(damage_rows, .{});
+        return .{
+            .gpa = gpa,
+            .id = pane_id,
+            .location = location,
+            .buffer = buffer,
+            .damage_rows = damage_rows,
+            .attached = attached,
+        };
+    }
+
+    fn deinit(pane: *Pane) void {
+        pane.gpa.free(pane.damage_rows);
+        pane.buffer.deinit();
+    }
+
+    fn clearDamage(pane: *Pane) void {
+        for (pane.damage_rows) |*row| row.clear();
+    }
+
+    fn markSpan(pane: *Pane, start: u32, count: u32) void {
+        if (count == 0) return;
+        const width: usize = pane.buffer.w;
+        var cursor: usize = start;
+        const end = cursor + count;
+        while (cursor < end) {
+            const row_index = cursor / width;
+            const row_end = @min(end, (row_index + 1) * width);
+            pane.damage_rows[row_index].mark(
+                @intCast(cursor % width),
+                @intCast(row_end - row_index * width),
+            );
+            cursor = row_end;
+        }
+    }
+};
+
+pub const RenderStats = struct {
+    panes: usize = 0,
+    cells: usize = 0,
+    damaged_cells: usize = 0,
+    full: bool = false,
+};
+
+pub const Model = struct {
+    gpa: std.mem.Allocator,
+    layout: layout_mod.Layout = .{},
+    panes: [max_panes]?Pane = [_]?Pane{null} ** max_panes,
+    pane_count: usize = 0,
+    location: ?schema.PaneLocation = null,
+    composed: ?ui.Buffer = null,
+    composition_invalidated: bool = true,
+
+    pub fn init(gpa: std.mem.Allocator) Model {
+        return .{ .gpa = gpa };
+    }
+
+    pub fn deinit(model: *Model) void {
+        for (&model.panes) |*slot| {
+            if (slot.*) |*pane| pane.deinit();
+            slot.* = null;
+        }
+        if (model.composed) |*buffer| buffer.deinit();
+        model.composed = null;
+        model.pane_count = 0;
+    }
+
+    pub fn focusedPane(model: *Model) ?*Pane {
+        const pane_id = model.layout.focused() orelse return null;
+        return model.find(pane_id);
+    }
+
+    pub fn find(model: *Model, pane_id: schema.PaneId) ?*Pane {
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            if (pane.id == pane_id) return pane;
+        }
+        return null;
+    }
+
+    pub fn addRoot(
+        model: *Model,
+        pane_id: schema.PaneId,
+        location: schema.PaneLocation,
+        size: schema.TerminalSize,
+    ) !void {
+        if (model.pane_count != 0) return error.ModelNotEmpty;
+        try model.insertPane(pane_id, location, size, true);
+        errdefer _ = model.removePane(pane_id);
+        try model.layout.addRoot(pane_id);
+        model.location = location;
+        model.composition_invalidated = true;
+    }
+
+    pub fn split(
+        model: *Model,
+        existing_pane: schema.PaneId,
+        new_pane: schema.PaneId,
+        location: schema.PaneLocation,
+        axis: layout_mod.Axis,
+        area: ui.Rect,
+    ) !void {
+        const prospective = model.layout.prospectiveSplit(existing_pane, axis, area) orelse
+            return error.PaneTooSmall;
+        const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
+        try model.insertPane(new_pane, location, size, true);
+        errdefer _ = model.removePane(new_pane);
+        try model.layout.split(existing_pane, new_pane, axis);
+        model.composition_invalidated = true;
+    }
+
+    /// Adds panes discovered in a location snapshot. Reconstructed layouts are
+    /// intentionally local and deterministic: each additional pane splits the
+    /// currently focused leaf left-to-right.
+    pub fn addDiscovered(
+        model: *Model,
+        pane_id: schema.PaneId,
+        location: schema.PaneLocation,
+        area: ui.Rect,
+    ) !void {
+        if (model.find(pane_id) != null) return;
+        const focused = model.layout.focused() orelse {
+            const size = rectSize(area) orelse return error.PaneTooSmall;
+            try model.insertPane(pane_id, location, size, false);
+            errdefer _ = model.removePane(pane_id);
+            try model.layout.addRoot(pane_id);
+            model.location = location;
+            model.composition_invalidated = true;
+            return;
+        };
+        const prospective = model.layout.prospectiveSplit(focused, .horizontal, area) orelse
+            return error.PaneTooSmall;
+        const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
+        try model.insertPane(pane_id, location, size, false);
+        errdefer _ = model.removePane(pane_id);
+        try model.layout.split(focused, pane_id, .horizontal);
+        model.composition_invalidated = true;
+    }
+
+    pub fn markAttached(model: *Model, pane_id: schema.PaneId) !void {
+        const pane = model.find(pane_id) orelse return error.PaneNotFound;
+        pane.attached = true;
+    }
+
+    pub fn removePane(model: *Model, pane_id: schema.PaneId) bool {
+        var removed = false;
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            if (pane.id != pane_id) continue;
+            pane.deinit();
+            slot.* = null;
+            model.pane_count -= 1;
+            removed = true;
+            break;
+        }
+        _ = model.layout.remove(pane_id);
+        if (model.pane_count == 0) model.location = null;
+        if (removed) model.composition_invalidated = true;
+        return removed;
+    }
+
+    pub fn focusPane(model: *Model, pane_id: schema.PaneId) bool {
+        const previous = model.layout.focused();
+        if (!model.layout.focusPane(pane_id)) return false;
+        if (previous != pane_id) model.composition_invalidated = true;
+        return true;
+    }
+
+    pub fn focusDirection(
+        model: *Model,
+        direction: layout_mod.Direction,
+        area: ui.Rect,
+    ) ?schema.PaneId {
+        const previous = model.layout.focused();
+        const focused = model.layout.focusDirection(direction, area) orelse return null;
+        if (previous != focused) model.composition_invalidated = true;
+        return focused;
+    }
+
+    pub fn applyFrame(
+        model: *Model,
+        frame: schema.frame.FrameView,
+    ) !frame_apply.Applied {
+        const pane = model.find(frame.pane_id) orelse return error.PaneNotFound;
+        if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id)
+            return error.FrameBaseMismatch;
+        const resized = pane.buffer.w != frame.cols or pane.buffer.h != frame.rows;
+        const replacement_damage = if (resized)
+            try model.gpa.alloc(DamageRow, frame.rows)
+        else
+            null;
+        errdefer if (replacement_damage) |rows| model.gpa.free(rows);
+        const applied = try frame_apply.applyBuffer(&pane.buffer, &pane.cursor, frame);
+        if (replacement_damage) |rows| {
+            @memset(rows, .{});
+            model.gpa.free(pane.damage_rows);
+            pane.damage_rows = rows;
+            model.composition_invalidated = true;
+        } else {
+            var spans = frame.spans();
+            while (spans.next()) |span| pane.markSpan(span.start, span.cell_count);
+        }
+        pane.applied_frame_id = frame.frame_id;
+        pane.pending_frame_id = frame.frame_id;
+        return applied;
+    }
+
+    pub fn contentSize(
+        model: *const Model,
+        pane_id: schema.PaneId,
+        area: ui.Rect,
+    ) ?schema.TerminalSize {
+        var storage: [max_panes]layout_mod.View = undefined;
+        for (model.layout.views(area, &storage)) |view| {
+            if (view.pane_id == pane_id) return rectSize(view.content);
+        }
+        return null;
+    }
+
+    pub fn render(model: *Model, screen: *term.Screen) !RenderStats {
+        if (try model.ensureComposed(screen.back.w, screen.back.h))
+            model.composition_invalidated = true;
+        const target = &model.composed.?;
+        if (!model.composition_invalidated) {
+            const stats = try model.composeIncremental(screen, target);
+            model.clearPaneDamage();
+            return stats;
+        }
+
+        target.clear(.{});
+        screen.cursor = null;
+        var stats: RenderStats = .{ .full = true };
+        var storage: [max_panes]layout_mod.View = undefined;
+        for (model.layout.views(target.area(), &storage)) |view| {
+            const pane = model.find(view.pane_id) orelse continue;
+            stats.panes += 1;
+            if (model.layout.count() > 1) drawTitle(target, view);
+            target.pushClip(view.content);
+            defer target.popClip();
+            const rows = @min(view.content.h, pane.buffer.h);
+            const cols = @min(view.content.w, pane.buffer.w);
+            var y: u16 = 0;
+            while (y < rows) : (y += 1) {
+                var x: u16 = 0;
+                while (x < cols) : (x += 1) {
+                    const source = &pane.buffer.cells[
+                        @as(usize, y) * pane.buffer.w + x
+                    ];
+                    target.setCell(
+                        view.content.x + x,
+                        view.content.y + y,
+                        source.text(),
+                        source.width,
+                        source.style,
+                    );
+                    stats.cells += 1;
+                }
+            }
+            if (view.focused and pane.cursor.visible and
+                pane.cursor.x < view.content.w and pane.cursor.y < view.content.h)
+            {
+                screen.cursor = .{
+                    .x = view.content.x + pane.cursor.x,
+                    .y = view.content.y + pane.cursor.y,
+                };
+            }
+        }
+        stats.damaged_cells = try syncComposed(screen, target);
+        model.composition_invalidated = false;
+        model.clearPaneDamage();
+        return stats;
+    }
+
+    fn ensureComposed(model: *Model, width: u16, height: u16) !bool {
+        if (model.composed) |*buffer| {
+            if (buffer.w == width and buffer.h == height) return false;
+            try buffer.resize(width, height);
+            return true;
+        }
+        model.composed = try .init(model.gpa, width, height);
+        return true;
+    }
+
+    fn composeIncremental(
+        model: *Model,
+        screen: *term.Screen,
+        target: *ui.Buffer,
+    ) !RenderStats {
+        var stats: RenderStats = .{};
+        screen.cursor = null;
+        var storage: [max_panes]layout_mod.View = undefined;
+        for (model.layout.views(target.area(), &storage)) |view| {
+            const pane = model.find(view.pane_id) orelse continue;
+            stats.panes += 1;
+            const rows = @min(view.content.h, pane.buffer.h);
+            const cols = @min(view.content.w, pane.buffer.w);
+            var y: u16 = 0;
+            while (y < rows) : (y += 1) {
+                const damage = pane.damage_rows[y];
+                if (!damage.dirty()) continue;
+                const start = @min(damage.start, cols);
+                const end = @min(damage.end, cols);
+                if (start >= end) continue;
+                stats.cells += end - start;
+                stats.damaged_cells += try syncPaneRange(
+                    screen,
+                    target,
+                    pane,
+                    view.content.x,
+                    view.content.y + y,
+                    y,
+                    start,
+                    end,
+                );
+            }
+            if (view.focused and pane.cursor.visible and
+                pane.cursor.x < view.content.w and pane.cursor.y < view.content.h)
+            {
+                screen.cursor = .{
+                    .x = view.content.x + pane.cursor.x,
+                    .y = view.content.y + pane.cursor.y,
+                };
+            }
+        }
+        return stats;
+    }
+
+    fn clearPaneDamage(model: *Model) void {
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            pane.clearDamage();
+        }
+    }
+
+    fn insertPane(
+        model: *Model,
+        pane_id: schema.PaneId,
+        location: schema.PaneLocation,
+        size: schema.TerminalSize,
+        attached: bool,
+    ) !void {
+        if (pane_id == .invalid) return error.InvalidPaneId;
+        if (model.find(pane_id) != null) return error.DuplicatePane;
+        if (model.pane_count == max_panes) return error.PaneLimitReached;
+        for (&model.panes) |*slot| {
+            if (slot.* == null) {
+                slot.* = try Pane.init(model.gpa, pane_id, location, size, attached);
+                model.pane_count += 1;
+                return;
+            }
+        }
+        unreachable;
+    }
+};
+
+fn syncPaneRange(
+    screen: *term.Screen,
+    composed: *ui.Buffer,
+    pane: *const Pane,
+    destination_x: u16,
+    destination_y: u16,
+    source_y: u16,
+    start: u16,
+    end: u16,
+) !usize {
+    std.debug.assert(start < end);
+    const source_row = @as(usize, source_y) * pane.buffer.w;
+    const destination_row = @as(usize, destination_y) * composed.w;
+    var damaged: usize = 0;
+    var x = start;
+    while (x < end) {
+        const source_index = source_row + x;
+        const destination_index = destination_row + destination_x + x;
+        if (pane.buffer.cells[source_index].eqlPublic(&composed.cells[destination_index])) {
+            x += 1;
+            continue;
+        }
+        const run_start = x;
+        x += 1;
+        while (x < end) : (x += 1) {
+            const next_source = source_row + x;
+            const next_destination = destination_row + destination_x + x;
+            if (pane.buffer.cells[next_source].eqlPublic(&composed.cells[next_destination])) break;
+        }
+        const count: u16 = x - run_start;
+        const source = pane.buffer.cells[source_row + run_start ..][0..count];
+        const composed_start = destination_row + destination_x + run_start;
+        const terminal = try screen.patchCells(@intCast(composed_start), count);
+        @memcpy(composed.cells[composed_start..][0..count], source);
+        @memcpy(terminal, source);
+        damaged += count;
+    }
+    return damaged;
+}
+
+fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
+    std.debug.assert(screen.sizeMatches(composed.w, composed.h));
+    var damaged: usize = 0;
+    var y: u16 = 0;
+    while (y < composed.h) : (y += 1) {
+        const row_start = @as(usize, y) * composed.w;
+        var x: u16 = 0;
+        while (x < composed.w) {
+            const index = row_start + x;
+            if (composed.cells[index].eqlPublic(&screen.back.cells[index])) {
+                x += 1;
+                continue;
+            }
+            const run_start = x;
+            x += 1;
+            while (x < composed.w) : (x += 1) {
+                const next = row_start + x;
+                if (composed.cells[next].eqlPublic(&screen.back.cells[next])) break;
+            }
+            const count = x - run_start;
+            const destination = try screen.patchCells(
+                @intCast(row_start + run_start),
+                count,
+            );
+            @memcpy(destination, composed.cells[row_start + run_start ..][0..count]);
+            damaged += count;
+        }
+    }
+    return damaged;
+}
+
+fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
+    if (rect.w == 0 or rect.h == 0) return null;
+    return .{ .cols = rect.w, .rows = rect.h };
+}
+
+fn drawTitle(buffer: *ui.Buffer, view: layout_mod.View) void {
+    const title = view.outer.row(0);
+    const style: ui.Style = if (view.focused)
+        .{ .flags = .{ .bold = true, .inverse = true } }
+    else
+        .{ .flags = .{ .faint = true, .inverse = true } };
+    buffer.fill(title, " ", style);
+    var title_buffer: [32]u8 = undefined;
+    const text = std.fmt.bufPrint(
+        &title_buffer,
+        " pane {d} ",
+        .{schema.id.raw(view.pane_id)},
+    ) catch " pane ";
+    _ = buffer.writeTruncated(title, title.x, title.y, text, title.w, style);
+}
+
+test "two pane buffers compose into their layout rectangles" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 20, .rows = 6 });
+    try model.split(
+        @enumFromInt(1),
+        @enumFromInt(2),
+        location,
+        .horizontal,
+        .{ .w = 40, .h = 7 },
+    );
+    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "a", 1, .{});
+    model.find(@enumFromInt(2)).?.buffer.setCell(0, 0, "b", 1, .{});
+
+    var screen = try term.Screen.init(gpa, 40, 7);
+    defer screen.deinit();
+    const stats = try model.render(&screen);
+
+    try std.testing.expectEqual(@as(usize, 2), stats.panes);
+    try std.testing.expectEqualStrings("a", screen.back.cells[40].text());
+    try std.testing.expectEqualStrings("b", screen.back.cells[40 + 20].text());
+    try std.testing.expect(screen.back.cells[20].style.flags.inverse);
+}
+
+test "frame state and pending acknowledgements stay per pane" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 2, .rows = 1 });
+    try model.split(
+        @enumFromInt(1),
+        @enumFromInt(2),
+        location,
+        .horizontal,
+        .{ .w = 4, .h = 2 },
+    );
+
+    const cells = [_]ui.Cell{ .{}, .{} };
+    const spans = [_]schema.frame.Span{.{ .start = 0, .cells = &cells }};
+    var encoded: [256]u8 = undefined;
+    const payload = try schema.encodePaneFrame(&encoded, .{
+        .pane_id = @enumFromInt(2),
+        .frame_id = 1,
+        .base_frame_id = 0,
+        .cols = 2,
+        .rows = 1,
+        .spans = &spans,
+    });
+    _ = try model.applyFrame((try schema.decodeServer(payload)).pane_frame);
+
+    try std.testing.expectEqual(@as(u64, 0), model.find(@enumFromInt(1)).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 1), model.find(@enumFromInt(2)).?.pending_frame_id);
+}
+
+test "snapshot discovery does not imply a runtime attachment" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 40, .rows = 8 });
+    try model.addDiscovered(
+        @enumFromInt(2),
+        location,
+        .{ .w = 40, .h = 8 },
+    );
+
+    try std.testing.expect(model.find(@enumFromInt(1)).?.attached);
+    try std.testing.expect(!model.find(@enumFromInt(2)).?.attached);
+    try model.markAttached(@enumFromInt(2));
+    try std.testing.expect(model.find(@enumFromInt(2)).?.attached);
+}
+
+test "unchanged composition produces no terminal damage" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 8, .rows = 3 });
+    var screen = try term.Screen.init(gpa, 8, 3);
+    defer screen.deinit();
+
+    const first = try model.render(&screen);
+    var output: [4096]u8 = undefined;
+    var initial_writer = std.Io.Writer.fixed(&output);
+    _ = try screen.flush(&initial_writer);
+
+    const snapshot_cells = [_]ui.Cell{.{}} ** 24;
+    const snapshot_spans = [_]schema.frame.Span{.{
+        .start = 0,
+        .cells = &snapshot_cells,
+    }};
+    var encoded: [4096]u8 = undefined;
+    const snapshot_payload = try schema.encodePaneFrame(&encoded, .{
+        .pane_id = @enumFromInt(1),
+        .frame_id = 1,
+        .base_frame_id = 0,
+        .cols = 8,
+        .rows = 3,
+        .spans = &snapshot_spans,
+    });
+    _ = try model.applyFrame((try schema.decodeServer(snapshot_payload)).pane_frame);
+    const snapshot = try model.render(&screen);
+    var snapshot_writer = std.Io.Writer.fixed(&output);
+    _ = try screen.flush(&snapshot_writer);
+
+    const second = try model.render(&screen);
+    var unchanged_writer = std.Io.Writer.fixed(&output);
+    const unchanged_flush = try screen.flush(&unchanged_writer);
+    try std.testing.expectEqual(@as(usize, 0), first.damaged_cells);
+    try std.testing.expectEqual(@as(usize, 24), snapshot.cells);
+    try std.testing.expectEqual(@as(usize, 0), snapshot.damaged_cells);
+    try std.testing.expectEqual(@as(usize, 0), second.damaged_cells);
+    try std.testing.expectEqual(@as(usize, 0), unchanged_flush.scanned);
+
+    const patch_cells = [_]ui.Cell{.{
+        .bytes = [_]u8{'x'} ++ [_]u8{0} ** (ui.Cell.max_bytes - 1),
+    }};
+    const patch_spans = [_]schema.frame.Span{.{ .start = 11, .cells = &patch_cells }};
+    const patch_payload = try schema.encodePaneFrame(&encoded, .{
+        .pane_id = @enumFromInt(1),
+        .frame_id = 2,
+        .base_frame_id = 1,
+        .cols = 8,
+        .rows = 3,
+        .spans = &patch_spans,
+    });
+    _ = try model.applyFrame((try schema.decodeServer(patch_payload)).pane_frame);
+    const changed = try model.render(&screen);
+    var changed_writer = std.Io.Writer.fixed(&output);
+    const changed_flush = try screen.flush(&changed_writer);
+    try std.testing.expectEqual(@as(usize, 1), changed.cells);
+    try std.testing.expectEqual(@as(usize, 1), changed.damaged_cells);
+    try std.testing.expectEqual(@as(usize, 1), changed_flush.scanned);
+}
+
+test "focus changes invalidate titles but stable focus stays incremental" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.split(
+        @enumFromInt(1),
+        @enumFromInt(2),
+        location,
+        .horizontal,
+        .{ .w = 40, .h = 6 },
+    );
+    var screen = try term.Screen.init(gpa, 40, 6);
+    defer screen.deinit();
+
+    try std.testing.expect((try model.render(&screen)).full);
+    try std.testing.expect(model.focusPane(@enumFromInt(1)));
+    try std.testing.expect((try model.render(&screen)).full);
+    try std.testing.expect(model.focusPane(@enumFromInt(1)));
+    const stable = try model.render(&screen);
+    try std.testing.expect(!stable.full);
+    try std.testing.expectEqual(@as(usize, 0), stable.cells);
+}

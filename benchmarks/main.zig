@@ -108,6 +108,9 @@ const cases = [_]Case{
     .{ .name = "frontend.keybind.route", .work_per_op = 12, .work_unit = "keys" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
+    .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
+    .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
 };
 
 const Measurement = struct {
@@ -332,7 +335,7 @@ const Fixture = struct {
 
 fn frame(frame_id: u64, spans: []const schema.frame.Span) schema.frame.Frame {
     return .{
-        .pane_id = 1,
+        .pane_id = @enumFromInt(1),
         .frame_id = frame_id,
         .base_frame_id = 1,
         .cols = cols,
@@ -627,6 +630,111 @@ fn runPacer(context: *PacerContext, iterations: usize) !u64 {
     return checksum;
 }
 
+const LayoutContext = struct {
+    layout: frontend.layout.Layout = .{},
+    area: core.ui.Rect = .{ .w = cols, .h = rows },
+
+    fn init() !LayoutContext {
+        var context: LayoutContext = .{};
+        try context.layout.addRoot(@enumFromInt(1));
+        try context.layout.split(@enumFromInt(1), @enumFromInt(2), .horizontal);
+        try context.layout.split(@enumFromInt(1), @enumFromInt(3), .vertical);
+        try context.layout.split(@enumFromInt(2), @enumFromInt(4), .vertical);
+        return context;
+    }
+};
+
+fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
+    const directions = [_]frontend.layout.Direction{ .right, .down, .left, .up };
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        if (context.layout.focusDirection(directions[iteration & 3], context.area)) |pane_id|
+            checksum +%= schema.id.raw(pane_id);
+    }
+    return checksum;
+}
+
+const MultiplexerContext = struct {
+    model: frontend.multiplexer.Model,
+    screen: frontend.term.Screen,
+
+    fn init(gpa: std.mem.Allocator) !MultiplexerContext {
+        var model = frontend.multiplexer.Model.init(gpa);
+        errdefer model.deinit();
+        const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
+        const area: core.ui.Rect = .{ .w = cols, .h = rows };
+        try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+        try model.split(@enumFromInt(1), @enumFromInt(3), location, .vertical, area);
+        try model.split(@enumFromInt(2), @enumFromInt(4), location, .vertical, area);
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            pane.buffer.setCell(0, 0, "x", 1, .{});
+        }
+        const screen = try frontend.term.Screen.init(gpa, cols, rows);
+        return .{ .model = model, .screen = screen };
+    }
+
+    fn deinit(context: *MultiplexerContext) void {
+        context.screen.deinit();
+        context.model.deinit();
+    }
+};
+
+fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        _ = context.model.focusPane(@enumFromInt(iteration % 4 + 1));
+        const stats = try context.model.render(&context.screen);
+        checksum +%= stats.cells + stats.panes;
+    }
+    return checksum;
+}
+
+const IncrementalComposeContext = struct {
+    model: frontend.multiplexer.Model,
+    screen: frontend.term.Screen,
+    payloads: [2][]const u8,
+
+    fn init(
+        gpa: std.mem.Allocator,
+        fixture: *const Fixture,
+    ) !IncrementalComposeContext {
+        var model = frontend.multiplexer.Model.init(gpa);
+        errdefer model.deinit();
+        const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
+        var screen = try frontend.term.Screen.init(gpa, cols, rows);
+        errdefer screen.deinit();
+        _ = try model.render(&screen);
+        model.find(@enumFromInt(1)).?.applied_frame_id = 1;
+        return .{
+            .model = model,
+            .screen = screen,
+            .payloads = fixture.sparse_payloads,
+        };
+    }
+
+    fn deinit(context: *IncrementalComposeContext) void {
+        context.screen.deinit();
+        context.model.deinit();
+    }
+};
+
+fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        context.model.find(@enumFromInt(1)).?.applied_frame_id = 1;
+        const frame_view = (try schema.decodeServer(
+            context.payloads[iteration & 1],
+        )).pane_frame;
+        _ = try context.model.applyFrame(frame_view);
+        const stats = try context.model.render(&context.screen);
+        checksum +%= stats.cells + stats.damaged_cells;
+    }
+    return checksum;
+}
+
 fn execute(
     writer: *Io.Writer,
     io: Io,
@@ -706,10 +814,43 @@ fn execute(
     }
 
     const cursor_case = cases[case_index];
+    case_index += 1;
     if (config.includes(cursor_case.name)) {
         var context = try CursorContext.init(gpa, fixture.terminal_output);
         defer context.deinit();
         try writeResult(writer, config, cursor_case, try measure(io, config, &context, runCursor));
+    }
+
+    const layout_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(layout_case.name)) {
+        var context = try LayoutContext.init();
+        try writeResult(writer, config, layout_case, try measure(io, config, &context, runLayoutFocus));
+    }
+
+    const multiplexer_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(multiplexer_case.name)) {
+        var context = try MultiplexerContext.init(gpa);
+        defer context.deinit();
+        try writeResult(
+            writer,
+            config,
+            multiplexer_case,
+            try measure(io, config, &context, runMultiplexerCompose),
+        );
+    }
+
+    const incremental_case = cases[case_index];
+    if (config.includes(incremental_case.name)) {
+        var context = try IncrementalComposeContext.init(gpa, fixture);
+        defer context.deinit();
+        try writeResult(
+            writer,
+            config,
+            incremental_case,
+            try measure(io, config, &context, runIncrementalCompose),
+        );
     }
 }
 

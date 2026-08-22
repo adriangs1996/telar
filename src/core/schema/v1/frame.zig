@@ -4,6 +4,7 @@ const std = @import("std");
 const ui = @import("../../ui.zig");
 const transport = @import("../../transport.zig");
 const wire = @import("wire.zig");
+const id = @import("id.zig");
 
 pub const max_span_count = 4096;
 pub const cell_header_size = 1;
@@ -28,7 +29,7 @@ pub const Span = struct {
 };
 
 pub const Frame = struct {
-    pane_id: u64,
+    pane_id: id.PaneId,
     frame_id: u64,
     /// Zero denotes a full snapshot. A patch names the last acknowledged frame
     /// it was computed from.
@@ -40,7 +41,7 @@ pub const Frame = struct {
 };
 
 pub const FrameView = struct {
-    pane_id: u64,
+    pane_id: id.PaneId,
     frame_id: u64,
     base_frame_id: u64,
     cols: u16,
@@ -108,7 +109,7 @@ pub const CellIterator = struct {
 
 pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     try validateFrame(frame);
-    try encoder.writeInt(u64, frame.pane_id);
+    try encoder.writeInt(u64, id.raw(frame.pane_id));
     try encoder.writeInt(u64, frame.frame_id);
     try encoder.writeInt(u64, frame.base_frame_id);
     try encoder.writeInt(u16, frame.cols);
@@ -138,7 +139,7 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
 
 pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
     const body_start = decoder.index;
-    const pane_id = try decoder.readInt(u64);
+    const pane_id = try id.pane(try decoder.readInt(u64));
     const frame_id = try decoder.readInt(u64);
     const base_frame_id = try decoder.readInt(u64);
     const cols = try decoder.readInt(u16);
@@ -247,7 +248,7 @@ fn validateFrame(frame: Frame) !void {
 }
 
 fn validateHeader(
-    pane_id: u64,
+    pane_id: id.PaneId,
     frame_id: u64,
     base_frame_id: u64,
     cols: u16,
@@ -255,7 +256,7 @@ fn validateHeader(
     cursor: Cursor,
     span_count: usize,
 ) !void {
-    if (pane_id == 0) return error.InvalidPaneId;
+    if (pane_id == .invalid) return error.InvalidPaneId;
     if (frame_id == 0 or base_frame_id >= frame_id) return error.InvalidFrameId;
     _ = try gridCellCount(cols, rows);
     if (span_count > max_span_count) return error.TooManySpans;
@@ -426,7 +427,7 @@ test "full snapshots preserve cells, styles and cursor" {
     };
     const spans = [_]Span{.{ .start = 0, .cells = &cells }};
     const frame = Frame{
-        .pane_id = 7,
+        .pane_id = @enumFromInt(7),
         .frame_id = 1,
         .base_frame_id = 0,
         .cols = 2,
@@ -460,7 +461,7 @@ test "a style run pays two bytes per ordinary cell" {
     var buffer: [128]u8 = undefined;
     var encoder = wire.Encoder.init(&buffer);
     try encodeBody(&encoder, .{
-        .pane_id = 1,
+        .pane_id = @enumFromInt(1),
         .frame_id = 1,
         .base_frame_id = 0,
         .cols = 3,
@@ -489,7 +490,7 @@ test "the first cell of every span must define its style" {
     var buffer: [128]u8 = undefined;
     var encoder = wire.Encoder.init(&buffer);
     try encodeBody(&encoder, .{
-        .pane_id = 1,
+        .pane_id = @enumFromInt(1),
         .frame_id = 1,
         .base_frame_id = 0,
         .cols = 1,
@@ -511,7 +512,7 @@ test "patch spans must be ordered and inside the screen" {
     var buffer: [256]u8 = undefined;
     var encoder = wire.Encoder.init(&buffer);
     try std.testing.expectError(error.InvalidSpan, encodeBody(&encoder, .{
-        .pane_id = 1,
+        .pane_id = @enumFromInt(1),
         .frame_id = 2,
         .base_frame_id = 1,
         .cols = 2,
@@ -526,7 +527,7 @@ test "a snapshot must contain the complete grid" {
     var buffer: [256]u8 = undefined;
     var encoder = wire.Encoder.init(&buffer);
     try std.testing.expectError(error.InvalidSnapshot, encodeBody(&encoder, .{
-        .pane_id = 1,
+        .pane_id = @enumFromInt(1),
         .frame_id = 1,
         .base_frame_id = 0,
         .cols = 2,

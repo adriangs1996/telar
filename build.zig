@@ -176,6 +176,8 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/pace.zig" },
         .{ .path = "src/frontend/edit.zig" },
         .{ .path = "src/frontend/keybind.zig" },
+        .{ .path = "src/frontend/layout.zig" },
+        .{ .path = "src/frontend/multiplexer.zig", .libc = true },
         .{ .path = "src/frontend/client.zig", .libc = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },

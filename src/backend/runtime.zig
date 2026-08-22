@@ -1,4 +1,4 @@
-//! Long-lived single-pane runtime for protocol version 2.
+//! Long-lived runtime for protocol version 2.
 
 const std = @import("std");
 const vt = @import("ghostty-vt");
@@ -13,16 +13,20 @@ const File = Io.File;
 const schema = core.schema.v2;
 const diagnostics = core.diagnostics;
 const output_chunk_size = 16 * 1024;
+const max_workspaces = 64;
+const max_panes = schema.max_panes_per_location;
+const max_pending_responses = max_panes * 2;
 
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
 
-const Output = struct {
-    bytes: [output_chunk_size]u8 = undefined,
-    len: u16 = 0,
+const PaneOutputEvent = struct {
+    pane: *Pane,
+    result: anyerror!u16,
+};
 
-    fn slice(output: *const Output) []const u8 {
-        return output.bytes[0..output.len];
-    }
+const PaneExitEvent = struct {
+    pane: *Pane,
+    result: anyerror!pty.Exit,
 };
 
 const RuntimeEvent = union(enum) {
@@ -32,8 +36,8 @@ const RuntimeEvent = union(enum) {
     control_message: anyerror![]u8,
     control_sent: anyerror!void,
     pane_input_written: anyerror!void,
-    pane_output: anyerror!Output,
-    pane_exit: anyerror!pty.Exit,
+    pane_output: PaneOutputEvent,
+    pane_exit: PaneExitEvent,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     stopped: anyerror!void,
@@ -66,9 +70,49 @@ const RuntimeMetrics = struct {
 };
 
 const PendingFailure = struct {
-    request_id: u64,
+    request_id: schema.RequestId,
     code: schema.FailureCode,
     message: []const u8,
+};
+
+const PendingLocationSnapshot = struct {
+    request_id: schema.RequestId,
+    location: schema.PaneLocation,
+};
+
+const PendingResponse = union(enum) {
+    pane_opened: schema.PaneOpened,
+    request_failed: PendingFailure,
+    location_snapshot: PendingLocationSnapshot,
+};
+
+const ResponseQueue = struct {
+    items: [max_pending_responses]PendingResponse = undefined,
+    head: u8 = 0,
+    len: u8 = 0,
+
+    fn push(queue: *ResponseQueue, response: PendingResponse) !void {
+        if (queue.len == queue.items.len) return error.ResponseQueueFull;
+        const index = (@as(usize, queue.head) + queue.len) % queue.items.len;
+        queue.items[index] = response;
+        queue.len += 1;
+    }
+
+    fn peek(queue: *ResponseQueue) ?*PendingResponse {
+        if (queue.len == 0) return null;
+        return &queue.items[queue.head];
+    }
+
+    fn pop(queue: *ResponseQueue) void {
+        std.debug.assert(queue.len != 0);
+        queue.head = @intCast((@as(usize, queue.head) + 1) % queue.items.len);
+        queue.len -= 1;
+    }
+
+    fn clear(queue: *ResponseQueue) void {
+        queue.head = 0;
+        queue.len = 0;
+    }
 };
 
 const ShutdownState = struct {
@@ -114,34 +158,32 @@ const OwnedCommand = struct {
 };
 
 const Pane = struct {
-    id: u64,
+    id: schema.PaneId,
+    location: schema.PaneLocation,
     session: pty.Session,
     terminal: vt.Terminal,
     stream: vt.TerminalStream,
     render_state: vt.RenderState = .empty,
     screen: core.ui.Buffer,
-    acknowledged: core.ui.Buffer,
     damaged_rows: []bool,
+    output_buffer: [output_chunk_size]u8 = undefined,
     cursor: schema.frame.Cursor = .{},
-    acknowledged_cursor: schema.frame.Cursor = .{},
     foreground_override: ?vt.color.RGB = null,
     background_override: ?vt.color.RGB = null,
     semantic_colors_dirty: bool = false,
-    next_frame_id: u64 = 1,
-    acknowledged_frame_id: u64 = 0,
-    outstanding_frame_id: u64 = 0,
-    frame_sent_ns: u64 = 0,
     dirty: bool = true,
     output_pending: bool = false,
     output_done: bool = false,
     wait_pending: bool = false,
+    close_requested: bool = false,
     exit: ?pty.Exit = null,
     gpa: std.mem.Allocator,
 
     fn create(
         io: Io,
         gpa: std.mem.Allocator,
-        id: u64,
+        id: schema.PaneId,
+        location: schema.PaneLocation,
         command: *const pty.Command,
         size: schema.TerminalSize,
     ) !*Pane {
@@ -149,6 +191,7 @@ const Pane = struct {
         errdefer gpa.destroy(pane);
 
         pane.id = id;
+        pane.location = location;
         pane.gpa = gpa;
         pane.session = try .spawn(command, .{ .cols = size.cols, .rows = size.rows });
         errdefer pane.session.deinit();
@@ -159,24 +202,18 @@ const Pane = struct {
         pane.render_state = .empty;
         pane.screen = try .init(gpa, size.cols, size.rows);
         errdefer pane.screen.deinit();
-        pane.acknowledged = try .init(gpa, size.cols, size.rows);
-        errdefer pane.acknowledged.deinit();
         pane.damaged_rows = try gpa.alloc(bool, size.rows);
         errdefer gpa.free(pane.damaged_rows);
         @memset(pane.damaged_rows, false);
         pane.cursor = .{};
-        pane.acknowledged_cursor = .{};
         pane.foreground_override = pane.terminal.colors.foreground.override;
         pane.background_override = pane.terminal.colors.background.override;
         pane.semantic_colors_dirty = false;
-        pane.next_frame_id = 1;
-        pane.acknowledged_frame_id = 0;
-        pane.outstanding_frame_id = 0;
-        pane.frame_sent_ns = 0;
         pane.dirty = true;
         pane.output_pending = false;
         pane.output_done = false;
         pane.wait_pending = false;
+        pane.close_requested = false;
         pane.exit = null;
         try pane.render(true);
         return pane;
@@ -185,7 +222,6 @@ const Pane = struct {
     fn destroy(pane: *Pane) void {
         const gpa = pane.gpa;
         gpa.free(pane.damaged_rows);
-        pane.acknowledged.deinit();
         pane.screen.deinit();
         pane.render_state.deinit(gpa);
         pane.stream.deinit();
@@ -217,10 +253,8 @@ const Pane = struct {
         try pane.session.resize(.{ .cols = size.cols, .rows = size.rows });
         try pane.terminal.resize(pane.gpa, .{ .cols = size.cols, .rows = size.rows });
         try pane.screen.resize(size.cols, size.rows);
-        try pane.acknowledged.resize(size.cols, size.rows);
         pane.damaged_rows = try pane.gpa.realloc(pane.damaged_rows, size.rows);
         @memset(pane.damaged_rows, false);
-        pane.outstanding_frame_id = 0;
         try pane.render(true);
     }
 
@@ -242,6 +276,263 @@ const Pane = struct {
         else
             .{};
         pane.dirty = true;
+    }
+};
+
+/// Per-client rendering state. It is disposable: reconnecting creates a fresh
+/// baseline while the pane and its PTY continue to exist.
+const Attachment = struct {
+    pane: *Pane,
+    acknowledged: core.ui.Buffer,
+    acknowledged_cursor: schema.frame.Cursor = .{},
+    next_frame_id: u64 = 1,
+    acknowledged_frame_id: u64 = 0,
+    outstanding_frame_id: u64 = 0,
+    frame_sent_ns: u64 = 0,
+    snapshot_pending: bool = true,
+    exit_sent: bool = false,
+
+    fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
+        return .{
+            .pane = pane,
+            .acknowledged = try .init(gpa, pane.screen.w, pane.screen.h),
+        };
+    }
+
+    fn deinit(attachment: *Attachment) void {
+        attachment.acknowledged.deinit();
+    }
+
+    fn resizeIfNeeded(attachment: *Attachment) !bool {
+        if (attachment.acknowledged.w == attachment.pane.screen.w and
+            attachment.acknowledged.h == attachment.pane.screen.h)
+        {
+            return false;
+        }
+        try attachment.acknowledged.resize(
+            attachment.pane.screen.w,
+            attachment.pane.screen.h,
+        );
+        attachment.outstanding_frame_id = 0;
+        attachment.snapshot_pending = true;
+        return true;
+    }
+};
+
+const Workspace = struct {
+    id: schema.WorkspaceId,
+    path: []u8,
+};
+
+const WorkspaceStore = struct {
+    const Ensured = struct {
+        id: schema.WorkspaceId,
+        created: bool,
+    };
+
+    gpa: std.mem.Allocator,
+    items: [max_workspaces]?Workspace = [_]?Workspace{null} ** max_workspaces,
+    count: usize = 0,
+    next_id: u64 = 1,
+
+    fn init(gpa: std.mem.Allocator) WorkspaceStore {
+        return .{ .gpa = gpa };
+    }
+
+    fn deinit(store: *WorkspaceStore) void {
+        for (&store.items) |*slot| {
+            if (slot.*) |workspace| store.gpa.free(workspace.path);
+            slot.* = null;
+        }
+    }
+
+    fn ensure(store: *WorkspaceStore, path: []const u8) !Ensured {
+        for (store.items) |slot| {
+            const workspace = slot orelse continue;
+            if (std.mem.eql(u8, workspace.path, path))
+                return .{ .id = workspace.id, .created = false };
+        }
+        if (store.count == max_workspaces) return error.WorkspaceLimitReached;
+        const path_copy = try store.gpa.dupe(u8, path);
+        errdefer store.gpa.free(path_copy);
+        const workspace_id = try schema.id.workspace(store.next_id);
+        store.next_id += 1;
+        for (&store.items) |*slot| {
+            if (slot.* == null) {
+                slot.* = .{ .id = workspace_id, .path = path_copy };
+                store.count += 1;
+                return .{ .id = workspace_id, .created = true };
+            }
+        }
+        unreachable;
+    }
+
+    fn contains(store: *const WorkspaceStore, workspace_id: schema.WorkspaceId) bool {
+        for (store.items) |slot| {
+            const workspace = slot orelse continue;
+            if (workspace.id == workspace_id) return true;
+        }
+        return false;
+    }
+
+    fn remove(store: *WorkspaceStore, workspace_id: schema.WorkspaceId) void {
+        for (&store.items) |*slot| {
+            const workspace = slot.* orelse continue;
+            if (workspace.id == workspace_id) {
+                store.gpa.free(workspace.path);
+                slot.* = null;
+                store.count -= 1;
+                return;
+            }
+        }
+        unreachable;
+    }
+};
+
+const PaneStore = struct {
+    items: [max_panes]?*Pane = [_]?*Pane{null} ** max_panes,
+    count: usize = 0,
+    next_id: u64 = 1,
+
+    fn find(store: *PaneStore, pane_id: schema.PaneId) ?*Pane {
+        for (store.items) |slot| {
+            const pane = slot orelse continue;
+            if (pane.id == pane_id) return pane;
+        }
+        return null;
+    }
+
+    fn firstAt(store: *PaneStore, location: schema.PaneLocation) ?*Pane {
+        for (store.items) |slot| {
+            const pane = slot orelse continue;
+            if (!pane.close_requested and pane.exit == null and
+                std.meta.eql(pane.location, location)) return pane;
+        }
+        return null;
+    }
+
+    fn descriptorsAt(
+        store: *const PaneStore,
+        location: schema.PaneLocation,
+        output: *[max_panes]schema.PaneDescriptor,
+    ) []const schema.PaneDescriptor {
+        var len: usize = 0;
+        for (store.items) |slot| {
+            const pane = slot orelse continue;
+            if (pane.close_requested or pane.exit != null or
+                !std.meta.eql(pane.location, location)) continue;
+            output[len] = .{
+                .pane_id = pane.id,
+                .lifecycle = .running,
+            };
+            len += 1;
+        }
+        return output[0..len];
+    }
+
+    fn allocateId(store: *PaneStore) !schema.PaneId {
+        if (store.count == max_panes) return error.PaneLimitReached;
+        const pane_id = try schema.id.pane(store.next_id);
+        store.next_id += 1;
+        return pane_id;
+    }
+
+    fn insert(store: *PaneStore, pane: *Pane) !void {
+        for (&store.items) |*slot| {
+            if (slot.* == null) {
+                slot.* = pane;
+                store.count += 1;
+                return;
+            }
+        }
+        return error.PaneLimitReached;
+    }
+
+    fn removeAndDestroy(store: *PaneStore, pane: *Pane) void {
+        for (&store.items) |*slot| {
+            if (slot.* == pane) {
+                slot.* = null;
+                store.count -= 1;
+                pane.destroy();
+                return;
+            }
+        }
+        unreachable;
+    }
+
+    fn shutdown(store: *PaneStore) void {
+        for (store.items) |slot| if (slot) |pane| pane.session.shutdown();
+    }
+
+    fn deinit(store: *PaneStore) void {
+        for (&store.items) |*slot| {
+            if (slot.*) |pane| pane.destroy();
+            slot.* = null;
+        }
+        store.count = 0;
+    }
+
+    fn collectFinished(store: *PaneStore, attachments: *AttachmentStore) void {
+        for (&store.items) |*slot| {
+            const pane = slot.* orelse continue;
+            if (pane.exit == null or pane.output_pending or pane.wait_pending) continue;
+            if (attachments.find(pane.id) != null) continue;
+            slot.* = null;
+            store.count -= 1;
+            pane.destroy();
+        }
+    }
+};
+
+const AttachmentStore = struct {
+    items: [max_panes]?Attachment = [_]?Attachment{null} ** max_panes,
+    count: usize = 0,
+    next_send: usize = 0,
+
+    fn find(store: *AttachmentStore, pane_id: schema.PaneId) ?*Attachment {
+        for (&store.items) |*slot| {
+            const attachment = if (slot.*) |*value| value else continue;
+            if (attachment.pane.id == pane_id) return attachment;
+        }
+        return null;
+    }
+
+    fn attach(
+        store: *AttachmentStore,
+        gpa: std.mem.Allocator,
+        pane: *Pane,
+    ) !*Attachment {
+        if (store.find(pane.id)) |existing| return existing;
+        if (store.count == max_panes) return error.AttachmentLimitReached;
+        for (&store.items) |*slot| {
+            if (slot.* == null) {
+                slot.* = try Attachment.init(gpa, pane);
+                store.count += 1;
+                return &slot.*.?;
+            }
+        }
+        unreachable;
+    }
+
+    fn detach(store: *AttachmentStore, pane_id: schema.PaneId) bool {
+        for (&store.items) |*slot| {
+            const attachment = if (slot.*) |*value| value else continue;
+            if (attachment.pane.id != pane_id) continue;
+            attachment.deinit();
+            slot.* = null;
+            store.count -= 1;
+            return true;
+        }
+        return false;
+    }
+
+    fn deinit(store: *AttachmentStore) void {
+        for (&store.items) |*slot| {
+            if (slot.*) |*attachment| attachment.deinit();
+            slot.* = null;
+        }
+        store.count = 0;
+        store.next_send = 0;
     }
 };
 
@@ -285,7 +576,7 @@ fn serveInternal(
     const input_buffer = try gpa.alloc(u8, schema.max_input_bytes);
     defer gpa.free(input_buffer);
 
-    var select_storage: [13]RuntimeEvent = undefined;
+    var select_storage: [16 + 2 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
@@ -299,14 +590,12 @@ fn serveInternal(
     var client_read_pending = false;
     var client_send_pending = false;
     var pane_input_pending = false;
-    var attached_pane_id: u64 = 0;
-    var exit_sent = false;
-    var pending_opened: ?schema.PaneOpened = null;
-    var pending_failure: ?PendingFailure = null;
-    var snapshot_pending = false;
+    var attachments: AttachmentStore = .{};
+    var responses: ResponseQueue = .{};
+    var sent_exit_pane: ?schema.PaneId = null;
     var shutdown: ShutdownState = .{};
-    var pane: ?*Pane = null;
-    var next_pane_id: u64 = 1;
+    var workspaces = WorkspaceStore.init(gpa);
+    var panes: PaneStore = .{};
     var control_receive_buffer: [1]u8 = undefined;
     var control_send_buffer: [1]u8 = undefined;
     var telemetry_buffer: [4096]u8 = undefined;
@@ -318,12 +607,14 @@ fn serveInternal(
         if (control_connection) |*active| active.shutdown(io);
         // `pane_exit` blocks in libc's waitpid and cannot observe Select
         // cancellation. End the PTY session first so all actors can finish.
-        if (pane) |active| active.session.shutdown();
+        panes.shutdown();
         select.cancelDiscard();
         listener.deinit(io);
         if (connection) |*active| active.deinit(io);
         if (control_connection) |*active| active.deinit(io);
-        if (pane) |active| active.destroy();
+        attachments.deinit();
+        panes.deinit();
+        workspaces.deinit();
     }
 
     while (true) switch (try select.await()) {
@@ -348,9 +639,9 @@ fn serveInternal(
                 continue;
             }
             connection = accepted;
-            pending_opened = null;
-            pending_failure = null;
-            snapshot_pending = false;
+            responses.clear();
+            dropAttachments(&attachments, &panes);
+            sent_exit_pane = null;
             client_read_pending = true;
             try select.concurrent(.client_message, receiveClient, .{
                 io,
@@ -363,19 +654,15 @@ fn serveInternal(
             const payload = result catch {
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
-                attached_pane_id = 0;
-                exit_sent = false;
-                pending_opened = null;
-                pending_failure = null;
-                snapshot_pending = false;
+                dropAttachments(&attachments, &panes);
+                responses.clear();
                 continue;
             };
             const decode_started = diagnostics.now(io);
             const message = schema.decodeClient(payload) catch {
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
-                attached_pane_id = 0;
-                exit_sent = false;
+                dropAttachments(&attachments, &panes);
                 continue;
             };
             if (comptime diagnostics.enabled) {
@@ -387,23 +674,20 @@ fn serveInternal(
                 gpa,
                 &select,
                 message,
-                &pane,
-                &next_pane_id,
-                &attached_pane_id,
-                &exit_sent,
-                &pending_opened,
-                &pending_failure,
-                &snapshot_pending,
+                &panes,
+                &workspaces,
+                &attachments,
+                &responses,
                 input_buffer,
                 &pane_input_pending,
                 &shutdown,
                 &metrics,
-            ) catch {
+            ) catch |err| {
+                if (err == error.RuntimeConcurrencyUnavailable) return err;
                 if (shutdown.primary_request) return;
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
-                attached_pane_id = 0;
-                exit_sent = false;
+                dropAttachments(&attachments, &panes);
                 continue;
             };
             pumpSend(
@@ -411,13 +695,11 @@ fn serveInternal(
                 &select,
                 connectionPointer(&connection),
                 send_buffer,
-                pane,
-                attached_pane_id,
+                &attachments,
+                &panes,
+                &responses,
                 &client_send_pending,
-                &pending_opened,
-                &pending_failure,
-                &snapshot_pending,
-                &exit_sent,
+                &sent_exit_pane,
                 &shutdown,
                 &metrics,
             ) catch {
@@ -427,8 +709,8 @@ fn serveInternal(
                     &connection,
                     client_read_pending,
                     client_send_pending,
-                    &attached_pane_id,
-                    &exit_sent,
+                    &attachments,
+                    &panes,
                 );
                 continue;
             };
@@ -455,11 +737,16 @@ fn serveInternal(
                     &connection,
                     client_read_pending,
                     client_send_pending,
-                    &attached_pane_id,
-                    &exit_sent,
+                    &attachments,
+                    &panes,
                 );
                 continue;
             };
+            if (sent_exit_pane) |pane_id| {
+                sent_exit_pane = null;
+                _ = attachments.detach(pane_id);
+                panes.collectFinished(&attachments);
+            }
             if (connection == null or !connection.?.isActive()) {
                 if (!client_read_pending) connection = null;
                 continue;
@@ -469,13 +756,11 @@ fn serveInternal(
                 &select,
                 connectionPointer(&connection),
                 send_buffer,
-                pane,
-                attached_pane_id,
+                &attachments,
+                &panes,
+                &responses,
                 &client_send_pending,
-                &pending_opened,
-                &pending_failure,
-                &snapshot_pending,
-                &exit_sent,
+                &sent_exit_pane,
                 &shutdown,
                 &metrics,
             ) catch {
@@ -485,8 +770,8 @@ fn serveInternal(
                     &connection,
                     client_read_pending,
                     client_send_pending,
-                    &attached_pane_id,
-                    &exit_sent,
+                    &attachments,
+                    &panes,
                 );
             };
         },
@@ -531,13 +816,11 @@ fn serveInternal(
                 &select,
                 connectionPointer(&connection),
                 send_buffer,
-                pane,
-                attached_pane_id,
+                &attachments,
+                &panes,
+                &responses,
                 &client_send_pending,
-                &pending_opened,
-                &pending_failure,
-                &snapshot_pending,
-                &exit_sent,
+                &sent_exit_pane,
                 &shutdown,
                 &metrics,
             ) catch return;
@@ -551,8 +834,8 @@ fn serveInternal(
                     &connection,
                     client_read_pending,
                     client_send_pending,
-                    &attached_pane_id,
-                    &exit_sent,
+                    &attachments,
+                    &panes,
                 );
                 continue;
             };
@@ -565,39 +848,45 @@ fn serveInternal(
                 });
             }
         },
-        .pane_output => |result| {
-            const active = pane orelse continue;
+        .pane_output => |event| {
+            const active = event.pane;
             active.output_pending = false;
-            const output = result catch {
+            const output_len = event.result catch {
                 active.output_done = true;
-                pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown, &metrics) catch {
-                    closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
+                pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
+                    closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
                 };
+                panes.collectFinished(&attachments);
                 continue;
             };
-            if (output.len == 0) {
+            if (output_len == 0) {
                 active.output_done = true;
             } else {
                 if (comptime diagnostics.enabled) {
                     metrics.pty_events += 1;
-                    metrics.pty_bytes += output.len;
-                    if (active.outstanding_frame_id != 0) metrics.folded_pty_events += 1;
+                    metrics.pty_bytes += output_len;
+                    if (attachments.find(active.id)) |value| {
+                        if (value.outstanding_frame_id != 0)
+                            metrics.folded_pty_events += 1;
+                    }
                 }
-                try active.ingest(io, output.slice(), &metrics);
+                try active.ingest(io, active.output_buffer[0..output_len], &metrics);
                 active.output_pending = true;
-                try select.concurrent(.pane_output, readPane, .{ io, active.session.file() });
+                try select.concurrent(.pane_output, readPane, .{ io, active });
             }
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown, &metrics) catch {
-                closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
+                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
             };
+            panes.collectFinished(&attachments);
         },
-        .pane_exit => |result| {
-            const active = pane orelse continue;
+        .pane_exit => |event| {
+            const active = event.pane;
             active.wait_pending = false;
-            active.exit = try result;
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown, &metrics) catch {
-                closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
+            active.exit = try event.result;
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
+                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
             };
+            panes.collectFinished(&attachments);
         },
         .telemetry_tick => |result| {
             result catch {
@@ -611,7 +900,13 @@ fn serveInternal(
             };
             if (telemetry_write_pending) continue;
 
-            const line = formatRuntimeTelemetry(&telemetry_buffer, io, &metrics, pane) catch continue;
+            const line = formatRuntimeTelemetry(
+                &telemetry_buffer,
+                io,
+                &metrics,
+                &attachments,
+                panes.count,
+            ) catch continue;
             telemetry_write_pending = true;
             select.concurrent(.telemetry_written, writeDiagnostics, .{
                 io,
@@ -634,13 +929,10 @@ fn dispatchClientMessage(
     gpa: std.mem.Allocator,
     select: *Io.Select(RuntimeEvent),
     message: schema.ClientMessage,
-    pane_slot: *?*Pane,
-    next_pane_id: *u64,
-    attached_pane_id: *u64,
-    exit_sent: *bool,
-    pending_opened: *?schema.PaneOpened,
-    pending_failure: *?PendingFailure,
-    snapshot_pending: *bool,
+    panes: *PaneStore,
+    workspaces: *WorkspaceStore,
+    attachments: *AttachmentStore,
+    responses: *ResponseQueue,
     input_buffer: []u8,
     input_pending: *bool,
     shutdown: *ShutdownState,
@@ -651,57 +943,54 @@ fn dispatchClientMessage(
             var created = false;
             const active = switch (open.target) {
                 .pane => |wanted| pane: {
-                    const existing = pane_slot.* orelse {
-                        pending_failure.* = .{ .request_id = open.request_id, .code = .pane_not_found, .message = "pane not found" };
+                    const existing = panes.find(wanted) orelse {
+                        try queueFailure(responses, open.request_id, .pane_not_found, "pane not found");
                         return;
                     };
-                    if (existing.id != wanted) {
-                        pending_failure.* = .{ .request_id = open.request_id, .code = .pane_not_found, .message = "pane not found" };
+                    if (existing.close_requested or existing.exit != null) {
+                        try queueFailure(responses, open.request_id, .pane_not_found, "pane not found");
                         return;
                     }
                     break :pane existing;
                 },
                 .default => pane: {
-                    if (pane_slot.*) |existing| {
+                    const launch = open.launch.?;
+                    const ensured = workspaces.ensure(launch.cwd) catch {
+                        try queueFailure(responses, open.request_id, .resource_limit, "could not create workspace");
+                        return;
+                    };
+                    var workspace_committed = !ensured.created;
+                    defer if (!workspace_committed) workspaces.remove(ensured.id);
+                    const location: schema.PaneLocation = .{ .workspace = ensured.id };
+                    if (panes.firstAt(location)) |existing| {
                         if (existing.exit != null and existing.output_done) {
-                            existing.destroy();
-                            pane_slot.* = null;
+                            _ = attachments.detach(existing.id);
+                            panes.removeAndDestroy(existing);
                         } else break :pane existing;
                     }
-
-                    const launch = open.launch.?;
-                    var command = OwnedCommand.init(gpa, launch) catch {
-                        pending_failure.* = .{ .request_id = open.request_id, .code = .invalid_request, .message = "unsupported launch environment" };
+                    const fresh = spawnPane(io, gpa, select, panes, location, open.size, launch) catch |err| {
+                        if (err == error.RuntimeConcurrencyUnavailable) return err;
+                        try queueSpawnFailure(responses, open.request_id, err);
                         return;
                     };
-                    defer command.deinit();
-                    const fresh = Pane.create(io, gpa, next_pane_id.*, &command.command, open.size) catch {
-                        pending_failure.* = .{ .request_id = open.request_id, .code = .spawn_failed, .message = "could not start pane process" };
-                        return;
-                    };
-                    next_pane_id.* += 1;
-                    pane_slot.* = fresh;
-                    fresh.output_pending = true;
-                    fresh.wait_pending = true;
-                    try select.concurrent(.pane_output, readPane, .{ io, fresh.session.file() });
-                    try select.concurrent(.pane_exit, waitPane, .{fresh});
+                    workspace_committed = true;
                     created = true;
                     break :pane fresh;
                 },
             };
 
-            attached_pane_id.* = active.id;
-            exit_sent.* = false;
-            pending_opened.* = .{
+            try active.resize(open.size);
+            const attachment = try attachments.attach(gpa, active);
+            _ = try attachment.resizeIfNeeded();
+            try responses.push(.{ .pane_opened = .{
                 .request_id = open.request_id,
                 .pane_id = active.id,
+                .location = active.location,
                 .created = created,
-            };
-            try active.resize(open.size);
-            snapshot_pending.* = true;
+            } });
         },
         .pane_input => |input| {
-            const active = try attachedPane(pane_slot.*, attached_pane_id.*, input.pane_id);
+            const active = (try attachedPane(attachments, input.pane_id)).pane;
             if (active.exit != null) return;
             if (comptime diagnostics.enabled) {
                 metrics.input_events += 1;
@@ -720,12 +1009,12 @@ fn dispatchClientMessage(
             };
         },
         .pane_resize => |resize| {
-            const active = try attachedPane(pane_slot.*, attached_pane_id.*, resize.pane_id);
-            try active.resize(resize.size);
-            snapshot_pending.* = true;
+            const active = try attachedPane(attachments, resize.pane_id);
+            try active.pane.resize(resize.size);
+            _ = try active.resizeIfNeeded();
         },
         .frame_ack => |ack| {
-            const active = try attachedPane(pane_slot.*, attached_pane_id.*, ack.pane_id);
+            const active = try attachedPane(attachments, ack.pane_id);
             if (ack.frame_id != active.outstanding_frame_id) return;
             if (comptime diagnostics.enabled) {
                 metrics.ack.observe(diagnostics.elapsed(active.frame_sent_ns, diagnostics.now(io)));
@@ -734,13 +1023,57 @@ fn dispatchClientMessage(
             active.outstanding_frame_id = 0;
         },
         .request_snapshot => |request| {
-            _ = try attachedPane(pane_slot.*, attached_pane_id.*, request.pane_id);
-            snapshot_pending.* = true;
+            const active = try attachedPane(attachments, request.pane_id);
+            active.snapshot_pending = true;
         },
         .detach_pane => |detach| {
-            _ = try attachedPane(pane_slot.*, attached_pane_id.*, detach.pane_id);
-            attached_pane_id.* = 0;
-            exit_sent.* = false;
+            if (!attachments.detach(detach.pane_id)) return error.PaneNotFound;
+        },
+        .request_location_snapshot => |request| {
+            if (!locationExists(workspaces, request.location)) {
+                try queueFailure(responses, request.request_id, .pane_not_found, "location not found");
+                return;
+            }
+            try responses.push(.{ .location_snapshot = .{
+                .request_id = request.request_id,
+                .location = request.location,
+            } });
+        },
+        .create_pane => |create| {
+            if (!locationExists(workspaces, create.location)) {
+                try queueFailure(responses, create.request_id, .pane_not_found, "location not found");
+                return;
+            }
+            const fresh = spawnPane(
+                io,
+                gpa,
+                select,
+                panes,
+                create.location,
+                create.size,
+                create.launch,
+            ) catch |err| {
+                if (err == error.RuntimeConcurrencyUnavailable) return err;
+                try queueSpawnFailure(responses, create.request_id, err);
+                return;
+            };
+            _ = try attachments.attach(gpa, fresh);
+            try responses.push(.{ .pane_opened = .{
+                .request_id = create.request_id,
+                .pane_id = fresh.id,
+                .location = fresh.location,
+                .created = true,
+            } });
+        },
+        .close_pane => |close| {
+            const active = attachments.find(close.pane_id) orelse {
+                try queueFailure(responses, close.request_id, .pane_not_found, "pane not attached");
+                return;
+            };
+            if (!active.pane.close_requested) {
+                active.pane.close_requested = true;
+                active.pane.session.shutdown();
+            }
         },
         .runtime_stop => {
             shutdown.requested = true;
@@ -750,13 +1083,100 @@ fn dispatchClientMessage(
     }
 }
 
+fn locationExists(
+    workspaces: *const WorkspaceStore,
+    location: schema.PaneLocation,
+) bool {
+    return switch (location) {
+        .workspace => |workspace_id| workspaces.contains(workspace_id),
+        .worktree => false,
+    };
+}
+
+fn queueFailure(
+    responses: *ResponseQueue,
+    request_id: schema.RequestId,
+    code: schema.FailureCode,
+    message: []const u8,
+) !void {
+    try responses.push(.{ .request_failed = .{
+        .request_id = request_id,
+        .code = code,
+        .message = message,
+    } });
+}
+
+fn queueSpawnFailure(
+    responses: *ResponseQueue,
+    request_id: schema.RequestId,
+    spawn_error: anyerror,
+) !void {
+    switch (spawn_error) {
+        error.PaneLimitReached => try queueFailure(
+            responses,
+            request_id,
+            .resource_limit,
+            "pane limit reached",
+        ),
+        error.UnsupportedEnvironment => try queueFailure(
+            responses,
+            request_id,
+            .invalid_request,
+            "unsupported launch environment",
+        ),
+        else => try queueFailure(
+            responses,
+            request_id,
+            .spawn_failed,
+            "could not start pane process",
+        ),
+    }
+}
+
+fn spawnPane(
+    io: Io,
+    gpa: std.mem.Allocator,
+    select: *Io.Select(RuntimeEvent),
+    panes: *PaneStore,
+    location: schema.PaneLocation,
+    size: schema.TerminalSize,
+    launch: schema.LaunchView,
+) !*Pane {
+    var command = try OwnedCommand.init(gpa, launch);
+    defer command.deinit();
+    const pane_id = try panes.allocateId();
+    const fresh = fresh: {
+        const created = try Pane.create(io, gpa, pane_id, location, &command.command, size);
+        errdefer created.destroy();
+        try panes.insert(created);
+        break :fresh created;
+    };
+    select.concurrent(.pane_output, readPane, .{ io, fresh }) catch |err| {
+        panes.removeAndDestroy(fresh);
+        return err;
+    };
+    fresh.output_pending = true;
+    select.concurrent(.pane_exit, waitPane, .{fresh}) catch {
+        // The output actor already owns `fresh`, so this cannot be recovered
+        // as a failed request without risking a use-after-free. Stop the
+        // runtime; its normal teardown shuts down the PTY, joins the actor and
+        // only then destroys the pane.
+        fresh.close_requested = true;
+        fresh.session.shutdown();
+        return error.RuntimeConcurrencyUnavailable;
+    };
+    fresh.wait_pending = true;
+    return fresh;
+}
+
 fn encodeFrame(
     io: Io,
     buffer: []u8,
-    pane: *Pane,
+    attachment: *Attachment,
     force_snapshot: bool,
     metrics: *RuntimeMetrics,
 ) !?[]const u8 {
+    const pane = attachment.pane;
     const started = diagnostics.now(io);
     if (pane.dirty) try pane.render(false);
     var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
@@ -766,7 +1186,7 @@ fn encodeFrame(
     else
         damage.collectSpans(
             pane.screen.cells,
-            pane.acknowledged.cells,
+            attachment.acknowledged.cells,
             pane.screen.w,
             pane.damaged_rows,
             &span_storage,
@@ -774,7 +1194,7 @@ fn encodeFrame(
     var span_count = diff.span_count;
     snapshot = snapshot or diff.snapshot_required;
 
-    const cursor_changed = !std.meta.eql(pane.cursor, pane.acknowledged_cursor);
+    const cursor_changed = !std.meta.eql(pane.cursor, attachment.acknowledged_cursor);
     if (!snapshot and span_count == 0 and !cursor_changed) {
         @memset(pane.damaged_rows, false);
         pane.dirty = false;
@@ -794,28 +1214,28 @@ fn encodeFrame(
         span_count = 1;
     }
 
-    const frame_id = pane.next_frame_id;
-    pane.next_frame_id += 1;
+    const frame_id = attachment.next_frame_id;
+    attachment.next_frame_id += 1;
     const payload = try schema.encodePaneFrame(buffer, .{
         .pane_id = pane.id,
         .frame_id = frame_id,
-        .base_frame_id = if (snapshot) 0 else pane.acknowledged_frame_id,
+        .base_frame_id = if (snapshot) 0 else attachment.acknowledged_frame_id,
         .cols = pane.screen.w,
         .rows = pane.screen.h,
         .cursor = pane.cursor,
         .spans = span_storage[0..span_count],
     });
     if (snapshot) {
-        @memcpy(pane.acknowledged.cells, pane.screen.cells);
+        @memcpy(attachment.acknowledged.cells, pane.screen.cells);
     } else {
         for (span_storage[0..span_count]) |span| {
             const start: usize = @intCast(span.start);
-            @memcpy(pane.acknowledged.cells[start..][0..span.cells.len], span.cells);
+            @memcpy(attachment.acknowledged.cells[start..][0..span.cells.len], span.cells);
         }
     }
-    pane.acknowledged_cursor = pane.cursor;
-    pane.outstanding_frame_id = frame_id;
-    pane.frame_sent_ns = diagnostics.now(io);
+    attachment.acknowledged_cursor = pane.cursor;
+    attachment.outstanding_frame_id = frame_id;
+    attachment.frame_sent_ns = diagnostics.now(io);
     @memset(pane.damaged_rows, false);
     pane.dirty = false;
     if (comptime diagnostics.enabled) {
@@ -844,13 +1264,11 @@ fn pumpSend(
     select: *Io.Select(RuntimeEvent),
     connection: ?*core.transport.SocketChannel,
     buffer: []u8,
-    pane: ?*Pane,
-    attached_pane_id: u64,
+    attachments: *AttachmentStore,
+    panes: *PaneStore,
+    responses: *ResponseQueue,
     send_pending: *bool,
-    pending_opened: *?schema.PaneOpened,
-    pending_failure: *?PendingFailure,
-    snapshot_pending: *bool,
-    exit_sent: *bool,
+    sent_exit_pane: *?schema.PaneId,
     shutdown: *ShutdownState,
     metrics: *RuntimeMetrics,
 ) !void {
@@ -867,50 +1285,67 @@ fn pumpSend(
         return;
     }
 
-    if (pending_failure.*) |failure| {
-        const payload = try schema.encodeRequestFailed(buffer, .{
-            .request_id = failure.request_id,
-            .code = failure.code,
-            .message = failure.message,
+    if (responses.peek()) |response| {
+        var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
+        const payload = switch (response.*) {
+            .request_failed => |failure| try schema.encodeRequestFailed(buffer, .{
+                .request_id = failure.request_id,
+                .code = failure.code,
+                .message = failure.message,
+            }),
+            .pane_opened => |opened| try schema.encodePaneOpened(buffer, opened),
+            .location_snapshot => |snapshot| try schema.encodeLocationSnapshot(buffer, .{
+                .request_id = snapshot.request_id,
+                .location = snapshot.location,
+                .panes = panes.descriptorsAt(snapshot.location, &descriptor_storage),
+            }),
+        };
+        try startSend(io, select, connection.?, payload, send_pending);
+        responses.pop();
+        return;
+    }
+
+    var checked: usize = 0;
+    while (checked < attachments.items.len) : (checked += 1) {
+        const index = (attachments.next_send + checked) % attachments.items.len;
+        const active = if (attachments.items[index]) |*value| value else continue;
+        const pane = active.pane;
+        if (active.snapshot_pending) {
+            const payload = (try encodeFrame(io, buffer, active, true, metrics)) orelse
+                unreachable;
+            active.snapshot_pending = false;
+            try startSend(io, select, connection.?, payload, send_pending);
+            attachments.next_send = (index + 1) % attachments.items.len;
+            return;
+        }
+        if (active.outstanding_frame_id == 0 and pane.dirty) {
+            if (try encodeFrame(io, buffer, active, false, metrics)) |payload| {
+                try startSend(io, select, connection.?, payload, send_pending);
+                attachments.next_send = (index + 1) % attachments.items.len;
+                return;
+            }
+        }
+        if (active.exit_sent or !pane.output_done or pane.exit == null) continue;
+        if (active.outstanding_frame_id != 0) continue;
+
+        const exit = pane.exit.?;
+        const payload = try schema.encodePaneExited(buffer, .{
+            .pane_id = pane.id,
+            .kind = switch (exit) {
+                .exited => .exited,
+                .signaled => .signaled,
+            },
+            .value = switch (exit) {
+                .exited => |status| status,
+                .signaled => |signal| @intFromEnum(signal),
+            },
         });
-        pending_failure.* = null;
-        return startSend(io, select, connection.?, payload, send_pending);
+        try startSend(io, select, connection.?, payload, send_pending);
+        active.exit_sent = true;
+        sent_exit_pane.* = pane.id;
+        attachments.next_send = (index + 1) % attachments.items.len;
+        return;
     }
-    if (pending_opened.*) |opened| {
-        const payload = try schema.encodePaneOpened(buffer, opened);
-        pending_opened.* = null;
-        return startSend(io, select, connection.?, payload, send_pending);
-    }
-
-    const active = pane orelse return;
-    if (attached_pane_id != active.id) return;
-    if (snapshot_pending.*) {
-        const payload = (try encodeFrame(io, buffer, active, true, metrics)) orelse
-            unreachable;
-        snapshot_pending.* = false;
-        return startSend(io, select, connection.?, payload, send_pending);
-    }
-    if (active.outstanding_frame_id == 0 and active.dirty) {
-        if (try encodeFrame(io, buffer, active, false, metrics)) |payload|
-            return startSend(io, select, connection.?, payload, send_pending);
-    }
-    if (exit_sent.* or !active.output_done or active.exit == null) return;
-    if (active.outstanding_frame_id != 0) return;
-
-    const exit = active.exit.?;
-    const payload = try schema.encodePaneExited(buffer, .{
-        .pane_id = active.id,
-        .kind = switch (exit) {
-            .exited => .exited,
-            .signaled => .signaled,
-        },
-        .value = switch (exit) {
-            .exited => |status| status,
-            .signaled => |signal| @intFromEnum(signal),
-        },
-    });
-    exit_sent.* = true;
-    return startSend(io, select, connection.?, payload, send_pending);
 }
 
 fn startSend(
@@ -939,20 +1374,24 @@ fn closeClient(
     connection: *?core.transport.SocketChannel,
     read_pending: bool,
     send_pending: bool,
-    attached_pane_id: *u64,
-    exit_sent: *bool,
+    attachments: *AttachmentStore,
+    panes: *PaneStore,
 ) void {
     if (connection.*) |*active| active.deinit(io);
     if (!read_pending and !send_pending) connection.* = null;
-    attached_pane_id.* = 0;
-    exit_sent.* = false;
+    dropAttachments(attachments, panes);
 }
 
-fn attachedPane(pane: ?*Pane, attached_id: u64, message_id: u64) !*Pane {
-    const active = pane orelse return error.PaneNotFound;
-    if (attached_id == 0 or message_id != attached_id or active.id != attached_id)
-        return error.PaneNotFound;
-    return active;
+fn dropAttachments(attachments: *AttachmentStore, panes: *PaneStore) void {
+    attachments.deinit();
+    panes.collectFinished(attachments);
+}
+
+fn attachedPane(
+    attachments: *AttachmentStore,
+    message_id: schema.PaneId,
+) !*Attachment {
+    return attachments.find(message_id) orelse error.PaneNotFound;
 }
 
 fn sendClient(
@@ -975,12 +1414,20 @@ fn formatRuntimeTelemetry(
     buffer: []u8,
     io: Io,
     metrics: *const RuntimeMetrics,
-    pane: ?*Pane,
+    attachments: *const AttachmentStore,
+    pane_count: usize,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
-    const active = pane;
+    var outstanding_frames: usize = 0;
+    var dirty_panes: usize = 0;
+    for (attachments.items) |slot| {
+        const active = slot orelse continue;
+        if (active.outstanding_frame_id != 0) outstanding_frames += 1;
+        if (active.pane.dirty) dirty_panes += 1;
+    }
     return std.fmt.bufPrint(buffer, "{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
-        "\"pane_id\":{d},\"outstanding_frame\":{d},\"dirty\":{d}," ++
+        "\"pane_count\":{d},\"attachment_count\":{d}," ++
+        "\"outstanding_frames\":{d},\"dirty_panes\":{d}," ++
         "\"client_messages\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
         "\"pty_events\":{d},\"pty_bytes\":{d},\"folded_pty_events\":{d}," ++
         "\"frames\":{d},\"frame_bytes\":{d},\"frame_cells\":{d}," ++
@@ -995,9 +1442,10 @@ fn formatRuntimeTelemetry(
         "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
-        if (active) |value| value.id else 0,
-        if (active) |value| value.outstanding_frame_id else 0,
-        @intFromBool(if (active) |value| value.dirty else false),
+        pane_count,
+        attachments.count,
+        outstanding_frames,
+        dirty_panes,
         metrics.client_messages,
         metrics.input_events,
         metrics.input_bytes,
@@ -1053,12 +1501,39 @@ fn receiveClient(
     return connection.receive(io, buffer);
 }
 
-fn readPane(io: Io, master: File) anyerror!Output {
-    var output: Output = .{};
-    output.len = @intCast(try master.readStreaming(io, &.{&output.bytes}));
-    return output;
+fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
+    const len = pane.session.file().readStreaming(io, &.{&pane.output_buffer}) catch |err|
+        return .{ .pane = pane, .result = err };
+    return .{ .pane = pane, .result = @intCast(len) };
 }
 
-fn waitPane(pane: *Pane) anyerror!pty.Exit {
-    return pane.session.wait();
+fn waitPane(pane: *Pane) PaneExitEvent {
+    const result = pane.session.wait();
+    return .{ .pane = pane, .result = result };
+}
+
+test "workspace identities are stable per path" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const first = try store.ensure("/work/project");
+    const same = try store.ensure("/work/project");
+    const other = try store.ensure("/work/other");
+
+    try std.testing.expect(first.created);
+    try std.testing.expect(!same.created);
+    try std.testing.expect(other.created);
+    try std.testing.expectEqual(first.id, same.id);
+    try std.testing.expect(first.id != other.id);
+    try std.testing.expectEqual(@as(usize, 2), store.count);
+}
+
+test "an uncommitted workspace can be rolled back" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const workspace = try store.ensure("/invalid/cwd");
+    store.remove(workspace.id);
+
+    try std.testing.expectEqual(@as(usize, 0), store.count);
 }

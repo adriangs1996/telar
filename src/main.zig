@@ -326,7 +326,7 @@ const usage =
     \\       telar server
     \\       telar server stop
     \\
-    \\Run an interactive shell inside telar's single-pane UI.
+    \\Run an interactive shell inside telar's multiplexer UI.
     \\With a command, run that command instead of $SHELL.
     \\The local runtime starts automatically when needed.
     \\
@@ -338,6 +338,12 @@ const usage =
     \\  -h, --help       Show this help
     \\  -V, --version    Show the version
     \\  --               Stop parsing telar options
+    \\
+    \\Default keybindings (prefix Ctrl-b):
+    \\  % / "             Split left/right or top/bottom
+    \\  Arrow keys       Focus a pane by direction
+    \\  x                Close the focused pane
+    \\  d                Detach the client
     \\
 ;
 
