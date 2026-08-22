@@ -18,6 +18,21 @@ const ui = @import("telar-core").ui;
 // Rendering
 // ---------------------------------------------------------------------------
 
+const DamageRow = struct {
+    start: u16 = 0,
+    end: u16 = 0,
+
+    fn mark(row: *DamageRow, start: u16, end: u16) void {
+        std.debug.assert(start < end);
+        if (row.start == row.end) {
+            row.* = .{ .start = start, .end = end };
+            return;
+        }
+        row.start = @min(row.start, start);
+        row.end = @max(row.end, end);
+    }
+};
+
 /// Two buffers and the difference between them.
 ///
 /// `back` is what was just drawn; `front` is what the terminal is currently
@@ -28,6 +43,9 @@ const ui = @import("telar-core").ui;
 pub const Screen = struct {
     front: ui.Buffer,
     back: ui.Buffer,
+    damage_rows: []DamageRow,
+    full_damage: bool = true,
+    gpa: std.mem.Allocator,
 
     /// Where to leave the terminal's own cursor, and whether to show it.
     ///
@@ -44,13 +62,25 @@ pub const Screen = struct {
         /// Cells actually written. The number to watch: if idle frames are not
         /// near zero, something is being redrawn that did not change.
         cells: usize = 0,
+        /// Candidate cells compared. This should follow the damage size, not
+        /// the terminal size, for incremental frames.
+        scanned: usize = 0,
         bytes: usize = 0,
     };
 
     pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Screen {
+        var front = try ui.Buffer.init(gpa, w, h);
+        errdefer front.deinit();
+        var back = try ui.Buffer.init(gpa, w, h);
+        errdefer back.deinit();
+        const damage_rows = try gpa.alloc(DamageRow, h);
+        @memset(damage_rows, .{});
+
         var s: Screen = .{
-            .front = try .init(gpa, w, h),
-            .back = try .init(gpa, w, h),
+            .front = front,
+            .back = back,
+            .damage_rows = damage_rows,
+            .gpa = gpa,
         };
         s.invalidate();
         return s;
@@ -68,21 +98,59 @@ pub const Screen = struct {
         // No drawn cell is ever zero width and zero length, so nothing can
         // compare equal to this.
         @memset(s.front.cells, .{ .len = 0, .width = 0 });
+        s.full_damage = true;
+        @memset(s.damage_rows, .{});
     }
 
     pub fn deinit(s: *Screen) void {
+        s.gpa.free(s.damage_rows);
         s.front.deinit();
         s.back.deinit();
     }
 
     /// The buffer to draw this frame into.
+    ///
+    /// Arbitrary drawing cannot prove which cells it will touch, so borrowing
+    /// the buffer marks the whole screen. Protocol patches use `patchCells`
+    /// instead and retain exact damage.
     pub fn buffer(s: *Screen) *ui.Buffer {
+        s.full_damage = true;
         return &s.back;
     }
 
+    pub fn sizeMatches(s: *const Screen, w: u16, h: u16) bool {
+        return s.back.w == w and s.back.h == h;
+    }
+
+    /// Returns a writable linear patch and records the rows it intersects.
+    /// The returned slice is valid until resize, like the backing buffer.
+    pub fn patchCells(s: *Screen, start: u32, count: u32) ![]ui.Cell {
+        const first: usize = start;
+        const len: usize = count;
+        const end = std.math.add(usize, first, len) catch return error.PatchOutOfBounds;
+        if (len == 0 or end > s.back.cells.len) return error.PatchOutOfBounds;
+
+        const width: usize = s.back.w;
+        var index = first;
+        while (index < end) {
+            const y = index / width;
+            const x: u16 = @intCast(index % width);
+            const row_end = @min(end, (y + 1) * width);
+            const end_x: u16 = @intCast(row_end - y * width);
+            s.damage_rows[y].mark(x, end_x);
+            index = row_end;
+        }
+        return s.back.cells[first..end];
+    }
+
     pub fn resize(s: *Screen, w: u16, h: u16) !void {
+        const damage_rows = try s.gpa.alloc(DamageRow, h);
+        errdefer s.gpa.free(damage_rows);
+        @memset(damage_rows, .{});
         try s.back.resize(w, h);
         try s.front.resize(w, h);
+        s.gpa.free(s.damage_rows);
+        s.damage_rows = damage_rows;
         // A resized terminal kept none of what was there.
         s.invalidate();
     }
@@ -102,8 +170,11 @@ pub const Screen = struct {
 
         var y: u16 = 0;
         while (y < s.back.h) : (y += 1) {
-            var x: u16 = 0;
-            while (x < s.back.w) : (x += 1) {
+            const damage = s.damage_rows[y];
+            var x: u16 = if (s.full_damage) 0 else damage.start;
+            const end: u16 = if (s.full_damage) s.back.w else damage.end;
+            while (x < end) : (x += 1) {
+                stats.scanned += 1;
                 const index = @as(usize, y) * @as(usize, s.back.w) + @as(usize, x);
                 const next = &s.back.cells[index];
                 const current = &s.front.cells[index];
@@ -111,7 +182,10 @@ pub const Screen = struct {
                 // The trailing half of a wide glyph is not addressable: the
                 // terminal advanced its own cursor over it when the first half
                 // was drawn.
-                if (next.width == 0) continue;
+                if (next.width == 0) {
+                    current.* = next.*;
+                    continue;
+                }
                 if (next.eqlPublic(current)) continue;
 
                 // One cursor move per run of changes, not per cell. On a mostly
@@ -146,6 +220,8 @@ pub const Screen = struct {
         // Measured before the flush, which resets the writer's position.
         stats.bytes = w.end -| before;
         try w.flush();
+        s.full_damage = false;
+        @memset(s.damage_rows, .{});
         return stats;
     }
 };
@@ -705,6 +781,7 @@ test "the diff sends only what changed" {
         _ = screen.buffer().writeText(screen.buffer().area(), 0, 0, "hello", .{});
         const stats = try screen.flush(&w);
         try testing.expectEqual(@as(usize, 40 * 10), stats.cells);
+        try testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
     }
 
     { // Redrawing the same thing costs nothing at all.
@@ -713,6 +790,7 @@ test "the diff sends only what changed" {
         _ = screen.buffer().writeText(screen.buffer().area(), 0, 0, "hello", .{});
         const stats = try screen.flush(&w);
         try testing.expectEqual(@as(usize, 0), stats.cells);
+        try testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
     }
 
     { // One changed word costs one word.
@@ -741,6 +819,80 @@ test "a resize forces a full repaint" {
     screen.buffer().clear(.{});
     const stats = try screen.flush(&w2);
     try testing.expectEqual(@as(usize, 12 * 4), stats.cells);
+    try testing.expectEqual(@as(usize, 12 * 4), stats.scanned);
+}
+
+test "a protocol patch scans only its damaged cells" {
+    const gpa = testing.allocator;
+    var screen = try Screen.init(gpa, 10, 3);
+    defer screen.deinit();
+
+    var out: [8 * 1024]u8 = undefined;
+    var initial = Io.Writer.fixed(&out);
+    _ = try screen.flush(&initial);
+
+    const patch = try screen.patchCells(12, 2);
+    patch[0].bytes[0] = 'x';
+    patch[1].bytes[0] = 'y';
+
+    var writer = Io.Writer.fixed(&out);
+    const stats = try screen.flush(&writer);
+    try testing.expectEqual(@as(usize, 2), stats.scanned);
+    try testing.expectEqual(@as(usize, 2), stats.cells);
+}
+
+test "damage accumulates as one conservative range per row" {
+    const gpa = testing.allocator;
+    var screen = try Screen.init(gpa, 10, 2);
+    defer screen.deinit();
+
+    var out: [8 * 1024]u8 = undefined;
+    var initial = Io.Writer.fixed(&out);
+    _ = try screen.flush(&initial);
+
+    const left = try screen.patchCells(1, 1);
+    left[0].bytes[0] = 'x';
+    const right = try screen.patchCells(8, 1);
+    right[0].bytes[0] = 'y';
+
+    var writer = Io.Writer.fixed(&out);
+    const stats = try screen.flush(&writer);
+    try testing.expectEqual(@as(usize, 8), stats.scanned);
+    try testing.expectEqual(@as(usize, 2), stats.cells);
+}
+
+test "a patch crossing rows keeps exact damage on both" {
+    const gpa = testing.allocator;
+    var screen = try Screen.init(gpa, 10, 2);
+    defer screen.deinit();
+
+    var out: [8 * 1024]u8 = undefined;
+    var initial = Io.Writer.fixed(&out);
+    _ = try screen.flush(&initial);
+
+    const patch = try screen.patchCells(8, 4);
+    for (patch, 0..) |*cell, index| cell.bytes[0] = @intCast('a' + index);
+
+    var writer = Io.Writer.fixed(&out);
+    const stats = try screen.flush(&writer);
+    try testing.expectEqual(@as(usize, 4), stats.scanned);
+    try testing.expectEqual(@as(usize, 4), stats.cells);
+}
+
+test "a cursor-only frame scans no cells" {
+    const gpa = testing.allocator;
+    var screen = try Screen.init(gpa, 10, 2);
+    defer screen.deinit();
+
+    var out: [8 * 1024]u8 = undefined;
+    var initial = Io.Writer.fixed(&out);
+    _ = try screen.flush(&initial);
+
+    screen.cursor = .{ .x = 3, .y = 1 };
+    var writer = Io.Writer.fixed(&out);
+    const stats = try screen.flush(&writer);
+    try testing.expectEqual(@as(usize, 0), stats.scanned);
+    try testing.expectEqual(@as(usize, 0), stats.cells);
 }
 
 test "tab and shift-tab are their own keys" {

@@ -4,9 +4,18 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Parsing PTY output is the hottest part of the interactive path. Keep the
+    // application debuggable, but build the third-party emulator as optimized
+    // code just as herdr does; a Debug libghostty-vt makes terminal latency
+    // dominate before telar's own renderer even sees a frame.
+    const vt_optimize: std.builtin.OptimizeMode = if (optimize == .Debug)
+        .ReleaseFast
+    else
+        optimize;
+
     const ghostty_vt = b.dependency("ghostty_vt", .{
         .target = target,
-        .optimize = optimize,
+        .optimize = vt_optimize,
     }).module("ghostty-vt");
 
     // The width tables, behind a module name so the drawing layer never names
@@ -67,6 +76,57 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| run_exe.addArgs(args);
     b.step("run", "Run telar").dependOn(&run_exe.step);
 
+    // Benchmarks use their own optimized module graph. Running a Debug core
+    // under a ReleaseFast benchmark executable would measure safety checks and
+    // make the result depend on whichever build command happened to run it.
+    const bench_optimize: std.builtin.OptimizeMode = if (optimize == .Debug)
+        .ReleaseFast
+    else
+        optimize;
+    const bench_unicode = b.createModule(.{
+        .root_source_file = b.path("src/core/unicode.zig"),
+        .target = target,
+        .optimize = bench_optimize,
+    });
+    bench_unicode.addImport("ghostty-vt", ghostty_vt);
+    const bench_core = b.createModule(.{
+        .root_source_file = b.path("src/core/root.zig"),
+        .target = target,
+        .optimize = bench_optimize,
+    });
+    bench_core.addImport("unicode", bench_unicode);
+    const bench_backend = b.createModule(.{
+        .root_source_file = b.path("src/backend/root.zig"),
+        .target = target,
+        .optimize = bench_optimize,
+        .link_libc = true,
+    });
+    bench_backend.addImport("telar-core", bench_core);
+    bench_backend.addImport("ghostty-vt", ghostty_vt);
+    const bench_frontend = b.createModule(.{
+        .root_source_file = b.path("src/frontend/root.zig"),
+        .target = target,
+        .optimize = bench_optimize,
+        .link_libc = true,
+    });
+    bench_frontend.addImport("telar-core", bench_core);
+
+    const benchmarks = b.addExecutable(.{
+        .name = "telar-benchmarks",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("benchmarks/main.zig"),
+            .target = target,
+            .optimize = bench_optimize,
+            .link_libc = true,
+        }),
+    });
+    benchmarks.root_module.addImport("telar-core", bench_core);
+    benchmarks.root_module.addImport("telar-backend", bench_backend);
+    benchmarks.root_module.addImport("telar-frontend", bench_frontend);
+    const run_benchmarks = b.addRunArtifact(benchmarks);
+    if (b.args) |args| run_benchmarks.addArgs(args);
+    b.step("bench", "Run the interactive path benchmarks").dependOn(&run_benchmarks.step);
+
     // ---------------------------------------------------------------------
     // The example
     // ---------------------------------------------------------------------
@@ -107,15 +167,18 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/core/select.zig" },
         .{ .path = "src/core/transport.zig", .transport = true },
         .{ .path = "src/core/endpoint.zig", .transport = true },
+        .{ .path = "src/core/diagnostics.zig" },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
         .{ .path = "src/core/schema_v1_test.zig", .schema = true },
         .{ .path = "src/frontend/ui.zig" },
         .{ .path = "src/frontend/term.zig", .libc = true },
+        .{ .path = "src/frontend/frame.zig", .libc = true },
         .{ .path = "src/frontend/pace.zig" },
         .{ .path = "src/frontend/edit.zig" },
         .{ .path = "src/frontend/client.zig", .libc = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/damage.zig" },
         .{ .path = "src/backend/pty.zig", .libc = true },
         .{ .path = "src/backend/runtime.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },

@@ -8,3 +8,56 @@ thread of execution and a thread of conversation at the same time. The **trama**
 is how they are laid out on screen.
 
 Written in Zig 0.16. Very early.
+
+## Development diagnostics
+
+Debug builds emit one JSON Lines sample per second without writing terminal or
+PTY contents. Logs live beside the local runtime socket:
+
+```text
+<socket>.runtime-<pid>.log
+<socket>.client-<pid>.log
+```
+
+Runtime samples cover PTY throughput, folded updates, frame size, damaged rows,
+diff scans, no-op frames, VT ingestion, frame encoding, and acknowledgement
+latency. Client samples cover input and server throughput, applied, scanned and
+painted cells, frame pacing, protocol work, and terminal flush latency. File
+writes run outside the interactive loop. Release builds neither create these
+files nor schedule the telemetry actors.
+
+## Performance benchmarks
+
+Run the controlled interactive-path workloads with:
+
+```sh
+zig build bench
+```
+
+The benchmark target uses `ReleaseFast` when the main build mode is `Debug`.
+It measures damage collection, frame encoding and decoding, client application
+plus terminal output, and cursor-only output against a fixed 154x37 screen. The
+cell workloads are a one-cell patch, a representative fragmented patch with 56
+spans of 24 cells, and a full screen. Use `--filter`, `--samples`, or
+`--sample-ms` after `--` to narrow or lengthen a run:
+
+```sh
+zig build bench -- --filter frontend --samples 20 --sample-ms 100
+zig build bench -- --list
+```
+
+Save JSON Lines before and after a change, then compare median time and payload
+bytes per operation. The comparison rejects runs built with different Zig
+versions, optimization modes, CPUs, targets, or screen sizes.
+
+```sh
+zig build bench -- --json > /tmp/telar-before.jsonl
+# Make the optimization.
+zig build bench -- --json > /tmp/telar-after.jsonl
+python3 tools/bench_compare.py /tmp/telar-before.jsonl /tmp/telar-after.jsonl
+```
+
+`--fail-above 5` gives the comparison command a nonzero exit status when any
+median regresses by more than five percent. `--fail-payload-above 0` also
+rejects any wire payload growth. Keep benchmark result files outside the
+repository because absolute timings belong to the machine that produced them.

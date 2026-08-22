@@ -1,0 +1,653 @@
+//! Reproducible benchmarks for telar's interactive frame path.
+
+const std = @import("std");
+const builtin = @import("builtin");
+const core = @import("telar-core");
+const backend = @import("telar-backend");
+const frontend = @import("telar-frontend");
+
+const Io = std.Io;
+const schema = core.schema.v2;
+
+const cols: u16 = 154;
+const rows: u16 = 37;
+const cell_count: usize = @as(usize, cols) * rows;
+const max_samples = 64;
+const fragmented_rows = 28;
+const fragmented_spans_per_row = 2;
+const fragmented_span_cells = 24;
+const fragmented_span_count = fragmented_rows * fragmented_spans_per_row;
+
+const Workload = enum { one_cell, fragmented, full_screen };
+const workloads = [_]Workload{ .one_cell, .fragmented, .full_screen };
+
+const usage =
+    \\Usage: zig build bench -- [options]
+    \\
+    \\Options:
+    \\  --filter <text>       Run benchmarks whose name contains text
+    \\  --samples <count>     Samples per benchmark, default 12
+    \\  --sample-ms <ms>      Target duration of each sample, default 40
+    \\  --json                Emit JSON Lines for storage and comparison
+    \\  --list                Print benchmark names without running them
+    \\  --help                Print this help
+;
+
+const Config = struct {
+    filter: ?[]const u8 = null,
+    samples: usize = 12,
+    sample_ns: u64 = 40 * std.time.ns_per_ms,
+    json: bool = false,
+    list: bool = false,
+
+    fn parse(args: []const []const u8) !Config {
+        var config: Config = .{};
+        var index: usize = 1;
+        while (index < args.len) {
+            const arg = args[index];
+            if (std.mem.eql(u8, arg, "--filter")) {
+                index += 1;
+                if (index == args.len) return error.MissingFilter;
+                config.filter = args[index];
+            } else if (std.mem.eql(u8, arg, "--samples")) {
+                index += 1;
+                if (index == args.len) return error.MissingSampleCount;
+                config.samples = try std.fmt.parseUnsigned(usize, args[index], 10);
+                if (config.samples == 0 or config.samples > max_samples)
+                    return error.InvalidSampleCount;
+            } else if (std.mem.eql(u8, arg, "--sample-ms")) {
+                index += 1;
+                if (index == args.len) return error.MissingSampleDuration;
+                const milliseconds = try std.fmt.parseUnsigned(u64, args[index], 10);
+                if (milliseconds == 0 or milliseconds > 5000)
+                    return error.InvalidSampleDuration;
+                config.sample_ns = milliseconds * std.time.ns_per_ms;
+            } else if (std.mem.eql(u8, arg, "--json")) {
+                config.json = true;
+            } else if (std.mem.eql(u8, arg, "--list")) {
+                config.list = true;
+            } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
+                return error.HelpRequested;
+            } else {
+                return error.UnknownOption;
+            }
+            index += 1;
+        }
+        return config;
+    }
+
+    fn includes(config: Config, name: []const u8) bool {
+        return config.filter == null or std.mem.find(u8, name, config.filter.?) != null;
+    }
+};
+
+const Case = struct {
+    name: []const u8,
+    work_per_op: u64,
+    work_unit: []const u8,
+    payload_bytes_per_op: u64 = 0,
+};
+
+const cases = [_]Case{
+    .{ .name = "backend.damage.one_cell", .work_per_op = cols, .work_unit = "cells" },
+    .{ .name = "backend.damage.fragmented", .work_per_op = fragmented_rows * cols, .work_unit = "cells" },
+    .{ .name = "backend.damage.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "schema.encode.one_cell", .work_per_op = 1, .work_unit = "cells" },
+    .{ .name = "schema.encode.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
+    .{ .name = "schema.encode.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "schema.decode.one_cell", .work_per_op = 1, .work_unit = "cells" },
+    .{ .name = "schema.decode.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
+    .{ .name = "schema.decode.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "frontend.pipeline.one_cell", .work_per_op = 1, .work_unit = "cells" },
+    .{ .name = "frontend.pipeline.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
+    .{ .name = "frontend.pipeline.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
+};
+
+const Measurement = struct {
+    iterations: usize,
+    median_ns: u64,
+    minimum_ns: u64,
+    p95_ns: u64,
+};
+
+fn timestamp(io: Io) u64 {
+    return @intCast(Io.Clock.awake.now(io).nanoseconds);
+}
+
+fn timed(
+    io: Io,
+    context: anytype,
+    iterations: usize,
+    comptime run: fn (@TypeOf(context), usize) anyerror!u64,
+) !u64 {
+    const started = timestamp(io);
+    const checksum = try run(context, iterations);
+    const elapsed = timestamp(io) - started;
+    std.mem.doNotOptimizeAway(checksum);
+    return elapsed;
+}
+
+fn measure(
+    io: Io,
+    config: Config,
+    context: anytype,
+    comptime run: fn (@TypeOf(context), usize) anyerror!u64,
+) !Measurement {
+    var iterations: usize = 1;
+    while (true) {
+        const elapsed = try timed(io, context, iterations, run);
+        if (elapsed >= config.sample_ns / 4 or iterations >= 1 << 30) {
+            if (elapsed != 0 and elapsed < config.sample_ns) {
+                const scaled = @as(u128, iterations) * config.sample_ns / elapsed;
+                iterations = @max(iterations, @as(usize, @intCast(@min(scaled, 1 << 30))));
+            }
+            break;
+        }
+        iterations *= 4;
+    }
+
+    _ = try timed(io, context, iterations, run);
+
+    var samples: [max_samples]u64 = undefined;
+    for (samples[0..config.samples]) |*sample| {
+        const elapsed = try timed(io, context, iterations, run);
+        sample.* = elapsed / iterations;
+    }
+    std.sort.heap(u64, samples[0..config.samples], {}, std.sort.asc(u64));
+
+    const p95_index = (config.samples * 95 + 99) / 100 - 1;
+    return .{
+        .iterations = iterations,
+        .minimum_ns = samples[0],
+        .median_ns = samples[config.samples / 2],
+        .p95_ns = samples[p95_index],
+    };
+}
+
+fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measurement) !void {
+    const rate = if (result.median_ns == 0)
+        0
+    else
+        @as(u128, std.time.ns_per_s) * case.work_per_op / result.median_ns;
+    if (config.json) {
+        try writer.print(
+            "{{\"type\":\"benchmark\",\"name\":\"{s}\",\"iterations\":{d}," ++
+                "\"samples\":{d},\"median_ns_per_op\":{d},\"min_ns_per_op\":{d}," ++
+                "\"p95_ns_per_op\":{d},\"work_per_op\":{d},\"work_unit\":\"{s}\"," ++
+                "\"work_per_second\":{d},\"payload_bytes_per_op\":{d}}}\n",
+            .{
+                case.name,
+                result.iterations,
+                config.samples,
+                result.median_ns,
+                result.minimum_ns,
+                result.p95_ns,
+                case.work_per_op,
+                case.work_unit,
+                rate,
+                case.payload_bytes_per_op,
+            },
+        );
+    } else {
+        try writer.print("{s}\n  median {d} ns/op, p95 {d} ns/op, min {d} ns/op, {d} {s}/s", .{
+            case.name,
+            result.median_ns,
+            result.p95_ns,
+            result.minimum_ns,
+            rate,
+            case.work_unit,
+        });
+        if (case.payload_bytes_per_op != 0)
+            try writer.print(", payload {d} B/op", .{case.payload_bytes_per_op});
+        try writer.writeByte('\n');
+    }
+}
+
+const Fixture = struct {
+    gpa: std.mem.Allocator,
+    cells_a: []core.ui.Cell,
+    cells_b: []core.ui.Cell,
+    encode_buffer: []u8,
+    terminal_output: []u8,
+    sparse_storage_a: []u8,
+    sparse_storage_b: []u8,
+    fragmented_storage_a: []u8,
+    fragmented_storage_b: []u8,
+    full_storage_a: []u8,
+    full_storage_b: []u8,
+    sparse_spans: [2][1]schema.frame.Span,
+    fragmented_spans: [2][]schema.frame.Span,
+    full_spans: [2][1]schema.frame.Span,
+    sparse_payloads: [2][]const u8,
+    fragmented_payloads: [2][]const u8,
+    full_payloads: [2][]const u8,
+
+    fn init(gpa: std.mem.Allocator) !Fixture {
+        const cells_a = try gpa.alloc(core.ui.Cell, cell_count);
+        errdefer gpa.free(cells_a);
+        const cells_b = try gpa.alloc(core.ui.Cell, cell_count);
+        errdefer gpa.free(cells_b);
+        fillEditor(cells_a, 0);
+        fillEditor(cells_b, 1);
+
+        const encode_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(encode_buffer);
+        const terminal_output = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(terminal_output);
+        const sparse_storage_a = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(sparse_storage_a);
+        const sparse_storage_b = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(sparse_storage_b);
+        const fragmented_storage_a = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(fragmented_storage_a);
+        const fragmented_storage_b = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(fragmented_storage_b);
+        const full_storage_a = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(full_storage_a);
+        const full_storage_b = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(full_storage_b);
+
+        const middle: u32 = @intCast(cell_count / 2);
+        const sparse_spans = [2][1]schema.frame.Span{
+            .{.{ .start = middle, .cells = cells_a[middle..][0..1] }},
+            .{.{ .start = middle, .cells = cells_b[middle..][0..1] }},
+        };
+        const fragmented_a = try gpa.alloc(schema.frame.Span, fragmented_span_count);
+        errdefer gpa.free(fragmented_a);
+        const fragmented_b = try gpa.alloc(schema.frame.Span, fragmented_span_count);
+        errdefer gpa.free(fragmented_b);
+        fillFragmentedSpans(fragmented_a, cells_a);
+        fillFragmentedSpans(fragmented_b, cells_b);
+        const full_spans = [2][1]schema.frame.Span{
+            .{.{ .start = 0, .cells = cells_a }},
+            .{.{ .start = 0, .cells = cells_b }},
+        };
+
+        const sparse_payload_a = try schema.encodePaneFrame(sparse_storage_a, frame(2, &sparse_spans[0]));
+        const sparse_payload_b = try schema.encodePaneFrame(sparse_storage_b, frame(3, &sparse_spans[1]));
+        const fragmented_payload_a = try schema.encodePaneFrame(fragmented_storage_a, frame(2, fragmented_a));
+        const fragmented_payload_b = try schema.encodePaneFrame(fragmented_storage_b, frame(3, fragmented_b));
+        const full_payload_a = try schema.encodePaneFrame(full_storage_a, frame(2, &full_spans[0]));
+        const full_payload_b = try schema.encodePaneFrame(full_storage_b, frame(3, &full_spans[1]));
+
+        return .{
+            .gpa = gpa,
+            .cells_a = cells_a,
+            .cells_b = cells_b,
+            .encode_buffer = encode_buffer,
+            .terminal_output = terminal_output,
+            .sparse_storage_a = sparse_storage_a,
+            .sparse_storage_b = sparse_storage_b,
+            .fragmented_storage_a = fragmented_storage_a,
+            .fragmented_storage_b = fragmented_storage_b,
+            .full_storage_a = full_storage_a,
+            .full_storage_b = full_storage_b,
+            .sparse_spans = sparse_spans,
+            .fragmented_spans = .{ fragmented_a, fragmented_b },
+            .full_spans = full_spans,
+            .sparse_payloads = .{ sparse_payload_a, sparse_payload_b },
+            .fragmented_payloads = .{ fragmented_payload_a, fragmented_payload_b },
+            .full_payloads = .{ full_payload_a, full_payload_b },
+        };
+    }
+
+    fn deinit(fixture: *Fixture) void {
+        fixture.gpa.free(fixture.fragmented_spans[1]);
+        fixture.gpa.free(fixture.fragmented_spans[0]);
+        fixture.gpa.free(fixture.full_storage_b);
+        fixture.gpa.free(fixture.full_storage_a);
+        fixture.gpa.free(fixture.fragmented_storage_b);
+        fixture.gpa.free(fixture.fragmented_storage_a);
+        fixture.gpa.free(fixture.sparse_storage_b);
+        fixture.gpa.free(fixture.sparse_storage_a);
+        fixture.gpa.free(fixture.terminal_output);
+        fixture.gpa.free(fixture.encode_buffer);
+        fixture.gpa.free(fixture.cells_b);
+        fixture.gpa.free(fixture.cells_a);
+    }
+
+    fn spans(fixture: *const Fixture, workload: Workload, variant: usize) []const schema.frame.Span {
+        return switch (workload) {
+            .one_cell => &fixture.sparse_spans[variant],
+            .fragmented => fixture.fragmented_spans[variant],
+            .full_screen => &fixture.full_spans[variant],
+        };
+    }
+
+    fn payloads(fixture: *const Fixture, workload: Workload) [2][]const u8 {
+        return switch (workload) {
+            .one_cell => fixture.sparse_payloads,
+            .fragmented => fixture.fragmented_payloads,
+            .full_screen => fixture.full_payloads,
+        };
+    }
+};
+
+fn frame(frame_id: u64, spans: []const schema.frame.Span) schema.frame.Frame {
+    return .{
+        .pane_id = 1,
+        .frame_id = frame_id,
+        .base_frame_id = 1,
+        .cols = cols,
+        .rows = rows,
+        .spans = spans,
+    };
+}
+
+fn fillEditor(cells: []core.ui.Cell, variant: u8) void {
+    for (cells, 0..) |*cell, index| {
+        const x = index % cols;
+        const y = index / cols;
+        cell.* = .{};
+        cell.bytes[0] = 'a' + @as(u8, @intCast((x + y + variant) % 26));
+        if (x < 5) {
+            cell.style.fg = .{ .indexed = 8 };
+        } else if ((x / 11 + y) % 5 == 0) {
+            cell.style.fg = .{ .indexed = 12 };
+        } else if ((x / 17 + y) % 7 == 0) {
+            cell.style.fg = .{ .indexed = 10 };
+            cell.style.flags.bold = true;
+        }
+    }
+}
+
+fn fillFragmentedSpans(spans: []schema.frame.Span, cells: []const core.ui.Cell) void {
+    var span_index: usize = 0;
+    for (0..fragmented_rows) |y| {
+        for ([_]usize{ 12, 91 }) |x| {
+            const start = y * cols + x;
+            spans[span_index] = .{
+                .start = @intCast(start),
+                .cells = cells[start..][0..fragmented_span_cells],
+            };
+            span_index += 1;
+        }
+    }
+}
+
+const DamageContext = struct {
+    gpa: std.mem.Allocator,
+    acknowledged: []core.ui.Cell,
+    current: []core.ui.Cell,
+    damaged_rows: []bool,
+    spans: []schema.frame.Span,
+    changed_index: usize,
+
+    fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: Workload) !DamageContext {
+        const acknowledged = try gpa.dupe(core.ui.Cell, fixture.cells_a);
+        errdefer gpa.free(acknowledged);
+        const current = try gpa.dupe(core.ui.Cell, fixture.cells_a);
+        errdefer gpa.free(current);
+        const damaged_rows = try gpa.alloc(bool, rows);
+        errdefer gpa.free(damaged_rows);
+        @memset(damaged_rows, false);
+        if (workload == .full_screen) {
+            @memcpy(current, fixture.cells_b);
+            @memset(damaged_rows, true);
+        } else {
+            for (fixture.spans(workload, 1)) |span| {
+                const start: usize = @intCast(span.start);
+                @memcpy(current[start..][0..span.cells.len], span.cells);
+                damaged_rows[start / cols] = true;
+            }
+        }
+        const changed_index: usize = @intCast(fixture.spans(workload, 1)[0].start);
+        const spans = try gpa.alloc(schema.frame.Span, schema.frame.max_span_count);
+        return .{
+            .gpa = gpa,
+            .acknowledged = acknowledged,
+            .current = current,
+            .damaged_rows = damaged_rows,
+            .spans = spans,
+            .changed_index = changed_index,
+        };
+    }
+
+    fn deinit(context: *DamageContext) void {
+        context.gpa.free(context.spans);
+        context.gpa.free(context.damaged_rows);
+        context.gpa.free(context.current);
+        context.gpa.free(context.acknowledged);
+    }
+};
+
+fn runDamage(context: *DamageContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        context.current[context.changed_index].bytes[0] = if (iteration & 1 == 0) '0' else '1';
+        const diff = backend.damage.collectSpans(
+            context.current,
+            context.acknowledged,
+            cols,
+            context.damaged_rows,
+            context.spans,
+        );
+        checksum +%= diff.scanned_cells + diff.span_count;
+    }
+    return checksum;
+}
+
+const EncodeContext = struct {
+    fixture: *Fixture,
+    workload: Workload,
+};
+
+fn runEncode(context: *EncodeContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        const spans = context.fixture.spans(context.workload, iteration & 1);
+        const payload = try schema.encodePaneFrame(context.fixture.encode_buffer, frame(2, spans));
+        checksum +%= payload.len;
+        checksum +%= payload[payload.len - 1];
+    }
+    return checksum;
+}
+
+const DecodeContext = struct {
+    payloads: [2][]const u8,
+};
+
+fn runDecode(context: *DecodeContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        const message = try schema.decodeServer(context.payloads[iteration & 1]);
+        const decoded = message.pane_frame;
+        checksum +%= decoded.encoded_spans.len + decoded.span_count + decoded.frame_id;
+    }
+    return checksum;
+}
+
+const PipelineContext = struct {
+    screen: frontend.term.Screen,
+    payloads: [2][]const u8,
+    output: []u8,
+
+    fn init(gpa: std.mem.Allocator, fixture: *Fixture, workload: Workload) !PipelineContext {
+        var screen = try frontend.term.Screen.init(gpa, cols, rows);
+        errdefer screen.deinit();
+        var writer = Io.Writer.fixed(fixture.terminal_output);
+        _ = try screen.flush(&writer);
+        return .{
+            .screen = screen,
+            .payloads = fixture.payloads(workload),
+            .output = fixture.terminal_output,
+        };
+    }
+
+    fn deinit(context: *PipelineContext) void {
+        context.screen.deinit();
+    }
+};
+
+fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        const message = try schema.decodeServer(context.payloads[iteration & 1]);
+        const applied = try frontend.frame.apply(&context.screen, message.pane_frame);
+        var writer = Io.Writer.fixed(context.output);
+        const flushed = try context.screen.flush(&writer);
+        checksum +%= applied.cells + flushed.cells + flushed.scanned + flushed.bytes;
+    }
+    return checksum;
+}
+
+const CursorContext = struct {
+    screen: frontend.term.Screen,
+    output: []u8,
+
+    fn init(gpa: std.mem.Allocator, output: []u8) !CursorContext {
+        var screen = try frontend.term.Screen.init(gpa, cols, rows);
+        errdefer screen.deinit();
+        var writer = Io.Writer.fixed(output);
+        _ = try screen.flush(&writer);
+        return .{ .screen = screen, .output = output };
+    }
+
+    fn deinit(context: *CursorContext) void {
+        context.screen.deinit();
+    }
+};
+
+fn runCursor(context: *CursorContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        context.screen.cursor = .{ .x = @intCast(iteration % cols), .y = @intCast(iteration % rows) };
+        var writer = Io.Writer.fixed(context.output);
+        const flushed = try context.screen.flush(&writer);
+        checksum +%= flushed.bytes;
+    }
+    return checksum;
+}
+
+fn execute(
+    writer: *Io.Writer,
+    io: Io,
+    gpa: std.mem.Allocator,
+    config: Config,
+    fixture: *Fixture,
+) !void {
+    var case_index: usize = 0;
+
+    inline for (workloads) |workload| {
+        const case = cases[case_index];
+        case_index += 1;
+        if (config.includes(case.name)) {
+            var context = try DamageContext.init(gpa, fixture, workload);
+            defer context.deinit();
+            try writeResult(writer, config, case, try measure(io, config, &context, runDamage));
+        }
+    }
+
+    inline for (workloads) |workload| {
+        var case = cases[case_index];
+        case_index += 1;
+        if (config.includes(case.name)) {
+            const payloads = fixture.payloads(workload);
+            case.payload_bytes_per_op = (payloads[0].len + payloads[1].len) / 2;
+            var context: EncodeContext = .{ .fixture = fixture, .workload = workload };
+            try writeResult(writer, config, case, try measure(io, config, &context, runEncode));
+        }
+    }
+
+    inline for (workloads) |workload| {
+        var case = cases[case_index];
+        case_index += 1;
+        if (config.includes(case.name)) {
+            const payloads = fixture.payloads(workload);
+            case.payload_bytes_per_op = (payloads[0].len + payloads[1].len) / 2;
+            var context: DecodeContext = .{
+                .payloads = payloads,
+            };
+            try writeResult(writer, config, case, try measure(io, config, &context, runDecode));
+        }
+    }
+
+    inline for (workloads) |workload| {
+        var case = cases[case_index];
+        case_index += 1;
+        if (config.includes(case.name)) {
+            const payloads = fixture.payloads(workload);
+            case.payload_bytes_per_op = (payloads[0].len + payloads[1].len) / 2;
+            var context = try PipelineContext.init(gpa, fixture, workload);
+            defer context.deinit();
+            try writeResult(writer, config, case, try measure(io, config, &context, runPipeline));
+        }
+    }
+
+    const cursor_case = cases[case_index];
+    if (config.includes(cursor_case.name)) {
+        var context = try CursorContext.init(gpa, fixture.terminal_output);
+        defer context.deinit();
+        try writeResult(writer, config, cursor_case, try measure(io, config, &context, runCursor));
+    }
+}
+
+pub fn main(init: std.process.Init) !void {
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const config = Config.parse(args) catch |err| switch (err) {
+        error.HelpRequested => {
+            try Io.File.stdout().writeStreamingAll(init.io, usage);
+            return;
+        },
+        else => {
+            try Io.File.stderr().writeStreamingAll(init.io, usage);
+            return err;
+        },
+    };
+
+    var stdout_buffer: [16 * 1024]u8 = undefined;
+    var stdout_writer = Io.File.stdout().writer(init.io, &stdout_buffer);
+    const writer = &stdout_writer.interface;
+
+    if (config.list) {
+        for (cases) |case| {
+            if (config.includes(case.name)) try writer.print("{s}\n", .{case.name});
+        }
+        try writer.flush();
+        return;
+    }
+
+    if (config.json) {
+        try writer.print(
+            "{{\"type\":\"metadata\",\"zig\":\"{s}\",\"mode\":\"{s}\"," ++
+                "\"arch\":\"{s}\",\"cpu\":\"{s}\",\"os\":\"{s}\",\"cols\":{d},\"rows\":{d}," ++
+                "\"samples\":{d},\"sample_target_ns\":{d}}}\n",
+            .{
+                builtin.zig_version_string,
+                @tagName(builtin.mode),
+                @tagName(builtin.cpu.arch),
+                builtin.cpu.model.name,
+                @tagName(builtin.os.tag),
+                cols,
+                rows,
+                config.samples,
+                config.sample_ns,
+            },
+        );
+    } else {
+        try writer.print(
+            "telar benchmarks, Zig {s}, {s}, {s}-{s}, {d}x{d}\n" ++
+                "{d} samples, {d} ms target per sample\n\n",
+            .{
+                builtin.zig_version_string,
+                @tagName(builtin.mode),
+                @tagName(builtin.cpu.arch),
+                @tagName(builtin.os.tag),
+                cols,
+                rows,
+                config.samples,
+                config.sample_ns / std.time.ns_per_ms,
+            },
+        );
+    }
+    try writer.flush();
+
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer std.debug.assert(gpa.deinit() == .ok);
+    var fixture = try Fixture.init(gpa.allocator());
+    defer fixture.deinit();
+
+    try execute(writer, init.io, gpa.allocator(), config, &fixture);
+    try writer.flush();
+}

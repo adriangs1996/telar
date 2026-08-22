@@ -1,15 +1,17 @@
-//! Long-lived single-pane runtime for protocol version 1.
+//! Long-lived single-pane runtime for protocol version 2.
 
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const blit = @import("blit.zig");
+const damage = @import("damage.zig");
 const pty = @import("pty.zig");
 const transport = @import("transport.zig");
 
 const Io = std.Io;
 const File = Io.File;
-const schema = core.schema.v1;
+const schema = core.schema.v2;
+const diagnostics = core.diagnostics;
 const output_chunk_size = 16 * 1024;
 
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
@@ -32,7 +34,32 @@ const RuntimeEvent = union(enum) {
     pane_input_written: anyerror!void,
     pane_output: anyerror!Output,
     pane_exit: anyerror!pty.Exit,
+    telemetry_tick: anyerror!void,
+    telemetry_written: anyerror!void,
     stopped: anyerror!void,
+};
+
+const RuntimeMetrics = struct {
+    started_ns: u64,
+    client_messages: u64 = 0,
+    input_events: u64 = 0,
+    input_bytes: u64 = 0,
+    pty_events: u64 = 0,
+    pty_bytes: u64 = 0,
+    frames: u64 = 0,
+    frame_bytes: u64 = 0,
+    frame_cells: u64 = 0,
+    frame_spans: u64 = 0,
+    snapshots: u64 = 0,
+    cursor_only_frames: u64 = 0,
+    noop_frames: u64 = 0,
+    damaged_rows: u64 = 0,
+    diff_scanned_cells: u64 = 0,
+    folded_pty_events: u64 = 0,
+    decode: diagnostics.Timing = .{},
+    ingest: diagnostics.Timing = .{},
+    encode: diagnostics.Timing = .{},
+    ack: diagnostics.Timing = .{},
 };
 
 const PendingFailure = struct {
@@ -91,13 +118,16 @@ const Pane = struct {
     render_state: vt.RenderState = .empty,
     screen: core.ui.Buffer,
     acknowledged: core.ui.Buffer,
+    damaged_rows: []bool,
     cursor: schema.frame.Cursor = .{},
+    acknowledged_cursor: schema.frame.Cursor = .{},
     foreground_override: ?vt.color.RGB = null,
     background_override: ?vt.color.RGB = null,
     semantic_colors_dirty: bool = false,
     next_frame_id: u64 = 1,
     acknowledged_frame_id: u64 = 0,
     outstanding_frame_id: u64 = 0,
+    frame_sent_ns: u64 = 0,
     dirty: bool = true,
     output_pending: bool = false,
     output_done: bool = false,
@@ -128,13 +158,18 @@ const Pane = struct {
         errdefer pane.screen.deinit();
         pane.acknowledged = try .init(gpa, size.cols, size.rows);
         errdefer pane.acknowledged.deinit();
+        pane.damaged_rows = try gpa.alloc(bool, size.rows);
+        errdefer gpa.free(pane.damaged_rows);
+        @memset(pane.damaged_rows, false);
         pane.cursor = .{};
+        pane.acknowledged_cursor = .{};
         pane.foreground_override = pane.terminal.colors.foreground.override;
         pane.background_override = pane.terminal.colors.background.override;
         pane.semantic_colors_dirty = false;
         pane.next_frame_id = 1;
         pane.acknowledged_frame_id = 0;
         pane.outstanding_frame_id = 0;
+        pane.frame_sent_ns = 0;
         pane.dirty = true;
         pane.output_pending = false;
         pane.output_done = false;
@@ -146,6 +181,7 @@ const Pane = struct {
 
     fn destroy(pane: *Pane) void {
         const gpa = pane.gpa;
+        gpa.free(pane.damaged_rows);
         pane.acknowledged.deinit();
         pane.screen.deinit();
         pane.render_state.deinit(gpa);
@@ -155,7 +191,8 @@ const Pane = struct {
         gpa.destroy(pane);
     }
 
-    fn ingest(pane: *Pane, bytes: []const u8) !void {
+    fn ingest(pane: *Pane, io: Io, bytes: []const u8, metrics: *RuntimeMetrics) !void {
+        const started = diagnostics.now(io);
         pane.stream.nextSlice(bytes);
         const foreground = pane.terminal.colors.foreground.override;
         const background = pane.terminal.colors.background.override;
@@ -167,6 +204,9 @@ const Pane = struct {
             pane.semantic_colors_dirty = true;
         }
         pane.dirty = true;
+        if (comptime diagnostics.enabled) {
+            metrics.ingest.observe(diagnostics.elapsed(started, diagnostics.now(io)));
+        }
     }
 
     fn resize(pane: *Pane, size: schema.TerminalSize) !void {
@@ -175,6 +215,8 @@ const Pane = struct {
         try pane.terminal.resize(pane.gpa, .{ .cols = size.cols, .rows = size.rows });
         try pane.screen.resize(size.cols, size.rows);
         try pane.acknowledged.resize(size.cols, size.rows);
+        pane.damaged_rows = try pane.gpa.realloc(pane.damaged_rows, size.rows);
+        @memset(pane.damaged_rows, false);
         pane.outstanding_frame_id = 0;
         try pane.render(true);
     }
@@ -187,7 +229,7 @@ const Pane = struct {
             pane.screen.area(),
             &pane.terminal,
             &pane.render_state,
-            .{ .force = force_all },
+            .{ .force = force_all, .damaged_rows = pane.damaged_rows },
         );
         pane.semantic_colors_dirty = false;
         const cursor = pane.render_state.cursor;
@@ -224,6 +266,14 @@ fn serveInternal(
     _ = setenv("TERM_PROGRAM", "telar", 1);
 
     var listener = try transport.local.LocalListener.listen(io, endpoint);
+    var telemetry_suffix_buffer: [64]u8 = undefined;
+    const telemetry_suffix = std.fmt.bufPrint(
+        &telemetry_suffix_buffer,
+        "runtime-{d}",
+        .{std.c.getpid()},
+    ) catch "runtime";
+    var telemetry = diagnostics.Sink.init(io, endpoint, telemetry_suffix);
+    defer telemetry.deinit(io);
 
     const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
     defer gpa.free(receive_buffer);
@@ -232,10 +282,14 @@ fn serveInternal(
     const input_buffer = try gpa.alloc(u8, schema.max_input_bytes);
     defer gpa.free(input_buffer);
 
-    var select_storage: [11]RuntimeEvent = undefined;
+    var select_storage: [13]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
+    if (comptime diagnostics.enabled) {
+        if (telemetry.available())
+            try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
+    }
 
     var connection: ?core.transport.SocketChannel = null;
     var control_connection: ?core.transport.SocketChannel = null;
@@ -252,6 +306,9 @@ fn serveInternal(
     var next_pane_id: u64 = 1;
     var control_receive_buffer: [1]u8 = undefined;
     var control_send_buffer: [1]u8 = undefined;
+    var telemetry_buffer: [4096]u8 = undefined;
+    var telemetry_write_pending = false;
+    var metrics: RuntimeMetrics = .{ .started_ns = diagnostics.now(io) };
     defer {
         listener.shutdown();
         if (connection) |*active| active.shutdown(io);
@@ -307,6 +364,7 @@ fn serveInternal(
                 snapshot_pending = false;
                 continue;
             };
+            const decode_started = diagnostics.now(io);
             const message = schema.decodeClient(payload) catch {
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
@@ -314,6 +372,10 @@ fn serveInternal(
                 exit_sent = false;
                 continue;
             };
+            if (comptime diagnostics.enabled) {
+                metrics.client_messages += 1;
+                metrics.decode.observe(diagnostics.elapsed(decode_started, diagnostics.now(io)));
+            }
             dispatchClientMessage(
                 io,
                 gpa,
@@ -329,6 +391,7 @@ fn serveInternal(
                 input_buffer,
                 &pane_input_pending,
                 &shutdown,
+                &metrics,
             ) catch {
                 if (shutdown.primary_request) return;
                 connection.?.deinit(io);
@@ -350,6 +413,7 @@ fn serveInternal(
                 &snapshot_pending,
                 &exit_sent,
                 &shutdown,
+                &metrics,
             ) catch {
                 if (shutdown.primary_request) return;
                 closeClient(
@@ -407,6 +471,7 @@ fn serveInternal(
                 &snapshot_pending,
                 &exit_sent,
                 &shutdown,
+                &metrics,
             ) catch {
                 if (shutdown.primary_request) return;
                 closeClient(
@@ -479,7 +544,7 @@ fn serveInternal(
             active.output_pending = false;
             const output = result catch {
                 active.output_done = true;
-                pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown) catch {
+                pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown, &metrics) catch {
                     closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
                 };
                 continue;
@@ -487,11 +552,16 @@ fn serveInternal(
             if (output.len == 0) {
                 active.output_done = true;
             } else {
-                try active.ingest(output.slice());
+                if (comptime diagnostics.enabled) {
+                    metrics.pty_events += 1;
+                    metrics.pty_bytes += output.len;
+                    if (active.outstanding_frame_id != 0) metrics.folded_pty_events += 1;
+                }
+                try active.ingest(io, output.slice(), &metrics);
                 active.output_pending = true;
                 try select.concurrent(.pane_output, readPane, .{ io, active.session.file() });
             }
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown) catch {
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown, &metrics) catch {
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
             };
         },
@@ -499,9 +569,36 @@ fn serveInternal(
             const active = pane orelse continue;
             active.wait_pending = false;
             active.exit = try result;
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown) catch {
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, pane, attached_pane_id, &client_send_pending, &pending_opened, &pending_failure, &snapshot_pending, &exit_sent, &shutdown, &metrics) catch {
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attached_pane_id, &exit_sent);
             };
+        },
+        .telemetry_tick => |result| {
+            result catch {
+                telemetry.deinit(io);
+                continue;
+            };
+            if (!telemetry.available()) continue;
+            select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io}) catch {
+                telemetry.deinit(io);
+                continue;
+            };
+            if (telemetry_write_pending) continue;
+
+            const line = formatRuntimeTelemetry(&telemetry_buffer, io, &metrics, pane) catch continue;
+            telemetry_write_pending = true;
+            select.concurrent(.telemetry_written, writeDiagnostics, .{
+                io,
+                &telemetry,
+                line,
+            }) catch {
+                telemetry_write_pending = false;
+                telemetry.deinit(io);
+            };
+        },
+        .telemetry_written => |result| {
+            telemetry_write_pending = false;
+            result catch telemetry.deinit(io);
         },
     };
 }
@@ -521,6 +618,7 @@ fn dispatchClientMessage(
     input_buffer: []u8,
     input_pending: *bool,
     shutdown: *ShutdownState,
+    metrics: *RuntimeMetrics,
 ) !void {
     switch (message) {
         .open_pane => |open| {
@@ -579,6 +677,10 @@ fn dispatchClientMessage(
         .pane_input => |input| {
             const active = try attachedPane(pane_slot.*, attached_pane_id.*, input.pane_id);
             if (active.exit != null) return;
+            if (comptime diagnostics.enabled) {
+                metrics.input_events += 1;
+                metrics.input_bytes += input.bytes.len;
+            }
             std.debug.assert(!input_pending.*);
             @memcpy(input_buffer[0..input.bytes.len], input.bytes);
             input_pending.* = true;
@@ -599,6 +701,9 @@ fn dispatchClientMessage(
         .frame_ack => |ack| {
             const active = try attachedPane(pane_slot.*, attached_pane_id.*, ack.pane_id);
             if (ack.frame_id != active.outstanding_frame_id) return;
+            if (comptime diagnostics.enabled) {
+                metrics.ack.observe(diagnostics.elapsed(active.frame_sent_ns, diagnostics.now(io)));
+            }
             active.acknowledged_frame_id = ack.frame_id;
             active.outstanding_frame_id = 0;
         },
@@ -620,38 +725,40 @@ fn dispatchClientMessage(
 }
 
 fn encodeFrame(
+    io: Io,
     buffer: []u8,
     pane: *Pane,
     force_snapshot: bool,
-) ![]const u8 {
+    metrics: *RuntimeMetrics,
+) !?[]const u8 {
+    const started = diagnostics.now(io);
     if (pane.dirty) try pane.render(false);
     var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
-    var span_count: usize = 0;
     var snapshot = force_snapshot;
+    const diff = if (snapshot)
+        damage.Diff{}
+    else
+        damage.collectSpans(
+            pane.screen.cells,
+            pane.acknowledged.cells,
+            pane.screen.w,
+            pane.damaged_rows,
+            &span_storage,
+        );
+    var span_count = diff.span_count;
+    snapshot = snapshot or diff.snapshot_required;
 
-    if (!snapshot) {
-        var index: usize = 0;
-        while (index < pane.screen.cells.len) {
-            if (pane.screen.cells[index].eqlPublic(&pane.acknowledged.cells[index])) {
-                index += 1;
-                continue;
-            }
-            if (span_count == span_storage.len) {
-                snapshot = true;
-                break;
-            }
-            const start = index;
-            while (index < pane.screen.cells.len and
-                !pane.screen.cells[index].eqlPublic(&pane.acknowledged.cells[index]))
-            {
-                index += 1;
-            }
-            span_storage[span_count] = .{
-                .start = @intCast(start),
-                .cells = pane.screen.cells[start..index],
-            };
-            span_count += 1;
+    const cursor_changed = !std.meta.eql(pane.cursor, pane.acknowledged_cursor);
+    if (!snapshot and span_count == 0 and !cursor_changed) {
+        @memset(pane.damaged_rows, false);
+        pane.dirty = false;
+        if (comptime diagnostics.enabled) {
+            metrics.noop_frames += 1;
+            metrics.damaged_rows += diff.damaged_rows;
+            metrics.diff_scanned_cells += diff.scanned_cells;
+            metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
         }
+        return null;
     }
     if (snapshot) {
         span_storage[0] = .{ .start = 0, .cells = pane.screen.cells };
@@ -669,9 +776,32 @@ fn encodeFrame(
         .cursor = pane.cursor,
         .spans = span_storage[0..span_count],
     });
-    @memcpy(pane.acknowledged.cells, pane.screen.cells);
+    if (snapshot) {
+        @memcpy(pane.acknowledged.cells, pane.screen.cells);
+    } else {
+        for (span_storage[0..span_count]) |span| {
+            const start: usize = @intCast(span.start);
+            @memcpy(pane.acknowledged.cells[start..][0..span.cells.len], span.cells);
+        }
+    }
+    pane.acknowledged_cursor = pane.cursor;
     pane.outstanding_frame_id = frame_id;
+    pane.frame_sent_ns = diagnostics.now(io);
+    @memset(pane.damaged_rows, false);
     pane.dirty = false;
+    if (comptime diagnostics.enabled) {
+        var cell_count: u64 = 0;
+        for (span_storage[0..span_count]) |span| cell_count += span.cells.len;
+        metrics.frames += 1;
+        metrics.frame_bytes += payload.len;
+        metrics.frame_cells += cell_count;
+        metrics.frame_spans += span_count;
+        if (snapshot) metrics.snapshots += 1;
+        if (!snapshot and span_count == 0) metrics.cursor_only_frames += 1;
+        metrics.damaged_rows += diff.damaged_rows;
+        metrics.diff_scanned_cells += diff.scanned_cells;
+        metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
+    }
     return payload;
 }
 
@@ -688,6 +818,7 @@ fn pumpSend(
     snapshot_pending: *bool,
     exit_sent: *bool,
     shutdown: *ShutdownState,
+    metrics: *RuntimeMetrics,
 ) !void {
     if (connection == null or send_pending.*) return;
 
@@ -720,13 +851,14 @@ fn pumpSend(
     const active = pane orelse return;
     if (attached_pane_id != active.id) return;
     if (snapshot_pending.*) {
-        const payload = try encodeFrame(buffer, active, true);
+        const payload = (try encodeFrame(io, buffer, active, true, metrics)) orelse
+            unreachable;
         snapshot_pending.* = false;
         return startSend(io, select, connection.?, payload, send_pending);
     }
     if (active.outstanding_frame_id == 0 and active.dirty) {
-        const payload = try encodeFrame(buffer, active, false);
-        return startSend(io, select, connection.?, payload, send_pending);
+        if (try encodeFrame(io, buffer, active, false, metrics)) |payload|
+            return startSend(io, select, connection.?, payload, send_pending);
     }
     if (exit_sent.* or !active.output_done or active.exit == null) return;
     if (active.outstanding_frame_id != 0) return;
@@ -797,6 +929,65 @@ fn sendClient(
     try connection.send(io, payload);
 }
 
+fn writeDiagnostics(
+    io: Io,
+    sink: *diagnostics.Sink,
+    bytes: []const u8,
+) anyerror!void {
+    try sink.write(io, bytes);
+}
+
+fn formatRuntimeTelemetry(
+    buffer: []u8,
+    io: Io,
+    metrics: *const RuntimeMetrics,
+    pane: ?*Pane,
+) ![]const u8 {
+    const now_ns = diagnostics.now(io);
+    const active = pane;
+    return std.fmt.bufPrint(buffer, "{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
+        "\"pane_id\":{d},\"outstanding_frame\":{d},\"dirty\":{d}," ++
+        "\"client_messages\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
+        "\"pty_events\":{d},\"pty_bytes\":{d},\"folded_pty_events\":{d}," ++
+        "\"frames\":{d},\"frame_bytes\":{d},\"frame_cells\":{d}," ++
+        "\"frame_spans\":{d},\"snapshots\":{d}," ++
+        "\"cursor_only_frames\":{d},\"noop_frames\":{d}," ++
+        "\"damaged_rows\":{d},\"diff_scanned_cells\":{d}," ++
+        "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
+        "\"ingest_avg_us\":{d},\"ingest_max_us\":{d}," ++
+        "\"encode_avg_us\":{d},\"encode_max_us\":{d}," ++
+        "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
+        now_ns / std.time.ns_per_ms,
+        diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
+        if (active) |value| value.id else 0,
+        if (active) |value| value.outstanding_frame_id else 0,
+        @intFromBool(if (active) |value| value.dirty else false),
+        metrics.client_messages,
+        metrics.input_events,
+        metrics.input_bytes,
+        metrics.pty_events,
+        metrics.pty_bytes,
+        metrics.folded_pty_events,
+        metrics.frames,
+        metrics.frame_bytes,
+        metrics.frame_cells,
+        metrics.frame_spans,
+        metrics.snapshots,
+        metrics.cursor_only_frames,
+        metrics.noop_frames,
+        metrics.damaged_rows,
+        metrics.diff_scanned_cells,
+        metrics.decode.average() / std.time.ns_per_us,
+        metrics.decode.max_ns / std.time.ns_per_us,
+        metrics.ingest.average() / std.time.ns_per_us,
+        metrics.ingest.max_ns / std.time.ns_per_us,
+        metrics.encode.average() / std.time.ns_per_us,
+        metrics.encode.max_ns / std.time.ns_per_us,
+        metrics.ack.average() / std.time.ns_per_us,
+        metrics.ack.max_ns / std.time.ns_per_us,
+    });
+}
+
 fn writePaneInput(io: Io, master: File, bytes: []const u8) anyerror!void {
     try master.writeStreamingAll(io, bytes);
 }
@@ -831,14 +1022,4 @@ fn readPane(io: Io, master: File) anyerror!Output {
 
 fn waitPane(pane: *Pane) anyerror!pty.Exit {
     return pane.session.wait();
-}
-
-test "changed cells remain distinguishable for patch generation" {
-    const cells = [_]core.ui.Cell{ .{}, .{}, .{} };
-    var changed = cells;
-    changed[0].bytes[0] = 'x';
-    changed[2].bytes[0] = 'y';
-    try std.testing.expect(!changed[0].eqlPublic(&cells[0]));
-    try std.testing.expect(changed[1].eqlPublic(&cells[1]));
-    try std.testing.expect(!changed[2].eqlPublic(&cells[2]));
 }

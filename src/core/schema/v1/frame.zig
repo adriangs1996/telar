@@ -1,4 +1,4 @@
-//! Pane screen snapshots and patches for protocol version 1.
+//! Pane screen snapshots and patches for protocol version 2.
 
 const std = @import("std");
 const ui = @import("../../ui.zig");
@@ -6,10 +6,11 @@ const transport = @import("../../transport.zig");
 const wire = @import("wire.zig");
 
 pub const max_span_count = 4096;
-pub const cell_fixed_size = 16;
-pub const max_cell_size = cell_fixed_size + ui.Cell.max_bytes;
+pub const cell_header_size = 1;
+pub const max_style_size = 14;
+pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
 pub const body_header_size = 35;
-pub const span_header_size = 8;
+pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
     (max_body_size - body_header_size - span_header_size) / max_cell_size,
@@ -83,12 +84,12 @@ pub const SpanIterator = struct {
 
         const start = iterator.decoder.readInt(u32) catch unreachable;
         const count = iterator.decoder.readInt(u32) catch unreachable;
-        const cells_start = iterator.decoder.index;
-        for (0..count) |_| _ = decodeCell(&iterator.decoder) catch unreachable;
+        const encoded_length = iterator.decoder.readInt(u32) catch unreachable;
+        const encoded_cells = iterator.decoder.readBytes(encoded_length) catch unreachable;
         return .{
             .start = start,
             .cell_count = count,
-            .encoded_cells = iterator.decoder.consumed(cells_start),
+            .encoded_cells = encoded_cells,
         };
     }
 };
@@ -96,11 +97,12 @@ pub const SpanIterator = struct {
 pub const CellIterator = struct {
     decoder: wire.Decoder,
     remaining: u32,
+    style: ?ui.Style = null,
 
     pub fn next(iterator: *CellIterator) ?ui.Cell {
         if (iterator.remaining == 0) return null;
         iterator.remaining -= 1;
-        return decodeCell(&iterator.decoder) catch unreachable;
+        return decodeCell(&iterator.decoder, &iterator.style) catch unreachable;
     }
 };
 
@@ -119,7 +121,18 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     for (frame.spans) |span| {
         try encoder.writeInt(u32, span.start);
         try encoder.writeInt(u32, @intCast(span.cells.len));
-        for (span.cells) |cell| try encodeCell(encoder, cell);
+        const length_index = encoder.index;
+        try encoder.writeInt(u32, 0);
+        const cells_start = encoder.index;
+        try encodeCells(encoder, span.cells);
+        const encoded_length = encoder.index - cells_start;
+        if (encoded_length > std.math.maxInt(u32)) return error.FrameTooLarge;
+        std.mem.writeInt(
+            u32,
+            encoder.buffer[length_index..][0..@sizeOf(u32)],
+            @intCast(encoded_length),
+            .little,
+        );
     }
 }
 
@@ -153,14 +166,19 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
     for (0..span_count) |span_index| {
         const start = try decoder.readInt(u32);
         const count = try decoder.readInt(u32);
+        const encoded_length = try decoder.readInt(u32);
         const end = std.math.add(u32, start, count) catch return error.InvalidSpan;
-        if (start < previous_end or end > total_cells) return error.InvalidSpan;
+        if (count == 0 or start < previous_end or end > total_cells)
+            return error.InvalidSpan;
         if (span_index == 0) {
             first_start = start;
             first_count = count;
         }
         previous_end = end;
-        for (0..count) |_| _ = try decodeCell(decoder);
+        var cell_decoder = wire.Decoder.init(try decoder.readBytes(encoded_length));
+        var style: ?ui.Style = null;
+        for (0..count) |_| _ = try decodeCell(&cell_decoder, &style);
+        try cell_decoder.ensureEnd();
     }
     if (base_frame_id == 0 and
         (span_count != 1 or first_start != 0 or first_count != total_cells))
@@ -198,18 +216,25 @@ fn validateFrame(frame: Frame) !void {
         if (span.cells.len > std.math.maxInt(u32)) return error.InvalidSpan;
         const count: u32 = @intCast(span.cells.len);
         const end = std.math.add(u32, span.start, count) catch return error.InvalidSpan;
-        if (span.start < previous_end or end > total_cells) return error.InvalidSpan;
+        if (count == 0 or span.start < previous_end or end > total_cells)
+            return error.InvalidSpan;
         previous_end = end;
         encoded_size = std.math.add(usize, encoded_size, span_header_size) catch
             return error.FrameTooLarge;
+        var previous_style: ?ui.Style = null;
         for (span.cells) |cell| {
             try validateCell(cell);
+            const style_changed = previous_style == null or
+                !previous_style.?.eql(cell.style);
+            const cell_size = cell_header_size + cell.len +
+                if (style_changed) encodedStyleSize(cell.style) else 0;
             encoded_size = std.math.add(
                 usize,
                 encoded_size,
-                cell_fixed_size + cell.len,
+                cell_size,
             ) catch return error.FrameTooLarge;
             if (encoded_size > max_body_size) return error.FrameTooLarge;
+            previous_style = cell.style;
         }
     }
     if (frame.base_frame_id == 0 and
@@ -255,40 +280,78 @@ fn validateCell(cell: ui.Cell) !void {
     try validateFlags(@bitCast(cell.style.flags));
 }
 
-fn encodeCell(encoder: *wire.Encoder, cell: ui.Cell) !void {
-    try encoder.writeByte(cell.len);
-    try encoder.writeByte(cell.width);
-    try encoder.writeInt(u16, @bitCast(cell.style.flags));
-    try encodeColor(encoder, cell.style.fg);
-    try encodeColor(encoder, cell.style.bg);
-    try encodeColor(encoder, cell.style.underline_color);
-    try encoder.writeBytes(cell.bytes[0..cell.len]);
+const length_mask: u8 = 0x1f;
+const width_shift = 5;
+const style_changed_bit: u8 = 0x80;
+
+fn encodeCells(encoder: *wire.Encoder, cells: []const ui.Cell) !void {
+    var previous_style: ?ui.Style = null;
+    for (cells) |cell| {
+        const style_changed = previous_style == null or
+            !previous_style.?.eql(cell.style);
+        const header = cell.len |
+            (cell.width << width_shift) |
+            if (style_changed) style_changed_bit else 0;
+        try encoder.writeByte(header);
+        if (style_changed) try encodeStyle(encoder, cell.style);
+        try encoder.writeBytes(cell.bytes[0..cell.len]);
+        previous_style = cell.style;
+    }
 }
 
-fn decodeCell(decoder: *wire.Decoder) !ui.Cell {
-    const length = try decoder.readByte();
-    const width = try decoder.readByte();
-    const flags_bits = try decoder.readInt(u16);
-    try validateFlags(flags_bits);
-    const foreground = try decodeColor(decoder);
-    const background = try decodeColor(decoder);
-    const underline_color = try decodeColor(decoder);
+fn encodeStyle(encoder: *wire.Encoder, style: ui.Style) !void {
+    try encoder.writeInt(u16, @bitCast(style.flags));
+    try encodeColor(encoder, style.fg);
+    try encodeColor(encoder, style.bg);
+    try encodeColor(encoder, style.underline_color);
+}
+
+fn decodeCell(decoder: *wire.Decoder, previous_style: *?ui.Style) !ui.Cell {
+    const header = try decoder.readByte();
+    const length = header & length_mask;
+    const width = (header >> width_shift) & 0x3;
+    const style_changed = header & style_changed_bit != 0;
+    if (!style_changed and previous_style.* == null) return error.InvalidCell;
+    const style = if (style_changed)
+        try decodeStyle(decoder)
+    else
+        previous_style.*.?;
     if (length > ui.Cell.max_bytes) return error.InvalidCell;
     const text = try decoder.readBytes(length);
 
     var cell: ui.Cell = .{
         .len = length,
         .width = width,
-        .style = .{
-            .fg = foreground,
-            .bg = background,
-            .underline_color = underline_color,
-            .flags = @bitCast(flags_bits),
-        },
+        .style = style,
     };
     std.mem.copyForwards(u8, cell.bytes[0..length], text);
     try validateCell(cell);
+    previous_style.* = style;
     return cell;
+}
+
+fn decodeStyle(decoder: *wire.Decoder) !ui.Style {
+    const flags_bits = try decoder.readInt(u16);
+    try validateFlags(flags_bits);
+    return .{
+        .flags = @bitCast(flags_bits),
+        .fg = try decodeColor(decoder),
+        .bg = try decodeColor(decoder),
+        .underline_color = try decodeColor(decoder),
+    };
+}
+
+fn encodedStyleSize(style: ui.Style) usize {
+    return @sizeOf(u16) + encodedColorSize(style.fg) +
+        encodedColorSize(style.bg) + encodedColorSize(style.underline_color);
+}
+
+fn encodedColorSize(color: ui.Color) usize {
+    return switch (color) {
+        .default => 1,
+        .indexed => 2,
+        .rgb => 4,
+    };
 }
 
 fn validateFlags(bits: u16) !void {
@@ -299,13 +362,10 @@ fn validateFlags(bits: u16) !void {
 
 fn encodeColor(encoder: *wire.Encoder, color: ui.Color) !void {
     switch (color) {
-        .default => {
-            try encoder.writeByte(0);
-            try encoder.writeBytes(&.{ 0, 0, 0 });
-        },
+        .default => try encoder.writeByte(0),
         .indexed => |index| {
             try encoder.writeByte(1);
-            try encoder.writeBytes(&.{ index, 0, 0 });
+            try encoder.writeByte(index);
         },
         .rgb => |rgb| {
             try encoder.writeByte(2);
@@ -316,14 +376,10 @@ fn encodeColor(encoder: *wire.Encoder, color: ui.Color) !void {
 
 fn decodeColor(decoder: *wire.Decoder) !ui.Color {
     const tag = try decoder.readByte();
-    const payload = try decoder.readBytes(3);
     return switch (tag) {
-        0 => if (std.mem.eql(u8, payload, &.{ 0, 0, 0 })) .default else error.InvalidColor,
-        1 => if (payload[1] == 0 and payload[2] == 0)
-            .{ .indexed = payload[0] }
-        else
-            error.InvalidColor,
-        2 => .{ .rgb = payload[0..3].* },
+        0 => .default,
+        1 => .{ .indexed = try decoder.readByte() },
+        2 => .{ .rgb = (try decoder.readBytes(3))[0..3].* },
         else => error.InvalidColor,
     };
 }
@@ -378,6 +434,48 @@ test "full snapshots preserve cells, styles and cursor" {
     try std.testing.expectEqualDeep(cells[0], cell_iterator.next().?);
     try std.testing.expectEqualDeep(cells[1], cell_iterator.next().?);
     try std.testing.expect(cell_iterator.next() == null);
+}
+
+test "a style run pays two bytes per ordinary cell" {
+    const cells = [_]ui.Cell{ .{}, .{}, .{} };
+    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
+    var buffer: [128]u8 = undefined;
+    var encoder = wire.Encoder.init(&buffer);
+    try encodeBody(&encoder, .{
+        .pane_id = 1,
+        .frame_id = 1,
+        .base_frame_id = 0,
+        .cols = 3,
+        .rows = 1,
+        .spans = &spans,
+    });
+
+    // Header and span: 47 bytes. The first cell carries the five-byte default
+    // style and costs seven bytes. Each following space costs only its packed
+    // header and text byte.
+    try std.testing.expectEqual(@as(usize, 58), encoder.finish().len);
+    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[47]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[54]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[56]);
+}
+
+test "the first cell of every span must define its style" {
+    const cells = [_]ui.Cell{.{}};
+    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
+    var buffer: [128]u8 = undefined;
+    var encoder = wire.Encoder.init(&buffer);
+    try encodeBody(&encoder, .{
+        .pane_id = 1,
+        .frame_id = 1,
+        .base_frame_id = 0,
+        .cols = 1,
+        .rows = 1,
+        .spans = &spans,
+    });
+
+    buffer[body_header_size + span_header_size] &= ~style_changed_bit;
+    var decoder = wire.Decoder.init(encoder.finish());
+    try std.testing.expectError(error.InvalidCell, decodeBody(&decoder));
 }
 
 test "patch spans must be ordered and inside the screen" {

@@ -1,4 +1,4 @@
-//! Application messages for telar protocol version 1.
+//! Application messages for telar protocol version 2.
 //!
 //! The handshake selects this schema before either peer calls these decoders.
 //! Every function borrows input and caller-owned output memory; none allocates.

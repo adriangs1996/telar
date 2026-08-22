@@ -9,6 +9,7 @@ pub const select = @import("select.zig");
 pub const transport = @import("transport.zig");
 pub const schema = @import("schema.zig");
 pub const endpoint = @import("endpoint.zig");
+pub const diagnostics = @import("diagnostics.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

@@ -168,7 +168,7 @@ test "backend explains incompatible protocol versions" {
 test "runtime acknowledges a stop request and removes its endpoint" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v1;
+    const schema = core.schema.v2;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -213,7 +213,7 @@ test "runtime acknowledges a stop request and removes its endpoint" {
 test "runtime owns the PTY and streams pane frames to the client" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v1;
+    const schema = core.schema.v2;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -303,7 +303,7 @@ test "runtime owns the PTY and streams pane frames to the client" {
 test "pane keeps running while its client is disconnected" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v1;
+    const schema = core.schema.v2;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 

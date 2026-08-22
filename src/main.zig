@@ -182,11 +182,15 @@ fn startRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !v
     }
 }
 
-fn finishHandshake(io: Io, connection: core.transport.SocketChannel) !core.transport.SocketChannel {
+fn finishHandshakeVersions(
+    io: Io,
+    connection: core.transport.SocketChannel,
+    versions: core.schema.handshake.VersionRange,
+) !core.transport.SocketChannel {
     var result = connection;
     errdefer result.deinit(io);
 
-    const response = try frontend.transport.handshake.perform(io, &result);
+    const response = try frontend.transport.handshake.performVersions(io, &result, versions);
     switch (response) {
         .accepted => return result,
         .rejected => |rejected| {
@@ -200,6 +204,10 @@ fn finishHandshake(io: Io, connection: core.transport.SocketChannel) !core.trans
             return error.IncompatibleProtocolVersion;
         },
     }
+}
+
+fn finishHandshake(io: Io, connection: core.transport.SocketChannel) !core.transport.SocketChannel {
+    return finishHandshakeVersions(io, connection, core.schema.handshake.supported_versions);
 }
 
 fn connectRuntime(
@@ -250,14 +258,20 @@ fn stopRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !vo
         },
         else => |other| return other,
     };
-    var connection = try finishHandshake(init.io, raw_connection);
+    // Stop is deliberately compatible with protocol 1. Its one-byte request
+    // and response did not change, so a new binary can retire an old runtime
+    // before starting one that speaks compact pane frames.
+    var connection = try finishHandshakeVersions(init.io, raw_connection, .{
+        .minimum = 1,
+        .maximum = core.schema.handshake.current_version,
+    });
     defer connection.deinit(init.io);
 
     var send_buffer: [1]u8 = undefined;
-    try connection.send(init.io, try core.schema.v1.encodeRuntimeStop(&send_buffer));
+    try connection.send(init.io, try core.schema.v2.encodeRuntimeStop(&send_buffer));
 
     var receive_buffer: [2048]u8 = undefined;
-    switch (try core.schema.v1.decodeServer(try connection.receive(init.io, &receive_buffer))) {
+    switch (try core.schema.v2.decodeServer(try connection.receive(init.io, &receive_buffer))) {
         .runtime_stopping => try File.stdout().writeStreamingAll(init.io, "telar runtime stopped\n"),
         .request_failed => |failure| {
             std.debug.print("telar runtime: {s}\n", .{failure.message});
@@ -290,6 +304,7 @@ fn runClient(
     init: std.process.Init,
     connection: *core.transport.SocketChannel,
     command: *const pty.Command,
+    endpoint: []const u8,
 ) !u8 {
     var argument_storage: [pty.max_args][]const u8 = undefined;
     var argument_count: usize = 0;
@@ -302,6 +317,7 @@ fn runClient(
     return frontend.client.run(init, connection, .{
         .arguments = argument_storage[0..argument_count],
         .cwd = cwd_buffer[0..cwd_len],
+        .endpoint = endpoint,
     });
 }
 
@@ -338,7 +354,7 @@ pub fn main(init: std.process.Init) !void {
             var connection = try connectRuntime(init, &endpoint);
             defer connection.deinit(init.io);
 
-            const code = try runClient(init, &connection, &command);
+            const code = try runClient(init, &connection, &command, endpoint.path());
             std.process.exit(code);
         },
     }

@@ -8,6 +8,7 @@ const core = @import("telar-core");
 pub const ui = @import("ui.zig");
 pub const select = core.select;
 pub const term = @import("term.zig");
+pub const frame = @import("frame.zig");
 pub const pace = @import("pace.zig");
 pub const edit = @import("edit.zig");
 pub const platform = @import("platform.zig");

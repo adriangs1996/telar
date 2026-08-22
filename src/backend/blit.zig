@@ -47,6 +47,14 @@ pub const Options = struct {
     /// the pane moved, the window resized, a modal that covered it closed -
     /// because the emulator has no idea any of that happened.
     force: bool = false,
+
+    /// Destination rows copied by this blit.
+    ///
+    /// A runtime can retain this slice until it builds a frame, then compare
+    /// only the rows which may have changed. The slice belongs to the caller
+    /// and must cover the destination buffer's height. Marks accumulate so
+    /// several blits can be folded without losing earlier damage.
+    damaged_rows: ?[]bool = null,
 };
 
 pub const Stats = struct {
@@ -70,6 +78,7 @@ pub fn blit(
     opts: Options,
 ) Stats {
     var stats: Stats = .{};
+    if (opts.damaged_rows) |damaged| std.debug.assert(damaged.len >= b.h);
 
     // `full` means global state moved - the palette, the default colours, the
     // dimensions - and the per-row flags say nothing useful about that.
@@ -96,6 +105,7 @@ pub fn blit(
         blitRow(b, area, y, row_cells[y].slice(), terminal, state.colors);
         if (opts.selection) |range| highlightRow(b, area, y, range);
         dirty[y] = false;
+        if (opts.damaged_rows) |damaged| damaged[area.y + y] = true;
         stats.copied += 1;
     }
 
@@ -104,6 +114,7 @@ pub fn blit(
     // a rendering bug.
     while (y < area.h) : (y += 1) {
         b.fill(area.row(y), " ", .{ .bg = defaultBackground(terminal, state.colors) });
+        if (opts.damaged_rows) |damaged| damaged[area.y + y] = true;
     }
 
     // Applied after the rows, and to *every* row rather than only the dirty
@@ -573,9 +584,13 @@ test "only the rows that changed are copied" {
     // One character on one row. If this copies the whole pane, an agent
     // printing a spinner costs as much as an agent printing a full screen.
     try pane.write("Z");
-    const partial = blit(&buf, buf.area(), &pane.term, &pane.state, .{});
+    var damaged_rows = [_]bool{false} ** 4;
+    const partial = blit(&buf, buf.area(), &pane.term, &pane.state, .{
+        .damaged_rows = &damaged_rows,
+    });
     try testing.expect(partial.copied < 4);
     try testing.expect(partial.skipped > 0);
+    try testing.expectEqual(@as(usize, partial.copied), std.mem.count(bool, &damaged_rows, &.{true}));
 }
 
 test "a pane smaller than its rectangle leaves nothing stale behind" {

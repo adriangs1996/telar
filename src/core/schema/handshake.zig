@@ -3,7 +3,7 @@
 const std = @import("std");
 
 pub const Version = u16;
-pub const current_version: Version = 1;
+pub const current_version: Version = 2;
 pub const supported_versions = VersionRange{
     .minimum = current_version,
     .maximum = current_version,
