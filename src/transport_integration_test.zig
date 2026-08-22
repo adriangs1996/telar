@@ -165,7 +165,7 @@ test "backend explains incompatible protocol versions" {
     try std.testing.expectEqualDeep(client_response, worker.response.?);
 }
 
-test "runtime acknowledges a stop request and removes its endpoint" {
+test "runtime stops with a live pane and removes its endpoint" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.schema.v2;
@@ -192,15 +192,39 @@ test "runtime acknowledges a stop request and removes its endpoint" {
 
     var primary = try connectRuntimeForTest(io, path);
     defer primary.deinit(io);
+    var send_buffer: [512]u8 = undefined;
+    const arguments = [_][]const u8{ "/bin/sleep", "600" };
+    try primary.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = 1,
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory_buffer[0..directory_len], .arguments = &arguments },
+    }));
+
+    var receive_buffer: [4096]u8 = undefined;
+    while (true) {
+        switch (try schema.decodeServer(try primary.receive(io, &receive_buffer))) {
+            .pane_opened => break,
+            .request_failed => return error.RuntimeRequestFailed,
+            .runtime_stopping => return error.UnexpectedRuntimeShutdown,
+            else => {},
+        }
+    }
+
     var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
-    var send_buffer: [1]u8 = undefined;
     try connection.send(io, try schema.encodeRuntimeStop(&send_buffer));
 
-    var receive_buffer: [16]u8 = undefined;
     try std.testing.expect(
         (try schema.decodeServer(try connection.receive(io, &receive_buffer))) == .runtime_stopping,
     );
+
+    while (true) {
+        switch (try schema.decodeServer(try primary.receive(io, &receive_buffer))) {
+            .runtime_stopping => break,
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        }
+    }
 
     try server.await(io);
     server_finished = true;

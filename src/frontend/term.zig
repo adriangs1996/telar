@@ -442,14 +442,17 @@ pub fn parse(input: []const u8) ?Parsed {
 
     if (input[0] != 0x1b) return parseByte(input);
 
-    // A lone escape. Real terminals disambiguate this with a timeout; a spike
-    // can treat "nothing followed yet" as the key itself.
+    // A lone escape. Stream routers disambiguate it with a timeout; direct UI
+    // callers that already own event framing can treat it as the key itself.
     if (input.len == 1) return key(.escape, .{}, 1);
     // SS3, which is what a terminal in application cursor mode sends for the
     // arrows and for Home and End. Ignoring it makes those keys dead in exactly
     // the terminals that use it.
     if (input[1] == 'O') return parseSs3(input);
-    if (input[1] != '[') return key(.escape, .{}, 1);
+    // Traditional terminals encode Alt+key as Escape followed by the key's
+    // ordinary bytes. Once both bytes have arrived this is one modified key;
+    // a stream reader still needs a timeout to distinguish a lone Escape.
+    if (input[1] != '[') return parseAlt(input);
     if (input.len == 2) return .{ .event = .incomplete, .len = 0 };
 
     if (input[2] == '<') return parseMouse(input);
@@ -525,13 +528,34 @@ fn parseByte(input: []const u8) ?Parsed {
     // Control characters: Ctrl+A is 1, and so on up to Ctrl+Z. Reported as the
     // letter with a modifier rather than as its own kind of key, so a handler
     // that wants Ctrl+C and one that wants "c" read the same way.
-    if (input[0] < 0x20) {
+    if (input[0] == 0) {
+        return key(.{ .char = .init(" ") }, .{ .ctrl = true }, 1);
+    }
+    if (input[0] >= 1 and input[0] <= 26) {
         return key(.{ .char = .init(&.{input[0] + 'a' - 1}) }, .{ .ctrl = true }, 1);
+    }
+    if (input[0] >= 0x1c and input[0] <= 0x1f) {
+        const controls = "\\]^_";
+        return key(.{ .char = .init(controls[input[0] - 0x1c ..][0..1]) }, .{ .ctrl = true }, 1);
     }
 
     const length = std.unicode.utf8ByteSequenceLength(input[0]) catch 1;
     if (input.len < length) return .{ .event = .incomplete, .len = 0 };
     return key(.{ .char = .init(input[0..length]) }, .{}, length);
+}
+
+fn parseAlt(input: []const u8) Parsed {
+    if (input[1] == 0x1b) return key(.escape, .{ .alt = true }, 2);
+    const parsed = parseByte(input[1..]) orelse unreachable;
+    if (parsed.len == 0) return parsed;
+    return switch (parsed.event) {
+        .key => |pressed| key(pressed.code, .{
+            .shift = pressed.mods.shift,
+            .alt = true,
+            .ctrl = pressed.mods.ctrl,
+        }, parsed.len + 1),
+        else => .{ .event = .incomplete, .len = parsed.len + 1 },
+    };
 }
 
 /// `ESC O X`, application cursor mode.
@@ -733,6 +757,19 @@ test "keys" {
     const ctrl_c = parse("\x03").?.event.key;
     try testing.expect(ctrl_c.mods.ctrl);
     try testing.expect(ctrl_c.isCtrl('c'));
+
+    const alt_x = parse("\x1bx").?.event.key;
+    try testing.expect(alt_x.mods.alt);
+    try testing.expect(alt_x.code.char.eql("x"));
+
+    const ctrl_alt_x = parse("\x1b\x18").?.event.key;
+    try testing.expect(ctrl_alt_x.mods.alt);
+    try testing.expect(ctrl_alt_x.mods.ctrl);
+    try testing.expect(ctrl_alt_x.code.char.eql("x"));
+
+    const ctrl_space = parse("\x00").?.event.key;
+    try testing.expect(ctrl_space.mods.ctrl);
+    try testing.expect(ctrl_space.code.char.eql(" "));
 }
 
 test "a key event survives the buffer it was parsed from" {

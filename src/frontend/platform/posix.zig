@@ -69,6 +69,10 @@ pub const Tty = struct {
     pub fn writeHandle(t: *const Tty) File {
         return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
     }
+
+    pub fn readHandle(t: *const Tty) File {
+        return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
+    }
 };
 
 /// The self-pipe SIGWINCH writes into.

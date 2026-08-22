@@ -74,7 +74,7 @@ pub const Exit = union(enum) {
 pub const Session = struct {
     master: std.c.fd_t,
     pid: std.c.pid_t,
-    reaped: bool = false,
+    reaped: std.atomic.Value(bool) = .init(false),
 
     pub fn spawn(command: *const Command, initial_size: Size) !Session {
         const size = initial_size.valid();
@@ -121,21 +121,41 @@ pub const Session = struct {
     }
 
     pub fn wait(session: *Session) !Exit {
-        if (session.reaped) return error.ChildAlreadyReaped;
+        if (session.reaped.load(.acquire)) return error.ChildAlreadyReaped;
 
         const result = try waitPid(session.pid);
-        session.reaped = true;
+        session.reaped.store(true, .release);
         return result;
     }
 
+    /// Make every blocking operation on the session able to finish.
+    ///
+    /// The runtime calls this before cancelling its actors: `waitpid` is a
+    /// blocking libc call and cannot be cancelled by `Io.Select`, so the child
+    /// has to be terminated before the actor waiting for it can be joined.
+    pub fn shutdown(session: *Session) void {
+        // Signal first. On Darwin, close can itself wait for an in-flight read
+        // on this descriptor; killing the session leader releases both that
+        // read and the actor blocked in waitpid.
+        if (!session.reaped.load(.acquire)) _ = std.c.kill(session.pid, .KILL);
+        session.closeMaster();
+    }
+
+    fn closeMaster(session: *Session) void {
+        if (session.master >= 0) {
+            _ = std.c.close(session.master);
+            session.master = -1;
+        }
+    }
+
     pub fn deinit(session: *Session) void {
-        _ = std.c.close(session.master);
-        if (!session.reaped) {
+        session.closeMaster();
+        if (!session.reaped.load(.acquire)) {
             // The UI can only reach this path after an internal failure. The
             // child must not survive detached from the PTY that telar owned.
             _ = std.c.kill(session.pid, .KILL);
             _ = waitPid(session.pid) catch {};
-            session.reaped = true;
+            session.reaped.store(true, .release);
         }
     }
 };

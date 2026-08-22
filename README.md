@@ -36,10 +36,10 @@ zig build bench
 
 The benchmark target uses `ReleaseFast` when the main build mode is `Debug`.
 It measures damage collection, frame encoding and decoding, client application
-plus terminal output, and cursor-only output against a fixed 154x37 screen. The
-cell workloads are a one-cell patch, a representative fragmented patch with 56
-spans of 24 cells, and a full screen. Use `--filter`, `--samples`, or
-`--sample-ms` after `--` to narrow or lengthen a run:
+plus terminal output, keybinding routing, and cursor-only output against a fixed
+154x37 screen. The cell workloads are a one-cell patch, a representative
+fragmented patch with 56 spans of 24 cells, and a full screen. Use `--filter`,
+`--samples`, or `--sample-ms` after `--` to narrow or lengthen a run:
 
 ```sh
 zig build bench -- --filter frontend --samples 20 --sample-ms 100

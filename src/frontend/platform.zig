@@ -87,6 +87,7 @@ comptime {
     assertFn(T, "open", fn () anyerror!T);
     assertFn(T, "deinit", fn (*T) void);
     assertFn(T, "size", fn (*const T) Size);
+    assertFn(T, "readHandle", fn (*const T) Io.File);
     assertFn(T, "writeHandle", fn (*const T) Io.File);
 
     const W = impl.ResizeWatcher;

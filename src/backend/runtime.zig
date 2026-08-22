@@ -55,6 +55,9 @@ const RuntimeMetrics = struct {
     noop_frames: u64 = 0,
     damaged_rows: u64 = 0,
     diff_scanned_cells: u64 = 0,
+    coalesced_spans: u64 = 0,
+    bridged_cells: u64 = 0,
+    coalesced_bytes_saved: u64 = 0,
     folded_pty_events: u64 = 0,
     decode: diagnostics.Timing = .{},
     ingest: diagnostics.Timing = .{},
@@ -313,6 +316,9 @@ fn serveInternal(
         listener.shutdown();
         if (connection) |*active| active.shutdown(io);
         if (control_connection) |*active| active.shutdown(io);
+        // `pane_exit` blocks in libc's waitpid and cannot observe Select
+        // cancellation. End the PTY session first so all actors can finish.
+        if (pane) |active| active.session.shutdown();
         select.cancelDiscard();
         listener.deinit(io);
         if (connection) |*active| active.deinit(io);
@@ -515,7 +521,27 @@ fn serveInternal(
         },
         .control_sent => |result| {
             _ = result catch {};
-            return;
+            // A control client gets the acknowledgement first. The attached
+            // UI then gets an explicit shutdown message so it can leave raw
+            // mode cleanly instead of interpreting EOF as a runtime failure.
+            shutdown.primary_request = true;
+            shutdown.reply_pending = true;
+            pumpSend(
+                io,
+                &select,
+                connectionPointer(&connection),
+                send_buffer,
+                pane,
+                attached_pane_id,
+                &client_send_pending,
+                &pending_opened,
+                &pending_failure,
+                &snapshot_pending,
+                &exit_sent,
+                &shutdown,
+                &metrics,
+            ) catch return;
+            if (!client_send_pending) return;
         },
         .pane_input_written => |result| {
             pane_input_pending = false;
@@ -756,6 +782,9 @@ fn encodeFrame(
             metrics.noop_frames += 1;
             metrics.damaged_rows += diff.damaged_rows;
             metrics.diff_scanned_cells += diff.scanned_cells;
+            metrics.coalesced_spans += diff.coalesced_spans;
+            metrics.bridged_cells += diff.bridged_cells;
+            metrics.coalesced_bytes_saved += diff.bytes_saved;
             metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
         }
         return null;
@@ -800,6 +829,11 @@ fn encodeFrame(
         if (!snapshot and span_count == 0) metrics.cursor_only_frames += 1;
         metrics.damaged_rows += diff.damaged_rows;
         metrics.diff_scanned_cells += diff.scanned_cells;
+        if (!snapshot) {
+            metrics.coalesced_spans += diff.coalesced_spans;
+            metrics.bridged_cells += diff.bridged_cells;
+            metrics.coalesced_bytes_saved += diff.bytes_saved;
+        }
         metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
     }
     return payload;
@@ -953,6 +987,8 @@ fn formatRuntimeTelemetry(
         "\"frame_spans\":{d},\"snapshots\":{d}," ++
         "\"cursor_only_frames\":{d},\"noop_frames\":{d}," ++
         "\"damaged_rows\":{d},\"diff_scanned_cells\":{d}," ++
+        "\"coalesced_spans\":{d},\"bridged_cells\":{d}," ++
+        "\"coalesced_bytes_saved\":{d}," ++
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"ingest_avg_us\":{d},\"ingest_max_us\":{d}," ++
         "\"encode_avg_us\":{d},\"encode_max_us\":{d}," ++
@@ -977,6 +1013,9 @@ fn formatRuntimeTelemetry(
         metrics.noop_frames,
         metrics.damaged_rows,
         metrics.diff_scanned_cells,
+        metrics.coalesced_spans,
+        metrics.bridged_cells,
+        metrics.coalesced_bytes_saved,
         metrics.decode.average() / std.time.ns_per_us,
         metrics.decode.max_ns / std.time.ns_per_us,
         metrics.ingest.average() / std.time.ns_per_us,

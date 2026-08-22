@@ -26,7 +26,7 @@ pub const ns_per_ms: u64 = 1_000_000;
 /// The frame budget. One frame at 60Hz, which is the fastest a terminal
 /// emulator will present anyway, so drawing more often puts bytes on a pipe
 /// that nothing downstream will show.
-pub const default_interval: u64 = 16 * ns_per_ms;
+pub const default_interval: u64 = std.time.ns_per_s / 60;
 
 /// Bounds the frame rate without adding latency to an idle UI.
 ///
@@ -38,9 +38,9 @@ pub const default_interval: u64 = 16 * ns_per_ms;
 /// budget waits.
 pub const Pacer = struct {
     interval: u64 = default_interval,
-    /// When the last frame went out, in monotonic nanoseconds. Null until the
-    /// first frame, so a program's opening frame is never delayed.
-    last: ?u64 = null,
+    /// Earliest time the next frame may go out. Null until the first frame, so
+    /// a program's opening frame is never delayed.
+    next_deadline: ?u64 = null,
     stats: Stats = .{},
 
     pub const Stats = struct {
@@ -56,20 +56,33 @@ pub const Pacer = struct {
         dropped: u64 = 0,
     };
 
-    /// Nanoseconds to wait before `now` may become a frame; zero means draw.
-    pub fn waitFor(p: *const Pacer, now: u64) u64 {
-        const last = p.last orelse return 0;
-        // Saturating: a monotonic clock may return the same value twice, and
-        // is only promised not to go backwards across *consecutive* calls.
-        // Wrapping here would produce a wait of roughly six hundred years.
-        const elapsed = now -| last;
-        if (elapsed >= p.interval) return 0;
-        return p.interval - elapsed;
+    /// Absolute monotonic deadline for the next frame. Null means draw now.
+    ///
+    /// Returning the deadline instead of a duration matters once the caller
+    /// hands the wait to another actor. A relative sleep starts when that actor
+    /// gets CPU time and adds dispatch latency to every frame.
+    pub fn waitUntil(p: *const Pacer, now: u64) ?u64 {
+        const deadline = p.next_deadline orelse return null;
+        return if (now < deadline) deadline else null;
     }
 
-    /// Records that a frame went out at `now`.
-    pub fn record(p: *Pacer, now: u64, absorbed: usize) void {
-        p.last = now;
+    /// Records a frame presented at `now`.
+    ///
+    /// `scheduled_deadline` is the deadline returned by `waitUntil` when the
+    /// frame had to wait. Scheduled frames stay on that cadence even if the OS
+    /// wakes the actor late. Immediate frames start a fresh cadence because a
+    /// stale deadline means the UI was idle.
+    pub fn record(
+        p: *Pacer,
+        now: u64,
+        scheduled_deadline: ?u64,
+        absorbed: usize,
+    ) void {
+        std.debug.assert(p.interval != 0);
+        p.next_deadline = if (scheduled_deadline) |deadline|
+            nextCadenceDeadline(deadline, now, p.interval)
+        else
+            now +| p.interval;
         p.stats.drawn += 1;
         // The first message earned the frame; the rest rode along.
         p.stats.absorbed += absorbed -| 1;
@@ -83,6 +96,14 @@ pub const Pacer = struct {
         p.stats.dropped += n;
     }
 };
+
+fn nextCadenceDeadline(deadline: u64, now: u64, interval: u64) u64 {
+    std.debug.assert(interval != 0);
+    const elapsed = now -| deadline;
+    const periods = elapsed / interval +| 1;
+    const advance = std.math.mul(u64, periods, interval) catch return std.math.maxInt(u64);
+    return deadline +| advance;
+}
 
 /// The most distinct collapsible kinds a single batch will fold.
 ///
@@ -151,33 +172,64 @@ const testing = std.testing;
 test "an idle ui draws immediately" {
     // The delay a throttle adds is only acceptable while it is invisible, and
     // it is visible precisely here: one keypress into a still screen. If this
-    // ever returns non-zero the UI feels sticky no matter how fast it draws.
+    // ever returns a deadline the UI feels sticky no matter how fast it draws.
     var p: Pacer = .{};
-    try testing.expectEqual(@as(u64, 0), p.waitFor(0));
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(0));
 
-    p.record(1000 * ns_per_ms, 1);
+    p.record(1000 * ns_per_ms, null, 1);
     // Long after the budget elapsed.
-    try testing.expectEqual(@as(u64, 0), p.waitFor(1100 * ns_per_ms));
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(1100 * ns_per_ms));
 }
 
-test "a second frame inside the budget waits out the remainder" {
-    var p: Pacer = .{};
-    p.record(100 * ns_per_ms, 1);
-
-    // 4ms in: 12 left.
-    try testing.expectEqual(12 * ns_per_ms, p.waitFor(104 * ns_per_ms));
-    // Exactly on the boundary: no wait, not a one nanosecond wait.
-    try testing.expectEqual(@as(u64, 0), p.waitFor(116 * ns_per_ms));
-}
-
-test "a clock that does not advance cannot produce a six hundred year wait" {
-    // `monotonic` promises not to go backwards, not to move. Two calls inside
-    // one tick return the same number, and subtracting them unsaturated
-    // underflows into a wait no user outlives.
+test "a second frame inside the budget gets an absolute deadline" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms };
-    p.record(500, 1);
-    try testing.expectEqual(16 * ns_per_ms, p.waitFor(500));
-    try testing.expect(p.waitFor(499) <= 16 * ns_per_ms);
+    p.record(100 * ns_per_ms, null, 1);
+
+    try testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(104 * ns_per_ms));
+    // Exactly on the boundary the frame is due.
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(116 * ns_per_ms));
+}
+
+test "a clock that does not advance keeps the same deadline" {
+    var p: Pacer = .{ .interval = 16 * ns_per_ms };
+    p.record(500, null, 1);
+    try testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(500));
+    try testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(499));
+}
+
+test "a late scheduled frame does not shift the cadence" {
+    var p: Pacer = .{ .interval = 10 * ns_per_ms };
+    p.record(0, null, 1);
+    const deadline = p.waitUntil(2 * ns_per_ms).?;
+    try testing.expectEqual(10 * ns_per_ms, deadline);
+
+    p.record(13 * ns_per_ms, deadline, 1);
+    try testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(13 * ns_per_ms));
+}
+
+test "a badly late frame skips missed cadence slots" {
+    var p: Pacer = .{ .interval = 10 * ns_per_ms };
+    p.record(0, null, 1);
+    const deadline = p.waitUntil(1 * ns_per_ms).?;
+
+    p.record(35 * ns_per_ms, deadline, 1);
+    try testing.expectEqual(@as(?u64, 40 * ns_per_ms), p.waitUntil(35 * ns_per_ms));
+}
+
+test "cadence arithmetic saturates at the end of monotonic time" {
+    try testing.expectEqual(
+        std.math.maxInt(u64),
+        nextCadenceDeadline(0, std.math.maxInt(u64), 1),
+    );
+}
+
+test "an immediate frame after idle starts a fresh cadence" {
+    var p: Pacer = .{ .interval = 10 * ns_per_ms };
+    p.record(0, null, 1);
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(100 * ns_per_ms));
+
+    p.record(100 * ns_per_ms, null, 1);
+    try testing.expectEqual(@as(?u64, 110 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
 }
 
 test "a burst is bounded and the frames it skips are counted" {
@@ -190,8 +242,8 @@ test "a burst is bounded and the frames it skips are counted" {
 
     while (now < 300 * ns_per_ms) : (now += ns_per_ms) {
         absorbed += 1;
-        if (p.waitFor(now) > 0) continue;
-        p.record(now, absorbed);
+        if (p.waitUntil(now) != null) continue;
+        p.record(now, null, absorbed);
         absorbed = 0;
         frames += 1;
     }

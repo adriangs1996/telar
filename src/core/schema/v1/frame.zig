@@ -299,6 +299,24 @@ fn encodeCells(encoder: *wire.Encoder, cells: []const ui.Cell) !void {
     }
 }
 
+/// Exact wire size of a cell run, excluding its span header.
+/// `previous_style` models a run appended to an existing span.
+pub fn encodedCellsSize(cells: []const ui.Cell, previous_style: ?ui.Style) usize {
+    var size: usize = 0;
+    var style = previous_style;
+    for (cells) |cell| {
+        size += encodedCellSize(cell, style);
+        style = cell.style;
+    }
+    return size;
+}
+
+pub fn encodedCellSize(cell: ui.Cell, previous_style: ?ui.Style) usize {
+    const style_changed = previous_style == null or !previous_style.?.eql(cell.style);
+    return cell_header_size + cell.len +
+        if (style_changed) encodedStyleSize(cell.style) else 0;
+}
+
 fn encodeStyle(encoder: *wire.Encoder, style: ui.Style) !void {
     try encoder.writeInt(u16, @bitCast(style.flags));
     try encodeColor(encoder, style.fg);
@@ -457,6 +475,12 @@ test "a style run pays two bytes per ordinary cell" {
     try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[47]);
     try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[54]);
     try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[56]);
+}
+
+test "cell run size accounts for inherited style" {
+    const cells = [_]ui.Cell{ .{}, .{}, .{} };
+    try std.testing.expectEqual(@as(usize, 11), encodedCellsSize(&cells, null));
+    try std.testing.expectEqual(@as(usize, 6), encodedCellsSize(&cells, .{}));
 }
 
 test "the first cell of every span must define its style" {

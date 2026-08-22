@@ -11,6 +11,7 @@ pub const term = @import("term.zig");
 pub const frame = @import("frame.zig");
 pub const pace = @import("pace.zig");
 pub const edit = @import("edit.zig");
+pub const keybind = @import("keybind.zig");
 pub const platform = @import("platform.zig");
 pub const transport = @import("transport.zig");
 pub const client = @import("client.zig");

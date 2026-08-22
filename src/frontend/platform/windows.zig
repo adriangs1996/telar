@@ -130,6 +130,10 @@ pub const Tty = struct {
     pub fn writeHandle(t: *const Tty) File {
         return .{ .handle = t.output, .flags = .{ .nonblocking = false } };
     }
+
+    pub fn readHandle(t: *const Tty) File {
+        return .{ .handle = t.input, .flags = .{ .nonblocking = false } };
+    }
 };
 
 fn openConsole(comptime name: []const u8, read: bool) !HANDLE {

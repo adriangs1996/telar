@@ -1345,13 +1345,14 @@ pub fn main(init: std.process.Init) !void {
     screen.cursor = state.cursor;
     state.last_frame = try screen.flush(w);
     state.frames += 1;
-    pacer.record(monotonic(io), 1);
+    pacer.record(monotonic(io), null, 1);
 
     while (!state.quit) {
         // Blocks for the first message and returns everything queued behind
         // it in the same call. One syscall's worth of events, not one event.
         var n = queue.get(io, &batch, 1) catch break;
         var absorbed: usize = 0;
+        var scheduled_deadline: ?u64 = null;
 
         // Keep folding and applying until the frame budget opens up. Messages
         // that arrive during the wait join this frame instead of earning one
@@ -1378,10 +1379,11 @@ pub fn main(init: std.process.Init) !void {
             // should not wait out a frame budget to see the shell again.
             if (state.quit) break;
 
-            const wait = pacer.waitFor(monotonic(io));
-            if (wait == 0) break;
+            const deadline = pacer.waitUntil(monotonic(io)) orelse break;
             pacer.noteThrottled();
-            io.sleep(.fromNanoseconds(@intCast(wait)), .awake) catch break;
+            scheduled_deadline = deadline;
+            const timestamp = Io.Timestamp.fromNanoseconds(@intCast(deadline)).withClock(.awake);
+            timestamp.wait(io) catch break;
 
             // Whatever arrived while we waited. `min` zero so this never
             // blocks - an empty queue after the wait means draw now.
@@ -1398,7 +1400,7 @@ pub fn main(init: std.process.Init) !void {
         try sendClipboard(&state, w);
         state.last_frame = try screen.flush(w);
         state.frames += 1;
-        pacer.record(monotonic(io), absorbed);
+        pacer.record(monotonic(io), scheduled_deadline, absorbed);
     }
 
     // On stderr and after the alternate screen is gone, so it lands in the

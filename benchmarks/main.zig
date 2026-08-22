@@ -1,4 +1,4 @@
-//! Reproducible benchmarks for telar's interactive frame path.
+//! Reproducible benchmarks for telar's interactive path.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -14,8 +14,11 @@ const rows: u16 = 37;
 const cell_count: usize = @as(usize, cols) * rows;
 const max_samples = 64;
 const fragmented_rows = 28;
-const fragmented_spans_per_row = 2;
-const fragmented_span_cells = 24;
+const fragmented_clusters_per_row = 2;
+const fragmented_spans_per_cluster = 4;
+const fragmented_spans_per_row = fragmented_clusters_per_row * fragmented_spans_per_cluster;
+const fragmented_span_cells = 2;
+const fragmented_gap_cells = 2;
 const fragmented_span_count = fragmented_rows * fragmented_spans_per_row;
 
 const Workload = enum { one_cell, fragmented, full_screen };
@@ -92,6 +95,7 @@ const cases = [_]Case{
     .{ .name = "backend.damage.one_cell", .work_per_op = cols, .work_unit = "cells" },
     .{ .name = "backend.damage.fragmented", .work_per_op = fragmented_rows * cols, .work_unit = "cells" },
     .{ .name = "backend.damage.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "backend.frame.fragmented", .work_per_op = fragmented_rows * cols, .work_unit = "cells" },
     .{ .name = "schema.encode.one_cell", .work_per_op = 1, .work_unit = "cells" },
     .{ .name = "schema.encode.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
     .{ .name = "schema.encode.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
@@ -101,6 +105,8 @@ const cases = [_]Case{
     .{ .name = "frontend.pipeline.one_cell", .work_per_op = 1, .work_unit = "cells" },
     .{ .name = "frontend.pipeline.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
     .{ .name = "frontend.pipeline.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "frontend.keybind.route", .work_per_op = 12, .work_unit = "keys" },
+    .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
 };
 
@@ -355,13 +361,16 @@ fn fillEditor(cells: []core.ui.Cell, variant: u8) void {
 fn fillFragmentedSpans(spans: []schema.frame.Span, cells: []const core.ui.Cell) void {
     var span_index: usize = 0;
     for (0..fragmented_rows) |y| {
-        for ([_]usize{ 12, 91 }) |x| {
-            const start = y * cols + x;
-            spans[span_index] = .{
-                .start = @intCast(start),
-                .cells = cells[start..][0..fragmented_span_cells],
-            };
-            span_index += 1;
+        for ([_]usize{ 12, 91 }) |cluster_start| {
+            for (0..fragmented_spans_per_cluster) |run| {
+                const x = cluster_start + run * (fragmented_span_cells + fragmented_gap_cells);
+                const start = y * cols + x;
+                spans[span_index] = .{
+                    .start = @intCast(start),
+                    .cells = cells[start..][0..fragmented_span_cells],
+                };
+                span_index += 1;
+            }
         }
     }
 }
@@ -424,6 +433,48 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
             context.spans,
         );
         checksum +%= diff.scanned_cells + diff.span_count;
+    }
+    return checksum;
+}
+
+const FrameContext = struct {
+    damage: DamageContext,
+    encode_buffer: []u8,
+
+    fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !FrameContext {
+        var damage = try DamageContext.init(gpa, fixture, .fragmented);
+        errdefer damage.deinit();
+        const encode_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+        return .{ .damage = damage, .encode_buffer = encode_buffer };
+    }
+
+    fn deinit(context: *FrameContext) void {
+        context.damage.gpa.free(context.encode_buffer);
+        context.damage.deinit();
+    }
+
+    fn encode(context: *FrameContext) ![]const u8 {
+        const diff = backend.damage.collectSpans(
+            context.damage.current,
+            context.damage.acknowledged,
+            cols,
+            context.damage.damaged_rows,
+            context.damage.spans,
+        );
+        return schema.encodePaneFrame(
+            context.encode_buffer,
+            frame(2, context.damage.spans[0..diff.span_count]),
+        );
+    }
+};
+
+fn runFrame(context: *FrameContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        context.damage.current[context.damage.changed_index].bytes[0] =
+            if (iteration & 1 == 0) '0' else '1';
+        const payload = try context.encode();
+        checksum +%= payload.len + payload[payload.len - 1];
     }
     return checksum;
 }
@@ -492,6 +543,43 @@ fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
     return checksum;
 }
 
+const KeybindAction = enum(u8) { detach, palette };
+const KeybindBinding = frontend.keybind.Binding(KeybindAction, 4);
+const KeybindRouter = frontend.keybind.Router(KeybindAction, 16, 4, 64, 32);
+
+const KeybindContext = struct {
+    router: KeybindRouter,
+    checksum: u64 = 0,
+
+    fn init() !KeybindContext {
+        const ctrl_b = try frontend.keybind.parseKey("ctrl+b");
+        const d = try frontend.keybind.parseKey("d");
+        const p = try frontend.keybind.parseKey("p");
+        var bindings: [2]KeybindBinding = undefined;
+        bindings[0] = try .init(&.{ ctrl_b, d }, .detach);
+        bindings[1] = try .init(&.{ ctrl_b, p }, .palette);
+        return .{ .router = try .init(&bindings) };
+    }
+
+    pub fn forward(context: *KeybindContext, bytes: []const u8) !void {
+        context.checksum +%= bytes.len;
+        if (bytes.len != 0) context.checksum +%= bytes[0];
+    }
+
+    pub fn action(context: *KeybindContext, action_value: KeybindAction) !frontend.keybind.Control {
+        context.checksum +%= @intFromEnum(action_value) + 1;
+        return .continue_routing;
+    }
+};
+
+fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
+    const input = "cargo test\x02d";
+    for (0..iterations) |iteration| {
+        _ = try context.router.feed(input, iteration, context);
+    }
+    return context.checksum;
+}
+
 const CursorContext = struct {
     screen: frontend.term.Screen,
     output: []u8,
@@ -520,6 +608,25 @@ fn runCursor(context: *CursorContext, iterations: usize) !u64 {
     return checksum;
 }
 
+const PacerContext = struct {
+    pacer: frontend.pace.Pacer = .{},
+    now_ns: u64 = 0,
+};
+
+fn runPacer(context: *PacerContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        if (context.pacer.waitUntil(context.now_ns)) |deadline_ns| {
+            context.now_ns = deadline_ns + 2 * std.time.ns_per_ms;
+            context.pacer.record(context.now_ns, deadline_ns, 1);
+        } else {
+            context.pacer.record(context.now_ns, null, 1);
+        }
+        checksum +%= context.pacer.next_deadline.?;
+    }
+    return checksum;
+}
+
 fn execute(
     writer: *Io.Writer,
     io: Io,
@@ -537,6 +644,15 @@ fn execute(
             defer context.deinit();
             try writeResult(writer, config, case, try measure(io, config, &context, runDamage));
         }
+    }
+
+    var frame_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(frame_case.name)) {
+        var context = try FrameContext.init(gpa, fixture);
+        defer context.deinit();
+        frame_case.payload_bytes_per_op = (try context.encode()).len;
+        try writeResult(writer, config, frame_case, try measure(io, config, &context, runFrame));
     }
 
     inline for (workloads) |workload| {
@@ -573,6 +689,20 @@ fn execute(
             defer context.deinit();
             try writeResult(writer, config, case, try measure(io, config, &context, runPipeline));
         }
+    }
+
+    const keybind_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(keybind_case.name)) {
+        var context = try KeybindContext.init();
+        try writeResult(writer, config, keybind_case, try measure(io, config, &context, runKeybind));
+    }
+
+    const pacer_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(pacer_case.name)) {
+        var context: PacerContext = .{};
+        try writeResult(writer, config, pacer_case, try measure(io, config, &context, runPacer));
     }
 
     const cursor_case = cases[case_index];
