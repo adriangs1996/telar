@@ -10,6 +10,7 @@ const pace = @import("pace.zig");
 const platform = @import("platform.zig");
 const term = @import("term.zig");
 const tabs_mod = @import("tabs.zig");
+const theme = @import("theme.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -94,6 +95,7 @@ pub const Options = struct {
     cwd: []const u8,
     endpoint: []const u8,
     bindings: []const ConfiguredBinding = &.{},
+    theme: theme.Theme = theme.default_theme,
 };
 
 const ClientMetrics = struct {
@@ -151,23 +153,38 @@ const ClientEvent = union(enum) {
 const PendingSplit = struct {
     request_id: schema.RequestId,
     target_pane: schema.PaneId,
+    tab_id: schema.TabId,
     axis: layout_mod.Axis,
 };
 
 const PendingClose = struct {
     request_id: schema.RequestId,
     pane_id: schema.PaneId,
+    tab_id: schema.TabId,
+};
+
+const PendingTabRequest = struct {
+    request_id: schema.RequestId,
+    tab_id: schema.TabId,
 };
 
 const PendingTabOperation = union(enum) {
     create: schema.RequestId,
-    rename: schema.RequestId,
-    close: schema.RequestId,
-    move: schema.RequestId,
+    rename: PendingTabRequest,
+    close: PendingTabRequest,
+    move: PendingTabRequest,
 
     fn requestId(operation: PendingTabOperation) schema.RequestId {
         return switch (operation) {
-            inline else => |request_id| request_id,
+            .create => |request_id| request_id,
+            inline else => |request| request.request_id,
+        };
+    }
+
+    fn tabId(operation: PendingTabOperation) ?schema.TabId {
+        return switch (operation) {
+            .create => null,
+            inline else => |request| request.tab_id,
         };
     }
 };
@@ -180,6 +197,7 @@ const PendingTabSnapshot = struct {
 const PendingAttachment = struct {
     request_id: schema.RequestId,
     pane_id: schema.PaneId,
+    tab_id: schema.TabId,
 };
 
 const PendingAttachments = struct {
@@ -204,6 +222,46 @@ const PendingAttachments = struct {
             return entry.pane_id;
         }
         return null;
+    }
+
+    fn cancelTab(
+        pending: *PendingAttachments,
+        tab_id: schema.TabId,
+        ignored: *IgnoredRequests,
+    ) !void {
+        for (&pending.entries) |*slot| {
+            const entry = slot.* orelse continue;
+            if (entry.tab_id != tab_id) continue;
+            try ignored.add(entry.request_id);
+            slot.* = null;
+        }
+    }
+};
+
+const IgnoredRequests = struct {
+    const capacity = multiplexer.max_panes + 4;
+
+    entries: [capacity]schema.RequestId = @splat(.none),
+
+    fn add(ignored: *IgnoredRequests, request_id: schema.RequestId) !void {
+        std.debug.assert(request_id != .none);
+        for (&ignored.entries) |*entry| {
+            if (entry.* == request_id) return;
+            if (entry.* == .none) {
+                entry.* = request_id;
+                return;
+            }
+        }
+        return error.TooManyIgnoredRequests;
+    }
+
+    fn take(ignored: *IgnoredRequests, request_id: schema.RequestId) bool {
+        for (&ignored.entries) |*entry| {
+            if (entry.* != request_id) continue;
+            entry.* = .none;
+            return true;
+        }
+        return false;
     }
 };
 
@@ -246,7 +304,12 @@ pub fn run(
     var host_size = terminalSize(&tty);
     var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
     defer screen.deinit();
-    var view = try client_view.State.init(gpa, host_size.cols, host_size.rows);
+    var view = try client_view.State.initWithTheme(
+        gpa,
+        host_size.cols,
+        host_size.rows,
+        options.theme,
+    );
     defer view.deinit();
     var tabs = tabs_mod.Model.init(gpa);
     defer tabs.deinit();
@@ -296,6 +359,7 @@ pub fn run(
     var pending_close: ?PendingClose = null;
     var pending_tab_operation: ?PendingTabOperation = null;
     var pending_attachments: PendingAttachments = .{};
+    var ignored_requests: IgnoredRequests = .{};
     var draw_pending = false;
     var pending_updates: usize = 0;
     var pacer: pace.Pacer = .{};
@@ -309,7 +373,7 @@ pub fn run(
         .input => |result| {
             const chunk = try result;
             if (chunk.len == 0) return 0;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.feed(chunk.slice(), monotonic(io), &handler) == .stop)
                 return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
@@ -319,7 +383,7 @@ pub fn run(
         .input_timeout => |result| {
             try result;
             input_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.expireInput(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
@@ -327,7 +391,7 @@ pub fn run(
         .binding_timeout => |result| {
             try result;
             binding_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.expireBinding(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
@@ -428,6 +492,7 @@ pub fn run(
                         try pending_attachments.add(.{
                             .request_id = request_id,
                             .pane_id = pane.id,
+                            .tab_id = snapshot.location.tab_id,
                         });
                     }
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
@@ -446,7 +511,7 @@ pub fn run(
                     if (operation != .create or operation.requestId() != created.request_id)
                         return error.UnexpectedTabCreated;
                     if (tabs.active()) |current| {
-                        var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+                        var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
                         try handler.detachTab(current);
                     }
                     pending_tab_operation = null;
@@ -467,15 +532,50 @@ pub fn run(
                     view.invalidate();
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                 },
-                .tab_closed => |closed| {
-                    const operation = pending_tab_operation orelse
-                        return error.UnexpectedTabClosed;
-                    if (operation != .close or operation.requestId() != closed.request_id)
-                        return error.UnexpectedTabClosed;
-                    pending_tab_operation = null;
+                .tab_closed => |closed| closed_message: {
+                    const lifecycle_event = closed.request_id == .none;
+                    if (lifecycle_event) {
+                        if (pending_split != null and
+                            pending_split.?.tab_id == closed.location.tab_id)
+                        {
+                            try ignored_requests.add(pending_split.?.request_id);
+                            pending_split = null;
+                        }
+                        if (pending_close != null and
+                            pending_close.?.tab_id == closed.location.tab_id)
+                        {
+                            try ignored_requests.add(pending_close.?.request_id);
+                            pending_close = null;
+                        }
+                        if (tab_snapshot != null and
+                            tab_snapshot.?.tab_id == closed.location.tab_id)
+                        {
+                            try ignored_requests.add(tab_snapshot.?.request_id);
+                            tab_snapshot = null;
+                        }
+                        try pending_attachments.cancelTab(
+                            closed.location.tab_id,
+                            &ignored_requests,
+                        );
+                        if (pending_tab_operation) |operation| {
+                            if (operation.tabId() == closed.location.tab_id) {
+                                try ignored_requests.add(operation.requestId());
+                                pending_tab_operation = null;
+                            }
+                        }
+                    } else {
+                        const operation = pending_tab_operation orelse
+                            return error.UnexpectedTabClosed;
+                        if (operation != .close or operation.requestId() != closed.request_id)
+                            return error.UnexpectedTabClosed;
+                        pending_tab_operation = null;
+                    }
                     const was_active = tabs.activeConst() != null and
                         tabs.activeConst().?.location.tab_id == closed.location.tab_id;
-                    if (!tabs.remove(closed.location.tab_id)) return error.UnexpectedTab;
+                    if (!tabs.remove(closed.location.tab_id)) {
+                        if (lifecycle_event) break :closed_message;
+                        return error.UnexpectedTab;
+                    }
                     if (closed.workspace_closed or tabs.count == 0) return 0;
                     if (was_active) {
                         const active = tabs.active().?;
@@ -538,7 +638,10 @@ pub fn run(
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                 },
                 .request_failed => |failure| {
-                    if (pending_split != null and
+                    if (ignored_requests.take(failure.request_id)) {
+                        // A lifecycle event can overtake an operation that was
+                        // already queued for the tab the runtime destroyed.
+                    } else if (pending_split != null and
                         pending_split.?.request_id == failure.request_id)
                     {
                         pending_split = null;
@@ -612,6 +715,7 @@ pub fn run(
                 io,
                 &metrics,
                 &pacer,
+                view.theme.base.canonicalName(),
                 active.location.tab_id,
                 tabs.count,
                 focused,
@@ -649,7 +753,7 @@ const InputHandler = struct {
     metrics: *ClientMetrics,
     tabs: *tabs_mod.Model,
     view: *client_view.State,
-    options: Options,
+    options: *const Options,
     next_request_id: *u64,
     pending_split: *?PendingSplit,
     pending_close: *?PendingClose,
@@ -664,7 +768,7 @@ const InputHandler = struct {
         metrics: *ClientMetrics,
         tabs: *tabs_mod.Model,
         view: *client_view.State,
-        options: Options,
+        options: *const Options,
         next_request_id: *u64,
         pending_split: *?PendingSplit,
         pending_close: *?PendingClose,
@@ -856,6 +960,7 @@ const InputHandler = struct {
         handler.pending_split.* = .{
             .request_id = request_id,
             .target_pane = pane.id,
+            .tab_id = location.tab_id,
             .axis = axis,
         };
     }
@@ -886,7 +991,11 @@ const InputHandler = struct {
             .pane_id = pane.id,
         });
         try handler.connection.send(handler.io, payload);
-        handler.pending_close.* = .{ .request_id = request_id, .pane_id = pane.id };
+        handler.pending_close.* = .{
+            .request_id = request_id,
+            .pane_id = pane.id,
+            .tab_id = handler.tabs.active().?.location.tab_id,
+        };
     }
 
     fn createTab(handler: *InputHandler) !void {
@@ -926,7 +1035,10 @@ const InputHandler = struct {
             .location = tab.location,
         });
         try handler.connection.send(handler.io, payload);
-        handler.pending_tab_operation.* = .{ .close = request_id };
+        handler.pending_tab_operation.* = .{ .close = .{
+            .request_id = request_id,
+            .tab_id = tab.location.tab_id,
+        } };
     }
 
     fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
@@ -939,7 +1051,10 @@ const InputHandler = struct {
             .direction = direction,
         });
         try handler.connection.send(handler.io, payload);
-        handler.pending_tab_operation.* = .{ .move = request_id };
+        handler.pending_tab_operation.* = .{ .move = .{
+            .request_id = request_id,
+            .tab_id = tab.location.tab_id,
+        } };
     }
 
     fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
@@ -953,7 +1068,10 @@ const InputHandler = struct {
             .label = label,
         });
         try handler.connection.send(handler.io, payload);
-        handler.pending_tab_operation.* = .{ .rename = request_id };
+        handler.pending_tab_operation.* = .{ .rename = .{
+            .request_id = request_id,
+            .tab_id = tab.location.tab_id,
+        } };
         handler.view.finishTabRename();
     }
 };
@@ -1083,7 +1201,7 @@ fn presentModel(
     view: *client_view.State,
 ) !u64 {
     const compose_started = diagnostics.now(io);
-    const composed = try model.render(screen, view.workbench());
+    const composed = try model.renderThemed(screen, view.workbench(), view.palette());
     const chrome = try view.render(screen, tabs, model, composed.full);
     if (comptime diagnostics.enabled) {
         metrics.composed_panes += composed.panes;
@@ -1153,6 +1271,7 @@ fn formatClientTelemetry(
     io: Io,
     metrics: *const ClientMetrics,
     pacer: *const pace.Pacer,
+    theme_name: []const u8,
     active_tab: schema.TabId,
     tab_count: usize,
     focused_pane: schema.PaneId,
@@ -1163,6 +1282,7 @@ fn formatClientTelemetry(
     const now_ns = diagnostics.now(io);
     var writer = Io.Writer.fixed(buffer);
     try writer.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"client\"," ++
+        "\"theme\":\"{s}\"," ++
         "\"active_tab\":{d},\"tab_count\":{d}," ++
         "\"focused_pane\":{d},\"pane_count\":{d},\"pending_updates\":{d}," ++
         "\"draw_pending\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
@@ -1177,6 +1297,7 @@ fn formatClientTelemetry(
         "\"pacer_drawn\":{d},\"pacer_throttled\":{d},\"pacer_absorbed\":{d}", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
+        theme_name,
         schema.id.raw(active_tab),
         tab_count,
         schema.id.raw(focused_pane),
@@ -1288,10 +1409,30 @@ test "default bindings compile without ambiguous prefixes" {
 
 test "pending attachments are removed by request id" {
     var pending: PendingAttachments = .{};
-    try pending.add(.{ .request_id = @enumFromInt(7), .pane_id = @enumFromInt(3) });
+    try pending.add(.{
+        .request_id = @enumFromInt(7),
+        .pane_id = @enumFromInt(3),
+        .tab_id = @enumFromInt(2),
+    });
     try std.testing.expectEqual(
         @as(schema.PaneId, @enumFromInt(3)),
         pending.take(@enumFromInt(7)).?,
     );
     try std.testing.expect(pending.take(@enumFromInt(7)) == null);
+}
+
+test "closing a tab cancels its pending attachments" {
+    var pending: PendingAttachments = .{};
+    var ignored: IgnoredRequests = .{};
+    try pending.add(.{
+        .request_id = @enumFromInt(7),
+        .pane_id = @enumFromInt(3),
+        .tab_id = @enumFromInt(2),
+    });
+
+    try pending.cancelTab(@enumFromInt(2), &ignored);
+
+    try std.testing.expect(pending.take(@enumFromInt(7)) == null);
+    try std.testing.expect(ignored.take(@enumFromInt(7)));
+    try std.testing.expect(!ignored.take(@enumFromInt(7)));
 }

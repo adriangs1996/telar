@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const frame_apply = @import("frame.zig");
 const layout_mod = @import("layout.zig");
 const term = @import("term.zig");
+const theme = @import("theme.zig");
 
 const schema = core.schema.v2;
 const ui = core.ui;
@@ -28,6 +29,11 @@ const DamageRow = struct {
     fn dirty(row: DamageRow) bool {
         return row.start < row.end;
     }
+};
+
+const BorderTheme = struct {
+    focused: ui.Color,
+    unfocused: ui.Color,
 };
 
 pub const Pane = struct {
@@ -104,6 +110,7 @@ pub const Model = struct {
     composed: ?ui.Buffer = null,
     composition_area: ui.Rect = .{},
     composition_invalidated: bool = true,
+    border_theme: ?BorderTheme = null,
 
     pub fn init(gpa: std.mem.Allocator) Model {
         return .{ .gpa = gpa };
@@ -272,6 +279,23 @@ pub const Model = struct {
     }
 
     pub fn render(model: *Model, screen: *term.Screen, area: ui.Rect) !RenderStats {
+        return model.renderThemed(screen, area, &theme.default_theme.palette);
+    }
+
+    pub fn renderThemed(
+        model: *Model,
+        screen: *term.Screen,
+        area: ui.Rect,
+        palette: *const theme.Palette,
+    ) !RenderStats {
+        const border_theme: BorderTheme = .{
+            .focused = palette.accent,
+            .unfocused = palette.overlay0,
+        };
+        if (model.border_theme == null or !std.meta.eql(model.border_theme.?, border_theme)) {
+            model.border_theme = border_theme;
+            model.composition_invalidated = true;
+        }
         if (try model.ensureComposed(screen.back.w, screen.back.h))
             model.composition_invalidated = true;
         if (!std.meta.eql(model.composition_area, area)) {
@@ -292,7 +316,7 @@ pub const Model = struct {
         for (model.layout.views(area, &storage)) |view| {
             const pane = model.find(view.pane_id) orelse continue;
             stats.panes += 1;
-            if (model.layout.count() > 1) drawBorder(target, view);
+            if (model.layout.count() > 1) drawBorder(target, view, palette);
             target.pushClip(view.content);
             defer target.popClip();
             const rows = @min(view.content.h, pane.buffer.h);
@@ -488,11 +512,11 @@ fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
     return .{ .cols = rect.w, .rows = rect.h };
 }
 
-fn drawBorder(buffer: *ui.Buffer, view: layout_mod.View) void {
+fn drawBorder(buffer: *ui.Buffer, view: layout_mod.View, palette: *const theme.Palette) void {
     const style: ui.Style = if (view.focused)
-        .{ .flags = .{ .bold = true, .inverse = true } }
+        .{ .fg = palette.accent, .flags = .{ .bold = true } }
     else
-        .{ .flags = .{ .faint = true } };
+        .{ .fg = palette.overlay0 };
     var title_buffer: [32]u8 = undefined;
     const text = std.fmt.bufPrint(
         &title_buffer,
@@ -528,9 +552,45 @@ test "two pane buffers compose into their layout rectangles" {
     try std.testing.expectEqual(@as(usize, 2), stats.panes);
     try std.testing.expectEqualStrings("a", screen.back.cells[40 + 1].text());
     try std.testing.expectEqualStrings("b", screen.back.cells[40 + 21].text());
-    try std.testing.expect(screen.back.cells[20].style.flags.inverse);
+    try std.testing.expectEqualDeep(
+        theme.default_theme.palette.accent,
+        screen.back.cells[20].style.fg,
+    );
+    try std.testing.expect(screen.back.cells[20].style.flags.bold);
+    try std.testing.expect(!screen.back.cells[20].style.flags.inverse);
     try std.testing.expectEqualStrings(" ", screen.back.cells[19].text());
     try std.testing.expect(!screen.back.cells[19].style.flags.inverse);
+}
+
+test "pane borders use the selected theme without coloring pane contents" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 10, .rows = 3 });
+    try model.split(
+        @enumFromInt(1),
+        @enumFromInt(2),
+        location,
+        .horizontal,
+        .{ .w = 20, .h = 4 },
+    );
+    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "x", 1, .{});
+    const selected = theme.builtin(.tokyo_night);
+    var screen = try term.Screen.init(gpa, 20, 4);
+    defer screen.deinit();
+    _ = try model.renderThemed(&screen, screen.back.area(), &selected.palette);
+
+    try std.testing.expectEqualDeep(selected.palette.accent, screen.back.cells[10].style.fg);
+    try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[21].style.bg);
+
+    const replacement = theme.builtin(.catppuccin);
+    const replaced = try model.renderThemed(&screen, screen.back.area(), &replacement.palette);
+    try std.testing.expect(replaced.full);
+    try std.testing.expectEqualDeep(replacement.palette.accent, screen.back.cells[10].style.fg);
 }
 
 test "one pane has no telar border" {

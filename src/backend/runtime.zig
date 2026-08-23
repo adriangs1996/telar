@@ -680,6 +680,15 @@ const WorkspaceStore = struct {
         return workspace_closed;
     }
 
+    fn totalTabs(store: *const WorkspaceStore) usize {
+        var count: usize = 0;
+        for (store.items) |slot| {
+            const workspace = slot orelse continue;
+            count += workspace.tab_count;
+        }
+        return count;
+    }
+
     fn descriptors(
         store: *WorkspaceStore,
         workspace_location: schema.WorkspaceLocation,
@@ -768,6 +777,14 @@ const PaneStore = struct {
         return count;
     }
 
+    fn hasAt(store: *const PaneStore, location: schema.TabLocation) bool {
+        for (store.items) |slot| {
+            const pane = slot orelse continue;
+            if (std.meta.eql(pane.location, location)) return true;
+        }
+        return false;
+    }
+
     fn closeAt(store: *PaneStore, location: schema.TabLocation) void {
         for (store.items) |slot| {
             const pane = slot orelse continue;
@@ -819,15 +836,33 @@ const PaneStore = struct {
         store.count = 0;
     }
 
-    fn collectFinished(store: *PaneStore, attachments: *AttachmentStore) void {
+    fn collectFinished(
+        store: *PaneStore,
+        attachments: *AttachmentStore,
+        workspaces: *WorkspaceStore,
+        responses: ?*ResponseQueue,
+    ) !void {
         for (&store.items) |*slot| {
             const pane = slot.* orelse continue;
             if (pane.exit == null or !pane.output_done or
                 pane.output_pending or pane.wait_pending) continue;
             if (attachments.find(pane.id) != null) continue;
+            const location = pane.location;
             slot.* = null;
             store.count -= 1;
             pane.destroy();
+            if (store.hasAt(location) or workspaces.findTab(location) == null) continue;
+
+            const workspace_closed = workspaces.removeTab(location).?;
+            if (responses) |queue| {
+                if (attachments.observes(location.workspace)) {
+                    try queue.push(.{ .tab_closed = .{
+                        .request_id = .none,
+                        .location = location,
+                        .workspace_closed = workspace_closed,
+                    } });
+                }
+            }
         }
     }
 };
@@ -836,6 +871,7 @@ const AttachmentStore = struct {
     items: [max_panes]?Attachment = [_]?Attachment{null} ** max_panes,
     count: usize = 0,
     next_send: usize = 0,
+    workspace: ?schema.WorkspaceLocation = null,
 
     fn find(store: *AttachmentStore, pane_id: schema.PaneId) ?*Attachment {
         for (&store.items) |*slot| {
@@ -851,10 +887,15 @@ const AttachmentStore = struct {
         pane: *Pane,
     ) !*Attachment {
         if (store.find(pane.id)) |existing| return existing;
+        if (store.workspace) |workspace| {
+            if (!std.meta.eql(workspace, pane.location.workspace))
+                return error.WorkspaceMismatch;
+        }
         if (store.count == max_panes) return error.AttachmentLimitReached;
         for (&store.items) |*slot| {
             if (slot.* == null) {
                 slot.* = try Attachment.init(gpa, pane);
+                if (store.workspace == null) store.workspace = pane.location.workspace;
                 store.count += 1;
                 return &slot.*.?;
             }
@@ -874,6 +915,10 @@ const AttachmentStore = struct {
         return false;
     }
 
+    fn observes(store: *const AttachmentStore, workspace: schema.WorkspaceLocation) bool {
+        return store.workspace != null and std.meta.eql(store.workspace.?, workspace);
+    }
+
     fn deinit(store: *AttachmentStore) void {
         for (&store.items) |*slot| {
             if (slot.*) |*attachment| attachment.deinit();
@@ -881,6 +926,7 @@ const AttachmentStore = struct {
         }
         store.count = 0;
         store.next_send = 0;
+        store.workspace = null;
     }
 };
 
@@ -1024,7 +1070,7 @@ fn serveInternal(
             }
             connection = accepted;
             responses.clear();
-            dropAttachments(&attachments, &panes);
+            dropAttachments(&attachments, &panes, &workspaces);
             sent_exit_pane = null;
             client_read_pending = true;
             try select.concurrent(.client_message, receiveClient, .{
@@ -1038,7 +1084,7 @@ fn serveInternal(
             const payload = result catch {
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
-                dropAttachments(&attachments, &panes);
+                dropAttachments(&attachments, &panes, &workspaces);
                 responses.clear();
                 continue;
             };
@@ -1046,7 +1092,7 @@ fn serveInternal(
             const message = schema.decodeClient(payload) catch {
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
-                dropAttachments(&attachments, &panes);
+                dropAttachments(&attachments, &panes, &workspaces);
                 continue;
             };
             if (comptime diagnostics.enabled) {
@@ -1072,7 +1118,7 @@ fn serveInternal(
                 if (shutdown.primary_request) return;
                 connection.?.deinit(io);
                 if (!client_send_pending) connection = null;
-                dropAttachments(&attachments, &panes);
+                dropAttachments(&attachments, &panes, &workspaces);
                 continue;
             };
             pumpSend(
@@ -1097,6 +1143,7 @@ fn serveInternal(
                     client_send_pending,
                     &attachments,
                     &panes,
+                    &workspaces,
                 );
                 continue;
             };
@@ -1125,13 +1172,14 @@ fn serveInternal(
                     client_send_pending,
                     &attachments,
                     &panes,
+                    &workspaces,
                 );
                 continue;
             };
             if (sent_exit_pane) |pane_id| {
                 sent_exit_pane = null;
                 _ = attachments.detach(pane_id);
-                panes.collectFinished(&attachments);
+                try panes.collectFinished(&attachments, &workspaces, &responses);
             }
             if (connection == null or !connection.?.isActive()) {
                 if (!client_read_pending) connection = null;
@@ -1159,6 +1207,7 @@ fn serveInternal(
                     client_send_pending,
                     &attachments,
                     &panes,
+                    &workspaces,
                 );
             };
         },
@@ -1332,7 +1381,7 @@ fn serveInternal(
                 &shutdown,
                 &metrics,
             ) catch {
-                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
+                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes, &workspaces);
             };
         },
         .pane_input_written => |result| {
@@ -1345,6 +1394,7 @@ fn serveInternal(
                     client_send_pending,
                     &attachments,
                     &panes,
+                    &workspaces,
                 );
                 continue;
             };
@@ -1362,10 +1412,15 @@ fn serveInternal(
             active.output_pending = false;
             const output_len = event.result catch {
                 active.output_done = true;
+                if (active.exit) |exit| active.finishExitedHistory(exit, &metrics);
+                try panes.collectFinished(
+                    &attachments,
+                    &workspaces,
+                    if (connectionPointer(&connection) != null) &responses else null,
+                );
                 pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &workspaces, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
-                    closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
+                    closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes, &workspaces);
                 };
-                panes.collectFinished(&attachments);
                 continue;
             };
             if (output_len == 0) {
@@ -1384,20 +1439,28 @@ fn serveInternal(
                 active.output_pending = true;
                 try select.concurrent(.pane_output, readPane, .{ io, active });
             }
+            try panes.collectFinished(
+                &attachments,
+                &workspaces,
+                if (connectionPointer(&connection) != null) &responses else null,
+            );
             pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &workspaces, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
-                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
+                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes, &workspaces);
             };
-            panes.collectFinished(&attachments);
         },
         .pane_exit => |event| {
             const active = event.pane;
             active.wait_pending = false;
             active.exit = try event.result;
             if (active.output_done) active.finishExitedHistory(active.exit.?, &metrics);
+            try panes.collectFinished(
+                &attachments,
+                &workspaces,
+                if (connectionPointer(&connection) != null) &responses else null,
+            );
             pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &workspaces, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
-                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
+                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes, &workspaces);
             };
-            panes.collectFinished(&attachments);
         },
         .telemetry_tick => |result| {
             result catch {
@@ -1416,6 +1479,8 @@ fn serveInternal(
                 io,
                 &metrics,
                 &attachments,
+                workspaces.count,
+                workspaces.totalTabs(),
                 panes.count,
                 &history_service,
             ) catch continue;
@@ -2130,15 +2195,20 @@ fn closeClient(
     send_pending: bool,
     attachments: *AttachmentStore,
     panes: *PaneStore,
+    workspaces: *WorkspaceStore,
 ) void {
     if (connection.*) |*active| active.deinit(io);
     if (!read_pending and !send_pending) connection.* = null;
-    dropAttachments(attachments, panes);
+    dropAttachments(attachments, panes, workspaces);
 }
 
-fn dropAttachments(attachments: *AttachmentStore, panes: *PaneStore) void {
+fn dropAttachments(
+    attachments: *AttachmentStore,
+    panes: *PaneStore,
+    workspaces: *WorkspaceStore,
+) void {
     attachments.deinit();
-    panes.collectFinished(attachments);
+    panes.collectFinished(attachments, workspaces, null) catch unreachable;
 }
 
 fn attachedPane(
@@ -2176,6 +2246,8 @@ fn formatRuntimeTelemetry(
     io: Io,
     metrics: *const RuntimeMetrics,
     attachments: *const AttachmentStore,
+    workspace_count: usize,
+    tab_count: usize,
     pane_count: usize,
     history_service: *const history.Service,
 ) ![]const u8 {
@@ -2214,6 +2286,7 @@ fn formatRuntimeTelemetry(
     const history_stats = history_service.statsSnapshot();
     var output = Io.Writer.fixed(buffer);
     try output.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
+        "\"workspace_count\":{d},\"tab_count\":{d}," ++
         "\"pane_count\":{d},\"attachment_count\":{d}," ++
         "\"outstanding_frames\":{d},\"dirty_panes\":{d}," ++
         "\"client_messages\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
@@ -2226,6 +2299,8 @@ fn formatRuntimeTelemetry(
         "\"coalesced_bytes_saved\":{d},", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
+        workspace_count,
+        tab_count,
         pane_count,
         attachments.count,
         outstanding_frames,

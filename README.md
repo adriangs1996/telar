@@ -9,6 +9,21 @@ is how they are laid out on screen.
 
 Written in Zig 0.16. Very early.
 
+## Themes
+
+Vesper is the default client theme. Catppuccin Mocha, Tokyo Night, and a
+terminal-palette theme are built in:
+
+```sh
+zig build run -- --theme catppuccin
+zig build run -- --theme tokyo-night
+zig build run -- --theme terminal
+```
+
+Themes color Telar's bars, sidebar, selections, and pane borders. Applications
+inside panes keep their own terminal colors. `frontend.theme.Overrides` exposes
+the color roles that the user configuration will map onto later.
+
 ## Development diagnostics
 
 Debug builds emit one JSON Lines sample per second without writing terminal or

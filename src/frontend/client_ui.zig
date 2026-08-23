@@ -6,6 +6,7 @@ const edit = @import("edit.zig");
 const multiplexer = @import("multiplexer.zig");
 const tabs_mod = @import("tabs.zig");
 const term = @import("term.zig");
+const theme_mod = @import("theme.zig");
 const ui = @import("ui.zig");
 
 const schema = core.schema.v2;
@@ -88,6 +89,7 @@ const TabRename = struct {
 pub const State = struct {
     scratch: ui.Buffer,
     regions: Regions,
+    theme: theme_mod.Theme,
     hits: Hits = .{},
     sidebar_requested: bool = true,
     hovered: ?Action = null,
@@ -95,9 +97,19 @@ pub const State = struct {
     dirty: bool = true,
 
     pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
+        return initWithTheme(gpa, width, height, theme_mod.default_theme);
+    }
+
+    pub fn initWithTheme(
+        gpa: std.mem.Allocator,
+        width: u16,
+        height: u16,
+        selected_theme: theme_mod.Theme,
+    ) !State {
         return .{
             .scratch = try .init(gpa, width, height),
             .regions = .calculate(width, height, true),
+            .theme = selected_theme,
         };
     }
 
@@ -114,6 +126,16 @@ pub const State = struct {
 
     pub fn workbench(state: *const State) ui.Rect {
         return state.regions.workbench;
+    }
+
+    pub fn palette(state: *const State) *const theme_mod.Palette {
+        return &state.theme.palette;
+    }
+
+    pub fn setTheme(state: *State, selected_theme: theme_mod.Theme) void {
+        state.theme = selected_theme;
+        state.hovered = null;
+        state.dirty = true;
     }
 
     pub fn toggleSidebar(state: *State) void {
@@ -262,15 +284,20 @@ pub const State = struct {
 fn drawTop(state: *State, model: *const multiplexer.Model) void {
     const area = state.regions.top;
     if (area.isEmpty()) return;
-    const bar_style: ui.Style = .{ .flags = .{ .inverse = true } };
+    const palette = state.palette();
+    const bar_style: ui.Style = .{ .fg = palette.text, .bg = palette.panel_bg };
     state.scratch.fill(area, " ", bar_style);
 
     const toggle: ui.Rect = .{ .x = area.x, .y = area.y, .w = @min(area.w, 4), .h = 1 };
     state.hits.add(toggle, .toggle_sidebar);
     const toggle_style: ui.Style = if (isHovered(state, .toggle_sidebar))
-        .{ .flags = .{ .bold = true, .inverse = true, .underline = .single } }
+        .{
+            .fg = palette.accent,
+            .bg = palette.surface1,
+            .flags = .{ .bold = true, .underline = .single },
+        }
     else
-        bar_style;
+        .{ .fg = palette.accent, .bg = palette.panel_bg, .flags = .{ .bold = true } };
     _ = state.scratch.writeText(toggle, toggle.x, toggle.y, if (state.regions.sidebar.w == 0) "[>]" else "[<]", toggle_style);
 
     var workspace_buffer: [48]u8 = undefined;
@@ -296,9 +323,14 @@ fn drawTop(state: *State, model: *const multiplexer.Model) void {
 fn drawSidebar(state: *State, model: *const multiplexer.Model) void {
     const area = state.regions.sidebar;
     if (area.isEmpty()) return;
-    const faint: ui.Style = .{ .flags = .{ .faint = true } };
-    const heading: ui.Style = .{ .flags = .{ .bold = true } };
-    state.scratch.fill(area, " ", .{});
+    const palette = state.palette();
+    const faint: ui.Style = .{ .fg = palette.overlay0, .bg = palette.panel_bg };
+    const heading: ui.Style = .{
+        .fg = palette.accent,
+        .bg = palette.panel_bg,
+        .flags = .{ .bold = true },
+    };
+    state.scratch.fill(area, " ", .{ .fg = palette.text, .bg = palette.panel_bg });
 
     _ = state.scratch.writeText(area, area.x + 1, area.y, "TELAR", heading);
     if (area.w > 1) {
@@ -324,12 +356,20 @@ fn drawSidebar(state: *State, model: *const multiplexer.Model) void {
         state.hits.add(row_area, action);
         const focused = model.layout.focused() == pane.id;
         const style: ui.Style = if (focused)
-            .{ .flags = .{ .bold = true, .inverse = true } }
+            .{
+                .fg = palette.text,
+                .bg = palette.surface0,
+                .flags = .{ .bold = true },
+            }
         else if (isHovered(state, action))
-            .{ .flags = .{ .underline = .single } }
+            .{
+                .fg = palette.text,
+                .bg = palette.surface1,
+                .flags = .{ .underline = .single },
+            }
         else
-            .{};
-        if (focused or isHovered(state, action)) state.scratch.fill(row_area, " ", style);
+            .{ .fg = palette.subtext0, .bg = palette.panel_bg };
+        state.scratch.fill(row_area, " ", style);
         var label_buffer: [48]u8 = undefined;
         const label = std.fmt.bufPrint(&label_buffer, "  pane {d}", .{schema.id.raw(pane.id)}) catch "  pane";
         _ = state.scratch.writeTruncated(row_area, row_area.x, row, label, row_area.w, style);
@@ -344,12 +384,17 @@ fn drawBottom(
 ) void {
     const area = state.regions.bottom;
     if (area.isEmpty()) return;
-    const bar_style: ui.Style = .{ .flags = .{ .inverse = true } };
+    const palette = state.palette();
+    const bar_style: ui.Style = .{ .fg = palette.subtext0, .bg = palette.panel_bg };
     state.scratch.fill(area, " ", bar_style);
 
     if (state.tab_rename) |*rename| {
         const prefix = " rename tab: ";
-        _ = state.scratch.writeText(area, area.x, area.y, prefix, bar_style);
+        _ = state.scratch.writeText(area, area.x, area.y, prefix, .{
+            .fg = palette.accent,
+            .bg = palette.panel_bg,
+            .flags = .{ .bold = true },
+        });
         const field_x = area.x + ui.measure(prefix);
         const field_area: ui.Rect = .{
             .x = field_x,
@@ -364,7 +409,11 @@ fn drawBottom(
             area.y,
             field_view.text,
             field_area.w,
-            .{ .flags = .{ .bold = true, .inverse = true } },
+            .{
+                .fg = palette.text,
+                .bg = palette.surface0,
+                .flags = .{ .bold = true },
+            },
         );
         return;
     }
@@ -403,9 +452,17 @@ fn drawBottom(
             state.hits.add(tab_rect, action);
             const active = index == collection.active_index;
             const style: ui.Style = if (active)
-                .{ .flags = .{ .bold = true, .inverse = true, .underline = .single } }
+                .{
+                    .fg = palette.surface_dim,
+                    .bg = palette.accent,
+                    .flags = .{ .bold = true },
+                }
             else if (isHovered(state, action))
-                .{ .flags = .{ .inverse = true, .underline = .single } }
+                .{
+                    .fg = palette.text,
+                    .bg = palette.surface0,
+                    .flags = .{ .underline = .single },
+                }
             else
                 bar_style;
             _ = state.scratch.writeTruncated(tab_rect, x, area.y, tab_label, tab_width, style);
@@ -419,7 +476,9 @@ fn drawBottom(
         const tab_width = @min(ui.measure(tab_label), state.regions.tabs.w);
         const tab_rect: ui.Rect = .{ .x = x, .y = area.y, .w = tab_width, .h = 1 };
         _ = state.scratch.writeTruncated(tab_rect, x, area.y, tab_label, tab_width, .{
-            .flags = .{ .bold = true, .inverse = true, .underline = .single },
+            .fg = palette.surface_dim,
+            .bg = palette.accent,
+            .flags = .{ .bold = true },
         });
     }
 
@@ -467,10 +526,15 @@ fn locationLabels(
 }
 
 fn hoveredBarStyle(state: *const State, action: Action) ui.Style {
+    const palette = state.palette();
     return if (isHovered(state, action))
-        .{ .flags = .{ .bold = true, .inverse = true, .underline = .single } }
+        .{
+            .fg = palette.text,
+            .bg = palette.surface0,
+            .flags = .{ .bold = true, .underline = .single },
+        }
     else
-        .{ .flags = .{ .inverse = true } };
+        .{ .fg = palette.subtext0, .bg = palette.panel_bg };
 }
 
 fn isHovered(state: *const State, action: Action) bool {
@@ -571,7 +635,7 @@ test "sidebar rows focus panes and stable hover requests no extra frame" {
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
 }
 
-test "client bars preserve the terminal palette" {
+test "client chrome uses Vesper by default" {
     const gpa = std.testing.allocator;
     var state = try State.init(gpa, 80, 24);
     defer state.deinit();
@@ -587,9 +651,46 @@ test "client bars preserve the terminal palette" {
     _ = try model.render(&screen, state.workbench());
     _ = try state.render(&screen, null, &model, true);
 
-    try std.testing.expect(screen.back.cells[0].style.bg == .default);
-    try std.testing.expect(screen.back.cells[0].style.fg == .default);
-    try std.testing.expect(screen.back.cells[0].style.flags.inverse);
+    try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[0].style.bg);
+    try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[0].style.fg);
+    try std.testing.expect(!screen.back.cells[0].style.flags.inverse);
+    try std.testing.expectEqual(theme_mod.Builtin.vesper, state.theme.base);
+}
+
+test "terminal theme leaves client chrome backgrounds to the host terminal" {
+    const gpa = std.testing.allocator;
+    var state = try State.initWithTheme(gpa, 80, 24, theme_mod.builtin(.terminal));
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 50, .rows = 22 });
+    var screen = try term.Screen.init(gpa, 80, 24);
+    defer screen.deinit();
+    _ = try model.renderThemed(&screen, state.workbench(), state.palette());
+    _ = try state.render(&screen, null, &model, true);
+
+    try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[0].style.bg);
+    try std.testing.expectEqualDeep(
+        ui.Color.default,
+        screen.back.cells[@as(usize, 23) * 80 + 79].style.bg,
+    );
+}
+
+test "changing themes invalidates client chrome" {
+    var state = try State.init(std.testing.allocator, 80, 24);
+    defer state.deinit();
+    state.dirty = false;
+    state.hovered = .active_workspace;
+
+    state.setTheme(theme_mod.builtin(.catppuccin));
+
+    try std.testing.expect(state.dirty);
+    try std.testing.expect(state.hovered == null);
+    try std.testing.expectEqual(theme_mod.Builtin.catppuccin, state.theme.base);
 }
 
 test "tab bar renders ordered labels and clicks carry runtime ids" {

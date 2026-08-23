@@ -286,8 +286,9 @@ test "runtime destroys a pane after its shell exits" {
     var location: ?schema.TabLocation = null;
     var saw_output = false;
     var saw_exit = false;
+    var saw_tab_closed = false;
     var rejected_reattach = false;
-    var saw_empty_location = false;
+    var rejected_snapshot = false;
 
     for (0..96) |_| {
         const payload = try connection.receive(io, receive_buffer);
@@ -331,28 +332,187 @@ test "runtime destroys a pane after its shell exits" {
                 }));
             },
             .request_failed => |failure| {
-                if (failure.request_id != @as(schema.RequestId, @enumFromInt(2))) {
-                    std.debug.print("runtime integration failure: {s}\n", .{failure.message});
-                    return error.RuntimeRequestFailed;
+                switch (@intFromEnum(failure.request_id)) {
+                    2 => {
+                        try std.testing.expectEqual(schema.FailureCode.pane_not_found, failure.code);
+                        rejected_reattach = true;
+                    },
+                    3 => {
+                        try std.testing.expectEqual(schema.FailureCode.tab_not_found, failure.code);
+                        rejected_snapshot = true;
+                    },
+                    else => {
+                        std.debug.print("runtime integration failure: {s}\n", .{failure.message});
+                        return error.RuntimeRequestFailed;
+                    },
                 }
-                try std.testing.expectEqual(schema.FailureCode.pane_not_found, failure.code);
-                rejected_reattach = true;
             },
             .runtime_stopping => return error.UnexpectedRuntimeShutdown,
-            .tab_snapshot => |snapshot| {
-                try std.testing.expectEqual(
-                    @as(schema.RequestId, @enumFromInt(3)),
-                    snapshot.request_id,
-                );
-                try std.testing.expectEqual(@as(u16, 0), snapshot.pane_count);
-                saw_empty_location = true;
+            .tab_closed => |closed| {
+                try std.testing.expect(saw_exit);
+                try std.testing.expectEqual(schema.RequestId.none, closed.request_id);
+                try std.testing.expectEqualDeep(location.?, closed.location);
+                try std.testing.expect(closed.workspace_closed);
+                saw_tab_closed = true;
             },
             .history_results => return error.UnexpectedHistoryResults,
             else => return error.UnexpectedTabMessage,
         }
-        if (saw_exit and rejected_reattach and saw_empty_location) return;
+        if (saw_exit and saw_tab_closed and rejected_reattach and rejected_snapshot) return;
     }
     return error.RuntimeDidNotExit;
+}
+
+test "the last pane closes only its tab when the workspace has another tab" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema.v2;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/tab-exit.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, path);
+    defer connection.deinit(io);
+    var send_buffer: [4096]u8 = undefined;
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &.{ "/bin/sleep", "600" } },
+    }));
+    const primary = while (true) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .pane_opened => |opened| break opened.location,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeCreateTab(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .workspace = primary.workspace,
+        .label = "ephemeral",
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &.{"/usr/bin/true"} },
+    }));
+
+    var ephemeral: ?schema.TabLocation = null;
+    var ephemeral_pane: schema.PaneId = .invalid;
+    var saw_exit = false;
+    var saw_close = false;
+    while (!saw_close) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .tab_created => |created| {
+            ephemeral = created.location;
+            ephemeral_pane = created.root_pane_id;
+        },
+        .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .pane_exited => |exited| {
+            if (exited.pane_id != ephemeral_pane) continue;
+            try std.testing.expect(ephemeral != null);
+            saw_exit = true;
+        },
+        .tab_closed => |closed| {
+            try std.testing.expect(saw_exit);
+            try std.testing.expectEqual(schema.RequestId.none, closed.request_id);
+            try std.testing.expectEqualDeep(ephemeral.?, closed.location);
+            try std.testing.expect(!closed.workspace_closed);
+            saw_close = true;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeRequestWorkspaceSnapshot(&send_buffer, .{
+        .request_id = @enumFromInt(3),
+        .workspace = primary.workspace,
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .workspace_snapshot => |snapshot| {
+            try std.testing.expectEqual(@as(u16, 1), snapshot.tab_count);
+            var tabs = snapshot.tabs();
+            try std.testing.expectEqual(primary.tab_id, tabs.next().?.tab_id);
+            break;
+        },
+        .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+}
+
+test "an exited detached pane removes its tab and workspace" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema.v2;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/detached-exit.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var send_buffer: [1024]u8 = undefined;
+    var receive_buffer: [4096]u8 = undefined;
+    var first = try connectRuntimeForTest(io, path);
+    try first.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{
+            .cwd = directory,
+            .arguments = &.{ "/bin/sh", "-c", "sleep 0.05" },
+        },
+    }));
+    const old_location = while (true) switch (try schema.decodeServer(try first.receive(io, &receive_buffer))) {
+        .pane_opened => |opened| break opened.location,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+    first.deinit(io);
+
+    try io.sleep(.fromMilliseconds(200), .awake);
+    var second = try connectRuntimeForTest(io, path);
+    defer second.deinit(io);
+    try second.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &.{ "/bin/sleep", "600" } },
+    }));
+    while (true) switch (try schema.decodeServer(try second.receive(io, &receive_buffer))) {
+        .pane_opened => |opened| {
+            try std.testing.expect(!std.meta.eql(old_location, opened.location));
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
 }
 
 test "one client drives two attached panes and closes either one" {
@@ -1079,7 +1239,7 @@ test "runtime persists terminal-edited commands without shell integration" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "printf '$ '; IFS= read -r line; sleep 0.01; exit 7",
+        "printf '$ '; IFS= read -r line; exit 7",
     };
     try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
         .request_id = @enumFromInt(1),

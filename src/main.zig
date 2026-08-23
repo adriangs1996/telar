@@ -16,16 +16,22 @@ const runtime_start_interval_ms = 10;
 pub const std_options: std.Options = .{ .log_level = .err };
 
 extern "c" fn getenv(name: [*:0]const u8) ?[*:0]u8;
+
+const RunOptions = struct {
+    command: pty.Command,
+    theme: frontend.theme.Theme = frontend.theme.default_theme,
+};
+
 const Cli = union(enum) {
     help,
     version,
     server: ServerOptions,
     history: HistoryOptions,
-    run: pty.Command,
+    run: RunOptions,
 
     fn parse(args: []const [*:0]const u8) !Cli {
         if (args.len == 0) return error.MissingArgvZero;
-        if (args.len == 1) return .{ .run = try defaultShell() };
+        if (args.len == 1) return .{ .run = .{ .command = try defaultShell() } };
 
         const first = std.mem.span(args[1]);
         if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h"))
@@ -37,8 +43,41 @@ const Cli = union(enum) {
         if (std.mem.eql(u8, first, "history"))
             return .{ .history = try HistoryOptions.parse(args[2..]) };
 
-        const command_start: usize = if (std.mem.eql(u8, first, "--")) 2 else 1;
-        return .{ .run = try pty.Command.fromArgv(args[command_start..]) };
+        var options: RunOptions = .{ .command = undefined };
+        var theme_set = false;
+        var delimiter_seen = false;
+        var command_start: usize = 1;
+        while (command_start < args.len) {
+            const arg = std.mem.span(args[command_start]);
+            if (std.mem.eql(u8, arg, "--")) {
+                delimiter_seen = true;
+                command_start += 1;
+                break;
+            }
+            if (std.mem.eql(u8, arg, "--theme")) {
+                if (theme_set) return error.DuplicateThemeOption;
+                if (command_start + 1 >= args.len) return error.MissingThemeName;
+                options.theme = frontend.theme.fromName(std.mem.span(args[command_start + 1])) orelse
+                    return error.UnknownTheme;
+                theme_set = true;
+                command_start += 2;
+                continue;
+            }
+            if (std.mem.startsWith(u8, arg, "--theme=")) {
+                if (theme_set) return error.DuplicateThemeOption;
+                options.theme = frontend.theme.fromName(arg["--theme=".len..]) orelse
+                    return error.UnknownTheme;
+                theme_set = true;
+                command_start += 1;
+                continue;
+            }
+            break;
+        }
+        options.command = if (command_start == args.len)
+            if (delimiter_seen) return error.MissingCommand else try defaultShell()
+        else
+            try pty.Command.fromArgv(args[command_start..]);
+        return .{ .run = options };
     }
 };
 
@@ -452,12 +491,12 @@ fn collectArgs(init: std.process.Init, storage: *[pty.max_args][*:0]const u8) ![
 fn runClient(
     init: std.process.Init,
     connection: *core.transport.SocketChannel,
-    command: *const pty.Command,
+    options: *const RunOptions,
     endpoint: []const u8,
 ) !u8 {
     var argument_storage: [pty.max_args][]const u8 = undefined;
     var argument_count: usize = 0;
-    while (command.argv[argument_count]) |argument| : (argument_count += 1) {
+    while (options.command.argv[argument_count]) |argument| : (argument_count += 1) {
         argument_storage[argument_count] = std.mem.span(argument);
     }
 
@@ -467,6 +506,7 @@ fn runClient(
         .arguments = argument_storage[0..argument_count],
         .cwd = cwd_buffer[0..cwd_len],
         .endpoint = endpoint,
+        .theme = options.theme,
     });
 }
 
@@ -595,7 +635,7 @@ fn writeHistoryField(writer: *Io.Writer, value: []const u8) !void {
 }
 
 const usage =
-    \\Usage: telar [command [args...]]
+    \\Usage: telar [--theme NAME] [command [args...]]
     \\       telar server
     \\       telar server stop
     \\       telar history list [options]
@@ -620,6 +660,7 @@ const usage =
     \\  --socket PATH    Query a specific local runtime
     \\
     \\Options:
+    \\  --theme NAME      UI theme: vesper, catppuccin, tokyo-night, terminal
     \\  -h, --help       Show this help
     \\  -V, --version    Show the version
     \\  --               Stop parsing telar options
@@ -648,12 +689,12 @@ pub fn main(init: std.process.Init) !void {
         .version => try File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try runServer(init, options),
         .history => |options| try runHistory(init, options),
-        .run => |command| {
+        .run => |options| {
             const endpoint = try resolveEndpoint(init, null);
             var connection = try connectRuntime(init, &endpoint);
             defer connection.deinit(init.io);
 
-            const code = try runClient(init, &connection, &command, endpoint.path());
+            const code = try runClient(init, &connection, &options, endpoint.path());
             std.process.exit(code);
         },
     }
@@ -663,7 +704,8 @@ test "CLI defaults to the configured shell" {
     const args = [_][*:0]const u8{"telar"};
     const cli = try Cli.parse(&args);
     try std.testing.expect(cli == .run);
-    try std.testing.expect(cli.run.argv[0] != null);
+    try std.testing.expect(cli.run.command.argv[0] != null);
+    try std.testing.expectEqual(frontend.theme.Builtin.vesper, cli.run.theme.base);
 }
 
 test "CLI forwards a command without a shell" {
@@ -671,14 +713,41 @@ test "CLI forwards a command without a shell" {
     const cli = try Cli.parse(&args);
 
     try std.testing.expect(cli == .run);
-    try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.file));
-    try std.testing.expectEqualStrings("exit 9", std.mem.span(cli.run.argv[2].?));
+    try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
+    try std.testing.expectEqualStrings("exit 9", std.mem.span(cli.run.command.argv[2].?));
 }
 
 test "CLI delimiter permits option-shaped commands" {
     const args = [_][*:0]const u8{ "telar", "--", "-command" };
     const cli = try Cli.parse(&args);
-    try std.testing.expectEqualStrings("-command", std.mem.span(cli.run.file));
+    try std.testing.expectEqualStrings("-command", std.mem.span(cli.run.command.file));
+}
+
+test "CLI selects a built-in theme before the command" {
+    const args = [_][*:0]const u8{ "telar", "--theme=catppuccin", "/bin/sh" };
+    const cli = try Cli.parse(&args);
+    try std.testing.expectEqual(frontend.theme.Builtin.catppuccin, cli.run.theme.base);
+    try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
+}
+
+test "CLI runs the default shell when only a theme is provided" {
+    const args = [_][*:0]const u8{ "telar", "--theme", "tokyonight" };
+    const cli = try Cli.parse(&args);
+    try std.testing.expectEqual(frontend.theme.Builtin.tokyo_night, cli.run.theme.base);
+    try std.testing.expect(cli.run.command.argv[0] != null);
+}
+
+test "CLI rejects unknown and duplicate themes" {
+    const unknown = [_][*:0]const u8{ "telar", "--theme", "neon" };
+    try std.testing.expectError(error.UnknownTheme, Cli.parse(&unknown));
+
+    const duplicate = [_][*:0]const u8{
+        "telar",
+        "--theme",
+        "vesper",
+        "--theme=catppuccin",
+    };
+    try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate));
 }
 
 test "CLI rejects an empty command after the delimiter" {

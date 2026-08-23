@@ -389,6 +389,8 @@ pub const TabRenamed = struct {
 };
 
 pub const TabClosed = struct {
+    /// `.none` identifies a lifecycle event emitted by the runtime rather than
+    /// the response to an explicit close request.
     request_id: RequestId,
     location: TabLocation,
     workspace_closed: bool,
@@ -854,7 +856,6 @@ pub fn encodeTabRenamed(buffer: []u8, message: TabRenamed) ![]const u8 {
 }
 
 pub fn encodeTabClosed(buffer: []u8, message: TabClosed) ![]const u8 {
-    try validateRequestId(message.request_id);
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.tab_closed));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -1241,7 +1242,7 @@ fn decodeTabRenamed(decoder: *wire.Decoder) !TabRenamed {
 
 fn decodeTabClosed(decoder: *wire.Decoder) !TabClosed {
     return .{
-        .request_id = try id.request(try decoder.readInt(u64)),
+        .request_id = @enumFromInt(try decoder.readInt(u64)),
         .location = try decodeTabLocation(decoder),
         .workspace_closed = try decodeBool(try decoder.readByte()),
     };
@@ -1699,6 +1700,14 @@ test "tab lifecycle server messages round trip" {
         .workspace_closed = false,
     }))).tab_closed;
     try std.testing.expect(!closed.workspace_closed);
+
+    const lifecycle_closed = (try decodeServer(try encodeTabClosed(&buffer, .{
+        .request_id = .none,
+        .location = location,
+        .workspace_closed = true,
+    }))).tab_closed;
+    try std.testing.expectEqual(RequestId.none, lifecycle_closed.request_id);
+    try std.testing.expect(lifecycle_closed.workspace_closed);
 
     const moved = (try decodeServer(try encodeTabMoved(&buffer, .{
         .request_id = @enumFromInt(54),
