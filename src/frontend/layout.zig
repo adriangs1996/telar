@@ -6,7 +6,7 @@ const core = @import("telar-core");
 const schema = core.schema.v2;
 const ui = core.ui;
 
-pub const max_panes = schema.max_panes_per_location;
+pub const max_panes = schema.max_panes_per_tab;
 const max_nodes = max_panes * 2 - 1;
 const NodeIndex = u8;
 

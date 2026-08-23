@@ -15,7 +15,8 @@ const schema = core.schema.v2;
 const diagnostics = core.diagnostics;
 const output_chunk_size = 16 * 1024;
 const max_workspaces = 64;
-const max_panes = schema.max_panes_per_location;
+const max_tabs_per_workspace = schema.max_tabs_per_workspace;
+const max_panes = schema.max_panes_per_tab;
 const max_pending_responses = max_panes * 2;
 
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
@@ -82,15 +83,49 @@ const PendingFailure = struct {
     message: []const u8,
 };
 
-const PendingLocationSnapshot = struct {
+const PendingTabSnapshot = struct {
     request_id: schema.RequestId,
-    location: schema.PaneLocation,
+    location: schema.TabLocation,
+};
+
+const PendingWorkspaceSnapshot = struct {
+    request_id: schema.RequestId,
+    workspace: schema.WorkspaceLocation,
+};
+
+const PendingTabCreated = struct {
+    request_id: schema.RequestId,
+    location: schema.TabLocation,
+    position: u16,
+    label: [schema.max_tab_label_bytes]u8,
+    label_len: u8,
+    root_pane_id: schema.PaneId,
+
+    fn labelSlice(created: *const PendingTabCreated) []const u8 {
+        return created.label[0..created.label_len];
+    }
+};
+
+const PendingTabRenamed = struct {
+    request_id: schema.RequestId,
+    location: schema.TabLocation,
+    label: [schema.max_tab_label_bytes]u8,
+    label_len: u8,
+
+    fn labelSlice(renamed: *const PendingTabRenamed) []const u8 {
+        return renamed.label[0..renamed.label_len];
+    }
 };
 
 const PendingResponse = union(enum) {
     pane_opened: schema.PaneOpened,
     request_failed: PendingFailure,
-    location_snapshot: PendingLocationSnapshot,
+    tab_snapshot: PendingTabSnapshot,
+    workspace_snapshot: PendingWorkspaceSnapshot,
+    tab_created: PendingTabCreated,
+    tab_renamed: PendingTabRenamed,
+    tab_closed: schema.TabClosed,
+    tab_moved: schema.TabMoved,
     history_result: *history.model.QueryResult,
 };
 
@@ -179,7 +214,7 @@ const OwnedCommand = struct {
 
 const Pane = struct {
     id: schema.PaneId,
-    location: schema.PaneLocation,
+    location: schema.TabLocation,
     session: pty.Session,
     terminal: vt.Terminal,
     stream: vt.TerminalStream,
@@ -211,7 +246,7 @@ const Pane = struct {
         io: Io,
         gpa: std.mem.Allocator,
         id: schema.PaneId,
-        location: schema.PaneLocation,
+        location: schema.TabLocation,
         command: *const pty.Command,
         workspace_path: []const u8,
         history_service: *history.Service,
@@ -435,14 +470,95 @@ const Attachment = struct {
     }
 };
 
+const Tab = struct {
+    id: schema.TabId,
+    label: [schema.max_tab_label_bytes]u8 = undefined,
+    label_len: u8 = 0,
+
+    fn init(id: schema.TabId, label: []const u8) Tab {
+        var tab: Tab = .{ .id = id };
+        tab.setLabel(label);
+        return tab;
+    }
+
+    fn setLabel(tab: *Tab, label: []const u8) void {
+        std.debug.assert(label.len != 0 and label.len <= tab.label.len);
+        @memcpy(tab.label[0..label.len], label);
+        tab.label_len = @intCast(label.len);
+    }
+
+    fn labelSlice(tab: *const Tab) []const u8 {
+        return tab.label[0..tab.label_len];
+    }
+};
+
 const Workspace = struct {
     id: schema.WorkspaceId,
     path: []u8,
+    tabs: [max_tabs_per_workspace]?Tab = [_]?Tab{null} ** max_tabs_per_workspace,
+    tab_count: usize = 0,
+
+    fn defaultTab(workspace: *const Workspace) schema.TabId {
+        std.debug.assert(workspace.tab_count != 0);
+        return workspace.tabs[0].?.id;
+    }
+
+    fn containsTab(workspace: *const Workspace, tab_id: schema.TabId) bool {
+        for (workspace.tabs) |candidate|
+            if (candidate != null and candidate.?.id == tab_id) return true;
+        return false;
+    }
+
+    fn findTab(workspace: *Workspace, tab_id: schema.TabId) ?*Tab {
+        for (&workspace.tabs) |*slot| {
+            const tab = if (slot.*) |*value| value else continue;
+            if (tab.id == tab_id) return tab;
+        }
+        return null;
+    }
+
+    fn tabIndex(workspace: *const Workspace, tab_id: schema.TabId) ?usize {
+        for (workspace.tabs[0..workspace.tab_count], 0..) |slot, index|
+            if (slot != null and slot.?.id == tab_id) return index;
+        return null;
+    }
+
+    fn appendTab(workspace: *Workspace, tab: Tab) !u16 {
+        if (workspace.tab_count == workspace.tabs.len) return error.TabLimitReached;
+        const index = workspace.tab_count;
+        workspace.tabs[index] = tab;
+        workspace.tab_count += 1;
+        return @intCast(index);
+    }
+
+    fn removeTab(workspace: *Workspace, tab_id: schema.TabId) bool {
+        const index = workspace.tabIndex(tab_id) orelse return false;
+        var cursor = index;
+        while (cursor + 1 < workspace.tab_count) : (cursor += 1)
+            workspace.tabs[cursor] = workspace.tabs[cursor + 1];
+        workspace.tab_count -= 1;
+        workspace.tabs[workspace.tab_count] = null;
+        return true;
+    }
+
+    fn moveTab(
+        workspace: *Workspace,
+        tab_id: schema.TabId,
+        direction: schema.TabMoveDirection,
+    ) ?u16 {
+        const index = workspace.tabIndex(tab_id) orelse return null;
+        const target = switch (direction) {
+            .previous => if (index == 0) index else index - 1,
+            .next => if (index + 1 == workspace.tab_count) index else index + 1,
+        };
+        if (target != index) std.mem.swap(?Tab, &workspace.tabs[index], &workspace.tabs[target]);
+        return @intCast(target);
+    }
 };
 
 const WorkspaceStore = struct {
     const Ensured = struct {
-        id: schema.WorkspaceId,
+        location: schema.TabLocation,
         created: bool,
     };
 
@@ -450,6 +566,7 @@ const WorkspaceStore = struct {
     items: [max_workspaces]?Workspace = [_]?Workspace{null} ** max_workspaces,
     count: usize = 0,
     next_id: u64 = 1,
+    next_tab_id: u64 = 1,
 
     fn init(gpa: std.mem.Allocator) WorkspaceStore {
         return .{ .gpa = gpa };
@@ -463,32 +580,127 @@ const WorkspaceStore = struct {
     }
 
     fn ensure(store: *WorkspaceStore, path: []const u8) !Ensured {
-        for (store.items) |slot| {
-            const workspace = slot orelse continue;
+        for (&store.items) |*slot| {
+            const workspace = if (slot.*) |*value| value else continue;
             if (std.mem.eql(u8, workspace.path, path))
-                return .{ .id = workspace.id, .created = false };
+                return .{
+                    .location = .{
+                        .workspace = .{ .workspace = workspace.id },
+                        .tab_id = workspace.defaultTab(),
+                    },
+                    .created = false,
+                };
         }
         if (store.count == max_workspaces) return error.WorkspaceLimitReached;
         const path_copy = try store.gpa.dupe(u8, path);
         errdefer store.gpa.free(path_copy);
         const workspace_id = try schema.id.workspace(store.next_id);
         store.next_id += 1;
+        const tab_id = try schema.id.tab(store.next_tab_id);
+        store.next_tab_id += 1;
         for (&store.items) |*slot| {
             if (slot.* == null) {
-                slot.* = .{ .id = workspace_id, .path = path_copy };
+                var workspace: Workspace = .{ .id = workspace_id, .path = path_copy };
+                _ = try workspace.appendTab(.init(tab_id, "main"));
+                slot.* = workspace;
                 store.count += 1;
-                return .{ .id = workspace_id, .created = true };
+                return .{
+                    .location = .{
+                        .workspace = .{ .workspace = workspace_id },
+                        .tab_id = tab_id,
+                    },
+                    .created = true,
+                };
             }
         }
         unreachable;
     }
 
-    fn contains(store: *const WorkspaceStore, workspace_id: schema.WorkspaceId) bool {
-        for (store.items) |slot| {
-            const workspace = slot orelse continue;
-            if (workspace.id == workspace_id) return true;
+    fn contains(store: *const WorkspaceStore, location: schema.TabLocation) bool {
+        const workspace_id = switch (location.workspace) {
+            .workspace => |id| id,
+            .worktree => return false,
+        };
+        for (&store.items) |*slot| {
+            const workspace = if (slot.*) |*value| value else continue;
+            if (workspace.id == workspace_id)
+                return workspace.containsTab(location.tab_id);
         }
         return false;
+    }
+
+    fn find(store: *WorkspaceStore, location: schema.WorkspaceLocation) ?*Workspace {
+        const workspace_id = switch (location) {
+            .workspace => |id| id,
+            .worktree => return null,
+        };
+        for (&store.items) |*slot| {
+            const workspace = if (slot.*) |*value| value else continue;
+            if (workspace.id == workspace_id) return workspace;
+        }
+        return null;
+    }
+
+    fn findTab(store: *WorkspaceStore, location: schema.TabLocation) ?*Tab {
+        const workspace = store.find(location.workspace) orelse return null;
+        return workspace.findTab(location.tab_id);
+    }
+
+    fn createTab(
+        store: *WorkspaceStore,
+        workspace_location: schema.WorkspaceLocation,
+        requested_label: []const u8,
+        label_buffer: *[schema.max_tab_label_bytes]u8,
+    ) !struct { location: schema.TabLocation, position: u16 } {
+        const workspace = store.find(workspace_location) orelse return error.WorkspaceNotFound;
+        const tab_id = try schema.id.tab(store.next_tab_id);
+        var generated: []const u8 = requested_label;
+        if (generated.len == 0) {
+            generated = try std.fmt.bufPrint(label_buffer, "tab {d}", .{schema.id.raw(tab_id)});
+        }
+        const position = try workspace.appendTab(.init(tab_id, generated));
+        store.next_tab_id += 1;
+        return .{
+            .location = .{ .workspace = workspace_location, .tab_id = tab_id },
+            .position = position,
+        };
+    }
+
+    fn removeTab(store: *WorkspaceStore, location: schema.TabLocation) ?bool {
+        const workspace = store.find(location.workspace) orelse return null;
+        if (!workspace.removeTab(location.tab_id)) return null;
+        const workspace_closed = workspace.tab_count == 0;
+        if (workspace_closed) {
+            const workspace_id = switch (location.workspace) {
+                .workspace => |id| id,
+                .worktree => unreachable,
+            };
+            store.remove(workspace_id);
+        }
+        return workspace_closed;
+    }
+
+    fn descriptors(
+        store: *WorkspaceStore,
+        workspace_location: schema.WorkspaceLocation,
+        panes: *const PaneStore,
+        output: *[max_tabs_per_workspace]schema.TabDescriptor,
+    ) ?[]const schema.TabDescriptor {
+        const workspace = store.find(workspace_location) orelse return null;
+        for (workspace.tabs[0..workspace.tab_count], 0..) |*slot, index| {
+            const tab = &slot.*.?;
+            const location: schema.TabLocation = .{
+                .workspace = workspace_location,
+                .tab_id = tab.id,
+            };
+            output[index] = .{
+                .tab_id = tab.id,
+                .position = @intCast(index),
+                .pane_count = panes.countAt(location),
+                .label = tab.labelSlice(),
+            };
+        }
+        return output[0..workspace.tab_count];
     }
 
     fn remove(store: *WorkspaceStore, workspace_id: schema.WorkspaceId) void {
@@ -518,7 +730,7 @@ const PaneStore = struct {
         return null;
     }
 
-    fn firstAt(store: *PaneStore, location: schema.PaneLocation) ?*Pane {
+    fn firstAt(store: *PaneStore, location: schema.TabLocation) ?*Pane {
         for (store.items) |slot| {
             const pane = slot orelse continue;
             if (!pane.close_requested and pane.exit == null and
@@ -529,7 +741,7 @@ const PaneStore = struct {
 
     fn descriptorsAt(
         store: *const PaneStore,
-        location: schema.PaneLocation,
+        location: schema.TabLocation,
         output: *[max_panes]schema.PaneDescriptor,
     ) []const schema.PaneDescriptor {
         var len: usize = 0;
@@ -544,6 +756,25 @@ const PaneStore = struct {
             len += 1;
         }
         return output[0..len];
+    }
+
+    fn countAt(store: *const PaneStore, location: schema.TabLocation) u16 {
+        var count: u16 = 0;
+        for (store.items) |slot| {
+            const pane = slot orelse continue;
+            if (!pane.close_requested and pane.exit == null and
+                std.meta.eql(pane.location, location)) count += 1;
+        }
+        return count;
+    }
+
+    fn closeAt(store: *PaneStore, location: schema.TabLocation) void {
+        for (store.items) |slot| {
+            const pane = slot orelse continue;
+            if (!std.meta.eql(pane.location, location) or pane.close_requested) continue;
+            pane.close_requested = true;
+            pane.session.shutdown();
+        }
     }
 
     fn allocateId(store: *PaneStore) !schema.PaneId {
@@ -851,6 +1082,7 @@ fn serveInternal(
                 send_buffer,
                 &attachments,
                 &panes,
+                &workspaces,
                 &responses,
                 &client_send_pending,
                 &sent_exit_pane,
@@ -912,6 +1144,7 @@ fn serveInternal(
                 send_buffer,
                 &attachments,
                 &panes,
+                &workspaces,
                 &responses,
                 &client_send_pending,
                 &sent_exit_pane,
@@ -1021,6 +1254,7 @@ fn serveInternal(
                 send_buffer,
                 &attachments,
                 &panes,
+                &workspaces,
                 &responses,
                 &client_send_pending,
                 &sent_exit_pane,
@@ -1091,6 +1325,7 @@ fn serveInternal(
                 send_buffer,
                 &attachments,
                 &panes,
+                &workspaces,
                 &responses,
                 &client_send_pending,
                 &sent_exit_pane,
@@ -1127,7 +1362,7 @@ fn serveInternal(
             active.output_pending = false;
             const output_len = event.result catch {
                 active.output_done = true;
-                pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
+                pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &workspaces, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
                     closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
                 };
                 panes.collectFinished(&attachments);
@@ -1149,7 +1384,7 @@ fn serveInternal(
                 active.output_pending = true;
                 try select.concurrent(.pane_output, readPane, .{ io, active });
             }
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &workspaces, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
             };
             panes.collectFinished(&attachments);
@@ -1159,7 +1394,7 @@ fn serveInternal(
             active.wait_pending = false;
             active.exit = try event.result;
             if (active.output_done) active.finishExitedHistory(active.exit.?, &metrics);
-            pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &workspaces, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
             };
             panes.collectFinished(&attachments);
@@ -1238,8 +1473,12 @@ fn dispatchClientMessage(
                         return;
                     };
                     var workspace_committed = !ensured.created;
-                    defer if (!workspace_committed) workspaces.remove(ensured.id);
-                    const location: schema.PaneLocation = .{ .workspace = ensured.id };
+                    const workspace_id = switch (ensured.location.workspace) {
+                        .workspace => |id| id,
+                        .worktree => unreachable,
+                    };
+                    defer if (!workspace_committed) workspaces.remove(workspace_id);
+                    const location = ensured.location;
                     if (panes.firstAt(location)) |existing| {
                         if (existing.exit != null and existing.output_done) {
                             _ = attachments.detach(existing.id);
@@ -1329,19 +1568,19 @@ fn dispatchClientMessage(
         .detach_pane => |detach| {
             if (!attachments.detach(detach.pane_id)) return error.PaneNotFound;
         },
-        .request_location_snapshot => |request| {
-            if (!locationExists(workspaces, request.location)) {
-                try queueFailure(responses, request.request_id, .pane_not_found, "location not found");
+        .request_tab_snapshot => |request| {
+            if (!tabExists(workspaces, request.location)) {
+                try queueFailure(responses, request.request_id, .tab_not_found, "tab not found");
                 return;
             }
-            try responses.push(.{ .location_snapshot = .{
+            try responses.push(.{ .tab_snapshot = .{
                 .request_id = request.request_id,
                 .location = request.location,
             } });
         },
         .create_pane => |create| {
-            if (!locationExists(workspaces, create.location)) {
-                try queueFailure(responses, create.request_id, .pane_not_found, "location not found");
+            if (!tabExists(workspaces, create.location)) {
+                try queueFailure(responses, create.request_id, .pane_not_found, "tab not found");
                 return;
             }
             const fresh = spawnPane(
@@ -1375,6 +1614,125 @@ fn dispatchClientMessage(
                 active.pane.close_requested = true;
                 active.pane.session.shutdown();
             }
+        },
+        .request_workspace_snapshot => |request| {
+            if (workspaces.find(request.workspace) == null) {
+                try queueFailure(
+                    responses,
+                    request.request_id,
+                    .workspace_not_found,
+                    "workspace not found",
+                );
+                return;
+            }
+            try responses.push(.{ .workspace_snapshot = .{
+                .request_id = request.request_id,
+                .workspace = request.workspace,
+            } });
+        },
+        .create_tab => |create| {
+            var generated_label: [schema.max_tab_label_bytes]u8 = undefined;
+            const created = workspaces.createTab(
+                create.workspace,
+                create.label,
+                &generated_label,
+            ) catch |err| {
+                switch (err) {
+                    error.WorkspaceNotFound => try queueFailure(
+                        responses,
+                        create.request_id,
+                        .workspace_not_found,
+                        "workspace not found",
+                    ),
+                    error.TabLimitReached => try queueFailure(
+                        responses,
+                        create.request_id,
+                        .resource_limit,
+                        "tab limit reached",
+                    ),
+                    else => return err,
+                }
+                return;
+            };
+            var tab_committed = false;
+            defer if (!tab_committed) {
+                _ = workspaces.removeTab(created.location);
+            };
+            const fresh = spawnPane(
+                io,
+                gpa,
+                select,
+                panes,
+                created.location,
+                create.size,
+                create.launch,
+                history_service,
+            ) catch |err| {
+                if (err == error.RuntimeConcurrencyUnavailable) return err;
+                try queueSpawnFailure(responses, create.request_id, err);
+                return;
+            };
+            _ = try attachments.attach(gpa, fresh);
+            const tab = workspaces.findTab(created.location).?;
+            var pending: PendingTabCreated = .{
+                .request_id = create.request_id,
+                .location = created.location,
+                .position = created.position,
+                .label = undefined,
+                .label_len = @intCast(tab.labelSlice().len),
+                .root_pane_id = fresh.id,
+            };
+            @memcpy(pending.label[0..pending.label_len], tab.labelSlice());
+            try responses.push(.{ .tab_created = pending });
+            tab_committed = true;
+        },
+        .rename_tab => |rename| {
+            const tab = workspaces.findTab(rename.location) orelse {
+                try queueFailure(responses, rename.request_id, .tab_not_found, "tab not found");
+                return;
+            };
+            tab.setLabel(rename.label);
+            var pending: PendingTabRenamed = .{
+                .request_id = rename.request_id,
+                .location = rename.location,
+                .label = undefined,
+                .label_len = @intCast(rename.label.len),
+            };
+            @memcpy(pending.label[0..pending.label_len], rename.label);
+            try responses.push(.{ .tab_renamed = pending });
+        },
+        .close_tab => |close| {
+            if (!tabExists(workspaces, close.location)) {
+                try queueFailure(responses, close.request_id, .tab_not_found, "tab not found");
+                return;
+            }
+            panes.closeAt(close.location);
+            const workspace_closed = workspaces.removeTab(close.location).?;
+            try responses.push(.{ .tab_closed = .{
+                .request_id = close.request_id,
+                .location = close.location,
+                .workspace_closed = workspace_closed,
+            } });
+        },
+        .move_tab => |move| {
+            const workspace = workspaces.find(move.location.workspace) orelse {
+                try queueFailure(
+                    responses,
+                    move.request_id,
+                    .workspace_not_found,
+                    "workspace not found",
+                );
+                return;
+            };
+            const position = workspace.moveTab(move.location.tab_id, move.direction) orelse {
+                try queueFailure(responses, move.request_id, .tab_not_found, "tab not found");
+                return;
+            };
+            try responses.push(.{ .tab_moved = .{
+                .request_id = move.request_id,
+                .location = move.location,
+                .position = position,
+            } });
         },
         .query_history => |request| {
             const query = history.Query.init(
@@ -1415,14 +1773,11 @@ fn dispatchClientMessage(
     }
 }
 
-fn locationExists(
+fn tabExists(
     workspaces: *const WorkspaceStore,
-    location: schema.PaneLocation,
+    location: schema.TabLocation,
 ) bool {
-    return switch (location) {
-        .workspace => |workspace_id| workspaces.contains(workspace_id),
-        .worktree => false,
-    };
+    return workspaces.contains(location);
 }
 
 fn queueFailure(
@@ -1470,7 +1825,7 @@ fn spawnPane(
     gpa: std.mem.Allocator,
     select: *Io.Select(RuntimeEvent),
     panes: *PaneStore,
-    location: schema.PaneLocation,
+    location: schema.TabLocation,
     size: schema.TerminalSize,
     launch: schema.LaunchView,
     history_service: *history.Service,
@@ -1608,6 +1963,7 @@ fn pumpSend(
     buffer: []u8,
     attachments: *AttachmentStore,
     panes: *PaneStore,
+    workspaces: *WorkspaceStore,
     responses: *ResponseQueue,
     send_pending: *bool,
     sent_exit_pane: *?schema.PaneId,
@@ -1629,6 +1985,7 @@ fn pumpSend(
 
     if (responses.peek()) |response| {
         var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
+        var tab_storage: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
         var history_storage: [history.model.max_results]schema.HistoryEntry = undefined;
         var history_result: ?*history.model.QueryResult = null;
         const payload = switch (response.*) {
@@ -1638,11 +1995,31 @@ fn pumpSend(
                 .message = failure.message,
             }),
             .pane_opened => |opened| try schema.encodePaneOpened(buffer, opened),
-            .location_snapshot => |snapshot| try schema.encodeLocationSnapshot(buffer, .{
+            .tab_snapshot => |snapshot| try schema.encodeTabSnapshot(buffer, .{
                 .request_id = snapshot.request_id,
                 .location = snapshot.location,
                 .panes = panes.descriptorsAt(snapshot.location, &descriptor_storage),
             }),
+            .workspace_snapshot => |snapshot| try schema.encodeWorkspaceSnapshot(buffer, .{
+                .request_id = snapshot.request_id,
+                .workspace = snapshot.workspace,
+                .tabs = workspaces.descriptors(snapshot.workspace, panes, &tab_storage) orelse
+                    return error.WorkspaceNotFound,
+            }),
+            .tab_created => |*created| try schema.encodeTabCreated(buffer, .{
+                .request_id = created.request_id,
+                .location = created.location,
+                .position = created.position,
+                .label = created.labelSlice(),
+                .root_pane_id = created.root_pane_id,
+            }),
+            .tab_renamed => |*renamed| try schema.encodeTabRenamed(buffer, .{
+                .request_id = renamed.request_id,
+                .location = renamed.location,
+                .label = renamed.labelSlice(),
+            }),
+            .tab_closed => |closed| try schema.encodeTabClosed(buffer, closed),
+            .tab_moved => |moved| try schema.encodeTabMoved(buffer, moved),
             .history_result => |result| payload: {
                 history_result = result;
                 break :payload try encodeHistoryResult(buffer, result, &history_storage);
@@ -1975,7 +2352,7 @@ fn waitPane(pane: *Pane) PaneExitEvent {
     return .{ .pane = pane, .result = result };
 }
 
-test "workspace identities are stable per path" {
+test "workspace and default tab identities are stable per path" {
     var store = WorkspaceStore.init(std.testing.allocator);
     defer store.deinit();
 
@@ -1986,8 +2363,12 @@ test "workspace identities are stable per path" {
     try std.testing.expect(first.created);
     try std.testing.expect(!same.created);
     try std.testing.expect(other.created);
-    try std.testing.expectEqual(first.id, same.id);
-    try std.testing.expect(first.id != other.id);
+    try std.testing.expectEqualDeep(first.location, same.location);
+    try std.testing.expect(!std.meta.eql(first.location, other.location));
+    try std.testing.expect(store.contains(first.location));
+    var unknown_tab = first.location;
+    unknown_tab.tab_id = try schema.id.tab(999);
+    try std.testing.expect(!store.contains(unknown_tab));
     try std.testing.expectEqual(@as(usize, 2), store.count);
 }
 
@@ -1996,7 +2377,45 @@ test "an uncommitted workspace can be rolled back" {
     defer store.deinit();
 
     const workspace = try store.ensure("/invalid/cwd");
-    store.remove(workspace.id);
+    const workspace_id = switch (workspace.location.workspace) {
+        .workspace => |id| id,
+        .worktree => unreachable,
+    };
+    store.remove(workspace_id);
 
+    try std.testing.expectEqual(@as(usize, 0), store.count);
+}
+
+test "workspace tabs create rename reorder and close" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+    const ensured = try store.ensure("/work/project");
+    var label_buffer: [schema.max_tab_label_bytes]u8 = undefined;
+    const logs = try store.createTab(ensured.location.workspace, "logs", &label_buffer);
+    const generated = try store.createTab(ensured.location.workspace, "", &label_buffer);
+
+    try std.testing.expectEqual(@as(u16, 1), logs.position);
+    try std.testing.expectEqual(@as(u16, 2), generated.position);
+    try std.testing.expectEqualStrings("tab 3", store.findTab(generated.location).?.labelSlice());
+
+    store.findTab(logs.location).?.setLabel("server");
+    try std.testing.expectEqualStrings("server", store.findTab(logs.location).?.labelSlice());
+    const workspace = store.find(ensured.location.workspace).?;
+    try std.testing.expectEqual(@as(u16, 0), workspace.moveTab(logs.location.tab_id, .previous).?);
+    try std.testing.expectEqual(logs.location.tab_id, workspace.defaultTab());
+
+    var panes: PaneStore = .{};
+    var descriptors: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
+    const snapshot = store.descriptors(
+        ensured.location.workspace,
+        &panes,
+        &descriptors,
+    ).?;
+    try std.testing.expectEqual(@as(usize, 3), snapshot.len);
+    try std.testing.expectEqualStrings("server", snapshot[0].label);
+
+    try std.testing.expectEqual(false, store.removeTab(logs.location).?);
+    try std.testing.expectEqual(false, store.removeTab(generated.location).?);
+    try std.testing.expectEqual(true, store.removeTab(ensured.location).?);
     try std.testing.expectEqual(@as(usize, 0), store.count);
 }

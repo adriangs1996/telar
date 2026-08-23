@@ -629,6 +629,12 @@ const usage =
     \\  Arrow keys       Focus a pane by direction
     \\  s                Toggle the sidebar
     \\  x                Close the focused pane
+    \\  c                Create and select a tab
+    \\  n / p            Select the next or previous tab
+    \\  1..9             Select a tab by position
+    \\  T                Rename the active tab
+    \\  X                Close the active tab
+    \\  , / .            Move the active tab left or right
     \\  d                Detach the client
     \\
 ;

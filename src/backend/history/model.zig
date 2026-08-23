@@ -21,7 +21,7 @@ pub const CommandStatus = enum(u8) {
 pub const SessionStarted = struct {
     id: SessionId,
     pane_id: schema.PaneId,
-    location: schema.PaneLocation,
+    location: schema.TabLocation,
     started_at_ms: i64,
     workspace_path: []u8,
     shell: []u8,
@@ -41,7 +41,7 @@ pub const SessionFinished = struct {
 pub const CommandFinished = struct {
     session_id: SessionId,
     pane_id: schema.PaneId,
-    location: schema.PaneLocation,
+    location: schema.TabLocation,
     sequence: u64,
     started_at_ms: i64,
     duration_ns: i64,

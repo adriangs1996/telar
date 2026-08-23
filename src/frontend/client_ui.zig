@@ -2,7 +2,9 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const edit = @import("edit.zig");
 const multiplexer = @import("multiplexer.zig");
+const tabs_mod = @import("tabs.zig");
 const term = @import("term.zig");
 const ui = @import("ui.zig");
 
@@ -53,7 +55,7 @@ pub const Regions = struct {
 pub const Action = union(enum) {
     toggle_sidebar,
     focus_pane: schema.PaneId,
-    select_tab: u8,
+    select_tab: schema.TabId,
     active_workspace,
     active_worktree,
 };
@@ -63,11 +65,24 @@ const Hits = ui.Hits(Action, 128);
 pub const Interaction = struct {
     redraw: bool = false,
     layout_changed: bool = false,
+    select_tab: ?schema.TabId = null,
 };
 
 pub const RenderStats = struct {
     scanned: usize = 0,
     damaged: usize = 0,
+};
+
+pub const RenameInput = union(enum) {
+    editing,
+    cancelled,
+    submitted: []const u8,
+};
+
+const TabRename = struct {
+    tab_id: schema.TabId,
+    field: edit.Field(schema.max_tab_label_bytes),
+    pasting: bool = false,
 };
 
 pub const State = struct {
@@ -76,7 +91,7 @@ pub const State = struct {
     hits: Hits = .{},
     sidebar_requested: bool = true,
     hovered: ?Action = null,
-    active_tab: u8 = 0,
+    tab_rename: ?TabRename = null,
     dirty: bool = true,
 
     pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
@@ -116,12 +131,73 @@ pub const State = struct {
         state.dirty = true;
     }
 
+    pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
+        state.tab_rename = .{ .tab_id = tab_id, .field = .init(label) };
+        state.hovered = null;
+        state.dirty = true;
+    }
+
+    pub fn renamedTab(state: *const State) ?schema.TabId {
+        return if (state.tab_rename) |rename| rename.tab_id else null;
+    }
+
+    pub fn handleRenameInput(state: *State, bytes: []const u8) RenameInput {
+        const rename = if (state.tab_rename) |*value| value else return .editing;
+        var offset: usize = 0;
+        while (offset < bytes.len) {
+            const parsed = term.parse(bytes[offset..]) orelse {
+                if (rename.pasting) rename.field.insert(bytes[offset..]);
+                break;
+            };
+            offset += parsed.len;
+            switch (parsed.event) {
+                .paste_start => rename.pasting = true,
+                .paste_end => rename.pasting = false,
+                .key => |key| switch (key.code) {
+                    .enter => {
+                        if (rename.pasting) {
+                            rename.field.insert(" ");
+                            continue;
+                        }
+                        if (rename.field.text().len == 0) return .editing;
+                        state.dirty = true;
+                        return .{ .submitted = rename.field.text() };
+                    },
+                    .escape => {
+                        state.tab_rename = null;
+                        state.dirty = true;
+                        return .cancelled;
+                    },
+                    .backspace => rename.field.backspace(),
+                    .delete => rename.field.delete(),
+                    .left => rename.field.moveLeft(key.mods.shift),
+                    .right => rename.field.moveRight(key.mods.shift),
+                    .home => rename.field.home(key.mods.shift),
+                    .end => rename.field.end(key.mods.shift),
+                    .char => |char| if (!key.mods.ctrl and !key.mods.alt)
+                        rename.field.insert(char.slice()),
+                    else => {},
+                },
+                .mouse, .incomplete => {},
+            }
+        }
+        state.dirty = true;
+        return .editing;
+    }
+
+    pub fn finishTabRename(state: *State) void {
+        state.tab_rename = null;
+        state.dirty = true;
+    }
+
     pub fn handleMouse(
         state: *State,
+        tabs: ?*tabs_mod.Model,
         model: *multiplexer.Model,
         mouse: term.Event.Mouse,
     ) Interaction {
         var result: Interaction = .{};
+        if (state.tab_rename != null) return result;
         const hovered = state.hits.at(mouse.x, mouse.y);
         if (!optionalActionEql(state.hovered, hovered)) {
             state.hovered = hovered;
@@ -142,12 +218,8 @@ pub const State = struct {
                     result.redraw = true;
                 }
             },
-            .select_tab => |tab| {
-                if (state.active_tab != tab) {
-                    state.active_tab = tab;
-                    state.dirty = true;
-                    result.redraw = true;
-                }
+            .select_tab => |tab_id| if (tabs != null and tabs.?.indexOf(tab_id) != null) {
+                result.select_tab = tab_id;
             },
             .active_workspace, .active_worktree => {},
         }
@@ -157,6 +229,7 @@ pub const State = struct {
     pub fn render(
         state: *State,
         screen: *term.Screen,
+        tabs: ?*const tabs_mod.Model,
         model: *multiplexer.Model,
         force: bool,
     ) !RenderStats {
@@ -165,13 +238,22 @@ pub const State = struct {
         state.scratch.clear(.{});
         drawTop(state, model);
         drawSidebar(state, model);
-        drawBottom(state, model);
+        drawBottom(state, tabs, model);
         registerWorkbench(state, model);
 
         var stats: RenderStats = .{};
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.top));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.sidebar));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.bottom));
+        if (state.tab_rename) |*rename| {
+            const prefix = " rename tab: ";
+            const available = state.regions.bottom.w -| ui.measure(prefix) -| 1;
+            const field_view = rename.field.view(available);
+            screen.cursor = .{
+                .x = state.regions.bottom.x + ui.measure(prefix) + field_view.cursor,
+                .y = state.regions.bottom.y,
+            };
+        }
         state.dirty = false;
         return stats;
     }
@@ -255,30 +337,91 @@ fn drawSidebar(state: *State, model: *const multiplexer.Model) void {
     }
 }
 
-fn drawBottom(state: *State, model: *const multiplexer.Model) void {
+fn drawBottom(
+    state: *State,
+    tabs: ?*const tabs_mod.Model,
+    model: *const multiplexer.Model,
+) void {
     const area = state.regions.bottom;
     if (area.isEmpty()) return;
     const bar_style: ui.Style = .{ .flags = .{ .inverse = true } };
     state.scratch.fill(area, " ", bar_style);
 
-    // One layout tab exists today. Keeping it distinct from panes matters:
-    // tabs will own pane layouts, so treating every pane as a tab now would
-    // bake the wrong relationship into mouse actions and persisted UI state.
-    const tab_label = " 1:main ";
-    const tab_width = @min(ui.measure(tab_label), state.regions.tabs.w);
-    const tab: ui.Rect = .{
-        .x = state.regions.tabs.x,
-        .y = area.y,
-        .w = tab_width,
-        .h = 1,
-    };
-    const tab_action: Action = .{ .select_tab = 0 };
-    state.hits.add(tab, tab_action);
-    const tab_style: ui.Style = if (state.active_tab == 0 or isHovered(state, tab_action))
-        .{ .flags = .{ .bold = true, .inverse = true, .underline = .single } }
-    else
-        bar_style;
-    _ = state.scratch.writeTruncated(tab, tab.x, tab.y, tab_label, tab.w, tab_style);
+    if (state.tab_rename) |*rename| {
+        const prefix = " rename tab: ";
+        _ = state.scratch.writeText(area, area.x, area.y, prefix, bar_style);
+        const field_x = area.x + ui.measure(prefix);
+        const field_area: ui.Rect = .{
+            .x = field_x,
+            .y = area.y,
+            .w = area.w -| (field_x - area.x),
+            .h = 1,
+        };
+        const field_view = rename.field.view(field_area.w);
+        _ = state.scratch.writeTruncated(
+            field_area,
+            field_x,
+            area.y,
+            field_view.text,
+            field_area.w,
+            .{ .flags = .{ .bold = true, .inverse = true } },
+        );
+        return;
+    }
+
+    var x = state.regions.tabs.x;
+    if (tabs) |collection| {
+        var first_visible = collection.active_index;
+        var used = tabDisplayWidth(
+            collection.items[first_visible].?.labelSlice(),
+            first_visible,
+            state.regions.tabs.w,
+        );
+        while (first_visible > 0) {
+            const candidate = first_visible - 1;
+            const width = tabDisplayWidth(
+                collection.items[candidate].?.labelSlice(),
+                candidate,
+                state.regions.tabs.w,
+            );
+            if (width > state.regions.tabs.w -| used) break;
+            first_visible = candidate;
+            used += width;
+        }
+        for (collection.items[first_visible..collection.count], first_visible..) |slot, index| {
+            const tab_value = slot.?;
+            var tab_buffer: [schema.max_tab_label_bytes + 16]u8 = undefined;
+            const tab_label = std.fmt.bufPrint(&tab_buffer, " {d}:{s} ", .{
+                index + 1,
+                tab_value.labelSlice(),
+            }) catch " tab ";
+            const remaining = state.regions.tabs.x + state.regions.tabs.w -| x;
+            if (remaining == 0) break;
+            const tab_width = @min(ui.measure(tab_label), remaining);
+            const tab_rect: ui.Rect = .{ .x = x, .y = area.y, .w = tab_width, .h = 1 };
+            const action: Action = .{ .select_tab = tab_value.location.tab_id };
+            state.hits.add(tab_rect, action);
+            const active = index == collection.active_index;
+            const style: ui.Style = if (active)
+                .{ .flags = .{ .bold = true, .inverse = true, .underline = .single } }
+            else if (isHovered(state, action))
+                .{ .flags = .{ .inverse = true, .underline = .single } }
+            else
+                bar_style;
+            _ = state.scratch.writeTruncated(tab_rect, x, area.y, tab_label, tab_width, style);
+            x += tab_width;
+        }
+    } else if (model.location) |location| {
+        var tab_buffer: [32]u8 = undefined;
+        const tab_label = std.fmt.bufPrint(&tab_buffer, " tab {d} ", .{
+            schema.id.raw(location.tab_id),
+        }) catch " tab ";
+        const tab_width = @min(ui.measure(tab_label), state.regions.tabs.w);
+        const tab_rect: ui.Rect = .{ .x = x, .y = area.y, .w = tab_width, .h = 1 };
+        _ = state.scratch.writeTruncated(tab_rect, x, area.y, tab_label, tab_width, .{
+            .flags = .{ .bold = true, .inverse = true, .underline = .single },
+        });
+    }
 
     var status_buffer: [48]u8 = undefined;
     const status = std.fmt.bufPrint(&status_buffer, "{d} pane{s}  local", .{
@@ -288,6 +431,17 @@ fn drawBottom(state: *State, model: *const multiplexer.Model) void {
     _ = state.scratch.writeRight(state.regions.status, area.y, status, bar_style);
 }
 
+fn decimalDigits(value: usize) u16 {
+    var remaining = value;
+    var digits: u16 = 1;
+    while (remaining >= 10) : (digits += 1) remaining /= 10;
+    return digits;
+}
+
+fn tabDisplayWidth(label: []const u8, index: usize, available: u16) u16 {
+    return @min(ui.measure(label) + decimalDigits(index + 1) + 3, available);
+}
+
 fn registerWorkbench(state: *State, model: *const multiplexer.Model) void {
     var views: [multiplexer.max_panes]@import("layout.zig").View = undefined;
     for (model.layout.views(state.regions.workbench, &views)) |view|
@@ -295,12 +449,12 @@ fn registerWorkbench(state: *State, model: *const multiplexer.Model) void {
 }
 
 fn locationLabels(
-    location: ?schema.PaneLocation,
+    location: ?schema.TabLocation,
     workspace_buffer: []u8,
     worktree_buffer: []u8,
 ) struct { []const u8, []const u8 } {
     const value = location orelse return .{ " workspace - ", " worktree - " };
-    return switch (value) {
+    return switch (value.workspace) {
         .workspace => |workspace| .{
             std.fmt.bufPrint(workspace_buffer, " workspace {d} ", .{schema.id.raw(workspace)}) catch " workspace ",
             " worktree - ",
@@ -392,7 +546,10 @@ test "sidebar rows focus panes and stable hover requests no extra frame" {
     defer state.deinit();
     var model = multiplexer.Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 34, .rows = 27 });
     try model.split(
         @enumFromInt(1),
@@ -404,13 +561,13 @@ test "sidebar rows focus panes and stable hover requests no extra frame" {
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, &model, true);
+    _ = try state.render(&screen, null, &model, true);
 
     const first_row = term.Event.Mouse{ .x = 2, .y = 4, .kind = .move };
-    try std.testing.expect(state.handleMouse(&model, first_row).redraw);
-    try std.testing.expect(!state.handleMouse(&model, first_row).redraw);
+    try std.testing.expect(state.handleMouse(null, &model, first_row).redraw);
+    try std.testing.expect(!state.handleMouse(null, &model, first_row).redraw);
     const click = term.Event.Mouse{ .x = 2, .y = 4, .kind = .press };
-    _ = state.handleMouse(&model, click);
+    _ = state.handleMouse(null, &model, click);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
 }
 
@@ -420,14 +577,56 @@ test "client bars preserve the terminal palette" {
     defer state.deinit();
     var model = multiplexer.Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 50, .rows = 22 });
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, &model, true);
+    _ = try state.render(&screen, null, &model, true);
 
     try std.testing.expect(screen.back.cells[0].style.bg == .default);
     try std.testing.expect(screen.back.cells[0].style.fg == .default);
     try std.testing.expect(screen.back.cells[0].style.flags.inverse);
+}
+
+test "tab bar renders ordered labels and clicks carry runtime ids" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 80, 24);
+    defer state.deinit();
+    var tabs = tabs_mod.Model.init(gpa);
+    defer tabs.deinit();
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    try tabs.bootstrap(@enumFromInt(1), .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(4),
+    }, .{ .cols = 50, .rows = 22 });
+    _ = try tabs.addCreated(.{
+        .request_id = @enumFromInt(2),
+        .location = .{ .workspace = workspace, .tab_id = @enumFromInt(9) },
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 50, .rows = 22 });
+    var screen = try term.Screen.init(gpa, 80, 24);
+    defer screen.deinit();
+    const model = &tabs.active().?.model;
+    _ = try model.render(&screen, state.workbench());
+    _ = try state.render(&screen, &tabs, model, true);
+
+    const click = term.Event.Mouse{ .x = 1, .y = 23, .kind = .press };
+    const interaction = state.handleMouse(&tabs, model, click);
+    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
+}
+
+test "tab rename edits clusters and submits a non-empty label" {
+    var state = try State.init(std.testing.allocator, 80, 24);
+    defer state.deinit();
+    state.beginTabRename(@enumFromInt(3), "logs");
+    try std.testing.expect(state.handleRenameInput("\x7f") == .editing);
+    const submitted = state.handleRenameInput("í\r");
+    try std.testing.expect(submitted == .submitted);
+    try std.testing.expectEqualStrings("logí", submitted.submitted);
 }

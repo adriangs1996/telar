@@ -10,6 +10,11 @@ pub const WorktreeId = enum(u64) {
     _,
 };
 
+pub const TabId = enum(u64) {
+    invalid = 0,
+    _,
+};
+
 pub const PaneId = enum(u64) {
     invalid = 0,
     _,
@@ -28,6 +33,11 @@ pub fn workspace(value: u64) !WorkspaceId {
 
 pub fn worktree(value: u64) !WorktreeId {
     if (value == 0) return error.InvalidWorktreeId;
+    return @enumFromInt(value);
+}
+
+pub fn tab(value: u64) !TabId {
+    if (value == 0) return error.InvalidTabId;
     return @enumFromInt(value);
 }
 

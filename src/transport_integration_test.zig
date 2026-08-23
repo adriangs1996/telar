@@ -283,7 +283,7 @@ test "runtime destroys a pane after its shell exits" {
     defer gpa.free(receive_buffer);
     var cells: [40 * 8]core.ui.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
-    var location: ?schema.PaneLocation = null;
+    var location: ?schema.TabLocation = null;
     var saw_output = false;
     var saw_exit = false;
     var rejected_reattach = false;
@@ -325,7 +325,7 @@ test "runtime destroys a pane after its shell exits" {
                     .size = .{ .cols = 40, .rows = 8 },
                     .launch = null,
                 }));
-                try connection.send(io, try schema.encodeRequestLocationSnapshot(&send_buffer, .{
+                try connection.send(io, try schema.encodeRequestTabSnapshot(&send_buffer, .{
                     .request_id = @enumFromInt(3),
                     .location = location.?,
                 }));
@@ -339,7 +339,7 @@ test "runtime destroys a pane after its shell exits" {
                 rejected_reattach = true;
             },
             .runtime_stopping => return error.UnexpectedRuntimeShutdown,
-            .location_snapshot => |snapshot| {
+            .tab_snapshot => |snapshot| {
                 try std.testing.expectEqual(
                     @as(schema.RequestId, @enumFromInt(3)),
                     snapshot.request_id,
@@ -348,6 +348,7 @@ test "runtime destroys a pane after its shell exits" {
                 saw_empty_location = true;
             },
             .history_results => return error.UnexpectedHistoryResults,
+            else => return error.UnexpectedTabMessage,
         }
         if (saw_exit and rejected_reattach and saw_empty_location) return;
     }
@@ -393,7 +394,7 @@ test "one client drives two attached panes and closes either one" {
     }));
 
     var first_id: schema.PaneId = .invalid;
-    var location: schema.PaneLocation = undefined;
+    var location: schema.TabLocation = undefined;
     while (first_id == .invalid) {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
             .pane_opened => |opened| {
@@ -485,13 +486,13 @@ test "one client drives two attached panes and closes either one" {
     try std.testing.expect(saw_second);
     try std.testing.expect(saw_second_exit);
 
-    try connection.send(io, try schema.encodeRequestLocationSnapshot(&send_buffer, .{
+    try connection.send(io, try schema.encodeRequestTabSnapshot(&send_buffer, .{
         .request_id = @enumFromInt(4),
         .location = location,
     }));
     while (true) {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
-            .location_snapshot => |snapshot| {
+            .tab_snapshot => |snapshot| {
                 try std.testing.expectEqual(@as(u16, 1), snapshot.pane_count);
                 var panes = snapshot.panes();
                 try std.testing.expectEqual(first_id, panes.next().?.pane_id);
@@ -549,7 +550,7 @@ test "pane keeps running while its client is disconnected" {
             .pane_opened => |opened| original_pane_id = opened.pane_id,
             .request_failed => return error.RuntimeRequestFailed,
             .runtime_stopping => return error.UnexpectedRuntimeShutdown,
-            .location_snapshot => return error.UnexpectedLocationSnapshot,
+            .tab_snapshot => return error.UnexpectedTabSnapshot,
             else => {},
         }
     }
@@ -599,8 +600,9 @@ test "pane keeps running while its client is disconnected" {
             },
             .request_failed => return error.RuntimeRequestFailed,
             .runtime_stopping => return error.UnexpectedRuntimeShutdown,
-            .location_snapshot => return error.UnexpectedLocationSnapshot,
+            .tab_snapshot => return error.UnexpectedTabSnapshot,
             .history_results => return error.UnexpectedHistoryResults,
+            else => return error.UnexpectedTabMessage,
         }
     }
     return error.RuntimeDidNotExit;
@@ -685,6 +687,277 @@ test "runtime keeps independent panes for different workspaces" {
     try std.testing.expect(!reattached.created);
 }
 
+test "runtime owns the complete tab lifecycle" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema.v2;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/tabs.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, path);
+    defer connection.deinit(io);
+    var send_buffer: [4096]u8 = undefined;
+    var receive_buffer: [4096]u8 = undefined;
+    const arguments = [_][]const u8{ "/bin/sleep", "600" };
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    var primary: schema.TabLocation = undefined;
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .pane_opened => |opened| {
+            primary = opened.location;
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeCreateTab(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .workspace = primary.workspace,
+        .label = "logs",
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+    var logs: schema.TabLocation = undefined;
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .tab_created => |created| {
+            try std.testing.expectEqualStrings("logs", created.label);
+            try std.testing.expectEqual(@as(u16, 1), created.position);
+            logs = created.location;
+            break;
+        },
+        .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeRenameTab(&send_buffer, .{
+        .request_id = @enumFromInt(3),
+        .location = logs,
+        .label = "server",
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .tab_renamed => |renamed| {
+            try std.testing.expectEqualStrings("server", renamed.label);
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeMoveTab(&send_buffer, .{
+        .request_id = @enumFromInt(4),
+        .location = logs,
+        .direction = .previous,
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .tab_moved => |moved| {
+            try std.testing.expectEqual(@as(u16, 0), moved.position);
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeRequestWorkspaceSnapshot(&send_buffer, .{
+        .request_id = @enumFromInt(5),
+        .workspace = primary.workspace,
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .workspace_snapshot => |snapshot| {
+            try std.testing.expectEqual(@as(u16, 2), snapshot.tab_count);
+            var iterator = snapshot.tabs();
+            const first = iterator.next().?;
+            const second = iterator.next().?;
+            try std.testing.expectEqual(logs.tab_id, first.tab_id);
+            try std.testing.expectEqualStrings("server", first.label);
+            try std.testing.expectEqual(primary.tab_id, second.tab_id);
+            try std.testing.expectEqual(@as(u16, 1), first.pane_count);
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeCloseTab(&send_buffer, .{
+        .request_id = @enumFromInt(6),
+        .location = logs,
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .tab_closed => |closed| {
+            try std.testing.expect(!closed.workspace_closed);
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeCloseTab(&send_buffer, .{
+        .request_id = @enumFromInt(7),
+        .location = primary,
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .tab_closed => |closed| {
+            try std.testing.expect(closed.workspace_closed);
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+}
+
+test "a reconnect restores tab order labels and pane membership" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema.v2;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/tab-reconnect.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var send_buffer: [4096]u8 = undefined;
+    var receive_buffer: [4096]u8 = undefined;
+    const arguments = [_][]const u8{ "/bin/sleep", "600" };
+    var first = try connectRuntimeForTest(io, path);
+    try first.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+    const primary = while (true) switch (try schema.decodeServer(try first.receive(io, &receive_buffer))) {
+        .pane_opened => |opened| break opened.location,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try first.send(io, try schema.encodeCreateTab(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .workspace = primary.workspace,
+        .label = "agents",
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+    const agents = while (true) switch (try schema.decodeServer(try first.receive(io, &receive_buffer))) {
+        .tab_created => |created| break created.location,
+        .pane_frame => |frame| try first.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+    try first.send(io, try schema.encodeMoveTab(&send_buffer, .{
+        .request_id = @enumFromInt(3),
+        .location = agents,
+        .direction = .previous,
+    }));
+    while (true) switch (try schema.decodeServer(try first.receive(io, &receive_buffer))) {
+        .tab_moved => break,
+        .pane_frame => |frame| try first.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+    first.deinit(io);
+
+    try io.sleep(.fromMilliseconds(200), .awake);
+    var second = try connectRuntimeForTest(io, path);
+    defer second.deinit(io);
+    try second.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(4),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+    while (true) switch (try schema.decodeServer(try second.receive(io, &receive_buffer))) {
+        .pane_opened => |opened| {
+            try std.testing.expect(!opened.created);
+            try std.testing.expectEqual(agents.tab_id, opened.location.tab_id);
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try second.send(io, try schema.encodeRequestWorkspaceSnapshot(&send_buffer, .{
+        .request_id = @enumFromInt(5),
+        .workspace = primary.workspace,
+    }));
+    while (true) switch (try schema.decodeServer(try second.receive(io, &receive_buffer))) {
+        .workspace_snapshot => |snapshot| {
+            try std.testing.expectEqual(@as(u16, 2), snapshot.tab_count);
+            var iterator = snapshot.tabs();
+            const first_tab = iterator.next().?;
+            const second_tab = iterator.next().?;
+            try std.testing.expectEqual(agents.tab_id, first_tab.tab_id);
+            try std.testing.expectEqualStrings("agents", first_tab.label);
+            try std.testing.expectEqual(primary.tab_id, second_tab.tab_id);
+            try std.testing.expectEqualStrings("main", second_tab.label);
+            try std.testing.expectEqual(@as(u16, 1), first_tab.pane_count);
+            try std.testing.expectEqual(@as(u16, 1), second_tab.pane_count);
+            break;
+        },
+        .pane_frame => |frame| try second.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try second.send(io, try schema.encodeRequestTabSnapshot(&send_buffer, .{
+        .request_id = @enumFromInt(6),
+        .location = primary,
+    }));
+    while (true) switch (try schema.decodeServer(try second.receive(io, &receive_buffer))) {
+        .tab_snapshot => |snapshot| {
+            try std.testing.expectEqual(primary.tab_id, snapshot.location.tab_id);
+            try std.testing.expectEqual(@as(u16, 1), snapshot.pane_count);
+            break;
+        },
+        .pane_frame => |frame| try second.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+}
+
 test "an identical pane resize does not emit another snapshot" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
@@ -718,7 +991,7 @@ test "an identical pane resize does not emit another snapshot" {
     const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
-    var location: ?schema.PaneLocation = null;
+    var location: ?schema.TabLocation = null;
     var acknowledged_snapshot = false;
     while (!acknowledged_snapshot) {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
@@ -743,13 +1016,13 @@ test "an identical pane resize does not emit another snapshot" {
         .pane_id = pane_id,
         .size = .{ .cols = 40, .rows = 8 },
     }));
-    try connection.send(io, try schema.encodeRequestLocationSnapshot(&send_buffer, .{
+    try connection.send(io, try schema.encodeRequestTabSnapshot(&send_buffer, .{
         .request_id = @enumFromInt(2),
         .location = location.?,
     }));
     while (true) {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
-            .location_snapshot => |snapshot| {
+            .tab_snapshot => |snapshot| {
                 try std.testing.expectEqual(
                     @as(schema.RequestId, @enumFromInt(2)),
                     snapshot.request_id,

@@ -110,7 +110,7 @@ pub const Service = struct {
         io: std.Io,
         session_id: SessionId,
         pane_id: model_mod.schema.PaneId,
-        location: model_mod.schema.PaneLocation,
+        location: model_mod.schema.TabLocation,
         workspace_path: []const u8,
         shell: []const u8,
         started_at_ms: i64,
@@ -149,7 +149,7 @@ pub const Service = struct {
     pub const CommandContext = struct {
         session_id: SessionId,
         pane_id: model_mod.schema.PaneId,
-        location: model_mod.schema.PaneLocation,
+        location: model_mod.schema.TabLocation,
         sequence: u64,
         workspace_path: []const u8,
         cols: u16,

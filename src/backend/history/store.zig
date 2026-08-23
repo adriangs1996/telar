@@ -22,6 +22,7 @@ const database_schema =
     \\  pane_id        INTEGER NOT NULL,
     \\  location_kind  INTEGER NOT NULL,
     \\  location_id    INTEGER NOT NULL,
+    \\  tab_id         INTEGER NOT NULL,
     \\  workspace_path TEXT NOT NULL,
     \\  shell          TEXT NOT NULL,
     \\  started_at_ms  INTEGER NOT NULL,
@@ -33,6 +34,7 @@ const database_schema =
     \\  pane_id           INTEGER NOT NULL,
     \\  location_kind     INTEGER NOT NULL,
     \\  location_id       INTEGER NOT NULL,
+    \\  tab_id            INTEGER NOT NULL,
     \\  sequence          INTEGER NOT NULL,
     \\  command           TEXT NOT NULL,
     \\  command_truncated INTEGER NOT NULL DEFAULT 0,
@@ -61,8 +63,8 @@ const database_schema =
 
 const insert_session_sql =
     \\INSERT INTO session
-    \\  (id, pane_id, location_kind, location_id, workspace_path, shell, started_at_ms)
-    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);
+    \\  (id, pane_id, location_kind, location_id, tab_id, workspace_path, shell, started_at_ms)
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);
 ;
 
 const finish_session_sql =
@@ -71,10 +73,10 @@ const finish_session_sql =
 
 const insert_command_sql =
     \\INSERT INTO command
-    \\  (session_id, pane_id, location_kind, location_id, sequence, command,
+    \\  (session_id, pane_id, location_kind, location_id, tab_id, sequence, command,
     \\   command_truncated, cwd, workspace_path, started_at_ms, duration_ns,
     \\   exit_code, status)
-    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);
 ;
 
 pub const Store = struct {
@@ -94,6 +96,8 @@ pub const Store = struct {
         _ = c.sqlite3_extended_result_codes(opened, 1);
         if (c.sqlite3_exec(opened, database_schema, null, null, null) != c.SQLITE_OK)
             return error.HistorySchemaFailed;
+        try ensureTabColumn(opened, "session", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
+        try ensureTabColumn(opened, "command", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
 
         const insert_session = try prepare(opened, insert_session_sql);
         errdefer _ = c.sqlite3_finalize(insert_session);
@@ -124,9 +128,10 @@ pub const Store = struct {
         const location = locationColumns(value.location);
         _ = c.sqlite3_bind_int(stmt, 3, location.kind);
         _ = c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-        bindText(stmt, 5, value.workspace_path);
-        bindText(stmt, 6, value.shell);
-        _ = c.sqlite3_bind_int64(stmt, 7, value.started_at_ms);
+        _ = c.sqlite3_bind_int64(stmt, 5, @intCast(model.schema.id.raw(value.location.tab_id)));
+        bindText(stmt, 6, value.workspace_path);
+        bindText(stmt, 7, value.shell);
+        _ = c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
         try stepDone(stmt);
     }
 
@@ -146,19 +151,20 @@ pub const Store = struct {
         const location = locationColumns(value.location);
         _ = c.sqlite3_bind_int(stmt, 3, location.kind);
         _ = c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-        _ = c.sqlite3_bind_int64(stmt, 5, @intCast(value.sequence));
-        bindText(stmt, 6, value.command);
-        _ = c.sqlite3_bind_int(stmt, 7, @intFromBool(value.command_truncated));
-        bindText(stmt, 8, value.cwd);
-        bindText(stmt, 9, value.workspace_path);
-        _ = c.sqlite3_bind_int64(stmt, 10, value.started_at_ms);
-        _ = c.sqlite3_bind_int64(stmt, 11, value.duration_ns);
+        _ = c.sqlite3_bind_int64(stmt, 5, @intCast(model.schema.id.raw(value.location.tab_id)));
+        _ = c.sqlite3_bind_int64(stmt, 6, @intCast(value.sequence));
+        bindText(stmt, 7, value.command);
+        _ = c.sqlite3_bind_int(stmt, 8, @intFromBool(value.command_truncated));
+        bindText(stmt, 9, value.cwd);
+        bindText(stmt, 10, value.workspace_path);
+        _ = c.sqlite3_bind_int64(stmt, 11, value.started_at_ms);
+        _ = c.sqlite3_bind_int64(stmt, 12, value.duration_ns);
         if (value.exit_code) |exit_code| {
-            _ = c.sqlite3_bind_int(stmt, 12, exit_code);
+            _ = c.sqlite3_bind_int(stmt, 13, exit_code);
         } else {
-            _ = c.sqlite3_bind_null(stmt, 12);
+            _ = c.sqlite3_bind_null(stmt, 13);
         }
-        _ = c.sqlite3_bind_int(stmt, 13, @intFromEnum(value.status));
+        _ = c.sqlite3_bind_int(stmt, 14, @intFromEnum(value.status));
         try stepDone(stmt);
     }
 
@@ -242,6 +248,24 @@ pub const Store = struct {
     }
 };
 
+fn ensureTabColumn(db: *c.sqlite3, table: []const u8, alter_sql: [:0]const u8) !void {
+    var pragma_buffer: [64]u8 = undefined;
+    const pragma = try std.fmt.bufPrint(&pragma_buffer, "PRAGMA table_info({s});", .{table});
+    const stmt = try prepare(db, pragma);
+    defer _ = c.sqlite3_finalize(stmt);
+    while (true) switch (c.sqlite3_step(stmt)) {
+        c.SQLITE_ROW => {
+            const len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
+            const pointer = c.sqlite3_column_text(stmt, 1) orelse continue;
+            if (std.mem.eql(u8, pointer[0..len], "tab_id")) return;
+        },
+        c.SQLITE_DONE => break,
+        else => return error.HistorySchemaFailed,
+    };
+    if (c.sqlite3_exec(db, alter_sql.ptr, null, null, null) != c.SQLITE_OK)
+        return error.HistorySchemaFailed;
+}
+
 fn prepare(db: *c.sqlite3, sql: []const u8) !*c.sqlite3_stmt {
     var stmt: ?*c.sqlite3_stmt = null;
     if (c.sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != c.SQLITE_OK)
@@ -268,8 +292,8 @@ fn bindBlob(stmt: *c.sqlite3_stmt, index: c_int, value: *const model.SessionId) 
 
 const LocationColumns = struct { kind: c_int, id: u64 };
 
-fn locationColumns(location: model.schema.PaneLocation) LocationColumns {
-    return switch (location) {
+fn locationColumns(location: model.schema.TabLocation) LocationColumns {
+    return switch (location.workspace) {
         .workspace => |id| .{ .kind = 0, .id = model.schema.id.raw(id) },
         .worktree => |id| .{ .kind = 1, .id = model.schema.id.raw(id) },
     };
@@ -336,8 +360,9 @@ test "persists sessions and filters command history" {
 
     const session_id: model.SessionId = .{1} ** 16;
     const pane_id = try model.schema.id.pane(7);
-    const location: model.schema.PaneLocation = .{
-        .workspace = try model.schema.id.workspace(3),
+    const location: model.schema.TabLocation = .{
+        .workspace = .{ .workspace = try model.schema.id.workspace(3) },
+        .tab_id = try model.schema.id.tab(2),
     };
     const session: model.SessionStarted = .{
         .id = session_id,
@@ -373,6 +398,11 @@ test "persists sessions and filters command history" {
     failed.command = @constCast("git commit");
     try store.insertCommand(&failed);
     try store.finishSession(.{ .id = session_id, .finished_at_ms = 4_000 });
+
+    const tab_stmt = try prepare(store.db, "SELECT tab_id FROM command WHERE sequence = 1;");
+    defer _ = c.sqlite3_finalize(tab_stmt);
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(tab_stmt));
+    try std.testing.expectEqual(@as(c_longlong, 2), c.sqlite3_column_int64(tab_stmt, 0));
 
     const request = try model.Query.init(
         @enumFromInt(1),

@@ -38,11 +38,14 @@ The benchmark target uses `ReleaseFast` when the main build mode is `Debug`.
 It measures damage collection, frame encoding and decoding, client application
 plus terminal output, keybinding routing, and cursor-only output against a fixed
 154x37 screen. The cell workloads are a one-cell patch, a representative
-fragmented patch with 56 spans of 24 cells, and a full screen. Use `--filter`,
-`--samples`, or `--sample-ms` after `--` to narrow or lengthen a run:
+fragmented patch with 56 spans of 24 cells, and a full screen. The client chrome
+workloads render the real tab model with 1, 8, and 64 tabs. Fixture construction
+is outside the timed section. Use `--filter`, `--samples`, or `--sample-ms` after
+`--` to narrow or lengthen a run:
 
 ```sh
 zig build bench -- --filter frontend --samples 20 --sample-ms 100
+zig build bench -- --filter frontend.client_ui.chrome --samples 20 --sample-ms 100
 zig build bench -- --list
 ```
 

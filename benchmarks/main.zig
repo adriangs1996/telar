@@ -21,6 +21,7 @@ const fragmented_span_cells = 2;
 const fragmented_gap_cells = 2;
 const fragmented_span_count = fragmented_rows * fragmented_spans_per_row;
 const history_input = "\x1b[200~echo one\necho two\x1b[201~\r";
+const client_ui_tab_counts = [_]usize{ 1, 8, 64 };
 
 const Workload = enum { one_cell, fragmented, full_screen };
 const workloads = [_]Workload{ .one_cell, .fragmented, .full_screen };
@@ -110,7 +111,9 @@ const cases = [_]Case{
     .{ .name = "frontend.keybind.route", .work_per_op = 12, .work_unit = "keys" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
-    .{ .name = "frontend.client_ui.chrome", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_1", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_8", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_64", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
     .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
     .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
@@ -621,28 +624,48 @@ const CursorContext = struct {
 const sidebar_width = frontend.client_ui.sidebar_width;
 
 const ClientUiContext = struct {
-    model: frontend.multiplexer.Model,
+    tabs: frontend.tabs.Model,
     screen: frontend.term.Screen,
     view: frontend.client_ui.State,
 
-    fn init(gpa: std.mem.Allocator) !ClientUiContext {
-        var model = frontend.multiplexer.Model.init(gpa);
-        errdefer model.deinit();
+    fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
+        std.debug.assert(tab_count >= 1 and tab_count <= frontend.tabs.max_tabs);
+        var tabs = frontend.tabs.Model.init(gpa);
+        errdefer tabs.deinit();
+        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+        try tabs.bootstrap(
+            @enumFromInt(1),
+            .{ .workspace = workspace, .tab_id = @enumFromInt(1) },
+            .{ .cols = cols - sidebar_width, .rows = rows - 2 },
+        );
+        for (1..tab_count) |index| {
+            var label_buffer: [schema.max_tab_label_bytes]u8 = undefined;
+            const label = try std.fmt.bufPrint(&label_buffer, "tab-{d}", .{index + 1});
+            _ = try tabs.addCreated(.{
+                .request_id = @enumFromInt(index + 1),
+                .location = .{
+                    .workspace = workspace,
+                    .tab_id = @enumFromInt(index + 1),
+                },
+                .position = @intCast(index),
+                .label = label,
+                .root_pane_id = @enumFromInt(index + 1),
+            }, .{ .cols = cols - sidebar_width, .rows = rows - 2 });
+        }
         var screen = try frontend.term.Screen.init(gpa, cols, rows);
         errdefer screen.deinit();
         var view = try frontend.client_ui.State.init(gpa, cols, rows);
         errdefer view.deinit();
-        const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
-        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols - sidebar_width, .rows = rows - 2 });
+        const model = &tabs.active().?.model;
         _ = try model.render(&screen, view.workbench());
-        _ = try view.render(&screen, &model, true);
-        return .{ .model = model, .screen = screen, .view = view };
+        _ = try view.render(&screen, &tabs, model, true);
+        return .{ .tabs = tabs, .screen = screen, .view = view };
     }
 
     fn deinit(context: *ClientUiContext) void {
         context.view.deinit();
         context.screen.deinit();
-        context.model.deinit();
+        context.tabs.deinit();
     }
 };
 
@@ -651,7 +674,12 @@ fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
     for (0..iterations) |iteration| {
         context.view.hovered = if (iteration & 1 == 0) .active_workspace else .active_worktree;
         context.view.invalidate();
-        const stats = try context.view.render(&context.screen, &context.model, false);
+        const stats = try context.view.render(
+            &context.screen,
+            &context.tabs,
+            &context.tabs.active().?.model,
+            false,
+        );
         checksum +%= stats.scanned + stats.damaged;
     }
     return checksum;
@@ -718,7 +746,10 @@ const MultiplexerContext = struct {
     fn init(gpa: std.mem.Allocator) !MultiplexerContext {
         var model = frontend.multiplexer.Model.init(gpa);
         errdefer model.deinit();
-        const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+        const location: schema.TabLocation = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        };
         try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
         const area: core.ui.Rect = .{ .w = cols, .h = rows };
         try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
@@ -759,7 +790,10 @@ const IncrementalComposeContext = struct {
     ) !IncrementalComposeContext {
         var model = frontend.multiplexer.Model.init(gpa);
         errdefer model.deinit();
-        const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+        const location: schema.TabLocation = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        };
         try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
         var screen = try frontend.term.Screen.init(gpa, cols, rows);
         errdefer screen.deinit();
@@ -890,17 +924,19 @@ fn execute(
         try writeResult(writer, config, cursor_case, try measure(io, config, &context, runCursor));
     }
 
-    const client_ui_case = cases[case_index];
-    case_index += 1;
-    if (config.includes(client_ui_case.name)) {
-        var context = try ClientUiContext.init(gpa);
-        defer context.deinit();
-        try writeResult(
-            writer,
-            config,
-            client_ui_case,
-            try measure(io, config, &context, runClientUi),
-        );
+    inline for (client_ui_tab_counts) |tab_count| {
+        const client_ui_case = cases[case_index];
+        case_index += 1;
+        if (config.includes(client_ui_case.name)) {
+            var context = try ClientUiContext.init(gpa, tab_count);
+            defer context.deinit();
+            try writeResult(
+                writer,
+                config,
+                client_ui_case,
+                try measure(io, config, &context, runClientUi),
+            );
+        }
     }
 
     const layout_case = cases[case_index];

@@ -10,6 +10,7 @@ pub const frame = @import("v1/frame.zig");
 pub const id = @import("v1/id.zig");
 pub const WorkspaceId = id.WorkspaceId;
 pub const WorktreeId = id.WorktreeId;
+pub const TabId = id.TabId;
 pub const PaneId = id.PaneId;
 pub const RequestId = id.RequestId;
 
@@ -20,7 +21,9 @@ pub const max_argument_bytes = 128 * 1024;
 pub const max_environment_count = 256;
 pub const max_environment_bytes = 512 * 1024;
 pub const max_error_message_bytes = 1024;
-pub const max_panes_per_location = 64;
+pub const max_tab_label_bytes = 128;
+pub const max_tabs_per_workspace = 64;
+pub const max_panes_per_tab = 64;
 pub const max_history_query_bytes = 1024;
 pub const max_history_results = 100;
 pub const max_history_command_bytes = 64 * 1024;
@@ -33,10 +36,15 @@ pub const ClientTag = enum(u8) {
     request_snapshot = 0x05,
     detach_pane = 0x06,
     runtime_stop = 0x07,
-    request_location_snapshot = 0x08,
+    request_tab_snapshot = 0x08,
     create_pane = 0x09,
     close_pane = 0x0a,
     query_history = 0x0b,
+    request_workspace_snapshot = 0x0c,
+    create_tab = 0x0d,
+    rename_tab = 0x0e,
+    close_tab = 0x0f,
+    move_tab = 0x10,
 };
 
 pub const ServerTag = enum(u8) {
@@ -45,8 +53,13 @@ pub const ServerTag = enum(u8) {
     pane_exited = 0x83,
     request_failed = 0x84,
     runtime_stopping = 0x85,
-    location_snapshot = 0x86,
+    tab_snapshot = 0x86,
     history_results = 0x87,
+    workspace_snapshot = 0x88,
+    tab_created = 0x89,
+    tab_renamed = 0x8a,
+    tab_closed = 0x8b,
+    tab_moved = 0x8c,
 };
 
 pub const TerminalSize = struct {
@@ -65,11 +78,17 @@ pub const PaneTarget = union(enum) {
     pane: PaneId,
 };
 
-/// Persistent ownership of a pane. A worktree is itself a copy of a
-/// workspace, so a pane belongs to exactly one side of this union.
-pub const PaneLocation = union(enum) {
+/// A workspace-like container. Worktrees use the same tab model as their
+/// source workspace, but remain independently addressable runtimes.
+pub const WorkspaceLocation = union(enum) {
     workspace: WorkspaceId,
     worktree: WorktreeId,
+};
+
+/// Persistent identity of a tab and therefore of the pane layout it owns.
+pub const TabLocation = struct {
+    workspace: WorkspaceLocation,
+    tab_id: TabId,
 };
 
 pub const EnvironmentMode = enum(u8) {
@@ -179,21 +198,21 @@ pub const DetachPane = struct {
     pane_id: PaneId,
 };
 
-pub const RequestLocationSnapshot = struct {
+pub const RequestTabSnapshot = struct {
     request_id: RequestId,
-    location: PaneLocation,
+    location: TabLocation,
 };
 
 pub const CreatePane = struct {
     request_id: RequestId,
-    location: PaneLocation,
+    location: TabLocation,
     size: TerminalSize,
     launch: Launch,
 };
 
 pub const CreatePaneView = struct {
     request_id: RequestId,
-    location: PaneLocation,
+    location: TabLocation,
     size: TerminalSize,
     launch: LaunchView,
 };
@@ -201,6 +220,49 @@ pub const CreatePaneView = struct {
 pub const ClosePane = struct {
     request_id: RequestId,
     pane_id: PaneId,
+};
+
+pub const RequestWorkspaceSnapshot = struct {
+    request_id: RequestId,
+    workspace: WorkspaceLocation,
+};
+
+pub const CreateTab = struct {
+    request_id: RequestId,
+    workspace: WorkspaceLocation,
+    label: []const u8 = "",
+    size: TerminalSize,
+    launch: Launch,
+};
+
+pub const CreateTabView = struct {
+    request_id: RequestId,
+    workspace: WorkspaceLocation,
+    label: []const u8,
+    size: TerminalSize,
+    launch: LaunchView,
+};
+
+pub const RenameTab = struct {
+    request_id: RequestId,
+    location: TabLocation,
+    label: []const u8,
+};
+
+pub const CloseTab = struct {
+    request_id: RequestId,
+    location: TabLocation,
+};
+
+pub const TabMoveDirection = enum(u8) {
+    previous = 0,
+    next = 1,
+};
+
+pub const MoveTab = struct {
+    request_id: RequestId,
+    location: TabLocation,
+    direction: TabMoveDirection,
 };
 
 pub const HistoryScope = enum(u8) {
@@ -228,16 +290,21 @@ pub const ClientMessage = union(enum) {
     request_snapshot: RequestSnapshot,
     detach_pane: DetachPane,
     runtime_stop: void,
-    request_location_snapshot: RequestLocationSnapshot,
+    request_tab_snapshot: RequestTabSnapshot,
     create_pane: CreatePaneView,
     close_pane: ClosePane,
     query_history: QueryHistory,
+    request_workspace_snapshot: RequestWorkspaceSnapshot,
+    create_tab: CreateTabView,
+    rename_tab: RenameTab,
+    close_tab: CloseTab,
+    move_tab: MoveTab,
 };
 
 pub const PaneOpened = struct {
     request_id: RequestId,
     pane_id: PaneId,
-    location: PaneLocation,
+    location: TabLocation,
     created: bool,
 };
 
@@ -259,6 +326,8 @@ pub const FailureCode = enum(u16) {
     permission_denied = 4,
     resource_limit = 5,
     internal = 6,
+    workspace_not_found = 7,
+    tab_not_found = 8,
 };
 
 pub const RequestFailed = struct {
@@ -278,19 +347,72 @@ pub const PaneDescriptor = struct {
     lifecycle: PaneLifecycle,
 };
 
-pub const LocationSnapshot = struct {
+pub const TabDescriptor = struct {
+    tab_id: TabId,
+    position: u16,
+    pane_count: u16,
+    label: []const u8,
+};
+
+pub const WorkspaceSnapshot = struct {
     request_id: RequestId,
-    location: PaneLocation,
+    workspace: WorkspaceLocation,
+    tabs: []const TabDescriptor,
+};
+
+pub const WorkspaceSnapshotView = struct {
+    request_id: RequestId,
+    workspace: WorkspaceLocation,
+    tab_count: u16,
+    encoded_tabs: []const u8,
+
+    pub fn tabs(snapshot: WorkspaceSnapshotView) TabDescriptorIterator {
+        return .{
+            .decoder = .init(snapshot.encoded_tabs),
+            .remaining = snapshot.tab_count,
+        };
+    }
+};
+
+pub const TabCreated = struct {
+    request_id: RequestId,
+    location: TabLocation,
+    position: u16,
+    label: []const u8,
+    root_pane_id: PaneId,
+};
+
+pub const TabRenamed = struct {
+    request_id: RequestId,
+    location: TabLocation,
+    label: []const u8,
+};
+
+pub const TabClosed = struct {
+    request_id: RequestId,
+    location: TabLocation,
+    workspace_closed: bool,
+};
+
+pub const TabMoved = struct {
+    request_id: RequestId,
+    location: TabLocation,
+    position: u16,
+};
+
+pub const TabSnapshot = struct {
+    request_id: RequestId,
+    location: TabLocation,
     panes: []const PaneDescriptor,
 };
 
-pub const LocationSnapshotView = struct {
+pub const TabSnapshotView = struct {
     request_id: RequestId,
-    location: PaneLocation,
+    location: TabLocation,
     pane_count: u16,
     encoded_panes: []const u8,
 
-    pub fn panes(snapshot: LocationSnapshotView) PaneDescriptorIterator {
+    pub fn panes(snapshot: TabSnapshotView) PaneDescriptorIterator {
         return .{
             .decoder = .init(snapshot.encoded_panes),
             .remaining = snapshot.pane_count,
@@ -358,14 +480,35 @@ pub const PaneDescriptorIterator = struct {
     }
 };
 
+pub const TabDescriptorIterator = struct {
+    decoder: wire.Decoder,
+    remaining: u16,
+
+    pub fn next(iterator: *TabDescriptorIterator) ?TabDescriptor {
+        if (iterator.remaining == 0) return null;
+        iterator.remaining -= 1;
+        return .{
+            .tab_id = id.tab(iterator.decoder.readInt(u64) catch unreachable) catch unreachable,
+            .position = iterator.decoder.readInt(u16) catch unreachable,
+            .pane_count = iterator.decoder.readInt(u16) catch unreachable,
+            .label = iterator.decoder.readSized16() catch unreachable,
+        };
+    }
+};
+
 pub const ServerMessage = union(enum) {
     pane_opened: PaneOpened,
     pane_frame: frame.FrameView,
     pane_exited: PaneExited,
     request_failed: RequestFailed,
     runtime_stopping: void,
-    location_snapshot: LocationSnapshotView,
+    tab_snapshot: TabSnapshotView,
     history_results: HistoryResultsView,
+    workspace_snapshot: WorkspaceSnapshotView,
+    tab_created: TabCreated,
+    tab_renamed: TabRenamed,
+    tab_closed: TabClosed,
+    tab_moved: TabMoved,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -442,15 +585,15 @@ pub fn encodeDetachPane(buffer: []u8, message: DetachPane) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn encodeRequestLocationSnapshot(
+pub fn encodeRequestTabSnapshot(
     buffer: []u8,
-    message: RequestLocationSnapshot,
+    message: RequestTabSnapshot,
 ) ![]const u8 {
     try validateRequestId(message.request_id);
     var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ClientTag.request_location_snapshot));
+    try encoder.writeByte(@intFromEnum(ClientTag.request_tab_snapshot));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodePaneLocation(&encoder, message.location);
+    try encodeTabLocation(&encoder, message.location);
     return encoder.finish();
 }
 
@@ -460,7 +603,7 @@ pub fn encodeCreatePane(buffer: []u8, message: CreatePane) ![]const u8 {
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ClientTag.create_pane));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodePaneLocation(&encoder, message.location);
+    try encodeTabLocation(&encoder, message.location);
     try encodeSize(&encoder, message.size);
     try encodeLaunch(&encoder, message.launch);
     return encoder.finish();
@@ -473,6 +616,62 @@ pub fn encodeClosePane(buffer: []u8, message: ClosePane) ![]const u8 {
     try encoder.writeByte(@intFromEnum(ClientTag.close_pane));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
+    return encoder.finish();
+}
+
+pub fn encodeRequestWorkspaceSnapshot(
+    buffer: []u8,
+    message: RequestWorkspaceSnapshot,
+) ![]const u8 {
+    try validateRequestId(message.request_id);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.request_workspace_snapshot));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeWorkspaceLocation(&encoder, message.workspace);
+    return encoder.finish();
+}
+
+pub fn encodeCreateTab(buffer: []u8, message: CreateTab) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try message.size.validate();
+    try validateTabLabel(message.label, true);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.create_tab));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeWorkspaceLocation(&encoder, message.workspace);
+    try encoder.writeSized16(message.label);
+    try encodeSize(&encoder, message.size);
+    try encodeLaunch(&encoder, message.launch);
+    return encoder.finish();
+}
+
+pub fn encodeRenameTab(buffer: []u8, message: RenameTab) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateTabLabel(message.label, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.rename_tab));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeTabLocation(&encoder, message.location);
+    try encoder.writeSized16(message.label);
+    return encoder.finish();
+}
+
+pub fn encodeCloseTab(buffer: []u8, message: CloseTab) ![]const u8 {
+    try validateRequestId(message.request_id);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.close_tab));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeTabLocation(&encoder, message.location);
+    return encoder.finish();
+}
+
+pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {
+    try validateRequestId(message.request_id);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.move_tab));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeTabLocation(&encoder, message.location);
+    try encoder.writeByte(@intFromEnum(message.direction));
     return encoder.finish();
 }
 
@@ -525,12 +724,19 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .request_snapshot => .{ .request_snapshot = try decodeRequestSnapshot(&decoder) },
         .detach_pane => .{ .detach_pane = try decodeDetachPane(&decoder) },
         .runtime_stop => .{ .runtime_stop = {} },
-        .request_location_snapshot => .{
-            .request_location_snapshot = try decodeRequestLocationSnapshot(&decoder),
+        .request_tab_snapshot => .{
+            .request_tab_snapshot = try decodeRequestTabSnapshot(&decoder),
         },
         .create_pane => .{ .create_pane = try decodeCreatePane(&decoder) },
         .close_pane => .{ .close_pane = try decodeClosePane(&decoder) },
         .query_history => .{ .query_history = try decodeQueryHistory(&decoder) },
+        .request_workspace_snapshot => .{
+            .request_workspace_snapshot = try decodeRequestWorkspaceSnapshot(&decoder),
+        },
+        .create_tab => .{ .create_tab = try decodeCreateTab(&decoder) },
+        .rename_tab => .{ .rename_tab = try decodeRenameTab(&decoder) },
+        .close_tab => .{ .close_tab = try decodeCloseTab(&decoder) },
+        .move_tab => .{ .move_tab = try decodeMoveTab(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -543,7 +749,7 @@ pub fn encodePaneOpened(buffer: []u8, message: PaneOpened) ![]const u8 {
     try encoder.writeByte(@intFromEnum(ServerTag.pane_opened));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
-    try encodePaneLocation(&encoder, message.location);
+    try encodeTabLocation(&encoder, message.location);
     try encoder.writeByte(@intFromBool(message.created));
     return encoder.finish();
 }
@@ -581,14 +787,14 @@ pub fn encodeRuntimeStopping(buffer: []u8) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn encodeLocationSnapshot(buffer: []u8, message: LocationSnapshot) ![]const u8 {
+pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
     try validateRequestId(message.request_id);
-    if (message.panes.len > max_panes_per_location) return error.TooManyPanes;
+    if (message.panes.len > max_panes_per_tab) return error.TooManyPanes;
 
     var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ServerTag.location_snapshot));
+    try encoder.writeByte(@intFromEnum(ServerTag.tab_snapshot));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodePaneLocation(&encoder, message.location);
+    try encodeTabLocation(&encoder, message.location);
     try encoder.writeInt(u16, @intCast(message.panes.len));
     for (message.panes, 0..) |pane, pane_index| {
         try validatePaneId(pane.pane_id);
@@ -598,6 +804,72 @@ pub fn encodeLocationSnapshot(buffer: []u8, message: LocationSnapshot) ![]const 
         try encoder.writeInt(u64, id.raw(pane.pane_id));
         try encoder.writeByte(@intFromEnum(pane.lifecycle));
     }
+    return encoder.finish();
+}
+
+pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]const u8 {
+    try validateRequestId(message.request_id);
+    if (message.tabs.len > max_tabs_per_workspace) return error.TooManyTabs;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.workspace_snapshot));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeWorkspaceLocation(&encoder, message.workspace);
+    try encoder.writeInt(u16, @intCast(message.tabs.len));
+    for (message.tabs, 0..) |tab, index| {
+        if (tab.tab_id == .invalid) return error.InvalidTabId;
+        if (tab.position != index) return error.InvalidTabPosition;
+        if (tab.pane_count > max_panes_per_tab) return error.TooManyPanes;
+        try validateTabLabel(tab.label, false);
+        try encoder.writeInt(u64, id.raw(tab.tab_id));
+        try encoder.writeInt(u16, tab.position);
+        try encoder.writeInt(u16, tab.pane_count);
+        try encoder.writeSized16(tab.label);
+    }
+    return encoder.finish();
+}
+
+pub fn encodeTabCreated(buffer: []u8, message: TabCreated) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.root_pane_id);
+    try validateTabLabel(message.label, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.tab_created));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeTabLocation(&encoder, message.location);
+    try encoder.writeInt(u16, message.position);
+    try encoder.writeSized16(message.label);
+    try encoder.writeInt(u64, id.raw(message.root_pane_id));
+    return encoder.finish();
+}
+
+pub fn encodeTabRenamed(buffer: []u8, message: TabRenamed) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateTabLabel(message.label, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.tab_renamed));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeTabLocation(&encoder, message.location);
+    try encoder.writeSized16(message.label);
+    return encoder.finish();
+}
+
+pub fn encodeTabClosed(buffer: []u8, message: TabClosed) ![]const u8 {
+    try validateRequestId(message.request_id);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.tab_closed));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeTabLocation(&encoder, message.location);
+    try encoder.writeByte(@intFromBool(message.workspace_closed));
+    return encoder.finish();
+}
+
+pub fn encodeTabMoved(buffer: []u8, message: TabMoved) ![]const u8 {
+    try validateRequestId(message.request_id);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.tab_moved));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeTabLocation(&encoder, message.location);
+    try encoder.writeInt(u16, message.position);
     return encoder.finish();
 }
 
@@ -621,10 +893,17 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .pane_exited => .{ .pane_exited = try decodePaneExited(&decoder) },
         .request_failed => .{ .request_failed = try decodeRequestFailed(&decoder) },
         .runtime_stopping => .{ .runtime_stopping = {} },
-        .location_snapshot => .{
-            .location_snapshot = try decodeLocationSnapshot(&decoder),
+        .tab_snapshot => .{
+            .tab_snapshot = try decodeTabSnapshot(&decoder),
         },
         .history_results => .{ .history_results = try decodeHistoryResults(&decoder) },
+        .workspace_snapshot => .{
+            .workspace_snapshot = try decodeWorkspaceSnapshot(&decoder),
+        },
+        .tab_created => .{ .tab_created = try decodeTabCreated(&decoder) },
+        .tab_renamed => .{ .tab_renamed = try decodeTabRenamed(&decoder) },
+        .tab_closed => .{ .tab_closed = try decodeTabClosed(&decoder) },
+        .tab_moved => .{ .tab_moved = try decodeTabMoved(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -759,17 +1038,17 @@ fn decodeDetachPane(decoder: *wire.Decoder) !DetachPane {
     return .{ .pane_id = pane_id };
 }
 
-fn decodeRequestLocationSnapshot(decoder: *wire.Decoder) !RequestLocationSnapshot {
+fn decodeRequestTabSnapshot(decoder: *wire.Decoder) !RequestTabSnapshot {
     return .{
         .request_id = try id.request(try decoder.readInt(u64)),
-        .location = try decodePaneLocation(decoder),
+        .location = try decodeTabLocation(decoder),
     };
 }
 
 fn decodeCreatePane(decoder: *wire.Decoder) !CreatePaneView {
     return .{
         .request_id = try id.request(try decoder.readInt(u64)),
-        .location = try decodePaneLocation(decoder),
+        .location = try decodeTabLocation(decoder),
         .size = try decodeSize(decoder),
         .launch = try decodeLaunch(decoder),
     };
@@ -779,6 +1058,54 @@ fn decodeClosePane(decoder: *wire.Decoder) !ClosePane {
     return .{
         .request_id = try id.request(try decoder.readInt(u64)),
         .pane_id = try id.pane(try decoder.readInt(u64)),
+    };
+}
+
+fn decodeRequestWorkspaceSnapshot(decoder: *wire.Decoder) !RequestWorkspaceSnapshot {
+    return .{
+        .request_id = try id.request(try decoder.readInt(u64)),
+        .workspace = try decodeWorkspaceLocation(decoder),
+    };
+}
+
+fn decodeCreateTab(decoder: *wire.Decoder) !CreateTabView {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const workspace = try decodeWorkspaceLocation(decoder);
+    const label = try decoder.readSized16();
+    try validateTabLabel(label, true);
+    return .{
+        .request_id = request_id,
+        .workspace = workspace,
+        .label = label,
+        .size = try decodeSize(decoder),
+        .launch = try decodeLaunch(decoder),
+    };
+}
+
+fn decodeRenameTab(decoder: *wire.Decoder) !RenameTab {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const location = try decodeTabLocation(decoder);
+    const label = try decoder.readSized16();
+    try validateTabLabel(label, false);
+    return .{ .request_id = request_id, .location = location, .label = label };
+}
+
+fn decodeCloseTab(decoder: *wire.Decoder) !CloseTab {
+    return .{
+        .request_id = try id.request(try decoder.readInt(u64)),
+        .location = try decodeTabLocation(decoder),
+    };
+}
+
+fn decodeMoveTab(decoder: *wire.Decoder) !MoveTab {
+    return .{
+        .request_id = try id.request(try decoder.readInt(u64)),
+        .location = try decodeTabLocation(decoder),
+        .direction = switch (try decoder.readByte()) {
+            0 => .previous,
+            1 => .next,
+            else => return error.InvalidTabMoveDirection,
+        },
     };
 }
 
@@ -817,7 +1144,7 @@ fn decodePaneOpened(decoder: *wire.Decoder) !PaneOpened {
     return .{
         .request_id = request_id,
         .pane_id = pane_id,
-        .location = try decodePaneLocation(decoder),
+        .location = try decodeTabLocation(decoder),
         .created = try decodeBool(try decoder.readByte()),
     };
 }
@@ -839,14 +1166,14 @@ fn decodeRequestFailed(decoder: *wire.Decoder) !RequestFailed {
     return .{ .request_id = request_id, .code = code, .message = message };
 }
 
-fn decodeLocationSnapshot(decoder: *wire.Decoder) !LocationSnapshotView {
+fn decodeTabSnapshot(decoder: *wire.Decoder) !TabSnapshotView {
     const request_id = try id.request(try decoder.readInt(u64));
-    const location = try decodePaneLocation(decoder);
+    const location = try decodeTabLocation(decoder);
     const pane_count = try decoder.readInt(u16);
-    if (pane_count > max_panes_per_location) return error.TooManyPanes;
+    if (pane_count > max_panes_per_tab) return error.TooManyPanes;
 
     const panes_start = decoder.index;
-    var seen: [max_panes_per_location]PaneId = undefined;
+    var seen: [max_panes_per_tab]PaneId = undefined;
     for (0..pane_count) |pane_index| {
         const pane_id = try id.pane(try decoder.readInt(u64));
         _ = try decodePaneLifecycle(try decoder.readByte());
@@ -860,6 +1187,71 @@ fn decodeLocationSnapshot(decoder: *wire.Decoder) !LocationSnapshotView {
         .location = location,
         .pane_count = pane_count,
         .encoded_panes = decoder.consumed(panes_start),
+    };
+}
+
+fn decodeWorkspaceSnapshot(decoder: *wire.Decoder) !WorkspaceSnapshotView {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const workspace = try decodeWorkspaceLocation(decoder);
+    const tab_count = try decoder.readInt(u16);
+    if (tab_count == 0 or tab_count > max_tabs_per_workspace) return error.InvalidTabCount;
+    const tabs_start = decoder.index;
+    var seen: [max_tabs_per_workspace]TabId = undefined;
+    for (0..tab_count) |index| {
+        const tab_id = try id.tab(try decoder.readInt(u64));
+        const position = try decoder.readInt(u16);
+        if (position != index) return error.InvalidTabPosition;
+        const pane_count = try decoder.readInt(u16);
+        if (pane_count > max_panes_per_tab) return error.TooManyPanes;
+        const label = try decoder.readSized16();
+        try validateTabLabel(label, false);
+        for (seen[0..index]) |previous| if (previous == tab_id) return error.DuplicateTab;
+        seen[index] = tab_id;
+    }
+    return .{
+        .request_id = request_id,
+        .workspace = workspace,
+        .tab_count = tab_count,
+        .encoded_tabs = decoder.consumed(tabs_start),
+    };
+}
+
+fn decodeTabCreated(decoder: *wire.Decoder) !TabCreated {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const location = try decodeTabLocation(decoder);
+    const position = try decoder.readInt(u16);
+    const label = try decoder.readSized16();
+    try validateTabLabel(label, false);
+    return .{
+        .request_id = request_id,
+        .location = location,
+        .position = position,
+        .label = label,
+        .root_pane_id = try id.pane(try decoder.readInt(u64)),
+    };
+}
+
+fn decodeTabRenamed(decoder: *wire.Decoder) !TabRenamed {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const location = try decodeTabLocation(decoder);
+    const label = try decoder.readSized16();
+    try validateTabLabel(label, false);
+    return .{ .request_id = request_id, .location = location, .label = label };
+}
+
+fn decodeTabClosed(decoder: *wire.Decoder) !TabClosed {
+    return .{
+        .request_id = try id.request(try decoder.readInt(u64)),
+        .location = try decodeTabLocation(decoder),
+        .workspace_closed = try decodeBool(try decoder.readByte()),
+    };
+}
+
+fn decodeTabMoved(decoder: *wire.Decoder) !TabMoved {
+    return .{
+        .request_id = try id.request(try decoder.readInt(u64)),
+        .location = try decodeTabLocation(decoder),
+        .position = try decoder.readInt(u16),
     };
 }
 
@@ -942,7 +1334,13 @@ fn decodeSize(decoder: *wire.Decoder) !TerminalSize {
     return size;
 }
 
-fn encodePaneLocation(encoder: *wire.Encoder, location: PaneLocation) !void {
+fn encodeTabLocation(encoder: *wire.Encoder, location: TabLocation) !void {
+    try encodeWorkspaceLocation(encoder, location.workspace);
+    if (location.tab_id == .invalid) return error.InvalidTabId;
+    try encoder.writeInt(u64, id.raw(location.tab_id));
+}
+
+fn encodeWorkspaceLocation(encoder: *wire.Encoder, location: WorkspaceLocation) !void {
     switch (location) {
         .workspace => |workspace_id| {
             if (workspace_id == .invalid) return error.InvalidWorkspaceId;
@@ -957,11 +1355,18 @@ fn encodePaneLocation(encoder: *wire.Encoder, location: PaneLocation) !void {
     }
 }
 
-fn decodePaneLocation(decoder: *wire.Decoder) !PaneLocation {
+fn decodeTabLocation(decoder: *wire.Decoder) !TabLocation {
+    return .{
+        .workspace = try decodeWorkspaceLocation(decoder),
+        .tab_id = try id.tab(try decoder.readInt(u64)),
+    };
+}
+
+fn decodeWorkspaceLocation(decoder: *wire.Decoder) !WorkspaceLocation {
     return switch (try decoder.readByte()) {
         0 => .{ .workspace = try id.workspace(try decoder.readInt(u64)) },
         1 => .{ .worktree = try id.worktree(try decoder.readInt(u64)) },
-        else => error.InvalidPaneLocation,
+        else => error.InvalidWorkspaceLocation,
     };
 }
 
@@ -990,6 +1395,12 @@ fn validateErrorMessage(message: []const u8) !void {
     if (!std.unicode.utf8ValidateSlice(message)) return error.InvalidUtf8;
 }
 
+fn validateTabLabel(label: []const u8, empty_allowed: bool) !void {
+    try validateBytes(label, max_tab_label_bytes, empty_allowed);
+    if (!std.unicode.utf8ValidateSlice(label)) return error.InvalidUtf8;
+    for (label) |byte| if (byte < 0x20 or byte == 0x7f) return error.InvalidTabLabel;
+}
+
 fn decodeClientTag(value: u8) !ClientTag {
     return switch (value) {
         @intFromEnum(ClientTag.open_pane) => .open_pane,
@@ -999,10 +1410,15 @@ fn decodeClientTag(value: u8) !ClientTag {
         @intFromEnum(ClientTag.request_snapshot) => .request_snapshot,
         @intFromEnum(ClientTag.detach_pane) => .detach_pane,
         @intFromEnum(ClientTag.runtime_stop) => .runtime_stop,
-        @intFromEnum(ClientTag.request_location_snapshot) => .request_location_snapshot,
+        @intFromEnum(ClientTag.request_tab_snapshot) => .request_tab_snapshot,
         @intFromEnum(ClientTag.create_pane) => .create_pane,
         @intFromEnum(ClientTag.close_pane) => .close_pane,
         @intFromEnum(ClientTag.query_history) => .query_history,
+        @intFromEnum(ClientTag.request_workspace_snapshot) => .request_workspace_snapshot,
+        @intFromEnum(ClientTag.create_tab) => .create_tab,
+        @intFromEnum(ClientTag.rename_tab) => .rename_tab,
+        @intFromEnum(ClientTag.close_tab) => .close_tab,
+        @intFromEnum(ClientTag.move_tab) => .move_tab,
         else => error.UnknownMessage,
     };
 }
@@ -1014,8 +1430,13 @@ fn decodeServerTag(value: u8) !ServerTag {
         @intFromEnum(ServerTag.pane_exited) => .pane_exited,
         @intFromEnum(ServerTag.request_failed) => .request_failed,
         @intFromEnum(ServerTag.runtime_stopping) => .runtime_stopping,
-        @intFromEnum(ServerTag.location_snapshot) => .location_snapshot,
+        @intFromEnum(ServerTag.tab_snapshot) => .tab_snapshot,
         @intFromEnum(ServerTag.history_results) => .history_results,
+        @intFromEnum(ServerTag.workspace_snapshot) => .workspace_snapshot,
+        @intFromEnum(ServerTag.tab_created) => .tab_created,
+        @intFromEnum(ServerTag.tab_renamed) => .tab_renamed,
+        @intFromEnum(ServerTag.tab_closed) => .tab_closed,
+        @intFromEnum(ServerTag.tab_moved) => .tab_moved,
         else => error.UnknownMessage,
     };
 }
@@ -1070,6 +1491,8 @@ fn decodeFailureCode(value: u16) !FailureCode {
         @intFromEnum(FailureCode.permission_denied) => .permission_denied,
         @intFromEnum(FailureCode.resource_limit) => .resource_limit,
         @intFromEnum(FailureCode.internal) => .internal,
+        @intFromEnum(FailureCode.workspace_not_found) => .workspace_not_found,
+        @intFromEnum(FailureCode.tab_not_found) => .tab_not_found,
         else => error.UnknownFailureCode,
     };
 }
@@ -1166,12 +1589,15 @@ test "fixed client messages round trip" {
 
 test "multi-pane client messages round trip" {
     var buffer: [512]u8 = undefined;
-    const location: PaneLocation = .{ .workspace = @enumFromInt(7) };
+    const location: TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .tab_id = @enumFromInt(3),
+    };
 
-    const snapshot = (try decodeClient(try encodeRequestLocationSnapshot(&buffer, .{
+    const snapshot = (try decodeClient(try encodeRequestTabSnapshot(&buffer, .{
         .request_id = @enumFromInt(20),
         .location = location,
-    }))).request_location_snapshot;
+    }))).request_tab_snapshot;
     try std.testing.expect(std.meta.eql(location, snapshot.location));
 
     const created = (try decodeClient(try encodeCreatePane(&buffer, .{
@@ -1188,6 +1614,98 @@ test "multi-pane client messages round trip" {
         .pane_id = @enumFromInt(8),
     }))).close_pane;
     try std.testing.expectEqual(@as(PaneId, @enumFromInt(8)), closed.pane_id);
+}
+
+test "tab lifecycle client messages round trip" {
+    var buffer: [4096]u8 = undefined;
+    const workspace: WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
+    const location: TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
+
+    const requested = (try decodeClient(try encodeRequestWorkspaceSnapshot(&buffer, .{
+        .request_id = @enumFromInt(40),
+        .workspace = workspace,
+    }))).request_workspace_snapshot;
+    try std.testing.expect(std.meta.eql(workspace, requested.workspace));
+
+    const created = (try decodeClient(try encodeCreateTab(&buffer, .{
+        .request_id = @enumFromInt(41),
+        .workspace = workspace,
+        .label = "logs",
+        .size = .{ .cols = 80, .rows = 24 },
+        .launch = .{ .cwd = "/work", .arguments = &.{"/bin/sh"} },
+    }))).create_tab;
+    try std.testing.expectEqualStrings("logs", created.label);
+    try std.testing.expectEqualStrings("/work", created.launch.cwd);
+
+    const renamed = (try decodeClient(try encodeRenameTab(&buffer, .{
+        .request_id = @enumFromInt(42),
+        .location = location,
+        .label = "server",
+    }))).rename_tab;
+    try std.testing.expectEqualStrings("server", renamed.label);
+
+    const closed = (try decodeClient(try encodeCloseTab(&buffer, .{
+        .request_id = @enumFromInt(43),
+        .location = location,
+    }))).close_tab;
+    try std.testing.expectEqualDeep(location, closed.location);
+
+    const moved = (try decodeClient(try encodeMoveTab(&buffer, .{
+        .request_id = @enumFromInt(44),
+        .location = location,
+        .direction = .previous,
+    }))).move_tab;
+    try std.testing.expectEqual(TabMoveDirection.previous, moved.direction);
+}
+
+test "tab lifecycle server messages round trip" {
+    var buffer: [4096]u8 = undefined;
+    const workspace: WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
+    const location: TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
+    const descriptors = [_]TabDescriptor{
+        .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "main" },
+        .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
+    };
+
+    const snapshot = (try decodeServer(try encodeWorkspaceSnapshot(&buffer, .{
+        .request_id = @enumFromInt(50),
+        .workspace = workspace,
+        .tabs = &descriptors,
+    }))).workspace_snapshot;
+    var tabs = snapshot.tabs();
+    try std.testing.expectEqualDeep(descriptors[0], tabs.next().?);
+    try std.testing.expectEqualDeep(descriptors[1], tabs.next().?);
+    try std.testing.expect(tabs.next() == null);
+
+    const created = (try decodeServer(try encodeTabCreated(&buffer, .{
+        .request_id = @enumFromInt(51),
+        .location = location,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(9),
+    }))).tab_created;
+    try std.testing.expectEqualStrings("logs", created.label);
+
+    const renamed = (try decodeServer(try encodeTabRenamed(&buffer, .{
+        .request_id = @enumFromInt(52),
+        .location = location,
+        .label = "server",
+    }))).tab_renamed;
+    try std.testing.expectEqualStrings("server", renamed.label);
+
+    const closed = (try decodeServer(try encodeTabClosed(&buffer, .{
+        .request_id = @enumFromInt(53),
+        .location = location,
+        .workspace_closed = false,
+    }))).tab_closed;
+    try std.testing.expect(!closed.workspace_closed);
+
+    const moved = (try decodeServer(try encodeTabMoved(&buffer, .{
+        .request_id = @enumFromInt(54),
+        .location = location,
+        .position = 0,
+    }))).tab_moved;
+    try std.testing.expectEqual(@as(u16, 0), moved.position);
 }
 
 test "history queries round trip with scopes" {
@@ -1219,22 +1737,32 @@ test "fixed server messages round trip" {
     const opened = (try decodeServer(try encodePaneOpened(&buffer, .{
         .request_id = @enumFromInt(5),
         .pane_id = @enumFromInt(12),
-        .location = .{ .workspace = @enumFromInt(2) },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(2) },
+            .tab_id = @enumFromInt(4),
+        },
         .created = true,
     }))).pane_opened;
     try std.testing.expect(opened.created);
     try std.testing.expectEqual(@as(PaneId, @enumFromInt(12)), opened.pane_id);
-    try std.testing.expectEqual(@as(WorkspaceId, @enumFromInt(2)), opened.location.workspace);
+    try std.testing.expectEqual(
+        @as(WorkspaceId, @enumFromInt(2)),
+        opened.location.workspace.workspace,
+    );
+    try std.testing.expectEqual(@as(TabId, @enumFromInt(4)), opened.location.tab_id);
 
     const worktree_opened = (try decodeServer(try encodePaneOpened(&buffer, .{
         .request_id = @enumFromInt(6),
         .pane_id = @enumFromInt(13),
-        .location = .{ .worktree = @enumFromInt(3) },
+        .location = .{
+            .workspace = .{ .worktree = @enumFromInt(3) },
+            .tab_id = @enumFromInt(5),
+        },
         .created = false,
     }))).pane_opened;
     try std.testing.expectEqual(
         @as(WorktreeId, @enumFromInt(3)),
-        worktree_opened.location.worktree,
+        worktree_opened.location.workspace.worktree,
     );
 
     const exited = (try decodeServer(try encodePaneExited(&buffer, .{
@@ -1255,17 +1783,20 @@ test "fixed server messages round trip" {
     try std.testing.expect((try decodeServer(try encodeRuntimeStopping(&buffer))) == .runtime_stopping);
 }
 
-test "location snapshots preserve ordered pane descriptors" {
+test "tab snapshots preserve ordered pane descriptors" {
     const panes = [_]PaneDescriptor{
         .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
         .{ .pane_id = @enumFromInt(9), .lifecycle = .exited },
     };
     var buffer: [128]u8 = undefined;
-    const snapshot = (try decodeServer(try encodeLocationSnapshot(&buffer, .{
+    const snapshot = (try decodeServer(try encodeTabSnapshot(&buffer, .{
         .request_id = @enumFromInt(4),
-        .location = .{ .worktree = @enumFromInt(2) },
+        .location = .{
+            .workspace = .{ .worktree = @enumFromInt(2) },
+            .tab_id = @enumFromInt(6),
+        },
         .panes = &panes,
-    }))).location_snapshot;
+    }))).tab_snapshot;
 
     try std.testing.expectEqual(@as(u16, 2), snapshot.pane_count);
     var iterator = snapshot.panes();
@@ -1373,7 +1904,10 @@ test "truncated client and server messages are rejected" {
     const server_payload = try encodePaneOpened(&server_buffer, .{
         .request_id = @enumFromInt(1),
         .pane_id = @enumFromInt(2),
-        .location = .{ .workspace = @enumFromInt(1) },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
         .created = true,
     });
     for (0..server_payload.len) |length| {

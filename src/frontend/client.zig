@@ -9,6 +9,7 @@ const multiplexer = @import("multiplexer.zig");
 const pace = @import("pace.zig");
 const platform = @import("platform.zig");
 const term = @import("term.zig");
+const tabs_mod = @import("tabs.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -20,7 +21,7 @@ const input_chunk_size = 4096;
 const max_bindings = 256;
 const max_binding_keys = 4;
 const held_binding_bytes = 128;
-const default_binding_count = 9;
+const default_binding_count = 25;
 
 pub const Action = enum {
     split_horizontal,
@@ -31,6 +32,22 @@ pub const Action = enum {
     focus_down,
     toggle_sidebar,
     close_pane,
+    new_tab,
+    next_tab,
+    previous_tab,
+    select_tab_1,
+    select_tab_2,
+    select_tab_3,
+    select_tab_4,
+    select_tab_5,
+    select_tab_6,
+    select_tab_7,
+    select_tab_8,
+    select_tab_9,
+    rename_tab,
+    close_tab,
+    move_tab_previous,
+    move_tab_next,
     detach,
 
     pub fn parse(name: []const u8) !Action {
@@ -42,6 +59,22 @@ pub const Action = enum {
         if (std.mem.eql(u8, name, "focus-down")) return .focus_down;
         if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
         if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
+        if (std.mem.eql(u8, name, "new-tab")) return .new_tab;
+        if (std.mem.eql(u8, name, "next-tab")) return .next_tab;
+        if (std.mem.eql(u8, name, "previous-tab")) return .previous_tab;
+        if (std.mem.eql(u8, name, "rename-tab")) return .rename_tab;
+        if (std.mem.eql(u8, name, "close-tab")) return .close_tab;
+        if (std.mem.eql(u8, name, "move-tab-previous")) return .move_tab_previous;
+        if (std.mem.eql(u8, name, "move-tab-next")) return .move_tab_next;
+        if (std.mem.eql(u8, name, "select-tab-1")) return .select_tab_1;
+        if (std.mem.eql(u8, name, "select-tab-2")) return .select_tab_2;
+        if (std.mem.eql(u8, name, "select-tab-3")) return .select_tab_3;
+        if (std.mem.eql(u8, name, "select-tab-4")) return .select_tab_4;
+        if (std.mem.eql(u8, name, "select-tab-5")) return .select_tab_5;
+        if (std.mem.eql(u8, name, "select-tab-6")) return .select_tab_6;
+        if (std.mem.eql(u8, name, "select-tab-7")) return .select_tab_7;
+        if (std.mem.eql(u8, name, "select-tab-8")) return .select_tab_8;
+        if (std.mem.eql(u8, name, "select-tab-9")) return .select_tab_9;
         if (std.mem.eql(u8, name, "detach")) return .detach;
         return error.UnknownAction;
     }
@@ -126,6 +159,24 @@ const PendingClose = struct {
     pane_id: schema.PaneId,
 };
 
+const PendingTabOperation = union(enum) {
+    create: schema.RequestId,
+    rename: schema.RequestId,
+    close: schema.RequestId,
+    move: schema.RequestId,
+
+    fn requestId(operation: PendingTabOperation) schema.RequestId {
+        return switch (operation) {
+            inline else => |request_id| request_id,
+        };
+    }
+};
+
+const PendingTabSnapshot = struct {
+    request_id: schema.RequestId,
+    tab_id: schema.TabId,
+};
+
 const PendingAttachment = struct {
     request_id: schema.RequestId,
     pane_id: schema.PaneId,
@@ -197,8 +248,8 @@ pub fn run(
     defer screen.deinit();
     var view = try client_view.State.init(gpa, host_size.cols, host_size.rows);
     defer view.deinit();
-    var model = multiplexer.Model.init(gpa);
-    defer model.deinit();
+    var tabs = tabs_mod.Model.init(gpa);
+    defer tabs.deinit();
 
     var watcher = try platform.ResizeWatcher.init(&tty);
     defer watcher.deinit();
@@ -239,9 +290,11 @@ pub fn run(
     var input_timeout_pending = false;
     var binding_timeout_pending = false;
     var next_request_id: u64 = 2;
-    var snapshot_request_id: ?schema.RequestId = null;
+    var workspace_snapshot_request_id: ?schema.RequestId = null;
+    var tab_snapshot: ?PendingTabSnapshot = null;
     var pending_split: ?PendingSplit = null;
     var pending_close: ?PendingClose = null;
+    var pending_tab_operation: ?PendingTabOperation = null;
     var pending_attachments: PendingAttachments = .{};
     var draw_pending = false;
     var pending_updates: usize = 0;
@@ -256,7 +309,7 @@ pub fn run(
         .input => |result| {
             const chunk = try result;
             if (chunk.len == 0) return 0;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, &view, options, &next_request_id, &pending_split, &pending_close);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.feed(chunk.slice(), monotonic(io), &handler) == .stop)
                 return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
@@ -266,7 +319,7 @@ pub fn run(
         .input_timeout => |result| {
             try result;
             input_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, &view, options, &next_request_id, &pending_split, &pending_close);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.expireInput(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
@@ -274,7 +327,7 @@ pub fn run(
         .binding_timeout => |result| {
             try result;
             binding_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, &view, options, &next_request_id, &pending_split, &pending_close);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.expireBinding(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
@@ -284,7 +337,8 @@ pub fn run(
             host_size = terminalSize(&tty);
             try screen.resize(host_size.cols, host_size.rows);
             try view.resize(host_size.cols, host_size.rows);
-            try resizeAttached(io, connection, send_buffer, &model, view.workbench());
+            if (tabs.active()) |active|
+                try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
             try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try select.concurrent(.resized, waitResize, .{ io, &watcher });
         },
@@ -299,8 +353,8 @@ pub fn run(
             }
             switch (message) {
                 .pane_opened => |opened| {
-                    if (opened.request_id == initial_request_id and model.pane_count == 0) {
-                        try model.addRoot(
+                    if (opened.request_id == initial_request_id and tabs.count == 0) {
+                        try tabs.bootstrap(
                             opened.pane_id,
                             opened.location,
                             rectSize(view.workbench()) orelse return error.TerminalTooSmall,
@@ -310,10 +364,16 @@ pub fn run(
                             try select.concurrent(.input, readInput, .{ io, input_file });
                             input_started = true;
                         }
-                        const request_id = try nextRequestId(&next_request_id);
-                        snapshot_request_id = request_id;
-                        const request = try schema.encodeRequestLocationSnapshot(send_buffer, .{
-                            .request_id = request_id,
+                        const workspace_request_id = try nextRequestId(&next_request_id);
+                        workspace_snapshot_request_id = workspace_request_id;
+                        try connection.send(io, try schema.encodeRequestWorkspaceSnapshot(send_buffer, .{
+                            .request_id = workspace_request_id,
+                            .workspace = opened.location.workspace,
+                        }));
+                        const tab_request_id = try nextRequestId(&next_request_id);
+                        tab_snapshot = .{ .request_id = tab_request_id, .tab_id = opened.location.tab_id };
+                        const request = try schema.encodeRequestTabSnapshot(send_buffer, .{
+                            .request_id = tab_request_id,
                             .location = opened.location,
                         });
                         try connection.send(io, request);
@@ -321,6 +381,9 @@ pub fn run(
                         pending_split.?.request_id == opened.request_id)
                     {
                         const split = pending_split.?;
+                        const tab = tabs.tabForPane(split.target_pane) orelse
+                            return error.UnexpectedPane;
+                        const model = &tab.model;
                         if (model.find(split.target_pane) != null) {
                             try model.split(split.target_pane, opened.pane_id, opened.location, split.axis, view.workbench());
                         } else {
@@ -329,28 +392,26 @@ pub fn run(
                         }
                         view.invalidate();
                         pending_split = null;
-                        try resizeAttached(io, connection, send_buffer, &model, view.workbench());
+                        try resizeAttached(io, connection, send_buffer, model, view.workbench());
                     } else if (pending_attachments.take(opened.request_id)) |expected| {
                         if (expected != opened.pane_id) return error.UnexpectedPane;
-                        try model.markAttached(opened.pane_id);
+                        const pane = tabs.findPane(opened.pane_id) orelse return error.UnexpectedPane;
+                        pane.attached = true;
                     } else {
                         return error.UnexpectedRequest;
                     }
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                 },
-                .location_snapshot => |snapshot| {
-                    if (snapshot_request_id == null or
-                        snapshot.request_id != snapshot_request_id.?)
-                        return error.UnexpectedLocationSnapshot;
-                    snapshot_request_id = null;
-                    var panes = snapshot.panes();
-                    while (panes.next()) |descriptor| {
-                        if (model.find(descriptor.pane_id) == null) {
-                            try model.addDiscovered(descriptor.pane_id, snapshot.location, view.workbench());
-                        }
-                    }
+                .tab_snapshot => |snapshot| {
+                    const pending = tab_snapshot orelse return error.UnexpectedTabSnapshot;
+                    if (snapshot.request_id != pending.request_id or
+                        snapshot.location.tab_id != pending.tab_id)
+                        return error.UnexpectedTabSnapshot;
+                    tab_snapshot = null;
+                    const tab = try tabs.reconcileTab(snapshot, view.workbench());
+                    const model = &tab.model;
                     view.invalidate();
-                    try resizeAttached(io, connection, send_buffer, &model, view.workbench());
+                    try resizeAttached(io, connection, send_buffer, model, view.workbench());
                     for (&model.panes) |*slot| {
                         const pane = if (slot.*) |*value| value else continue;
                         if (pane.attached) continue;
@@ -371,36 +432,109 @@ pub fn run(
                     }
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                 },
+                .workspace_snapshot => |snapshot| {
+                    if (workspace_snapshot_request_id == null or
+                        snapshot.request_id != workspace_snapshot_request_id.?)
+                        return error.UnexpectedWorkspaceSnapshot;
+                    workspace_snapshot_request_id = null;
+                    try tabs.reconcileWorkspace(snapshot);
+                    view.invalidate();
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .tab_created => |created| {
+                    const operation = pending_tab_operation orelse return error.UnexpectedTabCreated;
+                    if (operation != .create or operation.requestId() != created.request_id)
+                        return error.UnexpectedTabCreated;
+                    if (tabs.active()) |current| {
+                        var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+                        try handler.detachTab(current);
+                    }
+                    pending_tab_operation = null;
+                    _ = try tabs.addCreated(
+                        created,
+                        rectSize(view.workbench()) orelse return error.TerminalTooSmall,
+                    );
+                    view.invalidate();
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .tab_renamed => |renamed| {
+                    const operation = pending_tab_operation orelse return error.UnexpectedTabRenamed;
+                    if (operation != .rename or operation.requestId() != renamed.request_id)
+                        return error.UnexpectedTabRenamed;
+                    pending_tab_operation = null;
+                    if (!tabs.rename(renamed.location.tab_id, renamed.label))
+                        return error.UnexpectedTab;
+                    view.invalidate();
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .tab_closed => |closed| {
+                    const operation = pending_tab_operation orelse
+                        return error.UnexpectedTabClosed;
+                    if (operation != .close or operation.requestId() != closed.request_id)
+                        return error.UnexpectedTabClosed;
+                    pending_tab_operation = null;
+                    const was_active = tabs.activeConst() != null and
+                        tabs.activeConst().?.location.tab_id == closed.location.tab_id;
+                    if (!tabs.remove(closed.location.tab_id)) return error.UnexpectedTab;
+                    if (closed.workspace_closed or tabs.count == 0) return 0;
+                    if (was_active) {
+                        const active = tabs.active().?;
+                        const request_id = try nextRequestId(&next_request_id);
+                        tab_snapshot = .{ .request_id = request_id, .tab_id = active.location.tab_id };
+                        try connection.send(io, try schema.encodeRequestTabSnapshot(send_buffer, .{
+                            .request_id = request_id,
+                            .location = active.location,
+                        }));
+                    }
+                    view.invalidate();
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .tab_moved => |moved| {
+                    const operation = pending_tab_operation orelse return error.UnexpectedTabMoved;
+                    if (operation != .move or operation.requestId() != moved.request_id)
+                        return error.UnexpectedTabMoved;
+                    pending_tab_operation = null;
+                    _ = tabs.move(moved.location.tab_id, moved.position);
+                    view.invalidate();
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
                 .pane_frame => |frame| {
-                    const pane = model.find(frame.pane_id) orelse return error.UnexpectedPane;
-                    if (frame.base_frame_id != 0 and
-                        frame.base_frame_id != pane.applied_frame_id)
-                    {
-                        const request = try schema.encodeRequestSnapshot(send_buffer, .{
-                            .pane_id = frame.pane_id,
-                            .known_frame_id = pane.applied_frame_id,
-                        });
-                        try connection.send(io, request);
-                    } else {
-                        const apply_started = diagnostics.now(io);
-                        const applied = try model.applyFrame(frame);
-                        if (comptime diagnostics.enabled) {
-                            metrics.frames += 1;
-                            metrics.frame_cells += applied.cells;
-                            metrics.frame_spans += applied.spans;
-                            if (frame.base_frame_id == 0) metrics.snapshots += 1;
-                            metrics.apply.observe(diagnostics.elapsed(apply_started, diagnostics.now(io)));
+                    const pane = tabs.findPane(frame.pane_id) orelse return error.UnexpectedPane;
+                    if (pane.attached) {
+                        if (frame.base_frame_id != 0 and
+                            frame.base_frame_id != pane.applied_frame_id)
+                        {
+                            const request = try schema.encodeRequestSnapshot(send_buffer, .{
+                                .pane_id = frame.pane_id,
+                                .known_frame_id = pane.applied_frame_id,
+                            });
+                            try connection.send(io, request);
+                        } else {
+                            const apply_started = diagnostics.now(io);
+                            const tab = tabs.tabForPane(frame.pane_id) orelse
+                                return error.UnexpectedPane;
+                            const applied = try tab.model.applyFrame(frame);
+                            if (comptime diagnostics.enabled) {
+                                metrics.frames += 1;
+                                metrics.frame_cells += applied.cells;
+                                metrics.frame_spans += applied.spans;
+                                if (frame.base_frame_id == 0) metrics.snapshots += 1;
+                                metrics.apply.observe(diagnostics.elapsed(apply_started, diagnostics.now(io)));
+                            }
+                            try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                         }
-                        try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                     }
                 },
                 .pane_exited => |exited| {
-                    if (!model.removePane(exited.pane_id)) return error.UnexpectedPane;
+                    const tab = tabs.tabForPane(exited.pane_id);
+                    if (tab) |value| _ = value.model.removePane(exited.pane_id);
                     view.invalidate();
                     if (pending_close != null and pending_close.?.pane_id == exited.pane_id)
                         pending_close = null;
-                    if (model.pane_count == 0) return exitCode(exited);
-                    try resizeAttached(io, connection, send_buffer, &model, view.workbench());
+                    if (tabs.active()) |active| {
+                        if (active.model.pane_count != 0)
+                            try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
+                    }
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                 },
                 .request_failed => |failure| {
@@ -408,15 +542,34 @@ pub fn run(
                         pending_split.?.request_id == failure.request_id)
                     {
                         pending_split = null;
-                        try resizeAttached(io, connection, send_buffer, &model, view.workbench());
+                        if (tabs.active()) |active|
+                            try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
                     } else if (pending_close != null and
                         pending_close.?.request_id == failure.request_id)
                     {
                         pending_close = null;
                     } else if (pending_attachments.take(failure.request_id)) |pane_id| {
-                        _ = model.removePane(pane_id);
+                        if (tabs.tabForPane(pane_id)) |tab| _ = tab.model.removePane(pane_id);
                         view.invalidate();
-                        try resizeAttached(io, connection, send_buffer, &model, view.workbench());
+                        if (tabs.active()) |active|
+                            try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
+                    } else if (pending_tab_operation != null and
+                        pending_tab_operation.?.requestId() == failure.request_id)
+                    {
+                        const operation = pending_tab_operation.?;
+                        pending_tab_operation = null;
+                        if (operation == .close) {
+                            const active = tabs.active().?;
+                            const request_id = try nextRequestId(&next_request_id);
+                            tab_snapshot = .{
+                                .request_id = request_id,
+                                .tab_id = active.location.tab_id,
+                            };
+                            try connection.send(io, try schema.encodeRequestTabSnapshot(send_buffer, .{
+                                .request_id = request_id,
+                                .location = active.location,
+                            }));
+                        }
                     } else {
                         std.debug.print("telar runtime: {s}\n", .{failure.message});
                         return error.RuntimeRequestFailed;
@@ -434,7 +587,8 @@ pub fn run(
             if (comptime diagnostics.enabled)
                 metrics.draw_lateness.observe(monotonic(io) -| draw_due_ns);
             if (pending_updates != 0) {
-                const presented_ns = try presentModel(io, &screen, writer, connection, send_buffer, &metrics, &model, &view);
+                const model = &tabs.active().?.model;
+                const presented_ns = try presentModel(io, &screen, writer, connection, send_buffer, &metrics, &tabs, model, &view);
                 observePresentation(&metrics, &last_presented_ns, presented_ns, true);
                 pacer.record(presented_ns, draw_due_ns, pending_updates);
                 pending_updates = 0;
@@ -451,8 +605,20 @@ pub fn run(
                 continue;
             };
             if (telemetry_write_pending) continue;
-            const focused = model.layout.focused() orelse .invalid;
-            const line = formatClientTelemetry(&telemetry_buffer, io, &metrics, &pacer, focused, model.pane_count, pending_updates, draw_pending) catch continue;
+            const active = tabs.active().?;
+            const focused = active.model.layout.focused() orelse .invalid;
+            const line = formatClientTelemetry(
+                &telemetry_buffer,
+                io,
+                &metrics,
+                &pacer,
+                active.location.tab_id,
+                tabs.count,
+                focused,
+                active.model.pane_count,
+                pending_updates,
+                draw_pending,
+            ) catch continue;
             telemetry_write_pending = true;
             select.concurrent(.telemetry_written, writeDiagnostics, .{
                 io,
@@ -481,12 +647,14 @@ const InputHandler = struct {
     connection: *core.transport.SocketChannel,
     send_buffer: []u8,
     metrics: *ClientMetrics,
-    model: *multiplexer.Model,
+    tabs: *tabs_mod.Model,
     view: *client_view.State,
     options: Options,
     next_request_id: *u64,
     pending_split: *?PendingSplit,
     pending_close: *?PendingClose,
+    pending_tab_operation: *?PendingTabOperation,
+    pending_tab_snapshot: *?PendingTabSnapshot,
     redraw: bool = false,
 
     fn init(
@@ -494,30 +662,81 @@ const InputHandler = struct {
         connection: *core.transport.SocketChannel,
         send_buffer: []u8,
         metrics: *ClientMetrics,
-        model: *multiplexer.Model,
+        tabs: *tabs_mod.Model,
         view: *client_view.State,
         options: Options,
         next_request_id: *u64,
         pending_split: *?PendingSplit,
         pending_close: *?PendingClose,
+        pending_tab_operation: *?PendingTabOperation,
+        pending_tab_snapshot: *?PendingTabSnapshot,
     ) InputHandler {
         return .{
             .io = io,
             .connection = connection,
             .send_buffer = send_buffer,
             .metrics = metrics,
-            .model = model,
+            .tabs = tabs,
             .view = view,
             .options = options,
             .next_request_id = next_request_id,
             .pending_split = pending_split,
             .pending_close = pending_close,
+            .pending_tab_operation = pending_tab_operation,
+            .pending_tab_snapshot = pending_tab_snapshot,
         };
+    }
+
+    fn activeModel(handler: *InputHandler) *multiplexer.Model {
+        return &handler.tabs.active().?.model;
+    }
+
+    fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
+        for (&tab.model.panes) |*slot| {
+            const pane = if (slot.*) |*item| item else continue;
+            if (!pane.attached) continue;
+            const payload = try schema.encodeDetachPane(handler.send_buffer, .{
+                .pane_id = pane.id,
+            });
+            try handler.connection.send(handler.io, payload);
+        }
+        tabs_mod.Model.detachAll(tab);
+    }
+
+    fn selectTab(handler: *InputHandler, tab_id: schema.TabId) !void {
+        if (handler.pending_tab_snapshot.* != null) return;
+        const current = handler.tabs.active() orelse return;
+        if (current.location.tab_id == tab_id) return;
+        if (handler.tabs.indexOf(tab_id) == null) return;
+        try handler.detachTab(current);
+        std.debug.assert(handler.tabs.select(tab_id));
+        const active = handler.tabs.active().?;
+        active.model.composition_invalidated = true;
+        const request_id = try nextRequestId(handler.next_request_id);
+        const payload = try schema.encodeRequestTabSnapshot(handler.send_buffer, .{
+            .request_id = request_id,
+            .location = active.location,
+        });
+        try handler.connection.send(handler.io, payload);
+        handler.pending_tab_snapshot.* = .{
+            .request_id = request_id,
+            .tab_id = tab_id,
+        };
+        handler.view.invalidate();
+        handler.redraw = true;
     }
 
     pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
         if (bytes.len == 0) return;
-        const pane = handler.model.focusedPane() orelse return;
+        if (handler.view.renamedTab() != null) {
+            switch (handler.view.handleRenameInput(bytes)) {
+                .editing, .cancelled => {},
+                .submitted => |label| try handler.submitTabRename(label),
+            }
+            handler.redraw = true;
+            return;
+        }
+        const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         const started = diagnostics.now(handler.io);
         const payload = try schema.encodePaneInput(handler.send_buffer, .{
@@ -534,13 +753,15 @@ const InputHandler = struct {
 
     pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         if (comptime diagnostics.enabled) handler.metrics.mouse_events += 1;
-        const interaction = handler.view.handleMouse(handler.model, event);
+        const model = handler.activeModel();
+        const interaction = handler.view.handleMouse(handler.tabs, model, event);
+        if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
         if (interaction.layout_changed) {
             try resizeAttached(
                 handler.io,
                 handler.connection,
                 handler.send_buffer,
-                handler.model,
+                handler.activeModel(),
                 handler.view.workbench(),
             );
         }
@@ -548,6 +769,7 @@ const InputHandler = struct {
     }
 
     pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
+        if (handler.view.renamedTab() != null) return .continue_routing;
         switch (value) {
             .split_horizontal => try handler.beginSplit(.horizontal),
             .split_vertical => try handler.beginSplit(.vertical),
@@ -561,20 +783,35 @@ const InputHandler = struct {
                     handler.io,
                     handler.connection,
                     handler.send_buffer,
-                    handler.model,
+                    handler.activeModel(),
                     handler.view.workbench(),
                 );
                 handler.redraw = true;
             },
             .close_pane => try handler.closeFocused(),
+            .new_tab => try handler.createTab(),
+            .next_tab => try handler.selectTabOffset(1),
+            .previous_tab => try handler.selectTabOffset(-1),
+            .select_tab_1 => try handler.selectTabPosition(0),
+            .select_tab_2 => try handler.selectTabPosition(1),
+            .select_tab_3 => try handler.selectTabPosition(2),
+            .select_tab_4 => try handler.selectTabPosition(3),
+            .select_tab_5 => try handler.selectTabPosition(4),
+            .select_tab_6 => try handler.selectTabPosition(5),
+            .select_tab_7 => try handler.selectTabPosition(6),
+            .select_tab_8 => try handler.selectTabPosition(7),
+            .select_tab_9 => try handler.selectTabPosition(8),
+            .rename_tab => if (handler.tabs.active()) |tab| {
+                handler.view.beginTabRename(tab.location.tab_id, tab.labelSlice());
+                handler.redraw = true;
+            },
+            .close_tab => try handler.closeTab(),
+            .move_tab_previous => try handler.moveTab(.previous),
+            .move_tab_next => try handler.moveTab(.next),
             .detach => {
-                for (&handler.model.panes) |*slot| {
-                    const pane = if (slot.*) |*item| item else continue;
-                    if (!pane.attached) continue;
-                    const payload = try schema.encodeDetachPane(handler.send_buffer, .{
-                        .pane_id = pane.id,
-                    });
-                    try handler.connection.send(handler.io, payload);
+                for (handler.tabs.items[0..handler.tabs.count]) |*slot| {
+                    const tab = if (slot.*) |*item| item else continue;
+                    try handler.detachTab(tab);
                 }
                 return .stop;
             },
@@ -584,10 +821,11 @@ const InputHandler = struct {
 
     fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
         if (handler.pending_split.* != null or handler.pending_close.* != null) return;
-        const pane = handler.model.focusedPane() orelse return;
+        const model = handler.activeModel();
+        const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
-        const location = handler.model.location orelse return;
-        const prospective = handler.model.layout.prospectiveSplit(
+        const location = model.location orelse return;
+        const prospective = model.layout.prospectiveSplit(
             pane.id,
             axis,
             handler.view.workbench(),
@@ -623,7 +861,7 @@ const InputHandler = struct {
     }
 
     fn restoreFocusedSize(handler: *InputHandler, pane_id: schema.PaneId) !void {
-        const size = handler.model.contentSize(pane_id, handler.view.workbench()) orelse return;
+        const size = handler.activeModel().contentSize(pane_id, handler.view.workbench()) orelse return;
         const payload = try schema.encodePaneResize(handler.send_buffer, .{
             .pane_id = pane_id,
             .size = size,
@@ -632,7 +870,7 @@ const InputHandler = struct {
     }
 
     fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) void {
-        if (handler.model.focusDirection(direction, handler.view.workbench()) != null) {
+        if (handler.activeModel().focusDirection(direction, handler.view.workbench()) != null) {
             handler.view.invalidate();
             handler.redraw = true;
         }
@@ -640,7 +878,7 @@ const InputHandler = struct {
 
     fn closeFocused(handler: *InputHandler) !void {
         if (handler.pending_close.* != null or handler.pending_split.* != null) return;
-        const pane = handler.model.focusedPane() orelse return;
+        const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         const request_id = try nextRequestId(handler.next_request_id);
         const payload = try schema.encodeClosePane(handler.send_buffer, .{
@@ -649,6 +887,74 @@ const InputHandler = struct {
         });
         try handler.connection.send(handler.io, payload);
         handler.pending_close.* = .{ .request_id = request_id, .pane_id = pane.id };
+    }
+
+    fn createTab(handler: *InputHandler) !void {
+        if (handler.pending_tab_operation.* != null) return;
+        const workspace = handler.tabs.workspace orelse return;
+        const request_id = try nextRequestId(handler.next_request_id);
+        const payload = try schema.encodeCreateTab(handler.send_buffer, .{
+            .request_id = request_id,
+            .workspace = workspace,
+            .size = rectSize(handler.view.workbench()) orelse return,
+            .launch = .{ .cwd = handler.options.cwd, .arguments = handler.options.arguments },
+        });
+        try handler.connection.send(handler.io, payload);
+        handler.pending_tab_operation.* = .{ .create = request_id };
+    }
+
+    fn selectTabOffset(handler: *InputHandler, offset: isize) !void {
+        if (handler.tabs.count < 2) return;
+        const count: isize = @intCast(handler.tabs.count);
+        const current: isize = @intCast(handler.tabs.active_index);
+        const position: usize = @intCast(@mod(current + offset, count));
+        try handler.selectTab(handler.tabs.items[position].?.location.tab_id);
+    }
+
+    fn selectTabPosition(handler: *InputHandler, position: usize) !void {
+        if (position >= handler.tabs.count) return;
+        try handler.selectTab(handler.tabs.items[position].?.location.tab_id);
+    }
+
+    fn closeTab(handler: *InputHandler) !void {
+        if (handler.pending_tab_operation.* != null) return;
+        const tab = handler.tabs.active() orelse return;
+        const request_id = try nextRequestId(handler.next_request_id);
+        try handler.detachTab(tab);
+        const payload = try schema.encodeCloseTab(handler.send_buffer, .{
+            .request_id = request_id,
+            .location = tab.location,
+        });
+        try handler.connection.send(handler.io, payload);
+        handler.pending_tab_operation.* = .{ .close = request_id };
+    }
+
+    fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
+        if (handler.pending_tab_operation.* != null) return;
+        const tab = handler.tabs.active() orelse return;
+        const request_id = try nextRequestId(handler.next_request_id);
+        const payload = try schema.encodeMoveTab(handler.send_buffer, .{
+            .request_id = request_id,
+            .location = tab.location,
+            .direction = direction,
+        });
+        try handler.connection.send(handler.io, payload);
+        handler.pending_tab_operation.* = .{ .move = request_id };
+    }
+
+    fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
+        if (handler.pending_tab_operation.* != null) return;
+        const tab_id = handler.view.renamedTab() orelse return;
+        const tab = handler.tabs.find(tab_id) orelse return;
+        const request_id = try nextRequestId(handler.next_request_id);
+        const payload = try schema.encodeRenameTab(handler.send_buffer, .{
+            .request_id = request_id,
+            .location = tab.location,
+            .label = label,
+        });
+        try handler.connection.send(handler.io, payload);
+        handler.pending_tab_operation.* = .{ .rename = request_id };
+        handler.view.finishTabRename();
     }
 };
 
@@ -663,6 +969,22 @@ fn defaultBindings() ![default_binding_count]ConfiguredBinding {
         try .parse(&.{ "ctrl+b", "s" }, .toggle_sidebar),
         try .parse(&.{ "ctrl+b", "x" }, .close_pane),
         try .parse(&.{ "ctrl+b", "d" }, .detach),
+        try .parse(&.{ "ctrl+b", "c" }, .new_tab),
+        try .parse(&.{ "ctrl+b", "n" }, .next_tab),
+        try .parse(&.{ "ctrl+b", "p" }, .previous_tab),
+        try .parse(&.{ "ctrl+b", "1" }, .select_tab_1),
+        try .parse(&.{ "ctrl+b", "2" }, .select_tab_2),
+        try .parse(&.{ "ctrl+b", "3" }, .select_tab_3),
+        try .parse(&.{ "ctrl+b", "4" }, .select_tab_4),
+        try .parse(&.{ "ctrl+b", "5" }, .select_tab_5),
+        try .parse(&.{ "ctrl+b", "6" }, .select_tab_6),
+        try .parse(&.{ "ctrl+b", "7" }, .select_tab_7),
+        try .parse(&.{ "ctrl+b", "8" }, .select_tab_8),
+        try .parse(&.{ "ctrl+b", "9" }, .select_tab_9),
+        try .parse(&.{ "ctrl+b", "T" }, .rename_tab),
+        try .parse(&.{ "ctrl+b", "X" }, .close_tab),
+        try .parse(&.{ "ctrl+b", "," }, .move_tab_previous),
+        try .parse(&.{ "ctrl+b", "." }, .move_tab_next),
     };
 }
 
@@ -756,12 +1078,13 @@ fn presentModel(
     connection: *core.transport.SocketChannel,
     send_buffer: []u8,
     metrics: *ClientMetrics,
+    tabs: *const tabs_mod.Model,
     model: *multiplexer.Model,
     view: *client_view.State,
 ) !u64 {
     const compose_started = diagnostics.now(io);
     const composed = try model.render(screen, view.workbench());
-    const chrome = try view.render(screen, model, composed.full);
+    const chrome = try view.render(screen, tabs, model, composed.full);
     if (comptime diagnostics.enabled) {
         metrics.composed_panes += composed.panes;
         metrics.composed_cells += composed.cells;
@@ -830,6 +1153,8 @@ fn formatClientTelemetry(
     io: Io,
     metrics: *const ClientMetrics,
     pacer: *const pace.Pacer,
+    active_tab: schema.TabId,
+    tab_count: usize,
     focused_pane: schema.PaneId,
     pane_count: usize,
     pending_updates: usize,
@@ -838,6 +1163,7 @@ fn formatClientTelemetry(
     const now_ns = diagnostics.now(io);
     var writer = Io.Writer.fixed(buffer);
     try writer.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"client\"," ++
+        "\"active_tab\":{d},\"tab_count\":{d}," ++
         "\"focused_pane\":{d},\"pane_count\":{d},\"pending_updates\":{d}," ++
         "\"draw_pending\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
         "\"server_messages\":{d},\"server_bytes\":{d}," ++
@@ -851,6 +1177,8 @@ fn formatClientTelemetry(
         "\"pacer_drawn\":{d},\"pacer_throttled\":{d},\"pacer_absorbed\":{d}", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
+        schema.id.raw(active_tab),
+        tab_count,
         schema.id.raw(focused_pane),
         pane_count,
         pending_updates,

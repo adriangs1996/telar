@@ -33,7 +33,7 @@ const DamageRow = struct {
 pub const Pane = struct {
     gpa: std.mem.Allocator,
     id: schema.PaneId,
-    location: schema.PaneLocation,
+    location: schema.TabLocation,
     buffer: ui.Buffer,
     damage_rows: []DamageRow,
     attached: bool,
@@ -44,7 +44,7 @@ pub const Pane = struct {
     fn init(
         gpa: std.mem.Allocator,
         pane_id: schema.PaneId,
-        location: schema.PaneLocation,
+        location: schema.TabLocation,
         size: schema.TerminalSize,
         attached: bool,
     ) !Pane {
@@ -100,7 +100,7 @@ pub const Model = struct {
     layout: layout_mod.Layout = .{},
     panes: [max_panes]?Pane = [_]?Pane{null} ** max_panes,
     pane_count: usize = 0,
-    location: ?schema.PaneLocation = null,
+    location: ?schema.TabLocation = null,
     composed: ?ui.Buffer = null,
     composition_area: ui.Rect = .{},
     composition_invalidated: bool = true,
@@ -135,7 +135,7 @@ pub const Model = struct {
     pub fn addRoot(
         model: *Model,
         pane_id: schema.PaneId,
-        location: schema.PaneLocation,
+        location: schema.TabLocation,
         size: schema.TerminalSize,
     ) !void {
         if (model.pane_count != 0) return error.ModelNotEmpty;
@@ -150,7 +150,7 @@ pub const Model = struct {
         model: *Model,
         existing_pane: schema.PaneId,
         new_pane: schema.PaneId,
-        location: schema.PaneLocation,
+        location: schema.TabLocation,
         axis: layout_mod.Axis,
         area: ui.Rect,
     ) !void {
@@ -169,7 +169,7 @@ pub const Model = struct {
     pub fn addDiscovered(
         model: *Model,
         pane_id: schema.PaneId,
-        location: schema.PaneLocation,
+        location: schema.TabLocation,
         area: ui.Rect,
     ) !void {
         if (model.find(pane_id) != null) return;
@@ -394,7 +394,7 @@ pub const Model = struct {
     fn insertPane(
         model: *Model,
         pane_id: schema.PaneId,
-        location: schema.PaneLocation,
+        location: schema.TabLocation,
         size: schema.TerminalSize,
         attached: bool,
     ) !void {
@@ -506,7 +506,10 @@ test "two pane buffers compose into their layout rectangles" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 20, .rows = 6 });
     try model.split(
         @enumFromInt(1),
@@ -534,7 +537,10 @@ test "one pane has no telar border" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 12, .rows = 3 });
     model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "x", 1, .{});
 
@@ -550,7 +556,10 @@ test "frame state and pending acknowledgements stay per pane" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 2, .rows = 1 });
     try model.split(
         @enumFromInt(1),
@@ -581,7 +590,10 @@ test "snapshot discovery does not imply a runtime attachment" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 40, .rows = 8 });
     try model.addDiscovered(
         @enumFromInt(2),
@@ -599,7 +611,10 @@ test "unchanged composition produces no terminal damage" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 8, .rows = 3 });
     var screen = try term.Screen.init(gpa, 8, 3);
     defer screen.deinit();
@@ -662,7 +677,10 @@ test "focus changes invalidate titles but stable focus stays incremental" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
-    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
     try model.split(
         @enumFromInt(1),
