@@ -21,7 +21,12 @@ const impl = switch (builtin.os.tag) {
     else => @import("platform/posix.zig"),
 };
 
-pub const Size = struct { cols: u16, rows: u16 };
+pub const Size = struct {
+    cols: u16,
+    rows: u16,
+    width_px: u16 = 0,
+    height_px: u16 = 0,
+};
 
 /// A terminal that has been put into the state a full screen application
 /// needs, and knows how to put it back.
@@ -49,6 +54,7 @@ pub const enter_sequence =
     "\x1b[?1002h" ++ // and drags
     "\x1b[?1003h" ++ // and plain movement
     "\x1b[?1006h" ++ // in the SGR encoding
+    "\x1b[?1016h" ++ // report SGR coordinates in pixels when supported
     "\x1b[?2004h" ++ // bracket pastes, so a newline in one is text not Enter
     "\x1b[2J"; // start from a blank screen
 
@@ -56,7 +62,7 @@ pub const enter_sequence =
 /// ends up with the modes it started with.
 pub const leave_sequence =
     "\x1b[?2004l" ++
-    "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l" ++
+    "\x1b[?1016l\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l" ++
     "\x1b[?25h" ++
     "\x1b[?1049l";
 

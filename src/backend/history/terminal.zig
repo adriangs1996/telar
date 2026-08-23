@@ -510,3 +510,34 @@ test "excludes an unchanged right prompt from the submitted command" {
 
     try std.testing.expectEqualStrings("echo ok", collected.bytes[0..collected.len]);
 }
+
+test "Kitty graphics commands do not enter shell history" {
+    const gpa = std.testing.allocator;
+    var terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 40, .rows = 8 });
+    defer terminal.deinit(gpa);
+    var stream = terminal.vtStream();
+    defer stream.deinit();
+    stream.nextSlice("$ ");
+
+    var tracker = try Tracker.init(gpa, "/work", &terminal);
+    defer tracker.deinit(&terminal);
+    var collected: Collected = .{};
+    _ = tracker.observeInput(
+        &terminal,
+        "echo safe\r",
+        true,
+        .{ .real_ms = 10, .awake_ns = 100 },
+        &collected,
+        Collected.collect,
+    );
+    const output = "echo safe\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\r\n";
+    stream.nextSlice(output);
+    try std.testing.expect(try tracker.captureSubmitted(&terminal));
+    tracker.shellExited(
+        .{ .real_ms = 20, .awake_ns = 500 },
+        0,
+        &collected,
+        Collected.collect,
+    );
+    try std.testing.expectEqualStrings("echo safe", collected.bytes[0..collected.len]);
+}

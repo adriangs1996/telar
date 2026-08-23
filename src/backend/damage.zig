@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema.v2;
+const schema = core.schema;
 
 pub const Diff = struct {
     span_count: usize = 0,

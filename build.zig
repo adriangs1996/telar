@@ -125,9 +125,18 @@ pub fn build(b: *std.Build) void {
     benchmarks.root_module.addImport("telar-core", bench_core);
     benchmarks.root_module.addImport("telar-backend", bench_backend);
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
+    benchmarks.root_module.addImport("ghostty-vt", ghostty_vt);
     const run_benchmarks = b.addRunArtifact(benchmarks);
     if (b.args) |args| run_benchmarks.addArgs(args);
     b.step("bench", "Run the interactive path benchmarks").dependOn(&run_benchmarks.step);
+
+    const verify_terminal_browser = b.addSystemCommand(&.{"python3"});
+    verify_terminal_browser.addFileArg(b.path("tools/verify_terminal_browser.py"));
+    if (b.args) |args| verify_terminal_browser.addArgs(args);
+    b.step(
+        "verify-terminal-browser",
+        "Build and exercise pinned terminal-browser inside Telar on Ghostty",
+    ).dependOn(&verify_terminal_browser.step);
 
     // ---------------------------------------------------------------------
     // The example
@@ -171,7 +180,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/core/endpoint.zig", .transport = true },
         .{ .path = "src/core/diagnostics.zig" },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
-        .{ .path = "src/core/schema_v1_test.zig", .schema = true },
+        .{ .path = "src/core/schema_test.zig", .schema = true },
         .{ .path = "src/frontend/ui.zig" },
         .{ .path = "src/frontend/term.zig", .libc = true },
         .{ .path = "src/frontend/frame.zig", .libc = true },

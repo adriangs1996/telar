@@ -26,6 +26,11 @@ Top notch sidebar, close to a real GUI like T3 Code (<https://github.com/pingdot
 Two processes. The split decides almost everything else, so get it right before
 you add anything that crosses it.
 
+Before changing lifecycle, IPC, PTY/VT/input, graphics, agents, persistence,
+history/proxy, Lua/plugins, or performance, read
+[`docs/engineering-invariants.md`](docs/engineering-invariants.md) and apply
+every rule relevant to the change.
+
 ### The runtime
 
 One long-lived process per machine. It owns everything that has to survive the
@@ -81,23 +86,28 @@ telar never parses escape sequences from a child. And the diff is the last step
 before bytes leave, so anything that wants to change what the user sees changes
 the buffer, never the output stream.
 
-### Two paths, two budgets
+### Three paths, three budgets
 
 telar sits between the terminal emulator and the pty, and between the agent and
-the network. Those are different paths and confusing them is the mistake this
-section exists to prevent.
+the network. Graphics add bulk media between applications and the host terminal.
+These paths have different budgets and never wait on one another.
 
 **The interactive path** carries a keystroke to the child and a byte of output
 to a glyph. It is measured in microseconds and it allocates nothing. A frame is
 capped at 60Hz by `pace`, and what does not fit gets folded rather than queued.
+
+**The media path** carries KGP payloads, decoded images, compression and image
+transfer. It is measured in frame deadlines. It may allocate within strict
+quotas, runs behind its own bounded queues, and never delays input or cell
+output. Repeated frames replace obsolete work rather than building a replay.
 
 **The observation path** carries what an agent did into history: which tool it
 called, what it asked the model, what came back. It is measured in "before the
 user searches for it". It may allocate, it may block, it may be slow. What it
 may never do is sit in the interactive path's way.
 
-The test is easy to apply. If you find yourself parsing JSON while forwarding a
-keystroke, you crossed the line. Move the work behind a queue and let the
+The test is easy to apply. Parsing JSON or decompressing a large image while
+forwarding a keystroke crosses a budget. Move the work to its queue and let the
 keystroke go.
 
 ### The proxy, as built

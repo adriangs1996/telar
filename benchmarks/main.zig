@@ -5,9 +5,10 @@ const builtin = @import("builtin");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
+const vt = @import("ghostty-vt");
 
 const Io = std.Io;
-const schema = core.schema.v2;
+const schema = core.schema;
 
 const cols: u16 = 154;
 const rows: u16 = 37;
@@ -117,6 +118,9 @@ const cases = [_]Case{
     .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
     .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
+    .{ .name = "backend.kitty.ingest_zlib_rgba_1920x1080", .work_per_op = 1920 * 1080, .work_unit = "pixels" },
+    .{ .name = "frontend.kitty.transmit_rgba_64x64", .work_per_op = 64 * 64, .work_unit = "pixels" },
+    .{ .name = "frontend.kitty.idle", .work_per_op = 1, .work_unit = "frames" },
 };
 
 const Measurement = struct {
@@ -826,6 +830,170 @@ fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize)
     return checksum;
 }
 
+const GraphicsContext = struct {
+    store: frontend.kitty.Store,
+    model: frontend.multiplexer.Model,
+    output: []u8,
+
+    fn init(gpa: std.mem.Allocator, output: []u8) !GraphicsContext {
+        var store = frontend.kitty.Store.init(gpa);
+        errdefer store.deinit();
+        var model = frontend.multiplexer.Model.init(gpa);
+        errdefer model.deinit();
+        const pane_id: schema.PaneId = @enumFromInt(1);
+        try model.addRoot(pane_id, .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        }, .{ .cols = cols, .rows = rows });
+        const metadata: core.graphics.Image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgba,
+            .width = 64,
+            .height = 64,
+            .byte_len = 64 * 64 * 4,
+        };
+        try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = metadata });
+        var pixels: [64 * 64 * 4]u8 = undefined;
+        for (&pixels, 0..) |*byte, index| byte.* = @truncate(index);
+        try store.applyChunk(.{
+            .pane_id = pane_id,
+            .revision = 1,
+            .key = metadata.key,
+            .offset = 0,
+            .bytes = &pixels,
+        });
+        try store.applyPlacement(.{
+            .pane_id = pane_id,
+            .revision = 1,
+            .placement = .{
+                .key = metadata.key,
+                .virtual_id = 1,
+                .placement_id = 1,
+                .x = 0,
+                .y = 0,
+            },
+        });
+        return .{ .store = store, .model = model, .output = output };
+    }
+
+    fn deinit(context: *GraphicsContext) void {
+        context.model.deinit();
+        context.store.deinit();
+    }
+
+    fn writer(context: *GraphicsContext) frontend.kitty.KittyGraphicsWriter {
+        return .{
+            .store = &context.store,
+            .model = &context.model,
+            .area = .{ .w = cols, .h = rows },
+            .cell_width = 10,
+            .cell_height = 20,
+        };
+    }
+};
+
+fn runGraphicsTransmission(context: *GraphicsContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        var images = context.store.images.iterator();
+        while (images.next()) |entry| entry.value_ptr.transmitted = false;
+        var placements = context.store.placements.iterator();
+        while (placements.next()) |entry| {
+            entry.value_ptr.emitted = false;
+            entry.value_ptr.dirty = true;
+        }
+        context.store.damage = true;
+        var output = Io.Writer.fixed(context.output);
+        var graphics_writer = context.writer();
+        checksum +%= try graphics_writer.write(&output);
+    }
+    return checksum;
+}
+
+fn runGraphicsIdle(context: *GraphicsContext, iterations: usize) !u64 {
+    context.store.damage = false;
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        var output = Io.Writer.fixed(context.output);
+        var graphics_writer = context.writer();
+        checksum +%= try graphics_writer.write(&output);
+    }
+    return checksum;
+}
+
+const KgpIngestContext = struct {
+    const width = 1920;
+    const height = 1080;
+    const raw_len = width * height * 4;
+    const prefix = "\x1b_Ga=t,f=32,o=z,s=1920,v=1080,t=d,i=7,q=2,C=1;";
+    const suffix = "\x1b\\";
+
+    terminal: vt.Terminal,
+    stream: vt.TerminalStream,
+    gpa: std.mem.Allocator,
+    command: []u8,
+
+    fn init(io: Io, gpa: std.mem.Allocator) !KgpIngestContext {
+        const raw = try gpa.alloc(u8, raw_len);
+        defer gpa.free(raw);
+        for (raw, 0..) |*byte, index| byte.* = @truncate(index % 251);
+
+        const compressed_buffer = try gpa.alloc(u8, raw_len + 1024);
+        defer gpa.free(compressed_buffer);
+        var output: Io.Writer = .fixed(compressed_buffer);
+        var compression_buffer: [std.compress.flate.max_window_len]u8 = undefined;
+        var compressor = try std.compress.flate.Compress.init(
+            &output,
+            &compression_buffer,
+            .zlib,
+            .fastest,
+        );
+        try compressor.writer.writeAll(raw);
+        try compressor.finish();
+        const compressed = output.buffered();
+
+        const encoded_len = std.base64.standard.Encoder.calcSize(compressed.len);
+        const command = try gpa.alloc(u8, prefix.len + encoded_len + suffix.len);
+        errdefer gpa.free(command);
+        @memcpy(command[0..prefix.len], prefix);
+        _ = std.base64.standard.Encoder.encode(
+            command[prefix.len..][0..encoded_len],
+            compressed,
+        );
+        @memcpy(command[prefix.len + encoded_len ..], suffix);
+
+        var terminal = try vt.Terminal.init(io, gpa, .{
+            .cols = cols,
+            .rows = rows,
+            .kitty_image_storage_limit = core.graphics.max_image_bytes_per_screen,
+            .kitty_image_loading_limits = .direct,
+        });
+        errdefer terminal.deinit(gpa);
+        const stream = vt.TerminalStream.init(.{
+            .allocator = gpa,
+            .handler = terminal.vtHandler(),
+        });
+        return .{ .terminal = terminal, .stream = stream, .gpa = gpa, .command = command };
+    }
+
+    fn deinit(context: *KgpIngestContext) void {
+        context.stream.deinit();
+        context.terminal.deinit(context.gpa);
+        context.gpa.free(context.command);
+    }
+};
+
+fn runKgpIngest(context: *KgpIngestContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        context.stream.nextSlice(context.command);
+        const image = context.terminal.screens.active.kitty_images.imageById(7) orelse
+            return error.KgpImageMissing;
+        checksum +%= image.generation + image.data.len();
+    }
+    return checksum;
+}
+
 fn execute(
     writer: *Io.Writer,
     io: Io,
@@ -960,6 +1128,7 @@ fn execute(
     }
 
     const incremental_case = cases[case_index];
+    case_index += 1;
     if (config.includes(incremental_case.name)) {
         var context = try IncrementalComposeContext.init(gpa, fixture);
         defer context.deinit();
@@ -970,6 +1139,43 @@ fn execute(
             try measure(io, config, &context, runIncrementalCompose),
         );
     }
+
+    var kgp_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(kgp_case.name)) {
+        var context = try KgpIngestContext.init(io, gpa);
+        defer context.deinit();
+        kgp_case.payload_bytes_per_op = context.command.len;
+        try writeResult(
+            writer,
+            config,
+            kgp_case,
+            try measure(io, config, &context, runKgpIngest),
+        );
+    }
+
+    var graphics_context = try GraphicsContext.init(gpa, fixture.terminal_output);
+    defer graphics_context.deinit();
+    var graphics_transmit_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(graphics_transmit_case.name)) {
+        var output = Io.Writer.fixed(fixture.terminal_output);
+        var graphics_writer = graphics_context.writer();
+        graphics_transmit_case.payload_bytes_per_op = try graphics_writer.write(&output);
+        try writeResult(
+            writer,
+            config,
+            graphics_transmit_case,
+            try measure(io, config, &graphics_context, runGraphicsTransmission),
+        );
+    }
+    const graphics_idle_case = cases[case_index];
+    if (config.includes(graphics_idle_case.name)) try writeResult(
+        writer,
+        config,
+        graphics_idle_case,
+        try measure(io, config, &graphics_context, runGraphicsIdle),
+    );
 }
 
 pub fn main(init: std.process.Init) !void {

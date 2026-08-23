@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-const schema = core.schema.v2;
+const schema = core.schema;
 const ui = core.ui;
 
 pub const max_panes = schema.max_panes_per_tab;

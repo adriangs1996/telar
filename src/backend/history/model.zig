@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 
-pub const schema = core.schema.v2;
+pub const schema = core.schema;
 
 pub const max_query_bytes = schema.max_history_query_bytes;
 pub const max_results = schema.max_history_results;

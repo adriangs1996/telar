@@ -55,6 +55,12 @@ pub const Screen = struct {
     /// and what a terminal's own input method composes against, so a field that
     /// paints a block instead is invisible to both. It also blinks for free.
     cursor: ?Position = null,
+    graphics: ?GraphicsEffect = null,
+
+    pub const GraphicsEffect = struct {
+        context: *anyopaque,
+        write: *const fn (*anyopaque, *Io.Writer) Io.Writer.Error!usize,
+    };
 
     pub const Position = struct { x: u16, y: u16 };
 
@@ -66,6 +72,7 @@ pub const Screen = struct {
         /// the terminal size, for incremental frames.
         scanned: usize = 0,
         bytes: usize = 0,
+        graphics_bytes: usize = 0,
     };
 
     pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Screen {
@@ -207,6 +214,10 @@ pub const Screen = struct {
             }
         }
 
+        if (s.graphics) |effect|
+            stats.graphics_bytes = try effect.write(effect.context, w);
+        s.graphics = null;
+
         // The cursor is placed after the diff, so it ends up where the caller
         // asked rather than wherever the last cell happened to be.
         if (s.cursor) |at| {
@@ -323,6 +334,7 @@ pub fn writeClipboard(w: *Io.Writer, payload: []const u8) (ClipboardError || Io.
 pub const Event = union(enum) {
     key: Key,
     mouse: Mouse,
+    terminal_response: TerminalResponse,
     /// Bracketed paste boundaries.
     ///
     /// Between these, the characters that arrive were pasted rather than
@@ -340,6 +352,14 @@ pub const Event = union(enum) {
     paste_end,
     /// Bytes that arrived but do not yet form a complete sequence.
     incomplete,
+
+    pub const TerminalResponse = union(enum) {
+        kitty_graphics: struct { image_id: u32, supported: bool },
+        window_pixels: struct { width: u32, height: u32 },
+        cell_pixels: struct { width: u32, height: u32 },
+        mouse_pixels: struct { supported: bool },
+        primary_device_attributes,
+    };
 
     pub const Key = struct {
         code: Code,
@@ -417,7 +437,10 @@ pub const Event = union(enum) {
     pub const Mouse = struct {
         x: u16,
         y: u16,
+        raw_x: u32 = 0,
+        raw_y: u32 = 0,
         kind: Kind,
+        button: u8 = 0,
 
         pub const Kind = enum { press, release, drag, scroll_up, scroll_down, move };
     };
@@ -445,6 +468,7 @@ pub fn parse(input: []const u8) ?Parsed {
     // A lone escape. Stream routers disambiguate it with a timeout; direct UI
     // callers that already own event framing can treat it as the key itself.
     if (input.len == 1) return key(.escape, .{}, 1);
+    if (input[1] == '_') return parseApc(input);
     // SS3, which is what a terminal in application cursor mode sends for the
     // arrows and for Home and End. Ignoring it makes those keys dead in exactly
     // the terminals that use it.
@@ -476,7 +500,7 @@ pub fn parse(input: []const u8) ?Parsed {
     while (final < input.len and !(input[final] >= 0x40 and input[final] <= 0x7e)) final += 1;
     if (final == input.len) return .{ .event = .incomplete, .len = 0 };
 
-    var params: [2]u16 = .{ 0, 0 };
+    var params: [3]u32 = .{ 0, 0, 0 };
     var count: usize = 0;
     var index: usize = 2;
     while (index < final) : (index += 1) {
@@ -486,9 +510,20 @@ pub fn parse(input: []const u8) ?Parsed {
             continue;
         }
         if (input[index] < '0' or input[index] > '9') break;
-        params[count] = params[count] * 10 + (input[index] - '0');
+        params[count] = params[count] *| 10 +| (input[index] - '0');
     }
     const length = final + 1;
+
+    if (input[final] == 'y' and
+        std.mem.startsWith(u8, input[0..length], "\x1b[?1016;") and
+        final >= 2 and input[final - 1] == '$')
+    {
+        const prefix_len = "\x1b[?1016;".len;
+        const status = std.fmt.parseInt(u8, input[prefix_len .. final - 1], 10) catch 0;
+        return .{ .event = .{ .terminal_response = .{ .mouse_pixels = .{
+            .supported = status != 0,
+        } } }, .len = length };
+    }
 
     switch (input[final]) {
         // `ESC [ 1 ; mod X` - a modified arrow, Home or End.
@@ -507,6 +542,21 @@ pub fn parse(input: []const u8) ?Parsed {
             201 => return .{ .event = .paste_end, .len = length },
             else => {},
         },
+        't' => switch (params[0]) {
+            4 => return .{ .event = .{ .terminal_response = .{ .window_pixels = .{
+                .width = params[2],
+                .height = params[1],
+            } } }, .len = length },
+            6 => return .{ .event = .{ .terminal_response = .{ .cell_pixels = .{
+                .width = params[2],
+                .height = params[1],
+            } } }, .len = length },
+            else => {},
+        },
+        'c' => return .{
+            .event = .{ .terminal_response = .primary_device_attributes },
+            .len = length,
+        },
         else => {},
     }
 
@@ -514,6 +564,35 @@ pub fn parse(input: []const u8) ?Parsed {
     // nobody asked for, and dropping one unknown sequence beats desynchronising
     // the whole stream.
     return .{ .event = .incomplete, .len = length };
+}
+
+fn parseApc(input: []const u8) Parsed {
+    var end: usize = 2;
+    while (end + 1 < input.len) : (end += 1) {
+        if (input[end] != 0x1b or input[end + 1] != '\\') continue;
+        const length = end + 2;
+        const content = input[2..end];
+        if (content.len < 2 or content[0] != 'G')
+            return .{ .event = .incomplete, .len = length };
+        const separator = std.mem.indexOfScalar(u8, content, ';') orelse
+            return .{ .event = .incomplete, .len = length };
+        var image_id: u32 = 0;
+        var fields = std.mem.splitScalar(u8, content[1..separator], ',');
+        while (fields.next()) |field| {
+            if (!std.mem.startsWith(u8, field, "i=")) continue;
+            image_id = std.fmt.parseInt(u32, field[2..], 10) catch 0;
+        }
+        if (image_id == 0) return .{ .event = .incomplete, .len = length };
+        const status = content[separator + 1 ..];
+        return .{
+            .event = .{ .terminal_response = .{ .kitty_graphics = .{
+                .image_id = image_id,
+                .supported = std.mem.eql(u8, status, "OK"),
+            } } },
+            .len = length,
+        };
+    }
+    return .{ .event = .incomplete, .len = 0 };
 }
 
 fn parseByte(input: []const u8) ?Parsed {
@@ -580,7 +659,7 @@ fn key(code: Event.Key.Code, mods: Event.Key.Mods, length: usize) Parsed {
 ///
 /// Zero means the parameter was absent, which is not the same as "no
 /// modifiers" arithmetically - subtracting one from it would set every bit.
-fn modsOf(param: u16) Event.Key.Mods {
+fn modsOf(param: u32) Event.Key.Mods {
     if (param == 0) return .{};
     const bits = param - 1;
     return .{
@@ -664,7 +743,7 @@ pub fn Input(comptime capacity: usize) type {
 /// full screen terminal passes.
 fn parseMouse(input: []const u8) ?Parsed {
     var index: usize = 3;
-    var fields: [3]u16 = .{ 0, 0, 0 };
+    var fields: [3]u32 = .{ 0, 0, 0 };
     var field: usize = 0;
 
     while (index < input.len) : (index += 1) {
@@ -694,7 +773,14 @@ fn parseMouse(input: []const u8) ?Parsed {
         else
             .press;
 
-        return .{ .event = .{ .mouse = .{ .x = x, .y = y, .kind = kind } }, .len = index + 1 };
+        return .{ .event = .{ .mouse = .{
+            .x = std.math.cast(u16, x) orelse std.math.maxInt(u16),
+            .y = std.math.cast(u16, y) orelse std.math.maxInt(u16),
+            .raw_x = x,
+            .raw_y = y,
+            .kind = kind,
+            .button = @truncate(button),
+        } }, .len = index + 1 };
     }
     return .{ .event = .incomplete, .len = 0 };
 }
@@ -726,8 +812,36 @@ test "mouse reports are parsed and converted to zero based coordinates" {
     try expectMouse("\x1b[<65;10;5M", 9, 4, .scroll_down);
 }
 
+test "Kitty graphics and pixel capability replies are consumed" {
+    const kitty_reply = "\x1b_Gi=31;OK\x1b\\";
+    // A single ESC is intentionally a complete key at this parser layer; the
+    // stream router holds it until its ambiguity timeout. Once the APC
+    // introducer is present, every proper prefix must remain incomplete.
+    for (2..kitty_reply.len) |cut| {
+        const parsed = parse(kitty_reply[0..cut]).?;
+        try std.testing.expectEqual(@as(usize, 0), parsed.len);
+    }
+    const response = parse(kitty_reply).?.event.terminal_response.kitty_graphics;
+    try std.testing.expectEqual(@as(u32, 31), response.image_id);
+    try std.testing.expect(response.supported);
+
+    const window = parse("\x1b[4;1080;1920t").?.event.terminal_response.window_pixels;
+    try std.testing.expectEqual(@as(u32, 1920), window.width);
+    try std.testing.expectEqual(@as(u32, 1080), window.height);
+    const cell = parse("\x1b[6;20;10t").?.event.terminal_response.cell_pixels;
+    try std.testing.expectEqual(@as(u32, 10), cell.width);
+    try std.testing.expectEqual(@as(u32, 20), cell.height);
+    const mouse_pixels = parse("\x1b[?1016;2$y").?.event.terminal_response.mouse_pixels;
+    try std.testing.expect(mouse_pixels.supported);
+    const no_mouse_pixels = parse("\x1b[?1016;0$y").?.event.terminal_response.mouse_pixels;
+    try std.testing.expect(!no_mouse_pixels.supported);
+}
+
 test "coordinates past 223 survive, which the older encoding cannot" {
     try expectMouse("\x1b[<0;300;120M", 299, 119, .press);
+    const pixels = parse("\x1b[<0;70000;80000M").?.event.mouse;
+    try std.testing.expectEqual(@as(u32, 69999), pixels.raw_x);
+    try std.testing.expectEqual(@as(u32, 79999), pixels.raw_y);
 }
 
 test "a split escape sequence is reported as incomplete, not misread" {

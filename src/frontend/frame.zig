@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const term = @import("term.zig");
 
-const schema = core.schema.v2;
+const schema = core.schema;
 
 pub const Applied = struct {
     spans: u64 = 0,

@@ -3,13 +3,14 @@
 const std = @import("std");
 const core = @import("telar-core");
 const edit = @import("edit.zig");
+const kitty = @import("kitty.zig");
 const multiplexer = @import("multiplexer.zig");
 const tabs_mod = @import("tabs.zig");
 const term = @import("term.zig");
 const theme_mod = @import("theme.zig");
 const ui = @import("ui.zig");
 
-const schema = core.schema.v2;
+const schema = core.schema;
 
 pub const sidebar_width: u16 = 30;
 pub const minimum_workbench_width: u16 = 20;
@@ -63,6 +64,57 @@ pub const Action = union(enum) {
 
 const Hits = ui.Hits(Action, 128);
 
+const SidebarSemantic = struct {
+    area: ui.Rect,
+    rows: [multiplexer.max_panes]Row = undefined,
+    row_count: usize = 0,
+    focused_row: ?u16 = null,
+
+    const Row = struct {
+        area: ui.Rect,
+        pane_id: schema.PaneId,
+        focused: bool,
+        hovered: bool,
+    };
+};
+
+const CellSidebarRenderer = struct {
+    fn render(state: *State, semantic: *const SidebarSemantic, transparent: bool) void {
+        const area = semantic.area;
+        if (area.isEmpty()) return;
+        const palette = state.palette();
+        const background: ui.Color = if (transparent) .default else palette.panel_bg;
+        const faint: ui.Style = .{ .fg = palette.overlay0, .bg = background };
+        const heading: ui.Style = .{
+            .fg = palette.accent,
+            .bg = background,
+            .flags = .{ .bold = true },
+        };
+        state.scratch.fill(area, " ", .{ .fg = palette.text, .bg = background });
+        _ = state.scratch.writeText(area, area.x + 1, area.y, "TELAR", heading);
+        if (!transparent and area.w > 1) {
+            const edge_x = area.x + area.w - 1;
+            var y = area.y;
+            while (y < area.y + area.h) : (y += 1)
+                state.scratch.setCell(edge_x, y, "│", 1, faint);
+        }
+        if (area.h <= 2) return;
+        _ = state.scratch.writeText(area, area.x + 1, area.y + 2, "PANES", faint);
+        for (semantic.rows[0..semantic.row_count]) |row| {
+            const style: ui.Style = if (row.focused)
+                .{ .fg = palette.text, .bg = if (transparent) .default else palette.surface0, .flags = .{ .bold = true } }
+            else if (row.hovered)
+                .{ .fg = palette.text, .bg = if (transparent) .default else palette.surface1, .flags = .{ .underline = .single } }
+            else
+                .{ .fg = palette.subtext0, .bg = background };
+            state.scratch.fill(row.area, " ", style);
+            var label_buffer: [48]u8 = undefined;
+            const label = std.fmt.bufPrint(&label_buffer, "  pane {d}", .{schema.id.raw(row.pane_id)}) catch "  pane";
+            _ = state.scratch.writeTruncated(row.area, row.area.x, row.area.y, label, row.area.w, style);
+        }
+    }
+};
+
 pub const Interaction = struct {
     redraw: bool = false,
     layout_changed: bool = false,
@@ -95,6 +147,10 @@ pub const State = struct {
     hovered: ?Action = null,
     tab_rename: ?TabRename = null,
     dirty: bool = true,
+    sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
+    kitty_sidebar: kitty.KittySidebarRenderer,
+    cell_width_px: u16 = 0,
+    cell_height_px: u16 = 0,
 
     pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
         return initWithTheme(gpa, width, height, theme_mod.default_theme);
@@ -110,11 +166,13 @@ pub const State = struct {
             .scratch = try .init(gpa, width, height),
             .regions = .calculate(width, height, true),
             .theme = selected_theme,
+            .kitty_sidebar = .init(gpa),
         };
     }
 
     pub fn deinit(state: *State) void {
         state.scratch.deinit();
+        state.kitty_sidebar.deinit();
     }
 
     pub fn resize(state: *State, width: u16, height: u16) !void {
@@ -151,6 +209,28 @@ pub const State = struct {
 
     pub fn invalidate(state: *State) void {
         state.dirty = true;
+    }
+
+    pub fn configureSidebar(
+        state: *State,
+        requested: kitty.SidebarRendering,
+        support: kitty.Support,
+        cell_width: u16,
+        cell_height: u16,
+    ) !void {
+        const resolved = try requested.resolve(support);
+        if (state.sidebar_rendering != resolved or state.cell_width_px != cell_width or
+            state.cell_height_px != cell_height)
+        {
+            state.sidebar_rendering = resolved;
+            state.cell_width_px = cell_width;
+            state.cell_height_px = cell_height;
+            state.dirty = true;
+        }
+    }
+
+    pub fn kittySidebar(state: *State) *kitty.KittySidebarRenderer {
+        return &state.kitty_sidebar;
     }
 
     pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
@@ -200,7 +280,7 @@ pub const State = struct {
                         rename.field.insert(char.slice()),
                     else => {},
                 },
-                .mouse, .incomplete => {},
+                .mouse, .terminal_response, .incomplete => {},
             }
         }
         state.dirty = true;
@@ -259,7 +339,17 @@ pub const State = struct {
         state.hits.clear();
         state.scratch.clear(.{});
         drawTop(state, model);
-        drawSidebar(state, model);
+        const sidebar = buildSidebarSemantic(state, model);
+        const hybrid = state.sidebar_rendering == .kitty_hybrid or
+            state.sidebar_rendering == .kitty_full;
+        CellSidebarRenderer.render(state, &sidebar, hybrid);
+        if (hybrid) try state.kitty_sidebar.prepare(
+            sidebar.area,
+            state.palette(),
+            sidebar.focused_row,
+            state.cell_width_px,
+            state.cell_height_px,
+        ) else try state.kitty_sidebar.prepare(.{}, state.palette(), null, 0, 0);
         drawBottom(state, tabs, model);
         registerWorkbench(state, model);
 
@@ -320,27 +410,10 @@ fn drawTop(state: *State, model: *const multiplexer.Model) void {
     _ = state.scratch.writeTruncated(worktree_rect, x, area.y, worktree, worktree_width, hoveredBarStyle(state, .active_worktree));
 }
 
-fn drawSidebar(state: *State, model: *const multiplexer.Model) void {
+fn buildSidebarSemantic(state: *State, model: *const multiplexer.Model) SidebarSemantic {
     const area = state.regions.sidebar;
-    if (area.isEmpty()) return;
-    const palette = state.palette();
-    const faint: ui.Style = .{ .fg = palette.overlay0, .bg = palette.panel_bg };
-    const heading: ui.Style = .{
-        .fg = palette.accent,
-        .bg = palette.panel_bg,
-        .flags = .{ .bold = true },
-    };
-    state.scratch.fill(area, " ", .{ .fg = palette.text, .bg = palette.panel_bg });
-
-    _ = state.scratch.writeText(area, area.x + 1, area.y, "TELAR", heading);
-    if (area.w > 1) {
-        const edge_x = area.x + area.w - 1;
-        var y = area.y;
-        while (y < area.y + area.h) : (y += 1)
-            state.scratch.setCell(edge_x, y, "│", 1, faint);
-    }
-    if (area.h <= 2) return;
-    _ = state.scratch.writeText(area, area.x + 1, area.y + 2, "PANES", faint);
+    var semantic: SidebarSemantic = .{ .area = area };
+    if (area.isEmpty() or area.h <= 2) return semantic;
 
     var row: u16 = area.y + 3;
     for (&model.panes) |*slot| {
@@ -355,26 +428,17 @@ fn drawSidebar(state: *State, model: *const multiplexer.Model) void {
         const action: Action = .{ .focus_pane = pane.id };
         state.hits.add(row_area, action);
         const focused = model.layout.focused() == pane.id;
-        const style: ui.Style = if (focused)
-            .{
-                .fg = palette.text,
-                .bg = palette.surface0,
-                .flags = .{ .bold = true },
-            }
-        else if (isHovered(state, action))
-            .{
-                .fg = palette.text,
-                .bg = palette.surface1,
-                .flags = .{ .underline = .single },
-            }
-        else
-            .{ .fg = palette.subtext0, .bg = palette.panel_bg };
-        state.scratch.fill(row_area, " ", style);
-        var label_buffer: [48]u8 = undefined;
-        const label = std.fmt.bufPrint(&label_buffer, "  pane {d}", .{schema.id.raw(pane.id)}) catch "  pane";
-        _ = state.scratch.writeTruncated(row_area, row_area.x, row, label, row_area.w, style);
+        semantic.rows[semantic.row_count] = .{
+            .area = row_area,
+            .pane_id = pane.id,
+            .focused = focused,
+            .hovered = isHovered(state, action),
+        };
+        semantic.row_count += 1;
+        if (focused) semantic.focused_row = row;
         row += 1;
     }
+    return semantic;
 }
 
 fn drawBottom(
@@ -633,6 +697,26 @@ test "sidebar rows focus panes and stable hover requests no extra frame" {
     const click = term.Event.Mouse{ .x = 2, .y = 4, .kind = .press };
     _ = state.handleMouse(null, &model, click);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
+}
+
+test "hybrid sidebar preserves semantic pane hit testing" {
+    var state = try State.init(std.testing.allocator, 100, 30);
+    defer state.deinit();
+    try state.configureSidebar(.kitty_hybrid, .supported, 10, 20);
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 30, .rows = 20 });
+    var screen = try term.Screen.init(std.testing.allocator, 100, 30);
+    defer screen.deinit();
+    _ = try state.render(&screen, null, &model, true);
+    try std.testing.expectEqualDeep(Action{ .focus_pane = @enumFromInt(1) }, state.hits.at(2, 4).?);
+    const interaction = state.handleMouse(null, &model, .{ .x = 2, .y = 4, .kind = .press });
+    try std.testing.expect(interaction.redraw == false or model.layout.focused() == @as(schema.PaneId, @enumFromInt(1)));
+    try std.testing.expect(state.kittySidebar().damaged());
 }
 
 test "client chrome uses Vesper by default" {

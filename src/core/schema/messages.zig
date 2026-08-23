@@ -1,13 +1,14 @@
-//! Application messages for telar protocol version 2.
+//! Application messages for Telar's single current protocol schema.
 //!
 //! The handshake selects this schema before either peer calls these decoders.
 //! Every function borrows input and caller-owned output memory; none allocates.
 
 const std = @import("std");
-const wire = @import("v1/wire.zig");
+const wire = @import("wire.zig");
+pub const graphics = @import("graphics.zig");
 
-pub const frame = @import("v1/frame.zig");
-pub const id = @import("v1/id.zig");
+pub const frame = @import("frame.zig");
+pub const id = @import("id.zig");
 pub const WorkspaceId = id.WorkspaceId;
 pub const WorktreeId = id.WorktreeId;
 pub const TabId = id.TabId;
@@ -45,6 +46,7 @@ pub const ClientTag = enum(u8) {
     rename_tab = 0x0e,
     close_tab = 0x0f,
     move_tab = 0x10,
+    request_graphics_snapshot = 0x11,
 };
 
 pub const ServerTag = enum(u8) {
@@ -60,11 +62,20 @@ pub const ServerTag = enum(u8) {
     tab_renamed = 0x8a,
     tab_closed = 0x8b,
     tab_moved = 0x8c,
+    graphics_snapshot = 0x8d,
+    graphics_image = 0x8e,
+    graphics_image_chunk = 0x8f,
+    graphics_placement = 0x90,
+    graphics_delete_image = 0x91,
+    graphics_delete_placement = 0x92,
 };
 
 pub const TerminalSize = struct {
     cols: u16,
     rows: u16,
+    /// Pixel size of one cell. Zero means the client has not learned it.
+    cell_width_px: u16 = 0,
+    cell_height_px: u16 = 0,
 
     pub fn validate(size: TerminalSize) !void {
         if (size.cols == 0 or size.rows == 0) return error.InvalidTerminalSize;
@@ -265,6 +276,8 @@ pub const MoveTab = struct {
     direction: TabMoveDirection,
 };
 
+pub const RequestGraphicsSnapshot = struct { pane_id: PaneId };
+
 pub const HistoryScope = enum(u8) {
     global = 0,
     cwd = 1,
@@ -299,6 +312,7 @@ pub const ClientMessage = union(enum) {
     rename_tab: RenameTab,
     close_tab: CloseTab,
     move_tab: MoveTab,
+    request_graphics_snapshot: RequestGraphicsSnapshot,
 };
 
 pub const PaneOpened = struct {
@@ -511,6 +525,12 @@ pub const ServerMessage = union(enum) {
     tab_renamed: TabRenamed,
     tab_closed: TabClosed,
     tab_moved: TabMoved,
+    graphics_snapshot: graphics.Snapshot,
+    graphics_image: graphics.Image,
+    graphics_image_chunk: graphics.ImageChunk,
+    graphics_placement: graphics.Placement,
+    graphics_delete_image: graphics.DeleteImage,
+    graphics_delete_placement: graphics.DeletePlacement,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -715,6 +735,17 @@ pub fn encodeRuntimeStop(buffer: []u8) ![]const u8 {
     return encoder.finish();
 }
 
+pub fn encodeRequestGraphicsSnapshot(
+    buffer: []u8,
+    message: RequestGraphicsSnapshot,
+) ![]const u8 {
+    try validatePaneId(message.pane_id);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.request_graphics_snapshot));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    return encoder.finish();
+}
+
 pub fn decodeClient(payload: []const u8) !ClientMessage {
     var decoder = wire.Decoder.init(payload);
     const tag = try decodeClientTag(try decoder.readByte());
@@ -739,6 +770,9 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .rename_tab => .{ .rename_tab = try decodeRenameTab(&decoder) },
         .close_tab => .{ .close_tab = try decodeCloseTab(&decoder) },
         .move_tab => .{ .move_tab = try decodeMoveTab(&decoder) },
+        .request_graphics_snapshot => .{ .request_graphics_snapshot = .{
+            .pane_id = try id.pane(try decoder.readInt(u64)),
+        } },
     };
     try decoder.ensureEnd();
     return message;
@@ -786,6 +820,48 @@ pub fn encodeRequestFailed(buffer: []u8, message: RequestFailed) ![]const u8 {
 pub fn encodeRuntimeStopping(buffer: []u8) ![]const u8 {
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.runtime_stopping));
+    return encoder.finish();
+}
+
+pub fn encodeGraphicsSnapshot(buffer: []u8, message: graphics.Snapshot) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.graphics_snapshot));
+    try graphics.encodeSnapshot(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeGraphicsImage(buffer: []u8, message: graphics.Image) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.graphics_image));
+    try graphics.encodeImage(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeGraphicsImageChunk(buffer: []u8, message: graphics.ImageChunk) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.graphics_image_chunk));
+    try graphics.encodeImageChunk(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeGraphicsPlacement(buffer: []u8, message: graphics.Placement) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.graphics_placement));
+    try graphics.encodePlacement(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeGraphicsDeleteImage(buffer: []u8, message: graphics.DeleteImage) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.graphics_delete_image));
+    try graphics.encodeDeleteImage(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeGraphicsDeletePlacement(buffer: []u8, message: graphics.DeletePlacement) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.graphics_delete_placement));
+    try graphics.encodeDeletePlacement(&encoder, message);
     return encoder.finish();
 }
 
@@ -905,6 +981,12 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .tab_renamed => .{ .tab_renamed = try decodeTabRenamed(&decoder) },
         .tab_closed => .{ .tab_closed = try decodeTabClosed(&decoder) },
         .tab_moved => .{ .tab_moved = try decodeTabMoved(&decoder) },
+        .graphics_snapshot => .{ .graphics_snapshot = try graphics.decodeSnapshot(&decoder) },
+        .graphics_image => .{ .graphics_image = try graphics.decodeImage(&decoder) },
+        .graphics_image_chunk => .{ .graphics_image_chunk = try graphics.decodeImageChunk(&decoder) },
+        .graphics_placement => .{ .graphics_placement = try graphics.decodePlacement(&decoder) },
+        .graphics_delete_image => .{ .graphics_delete_image = try graphics.decodeDeleteImage(&decoder) },
+        .graphics_delete_placement => .{ .graphics_delete_placement = try graphics.decodeDeletePlacement(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -1324,12 +1406,16 @@ fn decodeHistoryResults(decoder: *wire.Decoder) !HistoryResultsView {
 fn encodeSize(encoder: *wire.Encoder, size: TerminalSize) !void {
     try encoder.writeInt(u16, size.cols);
     try encoder.writeInt(u16, size.rows);
+    try encoder.writeInt(u16, size.cell_width_px);
+    try encoder.writeInt(u16, size.cell_height_px);
 }
 
 fn decodeSize(decoder: *wire.Decoder) !TerminalSize {
     const size = TerminalSize{
         .cols = try decoder.readInt(u16),
         .rows = try decoder.readInt(u16),
+        .cell_width_px = try decoder.readInt(u16),
+        .cell_height_px = try decoder.readInt(u16),
     };
     try size.validate();
     return size;
@@ -1420,6 +1506,7 @@ fn decodeClientTag(value: u8) !ClientTag {
         @intFromEnum(ClientTag.rename_tab) => .rename_tab,
         @intFromEnum(ClientTag.close_tab) => .close_tab,
         @intFromEnum(ClientTag.move_tab) => .move_tab,
+        @intFromEnum(ClientTag.request_graphics_snapshot) => .request_graphics_snapshot,
         else => error.UnknownMessage,
     };
 }
@@ -1438,6 +1525,12 @@ fn decodeServerTag(value: u8) !ServerTag {
         @intFromEnum(ServerTag.tab_renamed) => .tab_renamed,
         @intFromEnum(ServerTag.tab_closed) => .tab_closed,
         @intFromEnum(ServerTag.tab_moved) => .tab_moved,
+        @intFromEnum(ServerTag.graphics_snapshot) => .graphics_snapshot,
+        @intFromEnum(ServerTag.graphics_image) => .graphics_image,
+        @intFromEnum(ServerTag.graphics_image_chunk) => .graphics_image_chunk,
+        @intFromEnum(ServerTag.graphics_placement) => .graphics_placement,
+        @intFromEnum(ServerTag.graphics_delete_image) => .graphics_delete_image,
+        @intFromEnum(ServerTag.graphics_delete_placement) => .graphics_delete_placement,
         else => error.UnknownMessage,
     };
 }

@@ -63,7 +63,12 @@ pub const Tty = struct {
         // twenty-four is what every terminal since 1978 has defaulted to, and
         // a wrong size draws a wrong frame where a crash draws nothing.
         if (std.c.ioctl(t.fd, TIOCGWINSZ, &ws) != 0) return .{ .cols = 80, .rows = 24 };
-        return .{ .cols = ws.col, .rows = ws.row };
+        return .{
+            .cols = ws.col,
+            .rows = ws.row,
+            .width_px = ws.xpixel,
+            .height_px = ws.ypixel,
+        };
     }
 
     pub fn writeHandle(t: *const Tty) File {

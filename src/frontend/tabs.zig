@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const multiplexer = @import("multiplexer.zig");
 const ui = core.ui;
 
-const schema = core.schema.v2;
+const schema = core.schema;
 
 pub const max_tabs = schema.max_tabs_per_workspace;
 

@@ -35,11 +35,15 @@ extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 pub const Size = struct {
     cols: u16,
     rows: u16,
+    cell_width_px: u16 = 0,
+    cell_height_px: u16 = 0,
 
     pub fn valid(size: Size) Size {
         return .{
             .cols = if (size.cols == 0) 80 else size.cols,
             .rows = if (size.rows == 0) 24 else size.rows,
+            .cell_width_px = size.cell_width_px,
+            .cell_height_px = size.cell_height_px,
         };
     }
 };
@@ -86,8 +90,10 @@ pub const Session = struct {
         var window: std.posix.winsize = .{
             .row = size.rows,
             .col = size.cols,
-            .xpixel = 0,
-            .ypixel = 0,
+            .xpixel = std.math.mul(u16, size.cols, size.cell_width_px) catch
+                std.math.maxInt(u16),
+            .ypixel = std.math.mul(u16, size.rows, size.cell_height_px) catch
+                std.math.maxInt(u16),
         };
 
         var master: std.c.fd_t = undefined;
@@ -136,8 +142,10 @@ pub const Session = struct {
         var window: std.posix.winsize = .{
             .row = size.rows,
             .col = size.cols,
-            .xpixel = 0,
-            .ypixel = 0,
+            .xpixel = std.math.mul(u16, size.cols, size.cell_width_px) catch
+                std.math.maxInt(u16),
+            .ypixel = std.math.mul(u16, size.rows, size.cell_height_px) catch
+                std.math.maxInt(u16),
         };
         if (std.c.ioctl(session.master, TIOC.SWINSZ, &window) != 0)
             return error.SetWindowSizeFailed;

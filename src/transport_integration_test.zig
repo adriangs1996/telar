@@ -2,17 +2,17 @@ const std = @import("std");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
-const handshake = core.schema.handshake;
+const handshake = core.handshake;
 
 const HandshakeWorker = struct {
     io: std.Io,
     connection: *core.transport.SocketChannel,
-    supported: handshake.VersionRange,
+    supported: handshake.SchemaId,
     response: ?handshake.ServerResponse = null,
     failure: ?anyerror = null,
 
     fn run(worker: *@This()) void {
-        worker.response = backend.transport.handshake.performVersions(
+        worker.response = backend.transport.handshake.performSchema(
             worker.io,
             worker.connection,
             worker.supported,
@@ -88,7 +88,7 @@ test "a second backend cannot replace a live endpoint" {
     client.deinit(io);
 }
 
-test "frontend and backend negotiate the highest shared protocol version" {
+test "frontend and backend accept the same schema" {
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
@@ -109,22 +109,22 @@ test "frontend and backend negotiate the highest shared protocol version" {
     var worker = HandshakeWorker{
         .io = io,
         .connection = &peer,
-        .supported = .{ .minimum = 2, .maximum = 4 },
+        .supported = handshake.schema_id,
     };
     const thread = try std.Thread.spawn(.{}, HandshakeWorker.run, .{&worker});
-    const client_response = try frontend.transport.handshake.performVersions(
+    const client_response = try frontend.transport.handshake.performSchema(
         io,
         &client,
-        .{ .minimum = 1, .maximum = 3 },
+        handshake.schema_id,
     );
     thread.join();
 
     if (worker.failure) |err| return err;
-    try std.testing.expectEqual(@as(handshake.Version, 3), client_response.accepted.version);
+    try std.testing.expectEqual(handshake.schema_id, client_response.accepted.schema);
     try std.testing.expectEqualDeep(client_response, worker.response.?);
 }
 
-test "backend explains incompatible protocol versions" {
+test "backend explains an incompatible schema" {
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
@@ -142,33 +142,34 @@ test "backend explains incompatible protocol versions" {
     var peer = try listener.accept(io);
     defer peer.deinit(io);
 
-    const server_versions = handshake.VersionRange{ .minimum = 1, .maximum = 1 };
+    var client_schema = handshake.schema_id;
+    client_schema[0] ^= 1;
     var worker = HandshakeWorker{
         .io = io,
         .connection = &peer,
-        .supported = server_versions,
+        .supported = handshake.schema_id,
     };
     const thread = try std.Thread.spawn(.{}, HandshakeWorker.run, .{&worker});
-    const client_response = try frontend.transport.handshake.performVersions(
+    const client_response = try frontend.transport.handshake.performSchema(
         io,
         &client,
-        .{ .minimum = 2, .maximum = 2 },
+        client_schema,
     );
     thread.join();
 
     if (worker.failure) |err| return err;
     try std.testing.expectEqual(
-        handshake.RejectReason.incompatible_versions,
+        handshake.RejectReason.incompatible_schema,
         client_response.rejected.reason,
     );
-    try std.testing.expectEqual(server_versions, client_response.rejected.supported_versions);
+    try std.testing.expectEqual(handshake.schema_id, client_response.rejected.expected_schema);
     try std.testing.expectEqualDeep(client_response, worker.response.?);
 }
 
 test "runtime stops with a live pane and removes its endpoint" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -237,7 +238,7 @@ test "runtime stops with a live pane and removes its endpoint" {
 test "runtime destroys a pane after its shell exits" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -366,7 +367,7 @@ test "runtime destroys a pane after its shell exits" {
 test "the last pane closes only its tab when the workspace has another tab" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -461,7 +462,7 @@ test "the last pane closes only its tab when the workspace has another tab" {
 test "an exited detached pane removes its tab and workspace" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -518,7 +519,7 @@ test "an exited detached pane removes its tab and workspace" {
 test "one client drives two attached panes and closes either one" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -671,7 +672,7 @@ test "one client drives two attached panes and closes either one" {
 test "pane keeps running while its client is disconnected" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -771,7 +772,7 @@ test "pane keeps running while its client is disconnected" {
 test "runtime keeps independent panes for different workspaces" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -850,7 +851,7 @@ test "runtime keeps independent panes for different workspaces" {
 test "runtime owns the complete tab lifecycle" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -990,7 +991,7 @@ test "runtime owns the complete tab lifecycle" {
 test "a reconnect restores tab order labels and pane membership" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1121,7 +1122,7 @@ test "a reconnect restores tab order labels and pane membership" {
 test "an identical pane resize does not emit another snapshot" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1199,7 +1200,7 @@ test "an identical pane resize does not emit another snapshot" {
 test "runtime persists terminal-edited commands without shell integration" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema.v2;
+    const schema = core.schema;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1239,7 +1240,8 @@ test "runtime persists terminal-edited commands without shell integration" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "printf '$ '; IFS= read -r line; exit 7",
+        "printf '\\033_Ga=T,f=32,s=1,v=1,t=d,i=19,q=2,C=1;AQID/w==\\033\\\\'; " ++
+            "printf '$ '; IFS= read -r line; exit 7",
     };
     try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
         .request_id = @enumFromInt(1),
@@ -1251,6 +1253,7 @@ test "runtime persists terminal-edited commands without shell integration" {
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
     var input_sent = false;
+    var saw_graphics = false;
     var cells: [80 * 24]core.ui.Cell = @splat(.{});
     while (true) {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
@@ -1269,8 +1272,13 @@ test "runtime persists terminal-edited commands without shell integration" {
                     input_sent = true;
                 }
             },
+            .graphics_image => |image| {
+                try std.testing.expectEqual(@as(u32, 19), image.image.key.image_id);
+                saw_graphics = true;
+            },
             .pane_exited => {
                 try std.testing.expect(input_sent);
+                try std.testing.expect(saw_graphics);
                 break;
             },
             .request_failed => return error.RuntimeRequestFailed,
@@ -1295,6 +1303,7 @@ test "runtime persists terminal-edited commands without shell integration" {
                 var entries = results.entries();
                 const entry = entries.next() orelse return error.MissingHistoryEntry;
                 try std.testing.expectEqualStrings("echo persisted", entry.command);
+                try std.testing.expect(std.mem.indexOf(u8, entry.command, "\x1b_G") == null);
                 try std.testing.expectEqual(@as(?i32, 7), entry.exit_code);
                 try std.testing.expectEqual(schema.HistoryStatus.completed, entry.status);
                 return;
@@ -1303,6 +1312,212 @@ test "runtime persists terminal-edited commands without shell integration" {
             else => {},
         }
     }
+}
+
+test "PTY input remains live while the bounded ingest actor is occupied" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/ingest.sock", .{directory});
+    var sentinel_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const sentinel_path = try std.fmt.bufPrint(&sentinel_buffer, "{s}/input-forwarded", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var entered_storage: [1]u8 = undefined;
+    var release_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var entered: std.Io.Queue(u8) = .init(&entered_storage);
+    var release: std.Io.Queue(u8) = .init(&release_storage);
+    var gate: backend.runtime.IngestTestGate = .{
+        .entered = &entered,
+        .release = &release,
+    };
+    var server = try io.concurrent(backend.runtime.serveUntilWithIngestGate, .{
+        io,
+        gpa,
+        socket_path,
+        &stop,
+        &gate,
+    });
+    var gate_released = false;
+    defer {
+        if (!gate_released) release.putOneUncancelable(io, 0) catch {};
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, socket_path);
+    defer connection.deinit(io);
+    var command_buffer: [2 * std.fs.max_path_bytes]u8 = undefined;
+    const command = try std.fmt.bufPrint(
+        &command_buffer,
+        "stty raw -echo; printf 'MEDIA_READY\\n'; " ++
+            "dd bs=1 count=1 of=/dev/null 2>/dev/null; " ++
+            ": > '{s}'; printf 'INPUT_FORWARDED\\n'; sleep 1",
+        .{sentinel_path},
+    );
+    const arguments = [_][]const u8{ "/bin/sh", "-c", command };
+    var send_buffer: [4096]u8 = undefined;
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+    var pane_id: schema.PaneId = .invalid;
+    while (pane_id == .invalid) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .pane_opened => |opened| pane_id = opened.pane_id,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    // The first PTY burst is now deliberately held inside the same bounded
+    // actor that performs base64/zlib/KGP work. The runtime event loop and PTY
+    // input writer must remain independent of that actor.
+    _ = try entered.getOne(io);
+    const started = std.Io.Timestamp.now(io, .awake).toNanoseconds();
+    try connection.send(io, try schema.encodePaneInput(&send_buffer, .{
+        .pane_id = pane_id,
+        .bytes = "x",
+    }));
+
+    var forwarded = false;
+    for (0..1000) |_| {
+        if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
+            forwarded = true;
+            break;
+        } else |err| switch (err) {
+            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
+            else => return err,
+        }
+    }
+    const elapsed: u64 = @intCast(std.Io.Timestamp.now(io, .awake).toNanoseconds() - started);
+    try std.testing.expect(forwarded);
+    try std.testing.expect(elapsed < std.time.ns_per_s);
+
+    release.putOneUncancelable(io, 0) catch unreachable;
+    gate_released = true;
+}
+
+test "runtime terminates KGP, replies to the child, and resynchronizes graphics" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/graphics.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, socket_path, &stop });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, socket_path);
+    defer connection.deinit(io);
+    const script =
+        "stty raw -echo; " ++
+        "printf '\\033_Ga=T,f=32,o=z,s=1,v=1,t=d,i=7,q=2,C=1,c=2,r=2;eAFjZGL+DwABEwEG\\033\\\\'; " ++
+        "printf '\\033_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\\033\\\\'; " ++
+        "reply=$(dd bs=1 count=12 2>/dev/null); " ++
+        "case \"$reply\" in *'Gi=31;OK'*) printf 'KGP_CHILD_OK\\n';; *) printf 'KGP_CHILD_BAD\\n';; esac; " ++
+        "sleep 2";
+    const arguments = [_][]const u8{ "/bin/sh", "-c", script };
+    var send_buffer: [2048]u8 = undefined;
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{
+            .cols = 40,
+            .rows = 8,
+            .cell_width_px = 10,
+            .cell_height_px = 20,
+        },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+    var store = frontend.kitty.Store.init(gpa);
+    defer store.deinit();
+    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var pane_id: schema.PaneId = .invalid;
+    var saw_child_reply = false;
+    var saw_image = false;
+    var saw_placement = false;
+    var requested_resync = false;
+    var snapshot_open = false;
+    var snapshot_complete = false;
+
+    for (0..256) |_| {
+        const payload = try connection.receive(io, receive_buffer);
+        switch (try schema.decodeServer(payload)) {
+            .pane_opened => |opened| pane_id = opened.pane_id,
+            .pane_frame => |frame| {
+                applyFrameCells(&cells, frame);
+                saw_child_reply = rowContains(&cells, "KGP_CHILD_OK");
+                if (rowContains(&cells, "KGP_CHILD_BAD")) return error.KittyQueryReplyMissing;
+                try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+                    .pane_id = frame.pane_id,
+                    .frame_id = frame.frame_id,
+                }));
+            },
+            .graphics_snapshot => |snapshot| {
+                try store.applySnapshot(snapshot);
+                if (requested_resync) switch (snapshot.phase) {
+                    .begin => snapshot_open = true,
+                    .end => snapshot_complete = snapshot_open,
+                };
+            },
+            .graphics_image => |image| {
+                try store.applyImage(image);
+                saw_image = true;
+            },
+            .graphics_image_chunk => |chunk| try store.applyChunk(chunk),
+            .graphics_placement => |placement| {
+                try store.applyPlacement(placement);
+                saw_placement = true;
+            },
+            .graphics_delete_image => |deleted| try store.deleteImage(deleted),
+            .graphics_delete_placement => |deleted| try store.deletePlacement(deleted),
+            .pane_exited => return error.GraphicsPaneExitedBeforeResync,
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        }
+
+        if (!requested_resync and saw_child_reply and saw_image and saw_placement) {
+            try std.testing.expectEqual(@as(usize, 1), store.images.count());
+            try std.testing.expectEqual(@as(usize, 1), store.placements.count());
+            var images = store.images.iterator();
+            const image = images.next().?.value_ptr;
+            try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3, 255 }, image.pixels);
+            try connection.send(io, try schema.encodeRequestGraphicsSnapshot(&send_buffer, .{
+                .pane_id = pane_id,
+            }));
+            requested_resync = true;
+        }
+        if (snapshot_complete) {
+            try std.testing.expectEqual(@as(usize, 1), store.images.count());
+            try std.testing.expectEqual(@as(usize, 1), store.placements.count());
+            return;
+        }
+    }
+    return error.GraphicsIntegrationTimedOut;
 }
 
 fn connectRuntimeForTest(io: std.Io, path: []const u8) !core.transport.SocketChannel {
@@ -1335,7 +1550,7 @@ fn rowContains(cells: []const core.ui.Cell, needle: []const u8) bool {
     return false;
 }
 
-fn applyFrameCells(cells: []core.ui.Cell, frame: core.schema.v2.frame.FrameView) void {
+fn applyFrameCells(cells: []core.ui.Cell, frame: core.schema.frame.FrameView) void {
     var spans = frame.spans();
     while (spans.next()) |span| {
         var source = span.cells();

@@ -20,6 +20,7 @@ extern "c" fn getenv(name: [*:0]const u8) ?[*:0]u8;
 const RunOptions = struct {
     command: pty.Command,
     theme: frontend.theme.Theme = frontend.theme.default_theme,
+    sidebar_rendering: frontend.kitty.SidebarRendering = .automatic,
 };
 
 const Cli = union(enum) {
@@ -45,6 +46,7 @@ const Cli = union(enum) {
 
         var options: RunOptions = .{ .command = undefined };
         var theme_set = false;
+        var sidebar_renderer_set = false;
         var delimiter_seen = false;
         var command_start: usize = 1;
         while (command_start < args.len) {
@@ -71,6 +73,25 @@ const Cli = union(enum) {
                 command_start += 1;
                 continue;
             }
+            if (std.mem.eql(u8, arg, "--sidebar-renderer")) {
+                if (sidebar_renderer_set) return error.DuplicateSidebarRendererOption;
+                if (command_start + 1 >= args.len) return error.MissingSidebarRenderer;
+                options.sidebar_rendering = try frontend.kitty.SidebarRendering.parse(
+                    std.mem.span(args[command_start + 1]),
+                );
+                sidebar_renderer_set = true;
+                command_start += 2;
+                continue;
+            }
+            if (std.mem.startsWith(u8, arg, "--sidebar-renderer=")) {
+                if (sidebar_renderer_set) return error.DuplicateSidebarRendererOption;
+                options.sidebar_rendering = try frontend.kitty.SidebarRendering.parse(
+                    arg["--sidebar-renderer=".len..],
+                );
+                sidebar_renderer_set = true;
+                command_start += 1;
+                continue;
+            }
             break;
         }
         options.command = if (command_start == args.len)
@@ -89,9 +110,9 @@ const HistoryAction = enum {
 const HistoryOptions = struct {
     action: HistoryAction,
     query: ?[*:0]const u8 = null,
-    scope: core.schema.v2.HistoryScope = .global,
+    scope: core.schema.HistoryScope = .global,
     scope_value: ?[*:0]const u8 = null,
-    pane_id: core.schema.v2.PaneId = .invalid,
+    pane_id: core.schema.PaneId = .invalid,
     failed_only: bool = false,
     limit: u16 = 20,
     socket: ?[*:0]const u8 = null,
@@ -119,7 +140,7 @@ const HistoryOptions = struct {
             } else if (std.mem.eql(u8, arg, "--pane")) {
                 if (index + 1 >= args.len) return error.MissingPaneId;
                 const raw = try std.fmt.parseInt(u64, std.mem.span(args[index + 1]), 10);
-                options.pane_id = try core.schema.v2.id.pane(raw);
+                options.pane_id = try core.schema.id.pane(raw);
                 try options.setScope(.pane, null);
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--failed")) {
@@ -128,7 +149,7 @@ const HistoryOptions = struct {
             } else if (std.mem.eql(u8, arg, "--limit")) {
                 if (index + 1 >= args.len) return error.MissingHistoryLimit;
                 options.limit = try std.fmt.parseInt(u16, std.mem.span(args[index + 1]), 10);
-                if (options.limit == 0 or options.limit > core.schema.v2.max_history_results)
+                if (options.limit == 0 or options.limit > core.schema.max_history_results)
                     return error.InvalidHistoryLimit;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--socket")) {
@@ -145,7 +166,7 @@ const HistoryOptions = struct {
 
     fn setScope(
         options: *HistoryOptions,
-        scope: core.schema.v2.HistoryScope,
+        scope: core.schema.HistoryScope,
         value: ?[*:0]const u8,
     ) !void {
         if (options.scope != .global) return error.ConflictingHistoryScopes;
@@ -169,6 +190,7 @@ const ServerOptions = struct {
     action: ServerAction = .run,
     mode: ServerMode = .foreground,
     socket: ?[*:0]const u8 = null,
+    graphics: backend.runtime.GraphicsLimits = .{},
 
     fn parse(args: []const [*:0]const u8) !ServerOptions {
         var options: ServerOptions = .{};
@@ -194,15 +216,29 @@ const ServerOptions = struct {
                 if (index + 1 >= args.len) return error.MissingSocketPath;
                 options.socket = args[index + 1];
                 index += 2;
+            } else if (std.mem.eql(u8, arg, "--graphics-pane-mib")) {
+                if (index + 1 >= args.len) return error.MissingGraphicsPaneLimit;
+                options.graphics.pane_bytes = try parseMebibytes(args[index + 1]);
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--graphics-global-mib")) {
+                if (index + 1 >= args.len) return error.MissingGraphicsGlobalLimit;
+                options.graphics.global_bytes = try parseMebibytes(args[index + 1]);
+                index += 2;
             } else {
                 return error.UnknownServerOption;
             }
         }
         if (options.action == .stop and options.mode != .foreground)
             return error.ConflictingServerAction;
+        try options.graphics.validate();
         return options;
     }
 };
+
+fn parseMebibytes(value: [*:0]const u8) !usize {
+    const mib = try std.fmt.parseUnsigned(usize, std.mem.span(value), 10);
+    return std.math.mul(usize, mib, 1024 * 1024) catch error.InvalidGraphicsLimit;
+}
 
 fn resolveEndpoint(
     init: std.process.Init,
@@ -252,17 +288,37 @@ fn executablePath(io: Io, buffer: []u8) ![]const u8 {
     return buffer[0..try std.process.executablePath(io, buffer)];
 }
 
-fn launchDaemon(init: std.process.Init, endpoint: *const core.endpoint.Local) !void {
+fn launchDaemon(
+    init: std.process.Init,
+    endpoint: *const core.endpoint.Local,
+    graphics: backend.runtime.GraphicsLimits,
+) !void {
     if (std.c.setsid() < 0) return error.DetachFailed;
 
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const executable = try executablePath(init.io, &executable_buffer);
+    var pane_mib_buffer: [32]u8 = undefined;
+    const pane_mib = try std.fmt.bufPrint(
+        &pane_mib_buffer,
+        "{d}",
+        .{graphics.pane_bytes / (1024 * 1024)},
+    );
+    var global_mib_buffer: [32]u8 = undefined;
+    const global_mib = try std.fmt.bufPrint(
+        &global_mib_buffer,
+        "{d}",
+        .{graphics.global_bytes / (1024 * 1024)},
+    );
     const argv = [_][]const u8{
         executable,
         "server",
         "--daemonized",
         "--socket",
         endpoint.path(),
+        "--graphics-pane-mib",
+        pane_mib,
+        "--graphics-global-mib",
+        global_mib,
     };
     const daemon = try std.process.spawn(init.io, .{
         .argv = &argv,
@@ -297,32 +353,21 @@ fn startRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !v
     }
 }
 
-fn finishHandshakeVersions(
-    io: Io,
-    connection: core.transport.SocketChannel,
-    versions: core.schema.handshake.VersionRange,
-) !core.transport.SocketChannel {
+fn finishHandshake(io: Io, connection: core.transport.SocketChannel) !core.transport.SocketChannel {
     var result = connection;
     errdefer result.deinit(io);
 
-    const response = try frontend.transport.handshake.performVersions(io, &result, versions);
+    const response = try frontend.transport.handshake.perform(io, &result);
     switch (response) {
         .accepted => return result,
         .rejected => |rejected| {
             std.debug.print(
-                "telar protocol mismatch: runtime supports {d}..{d}\n",
-                .{
-                    rejected.supported_versions.minimum,
-                    rejected.supported_versions.maximum,
-                },
+                "telar protocol mismatch: runtime expects schema {s}\n",
+                .{&rejected.expected_schema},
             );
-            return error.IncompatibleProtocolVersion;
+            return error.IncompatibleSchema;
         },
     }
-}
-
-fn finishHandshake(io: Io, connection: core.transport.SocketChannel) !core.transport.SocketChannel {
-    return finishHandshakeVersions(io, connection, core.schema.handshake.supported_versions);
 }
 
 fn connectRuntime(
@@ -422,7 +467,7 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     if (options.action == .stop) return stopRuntime(init, &endpoint);
 
     switch (options.mode) {
-        .background_launcher => return launchDaemon(init, &endpoint),
+        .background_launcher => return launchDaemon(init, &endpoint, options.graphics),
         .foreground, .daemonized => {},
     }
 
@@ -430,11 +475,12 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     var history_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const history_path = try resolveHistoryPath(init, &history_buffer);
     try prepareHistoryDatabase(init.io, history_path);
-    try backend.runtime.serveWithHistory(
+    try backend.runtime.serveWithHistoryOptions(
         init.io,
         init.gpa,
         endpoint.path(),
         history_path.path,
+        .{ .graphics = options.graphics },
     );
 }
 
@@ -446,20 +492,14 @@ fn stopRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !vo
         },
         else => |other| return other,
     };
-    // Stop is deliberately compatible with protocol 1. Its one-byte request
-    // and response did not change, so a new binary can retire an old runtime
-    // before starting one that speaks compact pane frames.
-    var connection = try finishHandshakeVersions(init.io, raw_connection, .{
-        .minimum = 1,
-        .maximum = core.schema.handshake.current_version,
-    });
+    var connection = try finishHandshake(init.io, raw_connection);
     defer connection.deinit(init.io);
 
     var send_buffer: [1]u8 = undefined;
-    try connection.send(init.io, try core.schema.v2.encodeRuntimeStop(&send_buffer));
+    try connection.send(init.io, try core.schema.encodeRuntimeStop(&send_buffer));
 
     var receive_buffer: [2048]u8 = undefined;
-    switch (try core.schema.v2.decodeServer(try connection.receive(init.io, &receive_buffer))) {
+    switch (try core.schema.decodeServer(try connection.receive(init.io, &receive_buffer))) {
         .runtime_stopping => try File.stdout().writeStreamingAll(init.io, "telar runtime stopped\n"),
         .request_failed => |failure| {
             std.debug.print("telar runtime: {s}\n", .{failure.message});
@@ -507,6 +547,7 @@ fn runClient(
         .cwd = cwd_buffer[0..cwd_len],
         .endpoint = endpoint,
         .theme = options.theme,
+        .sidebar_rendering = options.sidebar_rendering,
     });
 }
 
@@ -527,7 +568,7 @@ fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
     const query = if (options.query) |value| std.mem.span(value) else "";
 
     var send_buffer: [schema_history_request_size]u8 = undefined;
-    try connection.send(init.io, try core.schema.v2.encodeQueryHistory(&send_buffer, .{
+    try connection.send(init.io, try core.schema.encodeQueryHistory(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .query = query,
         .scope = options.scope,
@@ -539,7 +580,7 @@ fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
 
     const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
     defer init.gpa.free(receive_buffer);
-    const response = try core.schema.v2.decodeServer(
+    const response = try core.schema.decodeServer(
         try connection.receive(init.io, receive_buffer),
     );
     switch (response) {
@@ -552,10 +593,10 @@ fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
     }
 }
 
-const schema_history_request_size = core.schema.v2.max_history_query_bytes +
-    core.schema.v2.max_cwd_bytes + 64;
+const schema_history_request_size = core.schema.max_history_query_bytes +
+    core.schema.max_cwd_bytes + 64;
 
-fn printHistory(io: Io, results: core.schema.v2.HistoryResultsView) !void {
+fn printHistory(io: Io, results: core.schema.HistoryResultsView) !void {
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = File.stdout().writerStreaming(io, &output_buffer);
     const writer = &output.interface;
@@ -635,7 +676,7 @@ fn writeHistoryField(writer: *Io.Writer, value: []const u8) !void {
 }
 
 const usage =
-    \\Usage: telar [--theme NAME] [command [args...]]
+    \\Usage: telar [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
     \\       telar server
     \\       telar server stop
     \\       telar history list [options]
@@ -661,6 +702,10 @@ const usage =
     \\
     \\Options:
     \\  --theme NAME      UI theme: vesper, catppuccin, tokyo-night, terminal
+    \\  --sidebar-renderer MODE  automatic, cells, kitty-hybrid, kitty-full
+    \\Server options:
+    \\  --graphics-pane-mib N    Decoded KGP memory per pane (default 64)
+    \\  --graphics-global-mib N  Decoded KGP memory for the runtime (default 256)
     \\  -h, --help       Show this help
     \\  -V, --version    Show the version
     \\  --               Stop parsing telar options
@@ -750,6 +795,15 @@ test "CLI rejects unknown and duplicate themes" {
     try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate));
 }
 
+test "CLI selects and validates the sidebar renderer" {
+    const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
+    const cli = try Cli.parse(&args);
+    try std.testing.expectEqual(frontend.kitty.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
+
+    const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
+    try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid));
+}
+
 test "CLI rejects an empty command after the delimiter" {
     const args = [_][*:0]const u8{ "telar", "--" };
     try std.testing.expectError(error.MissingCommand, Cli.parse(&args));
@@ -792,6 +846,28 @@ test "server socket and launcher mode are explicit" {
     );
 }
 
+test "server graphics memory quotas are configurable and bounded" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "server",
+        "--graphics-pane-mib",
+        "32",
+        "--graphics-global-mib",
+        "128",
+    };
+    const cli = try Cli.parse(&args);
+    try std.testing.expectEqual(@as(usize, 32 * 1024 * 1024), cli.server.graphics.pane_bytes);
+    try std.testing.expectEqual(@as(usize, 128 * 1024 * 1024), cli.server.graphics.global_bytes);
+
+    const invalid = [_][*:0]const u8{
+        "telar",
+        "server",
+        "--graphics-pane-mib",
+        "65",
+    };
+    try std.testing.expectError(error.InvalidGraphicsLimits, Cli.parse(&invalid));
+}
+
 test "CLI parses history search filters" {
     const args = [_][*:0]const u8{
         "telar",
@@ -808,7 +884,7 @@ test "CLI parses history search filters" {
     try std.testing.expect(cli == .history);
     try std.testing.expectEqual(HistoryAction.search, cli.history.action);
     try std.testing.expectEqualStrings("git commit", std.mem.span(cli.history.query.?));
-    try std.testing.expectEqual(core.schema.v2.HistoryScope.workspace, cli.history.scope);
+    try std.testing.expectEqual(core.schema.HistoryScope.workspace, cli.history.scope);
     try std.testing.expectEqualStrings("/work/telar", std.mem.span(cli.history.scope_value.?));
     try std.testing.expect(cli.history.failed_only);
     try std.testing.expectEqual(@as(u16, 40), cli.history.limit);

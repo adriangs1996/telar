@@ -1,21 +1,23 @@
-//! Stable handshake used before either peer decodes versioned messages.
+//! Fixed handshake for Telar's single current schema.
+//!
+//! There is deliberately no version range yet. A client and runtime either
+//! speak the exact same schema or refuse the connection. Historical decoders
+//! belong here only once Telar promises rolling upgrades to users.
 
 const std = @import("std");
 
-pub const Version = u16;
-pub const current_version: Version = 2;
-pub const supported_versions = VersionRange{
-    .minimum = current_version,
-    .maximum = current_version,
-};
+pub const SchemaId = [8]u8;
+/// Opaque fingerprint of the only schema accepted by this source tree. Change
+/// it whenever an existing wire encoding changes; do not keep the old decoder
+/// until rolling upgrades become a supported product requirement.
+pub const schema_id: SchemaId = "1c6130a2".*;
 
 pub const magic: [8]u8 = "TELARIPC".*;
-pub const wire_revision: u8 = 1;
 
-const header_size = magic.len + 2;
-pub const client_hello_size = header_size + 4;
-pub const server_accept_size = header_size + 2;
-pub const server_reject_size = header_size + 5;
+const header_size = magic.len + 1;
+pub const client_hello_size = header_size + schema_id.len;
+pub const server_accept_size = header_size + schema_id.len;
+pub const server_reject_size = header_size + 1 + schema_id.len;
 pub const max_message_size = server_reject_size;
 
 pub const Tag = enum(u8) {
@@ -25,33 +27,20 @@ pub const Tag = enum(u8) {
 };
 
 pub const RejectReason = enum(u8) {
-    incompatible_versions = 1,
-};
-
-pub const VersionRange = struct {
-    minimum: Version,
-    maximum: Version,
-
-    pub fn isValid(range: VersionRange) bool {
-        return range.minimum != 0 and range.minimum <= range.maximum;
-    }
-
-    pub fn contains(range: VersionRange, version: Version) bool {
-        return range.isValid() and version >= range.minimum and version <= range.maximum;
-    }
+    incompatible_schema = 1,
 };
 
 pub const ClientHello = struct {
-    versions: VersionRange = supported_versions,
+    schema: SchemaId = schema_id,
 };
 
 pub const ServerAccept = struct {
-    version: Version,
+    schema: SchemaId,
 };
 
 pub const ServerReject = struct {
     reason: RejectReason,
-    supported_versions: VersionRange,
+    expected_schema: SchemaId,
 };
 
 pub const ServerResponse = union(enum) {
@@ -59,58 +48,36 @@ pub const ServerResponse = union(enum) {
     rejected: ServerReject,
 };
 
-pub const EncodeError = error{
-    BufferTooSmall,
-    InvalidVersionRange,
-    InvalidSelectedVersion,
-};
+pub const EncodeError = error{BufferTooSmall};
 
 pub const DecodeError = error{
     InvalidLength,
     InvalidMagic,
-    UnsupportedWireRevision,
     UnknownMessage,
     UnexpectedMessage,
-    InvalidVersionRange,
-    InvalidSelectedVersion,
     UnknownRejectReason,
 };
 
-pub fn negotiate(client: VersionRange, server: VersionRange) error{InvalidVersionRange}!ServerResponse {
-    if (!client.isValid() or !server.isValid()) return error.InvalidVersionRange;
-
-    const minimum = @max(client.minimum, server.minimum);
-    const maximum = @min(client.maximum, server.maximum);
-    if (minimum <= maximum) {
-        return .{ .accepted = .{ .version = maximum } };
-    }
+pub fn negotiate(client: SchemaId, server: SchemaId) ServerResponse {
+    if (std.mem.eql(u8, &client, &server))
+        return .{ .accepted = .{ .schema = server } };
     return .{ .rejected = .{
-        .reason = .incompatible_versions,
-        .supported_versions = server,
+        .reason = .incompatible_schema,
+        .expected_schema = server,
     } };
 }
 
 pub fn encodeClientHello(buffer: []u8, hello: ClientHello) EncodeError![]const u8 {
-    if (!hello.versions.isValid()) return error.InvalidVersionRange;
     if (buffer.len < client_hello_size) return error.BufferTooSmall;
-
     writeHeader(buffer, .client_hello);
-    std.mem.writeInt(Version, buffer[header_size..][0..2], hello.versions.minimum, .little);
-    std.mem.writeInt(Version, buffer[header_size + 2 ..][0..2], hello.versions.maximum, .little);
+    @memcpy(buffer[header_size..client_hello_size], &hello.schema);
     return buffer[0..client_hello_size];
 }
 
 pub fn decodeClientHello(payload: []const u8) DecodeError!ClientHello {
-    const tag = try decodeHeader(payload);
-    if (tag != .client_hello) return error.UnexpectedMessage;
+    if (try decodeHeader(payload) != .client_hello) return error.UnexpectedMessage;
     if (payload.len != client_hello_size) return error.InvalidLength;
-
-    const versions = VersionRange{
-        .minimum = std.mem.readInt(Version, payload[header_size..][0..2], .little),
-        .maximum = std.mem.readInt(Version, payload[header_size + 2 ..][0..2], .little),
-    };
-    if (!versions.isValid()) return error.InvalidVersionRange;
-    return .{ .versions = versions };
+    return .{ .schema = payload[header_size..client_hello_size][0..schema_id.len].* };
 }
 
 pub fn encodeServerResponse(buffer: []u8, response: ServerResponse) EncodeError![]const u8 {
@@ -129,67 +96,46 @@ pub fn decodeServerResponse(payload: []const u8) DecodeError!ServerResponse {
 }
 
 fn encodeServerAccept(buffer: []u8, accepted: ServerAccept) EncodeError![]const u8 {
-    if (accepted.version == 0) return error.InvalidSelectedVersion;
     if (buffer.len < server_accept_size) return error.BufferTooSmall;
-
     writeHeader(buffer, .server_accept);
-    std.mem.writeInt(Version, buffer[header_size..][0..2], accepted.version, .little);
+    @memcpy(buffer[header_size..server_accept_size], &accepted.schema);
     return buffer[0..server_accept_size];
 }
 
 fn decodeServerAccept(payload: []const u8) DecodeError!ServerAccept {
     if (payload.len != server_accept_size) return error.InvalidLength;
-    const version = std.mem.readInt(Version, payload[header_size..][0..2], .little);
-    if (version == 0) return error.InvalidSelectedVersion;
-    return .{ .version = version };
+    return .{ .schema = payload[header_size..server_accept_size][0..schema_id.len].* };
 }
 
 fn encodeServerReject(buffer: []u8, rejected: ServerReject) EncodeError![]const u8 {
-    if (!rejected.supported_versions.isValid()) return error.InvalidVersionRange;
     if (buffer.len < server_reject_size) return error.BufferTooSmall;
-
     writeHeader(buffer, .server_reject);
     buffer[header_size] = @intFromEnum(rejected.reason);
-    std.mem.writeInt(
-        Version,
-        buffer[header_size + 1 ..][0..2],
-        rejected.supported_versions.minimum,
-        .little,
-    );
-    std.mem.writeInt(
-        Version,
-        buffer[header_size + 3 ..][0..2],
-        rejected.supported_versions.maximum,
-        .little,
-    );
+    @memcpy(buffer[header_size + 1 .. server_reject_size], &rejected.expected_schema);
     return buffer[0..server_reject_size];
 }
 
 fn decodeServerReject(payload: []const u8) DecodeError!ServerReject {
     if (payload.len != server_reject_size) return error.InvalidLength;
     const reason: RejectReason = switch (payload[header_size]) {
-        @intFromEnum(RejectReason.incompatible_versions) => .incompatible_versions,
+        @intFromEnum(RejectReason.incompatible_schema) => .incompatible_schema,
         else => return error.UnknownRejectReason,
     };
-    const versions = VersionRange{
-        .minimum = std.mem.readInt(Version, payload[header_size + 1 ..][0..2], .little),
-        .maximum = std.mem.readInt(Version, payload[header_size + 3 ..][0..2], .little),
+    return .{
+        .reason = reason,
+        .expected_schema = payload[header_size + 1 .. server_reject_size][0..schema_id.len].*,
     };
-    if (!versions.isValid()) return error.InvalidVersionRange;
-    return .{ .reason = reason, .supported_versions = versions };
 }
 
 fn writeHeader(buffer: []u8, tag: Tag) void {
-    std.mem.copyForwards(u8, buffer[0..magic.len], &magic);
-    buffer[magic.len] = wire_revision;
-    buffer[magic.len + 1] = @intFromEnum(tag);
+    @memcpy(buffer[0..magic.len], &magic);
+    buffer[magic.len] = @intFromEnum(tag);
 }
 
 fn decodeHeader(payload: []const u8) DecodeError!Tag {
     if (payload.len < header_size) return error.InvalidLength;
     if (!std.mem.eql(u8, payload[0..magic.len], &magic)) return error.InvalidMagic;
-    if (payload[magic.len] != wire_revision) return error.UnsupportedWireRevision;
-    return switch (payload[magic.len + 1]) {
+    return switch (payload[magic.len]) {
         @intFromEnum(Tag.client_hello) => .client_hello,
         @intFromEnum(Tag.server_accept) => .server_accept,
         @intFromEnum(Tag.server_reject) => .server_reject,
@@ -199,51 +145,38 @@ fn decodeHeader(payload: []const u8) DecodeError!Tag {
 
 test "client hello has a stable byte representation" {
     var buffer: [client_hello_size]u8 = undefined;
-    const encoded = try encodeClientHello(&buffer, .{ .versions = .{
-        .minimum = 1,
-        .maximum = 3,
-    } });
+    const encoded = try encodeClientHello(&buffer, .{});
 
     try std.testing.expectEqualSlices(u8, &magic, encoded[0..magic.len]);
-    try std.testing.expectEqual(wire_revision, encoded[magic.len]);
-    try std.testing.expectEqual(@intFromEnum(Tag.client_hello), encoded[magic.len + 1]);
-    try std.testing.expectEqualSlices(u8, &.{ 1, 0, 3, 0 }, encoded[header_size..]);
-
-    const decoded = try decodeClientHello(encoded);
-    try std.testing.expectEqual(@as(Version, 1), decoded.versions.minimum);
-    try std.testing.expectEqual(@as(Version, 3), decoded.versions.maximum);
+    try std.testing.expectEqual(@intFromEnum(Tag.client_hello), encoded[magic.len]);
+    try std.testing.expectEqualSlices(u8, &schema_id, encoded[header_size..]);
+    try std.testing.expectEqual(schema_id, (try decodeClientHello(encoded)).schema);
 }
 
-test "negotiation selects the highest shared version" {
-    const response = try negotiate(
-        .{ .minimum = 1, .maximum = 4 },
-        .{ .minimum = 2, .maximum = 3 },
+test "only the exact schema is accepted" {
+    try std.testing.expectEqualDeep(
+        ServerResponse{ .accepted = .{ .schema = schema_id } },
+        negotiate(schema_id, schema_id),
     );
-    try std.testing.expectEqual(@as(Version, 3), response.accepted.version);
-}
 
-test "negotiation reports the server range when versions do not overlap" {
-    const server = VersionRange{ .minimum = 1, .maximum = 2 };
-    const response = try negotiate(.{ .minimum = 3, .maximum = 4 }, server);
-
-    try std.testing.expectEqual(RejectReason.incompatible_versions, response.rejected.reason);
-    try std.testing.expectEqual(server, response.rejected.supported_versions);
+    var incompatible = schema_id;
+    incompatible[0] ^= 1;
+    const response = negotiate(incompatible, schema_id);
+    try std.testing.expectEqual(RejectReason.incompatible_schema, response.rejected.reason);
+    try std.testing.expectEqual(schema_id, response.rejected.expected_schema);
 }
 
 test "server responses round trip" {
+    var incompatible = schema_id;
+    incompatible[0] ^= 1;
     const responses = [_]ServerResponse{
-        .{ .accepted = .{ .version = 1 } },
-        .{ .rejected = .{
-            .reason = .incompatible_versions,
-            .supported_versions = supported_versions,
-        } },
+        .{ .accepted = .{ .schema = schema_id } },
+        .{ .rejected = .{ .reason = .incompatible_schema, .expected_schema = incompatible } },
     };
-
     for (responses) |response| {
         var buffer: [max_message_size]u8 = undefined;
         const encoded = try encodeServerResponse(&buffer, response);
-        const decoded = try decodeServerResponse(encoded);
-        try std.testing.expectEqualDeep(response, decoded);
+        try std.testing.expectEqualDeep(response, try decodeServerResponse(encoded));
     }
 }
 
@@ -255,13 +188,8 @@ test "malformed handshakes are rejected" {
     wrong_magic[0] = 'X';
     try std.testing.expectError(error.InvalidMagic, decodeClientHello(&wrong_magic));
 
-    var wrong_revision = buffer;
-    wrong_revision[magic.len] = wire_revision + 1;
-    try std.testing.expectError(error.UnsupportedWireRevision, decodeClientHello(&wrong_revision));
-
+    var wrong_tag = buffer;
+    wrong_tag[magic.len] = 0xff;
+    try std.testing.expectError(error.UnknownMessage, decodeClientHello(&wrong_tag));
     try std.testing.expectError(error.InvalidLength, decodeClientHello(valid[0 .. valid.len - 1]));
-    try std.testing.expectError(
-        error.InvalidVersionRange,
-        encodeClientHello(&buffer, .{ .versions = .{ .minimum = 2, .maximum = 1 } }),
-    );
 }

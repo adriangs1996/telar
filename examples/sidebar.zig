@@ -932,6 +932,7 @@ fn apply(state: *State, action: Action) void {
 fn update(state: *State, event: term.Event) void {
     switch (event) {
         .incomplete => {},
+        .terminal_response => {},
         .paste_start => state.pasting = true,
         .paste_end => state.pasting = false,
         .key => |key| handleKey(state, key),
@@ -1240,7 +1241,7 @@ const Message = union(enum) {
                 // `paste_end` leaves the field swallowing every key that
                 // follows, and dropping a `paste_start` turns a pasted newline
                 // back into Enter.
-                .key, .incomplete, .paste_start, .paste_end => null,
+                .key, .terminal_response, .incomplete, .paste_start, .paste_end => null,
             },
         };
     }

@@ -12,6 +12,7 @@ pub const frame = @import("frame.zig");
 pub const pace = @import("pace.zig");
 pub const edit = @import("edit.zig");
 pub const theme = @import("theme.zig");
+pub const kitty = @import("kitty.zig");
 pub const keybind = @import("keybind.zig");
 pub const layout = @import("layout.zig");
 pub const multiplexer = @import("multiplexer.zig");

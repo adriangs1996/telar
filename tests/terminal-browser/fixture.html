@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telar terminal-browser verification</title>
+    <style>
+      html, body, canvas { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { background: #101010; }
+    </style>
+  </head>
+  <body>
+    <canvas id="surface"></canvas>
+    <script>
+      const canvas = document.querySelector("#surface");
+      const context = canvas.getContext("2d");
+      let frame = 0;
+      function draw() {
+        canvas.width = innerWidth;
+        canvas.height = innerHeight;
+        const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, `hsl(${frame % 360} 70% 45%)`);
+        gradient.addColorStop(1, "#101010");
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = "white";
+        context.font = "24px sans-serif";
+        context.fillText("terminal-browser inside Telar", 32, 48);
+        frame += 1;
+        requestAnimationFrame(draw);
+      }
+      draw();
+    </script>
+  </body>
+</html>

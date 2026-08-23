@@ -1,9 +1,10 @@
-//! Disposable multi-pane client for protocol version 2.
+//! Disposable multi-pane client for Telar's current schema.
 
 const std = @import("std");
 const core = @import("telar-core");
 const client_view = @import("client_ui.zig");
 const keybind = @import("keybind.zig");
+const kitty = @import("kitty.zig");
 const layout_mod = @import("layout.zig");
 const multiplexer = @import("multiplexer.zig");
 const pace = @import("pace.zig");
@@ -14,7 +15,7 @@ const theme = @import("theme.zig");
 
 const Io = std.Io;
 const File = Io.File;
-const schema = core.schema.v2;
+const schema = core.schema;
 const diagnostics = core.diagnostics;
 const ui = core.ui;
 
@@ -96,6 +97,7 @@ pub const Options = struct {
     endpoint: []const u8,
     bindings: []const ConfiguredBinding = &.{},
     theme: theme.Theme = theme.default_theme,
+    sidebar_rendering: kitty.SidebarRendering = .automatic,
 };
 
 const ClientMetrics = struct {
@@ -104,6 +106,8 @@ const ClientMetrics = struct {
     input_bytes: u64 = 0,
     server_messages: u64 = 0,
     server_bytes: u64 = 0,
+    graphics_messages: u64 = 0,
+    graphics_bytes: u64 = 0,
     frames: u64 = 0,
     frame_cells: u64 = 0,
     frame_spans: u64 = 0,
@@ -116,6 +120,9 @@ const ClientMetrics = struct {
     scanned_cells: u64 = 0,
     flushed_cells: u64 = 0,
     flushed_bytes: u64 = 0,
+    graphics_flushed_bytes: u64 = 0,
+    pane_graphics_flushed_bytes: u64 = 0,
+    sidebar_graphics_flushed_bytes: u64 = 0,
     max_pending_updates: u64 = 0,
     mouse_events: u64 = 0,
     chrome_scanned_cells: u64 = 0,
@@ -143,6 +150,7 @@ const ClientEvent = union(enum) {
     input: anyerror!InputChunk,
     input_timeout: anyerror!void,
     binding_timeout: anyerror!void,
+    capability_timeout: anyerror!void,
     resized: anyerror!void,
     server: anyerror![]u8,
     draw: anyerror!void,
@@ -295,6 +303,7 @@ pub fn run(
     const writer = &output_writer.interface;
 
     try writer.writeAll(platform.enter_sequence);
+    try writer.writeAll(kitty.capability_query);
     try writer.flush();
     defer {
         writer.writeAll(platform.leave_sequence) catch {};
@@ -302,6 +311,14 @@ pub fn run(
     }
 
     var host_size = terminalSize(&tty);
+    const host_platform_size = tty.size();
+    var capabilities: kitty.TerminalCapabilities = .{
+        .window_width_px = host_platform_size.width_px,
+        .window_height_px = host_platform_size.height_px,
+    };
+    const initial_cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
+    host_size.cell_width_px = initial_cell_size.width;
+    host_size.cell_height_px = initial_cell_size.height;
     var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
     defer screen.deinit();
     var view = try client_view.State.initWithTheme(
@@ -311,8 +328,16 @@ pub fn run(
         options.theme,
     );
     defer view.deinit();
+    try view.configureSidebar(
+        options.sidebar_rendering,
+        capabilities.kitty_graphics,
+        initial_cell_size.width,
+        initial_cell_size.height,
+    );
     var tabs = tabs_mod.Model.init(gpa);
     defer tabs.deinit();
+    var graphics_store = kitty.Store.init(gpa);
+    defer graphics_store.deinit();
 
     var watcher = try platform.ResizeWatcher.init(&tty);
     defer watcher.deinit();
@@ -333,11 +358,12 @@ pub fn run(
     });
     try connection.send(io, open_payload);
 
-    var select_storage: [8]ClientEvent = undefined;
+    var select_storage: [9]ClientEvent = undefined;
     var select = Io.Select(ClientEvent).init(io, &select_storage);
     defer select.cancelDiscard();
     try select.concurrent(.resized, waitResize, .{ io, &watcher });
     try select.concurrent(.server, receive, .{ io, connection, receive_buffer });
+    try select.concurrent(.capability_timeout, waitCapabilityTimeout, .{io});
     if (comptime diagnostics.enabled) {
         if (telemetry.available())
             try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
@@ -373,7 +399,7 @@ pub fn run(
         .input => |result| {
             const chunk = try result;
             if (chunk.len == 0) return 0;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &capabilities, &graphics_store, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.feed(chunk.slice(), monotonic(io), &handler) == .stop)
                 return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
@@ -383,7 +409,7 @@ pub fn run(
         .input_timeout => |result| {
             try result;
             input_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &capabilities, &graphics_store, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.expireInput(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
@@ -391,18 +417,59 @@ pub fn run(
         .binding_timeout => |result| {
             try result;
             binding_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &capabilities, &graphics_store, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
             if (try input_router.expireBinding(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
         },
+        .capability_timeout => |result| {
+            try result;
+            if (capabilities.expire()) {
+                const cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
+                try view.configureSidebar(
+                    options.sidebar_rendering,
+                    capabilities.kitty_graphics,
+                    cell_size.width,
+                    cell_size.height,
+                );
+                for (tabs.items[0..tabs.count]) |*slot| {
+                    const tab = if (slot.*) |*value| value else continue;
+                    for (&tab.model.panes) |*pane_slot| {
+                        const pane = if (pane_slot.*) |*value| value else continue;
+                        tab.model.setGraphicsPlaceholder(pane.id, graphics_store.hasPaneGraphics(pane.id));
+                    }
+                }
+                view.invalidate();
+                try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+            }
+        },
         .resized => |result| {
             try result;
             host_size = terminalSize(&tty);
+            const platform_size = tty.size();
+            if (platform_size.width_px != 0) capabilities.window_width_px = platform_size.width_px;
+            if (platform_size.height_px != 0) capabilities.window_height_px = platform_size.height_px;
+            const cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
+            host_size.cell_width_px = cell_size.width;
+            host_size.cell_height_px = cell_size.height;
+            try view.configureSidebar(
+                options.sidebar_rendering,
+                capabilities.kitty_graphics,
+                cell_size.width,
+                cell_size.height,
+            );
             try screen.resize(host_size.cols, host_size.rows);
             try view.resize(host_size.cols, host_size.rows);
-            if (tabs.active()) |active|
+            if (tabs.active()) |active| {
+                active.model.setCellSize(cell_size.width, cell_size.height);
+                graphics_store.invalidatePlacements();
                 try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
+            }
+            // Pixel dimensions are not guaranteed to be present in winsize,
+            // and can change independently when the font or display scale
+            // changes. Refresh both values without blocking the resize path.
+            try writer.writeAll("\x1b[14t\x1b[16t");
+            try writer.flush();
             try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try select.concurrent(.resized, waitResize, .{ io, &watcher });
         },
@@ -413,6 +480,19 @@ pub fn run(
             if (comptime diagnostics.enabled) {
                 metrics.server_messages += 1;
                 metrics.server_bytes += payload.len;
+                switch (message) {
+                    .graphics_snapshot,
+                    .graphics_image,
+                    .graphics_image_chunk,
+                    .graphics_placement,
+                    .graphics_delete_image,
+                    .graphics_delete_placement,
+                    => {
+                        metrics.graphics_messages += 1;
+                        metrics.graphics_bytes += payload.len;
+                    },
+                    else => {},
+                }
                 metrics.decode.observe(diagnostics.elapsed(decode_started, diagnostics.now(io)));
             }
             switch (message) {
@@ -511,7 +591,7 @@ pub fn run(
                     if (operation != .create or operation.requestId() != created.request_id)
                         return error.UnexpectedTabCreated;
                     if (tabs.active()) |current| {
-                        var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
+                        var handler = InputHandler.init(io, connection, send_buffer, &metrics, &tabs, &view, &options, &capabilities, &graphics_store, &next_request_id, &pending_split, &pending_close, &pending_tab_operation, &tab_snapshot);
                         try handler.detachTab(current);
                     }
                     pending_tab_operation = null;
@@ -626,6 +706,7 @@ pub fn run(
                     }
                 },
                 .pane_exited => |exited| {
+                    graphics_store.clearPane(exited.pane_id);
                     const tab = tabs.tabForPane(exited.pane_id);
                     if (tab) |value| _ = value.model.removePane(exited.pane_id);
                     view.invalidate();
@@ -681,6 +762,58 @@ pub fn run(
                 },
                 .runtime_stopping => return 0,
                 .history_results => return error.UnexpectedHistoryResults,
+                .graphics_snapshot => |snapshot| {
+                    graphics_store.applySnapshot(snapshot) catch |err| switch (err) {
+                        error.GraphicsResyncRequired => try requestGraphicsSnapshot(
+                            io,
+                            connection,
+                            send_buffer,
+                            snapshot.pane_id,
+                        ),
+                        else => return err,
+                    };
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .graphics_image => |image| {
+                    graphics_store.applyImage(image) catch |err| switch (err) {
+                        error.GraphicsResyncRequired => try requestGraphicsSnapshot(io, connection, send_buffer, image.pane_id),
+                        else => return err,
+                    };
+                    if (tabs.tabForPane(image.pane_id)) |tab|
+                        tab.model.setGraphicsPlaceholder(image.pane_id, capabilities.kitty_graphics != .supported);
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .graphics_image_chunk => |chunk| {
+                    graphics_store.applyChunk(chunk) catch |err| switch (err) {
+                        error.GraphicsResyncRequired => try requestGraphicsSnapshot(io, connection, send_buffer, chunk.pane_id),
+                        else => return err,
+                    };
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .graphics_placement => |placement| {
+                    graphics_store.applyPlacement(placement) catch |err| switch (err) {
+                        error.GraphicsResyncRequired => try requestGraphicsSnapshot(io, connection, send_buffer, placement.pane_id),
+                        else => return err,
+                    };
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .graphics_delete_image => |deleted| {
+                    graphics_store.deleteImage(deleted) catch |err| switch (err) {
+                        error.GraphicsResyncRequired => try requestGraphicsSnapshot(io, connection, send_buffer, deleted.pane_id),
+                        else => return err,
+                    };
+                    if (tabs.tabForPane(deleted.pane_id)) |tab|
+                        tab.model.setGraphicsPlaceholder(deleted.pane_id, capabilities.kitty_graphics != .supported and
+                            graphics_store.hasPaneGraphics(deleted.pane_id));
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
+                .graphics_delete_placement => |deleted| {
+                    graphics_store.deletePlacement(deleted) catch |err| switch (err) {
+                        error.GraphicsResyncRequired => try requestGraphicsSnapshot(io, connection, send_buffer, deleted.pane_id),
+                        else => return err,
+                    };
+                    try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
+                },
             }
             try select.concurrent(.server, receive, .{ io, connection, receive_buffer });
         },
@@ -691,7 +824,7 @@ pub fn run(
                 metrics.draw_lateness.observe(monotonic(io) -| draw_due_ns);
             if (pending_updates != 0) {
                 const model = &tabs.active().?.model;
-                const presented_ns = try presentModel(io, &screen, writer, connection, send_buffer, &metrics, &tabs, model, &view);
+                const presented_ns = try presentModel(io, &screen, writer, connection, send_buffer, &metrics, &tabs, model, &view, &capabilities, &graphics_store);
                 observePresentation(&metrics, &last_presented_ns, presented_ns, true);
                 pacer.record(presented_ns, draw_due_ns, pending_updates);
                 pending_updates = 0;
@@ -722,6 +855,8 @@ pub fn run(
                 active.model.pane_count,
                 pending_updates,
                 draw_pending,
+                &capabilities,
+                view.sidebar_rendering,
             ) catch continue;
             telemetry_write_pending = true;
             select.concurrent(.telemetry_written, writeDiagnostics, .{
@@ -754,6 +889,8 @@ const InputHandler = struct {
     tabs: *tabs_mod.Model,
     view: *client_view.State,
     options: *const Options,
+    capabilities: *kitty.TerminalCapabilities,
+    graphics_store: *kitty.Store,
     next_request_id: *u64,
     pending_split: *?PendingSplit,
     pending_close: *?PendingClose,
@@ -769,6 +906,8 @@ const InputHandler = struct {
         tabs: *tabs_mod.Model,
         view: *client_view.State,
         options: *const Options,
+        capabilities: *kitty.TerminalCapabilities,
+        graphics_store: *kitty.Store,
         next_request_id: *u64,
         pending_split: *?PendingSplit,
         pending_close: *?PendingClose,
@@ -783,6 +922,8 @@ const InputHandler = struct {
             .tabs = tabs,
             .view = view,
             .options = options,
+            .capabilities = capabilities,
+            .graphics_store = graphics_store,
             .next_request_id = next_request_id,
             .pending_split = pending_split,
             .pending_close = pending_close,
@@ -803,6 +944,7 @@ const InputHandler = struct {
                 .pane_id = pane.id,
             });
             try handler.connection.send(handler.io, payload);
+            try handler.graphics_store.setPaneVisible(pane.id, false);
         }
         tabs_mod.Model.detachAll(tab);
     }
@@ -815,6 +957,10 @@ const InputHandler = struct {
         try handler.detachTab(current);
         std.debug.assert(handler.tabs.select(tab_id));
         const active = handler.tabs.active().?;
+        for (&active.model.panes) |*slot| {
+            const pane = if (slot.*) |*item| item else continue;
+            try handler.graphics_store.setPaneVisible(pane.id, true);
+        }
         active.model.composition_invalidated = true;
         const request_id = try nextRequestId(handler.next_request_id);
         const payload = try schema.encodeRequestTabSnapshot(handler.send_buffer, .{
@@ -857,8 +1003,21 @@ const InputHandler = struct {
 
     pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         if (comptime diagnostics.enabled) handler.metrics.mouse_events += 1;
+        const cell_size = handler.capabilities.cellSize(
+            handler.view.scratch.w,
+            handler.view.scratch.h,
+        );
+        const exterior_pixels = handler.capabilities.mouse_pixels == .supported and
+            cell_size.width != 0 and cell_size.height != 0;
+        var cell_event = event;
+        if (exterior_pixels) {
+            cell_event.x = std.math.cast(u16, event.raw_x / cell_size.width) orelse
+                std.math.maxInt(u16);
+            cell_event.y = std.math.cast(u16, event.raw_y / cell_size.height) orelse
+                std.math.maxInt(u16);
+        }
         const model = handler.activeModel();
-        const interaction = handler.view.handleMouse(handler.tabs, model, event);
+        const interaction = handler.view.handleMouse(handler.tabs, model, cell_event);
         if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
         if (interaction.layout_changed) {
             try resizeAttached(
@@ -870,6 +1029,64 @@ const InputHandler = struct {
             );
         }
         handler.redraw = handler.redraw or interaction.redraw;
+        if (interaction.select_tab != null or !handler.view.workbench().contains(cell_event.x, cell_event.y)) return;
+        const pane = model.focusedPane() orelse return;
+        const pane_view = model.viewForPane(pane.id, handler.view.workbench()) orelse return;
+        if (!pane_view.content.contains(cell_event.x, cell_event.y) or !pane.mouse.sgr or
+            !mouseTracked(pane.mouse.tracking, cell_event.kind)) return;
+        var encoded: [64]u8 = undefined;
+        const exact_x: ?u32 = if (pane.mouse.pixels and exterior_pixels)
+            event.raw_x - @as(u32, pane_view.content.x) * cell_size.width
+        else
+            null;
+        const exact_y: ?u32 = if (pane.mouse.pixels and exterior_pixels)
+            event.raw_y - @as(u32, pane_view.content.y) * cell_size.height
+        else
+            null;
+        const bytes = try encodeSgrMouse(
+            &encoded,
+            cell_event,
+            cell_event.x - pane_view.content.x,
+            cell_event.y - pane_view.content.y,
+            pane.mouse.pixels,
+            cell_size.width,
+            cell_size.height,
+            exact_x,
+            exact_y,
+        );
+        const payload = try schema.encodePaneInput(handler.send_buffer, .{
+            .pane_id = pane.id,
+            .bytes = bytes,
+        });
+        try handler.connection.send(handler.io, payload);
+    }
+
+    pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalResponse) !void {
+        if (!handler.capabilities.observe(response)) return;
+        const cell_size = handler.capabilities.cellSize(
+            handler.view.scratch.w,
+            handler.view.scratch.h,
+        );
+        for (handler.tabs.items[0..handler.tabs.count]) |*slot| {
+            const tab = if (slot.*) |*value| value else continue;
+            tab.model.setCellSize(cell_size.width, cell_size.height);
+            for (&tab.model.panes) |*pane_slot| {
+                const pane = if (pane_slot.*) |*value| value else continue;
+                tab.model.setGraphicsPlaceholder(pane.id, handler.capabilities.kitty_graphics != .supported and
+                    handler.graphics_store.hasPaneGraphics(pane.id));
+            }
+        }
+        handler.graphics_store.invalidatePlacements();
+        try handler.view.configureSidebar(
+            handler.options.sidebar_rendering,
+            handler.capabilities.kitty_graphics,
+            cell_size.width,
+            cell_size.height,
+        );
+        if (handler.tabs.active()) |active|
+            try resizeAttached(handler.io, handler.connection, handler.send_buffer, &active.model, handler.view.workbench());
+        handler.view.invalidate();
+        handler.redraw = true;
     }
 
     pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
@@ -1199,6 +1416,8 @@ fn presentModel(
     tabs: *const tabs_mod.Model,
     model: *multiplexer.Model,
     view: *client_view.State,
+    capabilities: *const kitty.TerminalCapabilities,
+    graphics_store: *kitty.Store,
 ) !u64 {
     const compose_started = diagnostics.now(io);
     const composed = try model.renderThemed(screen, view.workbench(), view.palette());
@@ -1212,6 +1431,24 @@ fn presentModel(
         metrics.full_compositions += @intFromBool(composed.full);
         metrics.compose.observe(diagnostics.elapsed(compose_started, diagnostics.now(io)));
     }
+    const cell_size = capabilities.cellSize(screen.back.w, screen.back.h);
+    var graphics_writer: CombinedGraphicsWriter = .{
+        .panes = .{
+            .store = graphics_store,
+            .model = model,
+            .area = view.workbench(),
+            .cell_width = cell_size.width,
+            .cell_height = cell_size.height,
+        },
+        .sidebar = view.kittySidebar(),
+        .cell_width = cell_size.width,
+        .cell_height = cell_size.height,
+        .metrics = metrics,
+    };
+    if (capabilities.kitty_graphics == .supported) screen.graphics = .{
+        .context = &graphics_writer,
+        .write = CombinedGraphicsWriter.writeOpaque,
+    };
     try flushScreen(io, screen, writer, metrics);
     const presented_ns = monotonic(io);
     for (&model.panes) |*slot| {
@@ -1229,6 +1466,25 @@ fn presentModel(
     }
     return presented_ns;
 }
+
+const CombinedGraphicsWriter = struct {
+    panes: kitty.KittyGraphicsWriter,
+    sidebar: *kitty.KittySidebarRenderer,
+    cell_width: u16,
+    cell_height: u16,
+    metrics: *ClientMetrics,
+
+    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
+        const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
+        const pane_bytes = try self.panes.write(writer);
+        const sidebar_bytes = try self.sidebar.write(writer, self.cell_width, self.cell_height);
+        if (comptime diagnostics.enabled) {
+            self.metrics.pane_graphics_flushed_bytes += pane_bytes;
+            self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
+        }
+        return pane_bytes + sidebar_bytes;
+    }
+};
 
 fn observePresentation(
     metrics: *ClientMetrics,
@@ -1258,6 +1514,7 @@ fn flushScreen(
         metrics.scanned_cells += stats.scanned;
         metrics.flushed_cells += stats.cells;
         metrics.flushed_bytes += stats.bytes;
+        metrics.graphics_flushed_bytes += stats.graphics_bytes;
         metrics.flush.observe(diagnostics.elapsed(started, diagnostics.now(io)));
     }
 }
@@ -1278,6 +1535,8 @@ fn formatClientTelemetry(
     pane_count: usize,
     pending_updates: usize,
     draw_pending: bool,
+    capabilities: *const kitty.TerminalCapabilities,
+    sidebar_rendering: kitty.ResolvedSidebarRendering,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
     var writer = Io.Writer.fixed(buffer);
@@ -1285,16 +1544,11 @@ fn formatClientTelemetry(
         "\"theme\":\"{s}\"," ++
         "\"active_tab\":{d},\"tab_count\":{d}," ++
         "\"focused_pane\":{d},\"pane_count\":{d},\"pending_updates\":{d}," ++
-        "\"draw_pending\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
-        "\"server_messages\":{d},\"server_bytes\":{d}," ++
-        "\"frames\":{d},\"frame_cells\":{d},\"frame_spans\":{d}," ++
-        "\"snapshots\":{d},\"composed_panes\":{d},\"composed_cells\":{d}," ++
-        "\"composed_damage_cells\":{d},\"full_compositions\":{d}," ++
-        "\"flushes\":{d},\"scanned_cells\":{d},\"flushed_cells\":{d}," ++
-        "\"flushed_bytes\":{d},\"max_pending_updates\":{d}," ++
-        "\"mouse_events\":{d},\"chrome_scanned_cells\":{d}," ++
-        "\"chrome_damaged_cells\":{d}," ++
-        "\"pacer_drawn\":{d},\"pacer_throttled\":{d},\"pacer_absorbed\":{d}", .{
+        "\"draw_pending\":{d},\"kitty_graphics\":\"{s}\"," ++
+        "\"mouse_pixels\":\"{s}\",\"sidebar_renderer\":\"{s}\"," ++
+        "\"cell_width_px\":{d},\"cell_height_px\":{d}," ++
+        "\"input_events\":{d},\"input_bytes\":{d}," ++
+        "\"server_messages\":{d},\"server_bytes\":{d},", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
         theme_name,
@@ -1304,10 +1558,28 @@ fn formatClientTelemetry(
         pane_count,
         pending_updates,
         @intFromBool(draw_pending),
+        @tagName(capabilities.kitty_graphics),
+        @tagName(capabilities.mouse_pixels),
+        @tagName(sidebar_rendering),
+        capabilities.cell_width_px,
+        capabilities.cell_height_px,
         metrics.input_events,
         metrics.input_bytes,
         metrics.server_messages,
         metrics.server_bytes,
+    });
+    try writer.print("\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
+        "\"frames\":{d},\"frame_cells\":{d},\"frame_spans\":{d}," ++
+        "\"snapshots\":{d},\"composed_panes\":{d},\"composed_cells\":{d}," ++
+        "\"composed_damage_cells\":{d},\"full_compositions\":{d}," ++
+        "\"flushes\":{d},\"scanned_cells\":{d},\"flushed_cells\":{d}," ++
+        "\"flushed_bytes\":{d},\"graphics_flushed_bytes\":{d}," ++
+        "\"max_pending_updates\":{d}," ++
+        "\"mouse_events\":{d},\"chrome_scanned_cells\":{d}," ++
+        "\"chrome_damaged_cells\":{d}," ++
+        "\"pacer_drawn\":{d},\"pacer_throttled\":{d},\"pacer_absorbed\":{d}", .{
+        metrics.graphics_messages,
+        metrics.graphics_bytes,
         metrics.frames,
         metrics.frame_cells,
         metrics.frame_spans,
@@ -1320,6 +1592,7 @@ fn formatClientTelemetry(
         metrics.scanned_cells,
         metrics.flushed_cells,
         metrics.flushed_bytes,
+        metrics.graphics_flushed_bytes,
         metrics.max_pending_updates,
         metrics.mouse_events,
         metrics.chrome_scanned_cells,
@@ -1328,7 +1601,9 @@ fn formatClientTelemetry(
         pacer.stats.throttled,
         pacer.stats.absorbed,
     });
-    try writer.print(",\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
+    try writer.print(",\"pane_graphics_flushed_bytes\":{d}," ++
+        "\"sidebar_graphics_flushed_bytes\":{d}," ++
+        "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
         "\"compose_avg_us\":{d},\"compose_max_us\":{d}," ++
         "\"ack_send_avg_us\":{d},\"ack_send_max_us\":{d}," ++
@@ -1336,6 +1611,7 @@ fn formatClientTelemetry(
         "\"flush_avg_us\":{d},\"flush_max_us\":{d}," ++
         "\"draw_late_avg_us\":{d},\"draw_late_max_us\":{d}," ++
         "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}}}\n", .{
+        metrics.pane_graphics_flushed_bytes,                   metrics.sidebar_graphics_flushed_bytes,
         metrics.decode.average() / std.time.ns_per_us,         metrics.decode.max_ns / std.time.ns_per_us,
         metrics.apply.average() / std.time.ns_per_us,          metrics.apply.max_ns / std.time.ns_per_us,
         metrics.compose.average() / std.time.ns_per_us,        metrics.compose.max_ns / std.time.ns_per_us,
@@ -1353,6 +1629,12 @@ fn waitToDraw(io: Io, deadline_ns: u64) anyerror!void {
     try deadline.wait(io);
 }
 
+fn waitCapabilityTimeout(io: Io) anyerror!void {
+    const now = monotonic(io);
+    const deadline = Io.Timestamp.fromNanoseconds(@intCast(now + kitty.capability_timeout_ns)).withClock(.awake);
+    try deadline.wait(io);
+}
+
 fn monotonic(io: Io) u64 {
     const timestamp = Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));
@@ -1360,9 +1642,13 @@ fn monotonic(io: Io) u64 {
 
 fn terminalSize(tty: *const platform.Tty) schema.TerminalSize {
     const size = tty.size();
+    const cols = if (size.cols == 0) 80 else size.cols;
+    const rows = if (size.rows == 0) 24 else size.rows;
     return .{
-        .cols = if (size.cols == 0) 80 else size.cols,
-        .rows = if (size.rows == 0) 24 else size.rows,
+        .cols = cols,
+        .rows = rows,
+        .cell_width_px = if (size.width_px == 0) 0 else size.width_px / cols,
+        .cell_height_px = if (size.height_px == 0) 0 else size.height_px / rows,
     };
 }
 
@@ -1379,11 +1665,61 @@ fn nextRequestId(next: *u64) !schema.RequestId {
     return @enumFromInt(value);
 }
 
+fn requestGraphicsSnapshot(
+    io: Io,
+    connection: *core.transport.SocketChannel,
+    send_buffer: []u8,
+    pane_id: schema.PaneId,
+) !void {
+    try connection.send(io, try schema.encodeRequestGraphicsSnapshot(send_buffer, .{
+        .pane_id = pane_id,
+    }));
+}
+
 fn exitCode(message: schema.PaneExited) u8 {
     return switch (message.kind) {
         .exited => @intCast(@min(message.value, std.math.maxInt(u8))),
         .signaled => @intCast(@min(128 + message.value, std.math.maxInt(u8))),
     };
+}
+
+fn mouseTracked(tracking: schema.frame.MouseTracking, kind: term.Event.Mouse.Kind) bool {
+    return switch (tracking) {
+        .none => false,
+        .x10 => kind == .press,
+        .normal => kind == .press or kind == .release or
+            kind == .scroll_up or kind == .scroll_down,
+        .button => kind != .move,
+        .any => true,
+    };
+}
+
+fn encodeSgrMouse(
+    buffer: []u8,
+    event: term.Event.Mouse,
+    pane_x: u16,
+    pane_y: u16,
+    pixels: bool,
+    cell_width: u16,
+    cell_height: u16,
+    exact_pixel_x: ?u32,
+    exact_pixel_y: ?u32,
+) ![]const u8 {
+    const final: u8 = if (event.kind == .release) 'm' else 'M';
+    const x: u32 = exact_pixel_x orelse if (pixels and cell_width != 0)
+        @as(u32, pane_x) * cell_width + cell_width / 2
+    else
+        pane_x;
+    const y: u32 = exact_pixel_y orelse if (pixels and cell_height != 0)
+        @as(u32, pane_y) * cell_height + cell_height / 2
+    else
+        pane_y;
+    return std.fmt.bufPrint(buffer, "\x1b[<{d};{d};{d}{c}", .{
+        event.button,
+        x + 1,
+        y + 1,
+        final,
+    });
 }
 
 test "signal exits use the shell status convention" {
@@ -1405,6 +1741,30 @@ test "configured action names cover multiplexer operations" {
 test "default bindings compile without ambiguous prefixes" {
     var bindings = try defaultBindings();
     _ = try InputRouter.init(&bindings);
+}
+
+test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
+    var buffer: [64]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "\x1b[<0;3;5M",
+        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .press, .button = 0 }, 2, 4, false, 0, 0, null, null),
+    );
+    try std.testing.expectEqualStrings(
+        "\x1b[<0;3;5m",
+        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .release, .button = 0 }, 2, 4, false, 0, 0, null, null),
+    );
+    try std.testing.expectEqualStrings(
+        "\x1b[<0;26;91M",
+        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .press, .button = 0 }, 2, 4, true, 10, 20, null, null),
+    );
+    try std.testing.expectEqualStrings(
+        "\x1b[<0;8;10M",
+        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .press, .button = 0 }, 2, 4, true, 10, 20, 7, 9),
+    );
+    try std.testing.expect(mouseTracked(.any, .move));
+    try std.testing.expect(!mouseTracked(.button, .move));
+    try std.testing.expect(mouseTracked(.x10, .press));
+    try std.testing.expect(!mouseTracked(.x10, .release));
 }
 
 test "pending attachments are removed by request id" {

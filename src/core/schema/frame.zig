@@ -1,8 +1,8 @@
-//! Pane screen snapshots and patches for protocol version 2.
+//! Pane screen snapshots and patches for Telar's current protocol.
 
 const std = @import("std");
-const ui = @import("../../ui.zig");
-const transport = @import("../../transport.zig");
+const ui = @import("../ui.zig");
+const transport = @import("../transport.zig");
 const wire = @import("wire.zig");
 const id = @import("id.zig");
 
@@ -10,7 +10,7 @@ pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
-pub const body_header_size = 35;
+pub const body_header_size = 38;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
@@ -21,6 +21,20 @@ pub const Cursor = struct {
     visible: bool = false,
     x: u16 = 0,
     y: u16 = 0,
+};
+
+pub const MouseTracking = enum(u8) {
+    none = 0,
+    x10 = 1,
+    normal = 2,
+    button = 3,
+    any = 4,
+};
+
+pub const Mouse = struct {
+    tracking: MouseTracking = .none,
+    sgr: bool = false,
+    pixels: bool = false,
 };
 
 pub const Span = struct {
@@ -37,6 +51,7 @@ pub const Frame = struct {
     cols: u16,
     rows: u16,
     cursor: Cursor = .{},
+    mouse: Mouse = .{},
     spans: []const Span,
 };
 
@@ -47,6 +62,7 @@ pub const FrameView = struct {
     cols: u16,
     rows: u16,
     cursor: Cursor,
+    mouse: Mouse,
     span_count: u16,
     encoded_spans: []const u8,
 
@@ -117,6 +133,9 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     try encoder.writeByte(@intFromBool(frame.cursor.visible));
     try encoder.writeInt(u16, frame.cursor.x);
     try encoder.writeInt(u16, frame.cursor.y);
+    try encoder.writeByte(@intFromEnum(frame.mouse.tracking));
+    try encoder.writeByte(@intFromBool(frame.mouse.sgr));
+    try encoder.writeByte(@intFromBool(frame.mouse.pixels));
     try encoder.writeInt(u16, @intCast(frame.spans.len));
 
     for (frame.spans) |span| {
@@ -147,6 +166,18 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
     const cursor_visible = try decodeBool(try decoder.readByte());
     const cursor_x = try decoder.readInt(u16);
     const cursor_y = try decoder.readInt(u16);
+    const mouse: Mouse = .{
+        .tracking = switch (try decoder.readByte()) {
+            0 => .none,
+            1 => .x10,
+            2 => .normal,
+            3 => .button,
+            4 => .any,
+            else => return error.InvalidMouseTracking,
+        },
+        .sgr = try decodeBool(try decoder.readByte()),
+        .pixels = try decodeBool(try decoder.readByte()),
+    };
     const span_count = try decoder.readInt(u16);
 
     try validateHeader(
@@ -195,6 +226,7 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         .cols = cols,
         .rows = rows,
         .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
+        .mouse = mouse,
         .span_count = span_count,
         .encoded_spans = decoder.consumed(spans_start),
     };
@@ -469,13 +501,13 @@ test "a style run pays two bytes per ordinary cell" {
         .spans = &spans,
     });
 
-    // Header and span: 47 bytes. The first cell carries the five-byte default
+    // Header and span: 50 bytes. The first cell carries the five-byte default
     // style and costs seven bytes. Each following space costs only its packed
     // header and text byte.
-    try std.testing.expectEqual(@as(usize, 58), encoder.finish().len);
-    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[47]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[54]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[56]);
+    try std.testing.expectEqual(@as(usize, 61), encoder.finish().len);
+    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[50]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[57]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[59]);
 }
 
 test "cell run size accounts for inherited style" {

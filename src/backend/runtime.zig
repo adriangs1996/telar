@@ -1,4 +1,4 @@
-//! Long-lived runtime for protocol version 2.
+//! Long-lived runtime for Telar's current schema.
 
 const std = @import("std");
 const vt = @import("ghostty-vt");
@@ -11,9 +11,11 @@ const transport = @import("transport.zig");
 
 const Io = std.Io;
 const File = Io.File;
-const schema = core.schema.v2;
+const schema = core.schema;
 const diagnostics = core.diagnostics;
 const output_chunk_size = 16 * 1024;
+const max_pty_response_bytes = 1024;
+const max_pty_responses = 64;
 const max_workspaces = 64;
 const max_tabs_per_workspace = schema.max_tabs_per_workspace;
 const max_panes = schema.max_panes_per_tab;
@@ -21,14 +23,192 @@ const max_pending_responses = max_panes * 2;
 
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
 
+/// Runtime-owned KGP budgets. Values may be lowered by future user
+/// configuration but never raised past the protocol hard limits shared with
+/// clients, so every snapshot remains decodable by every compatible client.
+pub const GraphicsLimits = struct {
+    pane_bytes: usize = core.graphics.max_image_bytes_per_pane,
+    global_bytes: usize = core.graphics.max_image_bytes_global,
+    images_per_pane: usize = core.graphics.max_images_per_pane,
+    placements_per_pane: usize = core.graphics.max_placements_per_pane,
+    payload_bytes: usize = core.graphics.max_encoded_chunk_bytes,
+    chunks_per_image: usize = core.graphics.max_chunks_per_image,
+
+    pub fn validate(limits: GraphicsLimits) !void {
+        if (limits.pane_bytes < 2 or limits.pane_bytes > core.graphics.max_image_bytes_per_pane or
+            limits.global_bytes < limits.pane_bytes or limits.global_bytes > core.graphics.max_image_bytes_global or
+            limits.images_per_pane < 2 or limits.images_per_pane > core.graphics.max_images_per_pane or
+            limits.placements_per_pane < 2 or limits.placements_per_pane > core.graphics.max_placements_per_pane or
+            limits.payload_bytes == 0 or limits.payload_bytes > core.graphics.max_encoded_chunk_bytes or
+            limits.chunks_per_image == 0 or limits.chunks_per_image > core.graphics.max_chunks_per_image)
+            return error.InvalidGraphicsLimits;
+    }
+};
+
+pub const ServeOptions = struct {
+    graphics: GraphicsLimits = .{},
+};
+
+const GraphicsBudget = struct {
+    mutex: std.atomic.Mutex = .unlocked,
+    limit: usize,
+    used: usize = 0,
+
+    fn init(limit: usize) GraphicsBudget {
+        return .{ .limit = limit };
+    }
+
+    fn lock(budget: *GraphicsBudget) void {
+        while (!budget.mutex.tryLock()) std.atomic.spinLoopHint();
+    }
+
+    fn reserve(budget: *GraphicsBudget, pane: *PaneMediaAllocator, bytes: usize) bool {
+        budget.lock();
+        defer budget.mutex.unlock();
+        const pane_next = std.math.add(usize, pane.used, bytes) catch return false;
+        const global_next = std.math.add(usize, budget.used, bytes) catch return false;
+        if (pane_next > pane.limit or global_next > budget.limit) return false;
+        pane.used = pane_next;
+        budget.used = global_next;
+        return true;
+    }
+
+    fn release(budget: *GraphicsBudget, pane: *PaneMediaAllocator, bytes: usize) void {
+        budget.lock();
+        defer budget.mutex.unlock();
+        std.debug.assert(bytes <= pane.used and bytes <= budget.used);
+        pane.used -= bytes;
+        budget.used -= bytes;
+    }
+
+    fn releaseAll(budget: *GraphicsBudget, pane: *PaneMediaAllocator) void {
+        budget.lock();
+        defer budget.mutex.unlock();
+        std.debug.assert(pane.used <= budget.used);
+        budget.used -= pane.used;
+        pane.used = 0;
+    }
+};
+
+/// Allocator used by VT stream effects and KGP. Charging allocations before
+/// forwarding them to the child allocator makes compressed input, decoded
+/// pixels, parser buffers and IPC transfer snapshots obey one hard budget.
+const PaneMediaAllocator = struct {
+    child: std.mem.Allocator,
+    budget: *GraphicsBudget,
+    limit: usize,
+    used: usize = 0,
+
+    fn init(child: std.mem.Allocator, budget: *GraphicsBudget, limit: usize) PaneMediaAllocator {
+        return .{ .child = child, .budget = budget, .limit = limit };
+    }
+
+    fn allocator(media: *PaneMediaAllocator) std.mem.Allocator {
+        return .{ .ptr = media, .vtable = &.{
+            .alloc = alloc,
+            .resize = resize,
+            .remap = remap,
+            .free = free,
+        } };
+    }
+
+    fn reserveManual(media: *PaneMediaAllocator, bytes: usize) bool {
+        return media.budget.reserve(media, bytes);
+    }
+
+    fn releaseManual(media: *PaneMediaAllocator, bytes: usize) void {
+        media.budget.release(media, bytes);
+    }
+
+    fn detach(media: *PaneMediaAllocator) void {
+        media.budget.releaseAll(media);
+    }
+
+    fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+        const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
+        if (!media.reserveManual(len)) return null;
+        return media.child.rawAlloc(len, alignment, ret_addr) orelse {
+            media.releaseManual(len);
+            return null;
+        };
+    }
+
+    fn resize(
+        context: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        new_len: usize,
+        ret_addr: usize,
+    ) bool {
+        const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
+        if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return false;
+        if (!media.child.rawResize(memory, alignment, new_len, ret_addr)) {
+            if (new_len > memory.len) media.releaseManual(new_len - memory.len);
+            return false;
+        }
+        if (new_len < memory.len) media.releaseManual(memory.len - new_len);
+        return true;
+    }
+
+    fn remap(
+        context: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        new_len: usize,
+        ret_addr: usize,
+    ) ?[*]u8 {
+        const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
+        if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return null;
+        const result = media.child.rawRemap(memory, alignment, new_len, ret_addr) orelse {
+            if (new_len > memory.len) media.releaseManual(new_len - memory.len);
+            return null;
+        };
+        if (new_len < memory.len) media.releaseManual(memory.len - new_len);
+        return result;
+    }
+
+    fn free(
+        context: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        ret_addr: usize,
+    ) void {
+        const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
+        media.child.rawFree(memory, alignment, ret_addr);
+        media.releaseManual(memory.len);
+    }
+};
+
 const PaneOutputEvent = struct {
     pane: *Pane,
     result: anyerror!u16,
 };
 
+const PaneIngestStats = struct {
+    elapsed_ns: u64 = 0,
+    history_input_bytes: u64 = 0,
+    history_captured: u64 = 0,
+    history_dropped: u64 = 0,
+};
+
+const PaneIngestEvent = struct {
+    pane: *Pane,
+    result: anyerror!PaneIngestStats,
+};
+
+const PaneInputEvent = struct {
+    started_ns: u64,
+    result: anyerror!void,
+};
+
 const PaneExitEvent = struct {
     pane: *Pane,
     result: anyerror!pty.Exit,
+};
+
+const PaneResponseEvent = struct {
+    pane: *Pane,
+    result: anyerror!void,
 };
 
 const RuntimeEvent = union(enum) {
@@ -38,12 +218,174 @@ const RuntimeEvent = union(enum) {
     control_message: anyerror![]u8,
     control_sent: anyerror!void,
     history_response: anyerror!history.Response,
-    pane_input_written: anyerror!void,
+    pane_input_written: PaneInputEvent,
+    pane_response_written: PaneResponseEvent,
     pane_output: PaneOutputEvent,
+    pane_ingested: PaneIngestEvent,
     pane_exit: PaneExitEvent,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     stopped: anyerror!void,
+};
+
+const PtyResponseQueue = struct {
+    mutex: std.atomic.Mutex = .unlocked,
+    bytes: [max_pty_responses][max_pty_response_bytes]u8 = undefined,
+    lengths: [max_pty_responses]u16 = @splat(0),
+    head: u8 = 0,
+    len: u8 = 0,
+    dropped: u64 = 0,
+
+    fn lock(queue: *PtyResponseQueue) void {
+        while (!queue.mutex.tryLock()) std.atomic.spinLoopHint();
+    }
+
+    fn push(queue: *PtyResponseQueue, response: []const u8) bool {
+        queue.lock();
+        defer queue.mutex.unlock();
+        if (response.len > max_pty_response_bytes or queue.len == max_pty_responses) {
+            queue.dropped += 1;
+            return false;
+        }
+        const index = (@as(usize, queue.head) + queue.len) % max_pty_responses;
+        @memcpy(queue.bytes[index][0..response.len], response);
+        queue.lengths[index] = @intCast(response.len);
+        queue.len += 1;
+        return true;
+    }
+
+    fn peek(queue_const: *const PtyResponseQueue) ?[]const u8 {
+        const queue: *PtyResponseQueue = @constCast(queue_const);
+        queue.lock();
+        defer queue.mutex.unlock();
+        if (queue.len == 0) return null;
+        return queue.bytes[queue.head][0..queue.lengths[queue.head]];
+    }
+
+    fn pop(queue: *PtyResponseQueue) void {
+        queue.lock();
+        defer queue.mutex.unlock();
+        std.debug.assert(queue.len != 0);
+        queue.lengths[queue.head] = 0;
+        queue.head = @intCast((@as(usize, queue.head) + 1) % max_pty_responses);
+        queue.len -= 1;
+    }
+
+    fn clear(queue: *PtyResponseQueue) void {
+        queue.lock();
+        defer queue.mutex.unlock();
+        queue.lengths = @splat(0);
+        queue.head = 0;
+        queue.len = 0;
+    }
+};
+
+/// Counts complete Kitty APC commands across arbitrary PTY read boundaries
+/// without retaining their payload. Ghostty performs the actual parsing; this
+/// tiny recognizer exists only to enforce a bounded number of chunks in an
+/// incomplete upload.
+const KittyFramingCounter = struct {
+    state: State = .normal,
+
+    const State = enum { normal, escape, apc_identify, kitty, kitty_escape, other, other_escape };
+
+    fn observe(counter: *KittyFramingCounter, bytes: []const u8) usize {
+        var complete: usize = 0;
+        for (bytes) |byte| switch (counter.state) {
+            .normal => counter.state = switch (byte) {
+                0x1b => .escape,
+                0x9f => .apc_identify,
+                else => .normal,
+            },
+            .escape => counter.state = switch (byte) {
+                '_' => .apc_identify,
+                0x1b => .escape,
+                else => .normal,
+            },
+            .apc_identify => counter.state = if (byte == 'G')
+                .kitty
+            else if (byte == 0x9c)
+                .normal
+            else
+                .other,
+            .kitty => counter.state = switch (byte) {
+                0x1b => .kitty_escape,
+                0x9c => state: {
+                    complete += 1;
+                    break :state .normal;
+                },
+                else => .kitty,
+            },
+            .kitty_escape => counter.state = if (byte == '\\') state: {
+                complete += 1;
+                break :state .normal;
+            } else if (byte == 0x1b)
+                .kitty_escape
+            else
+                .kitty,
+            .other => counter.state = switch (byte) {
+                0x1b => .other_escape,
+                0x9c => .normal,
+                else => .other,
+            },
+            .other_escape => counter.state = if (byte == '\\')
+                .normal
+            else if (byte == 0x1b)
+                .other_escape
+            else
+                .other,
+        };
+        return complete;
+    }
+};
+
+const HistoryInputBatch = struct {
+    const max_entries = 256;
+    const Entry = struct {
+        offset: u32,
+        len: u32,
+        shell_foreground: bool,
+        clock: history.Clock,
+    };
+
+    bytes: [schema.max_input_bytes]u8 = undefined,
+    len: usize = 0,
+    entries: [max_entries]Entry = undefined,
+    entry_count: usize = 0,
+    cwd: [std.fs.max_path_bytes]u8 = undefined,
+    cwd_len: usize = 0,
+
+    fn reset(batch: *HistoryInputBatch) void {
+        batch.len = 0;
+        batch.entry_count = 0;
+        batch.cwd_len = 0;
+    }
+
+    fn push(
+        batch: *HistoryInputBatch,
+        bytes: []const u8,
+        shell_foreground: bool,
+        clock: history.Clock,
+        cwd: ?[]const u8,
+    ) bool {
+        if (batch.entry_count == batch.entries.len or bytes.len > batch.bytes.len - batch.len)
+            return false;
+        const offset = batch.len;
+        @memcpy(batch.bytes[offset..][0..bytes.len], bytes);
+        batch.len += bytes.len;
+        batch.entries[batch.entry_count] = .{
+            .offset = @intCast(offset),
+            .len = @intCast(bytes.len),
+            .shell_foreground = shell_foreground,
+            .clock = clock,
+        };
+        batch.entry_count += 1;
+        if (cwd) |value| {
+            batch.cwd_len = @min(value.len, batch.cwd.len);
+            @memcpy(batch.cwd[0..batch.cwd_len], value[0..batch.cwd_len]);
+        }
+        return true;
+    }
 };
 
 const RuntimeMetrics = struct {
@@ -51,6 +393,7 @@ const RuntimeMetrics = struct {
     client_messages: u64 = 0,
     input_events: u64 = 0,
     input_bytes: u64 = 0,
+    input_write: diagnostics.Timing = .{},
     pty_events: u64 = 0,
     pty_bytes: u64 = 0,
     frames: u64 = 0,
@@ -66,6 +409,8 @@ const RuntimeMetrics = struct {
     bridged_cells: u64 = 0,
     coalesced_bytes_saved: u64 = 0,
     folded_pty_events: u64 = 0,
+    graphics_messages: u64 = 0,
+    graphics_bytes: u64 = 0,
     decode: diagnostics.Timing = .{},
     ingest: diagnostics.Timing = .{},
     encode: diagnostics.Timing = .{},
@@ -218,16 +563,29 @@ const Pane = struct {
     session: pty.Session,
     terminal: vt.Terminal,
     stream: vt.TerminalStream,
+    pty_responses: PtyResponseQueue = .{},
+    kitty_framing: KittyFramingCounter = .{},
+    kitty_loading_chunks: usize = 0,
+    graphics_limits: GraphicsLimits,
+    graphics_storage_limit: usize,
+    media_allocator: PaneMediaAllocator,
+    pty_write_mutex: Io.Mutex = .init,
+    response_pending: bool = false,
+    size: schema.TerminalSize,
     render_state: vt.RenderState = .empty,
     screen: core.ui.Buffer,
     damaged_rows: []bool,
     output_buffer: [output_chunk_size]u8 = undefined,
     cursor: schema.frame.Cursor = .{},
+    mouse: schema.frame.Mouse = .{},
     foreground_override: ?vt.color.RGB = null,
     background_override: ?vt.color.RGB = null,
     semantic_colors_dirty: bool = false,
+    graphics_revision: u64 = 0,
+    graphics_present: bool = false,
     dirty: bool = true,
     output_pending: bool = false,
+    ingest_pending: bool = false,
     output_done: bool = false,
     wait_pending: bool = false,
     close_requested: bool = false,
@@ -239,6 +597,11 @@ const Pane = struct {
     history_session_started: bool = false,
     history_session_finished: bool = false,
     workspace_path: []u8,
+    history_input_batches: [2]HistoryInputBatch = .{ .{}, .{} },
+    history_input_active: u1 = 0,
+    history_input_worker: ?u1 = null,
+    history_input_dropped: u64 = 0,
+    pending_size: ?schema.TerminalSize = null,
     io: Io,
     gpa: std.mem.Allocator,
 
@@ -251,6 +614,8 @@ const Pane = struct {
         workspace_path: []const u8,
         history_service: *history.Service,
         size: schema.TerminalSize,
+        graphics_limits: GraphicsLimits,
+        graphics_budget: *GraphicsBudget,
     ) !*Pane {
         const pane = try gpa.create(Pane);
         errdefer gpa.destroy(pane);
@@ -260,18 +625,54 @@ const Pane = struct {
         pane.io = io;
         pane.gpa = gpa;
         pane.history_service = history_service;
+        pane.graphics_limits = graphics_limits;
+        pane.graphics_storage_limit = graphics_limits.pane_bytes / 3;
+        pane.media_allocator = .init(gpa, graphics_budget, graphics_limits.pane_bytes);
+        pane.pty_write_mutex = .init;
         pane.history_session_id = history_service.newSessionId(io);
         pane.history_sequence = 0;
         pane.history_session_started = false;
         pane.history_session_finished = false;
         pane.workspace_path = try gpa.dupe(u8, workspace_path);
         errdefer gpa.free(pane.workspace_path);
-        pane.session = try .spawn(command, .{ .cols = size.cols, .rows = size.rows });
+        pane.session = try .spawn(command, .{
+            .cols = size.cols,
+            .rows = size.rows,
+            .cell_width_px = size.cell_width_px,
+            .cell_height_px = size.cell_height_px,
+        });
         errdefer pane.session.deinit();
-        pane.terminal = try .init(io, gpa, .{ .cols = size.cols, .rows = size.rows });
+        pane.size = size;
+        pane.terminal = try .init(io, gpa, .{
+            .cols = size.cols,
+            .rows = size.rows,
+            .kitty_image_storage_limit = @min(
+                core.graphics.max_image_bytes_per_screen,
+                graphics_limits.pane_bytes / 3,
+            ),
+            .kitty_image_loading_limits = .direct,
+        });
         errdefer pane.terminal.deinit(gpa);
-        pane.stream = pane.terminal.vtStream();
+        var handler = pane.terminal.vtHandler();
+        handler.apc_handler.max_bytes.put(
+            .kitty,
+            graphics_limits.payload_bytes,
+        );
+        handler.effects.write_pty = Pane.writePty;
+        handler.effects.size = Pane.reportSize;
+        pane.stream = vt.TerminalStream.init(.{
+            .allocator = pane.media_allocator.allocator(),
+            .handler = handler,
+        });
         errdefer pane.stream.deinit();
+        try pane.stream.handler.resize(.{
+            .cols = size.cols,
+            .rows = size.rows,
+            .cell_size_px = if (size.cell_width_px != 0 and size.cell_height_px != 0) .{
+                .width = size.cell_width_px,
+                .height = size.cell_height_px,
+            } else null,
+        });
         pane.history_tracker = try .init(gpa, workspace_path, &pane.terminal);
         errdefer pane.history_tracker.deinit(&pane.terminal);
         pane.render_state = .empty;
@@ -281,15 +682,29 @@ const Pane = struct {
         errdefer gpa.free(pane.damaged_rows);
         @memset(pane.damaged_rows, false);
         pane.cursor = .{};
+        pane.mouse = .{};
+        pane.pty_responses = .{};
+        pane.kitty_framing = .{};
+        pane.kitty_loading_chunks = 0;
+        pane.response_pending = false;
         pane.foreground_override = pane.terminal.colors.foreground.override;
         pane.background_override = pane.terminal.colors.background.override;
         pane.semantic_colors_dirty = false;
+        pane.graphics_revision = 0;
+        pane.graphics_present = false;
         pane.dirty = true;
+        pane.mouse = pane.mouseState();
         pane.output_pending = false;
+        pane.ingest_pending = false;
         pane.output_done = false;
         pane.wait_pending = false;
         pane.close_requested = false;
         pane.exit = null;
+        pane.history_input_batches = .{ .{}, .{} };
+        pane.history_input_active = 0;
+        pane.history_input_worker = null;
+        pane.history_input_dropped = 0;
+        pane.pending_size = null;
         try pane.render(true);
         pane.history_session_started = history_service.startSession(
             io,
@@ -303,6 +718,26 @@ const Pane = struct {
         return pane;
     }
 
+    fn mouseState(pane: *const Pane) schema.frame.Mouse {
+        const modes = &pane.terminal.modes;
+        const tracking: schema.frame.MouseTracking = if (modes.get(.mouse_event_any))
+            .any
+        else if (modes.get(.mouse_event_button))
+            .button
+        else if (modes.get(.mouse_event_normal))
+            .normal
+        else if (modes.get(.mouse_event_x10))
+            .x10
+        else
+            .none;
+        const pixels = modes.get(.mouse_format_sgr_pixels);
+        return .{
+            .tracking = tracking,
+            .sgr = modes.get(.mouse_format_sgr) or pixels,
+            .pixels = pixels,
+        };
+    }
+
     fn destroy(pane: *Pane) void {
         const gpa = pane.gpa;
         pane.finishHistory();
@@ -312,20 +747,28 @@ const Pane = struct {
         pane.render_state.deinit(gpa);
         pane.history_tracker.deinit(&pane.terminal);
         pane.stream.deinit();
+        pane.media_allocator.detach();
         pane.terminal.deinit(gpa);
         pane.session.deinit();
         gpa.destroy(pane);
     }
 
-    fn ingest(pane: *Pane, io: Io, bytes: []const u8, metrics: *RuntimeMetrics) !void {
+    fn ingest(pane: *Pane, io: Io, bytes: []const u8, stats: *PaneIngestStats) !u64 {
         const started = diagnostics.now(io);
-        var capture_context: CaptureContext = .{ .pane = pane, .metrics = metrics };
+        var capture_context: CaptureContext = .{ .pane = pane, .ingest_stats = stats };
         var offset: usize = 0;
         while (offset < bytes.len) {
             const remaining = bytes[offset..];
             const boundary = pane.history_tracker.commitBoundary(remaining);
             const slice = if (boundary) |len| remaining[0..len] else remaining;
+            const loading_id = if (pane.terminal.screens.active.kitty_images.loading) |loading|
+                loading.image.id
+            else
+                null;
+            const kitty_commands = pane.kitty_framing.observe(slice);
             pane.stream.nextSlice(slice);
+            pane.enforceIncompleteGraphics(io, loading_id, kitty_commands);
+            pane.observeGraphicsDamage();
             if (boundary != null)
                 _ = try pane.history_tracker.captureSubmitted(&pane.terminal);
             pane.history_tracker.observeOutput(
@@ -339,6 +782,7 @@ const Pane = struct {
         }
         const foreground = pane.terminal.colors.foreground.override;
         const background = pane.terminal.colors.background.override;
+        pane.mouse = pane.mouseState();
         if (!std.meta.eql(pane.foreground_override, foreground) or
             !std.meta.eql(pane.background_override, background))
         {
@@ -347,14 +791,127 @@ const Pane = struct {
             pane.semantic_colors_dirty = true;
         }
         pane.dirty = true;
-        if (comptime diagnostics.enabled) {
-            metrics.ingest.observe(diagnostics.elapsed(started, diagnostics.now(io)));
+        pane.graphics_present = pane.terminal.screens.active.kitty_images.images.count() != 0;
+        return diagnostics.elapsed(started, diagnostics.now(io));
+    }
+
+    fn queueHistoryInput(
+        pane: *Pane,
+        bytes: []const u8,
+        shell_foreground: bool,
+        clock: history.Clock,
+        cwd: ?[]const u8,
+    ) void {
+        const batch = &pane.history_input_batches[pane.history_input_active];
+        if (!batch.push(bytes, shell_foreground, clock, cwd))
+            pane.history_input_dropped +|= 1;
+    }
+
+    fn sealHistoryInput(pane: *Pane) void {
+        std.debug.assert(pane.history_input_worker == null);
+        const sealed = pane.history_input_active;
+        pane.history_input_active ^= 1;
+        std.debug.assert(pane.history_input_batches[pane.history_input_active].entry_count == 0);
+        pane.history_input_worker = sealed;
+    }
+
+    fn processHistoryInput(pane: *Pane, stats: *PaneIngestStats) u64 {
+        const index = pane.history_input_worker orelse return 0;
+        const batch = &pane.history_input_batches[index];
+        if (batch.cwd_len != 0)
+            pane.history_tracker.updateCwd(batch.cwd[0..batch.cwd_len]);
+        var observed: u64 = 0;
+        var capture_context: CaptureContext = .{ .pane = pane, .ingest_stats = stats };
+        for (batch.entries[0..batch.entry_count]) |entry| {
+            const start: usize = entry.offset;
+            observed += pane.history_tracker.observeInput(
+                &pane.terminal,
+                batch.bytes[start..][0..entry.len],
+                entry.shell_foreground,
+                entry.clock,
+                &capture_context,
+                captureCommand,
+            );
         }
+        batch.reset();
+        pane.history_input_worker = null;
+        return observed;
+    }
+
+    fn enforceIncompleteGraphics(
+        pane: *Pane,
+        io: Io,
+        previous_loading_id: ?u32,
+        completed_commands: usize,
+    ) void {
+        const storage = &pane.terminal.screens.active.kitty_images;
+        if (previous_loading_id != null or storage.loading != null)
+            pane.kitty_loading_chunks +|= completed_commands
+        else
+            pane.kitty_loading_chunks = 0;
+
+        const chunk_limit_exceeded = pane.kitty_loading_chunks > pane.graphics_limits.chunks_per_image;
+        const loading = storage.loading orelse {
+            if (chunk_limit_exceeded) if (previous_loading_id) |image_id| {
+                storage.delete(io, pane.media_allocator.allocator(), &pane.terminal, .{ .id = .{
+                    .delete = true,
+                    .image_id = image_id,
+                } });
+                pane.queueGraphicsLimitResponse(image_id);
+            };
+            pane.kitty_loading_chunks = 0;
+            return;
+        };
+        if (!chunk_limit_exceeded and
+            loading.data.items.len <= pane.graphics_storage_limit) return;
+
+        const image_id = loading.image.id;
+        loading.destroy(pane.media_allocator.allocator());
+        storage.loading = null;
+        pane.kitty_loading_chunks = 0;
+        pane.queueGraphicsLimitResponse(image_id);
+    }
+
+    fn queueGraphicsLimitResponse(pane: *Pane, image_id: u32) void {
+        var response: [128]u8 = undefined;
+        const bytes = std.fmt.bufPrint(
+            &response,
+            "\x1b_Gi={d};ENOMEM: graphics upload limit exceeded\x1b\\",
+            .{image_id},
+        ) catch return;
+        _ = pane.pty_responses.push(bytes);
+    }
+
+    fn observeGraphicsDamage(pane: *Pane) void {
+        const storage = &pane.terminal.screens.active.kitty_images;
+        if (!storage.dirty) return;
+        pane.graphics_revision +%= 1;
+        if (pane.graphics_revision == 0) pane.graphics_revision = 1;
+        storage.dirty = false;
+    }
+
+    fn writePty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
+        const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
+        const pane: *Pane = @fieldParentPtr("stream", stream);
+        _ = pane.pty_responses.push(response);
+    }
+
+    fn reportSize(handler: *vt.TerminalStream.Handler) ?vt.size_report.Size {
+        const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
+        const pane: *Pane = @fieldParentPtr("stream", stream);
+        if (pane.size.cell_width_px == 0 or pane.size.cell_height_px == 0) return null;
+        return .{
+            .rows = pane.size.rows,
+            .columns = pane.size.cols,
+            .cell_width = pane.size.cell_width_px,
+            .cell_height = pane.size.cell_height_px,
+        };
     }
 
     const CaptureContext = struct {
         pane: *Pane,
-        metrics: ?*RuntimeMetrics,
+        metrics: ?*RuntimeMetrics = null,
+        ingest_stats: ?*PaneIngestStats = null,
     };
 
     fn captureCommand(context: *CaptureContext, command: history.Command) void {
@@ -373,11 +930,14 @@ const Pane = struct {
         if (comptime diagnostics.enabled) if (context.metrics) |metrics| {
             if (submitted) metrics.history_captured += 1 else metrics.history_dropped += 1;
         };
+        if (comptime diagnostics.enabled) if (context.ingest_stats) |stats| {
+            if (submitted) stats.history_captured += 1 else stats.history_dropped += 1;
+        };
     }
 
     fn finishHistory(pane: *Pane) void {
         if (pane.history_session_finished) return;
-        var capture_context: CaptureContext = .{ .pane = pane, .metrics = null };
+        var capture_context: CaptureContext = .{ .pane = pane };
         pane.history_tracker.interrupt(historyClock(pane.io), &capture_context, captureCommand);
         if (pane.history_session_started) {
             _ = pane.history_service.finishSession(
@@ -400,9 +960,34 @@ const Pane = struct {
     }
 
     fn resize(pane: *Pane, size: schema.TerminalSize) !void {
-        if (pane.screen.w == size.cols and pane.screen.h == size.rows) return;
-        try pane.session.resize(.{ .cols = size.cols, .rows = size.rows });
-        try pane.terminal.resize(pane.gpa, .{ .cols = size.cols, .rows = size.rows });
+        try pane.requestResize(size);
+        try pane.applyPendingResize();
+    }
+
+    fn requestResize(pane: *Pane, size: schema.TerminalSize) !void {
+        if (std.meta.eql(pane.pending_size orelse pane.size, size)) return;
+        try pane.session.resize(.{
+            .cols = size.cols,
+            .rows = size.rows,
+            .cell_width_px = size.cell_width_px,
+            .cell_height_px = size.cell_height_px,
+        });
+        pane.pending_size = size;
+    }
+
+    fn applyPendingResize(pane: *Pane) !void {
+        const size = pane.pending_size orelse return;
+        pane.pending_size = null;
+        try pane.stream.handler.resize(.{
+            .cols = size.cols,
+            .rows = size.rows,
+            .cell_size_px = if (size.cell_width_px != 0 and size.cell_height_px != 0) .{
+                .width = size.cell_width_px,
+                .height = size.cell_height_px,
+            } else null,
+        });
+        pane.size = size;
+        pane.observeGraphicsDamage();
         try pane.screen.resize(size.cols, size.rows);
         pane.damaged_rows = try pane.gpa.realloc(pane.damaged_rows, size.rows);
         @memset(pane.damaged_rows, false);
@@ -433,24 +1018,59 @@ const Pane = struct {
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 const Attachment = struct {
+    const KnownImage = struct { key: core.graphics.ImageKey };
+    const KnownPlacement = struct { placement: core.graphics.Placement };
+    const Transfer = struct {
+        metadata: core.graphics.Image,
+        pixels: []u8,
+        placements: [core.graphics.max_placements_per_pane]core.graphics.Placement = undefined,
+        placement_count: usize = 0,
+        placement_index: usize = 0,
+        offset: usize = 0,
+        metadata_sent: bool = false,
+    };
+    const SnapshotState = enum { begin_pending, open, idle };
+
     pane: *Pane,
     acknowledged: core.ui.Buffer,
     acknowledged_cursor: schema.frame.Cursor = .{},
+    acknowledged_mouse: schema.frame.Mouse = .{},
     next_frame_id: u64 = 1,
     acknowledged_frame_id: u64 = 0,
     outstanding_frame_id: u64 = 0,
     frame_sent_ns: u64 = 0,
     snapshot_pending: bool = true,
     exit_sent: bool = false,
+    graphics_snapshot: SnapshotState = .begin_pending,
+    graphics_revision: u64 = 1,
+    graphics_target_revision: u64 = 0,
+    graphics_batch_active: bool = false,
+    observed_graphics_revision: u64 = 0,
+    transfer: ?Transfer = null,
+    known_images: [core.graphics.max_images_per_pane]?KnownImage =
+        [_]?KnownImage{null} ** core.graphics.max_images_per_pane,
+    known_placements: [core.graphics.max_placements_per_pane]?KnownPlacement =
+        [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane,
+    gpa: std.mem.Allocator,
 
     fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
         return .{
             .pane = pane,
             .acknowledged = try .init(gpa, pane.screen.w, pane.screen.h),
+            .gpa = gpa,
+            .graphics_snapshot = if (!pane.graphics_present)
+                .idle
+            else
+                .begin_pending,
+            .observed_graphics_revision = if (!pane.graphics_present)
+                pane.graphics_revision
+            else
+                0,
         };
     }
 
     fn deinit(attachment: *Attachment) void {
+        attachment.freeTransfer();
         attachment.acknowledged.deinit();
     }
 
@@ -467,6 +1087,25 @@ const Attachment = struct {
         attachment.outstanding_frame_id = 0;
         attachment.snapshot_pending = true;
         return true;
+    }
+
+    fn resetGraphics(attachment: *Attachment) void {
+        attachment.freeTransfer();
+        attachment.graphics_snapshot = .begin_pending;
+        attachment.graphics_batch_active = false;
+        attachment.graphics_target_revision = 0;
+        attachment.observed_graphics_revision = 0;
+        attachment.transfer = null;
+        attachment.known_images = [_]?KnownImage{null} ** core.graphics.max_images_per_pane;
+        attachment.known_placements = [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane;
+    }
+
+    fn freeTransfer(attachment: *Attachment) void {
+        if (attachment.transfer) |transfer| {
+            attachment.gpa.free(transfer.pixels);
+            attachment.pane.media_allocator.releaseManual(transfer.pixels.len);
+        }
+        attachment.transfer = null;
     }
 };
 
@@ -730,6 +1369,8 @@ const PaneStore = struct {
     items: [max_panes]?*Pane = [_]?*Pane{null} ** max_panes,
     count: usize = 0,
     next_id: u64 = 1,
+    graphics_limits: GraphicsLimits = .{},
+    graphics_budget: GraphicsBudget = .init(core.graphics.max_image_bytes_global),
 
     fn find(store: *PaneStore, pane_id: schema.PaneId) ?*Pane {
         for (store.items) |slot| {
@@ -845,7 +1486,8 @@ const PaneStore = struct {
         for (&store.items) |*slot| {
             const pane = slot.* orelse continue;
             if (pane.exit == null or !pane.output_done or
-                pane.output_pending or pane.wait_pending) continue;
+                pane.output_pending or pane.ingest_pending or pane.wait_pending or pane.response_pending or
+                pane.pty_responses.len != 0) continue;
             if (attachments.find(pane.id) != null) continue;
             const location = pane.location;
             slot.* = null;
@@ -931,7 +1573,7 @@ const AttachmentStore = struct {
 };
 
 pub fn serve(io: Io, gpa: std.mem.Allocator, endpoint: []const u8) !void {
-    return serveInternal(io, gpa, endpoint, ":memory:", null);
+    return serveInternal(io, gpa, endpoint, ":memory:", null, null, .{});
 }
 
 pub fn serveWithHistory(
@@ -940,7 +1582,18 @@ pub fn serveWithHistory(
     endpoint: []const u8,
     history_path: [:0]const u8,
 ) !void {
-    return serveInternal(io, gpa, endpoint, history_path, null);
+    return serveInternal(io, gpa, endpoint, history_path, null, null, .{});
+}
+
+pub fn serveWithHistoryOptions(
+    io: Io,
+    gpa: std.mem.Allocator,
+    endpoint: []const u8,
+    history_path: [:0]const u8,
+    options: ServeOptions,
+) !void {
+    try options.graphics.validate();
+    return serveInternal(io, gpa, endpoint, history_path, null, null, options);
 }
 
 /// Test seam for stopping an otherwise long-lived runtime without signals.
@@ -950,7 +1603,7 @@ pub fn serveUntil(
     endpoint: []const u8,
     stop: *Io.Queue(u8),
 ) !void {
-    return serveInternal(io, gpa, endpoint, ":memory:", stop);
+    return serveInternal(io, gpa, endpoint, ":memory:", stop, null, .{});
 }
 
 pub fn serveUntilWithHistory(
@@ -960,7 +1613,32 @@ pub fn serveUntilWithHistory(
     history_path: [:0]const u8,
     stop: *Io.Queue(u8),
 ) !void {
-    return serveInternal(io, gpa, endpoint, history_path, stop);
+    return serveInternal(io, gpa, endpoint, history_path, stop, null, .{});
+}
+
+/// Deterministic integration seam proving that PTY input remains independent
+/// while a pane's bounded ingest actor is occupied. Production entry points
+/// never install this gate.
+pub const IngestTestGate = struct {
+    entered: *Io.Queue(u8),
+    release: *Io.Queue(u8),
+    claimed: std.atomic.Value(bool) = .init(false),
+
+    fn wait(gate: *IngestTestGate, io: Io) !void {
+        if (gate.claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) return;
+        try gate.entered.putOne(io, 0);
+        _ = try gate.release.getOne(io);
+    }
+};
+
+pub fn serveUntilWithIngestGate(
+    io: Io,
+    gpa: std.mem.Allocator,
+    endpoint: []const u8,
+    stop: *Io.Queue(u8),
+    gate: *IngestTestGate,
+) !void {
+    return serveInternal(io, gpa, endpoint, ":memory:", stop, gate, .{});
 }
 
 fn serveInternal(
@@ -969,7 +1647,10 @@ fn serveInternal(
     endpoint: []const u8,
     history_path: [:0]const u8,
     stop: ?*Io.Queue(u8),
+    ingest_gate: ?*IngestTestGate,
+    options: ServeOptions,
 ) !void {
+    try options.graphics.validate();
     _ = setenv("TERM", "xterm-256color", 1);
     _ = setenv("TERM_PROGRAM", "telar", 1);
 
@@ -1001,7 +1682,7 @@ fn serveInternal(
         history_service.deinit(io);
     };
 
-    var select_storage: [17 + 2 * max_panes]RuntimeEvent = undefined;
+    var select_storage: [17 + 4 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
@@ -1022,7 +1703,10 @@ fn serveInternal(
     var sent_exit_pane: ?schema.PaneId = null;
     var shutdown: ShutdownState = .{};
     var workspaces = WorkspaceStore.init(gpa);
-    var panes: PaneStore = .{};
+    var panes: PaneStore = .{
+        .graphics_limits = options.graphics,
+        .graphics_budget = .init(options.graphics.global_bytes),
+    };
     var telemetry_buffer: [4096]u8 = undefined;
     var telemetry_write_pending = false;
     var metrics: RuntimeMetrics = .{ .started_ns = diagnostics.now(io) };
@@ -1384,9 +2068,11 @@ fn serveInternal(
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes, &workspaces);
             };
         },
-        .pane_input_written => |result| {
+        .pane_input_written => |event| {
             pane_input_pending = false;
-            result catch {
+            if (comptime diagnostics.enabled)
+                metrics.input_write.observe(diagnostics.elapsed(event.started_ns, diagnostics.now(io)));
+            event.result catch {
                 closeClient(
                     io,
                     &connection,
@@ -1406,6 +2092,21 @@ fn serveInternal(
                     receive_buffer,
                 });
             }
+        },
+        .pane_response_written => |event| {
+            const active = event.pane;
+            active.response_pending = false;
+            if (event.result) |_| {
+                active.pty_responses.pop();
+                try schedulePaneResponse(io, &select, active);
+            } else |_| {
+                active.pty_responses.clear();
+            }
+            try panes.collectFinished(
+                &attachments,
+                &workspaces,
+                if (connectionPointer(&connection) != null) &responses else null,
+            );
         },
         .pane_output => |event| {
             const active = event.pane;
@@ -1435,10 +2136,52 @@ fn serveInternal(
                             metrics.folded_pty_events += 1;
                     }
                 }
-                try active.ingest(io, active.output_buffer[0..output_len], &metrics);
-                active.output_pending = true;
-                try select.concurrent(.pane_output, readPane, .{ io, active });
+                active.sealHistoryInput();
+                active.ingest_pending = true;
+                try select.concurrent(.pane_ingested, ingestPane, .{
+                    io,
+                    active,
+                    output_len,
+                    ingest_gate,
+                });
+                continue;
             }
+            try panes.collectFinished(
+                &attachments,
+                &workspaces,
+                if (connectionPointer(&connection) != null) &responses else null,
+            );
+            pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &workspaces, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
+                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes, &workspaces);
+            };
+        },
+        .pane_ingested => |event| {
+            const active = event.pane;
+            active.ingest_pending = false;
+            const stats = event.result catch {
+                active.close_requested = true;
+                active.session.shutdown();
+                active.output_done = true;
+                try panes.collectFinished(
+                    &attachments,
+                    &workspaces,
+                    if (connectionPointer(&connection) != null) &responses else null,
+                );
+                continue;
+            };
+            if (comptime diagnostics.enabled) {
+                metrics.ingest.observe(stats.elapsed_ns);
+                metrics.history_candidate_input_bytes += stats.history_input_bytes;
+                metrics.history_captured += stats.history_captured;
+                metrics.history_dropped += stats.history_dropped;
+            }
+            try active.applyPendingResize();
+            if (attachments.find(active.id)) |attachment| _ = try attachment.resizeIfNeeded();
+            enforceGraphicsQuotas(io, active);
+            active.observeGraphicsDamage();
+            try schedulePaneResponse(io, &select, active);
+            active.output_pending = true;
+            try select.concurrent(.pane_output, readPane, .{ io, active });
             try panes.collectFinished(
                 &attachments,
                 &workspaces,
@@ -1481,7 +2224,7 @@ fn serveInternal(
                 &attachments,
                 workspaces.count,
                 workspaces.totalTabs(),
-                panes.count,
+                &panes,
                 &history_service,
             ) catch continue;
             telemetry_write_pending = true;
@@ -1570,7 +2313,10 @@ fn dispatchClientMessage(
                 },
             };
 
-            try active.resize(open.size);
+            if (active.ingest_pending)
+                try active.requestResize(open.size)
+            else
+                try active.resize(open.size);
             const attachment = try attachments.attach(gpa, active);
             _ = try attachment.resizeIfNeeded();
             try responses.push(.{ .pane_opened = .{
@@ -1588,25 +2334,21 @@ fn dispatchClientMessage(
                 metrics.input_bytes += input.bytes.len;
             }
             var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-            if (active.session.cwd(&cwd_buffer)) |cwd| active.history_tracker.updateCwd(cwd);
-            var capture_context: Pane.CaptureContext = .{ .pane = active, .metrics = metrics };
-            const history_input_bytes = active.history_tracker.observeInput(
-                &active.terminal,
+            const cwd = active.session.cwd(&cwd_buffer);
+            active.queueHistoryInput(
                 input.bytes,
                 active.session.shellForeground() orelse false,
                 historyClock(io),
-                &capture_context,
-                Pane.captureCommand,
+                cwd,
             );
-            if (comptime diagnostics.enabled)
-                metrics.history_candidate_input_bytes += history_input_bytes;
             std.debug.assert(!input_pending.*);
             @memcpy(input_buffer[0..input.bytes.len], input.bytes);
             input_pending.* = true;
             select.concurrent(.pane_input_written, writePaneInput, .{
                 io,
-                active.session.file(),
+                active,
                 input_buffer[0..input.bytes.len],
+                if (comptime diagnostics.enabled) diagnostics.now(io) else 0,
             }) catch |err| {
                 input_pending.* = false;
                 return err;
@@ -1614,8 +2356,20 @@ fn dispatchClientMessage(
         },
         .pane_resize => |resize| {
             const active = try attachedPane(attachments, resize.pane_id);
-            try active.pane.resize(resize.size);
-            _ = try active.resizeIfNeeded();
+            try active.pane.requestResize(resize.size);
+            if (!active.pane.ingest_pending) {
+                try active.pane.applyPendingResize();
+                _ = try active.resizeIfNeeded();
+            }
+            // Resizing may cause the emulator to emit an in-band resize
+            // report. Treat it like every other terminal-produced response:
+            // queue it behind the bounded PTY response writer.
+            if (!active.pane.ingest_pending)
+                try schedulePaneResponse(io, select, active.pane);
+        },
+        .request_graphics_snapshot => |request| {
+            const active = try attachedPane(attachments, request.pane_id);
+            active.resetGraphics();
         },
         .frame_ack => |ack| {
             const active = try attachedPane(attachments, ack.pane_id);
@@ -1908,6 +2662,8 @@ fn spawnPane(
             launch.cwd,
             history_service,
             size,
+            panes.graphics_limits,
+            &panes.graphics_budget,
         );
         errdefer created.destroy();
         try panes.insert(created);
@@ -1929,6 +2685,47 @@ fn spawnPane(
     };
     fresh.wait_pending = true;
     return fresh;
+}
+
+fn enforceGraphicsQuotas(io: Io, pane: *Pane) void {
+    // The allocator has already reserved every VT and frozen-transfer byte
+    // against the pane and runtime counters. This pass only enforces count
+    // limits after a complete ingest. It never touches another pane because
+    // that pane may be parsing concurrently in its own actor.
+    enforceGraphicsCounts(io, pane, .primary);
+    enforceGraphicsCounts(io, pane, .alternate);
+}
+
+fn enforceGraphicsCounts(io: Io, pane: *Pane, screen_key: vt.ScreenSet.Key) void {
+    const screen = pane.terminal.screens.get(screen_key) orelse return;
+    const previous_key = pane.terminal.screens.active_key;
+    const previous = pane.terminal.screens.active;
+    pane.terminal.screens.active_key = screen_key;
+    pane.terminal.screens.active = screen;
+    defer {
+        pane.terminal.screens.active_key = previous_key;
+        pane.terminal.screens.active = previous;
+    }
+    const storage = &screen.kitty_images;
+    const placement_limit = pane.graphics_limits.placements_per_pane / 2;
+    if (storage.placements.count() > placement_limit)
+        storage.delete(io, pane.media_allocator.allocator(), &pane.terminal, .{ .all = false });
+
+    const image_limit = pane.graphics_limits.images_per_pane / 2;
+    while (storage.images.count() > image_limit) {
+        var oldest_id: ?u32 = null;
+        var oldest_generation: u64 = std.math.maxInt(u64);
+        var iterator = storage.images.iterator();
+        while (iterator.next()) |entry| {
+            if (entry.value_ptr.generation >= oldest_generation) continue;
+            oldest_generation = entry.value_ptr.generation;
+            oldest_id = entry.key_ptr.*;
+        }
+        storage.delete(io, pane.media_allocator.allocator(), &pane.terminal, .{ .id = .{
+            .delete = true,
+            .image_id = oldest_id orelse break,
+        } });
+    }
 }
 
 fn encodeFrame(
@@ -1957,7 +2754,8 @@ fn encodeFrame(
     snapshot = snapshot or diff.snapshot_required;
 
     const cursor_changed = !std.meta.eql(pane.cursor, attachment.acknowledged_cursor);
-    if (!snapshot and span_count == 0 and !cursor_changed) {
+    const mouse_changed = !std.meta.eql(pane.mouse, attachment.acknowledged_mouse);
+    if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed) {
         @memset(pane.damaged_rows, false);
         pane.dirty = false;
         if (comptime diagnostics.enabled) {
@@ -1985,6 +2783,7 @@ fn encodeFrame(
         .cols = pane.screen.w,
         .rows = pane.screen.h,
         .cursor = pane.cursor,
+        .mouse = pane.mouse,
         .spans = span_storage[0..span_count],
     });
     if (snapshot) {
@@ -1996,6 +2795,7 @@ fn encodeFrame(
         }
     }
     attachment.acknowledged_cursor = pane.cursor;
+    attachment.acknowledged_mouse = pane.mouse;
     attachment.outstanding_frame_id = frame_id;
     attachment.frame_sent_ns = diagnostics.now(io);
     @memset(pane.damaged_rows, false);
@@ -2019,6 +2819,274 @@ fn encodeFrame(
         metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
     }
     return payload;
+}
+
+fn encodeNextGraphics(
+    buffer: []u8,
+    attachment: *Attachment,
+) !?[]const u8 {
+    const pane = attachment.pane;
+    const storage = &pane.terminal.screens.active.kitty_images;
+    if (!attachment.graphics_batch_active) {
+        attachment.graphics_target_revision = pane.graphics_revision;
+        attachment.graphics_revision = @max(pane.graphics_revision, @as(u64, 1));
+        attachment.graphics_batch_active = true;
+    }
+    const revision = attachment.graphics_revision;
+
+    if (attachment.graphics_snapshot == .begin_pending) {
+        attachment.known_images = [_]?Attachment.KnownImage{null} ** core.graphics.max_images_per_pane;
+        attachment.known_placements = [_]?Attachment.KnownPlacement{null} ** core.graphics.max_placements_per_pane;
+        attachment.freeTransfer();
+        attachment.graphics_snapshot = .open;
+        return try schema.encodeGraphicsSnapshot(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .phase = .begin,
+        });
+    }
+
+    if (attachment.transfer) |*transfer| {
+        if (!transfer.metadata_sent) {
+            transfer.metadata_sent = true;
+            return try schema.encodeGraphicsImage(buffer, .{
+                .pane_id = pane.id,
+                .revision = revision,
+                .image = transfer.metadata,
+            });
+        }
+        if (transfer.offset < transfer.pixels.len) {
+            const remaining = transfer.pixels[transfer.offset..];
+            const take = @min(remaining.len, core.graphics.max_ipc_chunk_bytes);
+            const offset = transfer.offset;
+            transfer.offset += take;
+            return try schema.encodeGraphicsImageChunk(buffer, .{
+                .pane_id = pane.id,
+                .revision = revision,
+                .key = transfer.metadata.key,
+                .offset = offset,
+                .bytes = remaining[0..take],
+            });
+        }
+        try rememberImage(attachment, transfer.metadata.key);
+        if (transfer.placement_index < transfer.placement_count) {
+            const placement = transfer.placements[transfer.placement_index];
+            transfer.placement_index += 1;
+            if (knownPlacement(attachment, placement.virtual_id)) |known|
+                known.placement = placement
+            else
+                try rememberPlacement(attachment, placement);
+            return try schema.encodeGraphicsPlacement(buffer, .{
+                .pane_id = pane.id,
+                .revision = revision,
+                .placement = placement,
+            });
+        }
+        attachment.freeTransfer();
+    }
+
+    // Keep the currently displayed generation until its replacement image and
+    // placements have crossed the bounded transport. Exterior IDs include the
+    // generation, so both may coexist without aliasing during the handoff.
+    for (&attachment.known_images) |*slot| {
+        const known = slot.* orelse continue;
+        const current = storage.imageById(known.key.image_id);
+        if (current != null and current.?.generation == known.key.generation) continue;
+        if (current) |replacement| if (!knowsImage(attachment, .{
+            .image_id = replacement.id,
+            .generation = replacement.generation,
+        })) continue;
+        slot.* = null;
+        forgetPlacementsForImage(attachment, known.key);
+        return try schema.encodeGraphicsDeleteImage(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .key = known.key,
+        });
+    }
+
+    var image_iterator = storage.images.iterator();
+    while (image_iterator.next()) |entry| {
+        const image = entry.value_ptr;
+        if (image.data.bytes() == null) continue;
+        const key: core.graphics.ImageKey = .{
+            .image_id = image.id,
+            .generation = image.generation,
+        };
+        if (knowsImage(attachment, key)) continue;
+        const pixels = image.data.bytes() orelse continue;
+        const format: core.graphics.Format = switch (image.format) {
+            .rgb => .rgb,
+            .rgba => .rgba,
+            else => return error.UnsupportedGraphicsFormat,
+        };
+        const metadata: core.graphics.Image = .{
+            .key = key,
+            .format = format,
+            .width = image.width,
+            .height = image.height,
+            .byte_len = pixels.len,
+        };
+        _ = try metadata.validate(pane.graphics_storage_limit);
+        if (!pane.media_allocator.reserveManual(pixels.len))
+            return error.GraphicsQuotaExceeded;
+        errdefer pane.media_allocator.releaseManual(pixels.len);
+        const frozen = try attachment.gpa.dupe(u8, pixels);
+        attachment.transfer = .{ .metadata = metadata, .pixels = frozen };
+        var placement_iterator = storage.placements.iterator();
+        while (placement_iterator.next()) |placement_entry| {
+            if (placement_entry.key_ptr.image_id != image.id) continue;
+            const placement = placementValue(
+                pane,
+                placement_entry.key_ptr.*,
+                placement_entry.value_ptr.*,
+                image.*,
+            ) orelse continue;
+            const index = attachment.transfer.?.placement_count;
+            if (index == core.graphics.max_placements_per_pane) break;
+            attachment.transfer.?.placements[index] = placement;
+            attachment.transfer.?.placement_count += 1;
+        }
+        return encodeNextGraphics(buffer, attachment);
+    }
+
+    for (&attachment.known_placements) |*slot| {
+        const known = slot.* orelse continue;
+        if (findPlacement(storage, known.placement.virtual_id) != null) continue;
+        slot.* = null;
+        return try schema.encodeGraphicsDeletePlacement(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .key = known.placement.key,
+            .virtual_id = known.placement.virtual_id,
+            .placement_id = known.placement.placement_id,
+        });
+    }
+
+    var placement_iterator = storage.placements.iterator();
+    while (placement_iterator.next()) |entry| {
+        const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
+        if (!knowsImage(attachment, .{ .image_id = image.id, .generation = image.generation }))
+            continue;
+        const placement = placementValue(pane, entry.key_ptr.*, entry.value_ptr.*, image) orelse
+            continue;
+        if (knownPlacement(attachment, placement.virtual_id)) |known| {
+            if (std.meta.eql(known.placement, placement)) continue;
+            known.placement = placement;
+        } else try rememberPlacement(attachment, placement);
+        return try schema.encodeGraphicsPlacement(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .placement = placement,
+        });
+    }
+
+    attachment.observed_graphics_revision = attachment.graphics_target_revision;
+    attachment.graphics_batch_active = false;
+    if (attachment.graphics_snapshot == .open) {
+        attachment.graphics_snapshot = .idle;
+        return try schema.encodeGraphicsSnapshot(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .phase = .end,
+        });
+    }
+    return null;
+}
+
+fn knowsImage(attachment: *const Attachment, key: core.graphics.ImageKey) bool {
+    for (attachment.known_images) |slot| if (slot) |known| {
+        if (std.meta.eql(known.key, key)) return true;
+    };
+    return false;
+}
+
+fn rememberImage(attachment: *Attachment, key: core.graphics.ImageKey) !void {
+    if (knowsImage(attachment, key)) return;
+    for (&attachment.known_images) |*slot| if (slot.* == null) {
+        slot.* = .{ .key = key };
+        return;
+    };
+    return error.GraphicsImageLimitReached;
+}
+
+fn forgetPlacementsForImage(attachment: *Attachment, key: core.graphics.ImageKey) void {
+    for (&attachment.known_placements) |*slot| {
+        const known = slot.* orelse continue;
+        if (std.meta.eql(known.placement.key, key)) slot.* = null;
+    }
+}
+
+fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*Attachment.KnownPlacement {
+    for (&attachment.known_placements) |*slot| {
+        const known = if (slot.*) |*value| value else continue;
+        if (known.placement.virtual_id == virtual_id) return known;
+    }
+    return null;
+}
+
+fn rememberPlacement(attachment: *Attachment, placement: core.graphics.Placement) !void {
+    for (&attachment.known_placements) |*slot| if (slot.* == null) {
+        slot.* = .{ .placement = placement };
+        return;
+    };
+    return error.GraphicsPlacementLimitReached;
+}
+
+fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 {
+    const tag: u64 = switch (key.placement_id.tag) {
+        .internal => 0,
+        .external => 1,
+    };
+    return ((tag << 32) | key.placement_id.id) + 1;
+}
+
+fn findPlacement(
+    storage: *vt.kitty.graphics.ImageStorage,
+    virtual_id: u64,
+) ?vt.kitty.graphics.ImageStorage.Placement {
+    var iterator = storage.placements.iterator();
+    while (iterator.next()) |entry| {
+        if (placementVirtualId(entry.key_ptr.*) == virtual_id) return entry.value_ptr.*;
+    }
+    return null;
+}
+
+fn placementValue(
+    pane: *Pane,
+    key: vt.kitty.graphics.ImageStorage.PlacementKey,
+    placement: vt.kitty.graphics.ImageStorage.Placement,
+    image: vt.kitty.graphics.Image,
+) ?core.graphics.Placement {
+    const pin = switch (placement.location) {
+        .pin => |value| value,
+        .virtual => return null,
+    };
+    if (pin.garbage) return null;
+    const pages = &pane.terminal.screens.active.pages;
+    const screen_point = pages.pointFromPin(.screen, pin.*) orelse return null;
+    const viewport = pages.pointFromPin(.screen, pages.getTopLeft(.viewport)) orelse return null;
+    const source = placement.sourceRect(image);
+    return .{
+        .key = .{ .image_id = image.id, .generation = image.generation },
+        .virtual_id = placementVirtualId(key),
+        .placement_id = switch (key.placement_id.tag) {
+            .internal => 0,
+            .external => key.placement_id.id,
+        },
+        .x = @intCast(screen_point.screen.x),
+        .y = @as(i32, @intCast(screen_point.screen.y)) -
+            @as(i32, @intCast(viewport.screen.y)),
+        .source_x = source.x,
+        .source_y = source.y,
+        .source_width = source.width,
+        .source_height = source.height,
+        .columns = placement.columns,
+        .rows = placement.rows,
+        .offset_x = placement.x_offset,
+        .offset_y = placement.y_offset,
+        .z_index = placement.z,
+    };
 }
 
 fn pumpSend(
@@ -2101,6 +3169,7 @@ fn pumpSend(
         const index = (attachments.next_send + checked) % attachments.items.len;
         const active = if (attachments.items[index]) |*value| value else continue;
         const pane = active.pane;
+        if (pane.ingest_pending) continue;
         if (active.snapshot_pending) {
             const payload = (try encodeFrame(io, buffer, active, true, metrics)) orelse
                 unreachable;
@@ -2111,6 +3180,19 @@ fn pumpSend(
         }
         if (active.outstanding_frame_id == 0 and pane.dirty) {
             if (try encodeFrame(io, buffer, active, false, metrics)) |payload| {
+                try startSend(io, select, connection.?, payload, send_pending);
+                attachments.next_send = (index + 1) % attachments.items.len;
+                return;
+            }
+        }
+        if (active.graphics_snapshot != .idle or active.transfer != null or
+            active.observed_graphics_revision != pane.graphics_revision)
+        {
+            if (try encodeNextGraphics(buffer, active)) |payload| {
+                if (comptime diagnostics.enabled) {
+                    metrics.graphics_messages += 1;
+                    metrics.graphics_bytes += payload.len;
+                }
                 try startSend(io, select, connection.?, payload, send_pending);
                 attachments.next_send = (index + 1) % attachments.items.len;
                 return;
@@ -2248,7 +3330,7 @@ fn formatRuntimeTelemetry(
     attachments: *const AttachmentStore,
     workspace_count: usize,
     tab_count: usize,
-    pane_count: usize,
+    panes: *const PaneStore,
     history_service: *const history.Service,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
@@ -2266,8 +3348,34 @@ fn formatRuntimeTelemetry(
     var history_foreground_completions: u64 = 0;
     var history_next_input_completions: u64 = 0;
     var history_auxiliary_completions: u64 = 0;
+    var graphics_images: usize = 0;
+    var graphics_placements: usize = 0;
+    var graphics_resident_bytes: usize = 0;
+    var graphics_transfer_bytes: usize = 0;
+    var graphics_loading_bytes: usize = 0;
+    var pty_response_queue_depth: usize = 0;
+    var pty_response_dropped: u64 = 0;
+    for (panes.items) |slot| {
+        const pane = slot orelse continue;
+        if (pane.ingest_pending) continue;
+        pty_response_queue_depth += pane.pty_responses.len;
+        pty_response_dropped += pane.pty_responses.dropped;
+        for (std.enums.values(vt.ScreenSet.Key)) |key| {
+            const screen = pane.terminal.screens.get(key) orelse continue;
+            graphics_images += screen.kitty_images.images.count();
+            graphics_placements += screen.kitty_images.placements.count();
+            graphics_resident_bytes += screen.kitty_images.total_bytes;
+            if (screen.kitty_images.loading) |loading|
+                graphics_loading_bytes += loading.data.items.len;
+        }
+    }
     for (attachments.items) |slot| {
         const active = slot orelse continue;
+        if (active.pane.ingest_pending) continue;
+        if (active.transfer) |transfer| {
+            graphics_transfer_bytes += transfer.pixels.len;
+            graphics_resident_bytes += transfer.pixels.len;
+        }
         if (active.outstanding_frame_id != 0) outstanding_frames += 1;
         if (active.pane.dirty) dirty_panes += 1;
         history_prompt_markers += active.pane.history_tracker.aux.prompt_markers;
@@ -2301,7 +3409,7 @@ fn formatRuntimeTelemetry(
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
         workspace_count,
         tab_count,
-        pane_count,
+        panes.count,
         attachments.count,
         outstanding_frames,
         dirty_panes,
@@ -2324,6 +3432,24 @@ fn formatRuntimeTelemetry(
         metrics.bridged_cells,
         metrics.coalesced_bytes_saved,
     });
+    try output.print(
+        "\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
+            "\"graphics_images\":{d},\"graphics_placements\":{d}," ++
+            "\"graphics_resident_bytes\":{d},\"graphics_transfer_bytes\":{d}," ++
+            "\"graphics_loading_bytes\":{d}," ++
+            "\"pty_response_queue_depth\":{d},\"pty_response_dropped\":{d},",
+        .{
+            metrics.graphics_messages,
+            metrics.graphics_bytes,
+            graphics_images,
+            graphics_placements,
+            graphics_resident_bytes,
+            graphics_transfer_bytes,
+            graphics_loading_bytes,
+            pty_response_queue_depth,
+            pty_response_dropped,
+        },
+    );
     try output.print("\"history_captured\":{d},\"history_dropped\":{d}," ++
         "\"history_candidate_input_bytes\":{d}," ++
         "\"history_prompt_markers\":{d},\"history_input_markers\":{d}," ++
@@ -2357,6 +3483,7 @@ fn formatRuntimeTelemetry(
         "\"sqlite_write_avg_us\":{d},\"sqlite_write_max_us\":{d}," ++
         "\"sqlite_queries\":{d},\"sqlite_query_failures\":{d}," ++
         "\"sqlite_query_avg_us\":{d},\"sqlite_query_max_us\":{d}," ++
+        "\"input_write_avg_us\":{d},\"input_write_max_us\":{d}," ++
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"ingest_avg_us\":{d},\"ingest_max_us\":{d}," ++
         "\"encode_avg_us\":{d},\"encode_max_us\":{d}," ++
@@ -2374,6 +3501,8 @@ fn formatRuntimeTelemetry(
         history_stats.sqlite_query_failures,
         averageNs(history_stats.sqlite_query_ns, history_stats.sqlite_queries) / std.time.ns_per_us,
         history_stats.sqlite_query_max_ns / std.time.ns_per_us,
+        metrics.input_write.average() / std.time.ns_per_us,
+        metrics.input_write.max_ns / std.time.ns_per_us,
         metrics.decode.average() / std.time.ns_per_us,
         metrics.decode.max_ns / std.time.ns_per_us,
         metrics.ingest.average() / std.time.ns_per_us,
@@ -2390,8 +3519,40 @@ fn averageNs(total: u64, count: u64) u64 {
     return if (count == 0) 0 else total / count;
 }
 
-fn writePaneInput(io: Io, master: File, bytes: []const u8) anyerror!void {
-    try master.writeStreamingAll(io, bytes);
+fn writePaneInput(io: Io, pane: *Pane, bytes: []const u8, started_ns: u64) PaneInputEvent {
+    pane.pty_write_mutex.lockUncancelable(io);
+    defer pane.pty_write_mutex.unlock(io);
+    return .{
+        .started_ns = started_ns,
+        .result = pane.session.file().writeStreamingAll(io, bytes),
+    };
+}
+
+fn schedulePaneResponse(
+    io: Io,
+    select: *Io.Select(RuntimeEvent),
+    pane: *Pane,
+) !void {
+    if (pane.response_pending) return;
+    const response = pane.pty_responses.peek() orelse return;
+    pane.response_pending = true;
+    select.concurrent(.pane_response_written, writePaneResponse, .{
+        io,
+        pane,
+        response,
+    }) catch |err| {
+        pane.response_pending = false;
+        return err;
+    };
+}
+
+fn writePaneResponse(io: Io, pane: *Pane, bytes: []const u8) PaneResponseEvent {
+    pane.pty_write_mutex.lockUncancelable(io);
+    defer pane.pty_write_mutex.unlock(io);
+    return .{
+        .pane = pane,
+        .result = pane.session.file().writeStreamingAll(io, bytes),
+    };
 }
 
 fn waitForStop(io: Io, stop: *Io.Queue(u8)) anyerror!void {
@@ -2422,9 +3583,54 @@ fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
     return .{ .pane = pane, .result = @intCast(len) };
 }
 
+fn ingestPane(
+    io: Io,
+    pane: *Pane,
+    output_len: u16,
+    ingest_gate: ?*IngestTestGate,
+) PaneIngestEvent {
+    if (ingest_gate) |gate| gate.wait(io) catch |err|
+        return .{ .pane = pane, .result = err };
+    var stats: PaneIngestStats = .{};
+    stats.history_input_bytes = pane.processHistoryInput(&stats);
+    stats.elapsed_ns = pane.ingest(io, pane.output_buffer[0..output_len], &stats) catch |err|
+        return .{ .pane = pane, .result = err };
+    return .{ .pane = pane, .result = stats };
+}
+
 fn waitPane(pane: *Pane) PaneExitEvent {
     const result = pane.session.wait();
     return .{ .pane = pane, .result = result };
+}
+
+test "graphics allocator reserves pane and global bytes before allocation" {
+    var budget = GraphicsBudget.init(64);
+    var first = PaneMediaAllocator.init(std.testing.allocator, &budget, 48);
+    var second = PaneMediaAllocator.init(std.testing.allocator, &budget, 48);
+    const first_allocator = first.allocator();
+    const second_allocator = second.allocator();
+
+    const a = try first_allocator.alloc(u8, 40);
+    defer first_allocator.free(a);
+    const b = try second_allocator.alloc(u8, 24);
+    defer second_allocator.free(b);
+    try std.testing.expectError(error.OutOfMemory, second_allocator.alloc(u8, 1));
+    try std.testing.expectEqual(@as(usize, 64), budget.used);
+    try std.testing.expectEqual(@as(usize, 40), first.used);
+    try std.testing.expectEqual(@as(usize, 24), second.used);
+}
+
+test "frozen graphics transfers use the same reservation as VT media" {
+    var budget = GraphicsBudget.init(64);
+    var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 64);
+    const allocator = media.allocator();
+    const decoded = try allocator.alloc(u8, 40);
+    defer allocator.free(decoded);
+
+    try std.testing.expect(media.reserveManual(24));
+    try std.testing.expect(!media.reserveManual(1));
+    media.releaseManual(24);
+    try std.testing.expectEqual(@as(usize, 40), budget.used);
 }
 
 test "workspace and default tab identities are stable per path" {
@@ -2493,4 +3699,77 @@ test "workspace tabs create rename reorder and close" {
     try std.testing.expectEqual(false, store.removeTab(generated.location).?);
     try std.testing.expectEqual(true, store.removeTab(ensured.location).?);
     try std.testing.expectEqual(@as(usize, 0), store.count);
+}
+
+test "Kitty framing counter survives splits and ignores other APCs" {
+    var counter: KittyFramingCounter = .{};
+    try std.testing.expectEqual(@as(usize, 0), counter.observe("text\x1b_Gm=1;AA"));
+    try std.testing.expectEqual(@as(usize, 1), counter.observe("AA\x1b\\"));
+    try std.testing.expectEqual(@as(usize, 0), counter.observe("\x1b_Xnot-kitty\x1b\\"));
+    try std.testing.expectEqual(@as(usize, 2), counter.observe(
+        "\x1b_Gm=1;AAAA\x1b\\\x1b_Gm=0;AAAA\x1b\\",
+    ));
+}
+
+test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
+    const Capture = struct {
+        var bytes: [512]u8 = undefined;
+        var len: usize = 0;
+
+        fn reset() void {
+            len = 0;
+        }
+
+        fn writePty(_: *vt.TerminalStream.Handler, response: [:0]const u8) void {
+            if (len + response.len > bytes.len) @panic("KGP test response overflow");
+            @memcpy(bytes[len..][0..response.len], response);
+            len += response.len;
+        }
+    };
+
+    var terminal = try vt.Terminal.init(std.testing.io, std.testing.allocator, .{
+        .cols = 10,
+        .rows = 5,
+        .kitty_image_storage_limit = core.graphics.max_image_bytes_per_screen,
+        .kitty_image_loading_limits = .direct,
+    });
+    defer terminal.deinit(std.testing.allocator);
+    var handler = terminal.vtHandler();
+    handler.apc_handler.max_bytes.put(.kitty, core.graphics.max_encoded_chunk_bytes);
+    handler.effects.write_pty = Capture.writePty;
+    var stream = vt.TerminalStream.init(.{
+        .allocator = std.testing.allocator,
+        .handler = handler,
+    });
+    defer stream.deinit();
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\");
+    try std.testing.expectEqualStrings("\x1b_Gi=31;OK\x1b\\", Capture.bytes[0..Capture.len]);
+    try std.testing.expectEqual(@as(usize, 0), terminal.screens.active.kitty_images.images.count());
+
+    // Same encoding shape as terminal-browser: direct RGBA, zlib level 1,
+    // independently base64-encoded chunks.
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=t,f=32,o=z,s=1,v=1,t=d,i=7,m=1;eAFjZGL+\x1b\\");
+    stream.nextSlice("\x1b_Gm=0;DwABEwEG\x1b\\");
+    const image = terminal.screens.active.kitty_images.imageById(7).?;
+    try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3, 255 }, image.data.bytes().?);
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=q,f=32,o=z,s=1,v=1,t=d,i=8;eAFjZGIGAAANAAc=\x1b\\");
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        Capture.bytes[0..Capture.len],
+        "EINVAL: invalid data",
+    ) != null);
+    try std.testing.expect(terminal.screens.active.kitty_images.imageById(8) == null);
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=q,f=24,s=1,v=1,t=f,i=9;L3RtcC9pbWFnZQ==\x1b\\");
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        Capture.bytes[0..Capture.len],
+        "EINVAL: unsupported medium",
+    ) != null);
 }

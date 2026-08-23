@@ -1,19 +1,19 @@
-//! Client half of protocol version negotiation.
+//! Client half of the exact-schema handshake.
 
 const core = @import("telar-core");
-const schema = core.schema.handshake;
+const schema = core.handshake;
 
 pub fn perform(io: @import("std").Io, connection: anytype) !schema.ServerResponse {
-    return performVersions(io, connection, schema.supported_versions);
+    return performSchema(io, connection, schema.schema_id);
 }
 
-pub fn performVersions(
+pub fn performSchema(
     io: @import("std").Io,
     connection: anytype,
-    requested: schema.VersionRange,
+    requested: schema.SchemaId,
 ) !schema.ServerResponse {
     var request_buffer: [schema.max_message_size]u8 = undefined;
-    const request = try schema.encodeClientHello(&request_buffer, .{ .versions = requested });
+    const request = try schema.encodeClientHello(&request_buffer, .{ .schema = requested });
     try connection.send(io, request);
 
     var response_buffer: [schema.max_message_size]u8 = undefined;
@@ -21,7 +21,8 @@ pub fn performVersions(
     const response = try schema.decodeServerResponse(response_payload);
     switch (response) {
         .accepted => |accepted| {
-            if (!requested.contains(accepted.version)) return error.InvalidServerSelection;
+            if (!@import("std").mem.eql(u8, &requested, &accepted.schema))
+                return error.InvalidServerSelection;
         },
         .rejected => {},
     }

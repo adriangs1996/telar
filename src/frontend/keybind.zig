@@ -426,6 +426,13 @@ pub fn Router(
                             try router.appendOutput(raw, handler);
                         }
                     },
+                    .terminal_response => |response| {
+                        router.resetMatch();
+                        router.binding_since_ns = null;
+                        try router.flushOutput(handler);
+                        if (comptime @hasDecl(@TypeOf(handler.*), "terminalResponse"))
+                            try handler.terminalResponse(response);
+                    },
                     .paste_start, .paste_end, .incomplete => {
                         try router.replayBinding(handler);
                         try router.appendOutput(raw, handler);
@@ -591,6 +598,28 @@ const MouseCapture = struct {
     }
 };
 
+const TerminalResponseCapture = struct {
+    forwarded: usize = 0,
+    responses: usize = 0,
+    supported: bool = false,
+
+    fn forward(capture: *TerminalResponseCapture, bytes: []const u8) !void {
+        capture.forwarded += bytes.len;
+    }
+
+    fn action(_: *TerminalResponseCapture, _: TestAction) !Control {
+        return .continue_routing;
+    }
+
+    fn terminalResponse(capture: *TerminalResponseCapture, response: term.Event.TerminalResponse) !void {
+        switch (response) {
+            .kitty_graphics => |kitty| capture.supported = kitty.supported,
+            else => {},
+        }
+        capture.responses += 1;
+    }
+};
+
 test "configuration keys parse into semantic chords" {
     const ctrl_b = try parseKey("Ctrl+B");
     try testing.expect(ctrl_b.isCtrl('b'));
@@ -697,6 +726,20 @@ test "a semantic mouse handler consumes reports before they reach the pane" {
     _ = try router.feed("\x1b[<0;8;4M", 100, &capture);
     try testing.expectEqual(@as(usize, 1), capture.mouse_events);
     try testing.expectEqual(@as(usize, 0), capture.forwarded);
+}
+
+test "a fragmented KGP capability reply is consumed at every split" {
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
+    const reply = "\x1b_Gi=31;OK\x1b\\";
+    for (1..reply.len) |split| {
+        var router = try TestRouter.init(&bindings);
+        var capture: TerminalResponseCapture = .{};
+        _ = try router.feed(reply[0..split], 0, &capture);
+        _ = try router.feed(reply[split..], 1, &capture);
+        try testing.expectEqual(@as(usize, 0), capture.forwarded);
+        try testing.expectEqual(@as(usize, 1), capture.responses);
+        try testing.expect(capture.supported);
+    }
 }
 
 test "a failed sequence replays its bytes in order" {

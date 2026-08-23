@@ -7,7 +7,7 @@ const layout_mod = @import("layout.zig");
 const term = @import("term.zig");
 const theme = @import("theme.zig");
 
-const schema = core.schema.v2;
+const schema = core.schema;
 const ui = core.ui;
 
 pub const max_panes = layout_mod.max_panes;
@@ -44,8 +44,10 @@ pub const Pane = struct {
     damage_rows: []DamageRow,
     attached: bool,
     cursor: schema.frame.Cursor = .{},
+    mouse: schema.frame.Mouse = .{},
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
+    graphics_placeholder: bool = false,
 
     fn init(
         gpa: std.mem.Allocator,
@@ -111,6 +113,8 @@ pub const Model = struct {
     composition_area: ui.Rect = .{},
     composition_invalidated: bool = true,
     border_theme: ?BorderTheme = null,
+    cell_width_px: u16 = 0,
+    cell_height_px: u16 = 0,
 
     pub fn init(gpa: std.mem.Allocator) Model {
         return .{ .gpa = gpa };
@@ -252,6 +256,7 @@ pub const Model = struct {
             null;
         errdefer if (replacement_damage) |rows| model.gpa.free(rows);
         const applied = try frame_apply.applyBuffer(&pane.buffer, &pane.cursor, frame);
+        pane.mouse = frame.mouse;
         if (replacement_damage) |rows| {
             @memset(rows, .{});
             model.gpa.free(pane.damage_rows);
@@ -273,8 +278,24 @@ pub const Model = struct {
     ) ?schema.TerminalSize {
         var storage: [max_panes]layout_mod.View = undefined;
         for (model.layout.views(area, &storage)) |view| {
-            if (view.pane_id == pane_id) return rectSize(view.content);
+            if (view.pane_id == pane_id) {
+                var size = rectSize(view.content) orelse return null;
+                size.cell_width_px = model.cell_width_px;
+                size.cell_height_px = model.cell_height_px;
+                return size;
+            }
         }
+        return null;
+    }
+
+    pub fn viewForPane(
+        model: *const Model,
+        pane_id: schema.PaneId,
+        area: ui.Rect,
+    ) ?layout_mod.View {
+        var storage: [max_panes]layout_mod.View = undefined;
+        for (model.layout.views(area, &storage)) |view|
+            if (view.pane_id == pane_id) return view;
         return null;
     }
 
@@ -346,6 +367,7 @@ pub const Model = struct {
                     .y = view.content.y + pane.cursor.y,
                 };
             }
+            if (pane.graphics_placeholder) drawGraphicsPlaceholder(target, view.content, palette);
         }
         stats.damaged_cells = try syncComposed(screen, target);
         model.composition_invalidated = false;
@@ -406,6 +428,20 @@ pub const Model = struct {
             }
         }
         return stats;
+    }
+
+    pub fn setCellSize(model: *Model, width: u16, height: u16) void {
+        if (model.cell_width_px == width and model.cell_height_px == height) return;
+        model.cell_width_px = width;
+        model.cell_height_px = height;
+        model.composition_invalidated = true;
+    }
+
+    pub fn setGraphicsPlaceholder(model: *Model, pane_id: schema.PaneId, visible: bool) void {
+        const pane = model.find(pane_id) orelse return;
+        if (pane.graphics_placeholder == visible) return;
+        pane.graphics_placeholder = visible;
+        model.composition_invalidated = true;
     }
 
     fn clearPaneDamage(model: *Model) void {
@@ -524,6 +560,19 @@ fn drawBorder(buffer: *ui.Buffer, view: layout_mod.View, palette: *const theme.P
         .{schema.id.raw(view.pane_id)},
     ) catch " pane ";
     buffer.box(view.outer, style, text);
+}
+
+fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const theme.Palette) void {
+    if (area.w == 0 or area.h == 0) return;
+    const label = "[graphics unavailable]";
+    const width = @min(area.w, ui.measure(label));
+    const x = area.x + (area.w - width) / 2;
+    const y = area.y + area.h / 2;
+    _ = buffer.writeTruncated(area, x, y, label, width, .{
+        .fg = palette.yellow,
+        .bg = palette.surface_dim,
+        .flags = .{ .bold = true },
+    });
 }
 
 test "two pane buffers compose into their layout rectangles" {
