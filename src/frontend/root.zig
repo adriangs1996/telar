@@ -14,6 +14,7 @@ pub const edit = @import("edit.zig");
 pub const keybind = @import("keybind.zig");
 pub const layout = @import("layout.zig");
 pub const multiplexer = @import("multiplexer.zig");
+pub const client_ui = @import("client_ui.zig");
 pub const platform = @import("platform.zig");
 pub const transport = @import("transport.zig");
 pub const client = @import("client.zig");

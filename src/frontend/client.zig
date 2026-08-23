@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const client_view = @import("client_ui.zig");
 const keybind = @import("keybind.zig");
 const layout_mod = @import("layout.zig");
 const multiplexer = @import("multiplexer.zig");
@@ -19,7 +20,7 @@ const input_chunk_size = 4096;
 const max_bindings = 256;
 const max_binding_keys = 4;
 const held_binding_bytes = 128;
-const default_binding_count = 8;
+const default_binding_count = 9;
 
 pub const Action = enum {
     split_horizontal,
@@ -28,6 +29,7 @@ pub const Action = enum {
     focus_right,
     focus_up,
     focus_down,
+    toggle_sidebar,
     close_pane,
     detach,
 
@@ -38,6 +40,7 @@ pub const Action = enum {
         if (std.mem.eql(u8, name, "focus-right")) return .focus_right;
         if (std.mem.eql(u8, name, "focus-up")) return .focus_up;
         if (std.mem.eql(u8, name, "focus-down")) return .focus_down;
+        if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
         if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
         if (std.mem.eql(u8, name, "detach")) return .detach;
         return error.UnknownAction;
@@ -79,6 +82,9 @@ const ClientMetrics = struct {
     flushed_cells: u64 = 0,
     flushed_bytes: u64 = 0,
     max_pending_updates: u64 = 0,
+    mouse_events: u64 = 0,
+    chrome_scanned_cells: u64 = 0,
+    chrome_damaged_cells: u64 = 0,
     decode: diagnostics.Timing = .{},
     apply: diagnostics.Timing = .{},
     compose: diagnostics.Timing = .{},
@@ -179,16 +185,18 @@ pub fn run(
     var output_writer = tty_file.writer(io, &output_buffer);
     const writer = &output_writer.interface;
 
-    try writer.writeAll(platform.pane_enter_sequence);
+    try writer.writeAll(platform.enter_sequence);
     try writer.flush();
     defer {
-        writer.writeAll(platform.pane_leave_sequence) catch {};
+        writer.writeAll(platform.leave_sequence) catch {};
         writer.flush() catch {};
     }
 
     var host_size = terminalSize(&tty);
     var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
     defer screen.deinit();
+    var view = try client_view.State.init(gpa, host_size.cols, host_size.rows);
+    defer view.deinit();
     var model = multiplexer.Model.init(gpa);
     defer model.deinit();
 
@@ -203,7 +211,7 @@ pub fn run(
     const initial_request_id: schema.RequestId = @enumFromInt(1);
     const open_payload = try schema.encodeOpenPane(send_buffer, .{
         .request_id = initial_request_id,
-        .size = host_size,
+        .size = rectSize(view.workbench()) orelse return error.TerminalTooSmall,
         .launch = .{
             .cwd = options.cwd,
             .arguments = options.arguments,
@@ -248,7 +256,7 @@ pub fn run(
         .input => |result| {
             const chunk = try result;
             if (chunk.len == 0) return 0;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, screenArea(host_size), options, &next_request_id, &pending_split, &pending_close);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, &view, options, &next_request_id, &pending_split, &pending_close);
             if (try input_router.feed(chunk.slice(), monotonic(io), &handler) == .stop)
                 return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
@@ -258,7 +266,7 @@ pub fn run(
         .input_timeout => |result| {
             try result;
             input_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, screenArea(host_size), options, &next_request_id, &pending_split, &pending_close);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, &view, options, &next_request_id, &pending_split, &pending_close);
             if (try input_router.expireInput(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
@@ -266,7 +274,7 @@ pub fn run(
         .binding_timeout => |result| {
             try result;
             binding_timeout_pending = false;
-            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, screenArea(host_size), options, &next_request_id, &pending_split, &pending_close);
+            var handler = InputHandler.init(io, connection, send_buffer, &metrics, &model, &view, options, &next_request_id, &pending_split, &pending_close);
             if (try input_router.expireBinding(monotonic(io), &handler) == .stop) return 0;
             if (handler.redraw) try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
@@ -275,7 +283,8 @@ pub fn run(
             try result;
             host_size = terminalSize(&tty);
             try screen.resize(host_size.cols, host_size.rows);
-            try resizeAttached(io, connection, send_buffer, &model, screenArea(host_size));
+            try view.resize(host_size.cols, host_size.rows);
+            try resizeAttached(io, connection, send_buffer, &model, view.workbench());
             try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
             try select.concurrent(.resized, waitResize, .{ io, &watcher });
         },
@@ -291,7 +300,12 @@ pub fn run(
             switch (message) {
                 .pane_opened => |opened| {
                     if (opened.request_id == initial_request_id and model.pane_count == 0) {
-                        try model.addRoot(opened.pane_id, opened.location, host_size);
+                        try model.addRoot(
+                            opened.pane_id,
+                            opened.location,
+                            rectSize(view.workbench()) orelse return error.TerminalTooSmall,
+                        );
+                        view.invalidate();
                         if (!input_started) {
                             try select.concurrent(.input, readInput, .{ io, input_file });
                             input_started = true;
@@ -308,13 +322,14 @@ pub fn run(
                     {
                         const split = pending_split.?;
                         if (model.find(split.target_pane) != null) {
-                            try model.split(split.target_pane, opened.pane_id, opened.location, split.axis, screenArea(host_size));
+                            try model.split(split.target_pane, opened.pane_id, opened.location, split.axis, view.workbench());
                         } else {
-                            try model.addDiscovered(opened.pane_id, opened.location, screenArea(host_size));
+                            try model.addDiscovered(opened.pane_id, opened.location, view.workbench());
                             try model.markAttached(opened.pane_id);
                         }
+                        view.invalidate();
                         pending_split = null;
-                        try resizeAttached(io, connection, send_buffer, &model, screenArea(host_size));
+                        try resizeAttached(io, connection, send_buffer, &model, view.workbench());
                     } else if (pending_attachments.take(opened.request_id)) |expected| {
                         if (expected != opened.pane_id) return error.UnexpectedPane;
                         try model.markAttached(opened.pane_id);
@@ -331,14 +346,15 @@ pub fn run(
                     var panes = snapshot.panes();
                     while (panes.next()) |descriptor| {
                         if (model.find(descriptor.pane_id) == null) {
-                            try model.addDiscovered(descriptor.pane_id, snapshot.location, screenArea(host_size));
+                            try model.addDiscovered(descriptor.pane_id, snapshot.location, view.workbench());
                         }
                     }
-                    try resizeAttached(io, connection, send_buffer, &model, screenArea(host_size));
+                    view.invalidate();
+                    try resizeAttached(io, connection, send_buffer, &model, view.workbench());
                     for (&model.panes) |*slot| {
                         const pane = if (slot.*) |*value| value else continue;
                         if (pane.attached) continue;
-                        const size = model.contentSize(pane.id, screenArea(host_size)) orelse
+                        const size = model.contentSize(pane.id, view.workbench()) orelse
                             return error.PaneTooSmall;
                         const request_id = try nextRequestId(&next_request_id);
                         const request = try schema.encodeOpenPane(send_buffer, .{
@@ -380,10 +396,11 @@ pub fn run(
                 },
                 .pane_exited => |exited| {
                     if (!model.removePane(exited.pane_id)) return error.UnexpectedPane;
+                    view.invalidate();
                     if (pending_close != null and pending_close.?.pane_id == exited.pane_id)
                         pending_close = null;
                     if (model.pane_count == 0) return exitCode(exited);
-                    try resizeAttached(io, connection, send_buffer, &model, screenArea(host_size));
+                    try resizeAttached(io, connection, send_buffer, &model, view.workbench());
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                 },
                 .request_failed => |failure| {
@@ -391,14 +408,15 @@ pub fn run(
                         pending_split.?.request_id == failure.request_id)
                     {
                         pending_split = null;
-                        try resizeAttached(io, connection, send_buffer, &model, screenArea(host_size));
+                        try resizeAttached(io, connection, send_buffer, &model, view.workbench());
                     } else if (pending_close != null and
                         pending_close.?.request_id == failure.request_id)
                     {
                         pending_close = null;
                     } else if (pending_attachments.take(failure.request_id)) |pane_id| {
                         _ = model.removePane(pane_id);
-                        try resizeAttached(io, connection, send_buffer, &model, screenArea(host_size));
+                        view.invalidate();
+                        try resizeAttached(io, connection, send_buffer, &model, view.workbench());
                     } else {
                         std.debug.print("telar runtime: {s}\n", .{failure.message});
                         return error.RuntimeRequestFailed;
@@ -416,7 +434,7 @@ pub fn run(
             if (comptime diagnostics.enabled)
                 metrics.draw_lateness.observe(monotonic(io) -| draw_due_ns);
             if (pending_updates != 0) {
-                const presented_ns = try presentModel(io, &screen, writer, connection, send_buffer, &metrics, &model);
+                const presented_ns = try presentModel(io, &screen, writer, connection, send_buffer, &metrics, &model, &view);
                 observePresentation(&metrics, &last_presented_ns, presented_ns, true);
                 pacer.record(presented_ns, draw_due_ns, pending_updates);
                 pending_updates = 0;
@@ -464,7 +482,7 @@ const InputHandler = struct {
     send_buffer: []u8,
     metrics: *ClientMetrics,
     model: *multiplexer.Model,
-    area: ui.Rect,
+    view: *client_view.State,
     options: Options,
     next_request_id: *u64,
     pending_split: *?PendingSplit,
@@ -477,7 +495,7 @@ const InputHandler = struct {
         send_buffer: []u8,
         metrics: *ClientMetrics,
         model: *multiplexer.Model,
-        area: ui.Rect,
+        view: *client_view.State,
         options: Options,
         next_request_id: *u64,
         pending_split: *?PendingSplit,
@@ -489,7 +507,7 @@ const InputHandler = struct {
             .send_buffer = send_buffer,
             .metrics = metrics,
             .model = model,
-            .area = area,
+            .view = view,
             .options = options,
             .next_request_id = next_request_id,
             .pending_split = pending_split,
@@ -514,6 +532,21 @@ const InputHandler = struct {
         }
     }
 
+    pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
+        if (comptime diagnostics.enabled) handler.metrics.mouse_events += 1;
+        const interaction = handler.view.handleMouse(handler.model, event);
+        if (interaction.layout_changed) {
+            try resizeAttached(
+                handler.io,
+                handler.connection,
+                handler.send_buffer,
+                handler.model,
+                handler.view.workbench(),
+            );
+        }
+        handler.redraw = handler.redraw or interaction.redraw;
+    }
+
     pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
         switch (value) {
             .split_horizontal => try handler.beginSplit(.horizontal),
@@ -522,6 +555,17 @@ const InputHandler = struct {
             .focus_right => handler.moveFocus(.right),
             .focus_up => handler.moveFocus(.up),
             .focus_down => handler.moveFocus(.down),
+            .toggle_sidebar => {
+                handler.view.toggleSidebar();
+                try resizeAttached(
+                    handler.io,
+                    handler.connection,
+                    handler.send_buffer,
+                    handler.model,
+                    handler.view.workbench(),
+                );
+                handler.redraw = true;
+            },
             .close_pane => try handler.closeFocused(),
             .detach => {
                 for (&handler.model.panes) |*slot| {
@@ -543,7 +587,11 @@ const InputHandler = struct {
         const pane = handler.model.focusedPane() orelse return;
         if (!pane.attached) return;
         const location = handler.model.location orelse return;
-        const prospective = handler.model.layout.prospectiveSplit(pane.id, axis, handler.area) orelse
+        const prospective = handler.model.layout.prospectiveSplit(
+            pane.id,
+            axis,
+            handler.view.workbench(),
+        ) orelse
             return;
         const existing_size = rectSize(prospective.existing_content) orelse return;
         const new_size = rectSize(prospective.new_content) orelse return;
@@ -575,7 +623,7 @@ const InputHandler = struct {
     }
 
     fn restoreFocusedSize(handler: *InputHandler, pane_id: schema.PaneId) !void {
-        const size = handler.model.contentSize(pane_id, handler.area) orelse return;
+        const size = handler.model.contentSize(pane_id, handler.view.workbench()) orelse return;
         const payload = try schema.encodePaneResize(handler.send_buffer, .{
             .pane_id = pane_id,
             .size = size,
@@ -584,8 +632,10 @@ const InputHandler = struct {
     }
 
     fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) void {
-        if (handler.model.focusDirection(direction, handler.area) != null)
+        if (handler.model.focusDirection(direction, handler.view.workbench()) != null) {
+            handler.view.invalidate();
             handler.redraw = true;
+        }
     }
 
     fn closeFocused(handler: *InputHandler) !void {
@@ -610,6 +660,7 @@ fn defaultBindings() ![default_binding_count]ConfiguredBinding {
         try .parse(&.{ "ctrl+b", "right" }, .focus_right),
         try .parse(&.{ "ctrl+b", "up" }, .focus_up),
         try .parse(&.{ "ctrl+b", "down" }, .focus_down),
+        try .parse(&.{ "ctrl+b", "s" }, .toggle_sidebar),
         try .parse(&.{ "ctrl+b", "x" }, .close_pane),
         try .parse(&.{ "ctrl+b", "d" }, .detach),
     };
@@ -706,13 +757,17 @@ fn presentModel(
     send_buffer: []u8,
     metrics: *ClientMetrics,
     model: *multiplexer.Model,
+    view: *client_view.State,
 ) !u64 {
     const compose_started = diagnostics.now(io);
-    const composed = try model.render(screen);
+    const composed = try model.render(screen, view.workbench());
+    const chrome = try view.render(screen, model, composed.full);
     if (comptime diagnostics.enabled) {
         metrics.composed_panes += composed.panes;
         metrics.composed_cells += composed.cells;
         metrics.composed_damage_cells += composed.damaged_cells;
+        metrics.chrome_scanned_cells += chrome.scanned;
+        metrics.chrome_damaged_cells += chrome.damaged;
         metrics.full_compositions += @intFromBool(composed.full);
         metrics.compose.observe(diagnostics.elapsed(compose_started, diagnostics.now(io)));
     }
@@ -791,6 +846,8 @@ fn formatClientTelemetry(
         "\"composed_damage_cells\":{d},\"full_compositions\":{d}," ++
         "\"flushes\":{d},\"scanned_cells\":{d},\"flushed_cells\":{d}," ++
         "\"flushed_bytes\":{d},\"max_pending_updates\":{d}," ++
+        "\"mouse_events\":{d},\"chrome_scanned_cells\":{d}," ++
+        "\"chrome_damaged_cells\":{d}," ++
         "\"pacer_drawn\":{d},\"pacer_throttled\":{d},\"pacer_absorbed\":{d}", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
@@ -815,6 +872,9 @@ fn formatClientTelemetry(
         metrics.flushed_cells,
         metrics.flushed_bytes,
         metrics.max_pending_updates,
+        metrics.mouse_events,
+        metrics.chrome_scanned_cells,
+        metrics.chrome_damaged_cells,
         pacer.stats.drawn,
         pacer.stats.throttled,
         pacer.stats.absorbed,
@@ -857,10 +917,6 @@ fn terminalSize(tty: *const platform.Tty) schema.TerminalSize {
     };
 }
 
-fn screenArea(size: schema.TerminalSize) ui.Rect {
-    return .{ .w = size.cols, .h = size.rows };
-}
-
 fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
     if (rect.w == 0 or rect.h == 0) return null;
     return .{ .cols = rect.w, .rows = rect.h };
@@ -893,6 +949,7 @@ test "configured action names cover multiplexer operations" {
     try std.testing.expectEqual(Action.detach, try Action.parse("detach"));
     try std.testing.expectEqual(Action.split_horizontal, try Action.parse("split-horizontal"));
     try std.testing.expectEqual(Action.close_pane, try Action.parse("close-pane"));
+    try std.testing.expectEqual(Action.toggle_sidebar, try Action.parse("toggle-sidebar"));
     try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));
 }
 

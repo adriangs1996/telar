@@ -180,22 +180,22 @@ pub const Layout = struct {
             const primary, const secondary, const forward = switch (direction) {
                 .left => .{
                     source_left -| candidate_right,
-                    distance(source_y, candidate_y),
+                    distance(source_y, candidate_y) / 2,
                     candidate_right <= source_left,
                 },
                 .right => .{
                     candidate_left -| source_right,
-                    distance(source_y, candidate_y),
+                    distance(source_y, candidate_y) / 2,
                     candidate_left >= source_right,
                 },
                 .up => .{
                     source_top -| candidate_bottom,
-                    distance(source_x, candidate_x),
+                    distance(source_x, candidate_x) / 2,
                     candidate_bottom <= source_top,
                 },
                 .down => .{
                     candidate_top -| source_bottom,
-                    distance(source_x, candidate_x),
+                    distance(source_x, candidate_x) / 2,
                     candidate_top >= source_bottom,
                 },
             };
@@ -221,8 +221,11 @@ pub const Layout = struct {
         for (layout.views(area, &storage)) |view| {
             if (view.pane_id != pane_id) continue;
             return switch (axis) {
-                .horizontal => view.outer.w >= 2 and view.outer.h >= 2,
-                .vertical => view.outer.w >= 1 and view.outer.h >= 4,
+                // Each side needs a left border, one PTY column and a right
+                // border. The seventh column is the gutter between boxes.
+                .horizontal => view.outer.w >= 7 and view.outer.h >= 3,
+                // The vertical equivalent: two three-row boxes and a gutter.
+                .vertical => view.outer.w >= 3 and view.outer.h >= 7,
             };
         }
         return false;
@@ -240,8 +243,8 @@ pub const Layout = struct {
             if (view.pane_id != pane_id) continue;
             const first, const second = splitArea(view.outer, axis);
             return .{
-                .existing_content = titledContent(first),
-                .new_content = titledContent(second),
+                .existing_content = borderedContent(first),
+                .new_content = borderedContent(second),
             };
         }
         return null;
@@ -264,17 +267,12 @@ pub const Layout = struct {
             switch (layout.nodes[pending.node].node) {
                 .empty => unreachable,
                 .leaf => |pane_id| {
-                    const has_title = layout.pane_count > 1 and pending.area.h > 1;
+                    const has_border = layout.pane_count > 1;
                     output[output_len] = .{
                         .pane_id = pane_id,
                         .outer = pending.area,
-                        .content = if (has_title)
-                            .{
-                                .x = pending.area.x,
-                                .y = pending.area.y + 1,
-                                .w = pending.area.w,
-                                .h = pending.area.h - 1,
-                            }
+                        .content = if (has_border)
+                            borderedContent(pending.area)
                         else
                             pending.area,
                         .focused = pane_id == layout.focused_pane,
@@ -320,14 +318,39 @@ pub const Layout = struct {
 
 fn splitArea(area: ui.Rect, axis: Axis) [2]ui.Rect {
     return switch (axis) {
-        .horizontal => area.splitLeft(area.w / 2),
-        .vertical => area.splitTop(area.h / 2),
+        .horizontal => horizontal: {
+            const gutter: u16 = @intFromBool(area.w >= 3);
+            const usable = area.w - gutter;
+            const first_width = usable / 2;
+            break :horizontal .{
+                .{ .x = area.x, .y = area.y, .w = first_width, .h = area.h },
+                .{
+                    .x = area.x + first_width + gutter,
+                    .y = area.y,
+                    .w = usable - first_width,
+                    .h = area.h,
+                },
+            };
+        },
+        .vertical => vertical: {
+            const gutter: u16 = @intFromBool(area.h >= 5);
+            const usable = area.h - gutter;
+            const first_height = usable / 2;
+            break :vertical .{
+                .{ .x = area.x, .y = area.y, .w = area.w, .h = first_height },
+                .{
+                    .x = area.x,
+                    .y = area.y + first_height + gutter,
+                    .w = area.w,
+                    .h = usable - first_height,
+                },
+            };
+        },
     };
 }
 
-fn titledContent(area: ui.Rect) ui.Rect {
-    if (area.h <= 1) return area;
-    return .{ .x = area.x, .y = area.y + 1, .w = area.w, .h = area.h - 1 };
+fn borderedContent(area: ui.Rect) ui.Rect {
+    return area.inner(1);
 }
 
 fn center(origin: u16, length: u16) u32 {
@@ -338,7 +361,7 @@ fn distance(a: u32, b: u32) u32 {
     return if (a > b) a - b else b - a;
 }
 
-test "splits produce non-overlapping titled content rectangles" {
+test "splits produce non-overlapping bordered content rectangles" {
     var layout: Layout = .{};
     try layout.addRoot(@enumFromInt(1));
     try layout.splitFocused(@enumFromInt(2), .horizontal);
@@ -346,9 +369,10 @@ test "splits produce non-overlapping titled content rectangles" {
     var storage: [max_panes]View = undefined;
     const visible = layout.views(.{ .w = 80, .h = 24 }, &storage);
     try std.testing.expectEqual(@as(usize, 2), visible.len);
-    try std.testing.expectEqual(ui.Rect{ .w = 40, .h = 24 }, visible[0].outer);
-    try std.testing.expectEqual(ui.Rect{ .y = 1, .w = 40, .h = 23 }, visible[0].content);
+    try std.testing.expectEqual(ui.Rect{ .w = 39, .h = 24 }, visible[0].outer);
+    try std.testing.expectEqual(ui.Rect{ .x = 1, .y = 1, .w = 37, .h = 22 }, visible[0].content);
     try std.testing.expectEqual(ui.Rect{ .x = 40, .w = 40, .h = 24 }, visible[1].outer);
+    try std.testing.expectEqual(@as(u16, 1), visible[1].outer.x - visible[0].outer.w);
     try std.testing.expect(visible[1].focused);
 }
 

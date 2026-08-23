@@ -627,6 +627,7 @@ const usage =
     \\Default keybindings (prefix Ctrl-b):
     \\  % / "             Split left/right or top/bottom
     \\  Arrow keys       Focus a pane by direction
+    \\  s                Toggle the sidebar
     \\  x                Close the focused pane
     \\  d                Detach the client
     \\

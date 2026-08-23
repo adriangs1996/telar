@@ -110,6 +110,7 @@ const cases = [_]Case{
     .{ .name = "frontend.keybind.route", .work_per_op = 12, .work_unit = "keys" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
+    .{ .name = "frontend.client_ui.chrome", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
     .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
     .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
@@ -617,6 +618,45 @@ const CursorContext = struct {
     }
 };
 
+const sidebar_width = frontend.client_ui.sidebar_width;
+
+const ClientUiContext = struct {
+    model: frontend.multiplexer.Model,
+    screen: frontend.term.Screen,
+    view: frontend.client_ui.State,
+
+    fn init(gpa: std.mem.Allocator) !ClientUiContext {
+        var model = frontend.multiplexer.Model.init(gpa);
+        errdefer model.deinit();
+        var screen = try frontend.term.Screen.init(gpa, cols, rows);
+        errdefer screen.deinit();
+        var view = try frontend.client_ui.State.init(gpa, cols, rows);
+        errdefer view.deinit();
+        const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols - sidebar_width, .rows = rows - 2 });
+        _ = try model.render(&screen, view.workbench());
+        _ = try view.render(&screen, &model, true);
+        return .{ .model = model, .screen = screen, .view = view };
+    }
+
+    fn deinit(context: *ClientUiContext) void {
+        context.view.deinit();
+        context.screen.deinit();
+        context.model.deinit();
+    }
+};
+
+fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |iteration| {
+        context.view.hovered = if (iteration & 1 == 0) .active_workspace else .active_worktree;
+        context.view.invalidate();
+        const stats = try context.view.render(&context.screen, &context.model, false);
+        checksum +%= stats.scanned + stats.damaged;
+    }
+    return checksum;
+}
+
 fn runCursor(context: *CursorContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
@@ -702,7 +742,7 @@ fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         _ = context.model.focusPane(@enumFromInt(iteration % 4 + 1));
-        const stats = try context.model.render(&context.screen);
+        const stats = try context.model.render(&context.screen, context.screen.back.area());
         checksum +%= stats.cells + stats.panes;
     }
     return checksum;
@@ -723,7 +763,7 @@ const IncrementalComposeContext = struct {
         try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
         var screen = try frontend.term.Screen.init(gpa, cols, rows);
         errdefer screen.deinit();
-        _ = try model.render(&screen);
+        _ = try model.render(&screen, screen.back.area());
         model.find(@enumFromInt(1)).?.applied_frame_id = 1;
         return .{
             .model = model,
@@ -746,7 +786,7 @@ fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize)
             context.payloads[iteration & 1],
         )).pane_frame;
         _ = try context.model.applyFrame(frame_view);
-        const stats = try context.model.render(&context.screen);
+        const stats = try context.model.render(&context.screen, context.screen.back.area());
         checksum +%= stats.cells + stats.damaged_cells;
     }
     return checksum;
@@ -848,6 +888,19 @@ fn execute(
         var context = try CursorContext.init(gpa, fixture.terminal_output);
         defer context.deinit();
         try writeResult(writer, config, cursor_case, try measure(io, config, &context, runCursor));
+    }
+
+    const client_ui_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(client_ui_case.name)) {
+        var context = try ClientUiContext.init(gpa);
+        defer context.deinit();
+        try writeResult(
+            writer,
+            config,
+            client_ui_case,
+            try measure(io, config, &context, runClientUi),
+        );
     }
 
     const layout_case = cases[case_index];

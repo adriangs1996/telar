@@ -412,7 +412,21 @@ pub fn Router(
                         }
                         if (router.depth == 0) router.binding_since_ns = null;
                     },
-                    .mouse, .paste_start, .paste_end, .incomplete => {
+                    .mouse => |mouse| {
+                        if (comptime @hasDecl(@TypeOf(handler.*), "mouse")) {
+                            // A pointer action belongs to telar's visible UI.
+                            // Cancel a half-entered keybinding instead of
+                            // leaking its prefix into the focused PTY.
+                            router.resetMatch();
+                            router.binding_since_ns = null;
+                            try router.flushOutput(handler);
+                            try handler.mouse(mouse);
+                        } else {
+                            try router.replayBinding(handler);
+                            try router.appendOutput(raw, handler);
+                        }
+                    },
+                    .paste_start, .paste_end, .incomplete => {
                         try router.replayBinding(handler);
                         try router.appendOutput(raw, handler);
                     },
@@ -560,6 +574,23 @@ const Capture = struct {
     }
 };
 
+const MouseCapture = struct {
+    forwarded: usize = 0,
+    mouse_events: usize = 0,
+
+    fn forward(capture: *MouseCapture, bytes: []const u8) !void {
+        capture.forwarded += bytes.len;
+    }
+
+    fn action(_: *MouseCapture, _: TestAction) !Control {
+        return .continue_routing;
+    }
+
+    fn mouse(capture: *MouseCapture, _: term.Event.Mouse) !void {
+        capture.mouse_events += 1;
+    }
+};
+
 test "configuration keys parse into semantic chords" {
     const ctrl_b = try parseKey("Ctrl+B");
     try testing.expect(ctrl_b.isCtrl('b'));
@@ -656,6 +687,16 @@ test "a configured sequence runs once and does not reach the pane" {
     _ = try router.feed("before\x02dafter", 100, &capture);
     try testing.expectEqualStrings("beforeafter", capture.slice());
     try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
+}
+
+test "a semantic mouse handler consumes reports before they reach the pane" {
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
+    var router = try TestRouter.init(&bindings);
+    var capture: MouseCapture = .{};
+
+    _ = try router.feed("\x1b[<0;8;4M", 100, &capture);
+    try testing.expectEqual(@as(usize, 1), capture.mouse_events);
+    try testing.expectEqual(@as(usize, 0), capture.forwarded);
 }
 
 test "a failed sequence replays its bytes in order" {

@@ -102,6 +102,7 @@ pub const Model = struct {
     pane_count: usize = 0,
     location: ?schema.PaneLocation = null,
     composed: ?ui.Buffer = null,
+    composition_area: ui.Rect = .{},
     composition_invalidated: bool = true,
 
     pub fn init(gpa: std.mem.Allocator) Model {
@@ -270,12 +271,16 @@ pub const Model = struct {
         return null;
     }
 
-    pub fn render(model: *Model, screen: *term.Screen) !RenderStats {
+    pub fn render(model: *Model, screen: *term.Screen, area: ui.Rect) !RenderStats {
         if (try model.ensureComposed(screen.back.w, screen.back.h))
             model.composition_invalidated = true;
+        if (!std.meta.eql(model.composition_area, area)) {
+            model.composition_area = area;
+            model.composition_invalidated = true;
+        }
         const target = &model.composed.?;
         if (!model.composition_invalidated) {
-            const stats = try model.composeIncremental(screen, target);
+            const stats = try model.composeIncremental(screen, target, area);
             model.clearPaneDamage();
             return stats;
         }
@@ -284,10 +289,10 @@ pub const Model = struct {
         screen.cursor = null;
         var stats: RenderStats = .{ .full = true };
         var storage: [max_panes]layout_mod.View = undefined;
-        for (model.layout.views(target.area(), &storage)) |view| {
+        for (model.layout.views(area, &storage)) |view| {
             const pane = model.find(view.pane_id) orelse continue;
             stats.panes += 1;
-            if (model.layout.count() > 1) drawTitle(target, view);
+            if (model.layout.count() > 1) drawBorder(target, view);
             target.pushClip(view.content);
             defer target.popClip();
             const rows = @min(view.content.h, pane.buffer.h);
@@ -338,11 +343,12 @@ pub const Model = struct {
         model: *Model,
         screen: *term.Screen,
         target: *ui.Buffer,
+        area: ui.Rect,
     ) !RenderStats {
         var stats: RenderStats = .{};
         screen.cursor = null;
         var storage: [max_panes]layout_mod.View = undefined;
-        for (model.layout.views(target.area(), &storage)) |view| {
+        for (model.layout.views(area, &storage)) |view| {
             const pane = model.find(view.pane_id) orelse continue;
             stats.panes += 1;
             const rows = @min(view.content.h, pane.buffer.h);
@@ -482,20 +488,18 @@ fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
     return .{ .cols = rect.w, .rows = rect.h };
 }
 
-fn drawTitle(buffer: *ui.Buffer, view: layout_mod.View) void {
-    const title = view.outer.row(0);
+fn drawBorder(buffer: *ui.Buffer, view: layout_mod.View) void {
     const style: ui.Style = if (view.focused)
         .{ .flags = .{ .bold = true, .inverse = true } }
     else
-        .{ .flags = .{ .faint = true, .inverse = true } };
-    buffer.fill(title, " ", style);
+        .{ .flags = .{ .faint = true } };
     var title_buffer: [32]u8 = undefined;
     const text = std.fmt.bufPrint(
         &title_buffer,
         " pane {d} ",
         .{schema.id.raw(view.pane_id)},
     ) catch " pane ";
-    _ = buffer.writeTruncated(title, title.x, title.y, text, title.w, style);
+    buffer.box(view.outer, style, text);
 }
 
 test "two pane buffers compose into their layout rectangles" {
@@ -516,12 +520,30 @@ test "two pane buffers compose into their layout rectangles" {
 
     var screen = try term.Screen.init(gpa, 40, 7);
     defer screen.deinit();
-    const stats = try model.render(&screen);
+    const stats = try model.render(&screen, screen.back.area());
 
     try std.testing.expectEqual(@as(usize, 2), stats.panes);
-    try std.testing.expectEqualStrings("a", screen.back.cells[40].text());
-    try std.testing.expectEqualStrings("b", screen.back.cells[40 + 20].text());
+    try std.testing.expectEqualStrings("a", screen.back.cells[40 + 1].text());
+    try std.testing.expectEqualStrings("b", screen.back.cells[40 + 21].text());
     try std.testing.expect(screen.back.cells[20].style.flags.inverse);
+    try std.testing.expectEqualStrings(" ", screen.back.cells[19].text());
+    try std.testing.expect(!screen.back.cells[19].style.flags.inverse);
+}
+
+test "one pane has no telar border" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.PaneLocation = .{ .workspace = @enumFromInt(1) };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 12, .rows = 3 });
+    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "x", 1, .{});
+
+    var screen = try term.Screen.init(gpa, 12, 3);
+    defer screen.deinit();
+    _ = try model.render(&screen, screen.back.area());
+
+    try std.testing.expectEqualStrings("x", screen.back.cells[0].text());
+    try std.testing.expect(!screen.back.cells[0].style.flags.inverse);
 }
 
 test "frame state and pending acknowledgements stay per pane" {
@@ -535,7 +557,7 @@ test "frame state and pending acknowledgements stay per pane" {
         @enumFromInt(2),
         location,
         .horizontal,
-        .{ .w = 4, .h = 2 },
+        .{ .w = 7, .h = 3 },
     );
 
     const cells = [_]ui.Cell{ .{}, .{} };
@@ -582,7 +604,7 @@ test "unchanged composition produces no terminal damage" {
     var screen = try term.Screen.init(gpa, 8, 3);
     defer screen.deinit();
 
-    const first = try model.render(&screen);
+    const first = try model.render(&screen, screen.back.area());
     var output: [4096]u8 = undefined;
     var initial_writer = std.Io.Writer.fixed(&output);
     _ = try screen.flush(&initial_writer);
@@ -602,11 +624,11 @@ test "unchanged composition produces no terminal damage" {
         .spans = &snapshot_spans,
     });
     _ = try model.applyFrame((try schema.decodeServer(snapshot_payload)).pane_frame);
-    const snapshot = try model.render(&screen);
+    const snapshot = try model.render(&screen, screen.back.area());
     var snapshot_writer = std.Io.Writer.fixed(&output);
     _ = try screen.flush(&snapshot_writer);
 
-    const second = try model.render(&screen);
+    const second = try model.render(&screen, screen.back.area());
     var unchanged_writer = std.Io.Writer.fixed(&output);
     const unchanged_flush = try screen.flush(&unchanged_writer);
     try std.testing.expectEqual(@as(usize, 0), first.damaged_cells);
@@ -628,7 +650,7 @@ test "unchanged composition produces no terminal damage" {
         .spans = &patch_spans,
     });
     _ = try model.applyFrame((try schema.decodeServer(patch_payload)).pane_frame);
-    const changed = try model.render(&screen);
+    const changed = try model.render(&screen, screen.back.area());
     var changed_writer = std.Io.Writer.fixed(&output);
     const changed_flush = try screen.flush(&changed_writer);
     try std.testing.expectEqual(@as(usize, 1), changed.cells);
@@ -652,11 +674,11 @@ test "focus changes invalidate titles but stable focus stays incremental" {
     var screen = try term.Screen.init(gpa, 40, 6);
     defer screen.deinit();
 
-    try std.testing.expect((try model.render(&screen)).full);
+    try std.testing.expect((try model.render(&screen, screen.back.area())).full);
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    try std.testing.expect((try model.render(&screen)).full);
+    try std.testing.expect((try model.render(&screen, screen.back.area())).full);
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    const stable = try model.render(&screen);
+    const stable = try model.render(&screen, screen.back.area());
     try std.testing.expect(!stable.full);
     try std.testing.expectEqual(@as(usize, 0), stable.cells);
 }
