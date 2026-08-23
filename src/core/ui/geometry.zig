@@ -12,19 +12,25 @@ pub const Rect = struct {
     w: u16 = 0,
     h: u16 = 0,
 
+    // `x + w` and `y + h` may exceed maxInt(u16), so every edge sum below is
+    // computed in u32. Positions past maxInt(u16) are unaddressable; rects
+    // whose derived origin would land there come back empty.
+
     pub fn contains(r: Rect, x: u16, y: u16) bool {
-        return x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h;
+        return x >= r.x and x < @as(u32, r.x) + r.w and
+            y >= r.y and y < @as(u32, r.y) + r.h;
     }
 
     /// Shrinks by `margin` on every side, saturating rather than underflowing:
     /// a rectangle too small to shrink becomes empty, which draws as nothing.
     pub fn inner(r: Rect, margin: u16) Rect {
-        if (r.w <= margin * 2 or r.h <= margin * 2) return .{ .x = r.x, .y = r.y };
+        const shrink = @as(u32, margin) * 2;
+        if (r.w <= shrink or r.h <= shrink) return .{ .x = r.x, .y = r.y };
         return .{
-            .x = r.x + margin,
-            .y = r.y + margin,
-            .w = r.w - margin * 2,
-            .h = r.h - margin * 2,
+            .x = r.x +| margin,
+            .y = r.y +| margin,
+            .w = @intCast(r.w - shrink),
+            .h = @intCast(r.h - shrink),
         };
     }
 
@@ -33,7 +39,7 @@ pub const Rect = struct {
         const taken = @min(cols, r.w);
         return .{
             .{ .x = r.x, .y = r.y, .w = taken, .h = r.h },
-            .{ .x = r.x + taken, .y = r.y, .w = r.w - taken, .h = r.h },
+            .{ .x = r.x +| taken, .y = r.y, .w = r.w - taken, .h = r.h },
         };
     }
 
@@ -42,7 +48,7 @@ pub const Rect = struct {
         const taken = @min(rows, r.h);
         return .{
             .{ .x = r.x, .y = r.y, .w = r.w, .h = taken },
-            .{ .x = r.x, .y = r.y + taken, .w = r.w, .h = r.h - taken },
+            .{ .x = r.x, .y = r.y +| taken, .w = r.w, .h = r.h - taken },
         };
     }
 
@@ -51,7 +57,7 @@ pub const Rect = struct {
         const taken = @min(rows, r.h);
         return .{
             .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h - taken },
-            .{ .x = r.x, .y = r.y + r.h - taken, .w = r.w, .h = taken },
+            .{ .x = r.x, .y = r.y +| (r.h - taken), .w = r.w, .h = taken },
         };
     }
 
@@ -63,10 +69,17 @@ pub const Rect = struct {
     pub fn intersect(a: Rect, b: Rect) Rect {
         const x = @max(a.x, b.x);
         const y = @max(a.y, b.y);
-        const right = @min(a.x + a.w, b.x + b.w);
-        const bottom = @min(a.y + a.h, b.y + b.h);
+        const right = @min(@as(u32, a.x) + a.w, @as(u32, b.x) + b.w);
+        const bottom = @min(@as(u32, a.y) + a.h, @as(u32, b.y) + b.h);
         if (right <= x or bottom <= y) return .{ .x = x, .y = y };
-        return .{ .x = x, .y = y, .w = right - x, .h = bottom - y };
+        // The overlap starts at a u16 corner and each edge is bounded by one
+        // input's width, so the differences fit u16 again.
+        return .{
+            .x = x,
+            .y = y,
+            .w = @intCast(right - x),
+            .h = @intCast(bottom - y),
+        };
     }
 
     pub fn isEmpty(r: Rect) bool {
@@ -75,7 +88,7 @@ pub const Rect = struct {
 
     pub fn row(r: Rect, index: u16) Rect {
         if (index >= r.h) return .{ .x = r.x, .y = r.y };
-        return .{ .x = r.x, .y = r.y + index, .w = r.w, .h = 1 };
+        return .{ .x = r.x, .y = r.y +| index, .w = r.w, .h = 1 };
     }
 };
 
@@ -84,6 +97,24 @@ pub const Rect = struct {
 // ---------------------------------------------------------------------------
 
 const testing = std.testing;
+
+test "rectangle arithmetic survives coordinates near the u16 limit" {
+    // x + w exceeds maxInt(u16). Doing the sums in u16 panics in safe builds
+    // and wraps in fast builds, where a wrapped edge makes `contains` reject
+    // every point and `intersect` return garbage.
+    const r: Rect = .{ .x = 60000, .y = 0, .w = 10000, .h = 2 };
+    try testing.expect(r.contains(65000, 0));
+    try testing.expect(r.contains(65535, 1));
+    try testing.expect(!r.contains(500, 0));
+
+    const clipped = r.intersect(.{ .x = 0, .y = 0, .w = 65535, .h = 65535 });
+    try testing.expectEqual(@as(u16, 60000), clipped.x);
+    try testing.expectEqual(@as(u16, 5535), clipped.w);
+
+    const halves = r.splitLeft(8000);
+    try testing.expectEqual(@as(u16, 8000), halves[0].w);
+    try testing.expectEqual(@as(u16, 2000), halves[1].w);
+}
 
 test "rectangles split without overlapping or losing columns" {
     const full: Rect = .{ .w = 80, .h = 24 };

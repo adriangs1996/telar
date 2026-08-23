@@ -69,7 +69,10 @@ pub const Buffer = struct {
     }
 
     pub fn resize(b: *Buffer, w: u16, h: u16) !void {
-        const cells = try b.gpa.realloc(b.cells, @as(usize, w) * @as(usize, h));
+        // Fresh allocation rather than realloc: the old cells are cleared
+        // below anyway, so copying them into the new block is wasted work.
+        const cells = try b.gpa.alloc(Cell, @as(usize, w) * @as(usize, h));
+        b.gpa.free(b.cells);
         b.cells = cells;
         b.w = w;
         b.h = h;
@@ -94,11 +97,15 @@ pub const Buffer = struct {
     }
 
     pub fn fill(b: *Buffer, r: Rect, glyph: []const u8, style: Style) void {
-        var y = r.y;
-        while (y < r.y + r.h) : (y += 1) {
-            var x = r.x;
-            while (x < r.x + r.w) : (x += 1) {
-                b.setCell(x, y, glyph, 1, style);
+        // Edge sums in u32: `x + w` may exceed maxInt(u16), and positions past
+        // it are unaddressable anyway.
+        const x_end = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
+        const y_end = @min(@as(u32, r.y) + r.h, @as(u32, std.math.maxInt(u16)) + 1);
+        var y: u32 = r.y;
+        while (y < y_end) : (y += 1) {
+            var x: u32 = r.x;
+            while (x < x_end) : (x += 1) {
+                b.setCell(@intCast(x), @intCast(y), glyph, 1, style);
             }
         }
     }
@@ -115,12 +122,18 @@ pub const Buffer = struct {
         // ours to write. Drawing the head alone makes the terminal advance two
         // columns and paint over the neighbour, so the glyph is replaced by a
         // blank that stays inside the clip.
-        const fits = width != 2 or b.clip.contains(x + 1, y);
+        const fits = width != 2 or
+            (x < std.math.maxInt(u16) and b.clip.contains(x + 1, y));
         const text = if (fits) bytes else " ";
         const drawn: u8 = if (fits) width else 1;
 
         const cell = b.at(x, y) orelse return;
-        const len: u8 = @intCast(@min(text.len, Cell.max_bytes));
+        var len: u8 = @intCast(@min(text.len, Cell.max_bytes));
+        // A cluster longer than the cell is cut, but never mid-codepoint:
+        // invalid UTF-8 stored here would reach the host terminal verbatim.
+        if (len < text.len) {
+            while (len > 0 and text[len] & 0xc0 == 0x80) len -= 1;
+        }
         cell.* = .{ .len = len, .width = drawn, .style = style };
         @memcpy(cell.bytes[0..len], text[0..len]);
 
@@ -141,10 +154,10 @@ pub const Buffer = struct {
     /// does, and a UI whose idea of a column disagrees with the terminal's
     /// smears on the first accented character.
     pub fn writeText(b: *Buffer, r: Rect, x: u16, y: u16, text: []const u8, style: Style) u16 {
-        if (y < r.y or y >= r.y + r.h) return 0;
+        if (y < r.y or y >= @as(u32, r.y) + r.h) return 0;
 
-        var column = x;
-        const limit = r.x + r.w;
+        var column: u32 = x;
+        const limit = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
         var it: GraphemeIterator = .{ .bytes = text };
 
         while (it.next()) |cluster| {
@@ -152,10 +165,12 @@ pub const Buffer = struct {
             // A wide glyph that would straddle the edge is dropped rather than
             // cut in half.
             if (cluster.width == 2 and column + 1 >= limit) break;
-            if (column >= r.x) b.setCell(column, y, cluster.bytes, cluster.width, style);
+            if (column >= r.x) {
+                b.setCell(@intCast(column), y, cluster.bytes, cluster.width, style);
+            }
             column += cluster.width;
         }
-        return column - x;
+        return @intCast(@min(column - x, std.math.maxInt(u16)));
     }
 
     /// Draws `text`, appending an ellipsis if it does not fit in `max_width`.
@@ -186,7 +201,7 @@ pub const Buffer = struct {
         const budget = max_width - marker;
 
         var it: GraphemeIterator = .{ .bytes = text };
-        var used: u16 = 0;
+        var used: u32 = 0;
         var cut: usize = 0;
         while (it.next()) |cluster| {
             if (used + cluster.width > budget) break;
@@ -194,19 +209,27 @@ pub const Buffer = struct {
             cut = it.index;
         }
         const written = b.writeText(r, x, y, text[0..cut], style);
-        return written + b.writeText(r, x + written, y, ellipsis, style);
+        const ellipsis_x = @as(u32, x) + written;
+        if (ellipsis_x > std.math.maxInt(u16)) return written;
+        return written + b.writeText(r, @intCast(ellipsis_x), y, ellipsis, style);
     }
 
     /// Draws `text` so that it ends at the right edge of `r`.
     pub fn writeRight(b: *Buffer, r: Rect, y: u16, text: []const u8, style: Style) u16 {
         const width = measure(text);
         if (width > r.w) return b.writeTruncated(r, r.x, y, text, r.w, style);
-        return b.writeText(r, r.x + r.w - width, y, text, style);
+        const start = @as(u32, r.x) + (r.w - width);
+        if (start > std.math.maxInt(u16)) return 0;
+        return b.writeText(r, @intCast(start), y, text, style);
     }
 
     /// Draws a box, with an optional title in the top edge.
     pub fn box(b: *Buffer, r: Rect, style: Style, title: ?[]const u8) void {
         if (r.w < 2 or r.h < 2) return;
+        // A box whose far edge leaves the addressable plane cannot be drawn
+        // whole, and a partial box misleads more than no box.
+        if (@as(u32, r.x) + r.w - 1 > std.math.maxInt(u16) or
+            @as(u32, r.y) + r.h - 1 > std.math.maxInt(u16)) return;
         const right = r.x + r.w - 1;
         const bottom = r.y + r.h - 1;
 
@@ -343,6 +366,23 @@ test "right aligned text ends at the right edge" {
     _ = buf.writeRight(r, 0, "6 tasks", .{});
     try testing.expectEqualStrings("s", buf.at(19, 0).?.text());
     try testing.expectEqualStrings("6", buf.at(13, 0).?.text());
+}
+
+test "an oversized cluster is truncated on a codepoint boundary" {
+    const gpa = testing.allocator;
+    var buf = try Buffer.init(gpa, 4, 1);
+    defer buf.deinit();
+
+    // Man, ZWJ, rocket, ZWJ, man: 18 bytes, so the 16-byte cell cannot hold
+    // it. Cutting mid-codepoint would store invalid UTF-8 that later reaches
+    // the host terminal verbatim.
+    const cluster = "\u{1F468}\u{200D}\u{1F680}\u{200D}\u{1F468}";
+    try testing.expect(cluster.len > Cell.max_bytes);
+    buf.setCell(0, 0, cluster, 2, .{});
+    const stored = buf.at(0, 0).?.text();
+    try testing.expect(std.unicode.utf8ValidateSlice(stored));
+    // The whole first three codepoints survive; the cut codepoint is dropped.
+    try testing.expectEqualStrings("\u{1F468}\u{200D}\u{1F680}\u{200D}", stored);
 }
 
 test "a clip stops a widget damaging its neighbours" {

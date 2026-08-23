@@ -130,7 +130,7 @@ pub const Model = struct {
         var seen: [multiplexer.max_panes]schema.PaneId = undefined;
         var seen_count: usize = 0;
         var iterator = snapshot.panes();
-        while (iterator.next()) |descriptor| {
+        while (try iterator.next()) |descriptor| {
             seen[seen_count] = descriptor.pane_id;
             seen_count += 1;
             if (tab.model.find(descriptor.pane_id) == null)
@@ -166,7 +166,7 @@ pub const Model = struct {
         const active_id = model.activeConst().?.location.tab_id;
         var iterator = snapshot.tabs();
         var index: usize = 0;
-        while (iterator.next()) |descriptor| : (index += 1) {
+        while (try iterator.next()) |descriptor| : (index += 1) {
             if (model.indexOf(descriptor.tab_id)) |existing_index| {
                 if (existing_index != index)
                     std.mem.swap(?Tab, &model.items[existing_index], &model.items[index]);

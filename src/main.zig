@@ -15,8 +15,6 @@ const runtime_start_interval_ms = 10;
 // route them to its log; the bootstrap keeps stderr out of the drawing path.
 pub const std_options: std.Options = .{ .log_level = .err };
 
-extern "c" fn getenv(name: [*:0]const u8) ?[*:0]u8;
-
 const RunOptions = struct {
     command: pty.Command,
     theme: frontend.theme.Theme = frontend.theme.default_theme,
@@ -30,9 +28,9 @@ const Cli = union(enum) {
     history: HistoryOptions,
     run: RunOptions,
 
-    fn parse(args: []const [*:0]const u8) !Cli {
+    fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !Cli {
         if (args.len == 0) return error.MissingArgvZero;
-        if (args.len == 1) return .{ .run = .{ .command = try defaultShell() } };
+        if (args.len == 1) return .{ .run = .{ .command = try defaultShell(environ) } };
 
         const first = std.mem.span(args[1]);
         if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h"))
@@ -95,7 +93,7 @@ const Cli = union(enum) {
             break;
         }
         options.command = if (command_start == args.len)
-            if (delimiter_seen) return error.MissingCommand else try defaultShell()
+            if (delimiter_seen) return error.MissingCommand else try defaultShell(environ)
         else
             try pty.Command.fromArgv(args[command_start..]);
         return .{ .run = options };
@@ -276,12 +274,32 @@ fn prepareManagedDirectory(io: Io, endpoint: *const core.endpoint.Local) !void {
 
     const stat = try Io.Dir.cwd().statFile(io, directory, .{ .follow_symlinks = false });
     if (stat.kind != .directory) return error.InvalidRuntimeDirectory;
+
+    // Socket directories reject wrong owners explicitly instead of relying on
+    // a later chmod failing with EPERM. `Io.File.Stat` carries no uid, so ask
+    // libc directly.
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch
+        return error.NameTooLong;
+    var native_stat: std.c.Stat = undefined;
+    if (std.c.fstatat(
+        std.c.AT.FDCWD,
+        directory_z,
+        &native_stat,
+        std.c.AT.SYMLINK_NOFOLLOW,
+    ) != 0) return error.InvalidRuntimeDirectory;
+    try checkRuntimeDirectoryOwner(native_stat.uid, std.c.getuid());
+
     try Io.Dir.cwd().setFilePermissions(
         io,
         directory,
         permissions,
         .{ .follow_symlinks = false },
     );
+}
+
+fn checkRuntimeDirectoryOwner(owner: std.c.uid_t, me: std.c.uid_t) error{WrongOwner}!void {
+    if (owner != me) return error.WrongOwner;
 }
 
 fn executablePath(io: Io, buffer: []u8) ![]const u8 {
@@ -509,12 +527,12 @@ fn stopRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !vo
     }
 }
 
-fn defaultShell() !pty.Command {
+fn defaultShell(environ: std.process.Environ) !pty.Command {
     const fallback: [*:0]const u8 = "/bin/sh";
-    const configured = getenv("SHELL") orelse return pty.Command.fromArgv(&.{fallback});
-    const shell: [*:0]const u8 = configured;
-    if (shell[0] == 0) return pty.Command.fromArgv(&.{fallback});
-    return pty.Command.fromArgv(&.{shell});
+    const configured = environ.getPosix("SHELL") orelse
+        return pty.Command.fromArgv(&.{fallback});
+    if (configured.len == 0) return pty.Command.fromArgv(&.{fallback});
+    return pty.Command.fromArgv(&.{configured.ptr});
 }
 
 fn collectArgs(init: std.process.Init, storage: *[pty.max_args][*:0]const u8) ![]const [*:0]const u8 {
@@ -601,7 +619,7 @@ fn printHistory(io: Io, results: core.schema.HistoryResultsView) !void {
     var output = File.stdout().writerStreaming(io, &output_buffer);
     const writer = &output.interface;
     var entries = results.entries();
-    while (entries.next()) |entry| {
+    while (try entries.next()) |entry| {
         const timestamp = utcTimestamp(entry.started_at_ms);
         try writer.print(
             "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}Z  ",
@@ -729,7 +747,7 @@ pub fn main(init: std.process.Init) !void {
     var arg_storage: [pty.max_args][*:0]const u8 = undefined;
     const args = try collectArgs(init, &arg_storage);
 
-    switch (try Cli.parse(args)) {
+    switch (try Cli.parse(args, init.minimal.environ)) {
         .help => try File.stdout().writeStreamingAll(init.io, usage),
         .version => try File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try runServer(init, options),
@@ -747,7 +765,7 @@ pub fn main(init: std.process.Init) !void {
 
 test "CLI defaults to the configured shell" {
     const args = [_][*:0]const u8{"telar"};
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .run);
     try std.testing.expect(cli.run.command.argv[0] != null);
     try std.testing.expectEqual(frontend.theme.Builtin.vesper, cli.run.theme.base);
@@ -755,7 +773,7 @@ test "CLI defaults to the configured shell" {
 
 test "CLI forwards a command without a shell" {
     const args = [_][*:0]const u8{ "telar", "/bin/sh", "-c", "exit 9" };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
 
     try std.testing.expect(cli == .run);
     try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
@@ -764,27 +782,27 @@ test "CLI forwards a command without a shell" {
 
 test "CLI delimiter permits option-shaped commands" {
     const args = [_][*:0]const u8{ "telar", "--", "-command" };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expectEqualStrings("-command", std.mem.span(cli.run.command.file));
 }
 
 test "CLI selects a built-in theme before the command" {
     const args = [_][*:0]const u8{ "telar", "--theme=catppuccin", "/bin/sh" };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expectEqual(frontend.theme.Builtin.catppuccin, cli.run.theme.base);
     try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
 }
 
 test "CLI runs the default shell when only a theme is provided" {
     const args = [_][*:0]const u8{ "telar", "--theme", "tokyonight" };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expectEqual(frontend.theme.Builtin.tokyo_night, cli.run.theme.base);
     try std.testing.expect(cli.run.command.argv[0] != null);
 }
 
 test "CLI rejects unknown and duplicate themes" {
     const unknown = [_][*:0]const u8{ "telar", "--theme", "neon" };
-    try std.testing.expectError(error.UnknownTheme, Cli.parse(&unknown));
+    try std.testing.expectError(error.UnknownTheme, Cli.parse(&unknown, .empty));
 
     const duplicate = [_][*:0]const u8{
         "telar",
@@ -792,26 +810,26 @@ test "CLI rejects unknown and duplicate themes" {
         "vesper",
         "--theme=catppuccin",
     };
-    try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate));
+    try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate, .empty));
 }
 
 test "CLI selects and validates the sidebar renderer" {
     const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expectEqual(frontend.kitty.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
 
     const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
-    try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid));
+    try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));
 }
 
 test "CLI rejects an empty command after the delimiter" {
     const args = [_][*:0]const u8{ "telar", "--" };
-    try std.testing.expectError(error.MissingCommand, Cli.parse(&args));
+    try std.testing.expectError(error.MissingCommand, Cli.parse(&args, .empty));
 }
 
 test "CLI recognizes the runtime server" {
     const args = [_][*:0]const u8{ "telar", "server" };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .server);
     try std.testing.expectEqual(ServerAction.run, cli.server.action);
     try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
@@ -819,7 +837,7 @@ test "CLI recognizes the runtime server" {
 
 test "CLI recognizes runtime stop" {
     const args = [_][*:0]const u8{ "telar", "server", "stop" };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .server);
     try std.testing.expectEqual(ServerAction.stop, cli.server.action);
     try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
@@ -827,7 +845,7 @@ test "CLI recognizes runtime stop" {
 
 test "runtime stop cannot use an internal launcher mode" {
     const args = [_][*:0]const u8{ "telar", "server", "stop", "--background" };
-    try std.testing.expectError(error.ConflictingServerAction, Cli.parse(&args));
+    try std.testing.expectError(error.ConflictingServerAction, Cli.parse(&args, .empty));
 }
 
 test "server socket and launcher mode are explicit" {
@@ -838,7 +856,7 @@ test "server socket and launcher mode are explicit" {
         "--socket",
         "/tmp/telar-test.sock",
     };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expectEqual(ServerMode.background_launcher, cli.server.mode);
     try std.testing.expectEqualStrings(
         "/tmp/telar-test.sock",
@@ -855,7 +873,7 @@ test "server graphics memory quotas are configurable and bounded" {
         "--graphics-global-mib",
         "128",
     };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expectEqual(@as(usize, 32 * 1024 * 1024), cli.server.graphics.pane_bytes);
     try std.testing.expectEqual(@as(usize, 128 * 1024 * 1024), cli.server.graphics.global_bytes);
 
@@ -865,7 +883,7 @@ test "server graphics memory quotas are configurable and bounded" {
         "--graphics-pane-mib",
         "65",
     };
-    try std.testing.expectError(error.InvalidGraphicsLimits, Cli.parse(&invalid));
+    try std.testing.expectError(error.InvalidGraphicsLimits, Cli.parse(&invalid, .empty));
 }
 
 test "CLI parses history search filters" {
@@ -880,7 +898,7 @@ test "CLI parses history search filters" {
         "--limit",
         "40",
     };
-    const cli = try Cli.parse(&args);
+    const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .history);
     try std.testing.expectEqual(HistoryAction.search, cli.history.action);
     try std.testing.expectEqualStrings("git commit", std.mem.span(cli.history.query.?));
@@ -899,7 +917,14 @@ test "CLI rejects conflicting history scopes" {
         "--pane",
         "1",
     };
-    try std.testing.expectError(error.ConflictingHistoryScopes, Cli.parse(&args));
+    try std.testing.expectError(error.ConflictingHistoryScopes, Cli.parse(&args, .empty));
+}
+
+test "the runtime directory must belong to the current user" {
+    // Regression test for the new check: an attacker-owned directory on the
+    // socket path is rejected explicitly rather than via a later EPERM.
+    try checkRuntimeDirectoryOwner(1000, 1000);
+    try std.testing.expectError(error.WrongOwner, checkRuntimeDirectoryOwner(0, 1000));
 }
 
 test "history fields escape terminal control bytes" {

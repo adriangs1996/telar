@@ -122,6 +122,7 @@ pub fn decodeImageChunk(d: *wire.Decoder) !ImageChunk {
 pub fn encodePlacement(e: *wire.Encoder, value: Placement) !void {
     try header(e, value.pane_id, value.revision);
     const p = value.placement;
+    if (p.virtual_id == 0) return error.InvalidGraphicsIdentity;
     try imageKey(e, p.key);
     try e.writeInt(u64, p.virtual_id);
     try e.writeInt(u32, p.placement_id);
@@ -145,7 +146,7 @@ pub fn decodePlacement(d: *wire.Decoder) !Placement {
         .revision = h.revision,
         .placement = .{
             .key = try decodeImageKey(d),
-            .virtual_id = try d.readInt(u64),
+            .virtual_id = try decodeVirtualId(d),
             .placement_id = try d.readInt(u32),
             .x = try d.readInt(i32),
             .y = try d.readInt(i32),
@@ -173,6 +174,7 @@ pub fn decodeDeleteImage(d: *wire.Decoder) !DeleteImage {
 }
 
 pub fn encodeDeletePlacement(e: *wire.Encoder, value: DeletePlacement) !void {
+    if (value.virtual_id == 0) return error.InvalidGraphicsIdentity;
     try header(e, value.pane_id, value.revision);
     try imageKey(e, value.key);
     try e.writeInt(u64, value.virtual_id);
@@ -185,9 +187,15 @@ pub fn decodeDeletePlacement(d: *wire.Decoder) !DeletePlacement {
         .pane_id = h.pane_id,
         .revision = h.revision,
         .key = try decodeImageKey(d),
-        .virtual_id = try d.readInt(u64),
+        .virtual_id = try decodeVirtualId(d),
         .placement_id = try d.readInt(u32),
     };
+}
+
+fn decodeVirtualId(d: *wire.Decoder) !u64 {
+    const virtual_id = try d.readInt(u64);
+    if (virtual_id == 0) return error.InvalidGraphicsIdentity;
+    return virtual_id;
 }
 
 fn header(e: *wire.Encoder, pane_id: PaneId, revision: u64) !void {

@@ -7,10 +7,15 @@
 const std = @import("std");
 
 pub const SchemaId = [8]u8;
-/// Opaque fingerprint of the only schema accepted by this source tree. Change
-/// it whenever an existing wire encoding changes; do not keep the old decoder
-/// until rolling upgrades become a supported product requirement.
-pub const schema_id: SchemaId = "1c6130a2".*;
+/// Human-readable schema generation. Bump it on any breaking wire change so a
+/// mismatch log can say which side is newer.
+pub const schema_version: *const [2]u8 = "01";
+/// Version prefix plus a fingerprint of the golden corpus in
+/// `schema_test.zig`. The test "the handshake fingerprint derives from the
+/// golden corpus" recomputes the hash, so an encoding change cannot ship
+/// without updating this constant. Do not keep the old decoder until rolling
+/// upgrades become a supported product requirement.
+pub const schema_id: SchemaId = (schema_version.* ++ "38029b".*);
 
 pub const magic: [8]u8 = "TELARIPC".*;
 

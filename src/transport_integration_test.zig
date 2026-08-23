@@ -305,10 +305,10 @@ test "runtime destroys a pane after its shell exits" {
             },
             .pane_frame => |frame| {
                 var spans = frame.spans();
-                while (spans.next()) |span| {
+                while (try spans.next()) |span| {
                     var frame_cells = span.cells();
                     var index: usize = span.start;
-                    while (frame_cells.next()) |cell| : (index += 1) cells[index] = cell;
+                    while (try frame_cells.next()) |cell| : (index += 1) cells[index] = cell;
                 }
                 saw_output = rowContains(cells[0..40], "TELAR_RUNTIME_E2E");
                 try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
@@ -447,7 +447,7 @@ test "the last pane closes only its tab when the workspace has another tab" {
         .workspace_snapshot => |snapshot| {
             try std.testing.expectEqual(@as(u16, 1), snapshot.tab_count);
             var tabs = snapshot.tabs();
-            try std.testing.expectEqual(primary.tab_id, tabs.next().?.tab_id);
+            try std.testing.expectEqual(primary.tab_id, ((try tabs.next()).?).tab_id);
             break;
         },
         .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
@@ -619,7 +619,7 @@ test "one client drives two attached panes and closes either one" {
                     second_cells[0..]
                 else
                     return error.UnexpectedPane;
-                applyFrameCells(cells, frame);
+                try applyFrameCells(cells, frame);
                 saw_first = rowContains(&first_cells, "FIRST:one");
                 saw_second = rowContains(&second_cells, "SECOND:two");
                 try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
@@ -656,7 +656,7 @@ test "one client drives two attached panes and closes either one" {
             .tab_snapshot => |snapshot| {
                 try std.testing.expectEqual(@as(u16, 1), snapshot.pane_count);
                 var panes = snapshot.panes();
-                try std.testing.expectEqual(first_id, panes.next().?.pane_id);
+                try std.testing.expectEqual(first_id, ((try panes.next()).?).pane_id);
                 return;
             },
             .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(
@@ -742,10 +742,10 @@ test "pane keeps running while its client is disconnected" {
             },
             .pane_frame => |frame| {
                 var spans = frame.spans();
-                while (spans.next()) |span| {
+                while (try spans.next()) |span| {
                     var frame_cells = span.cells();
                     var index: usize = span.start;
-                    while (frame_cells.next()) |cell| : (index += 1) cells[index] = cell;
+                    while (try frame_cells.next()) |cell| : (index += 1) cells[index] = cell;
                 }
                 saw_output = rowContains(cells[0..40], "TELAR_PERSISTED");
                 try second.send(io, try schema.encodeFrameAck(&send_buffer, .{
@@ -949,8 +949,8 @@ test "runtime owns the complete tab lifecycle" {
         .workspace_snapshot => |snapshot| {
             try std.testing.expectEqual(@as(u16, 2), snapshot.tab_count);
             var iterator = snapshot.tabs();
-            const first = iterator.next().?;
-            const second = iterator.next().?;
+            const first = (try iterator.next()).?;
+            const second = (try iterator.next()).?;
             try std.testing.expectEqual(logs.tab_id, first.tab_id);
             try std.testing.expectEqualStrings("server", first.label);
             try std.testing.expectEqual(primary.tab_id, second.tab_id);
@@ -1082,8 +1082,8 @@ test "a reconnect restores tab order labels and pane membership" {
         .workspace_snapshot => |snapshot| {
             try std.testing.expectEqual(@as(u16, 2), snapshot.tab_count);
             var iterator = snapshot.tabs();
-            const first_tab = iterator.next().?;
-            const second_tab = iterator.next().?;
+            const first_tab = (try iterator.next()).?;
+            const second_tab = (try iterator.next()).?;
             try std.testing.expectEqual(agents.tab_id, first_tab.tab_id);
             try std.testing.expectEqualStrings("agents", first_tab.label);
             try std.testing.expectEqual(primary.tab_id, second_tab.tab_id);
@@ -1259,7 +1259,7 @@ test "runtime persists terminal-edited commands without shell integration" {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
             .pane_opened => |opened| pane_id = opened.pane_id,
             .pane_frame => |frame| {
-                applyFrameCells(&cells, frame);
+                try applyFrameCells(&cells, frame);
                 try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
                     .pane_id = frame.pane_id,
                     .frame_id = frame.frame_id,
@@ -1301,7 +1301,7 @@ test "runtime persists terminal-edited commands without shell integration" {
             .history_results => |results| {
                 try std.testing.expectEqual(@as(u16, 1), results.entry_count);
                 var entries = results.entries();
-                const entry = entries.next() orelse return error.MissingHistoryEntry;
+                const entry = (try entries.next()) orelse return error.MissingHistoryEntry;
                 try std.testing.expectEqualStrings("echo persisted", entry.command);
                 try std.testing.expect(std.mem.indexOf(u8, entry.command, "\x1b_G") == null);
                 try std.testing.expectEqual(@as(?i32, 7), entry.exit_code);
@@ -1469,7 +1469,7 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
         switch (try schema.decodeServer(payload)) {
             .pane_opened => |opened| pane_id = opened.pane_id,
             .pane_frame => |frame| {
-                applyFrameCells(&cells, frame);
+                try applyFrameCells(&cells, frame);
                 saw_child_reply = rowContains(&cells, "KGP_CHILD_OK");
                 if (rowContains(&cells, "KGP_CHILD_BAD")) return error.KittyQueryReplyMissing;
                 try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
@@ -1550,11 +1550,11 @@ fn rowContains(cells: []const core.ui.Cell, needle: []const u8) bool {
     return false;
 }
 
-fn applyFrameCells(cells: []core.ui.Cell, frame: core.schema.frame.FrameView) void {
+fn applyFrameCells(cells: []core.ui.Cell, frame: core.schema.frame.FrameView) !void {
     var spans = frame.spans();
-    while (spans.next()) |span| {
+    while (try spans.next()) |span| {
         var source = span.cells();
         var index: usize = span.start;
-        while (source.next()) |cell| : (index += 1) cells[index] = cell;
+        while (try source.next()) |cell| : (index += 1) cells[index] = cell;
     }
 }

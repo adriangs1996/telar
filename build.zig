@@ -176,6 +176,10 @@ pub fn build(b: *std.Build) void {
     const suites = [_]Suite{
         .{ .path = "src/core/ui.zig" },
         .{ .path = "src/core/select.zig" },
+        // Only referenced through non-pub imports elsewhere, so their tests
+        // never run unless they are their own suite roots.
+        .{ .path = "src/core/graphics.zig" },
+        .{ .path = "src/core/schema/wire.zig", .schema = true },
         .{ .path = "src/core/transport.zig", .transport = true },
         .{ .path = "src/core/endpoint.zig", .transport = true },
         .{ .path = "src/core/diagnostics.zig" },

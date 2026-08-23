@@ -95,14 +95,14 @@ pub const SpanIterator = struct {
     decoder: wire.Decoder,
     remaining: u16,
 
-    pub fn next(iterator: *SpanIterator) ?SpanView {
+    pub fn next(iterator: *SpanIterator) error{Truncated}!?SpanView {
         if (iterator.remaining == 0) return null;
         iterator.remaining -= 1;
 
-        const start = iterator.decoder.readInt(u32) catch unreachable;
-        const count = iterator.decoder.readInt(u32) catch unreachable;
-        const encoded_length = iterator.decoder.readInt(u32) catch unreachable;
-        const encoded_cells = iterator.decoder.readBytes(encoded_length) catch unreachable;
+        const start = try iterator.decoder.readInt(u32);
+        const count = try iterator.decoder.readInt(u32);
+        const encoded_length = try iterator.decoder.readInt(u32);
+        const encoded_cells = try iterator.decoder.readBytes(encoded_length);
         return .{
             .start = start,
             .cell_count = count,
@@ -116,10 +116,14 @@ pub const CellIterator = struct {
     remaining: u32,
     style: ?ui.Style = null,
 
-    pub fn next(iterator: *CellIterator) ?ui.Cell {
+    pub fn next(iterator: *CellIterator) !?ui.Cell {
         if (iterator.remaining == 0) return null;
         iterator.remaining -= 1;
-        return decodeCell(&iterator.decoder, &iterator.style) catch unreachable;
+        const cell = try decodeCell(&iterator.decoder, &iterator.style);
+        // The span header promised exactly `cell_count` cells; leftover bytes
+        // after the last one are corruption, not padding.
+        if (iterator.remaining == 0) try iterator.decoder.ensureEnd();
+        return cell;
     }
 };
 
@@ -163,7 +167,7 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
     const base_frame_id = try decoder.readInt(u64);
     const cols = try decoder.readInt(u16);
     const rows = try decoder.readInt(u16);
-    const cursor_visible = try decodeBool(try decoder.readByte());
+    const cursor_visible = try decoder.readBool();
     const cursor_x = try decoder.readInt(u16);
     const cursor_y = try decoder.readInt(u16);
     const mouse: Mouse = .{
@@ -175,8 +179,8 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
             4 => .any,
             else => return error.InvalidMouseTracking,
         },
-        .sgr = try decodeBool(try decoder.readByte()),
-        .pixels = try decodeBool(try decoder.readByte()),
+        .sgr = try decoder.readBool(),
+        .pixels = try decoder.readBool(),
     };
     const span_count = try decoder.readInt(u16);
 
@@ -190,6 +194,9 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         span_count,
     );
 
+    // Structural validation only: span ordering, grid coverage, and sizes.
+    // Cell payloads are validated by `CellIterator` as the consumer decodes
+    // them, so a frame's cells are only decoded once.
     const total_cells = try gridCellCount(cols, rows);
     const spans_start = decoder.index;
     var previous_end: u32 = 0;
@@ -207,10 +214,10 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
             first_count = count;
         }
         previous_end = end;
-        var cell_decoder = wire.Decoder.init(try decoder.readBytes(encoded_length));
-        var style: ?ui.Style = null;
-        for (0..count) |_| _ = try decodeCell(&cell_decoder, &style);
-        try cell_decoder.ensureEnd();
+        // A cell is at least its header byte, so a length that cannot hold
+        // `count` cells is structurally invalid.
+        if (encoded_length < count) return error.InvalidSpan;
+        _ = try decoder.readBytes(encoded_length);
     }
     if (base_frame_id == 0 and
         (span_count != 1 or first_start != 0 or first_count != total_cells))
@@ -435,14 +442,6 @@ fn decodeColor(decoder: *wire.Decoder) !ui.Color {
     };
 }
 
-fn decodeBool(value: u8) !bool {
-    return switch (value) {
-        0 => false,
-        1 => true,
-        else => error.InvalidBoolean,
-    };
-}
-
 test "full snapshots preserve cells, styles and cursor" {
     const cells = [_]ui.Cell{
         .{},
@@ -479,12 +478,12 @@ test "full snapshots preserve cells, styles and cursor" {
     try std.testing.expectEqual(frame.pane_id, decoded.pane_id);
     try std.testing.expectEqual(frame.cursor, decoded.cursor);
     var span_iterator = decoded.spans();
-    const span = span_iterator.next().?;
+    const span = (try span_iterator.next()).?;
     try std.testing.expectEqual(@as(u32, 2), span.cell_count);
     var cell_iterator = span.cells();
-    try std.testing.expectEqualDeep(cells[0], cell_iterator.next().?);
-    try std.testing.expectEqualDeep(cells[1], cell_iterator.next().?);
-    try std.testing.expect(cell_iterator.next() == null);
+    try std.testing.expectEqualDeep(cells[0], (try cell_iterator.next()).?);
+    try std.testing.expectEqualDeep(cells[1], (try cell_iterator.next()).?);
+    try std.testing.expect((try cell_iterator.next()) == null);
 }
 
 test "a style run pays two bytes per ordinary cell" {
@@ -532,7 +531,11 @@ test "the first cell of every span must define its style" {
 
     buffer[body_header_size + span_header_size] &= ~style_changed_bit;
     var decoder = wire.Decoder.init(encoder.finish());
-    try std.testing.expectError(error.InvalidCell, decodeBody(&decoder));
+    // Cell content is validated when the consumer iterates, not at decode.
+    const decoded = try decodeBody(&decoder);
+    var span_iterator = decoded.spans();
+    var cell_iterator = ((try span_iterator.next()).?).cells();
+    try std.testing.expectError(error.InvalidCell, cell_iterator.next());
 }
 
 test "patch spans must be ordered and inside the screen" {

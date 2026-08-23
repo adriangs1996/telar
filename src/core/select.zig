@@ -56,6 +56,8 @@ pub const Range = struct {
     mode: Mode = .linear,
     granularity: Granularity = .character,
 
+    /// A bare click before any drag. A word or line selection collapsed onto
+    /// one cell still selects that cell.
     pub fn isEmpty(r: Range) bool {
         return r.anchor.x == r.head.x and r.anchor.y == r.head.y and r.granularity == .character;
     }
@@ -103,7 +105,10 @@ pub const Range = struct {
                 to.x = if (b.w == 0) 0 else b.w - 1;
             },
         }
-        return .{ .anchor = from, .head = to, .mode = r.mode, .granularity = .character };
+        // The granularity survives so that a word or line selection collapsed
+        // onto a single cell is not mistaken for a bare click by `isEmpty`.
+        // Expansion is idempotent, so re-expanding the result is harmless.
+        return .{ .anchor = from, .head = to, .mode = r.mode, .granularity = r.granularity };
     }
 };
 
@@ -307,6 +312,22 @@ test "a wide glyph is copied once, not twice" {
     var out: [32]u8 = undefined;
     const got = copied(&b, .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 3, .y = 0 } }, &out);
     try testing.expectEqualStrings("漢字", got);
+}
+
+test "double click on a one-character word selects that character" {
+    // Expansion of a single-cell word collapses anchor and head onto the same
+    // point; that must still read as one selected cell, not as no selection.
+    const gpa = testing.allocator;
+    var b = try screen(gpa, &.{"run x now"});
+    defer b.deinit();
+
+    var out: [16]u8 = undefined;
+    const got = copied(&b, .{
+        .anchor = .{ .x = 4, .y = 0 },
+        .head = .{ .x = 4, .y = 0 },
+        .granularity = .word,
+    }, &out);
+    try testing.expectEqualStrings("x", got);
 }
 
 test "double click takes the word, including its punctuation" {

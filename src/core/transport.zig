@@ -8,7 +8,10 @@ const std = @import("std");
 const Io = std.Io;
 
 pub const length_prefix_size = @sizeOf(u32);
-pub const max_frame_size = 2 * 1024 * 1024;
+/// Sized so that a full pane snapshot of a large real screen (for example
+/// 480x150) fits one frame even at the worst-case per-cell encoding that
+/// `frame.max_cell_size` assumes.
+pub const max_frame_size = 4 * 1024 * 1024;
 
 pub const WriteFrameError = Io.Writer.Error || error{ FrameTooLarge, ConnectionClosed };
 
@@ -26,8 +29,10 @@ pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void 
 
     var prefix: [length_prefix_size]u8 = undefined;
     std.mem.writeInt(u32, &prefix, @intCast(payload.len), .little);
-    try writer.writeAll(&prefix);
-    try writer.writeAll(payload);
+    // One vectored write instead of two: this path carries per-keystroke
+    // messages, so the prefix must not cost its own syscall.
+    var parts = [2][]const u8{ &prefix, payload };
+    try writer.writeVecAll(&parts);
     try writer.flush();
 }
 
@@ -149,6 +154,50 @@ test "a frame must fit in caller-owned memory" {
     var payload: [4]u8 = undefined;
 
     try std.testing.expectError(error.BufferTooSmall, readFrame(&reader, &payload));
+}
+
+test "frames survive a reader that returns one byte at a time" {
+    // Socket reads split anywhere, including inside the length prefix. The
+    // framing must reassemble a frame from arbitrarily small reads.
+    const Dribble = struct {
+        bytes: []const u8,
+        index: usize = 0,
+        interface: Io.Reader = .{
+            .vtable = &.{ .stream = stream },
+            .buffer = &.{},
+            .seek = 0,
+            .end = 0,
+        },
+
+        fn stream(r: *Io.Reader, w: *Io.Writer, limit: Io.Limit) Io.Reader.StreamError!usize {
+            const d: *@This() = @alignCast(@fieldParentPtr("interface", r));
+            if (d.index == d.bytes.len) return error.EndOfStream;
+            if (limit.minInt(1) == 0) return 0;
+            const n = try w.write(d.bytes[d.index..][0..1]);
+            d.index += n;
+            return n;
+        }
+    };
+
+    var encoded: [64]u8 = undefined;
+    var writer = Io.Writer.fixed(&encoded);
+    try writeFrame(&writer, "split me anywhere");
+    try writeFrame(&writer, "second frame");
+
+    var dribble: Dribble = .{ .bytes = encoded[0..writer.end] };
+    var payload: [32]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "split me anywhere",
+        try readFrame(&dribble.interface, &payload),
+    );
+    try std.testing.expectEqualStrings(
+        "second frame",
+        try readFrame(&dribble.interface, &payload),
+    );
+    try std.testing.expectError(
+        error.ConnectionClosed,
+        readFrame(&dribble.interface, &payload),
+    );
 }
 
 test "clean close and truncated frames are distinct" {

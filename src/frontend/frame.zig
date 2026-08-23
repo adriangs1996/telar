@@ -26,14 +26,14 @@ pub fn applyBuffer(
 
     var applied: Applied = .{};
     var spans = frame.spans();
-    while (spans.next()) |span| {
+    while (try spans.next()) |span| {
         const start: usize = span.start;
         const count: usize = span.cell_count;
         const end = std.math.add(usize, start, count) catch return error.PatchOutOfBounds;
         if (count == 0 or end > buffer.cells.len) return error.PatchOutOfBounds;
         var cells = span.cells();
         var index = start;
-        while (cells.next()) |cell| : (index += 1) {
+        while (try cells.next()) |cell| : (index += 1) {
             buffer.cells[index] = cell;
             applied.cells += 1;
         }
@@ -55,12 +55,12 @@ pub fn apply(screen: *term.Screen, frame: schema.frame.FrameView) !Applied {
 
     var applied: Applied = .{};
     var spans = frame.spans();
-    while (spans.next()) |span| {
+    while (try spans.next()) |span| {
         applied.spans += 1;
         const target = try screen.patchCells(span.start, span.cell_count);
         var cells = span.cells();
         var index: usize = 0;
-        while (cells.next()) |cell| : (index += 1) {
+        while (try cells.next()) |cell| : (index += 1) {
             target[index] = cell;
             applied.cells += 1;
         }

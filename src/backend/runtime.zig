@@ -538,7 +538,7 @@ const OwnedCommand = struct {
         errdefer for (arguments[0..initialized]) |argument| gpa.free(argument);
 
         var iterator = launch.arguments();
-        while (iterator.next()) |argument| {
+        while (try iterator.next()) |argument| {
             arguments[initialized] = try gpa.dupeZ(u8, argument);
             initialized += 1;
         }

@@ -71,6 +71,14 @@ pub const Decoder = struct {
         return std.mem.readInt(T, decoder.bytes[decoder.index..][0..size], .little);
     }
 
+    pub fn readBool(decoder: *Decoder) error{ Truncated, InvalidBoolean }!bool {
+        return switch (try decoder.readByte()) {
+            0 => false,
+            1 => true,
+            else => error.InvalidBoolean,
+        };
+    }
+
     pub fn readBytes(decoder: *Decoder, length: usize) error{Truncated}![]const u8 {
         if (decoder.bytes.len - decoder.index < length) return error.Truncated;
         defer decoder.index += length;

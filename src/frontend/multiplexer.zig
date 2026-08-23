@@ -264,7 +264,7 @@ pub const Model = struct {
             model.composition_invalidated = true;
         } else {
             var spans = frame.spans();
-            while (spans.next()) |span| pane.markSpan(span.start, span.cell_count);
+            while (try spans.next()) |span| pane.markSpan(span.start, span.cell_count);
         }
         pane.applied_frame_id = frame.frame_id;
         pane.pending_frame_id = frame.frame_id;
