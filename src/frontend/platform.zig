@@ -43,6 +43,19 @@ pub const Tty = impl.Tty;
 /// otherwise would push a Unix-shaped abstraction onto Windows.
 pub const ResizeWatcher = impl.ResizeWatcher;
 
+/// Arms terminal restoration for the paths `deinit` cannot reach.
+///
+/// A panic aborts without running `defer`s, so the client's normal cleanup
+/// never happens and the terminal stays raw with the panic message rendered
+/// unreadably. On POSIX this hooks the fatal signals; the abort at the end of
+/// Zig's panic path is one of them.
+pub const installCrashRestore = impl.installCrashRestore;
+
+/// What the crash handler runs: emit `leave_sequence` and restore the saved
+/// termios. Exposed so the path is testable; idempotent and a no-op until
+/// `installCrashRestore` arms it or after `Tty.deinit` disarms it.
+pub const emergencyRestore = impl.emergencyRestore;
+
 /// What a full screen application asks the terminal for on the way in.
 ///
 /// Portable because these are bytes, not syscalls: the console mode set by
@@ -100,6 +113,11 @@ comptime {
     assertFn(W, "init", fn (*T) anyerror!W);
     assertFn(W, "deinit", fn (*W) void);
     assertFn(W, "wait", fn (*W, Io) Io.Cancelable!void);
+
+    if (!@hasDecl(impl, "installCrashRestore"))
+        @compileError("platform is missing installCrashRestore");
+    if (!@hasDecl(impl, "emergencyRestore"))
+        @compileError("platform is missing emergencyRestore");
 }
 
 fn assertFn(comptime T: type, comptime name: []const u8, comptime Want: type) void {

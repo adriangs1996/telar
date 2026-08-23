@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const diff = @import("diff.zig");
 const frame_apply = @import("frame.zig");
 const layout_mod = @import("layout.zig");
 const term = @import("term.zig");
@@ -12,24 +13,7 @@ const ui = core.ui;
 
 pub const max_panes = layout_mod.max_panes;
 
-const DamageRow = struct {
-    start: u16 = std.math.maxInt(u16),
-    end: u16 = 0,
-
-    fn mark(row: *DamageRow, start: u16, end: u16) void {
-        std.debug.assert(start < end);
-        row.start = @min(row.start, start);
-        row.end = @max(row.end, end);
-    }
-
-    fn clear(row: *DamageRow) void {
-        row.* = .{};
-    }
-
-    fn dirty(row: DamageRow) bool {
-        return row.start < row.end;
-    }
-};
+const DamageRow = diff.DamageRow;
 
 const BorderTheme = struct {
     focused: ui.Color,
@@ -80,19 +64,7 @@ pub const Pane = struct {
     }
 
     fn markSpan(pane: *Pane, start: u32, count: u32) void {
-        if (count == 0) return;
-        const width: usize = pane.buffer.w;
-        var cursor: usize = start;
-        const end = cursor + count;
-        while (cursor < end) {
-            const row_index = cursor / width;
-            const row_end = @min(end, (row_index + 1) * width);
-            pane.damage_rows[row_index].mark(
-                @intCast(cursor % width),
-                @intCast(row_end - row_index * width),
-            );
-            cursor = row_end;
-        }
+        diff.markRows(pane.damage_rows, pane.buffer.w, start, count);
     }
 };
 
@@ -472,6 +444,21 @@ pub const Model = struct {
     }
 };
 
+/// Copies each changed run into the composed buffer and the screen at once,
+/// so the composed cache and the terminal patch can never disagree.
+const ComposeSink = struct {
+    patch: term.PatchSink,
+    composed_row: []ui.Cell,
+
+    pub fn copyRun(sink: *ComposeSink, run_start: u16, count: u16) !void {
+        @memcpy(
+            sink.composed_row[run_start..][0..count],
+            sink.patch.source_row[run_start..][0..count],
+        );
+        try sink.patch.copyRun(run_start, count);
+    }
+};
+
 fn syncPaneRange(
     screen: *term.Screen,
     composed: *ui.Buffer,
@@ -483,33 +470,13 @@ fn syncPaneRange(
     end: u16,
 ) !usize {
     std.debug.assert(start < end);
-    const source_row = @as(usize, source_y) * pane.buffer.w;
-    const destination_row = @as(usize, destination_y) * composed.w;
-    var damaged: usize = 0;
-    var x = start;
-    while (x < end) {
-        const source_index = source_row + x;
-        const destination_index = destination_row + destination_x + x;
-        if (pane.buffer.cells[source_index].eqlPublic(&composed.cells[destination_index])) {
-            x += 1;
-            continue;
-        }
-        const run_start = x;
-        x += 1;
-        while (x < end) : (x += 1) {
-            const next_source = source_row + x;
-            const next_destination = destination_row + destination_x + x;
-            if (pane.buffer.cells[next_source].eqlPublic(&composed.cells[next_destination])) break;
-        }
-        const count: u16 = x - run_start;
-        const source = pane.buffer.cells[source_row + run_start ..][0..count];
-        const composed_start = destination_row + destination_x + run_start;
-        const terminal = try screen.patchCells(@intCast(composed_start), count);
-        @memcpy(composed.cells[composed_start..][0..count], source);
-        @memcpy(terminal, source);
-        damaged += count;
-    }
-    return damaged;
+    const source_row = pane.buffer.cells[@as(usize, source_y) * pane.buffer.w ..];
+    const destination_base = @as(usize, destination_y) * composed.w + destination_x;
+    var sink: ComposeSink = .{
+        .patch = .{ .screen = screen, .source_row = source_row, .base = destination_base },
+        .composed_row = composed.cells[destination_base..],
+    };
+    return diff.syncRow(source_row, sink.composed_row, start, end, &sink);
 }
 
 fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
@@ -518,32 +485,24 @@ fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
     var y: u16 = 0;
     while (y < composed.h) : (y += 1) {
         const row_start = @as(usize, y) * composed.w;
-        var x: u16 = 0;
-        while (x < composed.w) {
-            const index = row_start + x;
-            if (composed.cells[index].eqlPublic(&screen.back.cells[index])) {
-                x += 1;
-                continue;
-            }
-            const run_start = x;
-            x += 1;
-            while (x < composed.w) : (x += 1) {
-                const next = row_start + x;
-                if (composed.cells[next].eqlPublic(&screen.back.cells[next])) break;
-            }
-            const count = x - run_start;
-            const destination = try screen.patchCells(
-                @intCast(row_start + run_start),
-                count,
-            );
-            @memcpy(destination, composed.cells[row_start + run_start ..][0..count]);
-            damaged += count;
-        }
+        const source_row = composed.cells[row_start..][0..composed.w];
+        var sink: term.PatchSink = .{
+            .screen = screen,
+            .source_row = source_row,
+            .base = row_start,
+        };
+        damaged += try diff.syncRow(
+            source_row,
+            screen.back.cells[row_start..][0..composed.w],
+            0,
+            composed.w,
+            &sink,
+        );
     }
     return damaged;
 }
 
-fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
+pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
     if (rect.w == 0 or rect.h == 0) return null;
     return .{ .cols = rect.w, .rows = rect.h };
 }

@@ -151,6 +151,14 @@ fn openConsole(comptime name: []const u8, read: bool) !HANDLE {
     return handle;
 }
 
+/// Crash-time terminal restore is not implemented on Windows: the console
+/// mode is per-handle state the next process resets, and there is no POSIX
+/// fatal-signal path to hook. A crash leaves the console in VT mode, which
+/// Windows Terminal recovers from on the next prompt.
+pub fn installCrashRestore(_: *const Tty) void {}
+
+pub fn emergencyRestore() void {}
+
 /// Notices resizes by looking, because the alternative steals keystrokes.
 ///
 /// Windows reports a resize as a `WINDOW_BUFFER_SIZE_EVENT` record on the
@@ -165,6 +173,11 @@ fn openConsole(comptime name: []const u8, read: bool) !HANDLE {
 /// honest alternative is to move *all* input behind this file and translate
 /// console records centrally; that is the right long-term answer and a much
 /// larger change than a resize watcher.
+///
+/// Recorded exception to `docs/engineering-invariants.md` ("Idle panes and
+/// clients schedule no polling or repaint proportional to their count"): this
+/// is one constant-cost poll per client on Windows only, independent of pane
+/// count. It disappears when console records are translated centrally.
 pub const ResizeWatcher = struct {
     tty: *Tty,
     last: Size,

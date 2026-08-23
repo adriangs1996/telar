@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const ui = @import("telar-core").ui;
+const diff = @import("diff.zig");
 
 // The half of a TUI that speaks the terminal's language: the diff, the escape
 // sequences it turns into, and the parser for what comes back.
@@ -18,20 +19,7 @@ const ui = @import("telar-core").ui;
 // Rendering
 // ---------------------------------------------------------------------------
 
-const DamageRow = struct {
-    start: u16 = 0,
-    end: u16 = 0,
-
-    fn mark(row: *DamageRow, start: u16, end: u16) void {
-        std.debug.assert(start < end);
-        if (row.start == row.end) {
-            row.* = .{ .start = start, .end = end };
-            return;
-        }
-        row.start = @min(row.start, start);
-        row.end = @max(row.end, end);
-    }
-};
+const DamageRow = diff.DamageRow;
 
 /// Two buffers and the difference between them.
 ///
@@ -137,16 +125,7 @@ pub const Screen = struct {
         const end = std.math.add(usize, first, len) catch return error.PatchOutOfBounds;
         if (len == 0 or end > s.back.cells.len) return error.PatchOutOfBounds;
 
-        const width: usize = s.back.w;
-        var index = first;
-        while (index < end) {
-            const y = index / width;
-            const x: u16 = @intCast(index % width);
-            const row_end = @min(end, (y + 1) * width);
-            const end_x: u16 = @intCast(row_end - y * width);
-            s.damage_rows[y].mark(x, end_x);
-            index = row_end;
-        }
+        diff.markRows(s.damage_rows, s.back.w, first, len);
         return s.back.cells[first..end];
     }
 
@@ -164,6 +143,11 @@ pub const Screen = struct {
 
     /// Sends the difference to `w`.
     pub fn flush(s: *Screen, w: *Io.Writer) !Stats {
+        // The diff commits cells into `front` as it emits them. If the writer
+        // fails partway, `front` claims cells the terminal never received, so
+        // the only honest recovery is to forget the terminal's contents and
+        // repaint everything on the next flush.
+        errdefer s.invalidate();
         var stats: Stats = .{};
         const before = w.end;
 
@@ -234,6 +218,20 @@ pub const Screen = struct {
         s.full_damage = false;
         @memset(s.damage_rows, .{});
         return stats;
+    }
+};
+
+/// The run sink most composition layers want: copy the run straight into the
+/// screen's back buffer through `patchCells`, so damage stays exact.
+pub const PatchSink = struct {
+    screen: *Screen,
+    source_row: []const ui.Cell,
+    /// Linear cell index of `source_row[0]` in the screen buffer.
+    base: usize,
+
+    pub fn copyRun(sink: *PatchSink, run_start: u16, count: u16) !void {
+        const destination = try sink.screen.patchCells(@intCast(sink.base + run_start), count);
+        @memcpy(destination, sink.source_row[run_start..][0..count]);
     }
 };
 
@@ -497,7 +495,13 @@ pub fn parse(input: []const u8) ?Parsed {
     // A parameterised CSI: `ESC [ p1 ; p2 final`. Find the final byte first,
     // because everything else depends on having the whole sequence.
     var final: usize = 2;
-    while (final < input.len and !(input[final] >= 0x40 and input[final] <= 0x7e)) final += 1;
+    while (final < input.len and !(input[final] >= 0x40 and input[final] <= 0x7e)) {
+        // ECMA-48: a new ESC aborts the sequence in progress. Consume only
+        // the dead prefix, so the aborting sequence parses from its own
+        // introducer instead of leaking its final bytes as typed characters.
+        if (input[final] == 0x1b) return .{ .event = .incomplete, .len = final };
+        final += 1;
+    }
     if (final == input.len) return .{ .event = .incomplete, .len = 0 };
 
     var params: [3]u32 = .{ 0, 0, 0 };
@@ -624,7 +628,25 @@ fn parseByte(input: []const u8) ?Parsed {
 }
 
 fn parseAlt(input: []const u8) Parsed {
-    if (input[1] == 0x1b) return key(.escape, .{ .alt = true }, 2);
+    if (input[1] == 0x1b) {
+        // ESC ESC: legacy terminals prefix a whole CSI or SS3 sequence with
+        // ESC for a modified key, so Alt+Up arrives as `ESC ESC [ A`. Only
+        // the third byte disambiguates that from Alt+Escape.
+        if (input.len == 2) return .{ .event = .incomplete, .len = 0 };
+        if (input[2] == '[' or input[2] == 'O') {
+            const parsed = parse(input[1..]) orelse unreachable;
+            if (parsed.len == 0) return parsed;
+            return switch (parsed.event) {
+                .key => |pressed| key(pressed.code, .{
+                    .shift = pressed.mods.shift,
+                    .alt = true,
+                    .ctrl = pressed.mods.ctrl,
+                }, parsed.len + 1),
+                else => .{ .event = .incomplete, .len = parsed.len + 1 },
+            };
+        }
+        return key(.escape, .{ .alt = true }, 2);
+    }
     const parsed = parseByte(input[1..]) orelse unreachable;
     if (parsed.len == 0) return parsed;
     return switch (parsed.event) {
@@ -757,6 +779,8 @@ fn parseMouse(input: []const u8) ?Parsed {
             if (field >= fields.len) return .{ .event = .incomplete, .len = index + 1 };
             continue;
         }
+        // A new ESC aborts the report; keep it for the next parse.
+        if (byte == 0x1b) return .{ .event = .incomplete, .len = index };
         if (byte != 'M' and byte != 'm') return .{ .event = .incomplete, .len = index + 1 };
 
         const button = fields[0];
@@ -1253,6 +1277,65 @@ test "an unknown sequence is consumed without being reported" {
     _ = in.push("\x1b[6;12Rz");
     const event = in.next().?;
     try testing.expect(event.key.code.char.eql("z"));
+}
+
+test "a sequence aborted by a new escape does not leak keystrokes" {
+    // ECMA-48: an ESC aborts the control sequence in progress. Scanning past
+    // it for a final byte swallowed the aborting sequence's introducer and
+    // delivered its final bytes as typed characters.
+    var in: Input(64) = .{};
+    _ = in.push("\x1b[1\x1b[A");
+    const event = in.next().?;
+    try testing.expectEqual(KeyCode.up, event.key.code);
+    try testing.expectEqual(@as(?Event, null), in.next());
+
+    // The same abort inside a mouse report.
+    var mouse_in: Input(64) = .{};
+    _ = mouse_in.push("\x1b[<0;5\x1b[B");
+    const after_mouse = mouse_in.next().?;
+    try testing.expectEqual(KeyCode.down, after_mouse.key.code);
+    try testing.expectEqual(@as(?Event, null), mouse_in.next());
+}
+
+test "a legacy alt-prefixed arrow is one modified key" {
+    // Traditional terminals send Alt+Up as ESC ESC [ A. Reading the second
+    // escape as Alt+Escape typed "[A" into whatever was focused.
+    const parsed = parse("\x1b\x1b[A").?;
+    try testing.expectEqual(KeyCode.up, parsed.event.key.code);
+    try testing.expect(parsed.event.key.mods.alt);
+    try testing.expectEqual(@as(usize, 4), parsed.len);
+
+    // Two escapes alone stay ambiguous until the next byte arrives.
+    try testing.expectEqual(@as(usize, 0), parse("\x1b\x1b").?.len);
+
+    // Followed by anything that cannot start a sequence, it is Alt+Escape.
+    const alt_escape = parse("\x1b\x1bx").?;
+    try testing.expectEqual(KeyCode.escape, alt_escape.event.key.code);
+    try testing.expect(alt_escape.event.key.mods.alt);
+    try testing.expectEqual(@as(usize, 2), alt_escape.len);
+}
+
+test "a failed flush forgets nothing the terminal did not receive" {
+    // Regression: the diff committed cells into `front` while emitting them,
+    // so a writer error mid-flush left the screen claiming cells the terminal
+    // never got, and the retry emitted nothing.
+    const gpa = testing.allocator;
+    var screen = try Screen.init(gpa, 10, 2);
+    defer screen.deinit();
+    var out: [8 * 1024]u8 = undefined;
+    var initial = Io.Writer.fixed(&out);
+    screen.buffer().clear(.{});
+    _ = try screen.flush(&initial);
+
+    screen.buffer().clear(.{});
+    _ = screen.buffer().writeText(screen.buffer().area(), 0, 0, "hola", .{});
+    var tiny: [24]u8 = undefined;
+    var failing = Io.Writer.fixed(&tiny);
+    try testing.expectError(error.WriteFailed, screen.flush(&failing));
+
+    var retry = Io.Writer.fixed(&out);
+    const stats = try screen.flush(&retry);
+    try testing.expect(stats.cells >= 4);
 }
 
 test "a copy is one osc 52 sequence with the text in base64" {

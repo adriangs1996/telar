@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const diff = @import("diff.zig");
 const edit = @import("edit.zig");
 const kitty = @import("kitty.zig");
 const multiplexer = @import("multiplexer.zig");
@@ -251,6 +252,11 @@ pub const State = struct {
                 if (rename.pasting) rename.field.insert(bytes[offset..]);
                 break;
             };
+            // A zero-length incomplete can never complete inside this chunk:
+            // the router only hands over raw pending bytes after its own
+            // timeout, so the tail is stale terminal noise. Dropping it is the
+            // only move that guarantees the offset advances.
+            if (parsed.len == 0) break;
             offset += parsed.len;
             switch (parsed.event) {
                 .paste_start => rename.pasting = true,
@@ -620,26 +626,20 @@ fn syncRegion(screen: *term.Screen, source: *const ui.Buffer, area: ui.Rect) !Re
     var y = area.y;
     while (y < area.y + area.h) : (y += 1) {
         const row_start = @as(usize, y) * source.w;
-        var x = area.x;
-        while (x < area.x + area.w) {
-            stats.scanned += 1;
-            const index = row_start + x;
-            if (source.cells[index].eqlPublic(&screen.back.cells[index])) {
-                x += 1;
-                continue;
-            }
-            const run_start = x;
-            x += 1;
-            while (x < area.x + area.w) : (x += 1) {
-                stats.scanned += 1;
-                const next = row_start + x;
-                if (source.cells[next].eqlPublic(&screen.back.cells[next])) break;
-            }
-            const count: u16 = x - run_start;
-            const destination = try screen.patchCells(@intCast(row_start + run_start), count);
-            @memcpy(destination, source.cells[row_start + run_start ..][0..count]);
-            stats.damaged += count;
-        }
+        const source_row = source.cells[row_start..][0..source.w];
+        var sink: term.PatchSink = .{
+            .screen = screen,
+            .source_row = source_row,
+            .base = row_start,
+        };
+        stats.damaged += try diff.syncRow(
+            source_row,
+            screen.back.cells[row_start..][0..source.w],
+            area.x,
+            area.x + area.w,
+            &sink,
+        );
+        stats.scanned += area.w;
     }
     return stats;
 }
@@ -804,6 +804,21 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     const click = term.Event.Mouse{ .x = 1, .y = 23, .kind = .press };
     const interaction = state.handleMouse(&tabs, model, click);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
+}
+
+test "rename input consumes an unparseable tail instead of spinning" {
+    // Regression: the keybind router forwards raw pending bytes after its
+    // escape timeout ("\x1b[123" is its own tested behavior), and `term.parse`
+    // reports those as incomplete with zero length. The rename loop never
+    // advanced past a zero-length parse, so the client span forever.
+    var state = try State.init(std.testing.allocator, 80, 24);
+    defer state.deinit();
+    state.beginTabRename(@enumFromInt(3), "logs");
+    try std.testing.expect(state.handleRenameInput("\x1b[123") == .editing);
+    // The field is untouched and editing continues normally afterwards.
+    const submitted = state.handleRenameInput("!\r");
+    try std.testing.expect(submitted == .submitted);
+    try std.testing.expectEqualStrings("logs!", submitted.submitted);
 }
 
 test "tab rename edits clusters and submits a non-empty label" {

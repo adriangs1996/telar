@@ -47,6 +47,9 @@ pub const Tty = struct {
     }
 
     pub fn deinit(t: *Tty) void {
+        // Disarmed before the descriptor closes, so a crash after shutdown
+        // cannot write escape sequences into a recycled file descriptor.
+        crash_restore.fd = -1;
         std.posix.tcsetattr(t.fd, .FLUSH, t.original) catch {};
         _ = std.c.close(t.fd);
     }
@@ -79,6 +82,89 @@ pub const Tty = struct {
         return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
     }
 };
+
+/// What the fatal-signal handler needs to put the terminal back, captured
+/// when the client installs it. A panic does not run `defer`s - it aborts -
+/// so without this every crash leaves the terminal raw, on the alternate
+/// screen, with mouse reporting on, and the panic message itself lands
+/// somewhere the user cannot read it.
+var crash_restore: struct {
+    fd: std.c.fd_t = -1,
+    original: std.posix.termios = undefined,
+    leave: []const u8 = "",
+} = .{};
+
+/// Arms the fatal-signal restore for this terminal. Zig's panic path ends in
+/// `abort`, so catching SIGABRT (plus the hardware faults) covers panics as
+/// well as genuine crashes. The handler defers to the default disposition
+/// afterwards, so exit status and core dumps are unchanged.
+pub fn installCrashRestore(t: *const Tty) void {
+    crash_restore = .{
+        .fd = t.fd,
+        .original = t.original,
+        .leave = platform.leave_sequence,
+    };
+    var action: std.posix.Sigaction = .{
+        .handler = .{ .handler = onFatalSignal },
+        .mask = std.posix.sigemptyset(),
+        // RESETHAND: one shot, then the default disposition. A second fault
+        // inside the handler must not recurse.
+        .flags = std.posix.SA.RESETHAND,
+    };
+    for ([_]std.posix.SIG{ .ABRT, .SEGV, .BUS, .ILL, .FPE, .TRAP }) |signal| {
+        std.posix.sigaction(signal, &action, null);
+    }
+}
+
+/// The restore the fatal-signal handler performs. Only async-signal-safe
+/// calls - `write` and `tcsetattr` are both on the POSIX list - and safe to
+/// run any number of times, because a crash path cannot be choosy about who
+/// already ran it.
+pub fn emergencyRestore() void {
+    const state = crash_restore;
+    if (state.fd < 0) return;
+    _ = std.c.write(state.fd, state.leave.ptr, state.leave.len);
+    std.posix.tcsetattr(state.fd, .FLUSH, state.original) catch {};
+}
+
+fn onFatalSignal(signal: std.posix.SIG) callconv(.c) void {
+    emergencyRestore();
+    // RESETHAND already restored the default disposition; re-raising delivers
+    // the original signal to it once the handler returns.
+    _ = std.c.raise(signal);
+}
+
+test "emergency restore is armed, idempotent, and disarmable" {
+    // Unarmed: a no-op with nowhere to write.
+    emergencyRestore();
+
+    var fds: [2]std.c.fd_t = undefined;
+    try std.testing.expect(std.c.pipe(&fds) == 0);
+    defer _ = std.c.close(fds[0]);
+
+    crash_restore = .{
+        .fd = fds[1],
+        .original = std.mem.zeroes(std.posix.termios),
+        .leave = platform.leave_sequence,
+    };
+    // Twice: the crash path cannot be choosy about who already ran it, and
+    // the tcsetattr on a pipe failing must stay silent.
+    emergencyRestore();
+    emergencyRestore();
+    crash_restore.fd = -1;
+    _ = std.c.close(fds[1]);
+
+    var buffer: [4 * platform.leave_sequence.len]u8 = undefined;
+    const got = std.c.read(fds[0], &buffer, buffer.len);
+    try std.testing.expectEqual(@as(isize, 2 * platform.leave_sequence.len), got);
+    try std.testing.expectEqualStrings(
+        platform.leave_sequence ++ platform.leave_sequence,
+        buffer[0..@intCast(got)],
+    );
+
+    // Disarmed: a no-op again.
+    emergencyRestore();
+}
 
 /// The self-pipe SIGWINCH writes into.
 ///
