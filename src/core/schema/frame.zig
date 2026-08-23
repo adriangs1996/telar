@@ -128,7 +128,8 @@ pub const CellIterator = struct {
 };
 
 pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
-    try validateFrame(frame);
+    try validateFrameStructure(frame);
+    const body_start = encoder.index;
     try encoder.writeInt(u64, id.raw(frame.pane_id));
     try encoder.writeInt(u64, frame.frame_id);
     try encoder.writeInt(u64, frame.base_frame_id);
@@ -148,7 +149,7 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
         const length_index = encoder.index;
         try encoder.writeInt(u32, 0);
         const cells_start = encoder.index;
-        try encodeCells(encoder, span.cells);
+        try encodeCells(encoder, span.cells, body_start);
         const encoded_length = encoder.index - cells_start;
         if (encoded_length > std.math.maxInt(u32)) return error.FrameTooLarge;
         std.mem.writeInt(
@@ -239,7 +240,10 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
     };
 }
 
-fn validateFrame(frame: Frame) !void {
+/// Header and span-layout validation only, O(spans) without touching cells.
+/// Cell payloads are validated by `encodeCells` as they are written, so a
+/// frame's cells are only walked once on the encode side.
+fn validateFrameStructure(frame: Frame) !void {
     try validateHeader(
         frame.pane_id,
         frame.frame_id,
@@ -250,7 +254,6 @@ fn validateFrame(frame: Frame) !void {
         frame.spans.len,
     );
     const total_cells = try gridCellCount(frame.cols, frame.rows);
-    var encoded_size: usize = body_header_size;
     var previous_end: u32 = 0;
     for (frame.spans) |span| {
         if (span.cells.len > std.math.maxInt(u32)) return error.InvalidSpan;
@@ -259,23 +262,6 @@ fn validateFrame(frame: Frame) !void {
         if (count == 0 or span.start < previous_end or end > total_cells)
             return error.InvalidSpan;
         previous_end = end;
-        encoded_size = std.math.add(usize, encoded_size, span_header_size) catch
-            return error.FrameTooLarge;
-        var previous_style: ?ui.Style = null;
-        for (span.cells) |cell| {
-            try validateCell(cell);
-            const style_changed = previous_style == null or
-                !previous_style.?.eql(cell.style);
-            const cell_size = cell_header_size + cell.len +
-                if (style_changed) encodedStyleSize(cell.style) else 0;
-            encoded_size = std.math.add(
-                usize,
-                encoded_size,
-                cell_size,
-            ) catch return error.FrameTooLarge;
-            if (encoded_size > max_body_size) return error.FrameTooLarge;
-            previous_style = cell.style;
-        }
     }
     if (frame.base_frame_id == 0 and
         (frame.spans.len != 1 or
@@ -324,11 +310,18 @@ const length_mask: u8 = 0x1f;
 const width_shift = 5;
 const style_changed_bit: u8 = 0x80;
 
-fn encodeCells(encoder: *wire.Encoder, cells: []const ui.Cell) !void {
+fn encodeCells(encoder: *wire.Encoder, cells: []const ui.Cell, body_start: usize) !void {
     var previous_style: ?ui.Style = null;
     for (cells) |cell| {
+        try validateCell(cell);
         const style_changed = previous_style == null or
             !previous_style.?.eql(cell.style);
+        // The budget check precedes the write so an oversized frame reports
+        // FrameTooLarge, never the encoder's BufferTooSmall.
+        const cell_size = cell_header_size + cell.len +
+            if (style_changed) encodedStyleSize(cell.style) else 0;
+        if (encoder.index - body_start + cell_size > max_body_size)
+            return error.FrameTooLarge;
         const header = cell.len |
             (cell.width << width_shift) |
             if (style_changed) style_changed_bit else 0;

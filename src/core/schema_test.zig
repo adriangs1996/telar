@@ -1103,3 +1103,53 @@ test "truncated client and server messages are rejected" {
     }
 }
 
+test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
+    // max_cell_count budgets for a single span header, so a delta frame using
+    // all 4096 spans of worst-case cells (unique style, full cluster) is the
+    // one shape that can outgrow max_body_size on the encode side.
+    const gpa = std.testing.allocator;
+    const cols: u16 = 512;
+    const rows: u16 = 264;
+    const total: u32 = @as(u32, cols) * rows;
+    const span_count = frame.max_span_count;
+    const per_span = total / span_count;
+
+    const cells = try gpa.alloc(ui.Cell, total);
+    defer gpa.free(cells);
+    for (cells, 0..) |*cell, index| {
+        cell.* = .{
+            .len = ui.Cell.max_bytes,
+            .width = 1,
+            .style = .{
+                .fg = if (index % 2 == 0)
+                    .{ .rgb = .{ 255, 0, 0 } }
+                else
+                    .{ .rgb = .{ 0, 0, 255 } },
+                .bg = .{ .rgb = .{ 1, 2, 3 } },
+                .underline_color = .{ .rgb = .{ 4, 5, 6 } },
+            },
+        };
+        @memset(cell.bytes[0..ui.Cell.max_bytes], 'a');
+    }
+
+    const spans = try gpa.alloc(frame.Span, span_count);
+    defer gpa.free(spans);
+    for (spans, 0..) |*span, index| {
+        const start: u32 = @intCast(index * per_span);
+        span.* = .{ .start = start, .cells = cells[start .. start + per_span] };
+    }
+
+    // Larger than any legal frame, so the only possible failure is the budget.
+    const buffer = try gpa.alloc(u8, frame.max_body_size + 128 * 1024);
+    defer gpa.free(buffer);
+    try std.testing.expectError(error.FrameTooLarge, schema.encodePaneFrame(buffer, .{
+        .pane_id = try schema.id.pane(7),
+        .frame_id = 2,
+        .base_frame_id = 1,
+        .cols = cols,
+        .rows = rows,
+        .cursor = .{ .visible = true, .x = 0, .y = 0 },
+        .mouse = .{},
+        .spans = spans,
+    }));
+}
