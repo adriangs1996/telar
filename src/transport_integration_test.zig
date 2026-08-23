@@ -184,7 +184,7 @@ test "runtime stops with a live pane and removes its endpoint" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     var server_finished = false;
     defer if (!server_finished) {
         stop.putOneUncancelable(io, 0) catch {};
@@ -250,7 +250,7 @@ test "runtime destroys a pane after its shell exits" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -379,7 +379,7 @@ test "the last pane closes only its tab when the workspace has another tab" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -474,7 +474,7 @@ test "an exited detached pane removes its tab and workspace" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -531,7 +531,7 @@ test "one client drives two attached panes and closes either one" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -684,7 +684,7 @@ test "pane keeps running while its client is disconnected" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -784,7 +784,7 @@ test "runtime keeps independent panes for different workspaces" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -863,7 +863,7 @@ test "runtime owns the complete tab lifecycle" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1003,7 +1003,7 @@ test "a reconnect restores tab order labels and pane membership" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1134,7 +1134,7 @@ test "an identical pane resize does not emit another snapshot" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1222,12 +1222,11 @@ test "runtime persists terminal-edited commands without shell integration" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntilWithHistory, .{
+    var server = try io.concurrent(backend.runtime.serve, .{
         io,
         gpa,
         socket_path,
-        database_path,
-        &stop,
+        .{ .history_path = database_path, .stop = &stop },
     });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
@@ -1240,8 +1239,8 @@ test "runtime persists terminal-edited commands without shell integration" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "printf '\\033_Ga=T,f=32,s=1,v=1,t=d,i=19,q=2,C=1;AQID/w==\\033\\\\'; " ++
-            "printf '$ '; IFS= read -r line; exit 7",
+        "cd /; printf '\\033_Ga=T,f=32,s=1,v=1,t=d,i=19,q=2,C=1;AQID/w==\\033\\\\'; " ++
+            "printf '$ '; IFS= read -r line; sleep 1; exit 7",
     };
     try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
         .request_id = @enumFromInt(1),
@@ -1303,6 +1302,9 @@ test "runtime persists terminal-edited commands without shell integration" {
                 var entries = results.entries();
                 const entry = (try entries.next()) orelse return error.MissingHistoryEntry;
                 try std.testing.expectEqualStrings("echo persisted", entry.command);
+                // The cwd is sampled by the observation worker at submit
+                // time, not by the per-keystroke input handler.
+                try std.testing.expectEqualStrings("/", entry.cwd);
                 try std.testing.expect(std.mem.indexOf(u8, entry.command, "\x1b_G") == null);
                 try std.testing.expectEqual(@as(?i32, 7), entry.exit_code);
                 try std.testing.expectEqual(schema.HistoryStatus.completed, entry.status);
@@ -1339,12 +1341,11 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         .entered = &entered,
         .release = &release,
     };
-    var server = try io.concurrent(backend.runtime.serveUntilWithIngestGate, .{
+    var server = try io.concurrent(backend.runtime.serve, .{
         io,
         gpa,
         socket_path,
-        &stop,
-        &gate,
+        .{ .stop = &stop, .ingest_gate = &gate },
     });
     var gate_released = false;
     defer {
@@ -1423,7 +1424,7 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serveUntil, .{ io, gpa, socket_path, &stop });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{ .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1518,6 +1519,167 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
         }
     }
     return error.GraphicsIntegrationTimedOut;
+}
+
+test "a silent connection cannot starve later clients" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/starve.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    // Wait until the runtime listens, then park a connection that never sends
+    // its hello. The accept pipeline must not wait on it.
+    var probe = try connectRuntimeForTest(io, path);
+    probe.deinit(io);
+    var silent = while (true) {
+        if (frontend.transport.local.connect(io, path)) |connection| {
+            break connection;
+        } else |_| try io.sleep(.fromMilliseconds(1), .awake);
+    };
+    defer silent.deinit(io);
+
+    var connection = try connectRuntimeForTest(io, path);
+    defer connection.deinit(io);
+    var send_buffer: [512]u8 = undefined;
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &.{ "/bin/sleep", "600" } },
+    }));
+    var receive_buffer: [4096]u8 = undefined;
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .pane_opened => break,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+}
+
+test "input to one pane flows while another pane's PTY is wedged" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/wedged.sock", .{directory});
+    var sentinel_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const sentinel_path = try std.fmt.bufPrint(&sentinel_buffer, "{s}/b-input", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, path);
+    defer connection.deinit(io);
+    var send_buffer: [core.schema.max_input_bytes + 512]u8 = undefined;
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+
+    // Pane A: raw mode, then stopped. Its PTY input queue fills and the
+    // master write blocks, exactly like a child suspended mid-read.
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &.{
+            "/bin/sh", "-c", "stty raw -echo; printf 'A_READY\\n'; kill -STOP $$; sleep 600",
+        } },
+    }));
+    var wedged_pane: schema.PaneId = .invalid;
+    var wedged_location: schema.TabLocation = undefined;
+    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var a_ready = false;
+    while (!a_ready) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .pane_opened => |opened| {
+            wedged_pane = opened.pane_id;
+            wedged_location = opened.location;
+        },
+        .pane_frame => |frame| {
+            try applyFrameCells(&cells, frame);
+            a_ready = rowContains(&cells, "A_READY");
+            try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            }));
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    // Pane B: acknowledges one byte of input through the filesystem.
+    var command_buffer: [2 * std.fs.max_path_bytes]u8 = undefined;
+    const command = try std.fmt.bufPrint(
+        &command_buffer,
+        "stty raw -echo; dd bs=1 count=1 of=/dev/null 2>/dev/null; : > '{s}'; sleep 600",
+        .{sentinel_path},
+    );
+    try connection.send(io, try schema.encodeCreatePane(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .location = wedged_location,
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &.{ "/bin/sh", "-c", command } },
+    }));
+    var live_pane: schema.PaneId = .invalid;
+    while (live_pane == .invalid) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .pane_opened => |opened| if (opened.request_id == @as(schema.RequestId, @enumFromInt(2))) {
+            live_pane = opened.pane_id;
+        },
+        .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+    // Give pane B's shell a moment to reach its read.
+    try io.sleep(.fromMilliseconds(100), .awake);
+
+    // Flood the wedged pane far past any kernel PTY buffer.
+    const flood = [_]u8{'x'} ** (16 * 1024);
+    for (0..4) |_| {
+        try connection.send(io, try schema.encodePaneInput(&send_buffer, .{
+            .pane_id = wedged_pane,
+            .bytes = &flood,
+        }));
+    }
+    try connection.send(io, try schema.encodePaneInput(&send_buffer, .{
+        .pane_id = live_pane,
+        .bytes = "y",
+    }));
+
+    var forwarded = false;
+    for (0..3000) |_| {
+        if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
+            forwarded = true;
+            break;
+        } else |err| switch (err) {
+            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
+            else => return err,
+        }
+    }
+    try std.testing.expect(forwarded);
 }
 
 fn connectRuntimeForTest(io: std.Io, path: []const u8) !core.transport.SocketChannel {

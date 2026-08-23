@@ -13,13 +13,51 @@ const TIOC = switch (builtin.os.tag) {
     .macos => struct {
         const SWINSZ: c_int = @bitCast(@as(u32, 0x80087467));
         const SCTTY: c_int = 0x20007461;
+        /// TIOCFLUSH, pointer to FREAD | FWRITE.
+        const FLUSH: c_int = @bitCast(@as(u32, 0x80047410));
     },
     .linux => struct {
         const SWINSZ: c_int = 0x5414;
         const SCTTY: c_int = 0x540E;
+        /// TCFLSH, immediate TCIOFLUSH argument.
+        const FLUSH: c_int = 0x540B;
     },
     else => @compileError("telar's PTY bootstrap currently supports macOS and Linux"),
 };
+
+const WAITID = switch (builtin.os.tag) {
+    .macos => struct {
+        const P_PID: c_int = 1;
+        const WNOHANG: c_int = 0x00000001;
+        const WEXITED: c_int = 0x00000004;
+        const WSTOPPED: c_int = 0x00000008;
+        const WCONTINUED: c_int = 0x00000010;
+        const WNOWAIT: c_int = 0x00000020;
+    },
+    .linux => struct {
+        const P_PID: c_int = 1;
+        const WNOHANG: c_int = 0x00000001;
+        const WSTOPPED: c_int = 0x00000002;
+        const WCONTINUED: c_int = 0x00000008;
+        const WEXITED: c_int = 0x00000004;
+        const WNOWAIT: c_int = 0x01000000;
+    },
+    else => @compileError("telar's PTY bootstrap currently supports macOS and Linux"),
+};
+
+/// `siginfo.si_code` values for SIGCHLD, identical on macOS and Linux.
+const CLD = struct {
+    const EXITED: c_int = 1;
+    const KILLED: c_int = 2;
+    const DUMPED: c_int = 3;
+};
+
+extern "c" fn waitid(
+    idtype: c_int,
+    id: c_uint,
+    infop: *std.c.siginfo_t,
+    options: c_int,
+) c_int;
 
 extern "c" fn openpty(
     amaster: *std.c.fd_t,
@@ -56,7 +94,9 @@ pub const Command = struct {
 
     pub fn fromArgv(args: []const [*:0]const u8) !Command {
         if (args.len == 0) return error.MissingCommand;
-        if (args.len >= max_args) return error.TooManyArguments;
+        // `argv` holds `max_args` slots plus a null sentinel, so exactly
+        // `max_args` arguments fit.
+        if (args.len > max_args) return error.TooManyArguments;
 
         var command: Command = .{ .file = args[0] };
         for (args, 0..) |arg, index| command.argv[index] = arg;
@@ -101,6 +141,13 @@ pub const Session = struct {
         if (openpty(&master, &slave, null, null, &window) < 0) return error.OpenPtyFailed;
         errdefer _ = std.c.close(master);
         errdefer _ = std.c.close(slave);
+
+        // Close-on-exec keeps this pair out of every *other* pane's child:
+        // without it each spawned process inherits every older master and can
+        // read its siblings' terminals. The child's own copies survive
+        // because `dup2` onto stdio clears the flag on the duplicates.
+        _ = std.c.fcntl(master, std.c.F.SETFD, @as(c_int, 1)); // FD_CLOEXEC
+        _ = std.c.fcntl(slave, std.c.F.SETFD, @as(c_int, 1)); // FD_CLOEXEC
 
         const pid = std.c.fork();
         if (pid < 0) return error.ForkFailed;
@@ -154,9 +201,13 @@ pub const Session = struct {
     pub fn wait(session: *Session) !Exit {
         if (session.reaped.load(.acquire)) return error.ChildAlreadyReaped;
 
-        const result = try waitPid(session.pid);
+        // Observe the exit without releasing the PID (WNOWAIT), publish the
+        // reaped flag, and only then release the zombie. A concurrent
+        // `shutdown` that reads a stale `false` therefore signals a PID that
+        // is still held by the zombie, never one the kernel may have reused.
+        try waitObserve(session.pid);
         session.reaped.store(true, .release);
-        return result;
+        return waitPid(session.pid);
     }
 
     /// Make every blocking operation on the session able to finish.
@@ -164,16 +215,22 @@ pub const Session = struct {
     /// The runtime calls this before cancelling its actors: `waitpid` is a
     /// blocking libc call and cannot be cancelled by `Io.Select`, so the child
     /// has to be terminated before the actor waiting for it can be joined.
+    ///
+    /// Deliberately does NOT close the master. Child death releases a blocked
+    /// master *read* (EOF), but a master *write* blocked on a full slave
+    /// input queue survives it, and Darwin's close then waits behind that
+    /// write forever. The write actor is released by Io cancellation instead,
+    /// and the master closes in `deinit` once every actor has been joined.
     pub fn shutdown(session: *Session) void {
-        // Signal first. On Darwin, close can itself wait for an in-flight read
-        // on this descriptor; killing the session leader releases both that
-        // read and the actor blocked in waitpid.
         if (!session.reaped.load(.acquire)) _ = std.c.kill(session.pid, .KILL);
-        session.closeMaster();
     }
 
     fn closeMaster(session: *Session) void {
         if (session.master >= 0) {
+            // A master write blocked on a full slave input queue survives
+            // even the child's death, and Darwin's close then waits behind
+            // it forever. Flushing both queues wakes the writer first.
+            flushPty(session.master);
             _ = std.c.close(session.master);
             session.master = -1;
         }
@@ -235,6 +292,54 @@ fn childExec(
     std.c._exit(127);
 }
 
+fn flushPty(master: std.c.fd_t) void {
+    switch (builtin.os.tag) {
+        .macos => {
+            var queues: c_int = 0x1 | 0x2; // FREAD | FWRITE
+            _ = std.c.ioctl(master, TIOC.FLUSH, &queues);
+        },
+        .linux => _ = std.c.ioctl(master, TIOC.FLUSH, @as(c_int, 2)), // TCIOFLUSH
+        else => {},
+    }
+}
+
+/// Blocks until the child exits but leaves it a zombie, so its PID cannot be
+/// recycled before the caller has published that the exit was observed.
+fn waitObserve(pid: std.c.pid_t) !void {
+    var info: std.c.siginfo_t = undefined;
+    while (true) {
+        const result = waitid(
+            WAITID.P_PID,
+            @intCast(pid),
+            &info,
+            WAITID.WEXITED | WAITID.WNOWAIT,
+        );
+        if (result == 0) {
+            switch (info.code) {
+                CLD.EXITED, CLD.KILLED, CLD.DUMPED => return,
+                else => {
+                    // macOS delivers stop and continue reports here even
+                    // though the options ask only for exits, and WNOWAIT
+                    // leaves the report pending, so the same call would spin.
+                    // Consume the report, then keep waiting for the exit.
+                    _ = waitid(
+                        WAITID.P_PID,
+                        @intCast(pid),
+                        &info,
+                        WAITID.WSTOPPED | WAITID.WCONTINUED | WAITID.WNOHANG,
+                    );
+                    continue;
+                },
+            }
+        }
+        switch (std.posix.errno(result)) {
+            .INTR => continue,
+            .CHILD => return error.NoSuchChild,
+            else => return error.WaitpidFailed,
+        }
+    }
+}
+
 fn waitPid(pid: std.c.pid_t) !Exit {
     var child_status: c_int = undefined;
     while (true) {
@@ -268,6 +373,30 @@ test "command arguments remain null terminated" {
     try std.testing.expectEqualStrings("/bin/sh", std.mem.span(command.file));
     try std.testing.expectEqualStrings("exit 7", std.mem.span(command.argv[2].?));
     try std.testing.expectEqual(@as(?[*:0]const u8, null), command.argv[3]);
+}
+
+test "a command accepts the schema's maximum argument count" {
+    var args: [max_args][*:0]const u8 = @splat("x");
+    args[0] = "/bin/true";
+    const command = try Command.fromArgv(&args);
+    try std.testing.expectEqualStrings("/bin/true", std.mem.span(command.file));
+    try std.testing.expect(command.argv[max_args - 1] != null);
+}
+
+test "one argument past the limit is rejected" {
+    const args: [max_args + 1][*:0]const u8 = @splat("x");
+    try std.testing.expectError(error.TooManyArguments, Command.fromArgv(&args));
+}
+
+test "wait reaps a real child once and shutdown after the reap is harmless" {
+    const args = [_][*:0]const u8{ "/bin/sh", "-c", "exit 3" };
+    const command = try Command.fromArgv(&args);
+    var session = try Session.spawn(&command, .{ .cols = 20, .rows = 5 });
+    const exit = try session.wait();
+    try std.testing.expectEqual(Exit{ .exited = 3 }, exit);
+    try std.testing.expectError(error.ChildAlreadyReaped, session.wait());
+    session.shutdown();
+    session.deinit();
 }
 
 test "the process result maps to the conventional shell status" {

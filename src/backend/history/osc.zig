@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
+const escape = @import("escape.zig");
 
 pub const max_command_bytes = 64 * 1024;
 const max_osc_bytes = 8 * 1024;
@@ -27,7 +28,7 @@ pub const Command = struct {
 };
 
 pub const Tracker = struct {
-    state: State = .ground,
+    scanner: escape.OscScanner = .{},
     zone: Zone = .unknown,
     osc: [max_osc_bytes]u8 = undefined,
     osc_len: usize = 0,
@@ -47,7 +48,6 @@ pub const Tracker = struct {
     osc_started: u64 = 0,
     osc_finished: u64 = 0,
 
-    const State = enum { ground, escape, osc, osc_escape };
     const Zone = enum { unknown, prompt, input, output };
 
     pub fn init(cwd: []const u8) Tracker {
@@ -63,36 +63,15 @@ pub const Tracker = struct {
         context: anytype,
         comptime on_command: fn (@TypeOf(context), Command) void,
     ) void {
-        for (bytes) |byte| switch (tracker.state) {
-            .ground => if (byte == esc) {
-                tracker.state = .escape;
-            },
-            .escape => if (byte == ']') {
+        for (bytes) |byte| switch (tracker.scanner.next(byte)) {
+            .none => {},
+            .start => {
                 if (comptime builtin.mode == .Debug) tracker.osc_started += 1;
-                tracker.state = .osc;
                 tracker.osc_len = 0;
                 tracker.osc_overflow = false;
-            } else {
-                tracker.state = .ground;
             },
-            .osc => switch (byte) {
-                bel => {
-                    tracker.finishOsc(clock, context, on_command);
-                    tracker.state = .ground;
-                },
-                esc => tracker.state = .osc_escape,
-                else => tracker.appendOsc(byte),
-            },
-            .osc_escape => if (byte == '\\') {
-                tracker.finishOsc(clock, context, on_command);
-                tracker.state = .ground;
-            } else if (byte == esc) {
-                tracker.osc_len = 0;
-                tracker.osc_overflow = false;
-                tracker.state = .escape;
-            } else {
-                tracker.state = .ground;
-            },
+            .byte => |value| tracker.appendOsc(value),
+            .end => tracker.finishOsc(clock, context, on_command),
         };
     }
 
@@ -271,9 +250,6 @@ fn percentDecode(input: []const u8, output: []u8) ?usize {
     }
     return destination;
 }
-
-const esc = 0x1b;
-const bel = 0x07;
 
 const Collected = struct {
     count: usize = 0,

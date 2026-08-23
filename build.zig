@@ -195,6 +195,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/multiplexer.zig", .libc = true },
         .{ .path = "src/frontend/client.zig", .libc = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
+        .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/damage.zig" },
         .{ .path = "src/backend/history/root.zig", .vt = true, .libc = true },

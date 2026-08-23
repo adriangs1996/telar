@@ -84,6 +84,7 @@ pub const Store = struct {
     insert_session: *c.sqlite3_stmt,
     finish_session: *c.sqlite3_stmt,
     insert_command: *c.sqlite3_stmt,
+    fts_available: bool,
 
     pub fn open(path: [:0]const u8) !Store {
         var db: ?*c.sqlite3 = null;
@@ -98,6 +99,7 @@ pub const Store = struct {
             return error.HistorySchemaFailed;
         try ensureTabColumn(opened, "session", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
         try ensureTabColumn(opened, "command", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
+        const fts_available = enableCommandSearchIndex(opened);
 
         const insert_session = try prepare(opened, insert_session_sql);
         errdefer _ = c.sqlite3_finalize(insert_session);
@@ -110,6 +112,7 @@ pub const Store = struct {
             .insert_session = insert_session,
             .finish_session = finish_session,
             .insert_command = insert_command,
+            .fts_available = fts_available,
         };
     }
 
@@ -179,8 +182,19 @@ pub const Store = struct {
             "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
                 "command, cwd, workspace_path FROM command WHERE 1=1",
         );
-        if (request.text_len != 0)
-            try sql.writeAll(" AND instr(lower(command), lower(?)) > 0");
+        // The trigram index probes instead of scanning the whole table, and
+        // is case-insensitive like the fallback. Trigram matching needs at
+        // least three characters; shorter queries take the scan.
+        var match_buffer: [2 * model.max_query_bytes + 2]u8 = undefined;
+        const use_index = store.fts_available and queryCharacters(request.textSlice()) >= 3;
+        if (request.text_len != 0) {
+            if (use_index)
+                try sql.writeAll(
+                    " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?)",
+                )
+            else
+                try sql.writeAll(" AND instr(lower(command), lower(?)) > 0");
+        }
         if (request.failed_only)
             try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
         switch (request.scope) {
@@ -195,7 +209,10 @@ pub const Store = struct {
         defer _ = c.sqlite3_finalize(stmt);
         var parameter: c_int = 1;
         if (request.text_len != 0) {
-            bindText(stmt, parameter, request.textSlice());
+            bindText(stmt, parameter, if (use_index)
+                ftsQuote(request.textSlice(), &match_buffer)
+            else
+                request.textSlice());
             parameter += 1;
         }
         switch (request.scope) {
@@ -247,6 +264,79 @@ pub const Store = struct {
         return result;
     }
 };
+
+/// Best effort: without FTS5 or the trigram tokenizer (SQLite < 3.34) the
+/// query path falls back to the `instr` scan; history stays functional.
+fn enableCommandSearchIndex(db: *c.sqlite3) bool {
+    if (!(tableExists(db, "command_fts") catch return false)) {
+        if (c.sqlite3_exec(
+            db,
+            "CREATE VIRTUAL TABLE command_fts USING fts5(" ++
+                "command, content='command', content_rowid='id', " ++
+                "tokenize='trigram case_sensitive 0');",
+            null,
+            null,
+            null,
+        ) != c.SQLITE_OK) return false;
+        // Backfill so history written before this index existed is found too.
+        if (c.sqlite3_exec(
+            db,
+            "INSERT INTO command_fts(command_fts) VALUES('rebuild');",
+            null,
+            null,
+            null,
+        ) != c.SQLITE_OK) {
+            _ = c.sqlite3_exec(db, "DROP TABLE command_fts;", null, null, null);
+            return false;
+        }
+    }
+    return c.sqlite3_exec(
+        db,
+        "CREATE TRIGGER IF NOT EXISTS command_fts_insert AFTER INSERT ON command BEGIN " ++
+            "INSERT INTO command_fts(rowid, command) VALUES (new.id, new.command); " ++
+            "END;",
+        null,
+        null,
+        null,
+    ) == c.SQLITE_OK;
+}
+
+fn tableExists(db: *c.sqlite3, name: []const u8) !bool {
+    const stmt = try prepare(
+        db,
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?;",
+    );
+    defer _ = c.sqlite3_finalize(stmt);
+    bindText(stmt, 1, name);
+    return switch (c.sqlite3_step(stmt)) {
+        c.SQLITE_ROW => true,
+        c.SQLITE_DONE => false,
+        else => error.HistorySchemaFailed,
+    };
+}
+
+/// FTS5 MATCH parses operators out of raw text; quoting the whole query (and
+/// doubling interior quotes) turns it into one literal phrase.
+fn ftsQuote(text: []const u8, buffer: []u8) []const u8 {
+    var len: usize = 0;
+    buffer[len] = '"';
+    len += 1;
+    for (text) |byte| {
+        if (byte == '"') {
+            buffer[len] = '"';
+            len += 1;
+        }
+        buffer[len] = byte;
+        len += 1;
+    }
+    buffer[len] = '"';
+    len += 1;
+    return buffer[0..len];
+}
+
+fn queryCharacters(text: []const u8) usize {
+    return std.unicode.utf8CountCodepoints(text) catch text.len;
+}
 
 fn ensureTabColumn(db: *c.sqlite3, table: []const u8, alter_sql: [:0]const u8) !void {
     var pragma_buffer: [64]u8 = undefined;
@@ -419,4 +509,39 @@ test "persists sessions and filters command history" {
     try std.testing.expectEqual(@as(usize, 1), result.entries.len);
     try std.testing.expectEqualStrings("git commit", result.entries[0].command);
     try std.testing.expectEqual(@as(?i32, 2), result.entries[0].exit_code);
+
+    // The bundled SQLite is expected to carry FTS5 trigram; the scan remains
+    // only as a fallback for older libraries.
+    try std.testing.expect(store.fts_available);
+
+    // Index path: case-insensitive and substring-capable.
+    const indexed = try model.Query.init(
+        @enumFromInt(2),
+        .primary,
+        "IT COM",
+        .global,
+        "",
+        .invalid,
+        false,
+        20,
+    );
+    const indexed_result = try store.query(gpa, &indexed);
+    defer indexed_result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), indexed_result.entries.len);
+    try std.testing.expectEqualStrings("git commit", indexed_result.entries[0].command);
+
+    // Below three characters the query takes the scan fallback.
+    const short = try model.Query.init(
+        @enumFromInt(3),
+        .primary,
+        "gi",
+        .global,
+        "",
+        .invalid,
+        false,
+        20,
+    );
+    const short_result = try store.query(gpa, &short);
+    defer short_result.deinit();
+    try std.testing.expectEqual(@as(usize, 2), short_result.entries.len);
 }

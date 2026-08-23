@@ -3,6 +3,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
+const escape = @import("escape.zig");
 const osc = @import("osc.zig");
 
 pub const max_command_bytes = osc.max_command_bytes;
@@ -120,6 +121,11 @@ pub const Tracker = struct {
 
     /// Captures the terminal selection after the shell advances to the next
     /// line. The tracked anchor survives wrapping and scrollback movement.
+    ///
+    /// Capture is bounded twice: the selection itself is clamped to the rows
+    /// that can possibly matter, so the transient allocation cannot grow with
+    /// scrollback, and the retained command is cut to `max_command_bytes`
+    /// immediately rather than at emit time.
     pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
         if (tracker.phase != .awaiting_commit) return false;
         const screen = terminal.screens.active;
@@ -131,7 +137,16 @@ pub const Tracker = struct {
             return false;
         }
 
-        const selection_finish = tracker.selectionFinish(finish_pin);
+        const cols: usize = @max(1, terminal.cols);
+        const max_rows = max_command_bytes / cols + 2;
+        const clamped_finish = if (tracker.anchor.down(max_rows)) |limit| finish: {
+            if (!limit.before(finish_pin)) break :finish finish_pin;
+            var limited = limit;
+            limited.x = @intCast(cols - 1);
+            break :finish limited;
+        } else finish_pin;
+
+        const selection_finish = tracker.selectionFinish(clamped_finish);
         const selection: vt.Selection = .init(tracker.anchor.*, selection_finish, false);
         const text = try screen.selectionString(tracker.gpa, .{
             .sel = selection,
@@ -146,8 +161,19 @@ pub const Tracker = struct {
         }
 
         tracker.freeCommand();
-        tracker.command = text;
-        tracker.command_truncated = text.len > max_command_bytes;
+        if (text.len > max_command_bytes) {
+            const keep = validPrefixLength(text, max_command_bytes);
+            const trimmed = tracker.gpa.dupeZ(u8, text[0..keep]) catch |err| {
+                tracker.gpa.free(text);
+                return err;
+            };
+            tracker.gpa.free(text);
+            tracker.command = trimmed;
+            tracker.command_truncated = true;
+        } else {
+            tracker.command = text;
+            tracker.command_truncated = false;
+        }
         tracker.phase = .running;
         if (comptime builtin.mode == .Debug)
             tracker.submissions_captured += 1;
@@ -330,76 +356,7 @@ fn hashCells(cells: []const vt.Cell) u64 {
     return hash;
 }
 
-pub const InputScanner = struct {
-    state: State = .ground,
-    parameter: u16 = 0,
-    has_parameter: bool = false,
-
-    const State = enum { ground, escape, csi, paste, paste_escape, paste_csi };
-    pub const Event = struct { submitted: bool = false, cancelled: bool = false };
-
-    pub fn reset(scanner: *InputScanner) void {
-        scanner.* = .{};
-    }
-
-    pub fn feed(scanner: *InputScanner, bytes: []const u8) Event {
-        var event: Event = .{};
-        for (bytes) |byte| scanner.feedByte(byte, &event);
-        return event;
-    }
-
-    fn feedByte(scanner: *InputScanner, byte: u8, event: *Event) void {
-        switch (scanner.state) {
-            .ground => switch (byte) {
-                0x1b => scanner.state = .escape,
-                '\r', '\n' => event.submitted = true,
-                0x03 => event.cancelled = true,
-                else => {},
-            },
-            .escape => if (byte == '[') {
-                scanner.startCsi(.csi);
-            } else {
-                scanner.state = .ground;
-            },
-            .csi => scanner.csiByte(byte, false),
-            .paste => {
-                if (byte == 0x1b) scanner.state = .paste_escape;
-            },
-            .paste_escape => if (byte == '[') {
-                scanner.startCsi(.paste_csi);
-            } else {
-                scanner.state = .paste;
-            },
-            .paste_csi => scanner.csiByte(byte, true),
-        }
-    }
-
-    fn startCsi(scanner: *InputScanner, state: State) void {
-        scanner.state = state;
-        scanner.parameter = 0;
-        scanner.has_parameter = false;
-    }
-
-    fn csiByte(scanner: *InputScanner, byte: u8, from_paste: bool) void {
-        if (byte >= '0' and byte <= '9') {
-            scanner.has_parameter = true;
-            scanner.parameter = std.math.mul(u16, scanner.parameter, 10) catch std.math.maxInt(u16);
-            scanner.parameter = std.math.add(u16, scanner.parameter, byte - '0') catch std.math.maxInt(u16);
-            return;
-        }
-        if (byte == '~' and scanner.has_parameter) {
-            if (!from_paste and scanner.parameter == 200) {
-                scanner.state = .paste;
-                return;
-            }
-            if (from_paste and scanner.parameter == 201) {
-                scanner.state = .ground;
-                return;
-            }
-        }
-        scanner.state = if (from_paste) .paste else .ground;
-    }
-};
+pub const InputScanner = escape.InputScanner;
 
 test "bracketed paste newlines do not submit" {
     var scanner: InputScanner = .{};
@@ -509,6 +466,41 @@ test "excludes an unchanged right prompt from the submitted command" {
     );
 
     try std.testing.expectEqualStrings("echo ok", collected.bytes[0..collected.len]);
+}
+
+test "a captured command is bounded in bytes while resident" {
+    const gpa = std.testing.allocator;
+    var terminal = try vt.Terminal.init(std.testing.io, gpa, .{
+        .cols = 80,
+        .rows = 24,
+        // Enough scrollback that the tracked anchor survives the paste; the
+        // bound under test is the tracker's, not the emulator's.
+        .max_scrollback_bytes = 4 * 1024 * 1024,
+    });
+    defer terminal.deinit(gpa);
+    var stream = terminal.vtStream();
+    defer stream.deinit();
+    stream.nextSlice("$ ");
+
+    var tracker = try Tracker.init(gpa, "/work", &terminal);
+    defer tracker.deinit(&terminal);
+    var collected: Collected = .{};
+    _ = tracker.observeInput(
+        &terminal,
+        "huge\r",
+        true,
+        .{ .real_ms = 1, .awake_ns = 1 },
+        &collected,
+        Collected.collect,
+    );
+
+    // The echoed "command" is a paste far past the storable bound.
+    const chunk = "x" ** 1024;
+    for (0..(max_command_bytes / 1024) + 32) |_| stream.nextSlice(chunk);
+    stream.nextSlice("\r\n");
+    try std.testing.expect(try tracker.captureSubmitted(&terminal));
+    try std.testing.expect(tracker.command.?.len <= max_command_bytes);
+    try std.testing.expect(tracker.command_truncated);
 }
 
 test "Kitty graphics commands do not enter shell history" {

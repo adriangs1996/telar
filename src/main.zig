@@ -493,12 +493,11 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     var history_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const history_path = try resolveHistoryPath(init, &history_buffer);
     try prepareHistoryDatabase(init.io, history_path);
-    try backend.runtime.serveWithHistoryOptions(
+    try backend.runtime.serve(
         init.io,
         init.gpa,
         endpoint.path(),
-        history_path.path,
-        .{ .graphics = options.graphics },
+        .{ .graphics = options.graphics, .history_path = history_path.path },
     );
 }
 

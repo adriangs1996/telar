@@ -87,8 +87,8 @@ pub fn blit(
     // Consuming the flag is the caller's job, and forgetting it is silent: the
     // state stays `full` forever, every row is copied every frame, and the only
     // symptom is that the renderer is slow. Clearing it here means one blit
-    // owns one render state, which is the arrangement herdr has anyway - a pane
-    // is drawn once per frame.
+    // owns one render state, which is telar's arrangement anyway - a pane is
+    // drawn once per frame.
     state.dirty = .false;
 
     const rows = state.row_data.slice();
