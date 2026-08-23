@@ -347,6 +347,7 @@ test "runtime destroys a pane after its shell exits" {
                 try std.testing.expectEqual(@as(u16, 0), snapshot.pane_count);
                 saw_empty_location = true;
             },
+            .history_results => return error.UnexpectedHistoryResults,
         }
         if (saw_exit and rejected_reattach and saw_empty_location) return;
     }
@@ -599,6 +600,7 @@ test "pane keeps running while its client is disconnected" {
             .request_failed => return error.RuntimeRequestFailed,
             .runtime_stopping => return error.UnexpectedRuntimeShutdown,
             .location_snapshot => return error.UnexpectedLocationSnapshot,
+            .history_results => return error.UnexpectedHistoryResults,
         }
     }
     return error.RuntimeDidNotExit;
@@ -757,6 +759,115 @@ test "an identical pane resize does not emit another snapshot" {
             .pane_frame => return error.RedundantFrameAfterIdenticalResize,
             .request_failed => return error.RuntimeRequestFailed,
             else => return error.UnexpectedRuntimeMessage,
+        }
+    }
+}
+
+test "runtime persists terminal-edited commands without shell integration" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema.v2;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const socket_path = try std.fmt.bufPrint(
+        &socket_buffer,
+        "{s}/history.sock",
+        .{directory},
+    );
+    var database_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const database_path = try std.fmt.bufPrintZ(
+        &database_buffer,
+        "{s}/history.db",
+        .{directory},
+    );
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serveUntilWithHistory, .{
+        io,
+        gpa,
+        socket_path,
+        database_path,
+        &stop,
+    });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, socket_path);
+    defer connection.deinit(io);
+    var send_buffer: [2048]u8 = undefined;
+    const arguments = [_][]const u8{
+        "/bin/sh",
+        "-c",
+        "printf '$ '; IFS= read -r line; sleep 0.01; exit 7",
+    };
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 80, .rows = 24 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+    var pane_id: schema.PaneId = .invalid;
+    var input_sent = false;
+    var cells: [80 * 24]core.ui.Cell = @splat(.{});
+    while (true) {
+        switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+            .pane_opened => |opened| pane_id = opened.pane_id,
+            .pane_frame => |frame| {
+                applyFrameCells(&cells, frame);
+                try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+                    .pane_id = frame.pane_id,
+                    .frame_id = frame.frame_id,
+                }));
+                if (!input_sent and rowContains(&cells, "$ ")) {
+                    try connection.send(io, try schema.encodePaneInput(&send_buffer, .{
+                        .pane_id = frame.pane_id,
+                        .bytes = "echo persisX\x7fted\n",
+                    }));
+                    input_sent = true;
+                }
+            },
+            .pane_exited => {
+                try std.testing.expect(input_sent);
+                break;
+            },
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        }
+    }
+    try std.testing.expect(pane_id != .invalid);
+
+    var history_connection = try connectRuntimeForTest(io, socket_path);
+    defer history_connection.deinit(io);
+    try history_connection.send(io, try schema.encodeQueryHistory(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .query = "persisted",
+        .scope = .pane,
+        .pane_id = pane_id,
+        .limit = 10,
+    }));
+    while (true) {
+        switch (try schema.decodeServer(try history_connection.receive(io, receive_buffer))) {
+            .history_results => |results| {
+                try std.testing.expectEqual(@as(u16, 1), results.entry_count);
+                var entries = results.entries();
+                const entry = entries.next() orelse return error.MissingHistoryEntry;
+                try std.testing.expectEqualStrings("echo persisted", entry.command);
+                try std.testing.expectEqual(@as(?i32, 7), entry.exit_code);
+                try std.testing.expectEqual(schema.HistoryStatus.completed, entry.status);
+                return;
+            },
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
         }
     }
 }

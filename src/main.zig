@@ -20,6 +20,7 @@ const Cli = union(enum) {
     help,
     version,
     server: ServerOptions,
+    history: HistoryOptions,
     run: pty.Command,
 
     fn parse(args: []const [*:0]const u8) !Cli {
@@ -33,9 +34,84 @@ const Cli = union(enum) {
             return .version;
         if (std.mem.eql(u8, first, "server"))
             return .{ .server = try ServerOptions.parse(args[2..]) };
+        if (std.mem.eql(u8, first, "history"))
+            return .{ .history = try HistoryOptions.parse(args[2..]) };
 
         const command_start: usize = if (std.mem.eql(u8, first, "--")) 2 else 1;
         return .{ .run = try pty.Command.fromArgv(args[command_start..]) };
+    }
+};
+
+const HistoryAction = enum {
+    list,
+    search,
+};
+
+const HistoryOptions = struct {
+    action: HistoryAction,
+    query: ?[*:0]const u8 = null,
+    scope: core.schema.v2.HistoryScope = .global,
+    scope_value: ?[*:0]const u8 = null,
+    pane_id: core.schema.v2.PaneId = .invalid,
+    failed_only: bool = false,
+    limit: u16 = 20,
+    socket: ?[*:0]const u8 = null,
+
+    fn parse(args: []const [*:0]const u8) !HistoryOptions {
+        if (args.len == 0) return error.MissingHistoryAction;
+        const action_text = std.mem.span(args[0]);
+        var options: HistoryOptions = if (std.mem.eql(u8, action_text, "list"))
+            .{ .action = .list }
+        else if (std.mem.eql(u8, action_text, "search")) search: {
+            if (args.len < 2) return error.MissingHistoryQuery;
+            break :search .{ .action = .search, .query = args[1] };
+        } else return error.UnknownHistoryAction;
+
+        var index: usize = if (options.action == .search) 2 else 1;
+        while (index < args.len) {
+            const arg = std.mem.span(args[index]);
+            if (std.mem.eql(u8, arg, "--cwd")) {
+                try options.setScope(.cwd, null);
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--workspace")) {
+                if (index + 1 >= args.len) return error.MissingWorkspacePath;
+                try options.setScope(.workspace, args[index + 1]);
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--pane")) {
+                if (index + 1 >= args.len) return error.MissingPaneId;
+                const raw = try std.fmt.parseInt(u64, std.mem.span(args[index + 1]), 10);
+                options.pane_id = try core.schema.v2.id.pane(raw);
+                try options.setScope(.pane, null);
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--failed")) {
+                options.failed_only = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--limit")) {
+                if (index + 1 >= args.len) return error.MissingHistoryLimit;
+                options.limit = try std.fmt.parseInt(u16, std.mem.span(args[index + 1]), 10);
+                if (options.limit == 0 or options.limit > core.schema.v2.max_history_results)
+                    return error.InvalidHistoryLimit;
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--socket")) {
+                if (index + 1 >= args.len) return error.MissingSocketPath;
+                if (options.socket != null) return error.DuplicateSocketOption;
+                options.socket = args[index + 1];
+                index += 2;
+            } else {
+                return error.UnknownHistoryOption;
+            }
+        }
+        return options;
+    }
+
+    fn setScope(
+        options: *HistoryOptions,
+        scope: core.schema.v2.HistoryScope,
+        value: ?[*:0]const u8,
+    ) !void {
+        if (options.scope != .global) return error.ConflictingHistoryScopes;
+        options.scope = scope;
+        options.scope_value = value;
     }
 };
 
@@ -237,6 +313,71 @@ fn connectRuntime(
     return error.RuntimeUnavailable;
 }
 
+const HistoryPath = struct {
+    path: [:0]const u8,
+    managed_directory: ?[]const u8,
+};
+
+fn resolveHistoryPath(
+    init: std.process.Init,
+    buffer: []u8,
+) !HistoryPath {
+    if (std.process.Environ.getPosix(init.minimal.environ, "TELAR_HISTORY")) |path| {
+        if (path.len != 0) return .{
+            .path = try std.fmt.bufPrintZ(buffer, "{s}", .{path}),
+            .managed_directory = null,
+        };
+    }
+
+    const base = if (std.process.Environ.getPosix(init.minimal.environ, "XDG_DATA_HOME")) |path|
+        if (path.len != 0) path else null
+    else
+        null;
+    if (base) |data_home| {
+        const directory = try std.fmt.bufPrint(buffer, "{s}/telar", .{data_home});
+        const path = try std.fmt.bufPrintZ(buffer[directory.len..], "/history.db", .{});
+        return .{
+            .path = buffer[0 .. directory.len + path.len :0],
+            .managed_directory = directory,
+        };
+    }
+
+    const home = std.process.Environ.getPosix(init.minimal.environ, "HOME") orelse
+        return error.HomeDirectoryUnavailable;
+    if (home.len == 0) return error.HomeDirectoryUnavailable;
+    const directory = try std.fmt.bufPrint(buffer, "{s}/.local/share/telar", .{home});
+    const path = try std.fmt.bufPrintZ(buffer[directory.len..], "/history.db", .{});
+    return .{
+        .path = buffer[0 .. directory.len + path.len :0],
+        .managed_directory = directory,
+    };
+}
+
+fn prepareHistoryDatabase(io: Io, history_path: HistoryPath) !void {
+    if (history_path.managed_directory) |directory| {
+        const permissions = File.Permissions.fromMode(0o700);
+        _ = try Io.Dir.cwd().createDirPathStatus(io, directory, permissions);
+        try Io.Dir.cwd().setFilePermissions(
+            io,
+            directory,
+            permissions,
+            .{ .follow_symlinks = false },
+        );
+    }
+    const file = try Io.Dir.createFileAbsolute(io, history_path.path, .{
+        .read = true,
+        .truncate = false,
+        .permissions = File.Permissions.fromMode(0o600),
+    });
+    file.close(io);
+    try Io.Dir.cwd().setFilePermissions(
+        io,
+        history_path.path,
+        File.Permissions.fromMode(0o600),
+        .{ .follow_symlinks = false },
+    );
+}
+
 fn runServer(init: std.process.Init, options: ServerOptions) !void {
     const endpoint = try resolveEndpoint(init, options.socket);
     if (options.action == .stop) return stopRuntime(init, &endpoint);
@@ -247,7 +388,15 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     }
 
     try prepareManagedDirectory(init.io, &endpoint);
-    try backend.runtime.serve(init.io, init.gpa, endpoint.path());
+    var history_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const history_path = try resolveHistoryPath(init, &history_buffer);
+    try prepareHistoryDatabase(init.io, history_path);
+    try backend.runtime.serveWithHistory(
+        init.io,
+        init.gpa,
+        endpoint.path(),
+        history_path.path,
+    );
 }
 
 fn stopRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !void {
@@ -321,10 +470,136 @@ fn runClient(
     });
 }
 
+fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
+    const endpoint = try resolveEndpoint(init, options.socket);
+    var connection = try connectRuntime(init, &endpoint);
+    defer connection.deinit(init.io);
+
+    var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const scope_value: []const u8 = switch (options.scope) {
+        .cwd => cwd: {
+            const len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
+            break :cwd cwd_buffer[0..len];
+        },
+        .workspace => std.mem.span(options.scope_value.?),
+        .global, .pane => "",
+    };
+    const query = if (options.query) |value| std.mem.span(value) else "";
+
+    var send_buffer: [schema_history_request_size]u8 = undefined;
+    try connection.send(init.io, try core.schema.v2.encodeQueryHistory(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .query = query,
+        .scope = options.scope,
+        .scope_value = scope_value,
+        .pane_id = options.pane_id,
+        .failed_only = options.failed_only,
+        .limit = options.limit,
+    }));
+
+    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    defer init.gpa.free(receive_buffer);
+    const response = try core.schema.v2.decodeServer(
+        try connection.receive(init.io, receive_buffer),
+    );
+    switch (response) {
+        .history_results => |results| try printHistory(init.io, results),
+        .request_failed => |failure| {
+            std.debug.print("telar history: {s}\n", .{failure.message});
+            return error.HistoryQueryFailed;
+        },
+        else => return error.UnexpectedRuntimeResponse,
+    }
+}
+
+const schema_history_request_size = core.schema.v2.max_history_query_bytes +
+    core.schema.v2.max_cwd_bytes + 64;
+
+fn printHistory(io: Io, results: core.schema.v2.HistoryResultsView) !void {
+    var output_buffer: [16 * 1024]u8 = undefined;
+    var output = File.stdout().writerStreaming(io, &output_buffer);
+    const writer = &output.interface;
+    var entries = results.entries();
+    while (entries.next()) |entry| {
+        const timestamp = utcTimestamp(entry.started_at_ms);
+        try writer.print(
+            "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}Z  ",
+            .{
+                timestamp.year,
+                timestamp.month,
+                timestamp.day,
+                timestamp.hour,
+                timestamp.minute,
+                timestamp.second,
+            },
+        );
+        switch (entry.status) {
+            .interrupted => try writer.writeAll("INT  "),
+            .completed => if (entry.exit_code) |exit_code| {
+                if (exit_code < 0)
+                    try writer.print("-{d}  ", .{@as(u64, @intCast(-@as(i64, exit_code)))})
+                else
+                    try writer.print("{d}  ", .{@as(u32, @intCast(exit_code))});
+            } else {
+                try writer.writeAll("?  ");
+            },
+        }
+        const duration_ms: u64 = @intCast(@max(
+            @as(i64, 0),
+            @divTrunc(entry.duration_ns, std.time.ns_per_ms),
+        ));
+        try writer.print("{d}ms  ", .{duration_ms});
+        try writeHistoryField(writer, entry.cwd);
+        try writer.writeAll("  ");
+        try writeHistoryField(writer, entry.command);
+        try writer.writeByte('\n');
+    }
+    try writer.flush();
+}
+
+const UtcTimestamp = struct {
+    year: u16,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+};
+
+fn utcTimestamp(milliseconds: i64) UtcTimestamp {
+    const seconds: u64 = @intCast(@max(@as(i64, 0), @divFloor(milliseconds, 1000)));
+    const epoch = std.time.epoch.EpochSeconds{ .secs = seconds };
+    const year_day = epoch.getEpochDay().calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+    const day_seconds = epoch.getDaySeconds();
+    return .{
+        .year = year_day.year,
+        .month = @intFromEnum(month_day.month),
+        .day = month_day.day_index + 1,
+        .hour = day_seconds.getHoursIntoDay(),
+        .minute = day_seconds.getMinutesIntoHour(),
+        .second = day_seconds.getSecondsIntoMinute(),
+    };
+}
+
+fn writeHistoryField(writer: *Io.Writer, value: []const u8) !void {
+    for (value) |byte| switch (byte) {
+        '\n' => try writer.writeAll("\\n"),
+        '\r' => try writer.writeAll("\\r"),
+        '\t' => try writer.writeAll("\\t"),
+        else => if (byte < 0x20 or byte == 0x7f)
+            try writer.print("\\x{x:0>2}", .{byte})
+        else
+            try writer.writeByte(byte),
+    };
+}
+
 const usage =
     \\Usage: telar [command [args...]]
     \\       telar server
     \\       telar server stop
+    \\       telar history list [options]
+    \\       telar history search <query> [options]
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
     \\With a command, run that command instead of $SHELL.
@@ -333,6 +608,16 @@ const usage =
     \\Commands:
     \\  server           Run the local runtime in the foreground
     \\  server stop      Stop the local runtime
+    \\  history list     Show recent command history
+    \\  history search   Search command history
+    \\
+    \\History options:
+    \\  --cwd            Restrict results to the current directory
+    \\  --workspace PATH Restrict results to a workspace path
+    \\  --pane ID        Restrict results to a pane
+    \\  --failed         Only show commands with a non-zero exit status
+    \\  --limit N        Return at most N results (default 20, maximum 100)
+    \\  --socket PATH    Query a specific local runtime
     \\
     \\Options:
     \\  -h, --help       Show this help
@@ -355,6 +640,7 @@ pub fn main(init: std.process.Init) !void {
         .help => try File.stdout().writeStreamingAll(init.io, usage),
         .version => try File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try runServer(init, options),
+        .history => |options| try runHistory(init, options),
         .run => |command| {
             const endpoint = try resolveEndpoint(init, null);
             var connection = try connectRuntime(init, &endpoint);
@@ -428,4 +714,45 @@ test "server socket and launcher mode are explicit" {
         "/tmp/telar-test.sock",
         std.mem.span(cli.server.socket.?),
     );
+}
+
+test "CLI parses history search filters" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "history",
+        "search",
+        "git commit",
+        "--workspace",
+        "/work/telar",
+        "--failed",
+        "--limit",
+        "40",
+    };
+    const cli = try Cli.parse(&args);
+    try std.testing.expect(cli == .history);
+    try std.testing.expectEqual(HistoryAction.search, cli.history.action);
+    try std.testing.expectEqualStrings("git commit", std.mem.span(cli.history.query.?));
+    try std.testing.expectEqual(core.schema.v2.HistoryScope.workspace, cli.history.scope);
+    try std.testing.expectEqualStrings("/work/telar", std.mem.span(cli.history.scope_value.?));
+    try std.testing.expect(cli.history.failed_only);
+    try std.testing.expectEqual(@as(u16, 40), cli.history.limit);
+}
+
+test "CLI rejects conflicting history scopes" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "history",
+        "list",
+        "--cwd",
+        "--pane",
+        "1",
+    };
+    try std.testing.expectError(error.ConflictingHistoryScopes, Cli.parse(&args));
+}
+
+test "history fields escape terminal control bytes" {
+    var storage: [128]u8 = undefined;
+    var writer = Io.Writer.fixed(&storage);
+    try writeHistoryField(&writer, "echo\n\x1b[31m");
+    try std.testing.expectEqualStrings("echo\\n\\x1b[31m", writer.buffered());
 }

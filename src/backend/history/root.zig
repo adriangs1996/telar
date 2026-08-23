@@ -1,0 +1,328 @@
+//! Command history capture and persistence.
+
+const std = @import("std");
+const model_mod = @import("model.zig");
+const osc_mod = @import("osc.zig");
+const store_mod = @import("store.zig");
+const terminal_mod = @import("terminal.zig");
+
+pub const model = model_mod;
+pub const osc = osc_mod;
+pub const terminal = terminal_mod;
+pub const Tracker = terminal_mod.Tracker;
+pub const Command = terminal_mod.Command;
+pub const Clock = terminal_mod.Clock;
+pub const Status = terminal_mod.Status;
+pub const Query = model_mod.Query;
+pub const Response = model_mod.Response;
+pub const SessionId = model_mod.SessionId;
+
+const request_capacity = 64;
+const response_capacity = 4;
+
+pub const Service = struct {
+    gpa: std.mem.Allocator,
+    requests: std.Io.Queue(model_mod.Request),
+    responses: std.Io.Queue(model_mod.Response),
+    request_storage: []model_mod.Request,
+    response_storage: []model_mod.Response,
+    store: ?store_mod.Store,
+    stats: Stats = .{},
+
+    pub const Stats = struct {
+        queued: std.atomic.Value(u64) = .init(0),
+        queue_high_water: std.atomic.Value(u64) = .init(0),
+        dropped: std.atomic.Value(u64) = .init(0),
+        sqlite_writes: std.atomic.Value(u64) = .init(0),
+        sqlite_write_failures: std.atomic.Value(u64) = .init(0),
+        sqlite_write_ns: std.atomic.Value(u64) = .init(0),
+        sqlite_write_max_ns: std.atomic.Value(u64) = .init(0),
+        sqlite_queries: std.atomic.Value(u64) = .init(0),
+        sqlite_query_failures: std.atomic.Value(u64) = .init(0),
+        sqlite_query_ns: std.atomic.Value(u64) = .init(0),
+        sqlite_query_max_ns: std.atomic.Value(u64) = .init(0),
+    };
+
+    pub const StatsSnapshot = struct {
+        queued: u64,
+        queue_high_water: u64,
+        dropped: u64,
+        sqlite_writes: u64,
+        sqlite_write_failures: u64,
+        sqlite_write_ns: u64,
+        sqlite_write_max_ns: u64,
+        sqlite_queries: u64,
+        sqlite_query_failures: u64,
+        sqlite_query_ns: u64,
+        sqlite_query_max_ns: u64,
+    };
+
+    pub fn init(gpa: std.mem.Allocator, database_path: [:0]const u8) !Service {
+        const request_storage = try gpa.alloc(model_mod.Request, request_capacity);
+        errdefer gpa.free(request_storage);
+        const response_storage = try gpa.alloc(model_mod.Response, response_capacity);
+        errdefer gpa.free(response_storage);
+        return .{
+            .gpa = gpa,
+            .requests = .init(request_storage),
+            .responses = .init(response_storage),
+            .request_storage = request_storage,
+            .response_storage = response_storage,
+            // History is best effort. A broken database must not stop PTYs.
+            .store = store_mod.Store.open(database_path) catch null,
+        };
+    }
+
+    pub fn closeQueues(service: *Service, io: std.Io) void {
+        service.requests.close(io);
+        service.responses.close(io);
+    }
+
+    pub fn deinit(service: *Service, io: std.Io) void {
+        service.responses.close(io);
+        var request_buffer: [8]model_mod.Request = undefined;
+        while (true) {
+            const count = service.requests.get(io, &request_buffer, 0) catch break;
+            if (count == 0) break;
+            for (request_buffer[0..count]) |request|
+                model_mod.deinitRequest(request, service.gpa);
+        }
+        var response_buffer: [4]model_mod.Response = undefined;
+        while (true) {
+            const count = service.responses.get(io, &response_buffer, 0) catch break;
+            if (count == 0) break;
+            for (response_buffer[0..count]) |response|
+                model_mod.deinitResponse(response, service.gpa);
+        }
+        if (service.store) |*store| store.close();
+        service.gpa.free(service.response_storage);
+        service.gpa.free(service.request_storage);
+    }
+
+    pub fn newSessionId(_: *Service, io: std.Io) SessionId {
+        var session_id: SessionId = undefined;
+        io.random(&session_id);
+        return session_id;
+    }
+
+    pub fn startSession(
+        service: *Service,
+        io: std.Io,
+        session_id: SessionId,
+        pane_id: model_mod.schema.PaneId,
+        location: model_mod.schema.PaneLocation,
+        workspace_path: []const u8,
+        shell: []const u8,
+        started_at_ms: i64,
+    ) bool {
+        const value = service.gpa.create(model_mod.SessionStarted) catch return false;
+        value.* = .{
+            .id = session_id,
+            .pane_id = pane_id,
+            .location = location,
+            .started_at_ms = started_at_ms,
+            .workspace_path = service.gpa.dupe(u8, workspace_path) catch {
+                service.gpa.destroy(value);
+                return false;
+            },
+            .shell = service.gpa.dupe(u8, shell) catch {
+                service.gpa.free(value.workspace_path);
+                service.gpa.destroy(value);
+                return false;
+            },
+        };
+        return service.submit(io, .{ .session_started = value });
+    }
+
+    pub fn finishSession(
+        service: *Service,
+        io: std.Io,
+        session_id: SessionId,
+        finished_at_ms: i64,
+    ) bool {
+        return service.submit(io, .{ .session_finished = .{
+            .id = session_id,
+            .finished_at_ms = finished_at_ms,
+        } });
+    }
+
+    pub const CommandContext = struct {
+        session_id: SessionId,
+        pane_id: model_mod.schema.PaneId,
+        location: model_mod.schema.PaneLocation,
+        sequence: u64,
+        workspace_path: []const u8,
+        cols: u16,
+        rows: u16,
+    };
+
+    pub fn recordCommand(
+        service: *Service,
+        io: std.Io,
+        context: CommandContext,
+        command: terminal_mod.Command,
+    ) bool {
+        const allocation_len = @sizeOf(model_mod.CommandFinished) + command.bytes.len +
+            command.cwd.len + context.workspace_path.len;
+        const allocation = service.gpa.alignedAlloc(
+            u8,
+            .of(model_mod.CommandFinished),
+            allocation_len,
+        ) catch return false;
+        const value: *model_mod.CommandFinished = @ptrCast(allocation);
+        var cursor: usize = @sizeOf(model_mod.CommandFinished);
+        const command_copy = allocation[cursor..][0..command.bytes.len];
+        cursor += command_copy.len;
+        const cwd_copy = allocation[cursor..][0..command.cwd.len];
+        cursor += cwd_copy.len;
+        const workspace_copy = allocation[cursor..][0..context.workspace_path.len];
+        @memcpy(command_copy, command.bytes);
+        @memcpy(cwd_copy, command.cwd);
+        @memcpy(workspace_copy, context.workspace_path);
+        value.* = .{
+            .session_id = context.session_id,
+            .pane_id = context.pane_id,
+            .location = context.location,
+            .sequence = context.sequence,
+            .started_at_ms = command.started_at_ms,
+            .duration_ns = command.duration_ns,
+            .exit_code = command.exit_code,
+            .status = switch (command.status) {
+                .completed => .completed,
+                .interrupted => .interrupted,
+            },
+            .cols = context.cols,
+            .rows = context.rows,
+            .command = command_copy,
+            .cwd = cwd_copy,
+            .workspace_path = workspace_copy,
+            .command_truncated = command.truncated,
+        };
+        return service.submit(io, .{ .command_finished = value });
+    }
+
+    pub fn query(service: *Service, io: std.Io, request: model_mod.Query) bool {
+        return service.submit(io, .{ .query = request });
+    }
+
+    pub fn statsSnapshot(service: *const Service) StatsSnapshot {
+        return .{
+            .queued = service.stats.queued.load(.monotonic),
+            .queue_high_water = service.stats.queue_high_water.load(.monotonic),
+            .dropped = service.stats.dropped.load(.monotonic),
+            .sqlite_writes = service.stats.sqlite_writes.load(.monotonic),
+            .sqlite_write_failures = service.stats.sqlite_write_failures.load(.monotonic),
+            .sqlite_write_ns = service.stats.sqlite_write_ns.load(.monotonic),
+            .sqlite_write_max_ns = service.stats.sqlite_write_max_ns.load(.monotonic),
+            .sqlite_queries = service.stats.sqlite_queries.load(.monotonic),
+            .sqlite_query_failures = service.stats.sqlite_query_failures.load(.monotonic),
+            .sqlite_query_ns = service.stats.sqlite_query_ns.load(.monotonic),
+            .sqlite_query_max_ns = service.stats.sqlite_query_max_ns.load(.monotonic),
+        };
+    }
+
+    fn submit(service: *Service, io: std.Io, request: model_mod.Request) bool {
+        const queued = service.stats.queued.fetchAdd(1, .monotonic) + 1;
+        const count = service.requests.put(io, &.{request}, 0) catch 0;
+        if (count == 1) {
+            _ = service.stats.queue_high_water.fetchMax(queued, .monotonic);
+            return true;
+        }
+        _ = service.stats.queued.fetchSub(1, .monotonic);
+        _ = service.stats.dropped.fetchAdd(1, .monotonic);
+        model_mod.deinitRequest(request, service.gpa);
+        return false;
+    }
+};
+
+pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
+    while (true) {
+        const request = service.requests.getOne(io) catch |err| switch (err) {
+            error.Closed => return,
+            else => |other| return other,
+        };
+        _ = service.stats.queued.fetchSub(1, .monotonic);
+        switch (request) {
+            .session_started => |value| {
+                defer value.deinit(service.gpa);
+                const started = std.Io.Timestamp.now(io, .awake);
+                const result = if (service.store) |*store|
+                    store.startSession(value)
+                else
+                    error.HistoryUnavailable;
+                observeWrite(service, elapsedSince(io, started), result);
+            },
+            .session_finished => |value| {
+                const started = std.Io.Timestamp.now(io, .awake);
+                const result = if (service.store) |*store|
+                    store.finishSession(value)
+                else
+                    error.HistoryUnavailable;
+                observeWrite(service, elapsedSince(io, started), result);
+            },
+            .command_finished => |value| {
+                defer value.deinit(service.gpa);
+                const started = std.Io.Timestamp.now(io, .awake);
+                const result = if (service.store) |*store|
+                    store.insertCommand(value)
+                else
+                    error.HistoryUnavailable;
+                observeWrite(service, elapsedSince(io, started), result);
+            },
+            .query => |query_value| {
+                const started = std.Io.Timestamp.now(io, .awake);
+                const response: model_mod.Response = if (service.store) |*store|
+                    if (store.query(service.gpa, &query_value)) |result|
+                        .{ .query_result = result }
+                    else |_|
+                        .{ .failed = .{
+                            .request_id = query_value.request_id,
+                            .origin = query_value.origin,
+                            .message = "history query failed",
+                        } }
+                else
+                    .{ .failed = .{
+                        .request_id = query_value.request_id,
+                        .origin = query_value.origin,
+                        .message = "history database is unavailable",
+                    } };
+                const elapsed = elapsedNs(started, std.Io.Timestamp.now(io, .awake));
+                _ = service.stats.sqlite_queries.fetchAdd(1, .monotonic);
+                _ = service.stats.sqlite_query_ns.fetchAdd(elapsed, .monotonic);
+                _ = service.stats.sqlite_query_max_ns.fetchMax(elapsed, .monotonic);
+                if (response == .failed)
+                    _ = service.stats.sqlite_query_failures.fetchAdd(1, .monotonic);
+                service.responses.putOne(io, response) catch |err| {
+                    model_mod.deinitResponse(response, service.gpa);
+                    if (err == error.Closed) return;
+                    return err;
+                };
+            },
+        }
+    }
+}
+
+fn observeWrite(service: *Service, elapsed: u64, result: anyerror!void) void {
+    _ = service.stats.sqlite_writes.fetchAdd(1, .monotonic);
+    _ = service.stats.sqlite_write_ns.fetchAdd(elapsed, .monotonic);
+    _ = service.stats.sqlite_write_max_ns.fetchMax(elapsed, .monotonic);
+    result catch {
+        _ = service.stats.sqlite_write_failures.fetchAdd(1, .monotonic);
+    };
+}
+
+fn elapsedSince(io: std.Io, started: std.Io.Timestamp) u64 {
+    return elapsedNs(started, std.Io.Timestamp.now(io, .awake));
+}
+
+fn elapsedNs(started: std.Io.Timestamp, finished: std.Io.Timestamp) u64 {
+    return @intCast(@max(@as(i96, 0), finished.nanoseconds - started.nanoseconds));
+}
+
+pub fn receiveResponse(io: std.Io, service: *Service) anyerror!model_mod.Response {
+    return service.responses.getOne(io);
+}
+
+test {
+    std.testing.refAllDecls(@This());
+}

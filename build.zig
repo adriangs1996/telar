@@ -46,6 +46,7 @@ pub fn build(b: *std.Build) void {
     });
     backend.addImport("telar-core", core);
     backend.addImport("ghostty-vt", ghostty_vt);
+    backend.linkSystemLibrary("sqlite3", .{});
 
     const frontend = b.addModule("telar-frontend", .{
         .root_source_file = b.path("src/frontend/root.zig"),
@@ -103,6 +104,7 @@ pub fn build(b: *std.Build) void {
     });
     bench_backend.addImport("telar-core", bench_core);
     bench_backend.addImport("ghostty-vt", ghostty_vt);
+    bench_backend.linkSystemLibrary("sqlite3", .{});
     const bench_frontend = b.createModule(.{
         .root_source_file = b.path("src/frontend/root.zig"),
         .target = target,
@@ -182,6 +184,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/damage.zig" },
+        .{ .path = "src/backend/history/root.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pty.zig", .libc = true },
         .{ .path = "src/backend/runtime.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },

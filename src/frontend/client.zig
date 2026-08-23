@@ -406,6 +406,7 @@ pub fn run(
                     try requestDraw(io, &select, &pacer, &draw_pending, &draw_due_ns, &pending_updates, &metrics);
                 },
                 .runtime_stopping => return 0,
+                .history_results => return error.UnexpectedHistoryResults,
             }
             try select.concurrent(.server, receive, .{ io, connection, receive_buffer });
         },

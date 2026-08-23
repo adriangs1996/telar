@@ -20,6 +20,7 @@ const fragmented_spans_per_row = fragmented_clusters_per_row * fragmented_spans_
 const fragmented_span_cells = 2;
 const fragmented_gap_cells = 2;
 const fragmented_span_count = fragmented_rows * fragmented_spans_per_row;
+const history_input = "\x1b[200~echo one\necho two\x1b[201~\r";
 
 const Workload = enum { one_cell, fragmented, full_screen };
 const workloads = [_]Workload{ .one_cell, .fragmented, .full_screen };
@@ -96,6 +97,7 @@ const cases = [_]Case{
     .{ .name = "backend.damage.fragmented", .work_per_op = fragmented_rows * cols, .work_unit = "cells" },
     .{ .name = "backend.damage.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "backend.frame.fragmented", .work_per_op = fragmented_rows * cols, .work_unit = "cells" },
+    .{ .name = "backend.history.input_scan", .work_per_op = history_input.len, .work_unit = "bytes" },
     .{ .name = "schema.encode.one_cell", .work_per_op = 1, .work_unit = "cells" },
     .{ .name = "schema.encode.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
     .{ .name = "schema.encode.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
@@ -482,6 +484,21 @@ fn runFrame(context: *FrameContext, iterations: usize) !u64 {
     return checksum;
 }
 
+const HistoryInputContext = struct {
+    scanner: backend.history.terminal.InputScanner = .{},
+};
+
+fn runHistoryInput(context: *HistoryInputContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        context.scanner.reset();
+        const event = context.scanner.feed(history_input);
+        checksum +%= @intFromBool(event.submitted);
+        checksum +%= @as(u64, @intFromBool(event.cancelled)) << 1;
+    }
+    return checksum;
+}
+
 const EncodeContext = struct {
     fixture: *Fixture,
     workload: Workload,
@@ -761,6 +778,18 @@ fn execute(
         defer context.deinit();
         frame_case.payload_bytes_per_op = (try context.encode()).len;
         try writeResult(writer, config, frame_case, try measure(io, config, &context, runFrame));
+    }
+
+    const history_input_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(history_input_case.name)) {
+        var context: HistoryInputContext = .{};
+        try writeResult(
+            writer,
+            config,
+            history_input_case,
+            try measure(io, config, &context, runHistoryInput),
+        );
     }
 
     inline for (workloads) |workload| {

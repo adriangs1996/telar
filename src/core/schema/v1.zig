@@ -21,6 +21,9 @@ pub const max_environment_count = 256;
 pub const max_environment_bytes = 512 * 1024;
 pub const max_error_message_bytes = 1024;
 pub const max_panes_per_location = 64;
+pub const max_history_query_bytes = 1024;
+pub const max_history_results = 100;
+pub const max_history_command_bytes = 64 * 1024;
 
 pub const ClientTag = enum(u8) {
     open_pane = 0x01,
@@ -33,6 +36,7 @@ pub const ClientTag = enum(u8) {
     request_location_snapshot = 0x08,
     create_pane = 0x09,
     close_pane = 0x0a,
+    query_history = 0x0b,
 };
 
 pub const ServerTag = enum(u8) {
@@ -42,6 +46,7 @@ pub const ServerTag = enum(u8) {
     request_failed = 0x84,
     runtime_stopping = 0x85,
     location_snapshot = 0x86,
+    history_results = 0x87,
 };
 
 pub const TerminalSize = struct {
@@ -198,6 +203,23 @@ pub const ClosePane = struct {
     pane_id: PaneId,
 };
 
+pub const HistoryScope = enum(u8) {
+    global = 0,
+    cwd = 1,
+    workspace = 2,
+    pane = 3,
+};
+
+pub const QueryHistory = struct {
+    request_id: RequestId,
+    query: []const u8 = "",
+    scope: HistoryScope = .global,
+    scope_value: []const u8 = "",
+    pane_id: PaneId = .invalid,
+    failed_only: bool = false,
+    limit: u16 = 20,
+};
+
 pub const ClientMessage = union(enum) {
     open_pane: OpenPaneView,
     pane_input: PaneInput,
@@ -209,6 +231,7 @@ pub const ClientMessage = union(enum) {
     request_location_snapshot: RequestLocationSnapshot,
     create_pane: CreatePaneView,
     close_pane: ClosePane,
+    query_history: QueryHistory,
 };
 
 pub const PaneOpened = struct {
@@ -275,6 +298,52 @@ pub const LocationSnapshotView = struct {
     }
 };
 
+pub const HistoryStatus = enum(u8) {
+    completed = 0,
+    interrupted = 1,
+};
+
+pub const HistoryEntry = struct {
+    id: u64,
+    pane_id: PaneId,
+    started_at_ms: i64,
+    duration_ns: i64,
+    exit_code: ?i32,
+    status: HistoryStatus,
+    command: []const u8,
+    cwd: []const u8,
+    workspace_path: []const u8,
+};
+
+pub const HistoryResults = struct {
+    request_id: RequestId,
+    entries: []const HistoryEntry,
+};
+
+pub const HistoryResultsView = struct {
+    request_id: RequestId,
+    entry_count: u16,
+    encoded_entries: []const u8,
+
+    pub fn entries(results: HistoryResultsView) HistoryEntryIterator {
+        return .{
+            .decoder = .init(results.encoded_entries),
+            .remaining = results.entry_count,
+        };
+    }
+};
+
+pub const HistoryEntryIterator = struct {
+    decoder: wire.Decoder,
+    remaining: u16,
+
+    pub fn next(iterator: *HistoryEntryIterator) ?HistoryEntry {
+        if (iterator.remaining == 0) return null;
+        iterator.remaining -= 1;
+        return decodeHistoryEntry(&iterator.decoder) catch unreachable;
+    }
+};
+
 pub const PaneDescriptorIterator = struct {
     decoder: wire.Decoder,
     remaining: u16,
@@ -296,6 +365,7 @@ pub const ServerMessage = union(enum) {
     request_failed: RequestFailed,
     runtime_stopping: void,
     location_snapshot: LocationSnapshotView,
+    history_results: HistoryResultsView,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -406,6 +476,38 @@ pub fn encodeClosePane(buffer: []u8, message: ClosePane) ![]const u8 {
     return encoder.finish();
 }
 
+pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateBytes(message.query, max_history_query_bytes, true);
+    if (message.limit == 0 or message.limit > max_history_results)
+        return error.InvalidHistoryLimit;
+    switch (message.scope) {
+        .global => if (message.scope_value.len != 0 or message.pane_id != .invalid)
+            return error.InvalidHistoryScope,
+        .cwd, .workspace => {
+            try validateBytes(message.scope_value, max_cwd_bytes, false);
+            if (message.pane_id != .invalid) return error.InvalidHistoryScope;
+        },
+        .pane => {
+            try validatePaneId(message.pane_id);
+            if (message.scope_value.len != 0) return error.InvalidHistoryScope;
+        },
+    }
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.query_history));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeSized16(message.query);
+    try encoder.writeByte(@intFromEnum(message.scope));
+    switch (message.scope) {
+        .global => {},
+        .cwd, .workspace => try encoder.writeSized16(message.scope_value),
+        .pane => try encoder.writeInt(u64, id.raw(message.pane_id)),
+    }
+    try encoder.writeByte(@intFromBool(message.failed_only));
+    try encoder.writeInt(u16, message.limit);
+    return encoder.finish();
+}
+
 pub fn encodeRuntimeStop(buffer: []u8) ![]const u8 {
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ClientTag.runtime_stop));
@@ -428,6 +530,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         },
         .create_pane => .{ .create_pane = try decodeCreatePane(&decoder) },
         .close_pane => .{ .close_pane = try decodeClosePane(&decoder) },
+        .query_history => .{ .query_history = try decodeQueryHistory(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -498,6 +601,17 @@ pub fn encodeLocationSnapshot(buffer: []u8, message: LocationSnapshot) ![]const 
     return encoder.finish();
 }
 
+pub fn encodeHistoryResults(buffer: []u8, message: HistoryResults) ![]const u8 {
+    try validateRequestId(message.request_id);
+    if (message.entries.len > max_history_results) return error.TooManyHistoryResults;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.history_results));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u16, @intCast(message.entries.len));
+    for (message.entries) |entry| try encodeHistoryEntry(&encoder, entry);
+    return encoder.finish();
+}
+
 pub fn decodeServer(payload: []const u8) !ServerMessage {
     var decoder = wire.Decoder.init(payload);
     const tag = try decodeServerTag(try decoder.readByte());
@@ -510,6 +624,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .location_snapshot => .{
             .location_snapshot = try decodeLocationSnapshot(&decoder),
         },
+        .history_results => .{ .history_results = try decodeHistoryResults(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -667,6 +782,35 @@ fn decodeClosePane(decoder: *wire.Decoder) !ClosePane {
     };
 }
 
+fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const query = try decoder.readSized16();
+    try validateBytes(query, max_history_query_bytes, true);
+    const scope = try decodeHistoryScope(try decoder.readByte());
+    var scope_value: []const u8 = "";
+    var pane_id: PaneId = .invalid;
+    switch (scope) {
+        .global => {},
+        .cwd, .workspace => {
+            scope_value = try decoder.readSized16();
+            try validateBytes(scope_value, max_cwd_bytes, false);
+        },
+        .pane => pane_id = try id.pane(try decoder.readInt(u64)),
+    }
+    const failed_only = try decodeBool(try decoder.readByte());
+    const limit = try decoder.readInt(u16);
+    if (limit == 0 or limit > max_history_results) return error.InvalidHistoryLimit;
+    return .{
+        .request_id = request_id,
+        .query = query,
+        .scope = scope,
+        .scope_value = scope_value,
+        .pane_id = pane_id,
+        .failed_only = failed_only,
+        .limit = limit,
+    };
+}
+
 fn decodePaneOpened(decoder: *wire.Decoder) !PaneOpened {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
@@ -716,6 +860,71 @@ fn decodeLocationSnapshot(decoder: *wire.Decoder) !LocationSnapshotView {
         .location = location,
         .pane_count = pane_count,
         .encoded_panes = decoder.consumed(panes_start),
+    };
+}
+
+fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
+    if (entry.id == 0) return error.InvalidHistoryId;
+    try validatePaneId(entry.pane_id);
+    try validateBytes(entry.command, max_history_command_bytes, false);
+    try validateBytes(entry.cwd, max_cwd_bytes, false);
+    try validateBytes(entry.workspace_path, max_cwd_bytes, false);
+    try encoder.writeInt(u64, entry.id);
+    try encoder.writeInt(u64, id.raw(entry.pane_id));
+    try encoder.writeInt(i64, entry.started_at_ms);
+    try encoder.writeInt(i64, entry.duration_ns);
+    if (entry.exit_code) |exit_code| {
+        try encoder.writeByte(1);
+        try encoder.writeInt(i32, exit_code);
+    } else {
+        try encoder.writeByte(0);
+    }
+    try encoder.writeByte(@intFromEnum(entry.status));
+    try encoder.writeSized32(entry.command);
+    try encoder.writeSized16(entry.cwd);
+    try encoder.writeSized16(entry.workspace_path);
+}
+
+fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
+    const history_id = try decoder.readInt(u64);
+    if (history_id == 0) return error.InvalidHistoryId;
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const started_at_ms = try decoder.readInt(i64);
+    const duration_ns = try decoder.readInt(i64);
+    const exit_code = if (try decodeBool(try decoder.readByte()))
+        try decoder.readInt(i32)
+    else
+        null;
+    const status = try decodeHistoryStatus(try decoder.readByte());
+    const command = try decoder.readSized32();
+    const cwd = try decoder.readSized16();
+    const workspace_path = try decoder.readSized16();
+    try validateBytes(command, max_history_command_bytes, false);
+    try validateBytes(cwd, max_cwd_bytes, false);
+    try validateBytes(workspace_path, max_cwd_bytes, false);
+    return .{
+        .id = history_id,
+        .pane_id = pane_id,
+        .started_at_ms = started_at_ms,
+        .duration_ns = duration_ns,
+        .exit_code = exit_code,
+        .status = status,
+        .command = command,
+        .cwd = cwd,
+        .workspace_path = workspace_path,
+    };
+}
+
+fn decodeHistoryResults(decoder: *wire.Decoder) !HistoryResultsView {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const entry_count = try decoder.readInt(u16);
+    if (entry_count > max_history_results) return error.TooManyHistoryResults;
+    const entries_start = decoder.index;
+    for (0..entry_count) |_| _ = try decodeHistoryEntry(decoder);
+    return .{
+        .request_id = request_id,
+        .entry_count = entry_count,
+        .encoded_entries = decoder.consumed(entries_start),
     };
 }
 
@@ -793,6 +1002,7 @@ fn decodeClientTag(value: u8) !ClientTag {
         @intFromEnum(ClientTag.request_location_snapshot) => .request_location_snapshot,
         @intFromEnum(ClientTag.create_pane) => .create_pane,
         @intFromEnum(ClientTag.close_pane) => .close_pane,
+        @intFromEnum(ClientTag.query_history) => .query_history,
         else => error.UnknownMessage,
     };
 }
@@ -805,6 +1015,7 @@ fn decodeServerTag(value: u8) !ServerTag {
         @intFromEnum(ServerTag.request_failed) => .request_failed,
         @intFromEnum(ServerTag.runtime_stopping) => .runtime_stopping,
         @intFromEnum(ServerTag.location_snapshot) => .location_snapshot,
+        @intFromEnum(ServerTag.history_results) => .history_results,
         else => error.UnknownMessage,
     };
 }
@@ -830,6 +1041,24 @@ fn decodePaneLifecycle(value: u8) !PaneLifecycle {
         @intFromEnum(PaneLifecycle.running) => .running,
         @intFromEnum(PaneLifecycle.exited) => .exited,
         else => error.InvalidPaneLifecycle,
+    };
+}
+
+fn decodeHistoryScope(value: u8) !HistoryScope {
+    return switch (value) {
+        @intFromEnum(HistoryScope.global) => .global,
+        @intFromEnum(HistoryScope.cwd) => .cwd,
+        @intFromEnum(HistoryScope.workspace) => .workspace,
+        @intFromEnum(HistoryScope.pane) => .pane,
+        else => error.InvalidHistoryScope,
+    };
+}
+
+fn decodeHistoryStatus(value: u8) !HistoryStatus {
+    return switch (value) {
+        @intFromEnum(HistoryStatus.completed) => .completed,
+        @intFromEnum(HistoryStatus.interrupted) => .interrupted,
+        else => error.InvalidHistoryStatus,
     };
 }
 
@@ -961,6 +1190,30 @@ test "multi-pane client messages round trip" {
     try std.testing.expectEqual(@as(PaneId, @enumFromInt(8)), closed.pane_id);
 }
 
+test "history queries round trip with scopes" {
+    var buffer: [2048]u8 = undefined;
+    const cwd = (try decodeClient(try encodeQueryHistory(&buffer, .{
+        .request_id = @enumFromInt(31),
+        .query = "zig build",
+        .scope = .cwd,
+        .scope_value = "/work/telar",
+        .failed_only = true,
+        .limit = 12,
+    }))).query_history;
+    try std.testing.expectEqualStrings("zig build", cwd.query);
+    try std.testing.expectEqual(HistoryScope.cwd, cwd.scope);
+    try std.testing.expectEqualStrings("/work/telar", cwd.scope_value);
+    try std.testing.expect(cwd.failed_only);
+    try std.testing.expectEqual(@as(u16, 12), cwd.limit);
+
+    const pane = (try decodeClient(try encodeQueryHistory(&buffer, .{
+        .request_id = @enumFromInt(32),
+        .scope = .pane,
+        .pane_id = @enumFromInt(9),
+    }))).query_history;
+    try std.testing.expectEqual(@as(PaneId, @enumFromInt(9)), pane.pane_id);
+}
+
 test "fixed server messages round trip" {
     var buffer: [128]u8 = undefined;
     const opened = (try decodeServer(try encodePaneOpened(&buffer, .{
@@ -1018,6 +1271,43 @@ test "location snapshots preserve ordered pane descriptors" {
     var iterator = snapshot.panes();
     try std.testing.expectEqualDeep(panes[0], iterator.next().?);
     try std.testing.expectEqualDeep(panes[1], iterator.next().?);
+    try std.testing.expect(iterator.next() == null);
+}
+
+test "history results preserve nullable exits and command metadata" {
+    const entries = [_]HistoryEntry{
+        .{
+            .id = 11,
+            .pane_id = @enumFromInt(3),
+            .started_at_ms = 1700000000000,
+            .duration_ns = 42_000,
+            .exit_code = 7,
+            .status = .completed,
+            .command = "zig build test",
+            .cwd = "/work/telar",
+            .workspace_path = "/work/telar",
+        },
+        .{
+            .id = 12,
+            .pane_id = @enumFromInt(3),
+            .started_at_ms = 1700000001000,
+            .duration_ns = 9,
+            .exit_code = null,
+            .status = .interrupted,
+            .command = "sleep 600",
+            .cwd = "/work/telar",
+            .workspace_path = "/work/telar",
+        },
+    };
+    var buffer: [4096]u8 = undefined;
+    const results = (try decodeServer(try encodeHistoryResults(&buffer, .{
+        .request_id = @enumFromInt(33),
+        .entries = &entries,
+    }))).history_results;
+    try std.testing.expectEqual(@as(u16, 2), results.entry_count);
+    var iterator = results.entries();
+    try std.testing.expectEqualDeep(entries[0], iterator.next().?);
+    try std.testing.expectEqualDeep(entries[1], iterator.next().?);
     try std.testing.expect(iterator.next() == null);
 }
 

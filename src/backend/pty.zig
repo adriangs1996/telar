@@ -1,6 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const mac = if (builtin.os.tag == .macos) @cImport({
+    @cInclude("libproc.h");
+}) else struct {};
+
 const File = std.Io.File;
 
 pub const max_args = 64;
@@ -26,6 +30,7 @@ extern "c" fn openpty(
 ) c_int;
 
 extern "c" fn execvp(file: [*:0]const u8, argv: [*:null]const ?[*:0]const u8) c_int;
+extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 
 pub const Size = struct {
     cols: u16,
@@ -106,6 +111,24 @@ pub const Session = struct {
         };
     }
 
+    /// Returns whether the session leader currently owns the terminal. A
+    /// foreground job gets a different process group, regardless of shell.
+    pub fn shellForeground(session: *const Session) ?bool {
+        if (session.master < 0) return null;
+        const foreground = tcgetpgrp(session.master);
+        if (foreground < 0) return null;
+        return foreground == session.pid;
+    }
+
+    /// Reads the session leader's cwd without asking the shell to publish it.
+    pub fn cwd(session: *const Session, buffer: []u8) ?[]const u8 {
+        return switch (builtin.os.tag) {
+            .macos => cwdMacos(session.pid, buffer),
+            .linux => cwdLinux(session.pid, buffer),
+            else => null,
+        };
+    }
+
     /// Resizing the master updates the kernel's PTY state and sends SIGWINCH
     /// to the foreground process group on the slave side.
     pub fn resize(session: *Session, next_size: Size) !void {
@@ -159,6 +182,26 @@ pub const Session = struct {
         }
     }
 };
+
+fn cwdMacos(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
+    if (comptime builtin.os.tag != .macos) return null;
+    var info: mac.struct_proc_vnodepathinfo = undefined;
+    const size: c_int = @intCast(@sizeOf(@TypeOf(info)));
+    if (mac.proc_pidinfo(pid, mac.PROC_PIDVNODEPATHINFO, 0, &info, size) != size) return null;
+    const source = std.mem.sliceTo(&info.pvi_cdir.vip_path, 0);
+    if (source.len == 0 or source.len > buffer.len) return null;
+    @memcpy(buffer[0..source.len], source);
+    return buffer[0..source.len];
+}
+
+fn cwdLinux(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
+    if (comptime builtin.os.tag != .linux) return null;
+    var path_buffer: [64]u8 = undefined;
+    const path = std.fmt.bufPrintZ(&path_buffer, "/proc/{d}/cwd", .{pid}) catch return null;
+    const result = std.c.readlinkat(std.posix.AT.FDCWD, path.ptr, buffer.ptr, buffer.len);
+    if (result < 0) return null;
+    return buffer[0..@intCast(result)];
+}
 
 /// Only async-signal-safe calls are allowed between fork and exec. In
 /// particular, no allocator or error unwinding may run in this branch.

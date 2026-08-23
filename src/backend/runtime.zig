@@ -5,6 +5,7 @@ const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const blit = @import("blit.zig");
 const damage = @import("damage.zig");
+const history = @import("history/root.zig");
 const pty = @import("pty.zig");
 const transport = @import("transport.zig");
 
@@ -35,6 +36,7 @@ const RuntimeEvent = union(enum) {
     client_sent: anyerror!void,
     control_message: anyerror![]u8,
     control_sent: anyerror!void,
+    history_response: anyerror!history.Response,
     pane_input_written: anyerror!void,
     pane_output: PaneOutputEvent,
     pane_exit: PaneExitEvent,
@@ -67,6 +69,11 @@ const RuntimeMetrics = struct {
     ingest: diagnostics.Timing = .{},
     encode: diagnostics.Timing = .{},
     ack: diagnostics.Timing = .{},
+    history_captured: u64 = 0,
+    history_dropped: u64 = 0,
+    history_candidate_input_bytes: u64 = 0,
+    history_queries: u64 = 0,
+    history_query_failures: u64 = 0,
 };
 
 const PendingFailure = struct {
@@ -84,6 +91,7 @@ const PendingResponse = union(enum) {
     pane_opened: schema.PaneOpened,
     request_failed: PendingFailure,
     location_snapshot: PendingLocationSnapshot,
+    history_result: *history.model.QueryResult,
 };
 
 const ResponseQueue = struct {
@@ -110,8 +118,14 @@ const ResponseQueue = struct {
     }
 
     fn clear(queue: *ResponseQueue) void {
+        while (queue.peek()) |response| {
+            switch (response.*) {
+                .history_result => |result| result.deinit(),
+                else => {},
+            }
+            queue.pop();
+        }
         queue.head = 0;
-        queue.len = 0;
     }
 };
 
@@ -120,6 +134,12 @@ const ShutdownState = struct {
     primary_request: bool = false,
     reply_pending: bool = false,
     reply_in_flight: bool = false,
+};
+
+const ControlSend = enum {
+    none,
+    stop,
+    history,
 };
 
 const OwnedCommand = struct {
@@ -177,6 +197,14 @@ const Pane = struct {
     wait_pending: bool = false,
     close_requested: bool = false,
     exit: ?pty.Exit = null,
+    history_service: *history.Service,
+    history_tracker: history.Tracker,
+    history_session_id: history.SessionId,
+    history_sequence: u64 = 0,
+    history_session_started: bool = false,
+    history_session_finished: bool = false,
+    workspace_path: []u8,
+    io: Io,
     gpa: std.mem.Allocator,
 
     fn create(
@@ -185,6 +213,8 @@ const Pane = struct {
         id: schema.PaneId,
         location: schema.PaneLocation,
         command: *const pty.Command,
+        workspace_path: []const u8,
+        history_service: *history.Service,
         size: schema.TerminalSize,
     ) !*Pane {
         const pane = try gpa.create(Pane);
@@ -192,13 +222,23 @@ const Pane = struct {
 
         pane.id = id;
         pane.location = location;
+        pane.io = io;
         pane.gpa = gpa;
+        pane.history_service = history_service;
+        pane.history_session_id = history_service.newSessionId(io);
+        pane.history_sequence = 0;
+        pane.history_session_started = false;
+        pane.history_session_finished = false;
+        pane.workspace_path = try gpa.dupe(u8, workspace_path);
+        errdefer gpa.free(pane.workspace_path);
         pane.session = try .spawn(command, .{ .cols = size.cols, .rows = size.rows });
         errdefer pane.session.deinit();
         pane.terminal = try .init(io, gpa, .{ .cols = size.cols, .rows = size.rows });
         errdefer pane.terminal.deinit(gpa);
         pane.stream = pane.terminal.vtStream();
         errdefer pane.stream.deinit();
+        pane.history_tracker = try .init(gpa, workspace_path, &pane.terminal);
+        errdefer pane.history_tracker.deinit(&pane.terminal);
         pane.render_state = .empty;
         pane.screen = try .init(gpa, size.cols, size.rows);
         errdefer pane.screen.deinit();
@@ -216,14 +256,26 @@ const Pane = struct {
         pane.close_requested = false;
         pane.exit = null;
         try pane.render(true);
+        pane.history_session_started = history_service.startSession(
+            io,
+            pane.history_session_id,
+            pane.id,
+            pane.location,
+            pane.workspace_path,
+            std.mem.span(command.file),
+            Io.Timestamp.now(io, .real).toMilliseconds(),
+        );
         return pane;
     }
 
     fn destroy(pane: *Pane) void {
         const gpa = pane.gpa;
+        pane.finishHistory();
+        gpa.free(pane.workspace_path);
         gpa.free(pane.damaged_rows);
         pane.screen.deinit();
         pane.render_state.deinit(gpa);
+        pane.history_tracker.deinit(&pane.terminal);
         pane.stream.deinit();
         pane.terminal.deinit(gpa);
         pane.session.deinit();
@@ -232,7 +284,24 @@ const Pane = struct {
 
     fn ingest(pane: *Pane, io: Io, bytes: []const u8, metrics: *RuntimeMetrics) !void {
         const started = diagnostics.now(io);
-        pane.stream.nextSlice(bytes);
+        var capture_context: CaptureContext = .{ .pane = pane, .metrics = metrics };
+        var offset: usize = 0;
+        while (offset < bytes.len) {
+            const remaining = bytes[offset..];
+            const boundary = pane.history_tracker.commitBoundary(remaining);
+            const slice = if (boundary) |len| remaining[0..len] else remaining;
+            pane.stream.nextSlice(slice);
+            if (boundary != null)
+                _ = try pane.history_tracker.captureSubmitted(&pane.terminal);
+            pane.history_tracker.observeOutput(
+                slice,
+                historyClock(io),
+                pane.session.shellForeground(),
+                &capture_context,
+                captureCommand,
+            );
+            offset += slice.len;
+        }
         const foreground = pane.terminal.colors.foreground.override;
         const background = pane.terminal.colors.background.override;
         if (!std.meta.eql(pane.foreground_override, foreground) or
@@ -246,6 +315,53 @@ const Pane = struct {
         if (comptime diagnostics.enabled) {
             metrics.ingest.observe(diagnostics.elapsed(started, diagnostics.now(io)));
         }
+    }
+
+    const CaptureContext = struct {
+        pane: *Pane,
+        metrics: ?*RuntimeMetrics,
+    };
+
+    fn captureCommand(context: *CaptureContext, command: history.Command) void {
+        const pane = context.pane;
+        if (!pane.history_session_started) return;
+        pane.history_sequence += 1;
+        const submitted = pane.history_service.recordCommand(pane.io, .{
+            .session_id = pane.history_session_id,
+            .pane_id = pane.id,
+            .location = pane.location,
+            .sequence = pane.history_sequence,
+            .workspace_path = pane.workspace_path,
+            .cols = pane.screen.w,
+            .rows = pane.screen.h,
+        }, command);
+        if (comptime diagnostics.enabled) if (context.metrics) |metrics| {
+            if (submitted) metrics.history_captured += 1 else metrics.history_dropped += 1;
+        };
+    }
+
+    fn finishHistory(pane: *Pane) void {
+        if (pane.history_session_finished) return;
+        var capture_context: CaptureContext = .{ .pane = pane, .metrics = null };
+        pane.history_tracker.interrupt(historyClock(pane.io), &capture_context, captureCommand);
+        if (pane.history_session_started) {
+            _ = pane.history_service.finishSession(
+                pane.io,
+                pane.history_session_id,
+                Io.Timestamp.now(pane.io, .real).toMilliseconds(),
+            );
+        }
+        pane.history_session_finished = true;
+    }
+
+    fn finishExitedHistory(pane: *Pane, exit: pty.Exit, metrics: *RuntimeMetrics) void {
+        var capture_context: CaptureContext = .{ .pane = pane, .metrics = metrics };
+        pane.history_tracker.shellExited(
+            historyClock(pane.io),
+            exit.code(),
+            &capture_context,
+            captureCommand,
+        );
     }
 
     fn resize(pane: *Pane, size: schema.TerminalSize) !void {
@@ -475,7 +591,8 @@ const PaneStore = struct {
     fn collectFinished(store: *PaneStore, attachments: *AttachmentStore) void {
         for (&store.items) |*slot| {
             const pane = slot.* orelse continue;
-            if (pane.exit == null or pane.output_pending or pane.wait_pending) continue;
+            if (pane.exit == null or !pane.output_done or
+                pane.output_pending or pane.wait_pending) continue;
             if (attachments.find(pane.id) != null) continue;
             slot.* = null;
             store.count -= 1;
@@ -537,7 +654,16 @@ const AttachmentStore = struct {
 };
 
 pub fn serve(io: Io, gpa: std.mem.Allocator, endpoint: []const u8) !void {
-    return serveInternal(io, gpa, endpoint, null);
+    return serveInternal(io, gpa, endpoint, ":memory:", null);
+}
+
+pub fn serveWithHistory(
+    io: Io,
+    gpa: std.mem.Allocator,
+    endpoint: []const u8,
+    history_path: [:0]const u8,
+) !void {
+    return serveInternal(io, gpa, endpoint, history_path, null);
 }
 
 /// Test seam for stopping an otherwise long-lived runtime without signals.
@@ -547,13 +673,24 @@ pub fn serveUntil(
     endpoint: []const u8,
     stop: *Io.Queue(u8),
 ) !void {
-    return serveInternal(io, gpa, endpoint, stop);
+    return serveInternal(io, gpa, endpoint, ":memory:", stop);
+}
+
+pub fn serveUntilWithHistory(
+    io: Io,
+    gpa: std.mem.Allocator,
+    endpoint: []const u8,
+    history_path: [:0]const u8,
+    stop: *Io.Queue(u8),
+) !void {
+    return serveInternal(io, gpa, endpoint, history_path, stop);
 }
 
 fn serveInternal(
     io: Io,
     gpa: std.mem.Allocator,
     endpoint: []const u8,
+    history_path: [:0]const u8,
     stop: ?*Io.Queue(u8),
 ) !void {
     _ = setenv("TERM", "xterm-256color", 1);
@@ -575,11 +712,23 @@ fn serveInternal(
     defer gpa.free(send_buffer);
     const input_buffer = try gpa.alloc(u8, schema.max_input_bytes);
     defer gpa.free(input_buffer);
+    const control_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(control_buffer);
 
-    var select_storage: [16 + 2 * max_panes]RuntimeEvent = undefined;
+    var history_service = try history.Service.init(gpa, history_path);
+    var history_worker = try io.concurrent(history.runWorker, .{ io, &history_service });
+    var history_owned = true;
+    errdefer if (history_owned) {
+        history_service.closeQueues(io);
+        _ = history_worker.await(io) catch {};
+        history_service.deinit(io);
+    };
+
+    var select_storage: [17 + 2 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
+    try select.concurrent(.history_response, history.receiveResponse, .{ io, &history_service });
     if (comptime diagnostics.enabled) {
         if (telemetry.available())
             try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
@@ -587,6 +736,7 @@ fn serveInternal(
 
     var connection: ?core.transport.SocketChannel = null;
     var control_connection: ?core.transport.SocketChannel = null;
+    var control_send: ControlSend = .none;
     var client_read_pending = false;
     var client_send_pending = false;
     var pane_input_pending = false;
@@ -596,8 +746,6 @@ fn serveInternal(
     var shutdown: ShutdownState = .{};
     var workspaces = WorkspaceStore.init(gpa);
     var panes: PaneStore = .{};
-    var control_receive_buffer: [1]u8 = undefined;
-    var control_send_buffer: [1]u8 = undefined;
     var telemetry_buffer: [4096]u8 = undefined;
     var telemetry_write_pending = false;
     var metrics: RuntimeMetrics = .{ .started_ns = diagnostics.now(io) };
@@ -615,6 +763,11 @@ fn serveInternal(
         attachments.deinit();
         panes.deinit();
         workspaces.deinit();
+        responses.clear();
+        history_service.closeQueues(io);
+        _ = history_worker.await(io) catch {};
+        history_service.deinit(io);
+        history_owned = false;
     }
 
     while (true) switch (try select.await()) {
@@ -634,7 +787,7 @@ fn serveInternal(
                 try select.concurrent(.control_message, receiveClient, .{
                     io,
                     &control_connection.?,
-                    &control_receive_buffer,
+                    control_buffer,
                 });
                 continue;
             }
@@ -682,6 +835,7 @@ fn serveInternal(
                 &pane_input_pending,
                 &shutdown,
                 &metrics,
+                &history_service,
             ) catch |err| {
                 if (err == error.RuntimeConcurrencyUnavailable) return err;
                 if (shutdown.primary_request) return;
@@ -789,7 +943,8 @@ fn serveInternal(
             switch (message) {
                 .runtime_stop => {
                     shutdown.requested = true;
-                    const reply = try schema.encodeRuntimeStopping(&control_send_buffer);
+                    const reply = try schema.encodeRuntimeStopping(control_buffer);
+                    control_send = .stop;
                     select.concurrent(.control_sent, sendClient, .{
                         io,
                         &control_connection.?,
@@ -797,6 +952,47 @@ fn serveInternal(
                     }) catch |err| {
                         return err;
                     };
+                },
+                .query_history => |request| {
+                    const query = history.Query.init(
+                        request.request_id,
+                        .control,
+                        request.query,
+                        request.scope,
+                        request.scope_value,
+                        request.pane_id,
+                        request.failed_only,
+                        request.limit,
+                    ) catch {
+                        const reply = try schema.encodeRequestFailed(control_buffer, .{
+                            .request_id = request.request_id,
+                            .code = .invalid_request,
+                            .message = "invalid history query",
+                        });
+                        control_send = .history;
+                        try select.concurrent(.control_sent, sendClient, .{
+                            io,
+                            &control_connection.?,
+                            reply,
+                        });
+                        continue;
+                    };
+                    if (!history_service.query(io, query)) {
+                        if (comptime diagnostics.enabled) metrics.history_query_failures += 1;
+                        const reply = try schema.encodeRequestFailed(control_buffer, .{
+                            .request_id = request.request_id,
+                            .code = .resource_limit,
+                            .message = "history queue is full",
+                        });
+                        control_send = .history;
+                        try select.concurrent(.control_sent, sendClient, .{
+                            io,
+                            &control_connection.?,
+                            reply,
+                        });
+                        continue;
+                    }
+                    if (comptime diagnostics.enabled) metrics.history_queries += 1;
                 },
                 else => {
                     control_connection.?.deinit(io);
@@ -806,6 +1002,13 @@ fn serveInternal(
         },
         .control_sent => |result| {
             _ = result catch {};
+            if (control_send == .history) {
+                control_send = .none;
+                control_connection.?.deinit(io);
+                control_connection = null;
+                continue;
+            }
+            control_send = .none;
             // A control client gets the acknowledgement first. The attached
             // UI then gets an explicit shutdown message so it can leave raw
             // mode cleanly instead of interpreting EOF as a runtime failure.
@@ -825,6 +1028,77 @@ fn serveInternal(
                 &metrics,
             ) catch return;
             if (!client_send_pending) return;
+        },
+        .history_response => |response_result| {
+            const response = response_result catch continue;
+            try select.concurrent(.history_response, history.receiveResponse, .{
+                io,
+                &history_service,
+            });
+            switch (response) {
+                .query_result => |result| switch (result.origin) {
+                    .primary => responses.push(.{ .history_result = result }) catch {
+                        result.deinit();
+                    },
+                    .control => {
+                        defer result.deinit();
+                        if (control_connection == null) continue;
+                        var entries: [history.model.max_results]schema.HistoryEntry = undefined;
+                        const reply = encodeHistoryResult(control_buffer, result, &entries) catch {
+                            control_connection.?.deinit(io);
+                            control_connection = null;
+                            continue;
+                        };
+                        control_send = .history;
+                        try select.concurrent(.control_sent, sendClient, .{
+                            io,
+                            &control_connection.?,
+                            reply,
+                        });
+                    },
+                },
+                .failed => |failure| switch (failure.origin) {
+                    .primary => queueFailure(
+                        &responses,
+                        failure.request_id,
+                        .internal,
+                        failure.message,
+                    ) catch {},
+                    .control => {
+                        if (control_connection == null) continue;
+                        const reply = schema.encodeRequestFailed(control_buffer, .{
+                            .request_id = failure.request_id,
+                            .code = .internal,
+                            .message = failure.message,
+                        }) catch {
+                            control_connection.?.deinit(io);
+                            control_connection = null;
+                            continue;
+                        };
+                        control_send = .history;
+                        try select.concurrent(.control_sent, sendClient, .{
+                            io,
+                            &control_connection.?,
+                            reply,
+                        });
+                    },
+                },
+            }
+            pumpSend(
+                io,
+                &select,
+                connectionPointer(&connection),
+                send_buffer,
+                &attachments,
+                &panes,
+                &responses,
+                &client_send_pending,
+                &sent_exit_pane,
+                &shutdown,
+                &metrics,
+            ) catch {
+                closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
+            };
         },
         .pane_input_written => |result| {
             pane_input_pending = false;
@@ -861,6 +1135,7 @@ fn serveInternal(
             };
             if (output_len == 0) {
                 active.output_done = true;
+                if (active.exit) |exit| active.finishExitedHistory(exit, &metrics);
             } else {
                 if (comptime diagnostics.enabled) {
                     metrics.pty_events += 1;
@@ -883,6 +1158,7 @@ fn serveInternal(
             const active = event.pane;
             active.wait_pending = false;
             active.exit = try event.result;
+            if (active.output_done) active.finishExitedHistory(active.exit.?, &metrics);
             pumpSend(io, &select, connectionPointer(&connection), send_buffer, &attachments, &panes, &responses, &client_send_pending, &sent_exit_pane, &shutdown, &metrics) catch {
                 closeClient(io, &connection, client_read_pending, client_send_pending, &attachments, &panes);
             };
@@ -906,6 +1182,7 @@ fn serveInternal(
                 &metrics,
                 &attachments,
                 panes.count,
+                &history_service,
             ) catch continue;
             telemetry_write_pending = true;
             select.concurrent(.telemetry_written, writeDiagnostics, .{
@@ -937,6 +1214,7 @@ fn dispatchClientMessage(
     input_pending: *bool,
     shutdown: *ShutdownState,
     metrics: *RuntimeMetrics,
+    history_service: *history.Service,
 ) !void {
     switch (message) {
         .open_pane => |open| {
@@ -968,7 +1246,16 @@ fn dispatchClientMessage(
                             panes.removeAndDestroy(existing);
                         } else break :pane existing;
                     }
-                    const fresh = spawnPane(io, gpa, select, panes, location, open.size, launch) catch |err| {
+                    const fresh = spawnPane(
+                        io,
+                        gpa,
+                        select,
+                        panes,
+                        location,
+                        open.size,
+                        launch,
+                        history_service,
+                    ) catch |err| {
                         if (err == error.RuntimeConcurrencyUnavailable) return err;
                         try queueSpawnFailure(responses, open.request_id, err);
                         return;
@@ -996,6 +1283,19 @@ fn dispatchClientMessage(
                 metrics.input_events += 1;
                 metrics.input_bytes += input.bytes.len;
             }
+            var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            if (active.session.cwd(&cwd_buffer)) |cwd| active.history_tracker.updateCwd(cwd);
+            var capture_context: Pane.CaptureContext = .{ .pane = active, .metrics = metrics };
+            const history_input_bytes = active.history_tracker.observeInput(
+                &active.terminal,
+                input.bytes,
+                active.session.shellForeground() orelse false,
+                historyClock(io),
+                &capture_context,
+                Pane.captureCommand,
+            );
+            if (comptime diagnostics.enabled)
+                metrics.history_candidate_input_bytes += history_input_bytes;
             std.debug.assert(!input_pending.*);
             @memcpy(input_buffer[0..input.bytes.len], input.bytes);
             input_pending.* = true;
@@ -1052,6 +1352,7 @@ fn dispatchClientMessage(
                 create.location,
                 create.size,
                 create.launch,
+                history_service,
             ) catch |err| {
                 if (err == error.RuntimeConcurrencyUnavailable) return err;
                 try queueSpawnFailure(responses, create.request_id, err);
@@ -1074,6 +1375,37 @@ fn dispatchClientMessage(
                 active.pane.close_requested = true;
                 active.pane.session.shutdown();
             }
+        },
+        .query_history => |request| {
+            const query = history.Query.init(
+                request.request_id,
+                .primary,
+                request.query,
+                request.scope,
+                request.scope_value,
+                request.pane_id,
+                request.failed_only,
+                request.limit,
+            ) catch {
+                try queueFailure(
+                    responses,
+                    request.request_id,
+                    .invalid_request,
+                    "invalid history query",
+                );
+                return;
+            };
+            if (!history_service.query(io, query)) {
+                if (comptime diagnostics.enabled) metrics.history_query_failures += 1;
+                try queueFailure(
+                    responses,
+                    request.request_id,
+                    .resource_limit,
+                    "history queue is full",
+                );
+                return;
+            }
+            if (comptime diagnostics.enabled) metrics.history_queries += 1;
         },
         .runtime_stop => {
             shutdown.requested = true;
@@ -1141,12 +1473,22 @@ fn spawnPane(
     location: schema.PaneLocation,
     size: schema.TerminalSize,
     launch: schema.LaunchView,
+    history_service: *history.Service,
 ) !*Pane {
     var command = try OwnedCommand.init(gpa, launch);
     defer command.deinit();
     const pane_id = try panes.allocateId();
     const fresh = fresh: {
-        const created = try Pane.create(io, gpa, pane_id, location, &command.command, size);
+        const created = try Pane.create(
+            io,
+            gpa,
+            pane_id,
+            location,
+            &command.command,
+            launch.cwd,
+            history_service,
+            size,
+        );
         errdefer created.destroy();
         try panes.insert(created);
         break :fresh created;
@@ -1287,6 +1629,8 @@ fn pumpSend(
 
     if (responses.peek()) |response| {
         var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
+        var history_storage: [history.model.max_results]schema.HistoryEntry = undefined;
+        var history_result: ?*history.model.QueryResult = null;
         const payload = switch (response.*) {
             .request_failed => |failure| try schema.encodeRequestFailed(buffer, .{
                 .request_id = failure.request_id,
@@ -1299,8 +1643,13 @@ fn pumpSend(
                 .location = snapshot.location,
                 .panes = panes.descriptorsAt(snapshot.location, &descriptor_storage),
             }),
+            .history_result => |result| payload: {
+                history_result = result;
+                break :payload try encodeHistoryResult(buffer, result, &history_storage);
+            },
         };
         try startSend(io, select, connection.?, payload, send_pending);
+        if (history_result) |result| result.deinit();
         responses.pop();
         return;
     }
@@ -1346,6 +1695,34 @@ fn pumpSend(
         attachments.next_send = (index + 1) % attachments.items.len;
         return;
     }
+}
+
+fn encodeHistoryResult(
+    buffer: []u8,
+    result: *const history.model.QueryResult,
+    storage: *[history.model.max_results]schema.HistoryEntry,
+) ![]const u8 {
+    std.debug.assert(result.entries.len <= storage.len);
+    for (result.entries, 0..) |entry, index| {
+        storage[index] = .{
+            .id = entry.id,
+            .pane_id = entry.pane_id,
+            .started_at_ms = entry.started_at_ms,
+            .duration_ns = entry.duration_ns,
+            .exit_code = entry.exit_code,
+            .status = switch (entry.status) {
+                .completed => .completed,
+                .interrupted => .interrupted,
+            },
+            .command = entry.command,
+            .cwd = entry.cwd,
+            .workspace_path = entry.workspace_path,
+        };
+    }
+    return schema.encodeHistoryResults(buffer, .{
+        .request_id = result.request_id,
+        .entries = storage[0..result.entries.len],
+    });
 }
 
 fn startSend(
@@ -1410,22 +1787,56 @@ fn writeDiagnostics(
     try sink.write(io, bytes);
 }
 
+fn historyClock(io: Io) history.osc.Clock {
+    return .{
+        .real_ms = Io.Timestamp.now(io, .real).toMilliseconds(),
+        .awake_ns = @intCast(Io.Timestamp.now(io, .awake).toNanoseconds()),
+    };
+}
+
 fn formatRuntimeTelemetry(
     buffer: []u8,
     io: Io,
     metrics: *const RuntimeMetrics,
     attachments: *const AttachmentStore,
     pane_count: usize,
+    history_service: *const history.Service,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
     var outstanding_frames: usize = 0;
     var dirty_panes: usize = 0;
+    var history_prompt_markers: u64 = 0;
+    var history_input_markers: u64 = 0;
+    var history_output_markers: u64 = 0;
+    var history_finished_markers: u64 = 0;
+    var history_osc_started: u64 = 0;
+    var history_osc_finished: u64 = 0;
+    var history_pty_submissions: u64 = 0;
+    var history_pty_captures: u64 = 0;
+    var history_pty_capture_failures: u64 = 0;
+    var history_foreground_completions: u64 = 0;
+    var history_next_input_completions: u64 = 0;
+    var history_auxiliary_completions: u64 = 0;
     for (attachments.items) |slot| {
         const active = slot orelse continue;
         if (active.outstanding_frame_id != 0) outstanding_frames += 1;
         if (active.pane.dirty) dirty_panes += 1;
+        history_prompt_markers += active.pane.history_tracker.aux.prompt_markers;
+        history_input_markers += active.pane.history_tracker.aux.input_markers;
+        history_output_markers += active.pane.history_tracker.aux.output_markers;
+        history_finished_markers += active.pane.history_tracker.aux.finished_markers;
+        history_osc_started += active.pane.history_tracker.aux.osc_started;
+        history_osc_finished += active.pane.history_tracker.aux.osc_finished;
+        history_pty_submissions += active.pane.history_tracker.submissions_armed;
+        history_pty_captures += active.pane.history_tracker.submissions_captured;
+        history_pty_capture_failures += active.pane.history_tracker.capture_failures;
+        history_foreground_completions += active.pane.history_tracker.foreground_completions;
+        history_next_input_completions += active.pane.history_tracker.next_input_completions;
+        history_auxiliary_completions += active.pane.history_tracker.auxiliary_completions;
     }
-    return std.fmt.bufPrint(buffer, "{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
+    const history_stats = history_service.statsSnapshot();
+    var output = Io.Writer.fixed(buffer);
+    try output.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
         "\"pane_count\":{d},\"attachment_count\":{d}," ++
         "\"outstanding_frames\":{d},\"dirty_panes\":{d}," ++
         "\"client_messages\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
@@ -1435,11 +1846,7 @@ fn formatRuntimeTelemetry(
         "\"cursor_only_frames\":{d},\"noop_frames\":{d}," ++
         "\"damaged_rows\":{d},\"diff_scanned_cells\":{d}," ++
         "\"coalesced_spans\":{d},\"bridged_cells\":{d}," ++
-        "\"coalesced_bytes_saved\":{d}," ++
-        "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
-        "\"ingest_avg_us\":{d},\"ingest_max_us\":{d}," ++
-        "\"encode_avg_us\":{d},\"encode_max_us\":{d}," ++
-        "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
+        "\"coalesced_bytes_saved\":{d},", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
         pane_count,
@@ -1464,6 +1871,57 @@ fn formatRuntimeTelemetry(
         metrics.coalesced_spans,
         metrics.bridged_cells,
         metrics.coalesced_bytes_saved,
+    });
+    try output.print("\"history_captured\":{d},\"history_dropped\":{d}," ++
+        "\"history_candidate_input_bytes\":{d}," ++
+        "\"history_prompt_markers\":{d},\"history_input_markers\":{d}," ++
+        "\"history_output_markers\":{d},\"history_finished_markers\":{d}," ++
+        "\"history_osc_started\":{d},\"history_osc_finished\":{d}," ++
+        "\"history_pty_submissions\":{d},\"history_pty_captures\":{d}," ++
+        "\"history_pty_capture_failures\":{d}," ++
+        "\"history_foreground_completions\":{d}," ++
+        "\"history_next_input_completions\":{d}," ++
+        "\"history_auxiliary_completions\":{d},", .{
+        metrics.history_captured,
+        metrics.history_dropped,
+        metrics.history_candidate_input_bytes,
+        history_prompt_markers,
+        history_input_markers,
+        history_output_markers,
+        history_finished_markers,
+        history_osc_started,
+        history_osc_finished,
+        history_pty_submissions,
+        history_pty_captures,
+        history_pty_capture_failures,
+        history_foreground_completions,
+        history_next_input_completions,
+        history_auxiliary_completions,
+    });
+    try output.print("\"history_queries\":{d},\"history_query_failures\":{d}," ++
+        "\"history_queue_depth\":{d},\"history_queue_high_water\":{d}," ++
+        "\"history_queue_dropped\":{d}," ++
+        "\"sqlite_writes\":{d},\"sqlite_write_failures\":{d}," ++
+        "\"sqlite_write_avg_us\":{d},\"sqlite_write_max_us\":{d}," ++
+        "\"sqlite_queries\":{d},\"sqlite_query_failures\":{d}," ++
+        "\"sqlite_query_avg_us\":{d},\"sqlite_query_max_us\":{d}," ++
+        "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
+        "\"ingest_avg_us\":{d},\"ingest_max_us\":{d}," ++
+        "\"encode_avg_us\":{d},\"encode_max_us\":{d}," ++
+        "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
+        metrics.history_queries,
+        metrics.history_query_failures,
+        history_stats.queued,
+        history_stats.queue_high_water,
+        history_stats.dropped,
+        history_stats.sqlite_writes,
+        history_stats.sqlite_write_failures,
+        averageNs(history_stats.sqlite_write_ns, history_stats.sqlite_writes) / std.time.ns_per_us,
+        history_stats.sqlite_write_max_ns / std.time.ns_per_us,
+        history_stats.sqlite_queries,
+        history_stats.sqlite_query_failures,
+        averageNs(history_stats.sqlite_query_ns, history_stats.sqlite_queries) / std.time.ns_per_us,
+        history_stats.sqlite_query_max_ns / std.time.ns_per_us,
         metrics.decode.average() / std.time.ns_per_us,
         metrics.decode.max_ns / std.time.ns_per_us,
         metrics.ingest.average() / std.time.ns_per_us,
@@ -1473,6 +1931,11 @@ fn formatRuntimeTelemetry(
         metrics.ack.average() / std.time.ns_per_us,
         metrics.ack.max_ns / std.time.ns_per_us,
     });
+    return output.buffered();
+}
+
+fn averageNs(total: u64, count: u64) u64 {
+    return if (count == 0) 0 else total / count;
 }
 
 fn writePaneInput(io: Io, master: File, bytes: []const u8) anyerror!void {
