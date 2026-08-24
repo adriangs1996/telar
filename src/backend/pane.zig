@@ -1160,3 +1160,18 @@ test "the PTY response queue bounds depth and entry size" {
     try std.testing.expectEqual(@as(u8, 0), queue.len);
     try std.testing.expect(queue.peek() == null);
 }
+
+test "the pane input queue reports whole-message loss" {
+    var queue: PaneInputQueue = .{};
+    const first = [_]u8{'a'} ** schema.max_input_bytes;
+    const second = [_]u8{'b'} ** schema.max_input_bytes;
+    try std.testing.expect(queue.push(&first));
+    try std.testing.expect(queue.push(&second));
+    try std.testing.expect(!queue.push("lost"));
+    try std.testing.expectEqual(@as(u64, 4), queue.dropped_bytes);
+    try std.testing.expectEqual(@as(usize, PaneInputQueue.capacity), queue.len);
+
+    queue.consume(schema.max_input_bytes);
+    try std.testing.expect(queue.push("kept"));
+    try std.testing.expectEqualStrings(second[0..], queue.nextChunk().?);
+}

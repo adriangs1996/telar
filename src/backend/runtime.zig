@@ -1247,6 +1247,8 @@ fn serveInternal(
                 server.workspaces.totalTabs(),
                 &server.panes,
                 &history_service,
+                server.responses.len,
+                server.responses.dropped,
             ) catch continue;
             telemetry_write_pending = true;
             select.concurrent(.telemetry_written, writeDiagnostics, .{

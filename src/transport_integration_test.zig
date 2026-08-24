@@ -4,6 +4,58 @@ const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
 const handshake = core.handshake;
 
+const test_receive_timeout: std.Io.Timeout = .{
+    .duration = .{ .clock = .awake, .raw = .fromSeconds(5) },
+};
+
+const TestReceiveEvent = union(enum) {
+    received: anyerror![]u8,
+    expired: anyerror!void,
+};
+
+/// Runtime integration reads must fail instead of hanging the whole test
+/// process. A timeout makes the framed stream unusable because the reader may
+/// have consumed part of a frame, so the failure path shuts the channel down.
+const RuntimeTestChannel = struct {
+    channel: core.transport.SocketChannel,
+
+    fn send(self: *RuntimeTestChannel, io: std.Io, payload: []const u8) !void {
+        return self.channel.send(io, payload);
+    }
+
+    fn receive(self: *RuntimeTestChannel, io: std.Io, buffer: []u8) ![]u8 {
+        var storage: [2]TestReceiveEvent = undefined;
+        var select = std.Io.Select(TestReceiveEvent).init(io, &storage);
+        defer select.cancelDiscard();
+        try select.concurrent(.received, receiveRuntimeFrame, .{ io, &self.channel, buffer });
+        try select.concurrent(.expired, waitForTestReceiveDeadline, .{io});
+        return switch (try select.await()) {
+            .received => |result| try result,
+            .expired => |result| {
+                try result;
+                self.channel.shutdown(io);
+                return error.TestReceiveDeadlineExceeded;
+            },
+        };
+    }
+
+    fn deinit(self: *RuntimeTestChannel, io: std.Io) void {
+        self.channel.deinit(io);
+    }
+};
+
+fn receiveRuntimeFrame(
+    io: std.Io,
+    connection: *core.transport.SocketChannel,
+    buffer: []u8,
+) anyerror![]u8 {
+    return connection.receive(io, buffer);
+}
+
+fn waitForTestReceiveDeadline(io: std.Io) anyerror!void {
+    return test_receive_timeout.sleep(io);
+}
+
 const HandshakeWorker = struct {
     io: std.Io,
     connection: *core.transport.SocketChannel,
@@ -256,17 +308,8 @@ test "runtime destroys a pane after its shell exits" {
         _ = server.await(io) catch {};
     }
 
-    var client: ?core.transport.SocketChannel = null;
-    for (0..200) |_| {
-        client = frontend.transport.local.connect(io, path) catch null;
-        if (client != null) break;
-        try io.sleep(.fromMilliseconds(1), .awake);
-    }
-    var connection = client orelse return error.RuntimeDidNotStart;
+    var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
-
-    const negotiated = try frontend.transport.handshake.perform(io, &connection);
-    try std.testing.expect(negotiated == .accepted);
 
     const arguments = [_][]const u8{
         "/bin/sh",
@@ -1682,7 +1725,7 @@ test "input to one pane flows while another pane's PTY is wedged" {
     try std.testing.expect(forwarded);
 }
 
-fn connectRuntimeForTest(io: std.Io, path: []const u8) !core.transport.SocketChannel {
+fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     for (0..200) |_| {
         var connection = frontend.transport.local.connect(io, path) catch {
             try io.sleep(.fromMilliseconds(1), .awake);
@@ -1693,7 +1736,7 @@ fn connectRuntimeForTest(io: std.Io, path: []const u8) !core.transport.SocketCha
             try io.sleep(.fromMilliseconds(1), .awake);
             continue;
         };
-        if (negotiated == .accepted) return connection;
+        if (negotiated == .accepted) return .{ .channel = connection };
         connection.deinit(io);
         return error.IncompatibleRuntime;
     }

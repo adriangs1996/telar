@@ -55,6 +55,8 @@ pub fn formatRuntimeTelemetry(
     tab_count: usize,
     panes: *const PaneStore,
     history_service: *const history.Service,
+    response_queue_depth: usize,
+    response_queue_dropped: u64,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
     var outstanding_frames: usize = 0;
@@ -78,11 +80,17 @@ pub fn formatRuntimeTelemetry(
     var graphics_loading_bytes: usize = 0;
     var pty_response_queue_depth: usize = 0;
     var pty_response_dropped: u64 = 0;
+    var pane_input_queue_depth: usize = 0;
+    var pane_input_dropped_bytes: u64 = 0;
+    var history_input_dropped: u64 = 0;
     for (panes.items) |slot| {
         const pane = slot orelse continue;
         if (pane.ingest_pending) continue;
         pty_response_queue_depth += pane.pty_responses.len;
         pty_response_dropped += pane.pty_responses.dropped;
+        pane_input_queue_depth += pane.input_queue.len;
+        pane_input_dropped_bytes +|= pane.input_queue.dropped_bytes;
+        history_input_dropped +|= pane.history_input_dropped;
         for (std.enums.values(vt.ScreenSet.Key)) |key| {
             const screen = pane.terminal.screens.get(key) orelse continue;
             graphics_images += screen.kitty_images.images.count();
@@ -160,7 +168,9 @@ pub fn formatRuntimeTelemetry(
             "\"graphics_images\":{d},\"graphics_placements\":{d}," ++
             "\"graphics_resident_bytes\":{d},\"graphics_transfer_bytes\":{d}," ++
             "\"graphics_loading_bytes\":{d}," ++
-            "\"pty_response_queue_depth\":{d},\"pty_response_dropped\":{d},",
+            "\"pty_response_queue_depth\":{d},\"pty_response_dropped\":{d}," ++
+            "\"pane_input_queue_depth\":{d},\"pane_input_dropped_bytes\":{d}," ++
+            "\"response_queue_depth\":{d},\"response_queue_dropped\":{d},",
         .{
             metrics.graphics_messages,
             metrics.graphics_bytes,
@@ -171,10 +181,14 @@ pub fn formatRuntimeTelemetry(
             graphics_loading_bytes,
             pty_response_queue_depth,
             pty_response_dropped,
+            pane_input_queue_depth,
+            pane_input_dropped_bytes,
+            response_queue_depth,
+            response_queue_dropped,
         },
     );
     try output.print("\"history_captured\":{d},\"history_dropped\":{d}," ++
-        "\"history_candidate_input_bytes\":{d}," ++
+        "\"history_candidate_input_bytes\":{d},\"history_input_dropped\":{d}," ++
         "\"history_prompt_markers\":{d},\"history_input_markers\":{d}," ++
         "\"history_output_markers\":{d},\"history_finished_markers\":{d}," ++
         "\"history_osc_started\":{d},\"history_osc_finished\":{d}," ++
@@ -186,6 +200,7 @@ pub fn formatRuntimeTelemetry(
         metrics.history_captured,
         metrics.history_dropped,
         metrics.history_candidate_input_bytes,
+        history_input_dropped,
         history_prompt_markers,
         history_input_markers,
         history_output_markers,

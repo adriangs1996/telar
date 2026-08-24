@@ -129,6 +129,7 @@ const Measurement = struct {
     median_ns: u64,
     minimum_ns: u64,
     p95_ns: u64,
+    p99_ns: u64,
 };
 
 fn timestamp(io: Io) u64 {
@@ -177,11 +178,13 @@ fn measure(
     std.sort.heap(u64, samples[0..config.samples], {}, std.sort.asc(u64));
 
     const p95_index = (config.samples * 95 + 99) / 100 - 1;
+    const p99_index = (config.samples * 99 + 99) / 100 - 1;
     return .{
         .iterations = iterations,
         .minimum_ns = samples[0],
         .median_ns = samples[config.samples / 2],
         .p95_ns = samples[p95_index],
+        .p99_ns = samples[p99_index],
     };
 }
 
@@ -194,7 +197,8 @@ fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measureme
         try writer.print(
             "{{\"type\":\"benchmark\",\"name\":\"{s}\",\"iterations\":{d}," ++
                 "\"samples\":{d},\"median_ns_per_op\":{d},\"min_ns_per_op\":{d}," ++
-                "\"p95_ns_per_op\":{d},\"work_per_op\":{d},\"work_unit\":\"{s}\"," ++
+                "\"p95_ns_per_op\":{d},\"p99_ns_per_op\":{d}," ++
+                "\"work_per_op\":{d},\"work_unit\":\"{s}\"," ++
                 "\"work_per_second\":{d},\"payload_bytes_per_op\":{d}}}\n",
             .{
                 case.name,
@@ -203,6 +207,7 @@ fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measureme
                 result.median_ns,
                 result.minimum_ns,
                 result.p95_ns,
+                result.p99_ns,
                 case.work_per_op,
                 case.work_unit,
                 rate,
@@ -210,10 +215,11 @@ fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measureme
             },
         );
     } else {
-        try writer.print("{s}\n  median {d} ns/op, p95 {d} ns/op, min {d} ns/op, {d} {s}/s", .{
+        try writer.print("{s}\n  median {d} ns/op, p95 {d} ns/op, p99 {d} ns/op, min {d} ns/op, {d} {s}/s", .{
             case.name,
             result.median_ns,
             result.p95_ns,
+            result.p99_ns,
             result.minimum_ns,
             rate,
             case.work_unit,
