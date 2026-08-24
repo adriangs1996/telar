@@ -20,6 +20,7 @@ const diagnostics = core.diagnostics;
 
 pub const GraphicsLimits = pane_mod.GraphicsLimits;
 const Pane = pane_mod.Pane;
+const PaneKey = pane_mod.PaneKey;
 const PaneIngestStats = pane_mod.PaneIngestStats;
 const PaneStore = pane_mod.PaneStore;
 const historyClock = pane_mod.historyClock;
@@ -48,29 +49,29 @@ pub const ServeOptions = struct {
 };
 
 const PaneOutputEvent = struct {
-    pane: *Pane,
+    pane: PaneKey,
     result: anyerror!u16,
 };
 
 const PaneIngestEvent = struct {
-    pane: *Pane,
+    pane: PaneKey,
     result: anyerror!PaneIngestStats,
 };
 
 const PaneInputEvent = struct {
-    pane: *Pane,
+    pane: PaneKey,
     len: usize,
     started_ns: u64,
     result: anyerror!void,
 };
 
 const PaneExitEvent = struct {
-    pane: *Pane,
+    pane: PaneKey,
     result: anyerror!pty.Exit,
 };
 
 const PaneResponseEvent = struct {
-    pane: *Pane,
+    pane: PaneKey,
     result: anyerror!void,
 };
 
@@ -1226,7 +1227,11 @@ fn serveInternal(
             server.pumpOrDrop();
         },
         .pane_input_written => |event| {
-            const active = event.pane;
+            const active = server.panes.resolve(event.pane) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            active.actorFinished();
             active.input_write_pending = false;
             if (comptime diagnostics.enabled)
                 server.metrics.input_write.observe(
@@ -1243,7 +1248,11 @@ fn serveInternal(
             server.collect();
         },
         .pane_response_written => |event| {
-            const active = event.pane;
+            const active = server.panes.resolve(event.pane) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            active.actorFinished();
             active.response_pending = false;
             if (event.result) |_| {
                 active.pty_responses.pop();
@@ -1254,7 +1263,11 @@ fn serveInternal(
             server.collect();
         },
         .pane_output => |event| {
-            const active = event.pane;
+            const active = server.panes.resolve(event.pane) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            active.actorFinished();
             active.output_pending = false;
             const output_len = event.result catch {
                 active.output_done = true;
@@ -1277,19 +1290,28 @@ fn serveInternal(
                 }
                 active.sealHistoryInput();
                 active.ingest_pending = true;
-                try select.concurrent(.pane_ingested, ingestPane, .{
+                active.actorStarted();
+                select.concurrent(.pane_ingested, ingestPane, .{
                     io,
                     active,
                     output_len,
                     ingest_gate,
-                });
+                }) catch |err| {
+                    active.actorFinished();
+                    active.ingest_pending = false;
+                    return err;
+                };
                 continue;
             }
             server.collect();
             server.pumpOrDrop();
         },
         .pane_ingested => |event| {
-            const active = event.pane;
+            const active = server.panes.resolve(event.pane) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            active.actorFinished();
             active.ingest_pending = false;
             const stats = event.result catch {
                 active.close_requested = true;
@@ -1314,12 +1336,21 @@ fn serveInternal(
             active.observeGraphicsDamage();
             try schedulePaneResponse(io, &select, active);
             active.output_pending = true;
-            try select.concurrent(.pane_output, readPane, .{ io, active });
+            active.actorStarted();
+            select.concurrent(.pane_output, readPane, .{ io, active }) catch |err| {
+                active.actorFinished();
+                active.output_pending = false;
+                return err;
+            };
             server.collect();
             server.pumpOrDrop();
         },
         .pane_exit => |event| {
-            const active = event.pane;
+            const active = server.panes.resolve(event.pane) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            active.actorFinished();
             active.wait_pending = false;
             active.exit = exitOrSynthetic(event.result);
             server.panes.exited_count += 1;
@@ -1437,12 +1468,12 @@ fn spawnPane(
 ) !*Pane {
     var command = try OwnedCommand.init(gpa, launch);
     defer command.deinit();
-    const pane_id = try panes.allocateId();
+    const pane_key = try panes.allocateKey();
     const fresh = fresh: {
         const created = try Pane.create(
             io,
             gpa,
-            pane_id,
+            pane_key,
             location,
             &command.command,
             launch.cwd,
@@ -1460,6 +1491,7 @@ fn spawnPane(
         return err;
     };
     fresh.output_pending = true;
+    fresh.actorStarted();
     select.concurrent(.pane_exit, waitPane, .{fresh}) catch {
         // The output actor already owns `fresh`, so this cannot be recovered
         // as a failed request without risking a use-after-free. Stop the
@@ -1470,6 +1502,7 @@ fn spawnPane(
         return error.RuntimeConcurrencyUnavailable;
     };
     fresh.wait_pending = true;
+    fresh.actorStarted();
     return fresh;
 }
 
@@ -1697,7 +1730,7 @@ fn writePaneInput(io: Io, pane: *Pane, bytes: []const u8, started_ns: u64) PaneI
     pane.pty_write_mutex.lockUncancelable(io);
     defer pane.pty_write_mutex.unlock(io);
     return .{
-        .pane = pane,
+        .pane = pane.key(),
         .len = bytes.len,
         .started_ns = started_ns,
         .result = pane.session.file().writeStreamingAll(io, bytes),
@@ -1715,12 +1748,14 @@ fn schedulePaneInput(
     if (pane.input_write_pending) return;
     const chunk = pane.input_queue.nextChunk() orelse return;
     pane.input_write_pending = true;
+    pane.actorStarted();
     select.concurrent(.pane_input_written, writePaneInput, .{
         io,
         pane,
         chunk,
         if (comptime diagnostics.enabled) diagnostics.now(io) else 0,
     }) catch |err| {
+        pane.actorFinished();
         pane.input_write_pending = false;
         return err;
     };
@@ -1734,11 +1769,13 @@ fn schedulePaneResponse(
     if (pane.response_pending) return;
     const response = pane.pty_responses.peek() orelse return;
     pane.response_pending = true;
+    pane.actorStarted();
     select.concurrent(.pane_response_written, writePaneResponse, .{
         io,
         pane,
         response,
     }) catch |err| {
+        pane.actorFinished();
         pane.response_pending = false;
         return err;
     };
@@ -1748,7 +1785,7 @@ fn writePaneResponse(io: Io, pane: *Pane, bytes: []const u8) PaneResponseEvent {
     pane.pty_write_mutex.lockUncancelable(io);
     defer pane.pty_write_mutex.unlock(io);
     return .{
-        .pane = pane,
+        .pane = pane.key(),
         .result = pane.session.file().writeStreamingAll(io, bytes),
     };
 }
@@ -1776,8 +1813,8 @@ fn receiveClient(
 
 fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
     const len = pane.session.file().readStreaming(io, &.{&pane.output_buffer}) catch |err|
-        return .{ .pane = pane, .result = err };
-    return .{ .pane = pane, .result = @intCast(len) };
+        return .{ .pane = pane.key(), .result = err };
+    return .{ .pane = pane.key(), .result = @intCast(len) };
 }
 
 fn ingestPane(
@@ -1787,12 +1824,12 @@ fn ingestPane(
     ingest_gate: ?*IngestTestGate,
 ) PaneIngestEvent {
     if (ingest_gate) |gate| gate.wait(io) catch |err|
-        return .{ .pane = pane, .result = err };
+        return .{ .pane = pane.key(), .result = err };
     var stats: PaneIngestStats = .{};
     stats.history_input_bytes = pane.processHistoryInput(&stats);
     stats.elapsed_ns = pane.ingest(io, pane.output_buffer[0..output_len], &stats) catch |err|
-        return .{ .pane = pane, .result = err };
-    return .{ .pane = pane, .result = stats };
+        return .{ .pane = pane.key(), .result = err };
+    return .{ .pane = pane.key(), .result = stats };
 }
 
 /// A resize that cannot get storage retires the affected pane - its state is
@@ -1814,7 +1851,7 @@ fn exitOrSynthetic(result: anyerror!pty.Exit) pty.Exit {
 
 fn waitPane(pane: *Pane) PaneExitEvent {
     const result = pane.session.wait();
-    return .{ .pane = pane, .result = result };
+    return .{ .pane = pane.key(), .result = result };
 }
 
 test "a wait failure becomes a synthetic exit instead of a runtime error" {

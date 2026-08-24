@@ -518,7 +518,7 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
     const pane = try Pane.create(
         io,
         gpa,
-        try schema.id.pane(1),
+        .{ .id = try schema.id.pane(1), .generation = 1 },
         location,
         &command,
         "/",
@@ -586,7 +586,7 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
     const pane = try Pane.create(
         io,
         gpa,
-        try schema.id.pane(1),
+        .{ .id = try schema.id.pane(1), .generation = 1 },
         location,
         &command,
         "/",

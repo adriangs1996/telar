@@ -1,8 +1,8 @@
 //! One runtime pane: its process, PTY, emulator, buffers, and quotas.
 //!
 //! Split out of `runtime.zig`; ownership rules are unchanged. The runtime
-//! event loop drives these panes through `PaneStore`, and actor threads
-//! borrow `*Pane` only under the pending flags that `readyToDestroy` checks.
+//! event loop drives these panes through `PaneStore`. Actor results cross back
+//! into that owner as `PaneKey` values, never as mutable pane pointers.
 
 const std = @import("std");
 const vt = @import("ghostty-vt");
@@ -25,6 +25,13 @@ pub const output_chunk_size = 16 * 1024;
 pub const max_pty_response_bytes = 1024;
 
 pub const max_pty_responses = 64;
+
+/// Stable identity for work that can finish after the pane lifecycle moved
+/// on. Generation makes future id reuse safe without changing actor events.
+pub const PaneKey = struct {
+    id: schema.PaneId,
+    generation: u64,
+};
 
 /// Runtime-owned KGP budgets. Values may be lowered by future user
 /// configuration but never raised past the protocol hard limits shared with
@@ -346,6 +353,7 @@ pub const HistoryInputBatch = struct {
 
 pub const Pane = struct {
     id: schema.PaneId,
+    generation: u64,
     location: schema.TabLocation,
     session: pty.Session,
     terminal: vt.Terminal,
@@ -376,6 +384,7 @@ pub const Pane = struct {
     dirty: bool = true,
     output_pending: bool = false,
     ingest_pending: bool = false,
+    actor_count: u8 = 0,
     output_done: bool = false,
     wait_pending: bool = false,
     close_requested: bool = false,
@@ -398,7 +407,7 @@ pub const Pane = struct {
     pub fn create(
         io: Io,
         gpa: std.mem.Allocator,
-        id: schema.PaneId,
+        identity: PaneKey,
         location: schema.TabLocation,
         command: *const pty.Command,
         workspace_path: []const u8,
@@ -426,7 +435,8 @@ pub const Pane = struct {
         // handler-bearing fields stay `undefined` until the pane has its
         // final address, because the VT handler captures `&pane.terminal`.
         pane.* = .{
-            .id = id,
+            .id = identity.id,
+            .generation = identity.generation,
             .location = location,
             .io = io,
             .gpa = gpa,
@@ -516,6 +526,20 @@ pub const Pane = struct {
             .sgr = modes.get(.mouse_format_sgr) or pixels,
             .pixels = pixels,
         };
+    }
+
+    pub fn key(pane: *const Pane) PaneKey {
+        return .{ .id = pane.id, .generation = pane.generation };
+    }
+
+    pub fn actorStarted(pane: *Pane) void {
+        std.debug.assert(pane.actor_count < 5);
+        pane.actor_count += 1;
+    }
+
+    pub fn actorFinished(pane: *Pane) void {
+        std.debug.assert(pane.actor_count != 0);
+        pane.actor_count -= 1;
     }
 
     pub fn inputModeState(pane: *const Pane) schema.frame.InputModes {
@@ -754,14 +778,13 @@ pub const Pane = struct {
         );
     }
 
-    /// True only when no actor thread can still hold this pane. Actors borrow
-    /// `*Pane` rather than an ID, so every destroy site must consult this
-    /// predicate; destroying past a pending flag is a use-after-free.
+    /// True only when no actor task can still access the pane allocation.
+    /// Scheduling owns one count and consuming its `PaneKey` result releases
+    /// it, so adding a new actor cannot silently bypass the lifetime proof by
+    /// forgetting to extend a list of operation-specific flags.
     pub fn readyToDestroy(pane: *const Pane) bool {
         return pane.exit != null and pane.output_done and
-            !pane.output_pending and !pane.ingest_pending and
-            !pane.wait_pending and !pane.response_pending and
-            !pane.input_write_pending and
+            pane.actor_count == 0 and
             pane.pty_responses.len == 0;
     }
 
@@ -911,6 +934,7 @@ pub const PaneStore = struct {
     exited_count: usize = 0,
     index: SlotIndex(2 * max_panes) = .{},
     next_id: u64 = 1,
+    next_generation: u64 = 1,
     graphics_limits: GraphicsLimits = .{},
     graphics_budget: GraphicsBudget = .init(core.graphics.max_image_bytes_global),
 
@@ -918,6 +942,12 @@ pub const PaneStore = struct {
         const slot = store.index.get(schema.id.raw(pane_id)) orelse return null;
         const pane = store.items[slot].?;
         std.debug.assert(pane.id == pane_id);
+        return pane;
+    }
+
+    pub fn resolve(store: *PaneStore, key: PaneKey) ?*Pane {
+        const pane = store.find(key.id) orelse return null;
+        if (pane.generation != key.generation) return null;
         return pane;
     }
 
@@ -979,11 +1009,15 @@ pub const PaneStore = struct {
         }
     }
 
-    pub fn allocateId(store: *PaneStore) !schema.PaneId {
+    pub fn allocateKey(store: *PaneStore) !PaneKey {
         if (store.count == max_panes) return error.PaneLimitReached;
         const pane_id = try schema.id.pane(store.next_id);
+        if (store.next_generation == 0 or store.next_generation == std.math.maxInt(u64))
+            return error.PaneGenerationExhausted;
+        const generation = store.next_generation;
         store.next_id += 1;
-        return pane_id;
+        store.next_generation += 1;
+        return .{ .id = pane_id, .generation = generation };
     }
 
     pub fn insert(store: *PaneStore, pane: *Pane) !void {
@@ -1032,6 +1066,27 @@ pub fn historyClock(io: Io) history.osc.Clock {
         .real_ms = Io.Timestamp.now(io, .real).toMilliseconds(),
         .awake_ns = @intCast(Io.Timestamp.now(io, .awake).toNanoseconds()),
     };
+}
+
+test "pane store rejects an event from another generation" {
+    var store: PaneStore = .{};
+    var pane: Pane = undefined;
+    pane.id = @enumFromInt(7);
+    pane.generation = 11;
+    try store.insert(&pane);
+
+    try std.testing.expectEqual(&pane, store.resolve(.{
+        .id = pane.id,
+        .generation = pane.generation,
+    }).?);
+    try std.testing.expect(store.resolve(.{
+        .id = pane.id,
+        .generation = pane.generation + 1,
+    }) == null);
+
+    store.index.remove(schema.id.raw(pane.id));
+    store.items = @splat(null);
+    store.count = 0;
 }
 
 test "graphics allocator reserves pane and global bytes before allocation" {
@@ -1093,26 +1148,18 @@ test "a pane is destroyable only when no actor can still borrow it" {
     var pane: Pane = undefined;
     pane.exit = .{ .exited = 0 };
     pane.output_done = true;
-    pane.output_pending = false;
-    pane.ingest_pending = false;
-    pane.wait_pending = false;
-    pane.response_pending = false;
+    pane.actor_count = 0;
     pane.pty_responses = .{};
     try std.testing.expect(pane.readyToDestroy());
 
-    // Each pending flag marks an actor thread that still holds `*Pane`.
-    pane.response_pending = true;
+    pane.actorStarted();
     try std.testing.expect(!pane.readyToDestroy());
-    pane.response_pending = false;
-    pane.wait_pending = true;
+    pane.actorStarted();
     try std.testing.expect(!pane.readyToDestroy());
-    pane.wait_pending = false;
-    pane.ingest_pending = true;
+    pane.actorFinished();
     try std.testing.expect(!pane.readyToDestroy());
-    pane.ingest_pending = false;
-    pane.output_pending = true;
-    try std.testing.expect(!pane.readyToDestroy());
-    pane.output_pending = false;
+    pane.actorFinished();
+    try std.testing.expect(pane.readyToDestroy());
     _ = pane.pty_responses.push("late reply");
     try std.testing.expect(!pane.readyToDestroy());
     pane.pty_responses.clear();
