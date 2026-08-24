@@ -365,6 +365,30 @@ pub fn build(b: *std.Build) void {
             }),
         });
         cross_step.dependOn(&check.step);
+        if (query.os_tag.? == .linux) {
+            const cross_unicode = b.createModule(.{
+                .root_source_file = b.path("src/core/unicode_fake.zig"),
+                .target = b.resolveTargetQuery(query),
+                .optimize = .Debug,
+            });
+            const cross_core = b.createModule(.{
+                .root_source_file = b.path("src/core/root.zig"),
+                .target = b.resolveTargetQuery(query),
+                .optimize = .Debug,
+            });
+            cross_core.addImport("unicode", cross_unicode);
+            const local_transport_check = b.addObject(.{
+                .name = "local-transport-linux",
+                .root_module = b.createModule(.{
+                    .root_source_file = b.path("src/backend/transport/local.zig"),
+                    .target = b.resolveTargetQuery(query),
+                    .optimize = .Debug,
+                    .link_libc = true,
+                }),
+            });
+            local_transport_check.root_module.addImport("telar-core", cross_core);
+            cross_step.dependOn(&local_transport_check.step);
+        }
     }
     test_step.dependOn(cross_step);
 }
