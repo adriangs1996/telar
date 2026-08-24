@@ -7,12 +7,14 @@ const client_outbox = @import("client_outbox.zig");
 const client_requests = @import("client_requests.zig");
 const client_telemetry = @import("client_telemetry.zig");
 const client_view = @import("client_ui.zig");
+const default_bindings = @import("default_bindings.zig");
 const input_mod = @import("input.zig");
 const keybind = @import("keybind.zig");
 const kitty = @import("kitty.zig");
 const layout_mod = @import("layout.zig");
 const lua_config = @import("lua_config.zig");
 const multiplexer = @import("multiplexer.zig");
+const mouse_protocol = @import("mouse_protocol.zig");
 const pace = @import("pace.zig");
 const platform = @import("platform.zig");
 const plugin_broker = @import("plugin_broker.zig");
@@ -28,9 +30,9 @@ const ui = core.ui;
 
 const input_chunk_size = 4096;
 const max_bindings = 256;
-const max_binding_keys = 4;
+const max_binding_keys = default_bindings.max_keys;
 const held_binding_bytes = 128;
-const default_binding_count = 25;
+const default_binding_count = default_bindings.count;
 
 pub const Action = action_mod.Action;
 
@@ -71,6 +73,8 @@ pub const Options = struct {
 };
 
 const ClientMetrics = client_telemetry.Metrics;
+const encodeSgrMouse = mouse_protocol.encodeSgr;
+const mouseTracked = mouse_protocol.tracked;
 
 const InputChunk = struct {
     bytes: [input_chunk_size]u8 = undefined,
@@ -1830,35 +1834,7 @@ const InputHandler = struct {
     }
 };
 
-fn defaultBindings() ![default_binding_count]ConfiguredBinding {
-    return .{
-        try .parse(&.{ "ctrl+b", "%" }, .{ .split_pane = .horizontal }),
-        try .parse(&.{ "ctrl+b", "\"" }, .{ .split_pane = .vertical }),
-        try .parse(&.{ "ctrl+b", "left" }, .{ .focus_pane = .left }),
-        try .parse(&.{ "ctrl+b", "right" }, .{ .focus_pane = .right }),
-        try .parse(&.{ "ctrl+b", "up" }, .{ .focus_pane = .up }),
-        try .parse(&.{ "ctrl+b", "down" }, .{ .focus_pane = .down }),
-        try .parse(&.{ "ctrl+b", "s" }, .toggle_sidebar),
-        try .parse(&.{ "ctrl+b", "x" }, .close_pane),
-        try .parse(&.{ "ctrl+b", "d" }, .detach),
-        try .parse(&.{ "ctrl+b", "c" }, .new_tab),
-        try .parse(&.{ "ctrl+b", "n" }, .{ .select_tab_offset = 1 }),
-        try .parse(&.{ "ctrl+b", "p" }, .{ .select_tab_offset = -1 }),
-        try .parse(&.{ "ctrl+b", "1" }, .{ .select_tab = 0 }),
-        try .parse(&.{ "ctrl+b", "2" }, .{ .select_tab = 1 }),
-        try .parse(&.{ "ctrl+b", "3" }, .{ .select_tab = 2 }),
-        try .parse(&.{ "ctrl+b", "4" }, .{ .select_tab = 3 }),
-        try .parse(&.{ "ctrl+b", "5" }, .{ .select_tab = 4 }),
-        try .parse(&.{ "ctrl+b", "6" }, .{ .select_tab = 5 }),
-        try .parse(&.{ "ctrl+b", "7" }, .{ .select_tab = 6 }),
-        try .parse(&.{ "ctrl+b", "8" }, .{ .select_tab = 7 }),
-        try .parse(&.{ "ctrl+b", "9" }, .{ .select_tab = 8 }),
-        try .parse(&.{ "ctrl+b", "T" }, .rename_tab),
-        try .parse(&.{ "ctrl+b", "X" }, .close_tab),
-        try .parse(&.{ "ctrl+b", "," }, .{ .move_tab = .previous }),
-        try .parse(&.{ "ctrl+b", "." }, .{ .move_tab = .next }),
-    };
-}
+const defaultBindings = default_bindings.load;
 
 /// Drops every image, placement, and revision the store holds for the panes
 /// of a tab that no longer exists.
@@ -2004,45 +1980,6 @@ fn nextRequestId(next: *u64) !schema.RequestId {
     const value = next.*;
     next.* += 1;
     return @enumFromInt(value);
-}
-
-fn mouseTracked(tracking: schema.frame.MouseTracking, kind: term.Event.Mouse.Kind) bool {
-    return switch (tracking) {
-        .none => false,
-        .x10 => kind == .press,
-        .normal => kind == .press or kind == .release or
-            kind == .scroll_up or kind == .scroll_down,
-        .button => kind != .move,
-        .any => true,
-    };
-}
-
-fn encodeSgrMouse(
-    buffer: []u8,
-    event: term.Event.Mouse,
-    pane_x: u16,
-    pane_y: u16,
-    pixels: bool,
-    cell_width: u16,
-    cell_height: u16,
-    exact_pixel_x: ?u32,
-    exact_pixel_y: ?u32,
-) ![]const u8 {
-    const final: u8 = if (event.kind == .release) 'm' else 'M';
-    const x: u32 = exact_pixel_x orelse if (pixels and cell_width != 0)
-        @as(u32, pane_x) * cell_width + cell_width / 2
-    else
-        pane_x;
-    const y: u32 = exact_pixel_y orelse if (pixels and cell_height != 0)
-        @as(u32, pane_y) * cell_height + cell_height / 2
-    else
-        pane_y;
-    return std.fmt.bufPrint(buffer, "\x1b[<{d};{d};{d}{c}", .{
-        event.button,
-        x + 1,
-        y + 1,
-        final,
-    });
 }
 
 test {
