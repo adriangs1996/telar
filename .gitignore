@@ -8,3 +8,4 @@ zig-pkg/
 # saying what it is and how to recreate it is tracked.
 references/*
 !references/README.md
+.lavish/*
