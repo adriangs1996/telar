@@ -10,6 +10,7 @@ const graphics_sync = @import("graphics_sync.zig");
 const media_mod = @import("media.zig");
 const pane_mod = @import("pane.zig");
 const pty = @import("pty.zig");
+const response_queue = @import("response_queue.zig");
 const telemetry_mod = @import("telemetry.zig");
 const transport = @import("transport.zig");
 const workspace_mod = @import("workspace.zig");
@@ -36,8 +37,11 @@ const encodeNextGraphics = graphics_sync.encodeNextGraphics;
 const enforceGraphicsQuotas = graphics_sync.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
-const max_pending_responses = max_panes * 2;
 const max_clients = 8;
+const PendingResponse = response_queue.PendingResponse;
+const PendingTabCreated = response_queue.PendingTabCreated;
+const PendingTabRenamed = response_queue.PendingTabRenamed;
+const ResponseQueue = response_queue.ResponseQueue;
 
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
 
@@ -116,146 +120,6 @@ const RuntimeEvent = union(enum) {
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     stopped: anyerror!void,
-};
-
-const PendingFailure = struct {
-    request_id: schema.RequestId,
-    code: schema.FailureCode,
-    message: []const u8,
-};
-
-const PendingTabSnapshot = struct {
-    request_id: schema.RequestId,
-    location: schema.TabLocation,
-};
-
-const PendingWorkspaceSnapshot = struct {
-    request_id: schema.RequestId,
-    workspace: schema.WorkspaceLocation,
-};
-
-const PendingTabCreated = struct {
-    request_id: schema.RequestId,
-    location: schema.TabLocation,
-    position: u16,
-    label: [schema.max_tab_label_bytes]u8,
-    label_len: u8,
-    root_pane_id: schema.PaneId,
-
-    fn labelSlice(created: *const PendingTabCreated) []const u8 {
-        return created.label[0..created.label_len];
-    }
-};
-
-const PendingTabRenamed = struct {
-    request_id: schema.RequestId,
-    location: schema.TabLocation,
-    label: [schema.max_tab_label_bytes]u8,
-    label_len: u8,
-
-    fn labelSlice(renamed: *const PendingTabRenamed) []const u8 {
-        return renamed.label[0..renamed.label_len];
-    }
-};
-
-const PendingResponse = union(enum) {
-    pane_opened: schema.PaneOpened,
-    request_failed: PendingFailure,
-    tab_snapshot: PendingTabSnapshot,
-    workspace_snapshot: PendingWorkspaceSnapshot,
-    tab_created: PendingTabCreated,
-    tab_renamed: PendingTabRenamed,
-    tab_closed: schema.TabClosed,
-    tab_moved: schema.TabMoved,
-    history_result: *history.model.QueryResult,
-};
-
-const ResponseQueue = struct {
-    items: [max_pending_responses]PendingResponse = undefined,
-    head: u8 = 0,
-    len: u8 = 0,
-    dropped: u64 = 0,
-    resync_workspace: ?schema.WorkspaceLocation = null,
-
-    const Entry = struct {
-        offset: u8,
-        response: *PendingResponse,
-    };
-
-    fn push(queue: *ResponseQueue, response: PendingResponse) !void {
-        if (queue.len == queue.items.len) return error.ResponseQueueFull;
-        const index = (@as(usize, queue.head) + queue.len) % queue.items.len;
-        queue.items[index] = response;
-        queue.len += 1;
-    }
-
-    /// For unsolicited notifications: a full queue means the client is
-    /// behind, and the policy is to drop the notification and count it, never
-    /// to escalate into tearing the runtime down. The client rebuilds tab
-    /// state from snapshots when it catches up.
-    fn pushOrDrop(queue: *ResponseQueue, response: PendingResponse) void {
-        queue.push(response) catch {
-            switch (response) {
-                .history_result => |result| result.deinit(),
-                .tab_closed => |closed| queue.resync_workspace = closed.location.workspace,
-                .tab_moved => |moved| queue.resync_workspace = moved.location.workspace,
-                else => {},
-            }
-            queue.dropped += 1;
-        };
-    }
-
-    fn peek(queue: *ResponseQueue) ?*PendingResponse {
-        if (queue.len == 0) return null;
-        return &queue.items[queue.head];
-    }
-
-    fn peekManagement(queue: *ResponseQueue) ?Entry {
-        for (0..queue.len) |offset| {
-            const index = (@as(usize, queue.head) + offset) % queue.items.len;
-            if (queue.items[index] == .history_result) continue;
-            return .{ .offset = @intCast(offset), .response = &queue.items[index] };
-        }
-        return null;
-    }
-
-    fn peekObservation(queue: *ResponseQueue) ?Entry {
-        for (0..queue.len) |offset| {
-            const index = (@as(usize, queue.head) + offset) % queue.items.len;
-            if (queue.items[index] != .history_result) continue;
-            return .{ .offset = @intCast(offset), .response = &queue.items[index] };
-        }
-        return null;
-    }
-
-    fn pop(queue: *ResponseQueue) void {
-        std.debug.assert(queue.len != 0);
-        queue.head = @intCast((@as(usize, queue.head) + 1) % queue.items.len);
-        queue.len -= 1;
-    }
-
-    fn removeAt(queue: *ResponseQueue, offset: u8) void {
-        std.debug.assert(offset < queue.len);
-        var cursor: usize = offset;
-        while (cursor + 1 < queue.len) : (cursor += 1) {
-            const destination = (@as(usize, queue.head) + cursor) % queue.items.len;
-            const source = (@as(usize, queue.head) + cursor + 1) % queue.items.len;
-            queue.items[destination] = queue.items[source];
-        }
-        queue.len -= 1;
-    }
-
-    fn clear(queue: *ResponseQueue) void {
-        while (queue.peek()) |response| {
-            switch (response.*) {
-                .history_result => |result| result.deinit(),
-                else => {},
-            }
-            queue.pop();
-        }
-        queue.head = 0;
-        queue.resync_workspace = null;
-    }
 };
 
 const ClientRole = enum { undecided, ui, control };
