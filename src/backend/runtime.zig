@@ -149,6 +149,12 @@ const ResponseQueue = struct {
     head: u8 = 0,
     len: u8 = 0,
     dropped: u64 = 0,
+    resync_workspace: ?schema.WorkspaceLocation = null,
+
+    const Entry = struct {
+        offset: u8,
+        response: *PendingResponse,
+    };
 
     fn push(queue: *ResponseQueue, response: PendingResponse) !void {
         if (queue.len == queue.items.len) return error.ResponseQueueFull;
@@ -165,6 +171,8 @@ const ResponseQueue = struct {
         queue.push(response) catch {
             switch (response) {
                 .history_result => |result| result.deinit(),
+                .tab_closed => |closed| queue.resync_workspace = closed.location.workspace,
+                .tab_moved => |moved| queue.resync_workspace = moved.location.workspace,
                 else => {},
             }
             queue.dropped += 1;
@@ -176,9 +184,38 @@ const ResponseQueue = struct {
         return &queue.items[queue.head];
     }
 
+    fn peekManagement(queue: *ResponseQueue) ?Entry {
+        for (0..queue.len) |offset| {
+            const index = (@as(usize, queue.head) + offset) % queue.items.len;
+            if (queue.items[index] == .history_result) continue;
+            return .{ .offset = @intCast(offset), .response = &queue.items[index] };
+        }
+        return null;
+    }
+
+    fn peekObservation(queue: *ResponseQueue) ?Entry {
+        for (0..queue.len) |offset| {
+            const index = (@as(usize, queue.head) + offset) % queue.items.len;
+            if (queue.items[index] != .history_result) continue;
+            return .{ .offset = @intCast(offset), .response = &queue.items[index] };
+        }
+        return null;
+    }
+
     fn pop(queue: *ResponseQueue) void {
         std.debug.assert(queue.len != 0);
         queue.head = @intCast((@as(usize, queue.head) + 1) % queue.items.len);
+        queue.len -= 1;
+    }
+
+    fn removeAt(queue: *ResponseQueue, offset: u8) void {
+        std.debug.assert(offset < queue.len);
+        var cursor: usize = offset;
+        while (cursor + 1 < queue.len) : (cursor += 1) {
+            const destination = (@as(usize, queue.head) + cursor) % queue.items.len;
+            const source = (@as(usize, queue.head) + cursor + 1) % queue.items.len;
+            queue.items[destination] = queue.items[source];
+        }
         queue.len -= 1;
     }
 
@@ -191,6 +228,7 @@ const ResponseQueue = struct {
             queue.pop();
         }
         queue.head = 0;
+        queue.resync_workspace = null;
     }
 };
 
@@ -399,12 +437,23 @@ const Server = struct {
             return;
         }
 
-        if (responses.peek()) |response| {
+        if (responses.peekManagement()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
-            const payload = try encodeResponse(buffer, response, panes, workspaces, &history_result);
+            const payload = try encodeResponse(buffer, entry.response, panes, workspaces, &history_result);
             try startSend(io, select, connection.?, payload, send_pending);
             if (history_result) |result| result.deinit();
-            responses.pop();
+            responses.removeAt(entry.offset);
+            return;
+        }
+
+        if (responses.resync_workspace) |workspace| {
+            const payload = try schema.encodeResyncRequired(buffer, .{
+                .workspace = workspace,
+                .workspace_closed = workspaces.find(workspace) == null,
+            });
+            try startSend(io, select, connection.?, payload, send_pending);
+            responses.resync_workspace = null;
+            if (comptime diagnostics.enabled) metrics.client_resyncs += 1;
             return;
         }
 
@@ -429,6 +478,43 @@ const Server = struct {
                     return;
                 }
             }
+        }
+
+        checked = 0;
+        while (checked < attachments.items.len) : (checked += 1) {
+            const index = (attachments.next_send + checked) % attachments.items.len;
+            const active = if (attachments.items[index]) |*value| value else continue;
+            const pane = active.pane;
+            if (pane.ingest_pending) continue;
+            if (!active.exit_sent and pane.output_done and pane.exit != null and
+                active.outstanding_frame_id == 0)
+            {
+                const exit = pane.exit.?;
+                const payload = try schema.encodePaneExited(buffer, .{
+                    .pane_id = pane.id,
+                    .kind = switch (exit) {
+                        .exited => .exited,
+                        .signaled => .signaled,
+                    },
+                    .value = switch (exit) {
+                        .exited => |status| status,
+                        .signaled => |signal| @intFromEnum(signal),
+                    },
+                });
+                try startSend(io, select, connection.?, payload, send_pending);
+                active.exit_sent = true;
+                sent_exit_pane.* = pane.id;
+                attachments.next_send = (index + 1) % attachments.items.len;
+                return;
+            }
+        }
+
+        checked = 0;
+        while (checked < attachments.items.len) : (checked += 1) {
+            const index = (attachments.next_send + checked) % attachments.items.len;
+            const active = if (attachments.items[index]) |*value| value else continue;
+            const pane = active.pane;
+            if (pane.ingest_pending) continue;
             if (active.graphics_snapshot != .idle or active.transfer != null or
                 active.observed_graphics_revision != pane.graphics_revision)
             {
@@ -449,25 +535,14 @@ const Server = struct {
                     return;
                 }
             }
-            if (active.exit_sent or !pane.output_done or pane.exit == null) continue;
-            if (active.outstanding_frame_id != 0) continue;
+        }
 
-            const exit = pane.exit.?;
-            const payload = try schema.encodePaneExited(buffer, .{
-                .pane_id = pane.id,
-                .kind = switch (exit) {
-                    .exited => .exited,
-                    .signaled => .signaled,
-                },
-                .value = switch (exit) {
-                    .exited => |status| status,
-                    .signaled => |signal| @intFromEnum(signal),
-                },
-            });
+        if (responses.peekObservation()) |entry| {
+            var history_result: ?*history.model.QueryResult = null;
+            const payload = try encodeResponse(buffer, entry.response, panes, workspaces, &history_result);
             try startSend(io, select, connection.?, payload, send_pending);
-            active.exit_sent = true;
-            sent_exit_pane.* = pane.id;
-            attachments.next_send = (index + 1) % attachments.items.len;
+            if (history_result) |result| result.deinit();
+            responses.removeAt(entry.offset);
             return;
         }
     }
@@ -1736,18 +1811,50 @@ test "a wait failure becomes a synthetic exit instead of a runtime error" {
 
 test "a full response queue drops notifications instead of failing" {
     var queue: ResponseQueue = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .tab_id = @enumFromInt(3),
+    };
     while (queue.len < queue.items.len) try queue.push(.{ .tab_moved = .{
         .request_id = .none,
-        .location = undefined,
+        .location = location,
         .position = 0,
     } });
     queue.pushOrDrop(.{ .tab_moved = .{
         .request_id = .none,
-        .location = undefined,
+        .location = location,
         .position = 1,
     } });
     try std.testing.expectEqual(@as(u64, 1), queue.dropped);
     try std.testing.expectEqual(@as(u8, queue.items.len), queue.len);
+    try std.testing.expectEqualDeep(
+        location.workspace,
+        queue.resync_workspace.?,
+    );
+    queue.head = 0;
+    queue.len = 0;
+}
+
+test "management responses overtake queued observation work" {
+    var queue: ResponseQueue = .{};
+    const fake_history: *history.model.QueryResult = @ptrFromInt(@alignOf(history.model.QueryResult));
+    try queue.push(.{ .history_result = fake_history });
+    try queue.push(.{ .tab_moved = .{
+        .request_id = @enumFromInt(1),
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(7) },
+            .tab_id = @enumFromInt(3),
+        },
+        .position = 0,
+    } });
+
+    const management = queue.peekManagement().?;
+    try std.testing.expectEqual(@as(u8, 1), management.offset);
+    try std.testing.expect(management.response.* == .tab_moved);
+    queue.removeAt(management.offset);
+    try std.testing.expect(queue.peek().?.* == .history_result);
+
+    // The fake pointer only tests ordering and must not reach `clear`.
     queue.head = 0;
     queue.len = 0;
 }

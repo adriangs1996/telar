@@ -109,6 +109,7 @@ const cases = [_]Case{
     .{ .name = "frontend.pipeline.one_cell", .work_per_op = 1, .work_unit = "cells" },
     .{ .name = "frontend.pipeline.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
     .{ .name = "frontend.pipeline.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
+    .{ .name = "frontend.outbox.input", .work_per_op = 12, .work_unit = "bytes" },
     .{ .name = "frontend.keybind.route", .work_per_op = 12, .work_unit = "keys" },
     .{ .name = "frontend.lua.callback", .work_per_op = 1, .work_unit = "callbacks" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
@@ -574,6 +575,31 @@ fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
         var writer = Io.Writer.fixed(context.output);
         const flushed = try context.screen.flush(&writer);
         checksum +%= applied.cells + flushed.cells + flushed.scanned + flushed.bytes;
+    }
+    return checksum;
+}
+
+const OutboxContext = struct {
+    outbox: *frontend.client_outbox.Outbox,
+
+    fn init(gpa: std.mem.Allocator) !OutboxContext {
+        const outbox = try gpa.create(frontend.client_outbox.Outbox);
+        outbox.* = .{};
+        return .{ .outbox = outbox };
+    }
+
+    fn deinit(context: *OutboxContext, gpa: std.mem.Allocator) void {
+        gpa.destroy(context.outbox);
+    }
+};
+
+fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        try context.outbox.pushInput(@enumFromInt(1), "hello world\n");
+        checksum +%= context.outbox.len;
+        context.outbox.send_pending = true;
+        context.outbox.popSent();
     }
     return checksum;
 }
@@ -1120,6 +1146,14 @@ fn execute(
             defer context.deinit();
             try writeResult(writer, config, case, try measure(io, config, &context, runPipeline));
         }
+    }
+
+    const outbox_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(outbox_case.name)) {
+        var context = try OutboxContext.init(gpa);
+        defer context.deinit(gpa);
+        try writeResult(writer, config, outbox_case, try measure(io, config, &context, runOutboxInput));
     }
 
     const keybind_case = cases[case_index];

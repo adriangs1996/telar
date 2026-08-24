@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const action_mod = @import("action.zig");
+const client_outbox = @import("client_outbox.zig");
 const client_view = @import("client_ui.zig");
 const input_mod = @import("input.zig");
 const keybind = @import("keybind.zig");
@@ -39,6 +40,11 @@ const InputRouter = keybind.Router(
     input_chunk_size,
     held_binding_bytes,
 );
+
+comptime {
+    std.debug.assert(input_chunk_size <= client_outbox.max_input_bytes);
+    std.debug.assert(lua_config.max_expression_paste_bytes + 16 <= client_outbox.max_input_bytes);
+}
 
 pub const Options = struct {
     arguments: []const []const u8,
@@ -92,8 +98,8 @@ const ClientMetrics = struct {
     decode: diagnostics.Timing = .{},
     apply: diagnostics.Timing = .{},
     compose: diagnostics.Timing = .{},
-    ack_send: diagnostics.Timing = .{},
-    input_send: diagnostics.Timing = .{},
+    ack_enqueue: diagnostics.Timing = .{},
+    input_enqueue: diagnostics.Timing = .{},
     flush: diagnostics.Timing = .{},
     draw_lateness: diagnostics.Timing = .{},
     paced_interval: diagnostics.Timing = .{},
@@ -115,6 +121,7 @@ const ClientEvent = union(enum) {
     capability_timeout: anyerror!void,
     resized: anyerror!void,
     server: anyerror![]u8,
+    sent: anyerror!void,
     draw: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
@@ -263,6 +270,7 @@ const Client = struct {
     gpa: std.mem.Allocator,
     connection: *core.transport.SocketChannel,
     send_buffer: []u8,
+    outbox: *client_outbox.Outbox,
     writer: *Io.Writer,
     select: *Io.Select(ClientEvent),
     options: *const Options,
@@ -283,7 +291,7 @@ const Client = struct {
     plugin_pending: bool = false,
     paste_pane: ?schema.PaneId = null,
 
-    input_started: bool = false,
+    input_read_pending: bool = false,
     next_request_id: u64 = 2,
     workspace_snapshot_request_id: ?schema.RequestId = null,
     tab_snapshot: ?PendingTabSnapshot = null,
@@ -300,6 +308,41 @@ const Client = struct {
 
     fn nextId(client: *Client) !schema.RequestId {
         return nextRequestId(&client.next_request_id);
+    }
+
+    fn enqueue(client: *Client, message: client_outbox.Message) !void {
+        try client.outbox.push(message);
+        try client.pumpOutbox();
+    }
+
+    fn enqueueInput(client: *Client, pane_id: schema.PaneId, bytes: []const u8) !void {
+        try client.outbox.pushInput(pane_id, bytes);
+        try client.pumpOutbox();
+    }
+
+    fn enqueueRename(client: *Client, rename: schema.RenameTab) !void {
+        try client.outbox.pushRename(rename);
+        try client.pumpOutbox();
+    }
+
+    fn pumpOutbox(client: *Client) !void {
+        if (client.outbox.send_pending or client.outbox.len == 0) return;
+        const payload = try client.outbox.encodeNext(client.send_buffer);
+        client.outbox.send_pending = true;
+        client.select.concurrent(.sent, sendClient, .{
+            client.io,
+            client.connection,
+            payload,
+        }) catch |err| {
+            client.outbox.send_pending = false;
+            return err;
+        };
+    }
+
+    fn scheduleInputRead(client: *Client) !void {
+        if (client.input_read_pending or !client.outbox.canQueueInput()) return;
+        try client.select.concurrent(.input, readInput, .{ client.io, client.input_file });
+        client.input_read_pending = true;
     }
 
     fn requestDraw(client: *Client) !void {
@@ -332,6 +375,10 @@ const Client = struct {
             .pane_frame => |frame| try client.handlePaneFrame(frame),
             .pane_exited => |exited| try client.handlePaneExited(exited),
             .request_failed => |failure| try client.handleRequestFailed(failure),
+            .resync_required => |required| {
+                if (required.workspace_closed) return 0;
+                try client.handleResyncRequired(required);
+            },
             .runtime_stopping => return 0,
             .history_results => return error.UnexpectedHistoryResults,
             .graphics_snapshot,
@@ -353,23 +400,19 @@ const Client = struct {
                 rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
             );
             client.view.invalidate();
-            if (!client.input_started) {
-                try client.select.concurrent(.input, readInput, .{ client.io, client.input_file });
-                client.input_started = true;
-            }
+            try client.scheduleInputRead();
             const workspace_request_id = try client.nextId();
             client.workspace_snapshot_request_id = workspace_request_id;
-            try client.connection.send(client.io, try schema.encodeRequestWorkspaceSnapshot(client.send_buffer, .{
+            try client.enqueue(.{ .request_workspace_snapshot = .{
                 .request_id = workspace_request_id,
                 .workspace = opened.location.workspace,
-            }));
+            } });
             const tab_request_id = try client.nextId();
             client.tab_snapshot = .{ .request_id = tab_request_id, .tab_id = opened.location.tab_id };
-            const request = try schema.encodeRequestTabSnapshot(client.send_buffer, .{
+            try client.enqueue(.{ .request_tab_snapshot = .{
                 .request_id = tab_request_id,
                 .location = opened.location,
-            });
-            try client.connection.send(client.io, request);
+            } });
         } else if (client.pending_split != null and
             client.pending_split.?.request_id == opened.request_id)
         {
@@ -385,7 +428,7 @@ const Client = struct {
             }
             client.view.invalidate();
             client.pending_split = null;
-            try resizeAttached(client.io, client.connection, client.send_buffer, model, client.view.workbench());
+            try client.resizeAttached(model, client.view.workbench());
         } else if (client.pending_attachments.take(opened.request_id)) |expected| {
             if (expected != opened.pane_id) return error.UnexpectedPane;
             const pane = client.tabs.findPane(opened.pane_id) orelse return error.UnexpectedPane;
@@ -405,20 +448,19 @@ const Client = struct {
         const tab = try client.tabs.reconcileTab(snapshot, client.view.workbench());
         const model = &tab.model;
         client.view.invalidate();
-        try resizeAttached(client.io, client.connection, client.send_buffer, model, client.view.workbench());
+        try client.resizeAttached(model, client.view.workbench());
         for (&model.panes) |*slot| {
             const pane = if (slot.*) |*value| value else continue;
             if (pane.attached) continue;
             const size = model.contentSize(pane.id, client.view.workbench()) orelse
                 return error.PaneTooSmall;
             const request_id = try client.nextId();
-            const request = try schema.encodeOpenPane(client.send_buffer, .{
+            try client.enqueue(.{ .open_pane = .{
                 .request_id = request_id,
                 .target = .{ .pane = pane.id },
                 .size = size,
                 .launch = null,
-            });
-            try client.connection.send(client.io, request);
+            } });
             try client.pending_attachments.add(.{
                 .request_id = request_id,
                 .pane_id = pane.id,
@@ -433,7 +475,37 @@ const Client = struct {
             snapshot.request_id != client.workspace_snapshot_request_id.?)
             return error.UnexpectedWorkspaceSnapshot;
         client.workspace_snapshot_request_id = null;
+        var canonical_tabs: [tabs_mod.max_tabs]schema.TabId = undefined;
+        var canonical_count: usize = 0;
+        var iterator = snapshot.tabs();
+        while (try iterator.next()) |descriptor| {
+            canonical_tabs[canonical_count] = descriptor.tab_id;
+            canonical_count += 1;
+        }
+        for (client.tabs.items[0..client.tabs.count]) |*slot| {
+            const tab = if (slot.*) |*value| value else continue;
+            if (std.mem.findScalar(
+                schema.TabId,
+                canonical_tabs[0..canonical_count],
+                tab.location.tab_id,
+            ) == null) releaseTabGraphics(client.graphics_store, tab);
+        }
         try client.tabs.reconcileWorkspace(snapshot);
+        if (client.tab_snapshot == null) {
+            if (client.tabs.active()) |active| {
+                if (!active.snapshot_loaded) {
+                    const request_id = try client.nextId();
+                    client.tab_snapshot = .{
+                        .request_id = request_id,
+                        .tab_id = active.location.tab_id,
+                    };
+                    try client.enqueue(.{ .request_tab_snapshot = .{
+                        .request_id = request_id,
+                        .location = active.location,
+                    } });
+                }
+            }
+        }
         client.view.invalidate();
         try client.requestDraw();
     }
@@ -519,10 +591,10 @@ const Client = struct {
             const active = client.tabs.active().?;
             const request_id = try client.nextId();
             client.tab_snapshot = .{ .request_id = request_id, .tab_id = active.location.tab_id };
-            try client.connection.send(client.io, try schema.encodeRequestTabSnapshot(client.send_buffer, .{
+            try client.enqueue(.{ .request_tab_snapshot = .{
                 .request_id = request_id,
                 .location = active.location,
-            }));
+            } });
         }
         client.view.invalidate();
         try client.requestDraw();
@@ -545,11 +617,10 @@ const Client = struct {
         if (frame.base_frame_id != 0 and
             frame.base_frame_id != pane.applied_frame_id)
         {
-            const request = try schema.encodeRequestSnapshot(client.send_buffer, .{
+            try client.enqueue(.{ .request_snapshot = .{
                 .pane_id = frame.pane_id,
                 .known_frame_id = pane.applied_frame_id,
-            });
-            try client.connection.send(client.io, request);
+            } });
             return;
         }
         const apply_started = diagnostics.now(client.io);
@@ -575,7 +646,7 @@ const Client = struct {
             client.pending_close = null;
         if (client.tabs.active()) |active| {
             if (active.model.pane_count != 0)
-                try resizeAttached(client.io, client.connection, client.send_buffer, &active.model, client.view.workbench());
+                try client.resizeAttached(&active.model, client.view.workbench());
         }
         try client.requestDraw();
     }
@@ -589,7 +660,7 @@ const Client = struct {
         {
             client.pending_split = null;
             if (client.tabs.active()) |active|
-                try resizeAttached(client.io, client.connection, client.send_buffer, &active.model, client.view.workbench());
+                try client.resizeAttached(&active.model, client.view.workbench());
         } else if (client.pending_close != null and
             client.pending_close.?.request_id == failure.request_id)
         {
@@ -598,7 +669,7 @@ const Client = struct {
             if (client.tabs.tabForPane(pane_id)) |tab| _ = tab.model.removePane(pane_id);
             client.view.invalidate();
             if (client.tabs.active()) |active|
-                try resizeAttached(client.io, client.connection, client.send_buffer, &active.model, client.view.workbench());
+                try client.resizeAttached(&active.model, client.view.workbench());
         } else if (client.pending_tab_operation != null and
             client.pending_tab_operation.?.requestId() == failure.request_id)
         {
@@ -611,16 +682,28 @@ const Client = struct {
                     .request_id = request_id,
                     .tab_id = active.location.tab_id,
                 };
-                try client.connection.send(client.io, try schema.encodeRequestTabSnapshot(client.send_buffer, .{
+                try client.enqueue(.{ .request_tab_snapshot = .{
                     .request_id = request_id,
                     .location = active.location,
-                }));
+                } });
             }
         } else {
             std.debug.print("telar runtime: {s}\n", .{failure.message});
             return error.RuntimeRequestFailed;
         }
         try client.requestDraw();
+    }
+
+    fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !void {
+        const workspace = client.tabs.workspace orelse return error.UnexpectedResync;
+        if (!std.meta.eql(workspace, required.workspace)) return error.UnexpectedResync;
+        if (client.workspace_snapshot_request_id != null) return;
+        const request_id = try client.nextId();
+        client.workspace_snapshot_request_id = request_id;
+        try client.enqueue(.{ .request_workspace_snapshot = .{
+            .request_id = request_id,
+            .workspace = workspace,
+        } });
     }
 
     fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
@@ -664,9 +747,9 @@ const Client = struct {
     }
 
     fn requestGraphicsSnapshot(client: *Client, pane_id: schema.PaneId) !void {
-        try client.connection.send(client.io, try schema.encodeRequestGraphicsSnapshot(client.send_buffer, .{
+        try client.enqueue(.{ .request_graphics_snapshot = .{
             .pane_id = pane_id,
-        }));
+        } });
     }
 
     /// The `.draw` event: present if there is anything to show yet.
@@ -754,16 +837,27 @@ const Client = struct {
             const pane = if (slot.*) |*value| value else continue;
             if (!pane.attached or pane.pending_frame_id == 0) continue;
             const ack_started = diagnostics.now(client.io);
-            const ack = try schema.encodeFrameAck(client.send_buffer, .{
+            try client.enqueue(.{ .frame_ack = .{
                 .pane_id = pane.id,
                 .frame_id = pane.pending_frame_id,
-            });
-            try client.connection.send(client.io, ack);
+            } });
             pane.pending_frame_id = 0;
             if (comptime diagnostics.enabled)
-                client.metrics.ack_send.observe(diagnostics.elapsed(ack_started, diagnostics.now(client.io)));
+                client.metrics.ack_enqueue.observe(diagnostics.elapsed(ack_started, diagnostics.now(client.io)));
         }
         return presented_ns;
+    }
+
+    fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            if (!pane.attached) continue;
+            const size = model.contentSize(pane.id, area) orelse continue;
+            try client.enqueue(.{ .pane_resize = .{
+                .pane_id = pane.id,
+                .size = size,
+            } });
+        }
     }
 };
 
@@ -867,7 +961,10 @@ pub fn run(
     defer if (reload_registry_orphan) |registry| gpa.destroy(registry);
     var reload_trust_orphan: ?*core.plugin.TrustStore = null;
     defer if (reload_trust_orphan) |store| gpa.destroy(store);
-    var select_storage: [11]ClientEvent = undefined;
+    const outbox = try gpa.create(client_outbox.Outbox);
+    defer gpa.destroy(outbox);
+    outbox.* = .{};
+    var select_storage: [12]ClientEvent = undefined;
     var select = Io.Select(ClientEvent).init(io, &select_storage);
     defer select.cancelDiscard();
     try select.concurrent(.resized, waitResize, .{ io, &watcher });
@@ -896,6 +993,7 @@ pub fn run(
         .gpa = gpa,
         .connection = connection,
         .send_buffer = send_buffer,
+        .outbox = outbox,
         .writer = writer,
         .select = &select,
         .options = &options,
@@ -930,6 +1028,7 @@ pub fn run(
 
     while (true) switch (try select.await()) {
         .input => |result| {
+            client.input_read_pending = false;
             const chunk = try result;
             if (chunk.len == 0) return 0;
             var handler: InputHandler = .{ .client = &client };
@@ -937,7 +1036,7 @@ pub fn run(
                 return 0;
             if (handler.redraw) try client.requestDraw();
             try scheduleInputTimers(io, &select, &input_router, &input_timeout_pending, &binding_timeout_pending);
-            try select.concurrent(.input, readInput, .{ io, input_file });
+            try client.scheduleInputRead();
         },
         .input_timeout => |result| {
             try result;
@@ -996,7 +1095,7 @@ pub fn run(
             if (tabs.active()) |active| {
                 active.model.setCellSize(cell_size.width, cell_size.height);
                 graphics_store.invalidatePlacements();
-                try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
+                try client.resizeAttached(&active.model, view.workbench());
             }
             // Pixel dimensions are not guaranteed to be present in winsize,
             // and can change independently when the font or display scale
@@ -1031,6 +1130,12 @@ pub fn run(
             if (try client.handleServer(message)) |status| return status;
             try select.concurrent(.server, receive, .{ io, connection, receive_buffer });
         },
+        .sent => |result| {
+            try result;
+            client.outbox.popSent();
+            try client.pumpOutbox();
+            try client.scheduleInputRead();
+        },
         .draw => |result| {
             try result;
             try client.presentDue();
@@ -1061,6 +1166,7 @@ pub fn run(
                 active.model.pane_count,
                 client.pending_updates,
                 client.draw_pending,
+                client.outbox,
                 &capabilities,
                 view.sidebar_rendering,
             ) catch continue;
@@ -1172,7 +1278,7 @@ pub fn run(
                         cell_size.height,
                     );
                     if (tabs.active()) |active|
-                        try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
+                        try client.resizeAttached(&active.model, view.workbench());
 
                     const previous = client.lua_generation.*;
                     client.lua_generation.* = loaded.generation;
@@ -1374,10 +1480,9 @@ const InputHandler = struct {
         for (&tab.model.panes) |*slot| {
             const pane = if (slot.*) |*item| item else continue;
             if (!pane.attached) continue;
-            const payload = try schema.encodeDetachPane(handler.client.send_buffer, .{
+            try handler.client.enqueue(.{ .detach_pane = .{
                 .pane_id = pane.id,
-            });
-            try handler.client.connection.send(handler.client.io, payload);
+            } });
             try handler.client.graphics_store.setPaneVisible(pane.id, false);
         }
         tabs_mod.Model.detachAll(tab);
@@ -1397,11 +1502,10 @@ const InputHandler = struct {
         }
         active.model.composition_invalidated = true;
         const request_id = try handler.client.nextId();
-        const payload = try schema.encodeRequestTabSnapshot(handler.client.send_buffer, .{
+        try handler.client.enqueue(.{ .request_tab_snapshot = .{
             .request_id = request_id,
             .location = active.location,
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        } });
         handler.client.tab_snapshot = .{
             .request_id = request_id,
             .tab_id = tab_id,
@@ -1482,15 +1586,11 @@ const InputHandler = struct {
         bytes: []const u8,
     ) !void {
         const started = diagnostics.now(handler.client.io);
-        const payload = try schema.encodePaneInput(handler.client.send_buffer, .{
-            .pane_id = pane.id,
-            .bytes = bytes,
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        try handler.client.enqueueInput(pane.id, bytes);
         if (comptime diagnostics.enabled) {
             handler.client.metrics.input_events += 1;
             handler.client.metrics.input_bytes += bytes.len;
-            handler.client.metrics.input_send.observe(diagnostics.elapsed(started, diagnostics.now(handler.client.io)));
+            handler.client.metrics.input_enqueue.observe(diagnostics.elapsed(started, diagnostics.now(handler.client.io)));
         }
     }
 
@@ -1513,10 +1613,7 @@ const InputHandler = struct {
         const interaction = handler.client.view.handleMouse(handler.client.tabs, model, cell_event);
         if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
         if (interaction.layout_changed) {
-            try resizeAttached(
-                handler.client.io,
-                handler.client.connection,
-                handler.client.send_buffer,
+            try handler.client.resizeAttached(
                 handler.activeModel(),
                 handler.client.view.workbench(),
             );
@@ -1547,11 +1644,7 @@ const InputHandler = struct {
             exact_x,
             exact_y,
         );
-        const payload = try schema.encodePaneInput(handler.client.send_buffer, .{
-            .pane_id = pane.id,
-            .bytes = bytes,
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        try handler.client.enqueueInput(pane.id, bytes);
     }
 
     pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalResponse) !void {
@@ -1577,7 +1670,7 @@ const InputHandler = struct {
             cell_size.height,
         );
         if (handler.client.tabs.active()) |active|
-            try resizeAttached(handler.client.io, handler.client.connection, handler.client.send_buffer, &active.model, handler.client.view.workbench());
+            try handler.client.resizeAttached(&active.model, handler.client.view.workbench());
         handler.client.view.invalidate();
         handler.redraw = true;
     }
@@ -1686,10 +1779,7 @@ const InputHandler = struct {
             }),
             .toggle_sidebar => {
                 handler.client.view.toggleSidebar();
-                try resizeAttached(
-                    handler.client.io,
-                    handler.client.connection,
-                    handler.client.send_buffer,
+                try handler.client.resizeAttached(
                     handler.activeModel(),
                     handler.client.view.workbench(),
                 );
@@ -1748,21 +1838,16 @@ const InputHandler = struct {
         const new_size = rectSize(prospective.new_content) orelse return;
         const request_id = try handler.client.nextId();
 
-        const resize = try schema.encodePaneResize(handler.client.send_buffer, .{
+        try handler.client.enqueue(.{ .pane_resize = .{
             .pane_id = pane.id,
             .size = existing_size,
-        });
-        try handler.client.connection.send(handler.client.io, resize);
-        const request = schema.encodeCreatePane(handler.client.send_buffer, .{
+        } });
+        handler.client.enqueue(.{ .create_pane = .{
             .request_id = request_id,
             .location = location,
             .size = new_size,
             .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
-        }) catch |err| {
-            try handler.restoreFocusedSize(pane.id);
-            return err;
-        };
-        handler.client.connection.send(handler.client.io, request) catch |err| {
+        } }) catch |err| {
             try handler.restoreFocusedSize(pane.id);
             return err;
         };
@@ -1776,11 +1861,10 @@ const InputHandler = struct {
 
     fn restoreFocusedSize(handler: *InputHandler, pane_id: schema.PaneId) !void {
         const size = handler.activeModel().contentSize(pane_id, handler.client.view.workbench()) orelse return;
-        const payload = try schema.encodePaneResize(handler.client.send_buffer, .{
+        try handler.client.enqueue(.{ .pane_resize = .{
             .pane_id = pane_id,
             .size = size,
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        } });
     }
 
     fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) void {
@@ -1795,11 +1879,10 @@ const InputHandler = struct {
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         const request_id = try handler.client.nextId();
-        const payload = try schema.encodeClosePane(handler.client.send_buffer, .{
+        try handler.client.enqueue(.{ .close_pane = .{
             .request_id = request_id,
             .pane_id = pane.id,
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        } });
         handler.client.pending_close = .{
             .request_id = request_id,
             .pane_id = pane.id,
@@ -1811,13 +1894,12 @@ const InputHandler = struct {
         if (handler.client.pending_tab_operation != null) return;
         const workspace = handler.client.tabs.workspace orelse return;
         const request_id = try handler.client.nextId();
-        const payload = try schema.encodeCreateTab(handler.client.send_buffer, .{
+        try handler.client.enqueue(.{ .create_tab = .{
             .request_id = request_id,
             .workspace = workspace,
             .size = rectSize(handler.client.view.workbench()) orelse return,
             .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        } });
         handler.client.pending_tab_operation = .{ .create = request_id };
     }
 
@@ -1839,11 +1921,10 @@ const InputHandler = struct {
         const tab = handler.client.tabs.active() orelse return;
         const request_id = try handler.client.nextId();
         try handler.detachTab(tab);
-        const payload = try schema.encodeCloseTab(handler.client.send_buffer, .{
+        try handler.client.enqueue(.{ .close_tab = .{
             .request_id = request_id,
             .location = tab.location,
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        } });
         handler.client.pending_tab_operation = .{ .close = .{
             .request_id = request_id,
             .tab_id = tab.location.tab_id,
@@ -1854,12 +1935,11 @@ const InputHandler = struct {
         if (handler.client.pending_tab_operation != null) return;
         const tab = handler.client.tabs.active() orelse return;
         const request_id = try handler.client.nextId();
-        const payload = try schema.encodeMoveTab(handler.client.send_buffer, .{
+        try handler.client.enqueue(.{ .move_tab = .{
             .request_id = request_id,
             .location = tab.location,
             .direction = direction,
-        });
-        try handler.client.connection.send(handler.client.io, payload);
+        } });
         handler.client.pending_tab_operation = .{ .move = .{
             .request_id = request_id,
             .tab_id = tab.location.tab_id,
@@ -1871,12 +1951,11 @@ const InputHandler = struct {
         const tab_id = handler.client.view.renamedTab() orelse return;
         const tab = handler.client.tabs.find(tab_id) orelse return;
         const request_id = try handler.client.nextId();
-        const payload = try schema.encodeRenameTab(handler.client.send_buffer, .{
+        try handler.client.enqueueRename(.{
             .request_id = request_id,
             .location = tab.location,
             .label = label,
         });
-        try handler.client.connection.send(handler.client.io, payload);
         handler.client.pending_tab_operation = .{ .rename = .{
             .request_id = request_id,
             .tab_id = tab.location.tab_id,
@@ -1932,25 +2011,6 @@ fn presentableModel(tabs: *tabs_mod.Model) ?*multiplexer.Model {
     return &active.model;
 }
 
-fn resizeAttached(
-    io: Io,
-    connection: *core.transport.SocketChannel,
-    send_buffer: []u8,
-    model: *multiplexer.Model,
-    area: ui.Rect,
-) !void {
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
-        if (!pane.attached) continue;
-        const size = model.contentSize(pane.id, area) orelse continue;
-        const payload = try schema.encodePaneResize(send_buffer, .{
-            .pane_id = pane.id,
-            .size = size,
-        });
-        try connection.send(io, payload);
-    }
-}
-
 fn scheduleInputTimers(
     io: Io,
     select: *Io.Select(ClientEvent),
@@ -1989,6 +2049,14 @@ fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {
 
 fn receive(io: Io, connection: *core.transport.SocketChannel, buffer: []u8) anyerror![]u8 {
     return connection.receive(io, buffer);
+}
+
+fn sendClient(
+    io: Io,
+    connection: *core.transport.SocketChannel,
+    payload: []const u8,
+) anyerror!void {
+    return connection.send(io, payload);
 }
 
 const CombinedGraphicsWriter = struct {
@@ -2046,6 +2114,7 @@ fn formatClientTelemetry(
     pane_count: usize,
     pending_updates: usize,
     draw_pending: bool,
+    outbox: *const client_outbox.Outbox,
     capabilities: *const kitty.TerminalCapabilities,
     sidebar_rendering: kitty.ResolvedSidebarRendering,
 ) ![]const u8 {
@@ -2055,7 +2124,10 @@ fn formatClientTelemetry(
         "\"theme\":\"{s}\"," ++
         "\"active_tab\":{d},\"tab_count\":{d}," ++
         "\"focused_pane\":{d},\"pane_count\":{d},\"pending_updates\":{d}," ++
-        "\"draw_pending\":{d},\"kitty_graphics\":\"{s}\"," ++
+        "\"draw_pending\":{d},\"outbox_depth\":{d}," ++
+        "\"outbox_high_water\":{d},\"outbox_saturated\":{d}," ++
+        "\"outbox_coalesced_input\":{d},\"outbox_coalesced_resize\":{d}," ++
+        "\"outbox_coalesced_ack\":{d},\"kitty_graphics\":\"{s}\"," ++
         "\"mouse_pixels\":\"{s}\",\"sidebar_renderer\":\"{s}\"," ++
         "\"cell_width_px\":{d},\"cell_height_px\":{d}," ++
         "\"input_events\":{d},\"input_bytes\":{d}," ++
@@ -2069,6 +2141,12 @@ fn formatClientTelemetry(
         pane_count,
         pending_updates,
         @intFromBool(draw_pending),
+        outbox.len,
+        outbox.stats.high_water,
+        outbox.stats.saturated,
+        outbox.stats.coalesced_input,
+        outbox.stats.coalesced_resize,
+        outbox.stats.coalesced_ack,
         @tagName(capabilities.kitty_graphics),
         @tagName(capabilities.mouse_pixels),
         @tagName(sidebar_rendering),
@@ -2117,8 +2195,8 @@ fn formatClientTelemetry(
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
         "\"compose_avg_us\":{d},\"compose_max_us\":{d}," ++
-        "\"ack_send_avg_us\":{d},\"ack_send_max_us\":{d}," ++
-        "\"input_send_avg_us\":{d},\"input_send_max_us\":{d}," ++
+        "\"ack_enqueue_avg_us\":{d},\"ack_enqueue_max_us\":{d}," ++
+        "\"input_enqueue_avg_us\":{d},\"input_enqueue_max_us\":{d}," ++
         "\"flush_avg_us\":{d},\"flush_max_us\":{d}," ++
         "\"draw_late_avg_us\":{d},\"draw_late_max_us\":{d}," ++
         "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}}}\n", .{
@@ -2126,8 +2204,8 @@ fn formatClientTelemetry(
         metrics.decode.average() / std.time.ns_per_us,         metrics.decode.max_ns / std.time.ns_per_us,
         metrics.apply.average() / std.time.ns_per_us,          metrics.apply.max_ns / std.time.ns_per_us,
         metrics.compose.average() / std.time.ns_per_us,        metrics.compose.max_ns / std.time.ns_per_us,
-        metrics.ack_send.average() / std.time.ns_per_us,       metrics.ack_send.max_ns / std.time.ns_per_us,
-        metrics.input_send.average() / std.time.ns_per_us,     metrics.input_send.max_ns / std.time.ns_per_us,
+        metrics.ack_enqueue.average() / std.time.ns_per_us,    metrics.ack_enqueue.max_ns / std.time.ns_per_us,
+        metrics.input_enqueue.average() / std.time.ns_per_us,  metrics.input_enqueue.max_ns / std.time.ns_per_us,
         metrics.flush.average() / std.time.ns_per_us,          metrics.flush.max_ns / std.time.ns_per_us,
         metrics.draw_lateness.average() / std.time.ns_per_us,  metrics.draw_lateness.max_ns / std.time.ns_per_us,
         metrics.paced_interval.average() / std.time.ns_per_us, metrics.paced_interval.max_ns / std.time.ns_per_us,

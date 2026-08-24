@@ -44,6 +44,7 @@ pub const RuntimeMetrics = struct {
     history_candidate_input_bytes: u64 = 0,
     history_queries: u64 = 0,
     history_query_failures: u64 = 0,
+    client_resyncs: u64 = 0,
 };
 
 pub fn formatRuntimeTelemetry(
@@ -215,6 +216,7 @@ pub fn formatRuntimeTelemetry(
         history_auxiliary_completions,
     });
     try output.print("\"history_queries\":{d},\"history_query_failures\":{d}," ++
+        "\"client_resyncs\":{d}," ++
         "\"history_queue_depth\":{d},\"history_queue_high_water\":{d}," ++
         "\"history_queue_dropped\":{d}," ++
         "\"sqlite_writes\":{d},\"sqlite_write_failures\":{d}," ++
@@ -228,6 +230,7 @@ pub fn formatRuntimeTelemetry(
         "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
         metrics.history_queries,
         metrics.history_query_failures,
+        metrics.client_resyncs,
         history_stats.queued,
         history_stats.queue_high_water,
         history_stats.dropped,

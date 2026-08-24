@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 37;
+const corpus_len = 38;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -349,6 +349,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .position = 0,
         }),
     ));
+    helper.add("resync_required", .server, false, golden.resync_required, helper.commit(
+        try schema.encodeResyncRequired(helper.space(), .{
+            .workspace = .{ .workspace = @enumFromInt(7) },
+            .workspace_closed = false,
+        }),
+    ));
     helper.add("graphics_snapshot", .server, false, golden.graphics_snapshot, helper.commit(
         try schema.encodeGraphicsSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(1),
@@ -451,6 +457,7 @@ const golden = struct {
     pub const tab_renamed = "8a340000000000000000070000000000000003000000000000000600736572766572";
     pub const tab_closed = "8b0000000000000000000700000000000000030000000000000001";
     pub const tab_moved = "8c360000000000000000070000000000000003000000000000000000";
+    pub const resync_required = "9300070000000000000000";
     pub const graphics_snapshot = "8d0100000000000000030000000000000000";
     pub const graphics_image = "8e010000000000000003000000000000000700000008000000000000002002000000020000001000000000000000";
     pub const graphics_image_chunk = "8f0100000000000000030000000000000007000000080000000000000000000000000000000400000001020304";

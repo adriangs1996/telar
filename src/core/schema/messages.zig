@@ -109,6 +109,7 @@ pub const ServerTag = enum(u8) {
     graphics_placement = 0x90,
     graphics_delete_image = 0x91,
     graphics_delete_placement = 0x92,
+    resync_required = 0x93,
 };
 
 pub const LaunchView = struct {
@@ -375,6 +376,11 @@ pub const TabMoved = struct {
     position: u16,
 };
 
+pub const ResyncRequired = struct {
+    workspace: WorkspaceLocation,
+    workspace_closed: bool,
+};
+
 pub const TabSnapshot = struct {
     request_id: RequestId,
     location: TabLocation,
@@ -473,6 +479,7 @@ pub const ServerMessage = union(enum) {
     graphics_placement: graphics.Placement,
     graphics_delete_image: graphics.DeleteImage,
     graphics_delete_placement: graphics.DeletePlacement,
+    resync_required: ResyncRequired,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -830,6 +837,15 @@ pub fn encodeTabMoved(buffer: []u8, message: TabMoved) ![]const u8 {
     return encodeDerived(@intFromEnum(ServerTag.tab_moved), TabMoved, buffer, message);
 }
 
+pub fn encodeResyncRequired(buffer: []u8, message: ResyncRequired) ![]const u8 {
+    return encodeDerived(
+        @intFromEnum(ServerTag.resync_required),
+        ResyncRequired,
+        buffer,
+        message,
+    );
+}
+
 pub fn encodeHistoryResults(buffer: []u8, message: HistoryResults) ![]const u8 {
     try validateRequestId(message.request_id);
     if (message.entries.len > max_history_results) return error.TooManyHistoryResults;
@@ -867,6 +883,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .graphics_placement => .{ .graphics_placement = try graphics.decodePlacement(&decoder) },
         .graphics_delete_image => .{ .graphics_delete_image = try graphics.decodeDeleteImage(&decoder) },
         .graphics_delete_placement => .{ .graphics_delete_placement = try graphics.decodeDeletePlacement(&decoder) },
+        .resync_required => .{ .resync_required = try Derived(ResyncRequired).decode(&decoder) },
     };
     try decoder.ensureEnd();
     return message;

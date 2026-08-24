@@ -28,6 +28,7 @@ pub const client_ui = @import("client_ui.zig");
 pub const platform = @import("platform.zig");
 pub const transport = @import("transport.zig");
 pub const client = @import("client.zig");
+pub const client_outbox = @import("client_outbox.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());
