@@ -216,6 +216,60 @@ pub const Pipeline = struct {
     }
 };
 
+/// Stable identity for a child placement. Anonymous placements use Ghostty's
+/// internal namespace; explicit child IDs use the exterior namespace. Adding
+/// one reserves zero as the invalid value in Telar's wire vocabulary.
+pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 {
+    const tag: u64 = switch (key.placement_id.tag) {
+        .internal => 0,
+        .external => 1,
+    };
+    return ((tag << 32) | key.placement_id.id) + 1;
+}
+
+/// Converts Ghostty's pinned placement into pane-relative coordinates.
+///
+/// Both the runtime sync path and the reduced terminal-browser example use
+/// this adapter. Keeping one implementation matters here: a second geometry
+/// conversion in the example could hide the production bug it is meant to
+/// isolate.
+pub fn placementValue(
+    terminal: *vt.Terminal,
+    key: vt.kitty.graphics.ImageStorage.PlacementKey,
+    placement: vt.kitty.graphics.ImageStorage.Placement,
+    image: vt.kitty.graphics.Image,
+) ?core.graphics.Placement {
+    const pin = switch (placement.location) {
+        .pin => |value| value,
+        .virtual => return null,
+    };
+    if (pin.garbage) return null;
+    const pages = &terminal.screens.active.pages;
+    const screen_point = pages.pointFromPin(.screen, pin.*) orelse return null;
+    const viewport = pages.pointFromPin(.screen, pages.getTopLeft(.viewport)) orelse return null;
+    const source = placement.sourceRect(image);
+    return .{
+        .key = .{ .image_id = image.id, .generation = image.generation },
+        .virtual_id = placementVirtualId(key),
+        .placement_id = switch (key.placement_id.tag) {
+            .internal => 0,
+            .external => key.placement_id.id,
+        },
+        .x = @intCast(screen_point.screen.x),
+        .y = @as(i32, @intCast(screen_point.screen.y)) -
+            @as(i32, @intCast(viewport.screen.y)),
+        .source_x = source.x,
+        .source_y = source.y,
+        .source_width = source.width,
+        .source_height = source.height,
+        .columns = placement.columns,
+        .rows = placement.rows,
+        .offset_x = placement.x_offset,
+        .offset_y = placement.y_offset,
+        .z_index = placement.z,
+    };
+}
+
 fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
     return .{
         .cols = size.cols,

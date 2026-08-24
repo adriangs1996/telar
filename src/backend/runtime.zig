@@ -44,10 +44,9 @@ const ResponseQueue = response_queue.ResponseQueue;
 const encodeFrame = runtime_encoder.encodeFrame;
 const encodeResponse = runtime_encoder.encodeResponse;
 
-extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
-
 pub const ServeOptions = struct {
     graphics: GraphicsLimits = .{},
+    environment: std.process.Environ,
     /// SQLite database for durable history; the default keeps it in memory.
     history_path: [:0]const u8 = ":memory:",
     /// Test seam: stops the otherwise long-lived runtime without signals.
@@ -264,7 +263,11 @@ const OwnedCommand = struct {
     cwd: [:0]u8,
     gpa: std.mem.Allocator,
 
-    fn init(gpa: std.mem.Allocator, launch: schema.LaunchView) !OwnedCommand {
+    fn init(
+        gpa: std.mem.Allocator,
+        launch: schema.LaunchView,
+        environment: *const pty.Environment,
+    ) !OwnedCommand {
         if (launch.environment_mode != .inherit_runtime or launch.environment_count != 0)
             return error.UnsupportedEnvironment;
 
@@ -281,7 +284,11 @@ const OwnedCommand = struct {
         const cwd = try gpa.dupeZ(u8, launch.cwd);
         errdefer gpa.free(cwd);
 
-        var command: pty.Command = .{ .file = arguments[0].ptr, .cwd = cwd.ptr };
+        var command: pty.Command = .{
+            .file = arguments[0].ptr,
+            .cwd = cwd.ptr,
+            .environment = environment,
+        };
         for (arguments, 0..) |argument, index| command.argv[index] = argument.ptr;
         return .{ .command = command, .arguments = arguments, .cwd = cwd, .gpa = gpa };
     }
@@ -320,6 +327,7 @@ const Server = struct {
     gpa: std.mem.Allocator,
     select: *Io.Select(RuntimeEvent),
     history_service: *history.Service,
+    child_environment: *const pty.Environment,
     clients: *ClientStore,
     handshake_slot: ?core.transport.SocketChannel = null,
     handshake_pending: bool = false,
@@ -664,6 +672,7 @@ const Server = struct {
                             gpa,
                             select,
                             panes,
+                            server.child_environment,
                             location,
                             open.size,
                             launch,
@@ -809,6 +818,7 @@ const Server = struct {
                     gpa,
                     select,
                     panes,
+                    server.child_environment,
                     create.location,
                     create.size,
                     create.launch,
@@ -894,6 +904,7 @@ const Server = struct {
                     gpa,
                     select,
                     panes,
+                    server.child_environment,
                     created.location,
                     create.size,
                     create.launch,
@@ -1011,8 +1022,8 @@ fn serveInternal(
     const history_path = options.history_path;
     const stop = options.stop;
     const ingest_gate = options.ingest_gate;
-    _ = setenv("TERM", "xterm-256color", 1);
-    _ = setenv("TERM_PROGRAM", "telar", 1);
+    var child_environment = try pty.Environment.init(gpa, options.environment, "telar");
+    defer child_environment.deinit();
 
     var listener = try transport.local.LocalListener.listen(io, endpoint);
     var telemetry_suffix_buffer: [64]u8 = undefined;
@@ -1052,6 +1063,7 @@ fn serveInternal(
         .gpa = gpa,
         .select = &select,
         .history_service = &history_service,
+        .child_environment = &child_environment,
         .clients = clients,
         .workspaces = WorkspaceStore.init(gpa),
         .panes = .{
@@ -1564,12 +1576,13 @@ fn spawnPane(
     gpa: std.mem.Allocator,
     select: *Io.Select(RuntimeEvent),
     panes: *PaneStore,
+    environment: *const pty.Environment,
     location: schema.TabLocation,
     size: schema.TerminalSize,
     launch: schema.LaunchView,
     history_service: *history.Service,
 ) !*Pane {
-    var command = try OwnedCommand.init(gpa, launch);
+    var command = try OwnedCommand.init(gpa, launch, environment);
     defer command.deinit();
     const pane_key = try panes.allocateKey();
     const fresh = fresh: {

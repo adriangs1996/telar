@@ -68,7 +68,45 @@ extern "c" fn openpty(
 ) c_int;
 
 extern "c" fn execvp(file: [*:0]const u8, argv: [*:null]const ?[*:0]const u8) c_int;
+extern "c" fn _NSGetEnviron() *[*:null]?[*:0]u8;
+extern "c" var environ: [*:null]?[*:0]u8;
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
+
+/// The immutable environment presented by Telar's terminal to every child.
+/// It is built once by the runtime, before pane launches enter the interactive
+/// path, and borrowed by `Command` through `spawn`.
+pub const Environment = struct {
+    block: std.process.Environ.PosixBlock,
+    gpa: std.mem.Allocator,
+
+    pub fn init(
+        gpa: std.mem.Allocator,
+        inherited: std.process.Environ,
+        term_program: []const u8,
+    ) !Environment {
+        var map = try inherited.createMap(gpa);
+        defer map.deinit();
+
+        // terminal-browser otherwise treats this nested PTY as Ghostty and
+        // writes Ghostty pane-discovery OSC 7 between Kitty image chunks.
+        _ = map.swapRemove("GHOSTTY_RESOURCES_DIR");
+        // Runtime authority is never ambient pane state.
+        _ = map.swapRemove("TELAR_SOCKET");
+        try map.put("TERM", "xterm-256color");
+        try map.put("TERM_PROGRAM", term_program);
+
+        const block = try map.createPosixBlock(gpa, .{});
+        return .{
+            .block = block,
+            .gpa = gpa,
+        };
+    }
+
+    pub fn deinit(environment: *Environment) void {
+        environment.block.deinit(environment.gpa);
+        environment.* = undefined;
+    }
+};
 
 pub const Size = struct {
     cols: u16,
@@ -91,6 +129,7 @@ pub const Command = struct {
     file: [*:0]const u8,
     argv: [max_args:null]?[*:0]const u8 = @splat(null),
     cwd: ?[*:0]const u8 = null,
+    environment: ?*const Environment = null,
 
     pub fn fromArgv(args: []const [*:0]const u8) !Command {
         if (args.len == 0) return error.MissingCommand;
@@ -288,6 +327,15 @@ fn childExec(
         if (std.c.chdir(cwd) != 0) std.c._exit(126);
     }
 
+    // `fork` gave this child a private address space. Repointing libc's
+    // environment here cannot race with the runtime and lets `execvp` retain
+    // its existing PATH search and ENOEXEC fallback semantics.
+    if (command.environment) |environment| switch (builtin.os.tag) {
+        .macos => _NSGetEnviron().* = @ptrCast(@constCast(environment.block.slice.ptr)),
+        .linux => environ = @ptrCast(@constCast(environment.block.slice.ptr)),
+        else => unreachable,
+    };
+
     _ = execvp(command.file, &command.argv);
     std.c._exit(127);
 }
@@ -373,6 +421,73 @@ test "command arguments remain null terminated" {
     try std.testing.expectEqualStrings("/bin/sh", std.mem.span(command.file));
     try std.testing.expectEqualStrings("exit 7", std.mem.span(command.argv[2].?));
     try std.testing.expectEqual(@as(?[*:0]const u8, null), command.argv[3]);
+}
+
+test "terminal child environment removes inherited Ghostty identity" {
+    var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
+    defer inherited_map.deinit();
+    try inherited_map.put("HOME", "/tmp/telar-home");
+    try inherited_map.put("PATH", "/bin:/usr/bin");
+    try inherited_map.put("TERM", "xterm-ghostty");
+    try inherited_map.put("TERM_PROGRAM", "ghostty");
+    try inherited_map.put("TELAR_SOCKET", "/tmp/outer-telar.sock");
+    try inherited_map.put("GHOSTTY_RESOURCES_DIR", "outer");
+    const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
+    defer inherited_block.deinit(std.testing.allocator);
+
+    var environment = try Environment.init(
+        std.testing.allocator,
+        .{ .block = inherited_block },
+        "telar",
+    );
+    defer environment.deinit();
+    const child: std.process.Environ = .{ .block = environment.block };
+
+    try std.testing.expectEqualStrings(
+        "xterm-256color",
+        std.process.Environ.getPosix(child, "TERM").?,
+    );
+    try std.testing.expectEqualStrings(
+        "telar",
+        std.process.Environ.getPosix(child, "TERM_PROGRAM").?,
+    );
+    try std.testing.expectEqualStrings(
+        "/tmp/telar-home",
+        std.process.Environ.getPosix(child, "HOME").?,
+    );
+    try std.testing.expect(std.process.Environ.getPosix(child, "TELAR_SOCKET") == null);
+    try std.testing.expect(std.process.Environ.getPosix(child, "GHOSTTY_RESOURCES_DIR") == null);
+}
+
+test "PTY child receives the explicit terminal environment" {
+    var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
+    defer inherited_map.deinit();
+    try inherited_map.put("PATH", "/bin:/usr/bin");
+    try inherited_map.put("GHOSTTY_RESOURCES_DIR", "/Applications/Ghostty.app/Contents/Resources");
+    const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
+    defer inherited_block.deinit(std.testing.allocator);
+
+    var environment = try Environment.init(
+        std.testing.allocator,
+        .{ .block = inherited_block },
+        "telar",
+    );
+    defer environment.deinit();
+
+    const args = [_][*:0]const u8{
+        "sh",
+        "-c",
+        "printf '%s|%s|%s' \"$TERM\" \"$TERM_PROGRAM\" \"${GHOSTTY_RESOURCES_DIR-unset}\"",
+    };
+    var command = try Command.fromArgv(&args);
+    command.environment = &environment;
+    var session = try Session.spawn(&command, .{ .cols = 40, .rows = 5 });
+    defer session.deinit();
+
+    var output: [128]u8 = undefined;
+    const len = try session.file().readStreaming(std.testing.io, &.{&output});
+    try std.testing.expectEqual(Exit{ .exited = 0 }, try session.wait());
+    try std.testing.expectEqualStrings("xterm-256color|telar|unset", output[0..len]);
 }
 
 test "a command accepts the schema's maximum argument count" {

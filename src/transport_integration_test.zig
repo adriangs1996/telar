@@ -236,7 +236,10 @@ test "runtime stops with a live pane and removes its endpoint" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     var server_finished = false;
     defer if (!server_finished) {
         stop.putOneUncancelable(io, 0) catch {};
@@ -302,7 +305,10 @@ test "runtime destroys a pane after its shell exits" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -422,7 +428,10 @@ test "the last pane closes only its tab when the workspace has another tab" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -517,7 +526,10 @@ test "an exited detached pane removes its tab and workspace" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -574,7 +586,10 @@ test "one client drives two attached panes and closes either one" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -727,7 +742,10 @@ test "pane keeps running while its client is disconnected" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -827,7 +845,10 @@ test "runtime keeps independent panes for different workspaces" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -906,7 +927,10 @@ test "runtime owns the complete tab lifecycle" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1046,7 +1070,10 @@ test "a reconnect restores tab order labels and pane membership" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1177,7 +1204,10 @@ test "an identical pane resize does not emit another snapshot" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1269,7 +1299,11 @@ test "runtime persists terminal-edited commands without shell integration" {
         io,
         gpa,
         socket_path,
-        .{ .history_path = database_path, .stop = &stop },
+        .{
+            .environment = std.testing.environ,
+            .history_path = database_path,
+            .stop = &stop,
+        },
     });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
@@ -1388,7 +1422,11 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         io,
         gpa,
         socket_path,
-        .{ .stop = &stop, .ingest_gate = &gate },
+        .{
+            .environment = std.testing.environ,
+            .stop = &stop,
+            .ingest_gate = &gate,
+        },
     });
     var gate_released = false;
     defer {
@@ -1467,7 +1505,10 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1579,7 +1620,10 @@ test "a silent connection cannot starve later clients" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1629,7 +1673,10 @@ test "input to one pane flows while another pane's PTY is wedged" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1740,7 +1787,10 @@ test "two clients observe one pane with independent frame acknowledgement" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
@@ -1885,7 +1935,10 @@ test "a stale attachment command does not disconnect the client" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};

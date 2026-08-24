@@ -365,7 +365,11 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
         init.io,
         init.gpa,
         endpoint.path(),
-        .{ .graphics = resolved_options.graphics, .history_path = history_path.path },
+        .{
+            .graphics = resolved_options.graphics,
+            .environment = init.minimal.environ,
+            .history_path = history_path.path,
+        },
     );
 }
 

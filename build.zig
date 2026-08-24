@@ -163,6 +163,29 @@ pub fn build(b: *std.Build) void {
     run_sidebar.step.dependOn(b.getInstallStep());
     b.step("sidebar", "Run the example").dependOn(&run_sidebar.step);
 
+    const terminal_browser_pane = b.addExecutable(.{
+        .name = "terminal-browser-pane",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/terminal_browser_pane.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    terminal_browser_pane.root_module.addImport("telar-core", core);
+    terminal_browser_pane.root_module.addImport("telar-backend", backend);
+    terminal_browser_pane.root_module.addImport("telar-frontend", frontend);
+    terminal_browser_pane.root_module.addImport("ghostty-vt", ghostty_vt);
+    b.installArtifact(terminal_browser_pane);
+
+    const run_terminal_browser_pane = b.addRunArtifact(terminal_browser_pane);
+    run_terminal_browser_pane.step.dependOn(b.getInstallStep());
+    if (b.args) |args| run_terminal_browser_pane.addArgs(args);
+    b.step(
+        "terminal-browser-pane",
+        "Run terminal-browser inside a centered half-size pane",
+    ).dependOn(&run_terminal_browser_pane.step);
+
     // ---------------------------------------------------------------------
     // Tests
     // ---------------------------------------------------------------------
@@ -232,6 +255,7 @@ pub fn build(b: *std.Build) void {
         },
         .{ .path = "src/main.zig", .vt = true, .libc = true },
         .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
+        .{ .path = "examples/terminal_browser_pane.zig", .vt = true, .libc = true },
     };
     for (suites) |suite| {
         const tests = b.addTest(.{

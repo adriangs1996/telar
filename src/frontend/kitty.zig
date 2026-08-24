@@ -45,12 +45,13 @@ const ImageEntry = struct {
     chunks: usize = 0,
     external_id: u32,
     transmitted: bool = false,
+    retire_pending: bool = false,
 };
 
 const PlacementEntry = struct {
     placement: graphics.Placement,
     external_id: u32,
-    emitted: bool = false,
+    emitted_image_id: ?u32 = null,
     dirty: bool = true,
 };
 
@@ -59,12 +60,19 @@ const Delete = union(enum) {
     placement: struct { image_id: u32, placement_id: u32 },
 };
 
+const FallbackPlacement = struct {
+    placement: graphics.Placement,
+    external_id: u32,
+};
+
 /// A chunked transfer the frame budget interrupted. The next frame resumes
 /// it before emitting any other graphics escape, which the protocol demands.
 const PartialTransmission = struct {
     key: ImageIdentity,
     external_id: u32,
     offset: usize,
+    fallback_count: usize = 0,
+    fallbacks: [graphics.max_placements_per_pane]FallbackPlacement = undefined,
 };
 
 pub const Store = struct {
@@ -210,25 +218,20 @@ pub const Store = struct {
         _ = try placement.sourceRect(image.metadata);
         const key: PlacementIdentity = .{ .pane_id = pane_id, .virtual_id = placement.virtual_id };
         if (store.placements.getPtr(key)) |entry| {
-            if (entry.emitted) {
-                const previous_image = store.images.get(identity(pane_id, entry.placement.key)).?;
-                store.queueDelete(.{ .placement = .{
-                    .image_id = previous_image.external_id,
-                    .placement_id = entry.external_id,
-                } });
-            }
             entry.placement = placement;
             entry.dirty = true;
-            entry.emitted = false;
+            store.rememberPartialPlacement(pane_id, placement, entry.external_id);
         } else {
             if (store.panePlacementCount(pane_id) == graphics.max_placements_per_pane)
                 return error.GraphicsPlacementLimitExceeded;
             const usage = try store.usageFor(pane_id);
+            const external_id = try store.allocatePlacementId();
             try store.placements.put(store.gpa, key, .{
                 .placement = placement,
-                .external_id = try store.allocatePlacementId(),
+                .external_id = external_id,
             });
             usage.placements += 1;
+            store.rememberPartialPlacement(pane_id, placement, external_id);
         }
         store.damage = true;
     }
@@ -239,21 +242,38 @@ pub const Store = struct {
     }
 
     fn deleteImageData(store: *Store, pane_id: schema.PaneId, key: graphics.ImageKey) void {
-        const removed = store.images.fetchRemove(identity(pane_id, key)) orelse return;
+        const image_key = identity(pane_id, key);
+        const image = store.images.getPtr(image_key) orelse return;
+        image.retire_pending = true;
+        store.removePlacementsForImage(pane_id, key);
+        store.collectRetired(pane_id, key.image_id);
+        store.damage = true;
+    }
+
+    fn removeImageData(store: *Store, key: ImageIdentity) void {
+        const removed = store.images.fetchRemove(key) orelse return;
         store.total_bytes -= removed.value.pixels.len;
-        store.noteImageRemoved(pane_id, removed.value.pixels.len);
+        store.noteImageRemoved(key.pane_id, removed.value.pixels.len);
         store.gpa.free(removed.value.pixels);
         store.queueDelete(.{ .image = removed.value.external_id });
+    }
+
+    fn removePlacementsForImage(store: *Store, pane_id: schema.PaneId, key: graphics.ImageKey) void {
         var iterator = store.placements.iterator();
         while (iterator.next()) |entry| {
             if (entry.key_ptr.pane_id == pane_id and
                 std.meta.eql(entry.value_ptr.placement.key, key))
             {
+                if (entry.value_ptr.emitted_image_id) |image_id| store.queueDelete(.{
+                    .placement = .{
+                        .image_id = image_id,
+                        .placement_id = entry.value_ptr.external_id,
+                    },
+                });
                 _ = store.placements.removeByPtr(entry.key_ptr);
                 store.notePlacementRemoved(pane_id);
             }
         }
-        store.damage = true;
     }
 
     pub fn deletePlacement(store: *Store, message: schema.graphics.DeletePlacement) !void {
@@ -264,13 +284,11 @@ pub const Store = struct {
         };
         const removed = store.placements.fetchRemove(key) orelse return;
         store.notePlacementRemoved(message.pane_id);
-        if (removed.value.emitted) if (store.images.get(identity(
-            message.pane_id,
-            removed.value.placement.key,
-        ))) |image| store.queueDelete(.{ .placement = .{
-            .image_id = image.external_id,
+        if (removed.value.emitted_image_id) |image_id| store.queueDelete(.{ .placement = .{
+            .image_id = image_id,
             .placement_id = removed.value.external_id,
         } });
+        store.collectRetired(message.pane_id, message.key.image_id);
         store.damage = true;
     }
 
@@ -301,19 +319,16 @@ pub const Store = struct {
     pub fn invalidatePlacements(store: *Store) void {
         var iterator = store.placements.iterator();
         while (iterator.next()) |entry| {
-            if (entry.value_ptr.emitted) {
-                const image = store.images.get(identity(
-                    entry.key_ptr.pane_id,
-                    entry.value_ptr.placement.key,
-                )) orelse continue;
+            if (entry.value_ptr.emitted_image_id) |image_id| {
                 store.queueDelete(.{ .placement = .{
-                    .image_id = image.external_id,
+                    .image_id = image_id,
                     .placement_id = entry.value_ptr.external_id,
                 } });
             }
-            entry.value_ptr.emitted = false;
+            entry.value_ptr.emitted_image_id = null;
             entry.value_ptr.dirty = true;
         }
+        store.collectRetired(null, null);
         store.damage = true;
     }
 
@@ -327,19 +342,16 @@ pub const Store = struct {
         var iterator = store.placements.iterator();
         while (iterator.next()) |entry| {
             if (entry.key_ptr.pane_id != pane_id) continue;
-            if (!visible and entry.value_ptr.emitted) {
-                const image = store.images.get(identity(
-                    pane_id,
-                    entry.value_ptr.placement.key,
-                )) orelse continue;
+            if (!visible) if (entry.value_ptr.emitted_image_id) |image_id| {
                 store.queueDelete(.{ .placement = .{
-                    .image_id = image.external_id,
+                    .image_id = image_id,
                     .placement_id = entry.value_ptr.external_id,
                 } });
-            }
-            entry.value_ptr.emitted = false;
+            };
+            entry.value_ptr.emitted_image_id = null;
             entry.value_ptr.dirty = visible;
         }
+        if (!visible) store.collectRetired(pane_id, null);
         store.damage = true;
     }
 
@@ -453,60 +465,99 @@ pub const Store = struct {
         pane_id: schema.PaneId,
         current: graphics.ImageKey,
     ) void {
-        store.removeGenerationsExcept(pane_id, current.image_id, current.generation, null);
+        store.retireOtherGenerations(pane_id, current);
     }
 
-    /// Keeps at most two generations of one child image: the newest complete
-    /// one still on screen and the transfer replacing it. Anything older is
-    /// an abandoned transfer superseded before it finished, and letting those
-    /// accumulate is bounded only by the byte quota, not by
-    /// `max_images_per_pane`.
+    /// A new frame replaces pending work, but not the frame the host terminal
+    /// is displaying or a KGP transmission whose `m=0` has not been sent yet.
     fn evictReplacedGenerations(
         store: *Store,
         pane_id: schema.PaneId,
         incoming: graphics.ImageKey,
     ) void {
-        var keep: ?u64 = null;
-        var iterator = store.images.iterator();
-        while (iterator.next()) |entry| {
-            if (entry.key_ptr.pane_id != pane_id or
-                entry.key_ptr.image_id != incoming.image_id or
-                entry.key_ptr.generation == incoming.generation) continue;
-            if (entry.value_ptr.received != entry.value_ptr.pixels.len) continue;
-            if (keep == null or entry.key_ptr.generation > keep.?)
-                keep = entry.key_ptr.generation;
-        }
-        store.removeGenerationsExcept(pane_id, incoming.image_id, incoming.generation, keep);
+        store.retireOtherGenerations(pane_id, incoming);
     }
 
-    fn removeGenerationsExcept(
+    fn retireOtherGenerations(
         store: *Store,
         pane_id: schema.PaneId,
-        image_id: u32,
-        kept_a: u64,
-        kept_b: ?u64,
+        current: graphics.ImageKey,
     ) void {
-        // Collected in bounded batches and swept until nothing is left:
-        // retransmissions of one image id bypass the logical-count limit, so
-        // no fixed array is guaranteed to hold every stale generation.
-        var obsolete: [graphics.max_images_per_pane]graphics.ImageKey = undefined;
+        var images = store.images.iterator();
+        while (images.next()) |entry| {
+            if (entry.key_ptr.pane_id != pane_id or
+                entry.key_ptr.image_id != current.image_id or
+                entry.key_ptr.generation == current.generation) continue;
+            entry.value_ptr.retire_pending = true;
+        }
+        store.collectRetired(pane_id, current.image_id);
+    }
+
+    fn exteriorGenerationLive(store: *const Store, key: ImageIdentity, external_id: u32) bool {
+        if (store.partial) |partial| if (std.meta.eql(partial.key, key)) return true;
+        var placements = store.placements.iterator();
+        while (placements.next()) |entry| {
+            if (entry.key_ptr.pane_id != key.pane_id) continue;
+            if (entry.value_ptr.emitted_image_id == external_id or
+                (entry.value_ptr.placement.key.image_id == key.image_id and
+                    entry.value_ptr.placement.key.generation == key.generation)) return true;
+        }
+        return false;
+    }
+
+    fn collectRetired(store: *Store, pane_id: ?schema.PaneId, image_id: ?u32) void {
+        // Retransmissions bypass the logical image count, so sweep in bounded
+        // batches instead of assuming one fixed array holds every generation.
+        var retired: [graphics.max_images_per_pane]ImageIdentity = undefined;
         while (true) {
             var count: usize = 0;
-            var iterator = store.images.iterator();
-            while (iterator.next()) |entry| {
-                if (entry.key_ptr.pane_id != pane_id or
-                    entry.key_ptr.image_id != image_id or
-                    entry.key_ptr.generation == kept_a or
-                    entry.key_ptr.generation == kept_b) continue;
-                obsolete[count] = .{
-                    .image_id = entry.key_ptr.image_id,
-                    .generation = entry.key_ptr.generation,
-                };
+            var images = store.images.iterator();
+            while (images.next()) |entry| {
+                if (pane_id) |expected| if (entry.key_ptr.pane_id != expected) continue;
+                if (image_id) |expected| if (entry.key_ptr.image_id != expected) continue;
+                if (!entry.value_ptr.retire_pending or
+                    store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id)) continue;
+                retired[count] = entry.key_ptr.*;
                 count += 1;
-                if (count == obsolete.len) break;
+                if (count == retired.len) break;
             }
             if (count == 0) return;
-            for (obsolete[0..count]) |key| store.deleteImageData(pane_id, key);
+            for (retired[0..count]) |key| store.removeImageData(key);
+        }
+    }
+
+    fn rememberPartialPlacement(
+        store: *Store,
+        pane_id: schema.PaneId,
+        placement: graphics.Placement,
+        external_id: u32,
+    ) void {
+        const partial = if (store.partial) |*value| value else return;
+        if (partial.key.pane_id != pane_id or
+            partial.key.image_id != placement.key.image_id or
+            partial.key.generation != placement.key.generation) return;
+        for (partial.fallbacks[0..partial.fallback_count]) |*fallback| {
+            if (fallback.placement.virtual_id != placement.virtual_id) continue;
+            fallback.* = .{ .placement = placement, .external_id = external_id };
+            return;
+        }
+        if (partial.fallback_count == partial.fallbacks.len) return;
+        partial.fallbacks[partial.fallback_count] = .{
+            .placement = placement,
+            .external_id = external_id,
+        };
+        partial.fallback_count += 1;
+    }
+
+    fn capturePartialPlacements(store: *Store) void {
+        if (store.partial == null) return;
+        var placements = store.placements.iterator();
+        while (placements.next()) |entry| {
+            store.rememberPartialPlacement(
+                entry.key_ptr.pane_id,
+                entry.value_ptr.placement,
+                entry.value_ptr.external_id,
+            );
         }
     }
 
@@ -622,6 +673,11 @@ pub const KittyGraphicsWriter = struct {
                 }
                 entry.transmitted = true;
                 self.store.partial = null;
+                written += try self.writeFallbackPlacements(writer, partial, entry.*);
+                self.store.collectRetired(
+                    partial.key.pane_id,
+                    partial.key.image_id,
+                );
                 budget -= @min(budget, progress.written);
             }
         }
@@ -634,9 +690,10 @@ pub const KittyGraphicsWriter = struct {
             while (reset_images.next()) |entry| entry.value_ptr.transmitted = false;
             var reset_placements = self.store.placements.iterator();
             while (reset_placements.next()) |entry| {
-                entry.value_ptr.emitted = false;
+                entry.value_ptr.emitted_image_id = null;
                 entry.value_ptr.dirty = true;
             }
+            self.store.collectRetired(null, null);
         }
         while (self.store.popDelete()) |deletion| written += switch (deletion) {
             .image => |image_id| try writeDeleteImage(writer, image_id),
@@ -670,6 +727,7 @@ pub const KittyGraphicsWriter = struct {
                     .external_id = image.external_id,
                     .offset = progress.offset,
                 };
+                self.store.capturePartialPlacements();
                 // The open transfer forbids emitting anything else.
                 return written;
             }
@@ -688,7 +746,19 @@ pub const KittyGraphicsWriter = struct {
             )) orelse continue;
             if (!image.transmitted) continue;
             const output = self.geometry(entry.key_ptr.pane_id, placement.placement, image.metadata) orelse {
+                if (placement.emitted_image_id) |previous_image_id| {
+                    written += try writeDeletePlacement(
+                        writer,
+                        previous_image_id,
+                        placement.external_id,
+                    );
+                }
+                placement.emitted_image_id = null;
                 placement.dirty = false;
+                self.store.collectRetired(
+                    entry.key_ptr.pane_id,
+                    placement.placement.key.image_id,
+                );
                 continue;
             };
             written += try writePlacement(
@@ -698,10 +768,68 @@ pub const KittyGraphicsWriter = struct {
                 output,
                 placement.placement.z_index,
             );
-            placement.emitted = true;
+            if (placement.emitted_image_id) |previous_image_id| {
+                if (previous_image_id != image.external_id)
+                    written += try writeDeletePlacement(
+                        writer,
+                        previous_image_id,
+                        placement.external_id,
+                    );
+            }
+            placement.emitted_image_id = image.external_id;
             placement.dirty = false;
+            self.store.collectRetired(
+                entry.key_ptr.pane_id,
+                placement.placement.key.image_id,
+            );
         }
-        self.store.damage = false;
+        self.store.damage = self.store.delete_len != 0 or self.store.delete_overflow;
+        return written;
+    }
+
+    /// Presents a completed frame even if a newer generation arrived while
+    /// it crossed the host terminal. This bounds the queue to the visible,
+    /// in-flight and latest generations without starving continuous repaint.
+    fn writeFallbackPlacements(
+        self: *KittyGraphicsWriter,
+        writer: *Io.Writer,
+        partial: PartialTransmission,
+        image: ImageEntry,
+    ) Io.Writer.Error!usize {
+        if (!self.store.paneVisible(partial.key.pane_id)) return 0;
+        var written: usize = 0;
+        for (partial.fallbacks[0..partial.fallback_count]) |fallback| {
+            const key: PlacementIdentity = .{
+                .pane_id = partial.key.pane_id,
+                .virtual_id = fallback.placement.virtual_id,
+            };
+            const placement = self.store.placements.getPtr(key) orelse continue;
+            if (placement.external_id != fallback.external_id or
+                placement.placement.key.image_id != partial.key.image_id or
+                placement.placement.key.generation < partial.key.generation) continue;
+            const output = self.geometry(
+                partial.key.pane_id,
+                fallback.placement,
+                image.metadata,
+            ) orelse continue;
+            written += try writePlacement(
+                writer,
+                image.external_id,
+                placement.external_id,
+                output,
+                fallback.placement.z_index,
+            );
+            if (placement.emitted_image_id) |previous_image_id| {
+                if (previous_image_id != image.external_id)
+                    written += try writeDeletePlacement(
+                        writer,
+                        previous_image_id,
+                        placement.external_id,
+                    );
+            }
+            placement.emitted_image_id = image.external_id;
+            placement.dirty = !std.meta.eql(placement.placement, fallback.placement);
+        }
         return written;
     }
 
@@ -1370,6 +1498,207 @@ test "image transmission is paced across frames by the byte budget" {
     // Idle afterwards: no work left.
     var idle = Io.Writer.fixed(frame_buffer);
     try std.testing.expectEqual(@as(usize, 0), try graphics_writer.write(&idle));
+}
+
+test "continuous replacements complete and hand off without a blank frame" {
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, location, .{ .cols = 10, .rows = 5 });
+
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const first: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = first });
+    try store.applyChunk(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .key = first.key,
+        .offset = 0,
+        .bytes = &.{ 1, 2, 3, 255 },
+    });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{
+            .key = first.key,
+            .virtual_id = 1,
+            .placement_id = 1,
+            .x = 0,
+            .y = 0,
+        },
+    });
+
+    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+    var graphics_writer: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = layout_snapshot,
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+    var small_buffer: [1024]u8 = undefined;
+    var first_writer = Io.Writer.fixed(&small_buffer);
+    _ = try graphics_writer.write(&first_writer);
+
+    const placement_key: PlacementIdentity = .{ .pane_id = pane_id, .virtual_id = 1 };
+    const placement_id = store.placements.get(placement_key).?.external_id;
+    const first_id = store.images.get(identity(pane_id, first.key)).?.external_id;
+    try std.testing.expectEqual(
+        first_id,
+        store.placements.get(placement_key).?.emitted_image_id.?,
+    );
+
+    const pixels = try std.testing.allocator.alloc(u8, 256 * 256 * 4);
+    defer std.testing.allocator.free(pixels);
+    @memset(pixels, 0x5a);
+    const second: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 2 },
+        .format = .rgba,
+        .width = 256,
+        .height = 256,
+        .byte_len = pixels.len,
+    };
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 2, .image = second });
+    try store.applyChunk(.{
+        .pane_id = pane_id,
+        .revision = 2,
+        .key = second.key,
+        .offset = 0,
+        .bytes = pixels,
+    });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 2,
+        .placement = .{
+            .key = second.key,
+            .virtual_id = 1,
+            .placement_id = 1,
+            .x = 0,
+            .y = 0,
+        },
+    });
+
+    var frame_buffer: [transmission_budget_per_frame + 16 * 1024]u8 = undefined;
+    var begin_second = Io.Writer.fixed(&frame_buffer);
+    _ = try graphics_writer.write(&begin_second);
+    try std.testing.expect(store.partial != null);
+    try std.testing.expectEqual(
+        first_id,
+        store.placements.get(placement_key).?.emitted_image_id.?,
+    );
+
+    // A third browser frame arrives before the second has crossed the host
+    // terminal. It replaces pending work, but cannot abort the open KGP stream.
+    const third: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 3 },
+        .format = .rgba,
+        .width = 256,
+        .height = 256,
+        .byte_len = pixels.len,
+    };
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 3, .image = third });
+    try store.applyChunk(.{
+        .pane_id = pane_id,
+        .revision = 3,
+        .key = third.key,
+        .offset = 0,
+        .bytes = pixels,
+    });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 3,
+        .placement = .{
+            .key = third.key,
+            .virtual_id = 1,
+            .placement_id = 1,
+            .x = 0,
+            .y = 0,
+        },
+    });
+    try store.deleteImage(.{
+        .pane_id = pane_id,
+        .revision = 3,
+        .key = second.key,
+    });
+    try std.testing.expectEqual(@as(usize, 3), store.images.count());
+
+    const second_id = store.images.get(identity(pane_id, second.key)).?.external_id;
+    const third_id = store.images.get(identity(pane_id, third.key)).?.external_id;
+    var second_placement_buffer: [64]u8 = undefined;
+    const second_placement = try std.fmt.bufPrint(
+        &second_placement_buffer,
+        "\x1b_Ga=p,i={d},p={d},",
+        .{ second_id, placement_id },
+    );
+    var third_placement_buffer: [64]u8 = undefined;
+    const third_placement = try std.fmt.bufPrint(
+        &third_placement_buffer,
+        "\x1b_Ga=p,i={d},p={d},",
+        .{ third_id, placement_id },
+    );
+    var delete_first_buffer: [64]u8 = undefined;
+    const delete_first = try std.fmt.bufPrint(
+        &delete_first_buffer,
+        "\x1b_Ga=d,d=i,i={d},p={d},q=2\x1b\\",
+        .{ first_id, placement_id },
+    );
+    var delete_second_buffer: [64]u8 = undefined;
+    const delete_second = try std.fmt.bufPrint(
+        &delete_second_buffer,
+        "\x1b_Ga=d,d=i,i={d},p={d},q=2\x1b\\",
+        .{ second_id, placement_id },
+    );
+
+    var frames: usize = 1;
+    var second_handoff = false;
+    var third_handoff = false;
+    while (store.damage) {
+        frames += 1;
+        try std.testing.expect(frames < 16);
+        var writer = Io.Writer.fixed(&frame_buffer);
+        _ = try graphics_writer.write(&writer);
+        const output = writer.buffered();
+        try std.testing.expect(std.mem.indexOf(u8, output, "\x1b_Gm=0;\x1b\\") == null);
+        if (std.mem.indexOf(u8, output, second_placement)) |placement_at| {
+            const delete_at = std.mem.indexOf(u8, output, delete_first) orelse
+                return error.MissingOldPlacementDelete;
+            try std.testing.expect(placement_at < delete_at);
+            second_handoff = true;
+        }
+        if (std.mem.indexOf(u8, output, third_placement)) |placement_at| {
+            const delete_at = std.mem.indexOf(u8, output, delete_second) orelse
+                return error.MissingOldPlacementDelete;
+            try std.testing.expect(placement_at < delete_at);
+            third_handoff = true;
+        }
+        if (!second_handoff) try std.testing.expectEqual(
+            first_id,
+            store.placements.get(placement_key).?.emitted_image_id.?,
+        );
+        if (second_handoff and !third_handoff) try std.testing.expectEqual(
+            second_id,
+            store.placements.get(placement_key).?.emitted_image_id.?,
+        );
+    }
+
+    try std.testing.expect(second_handoff);
+    try std.testing.expect(third_handoff);
+    try std.testing.expectEqual(
+        third_id,
+        store.placements.get(placement_key).?.emitted_image_id.?,
+    );
+    try std.testing.expectEqual(@as(usize, 1), store.images.count());
+    try std.testing.expect(store.images.contains(identity(pane_id, third.key)));
 }
 
 test "image and placement deletes encode exactly and clear client state" {
