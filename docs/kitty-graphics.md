@@ -39,6 +39,9 @@ and `kitty-full` return `KittyGraphicsUnsupported` when the probe fails.
 
 - RGB (`f=24`) and RGBA (`f=32`).
 - Direct transmission (`t=d`) with independently base64-encoded chunks.
+- POSIX shared-memory transmission (`t=s`) for local RGB and RGBA frames. The
+  media actor copies the mapped bytes into quota-accounted runtime storage and
+  unlinks the segment after reading it.
 - Zlib compression (`o=z`) with exact decompressed-length validation.
 - Transmit, transmit-and-display, put, query, and delete.
 - Child image IDs, placement IDs, runtime generations, and anonymous virtual
@@ -52,10 +55,10 @@ and `kitty-full` return `KittyGraphicsUnsupported` when the probe fails.
   Telar preserves its exact pixel coordinates relative to the pane. Otherwise
   it falls back to the measured center of the reported cell.
 
-File (`t=f`) and shared-memory (`t=s`) media are rejected as unsupported; they
-are never accepted and ignored. PNG is not decoded. Unicode virtual placements
-are not emitted because the pinned Ghostty VT does not expose them with enough
-information to preserve pane clipping and lifecycle.
+Regular and temporary file media (`t=f`, `t=t`) are rejected as unsupported;
+the runtime never opens a child-selected path. PNG is not decoded. Unicode
+virtual placements are not emitted because the pinned Ghostty VT does not
+expose them with enough information to preserve pane clipping and lifecycle.
 
 ## Runtime-client flow control
 
@@ -84,10 +87,12 @@ Incomplete loads are cancelled on chunk, payload, or quota violations. Closing
 a pane frees VT images, transfer snapshots, client pixels, placements, and
 exterior IDs.
 
-PTY bursts are parsed by at most one bounded ingest actor per pane. A pane does
-not schedule its next read until that actor finishes, so uploads cannot create
-an unbounded queue. The runtime event loop and serialized PTY input writer stay
-live while the actor performs base64, zlib, allocation, and Ghostty parsing.
+PTY output is copied into two fixed 64 KiB batches and parsed by at most one
+media actor per pane. PTY reads resume after the independent text ingest, so
+base64, zlib, allocation, and Ghostty graphics parsing cannot stall cells or
+input. Applications that negotiate shared memory keep bulk pixels out of those
+batches; mapping, copying, and decoding still happen on the media actor under
+the same pane and global quotas.
 Debug telemetry exposes `input_write_*` and `ingest_*` timings. The benchmark
 `backend.kitty.ingest_zlib_rgba_1920x1080` covers the actual APC → base64 →
 zlib → Ghostty path; the transport integration suite holds the ingest actor at
@@ -120,7 +125,8 @@ live while the ingest actor is occupied.
 
 The reproducible exterior check builds the pinned terminal-browser revision
 `cce10b6131d15bf46a3e4b8dc827e0544ff7fc65` without changes and runs it inside
-Telar:
+Telar. It rejects media resets or dropped PTY bytes, so a silent fallback to an
+overloaded inline transport cannot pass:
 
 ```sh
 zig build verify-terminal-browser
@@ -148,7 +154,7 @@ scaling, and sidebar artwork.
 
 ## Remaining limitations
 
-- No PNG, file, shared-memory, or Unicode-placeholder transport.
+- No PNG, file, temporary-file, or Unicode-placeholder transport.
 - Pixel mouse precision is limited to cell centers when the exterior terminal
   does not report pixel mouse coordinates.
 - Only the local socket transport has been exercised with graphical load.

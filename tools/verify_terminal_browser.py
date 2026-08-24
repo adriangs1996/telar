@@ -223,6 +223,14 @@ def main() -> int:
         ),
         "no_pty_response_drops": bool(runtime_samples)
         and all(int(sample.get("pty_response_dropped", 0)) == 0 for sample in runtime_samples),
+        "no_media_resets": bool(runtime_samples)
+        and all(int(sample.get("media_resets", 0)) == 0 for sample in runtime_samples),
+        "no_media_drops": bool(runtime_samples)
+        and all(
+            int(sample.get("media_dropped_events", 0)) == 0
+            and int(sample.get("media_dropped_bytes", 0)) == 0
+            for sample in runtime_samples
+        ),
         "history_isolated": history_commands == 0,
     }
     result = {

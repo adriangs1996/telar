@@ -140,7 +140,7 @@ const Emulator = struct {
             .cols = size.cols,
             .rows = size.rows,
             .kitty_image_storage_limit = core.graphics.max_image_bytes_per_screen,
-            .kitty_image_loading_limits = .direct,
+            .kitty_image_loading_limits = media.image_loading_limits,
         });
         errdefer emulator.terminal.deinit(gpa);
 

@@ -16,6 +16,15 @@ const schema = core.schema;
 pub const batch_bytes = 4 * 16 * 1024;
 pub const batch_events = 64;
 
+/// Raw pixels may cross the local child/runtime boundary through POSIX shared
+/// memory. Path-based media stays disabled so a pane cannot ask the long-lived
+/// runtime to open an arbitrary file.
+pub const image_loading_limits: vt.kitty.graphics.LoadingImage.Limits = .{
+    .file = false,
+    .temporary_file = .disabled,
+    .shared_memory = true,
+};
+
 pub const Stats = struct {
     output_bytes: u64 = 0,
     reset: bool = false,
@@ -41,11 +50,27 @@ const Batch = struct {
     }
 
     fn pushOutput(batch: *Batch, bytes: []const u8) bool {
-        if (batch.event_count == batch.events.len or bytes.len > batch.bytes.len - batch.len)
-            return false;
+        if (bytes.len > batch.bytes.len - batch.len) return false;
         const offset = batch.len;
         @memcpy(batch.bytes[offset..][0..bytes.len], bytes);
         batch.len += bytes.len;
+
+        // Output slices are one byte stream. Merge adjacent PTY reads so the
+        // event bound measures output/resize ordering rather than scheduler
+        // granularity; TerminalStream is required to be slice-independent.
+        if (batch.event_count != 0) switch (batch.events[batch.event_count - 1]) {
+            .output => |output| {
+                if (@as(usize, output.offset) + output.len == offset) {
+                    batch.events[batch.event_count - 1].output.len += @intCast(bytes.len);
+                    return true;
+                }
+            },
+            .resize => {},
+        };
+        if (batch.event_count == batch.events.len) {
+            batch.len = offset;
+            return false;
+        }
         batch.events[batch.event_count] = .{ .output = .{
             .offset = @intCast(offset),
             .len = @intCast(bytes.len),
@@ -93,7 +118,7 @@ pub const Pipeline = struct {
             .cols = size.cols,
             .rows = size.rows,
             .kitty_image_storage_limit = storage_limit,
-            .kitty_image_loading_limits = .direct,
+            .kitty_image_loading_limits = image_loading_limits,
         });
         errdefer pipeline.terminal.deinit(allocator);
         pipeline.stream = pipeline.newStream();
@@ -299,6 +324,11 @@ test "media terminal preserves cursor-relative KGP placement" {
     );
     defer pipeline.deinit();
 
+    const limits = pipeline.terminal.screens.active.kitty_images.image_limits;
+    try std.testing.expect(limits.shared_memory);
+    try std.testing.expect(!limits.file);
+    try std.testing.expect(limits.temporary_file == .disabled);
+
     const Feed = struct {
         fn output(active: *Pipeline, bytes: []const u8) void {
             active.stream.nextSlice(bytes);
@@ -348,4 +378,29 @@ test "overflow replaces obsolete media and requests a reset" {
     try std.testing.expect(pipeline.dropped_events != 0);
     try std.testing.expect(pipeline.batches[pipeline.worker.?].reset_before);
     pipeline.finishSealed();
+}
+
+test "adjacent PTY reads use the byte bound instead of the event bound" {
+    var batch: Batch = .{};
+    const read: [1024]u8 = @splat('x');
+    for (0..batch_bytes / read.len) |_| try std.testing.expect(batch.pushOutput(&read));
+
+    try std.testing.expectEqual(batch_bytes, batch.len);
+    try std.testing.expectEqual(@as(usize, 1), batch.event_count);
+    try std.testing.expectEqual(@as(u32, batch_bytes), batch.events[0].output.len);
+    try std.testing.expect(!batch.pushOutput(&read));
+}
+
+test "output coalescing preserves resize order" {
+    var batch: Batch = .{};
+    try std.testing.expect(batch.pushOutput("ab"));
+    try std.testing.expect(batch.pushOutput("cd"));
+    try std.testing.expect(batch.pushResize(.{ .cols = 40, .rows = 12 }));
+    try std.testing.expect(batch.pushOutput("ef"));
+    try std.testing.expect(batch.pushOutput("gh"));
+
+    try std.testing.expectEqual(@as(usize, 3), batch.event_count);
+    try std.testing.expectEqual(@as(u32, 4), batch.events[0].output.len);
+    try std.testing.expectEqual(@as(u16, 40), batch.events[1].resize.cols);
+    try std.testing.expectEqual(@as(u32, 4), batch.events[2].output.len);
 }
