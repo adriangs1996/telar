@@ -13,6 +13,11 @@ pub const encoded_entry_overhead_bytes = 46;
 
 pub const SessionId = [16]u8;
 
+pub const ClientKey = struct {
+    id: u64,
+    generation: u64,
+};
+
 pub const CommandStatus = enum(u8) {
     completed = 0,
     interrupted = 1,
@@ -64,9 +69,9 @@ pub const CommandFinished = struct {
 
 pub const Scope = schema.HistoryScope;
 
-pub const QueryOrigin = enum {
-    primary,
-    control,
+pub const QueryOrigin = struct {
+    client: ClientKey,
+    close_after_reply: bool,
 };
 
 pub const Query = struct {

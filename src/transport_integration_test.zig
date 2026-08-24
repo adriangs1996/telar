@@ -1725,6 +1725,151 @@ test "input to one pane flows while another pane's PTY is wedged" {
     try std.testing.expect(forwarded);
 }
 
+test "two clients observe one pane with independent frame acknowledgement" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/multi-client.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var first = try connectRuntimeForTest(io, path);
+    var first_open = true;
+    defer if (first_open) first.deinit(io);
+    var first_send: [2048]u8 = undefined;
+    const arguments = [_][]const u8{
+        "/bin/sh",
+        "-c",
+        "stty raw -echo; while IFS= read -r line; do printf '%s\\r\\n' \"$line\"; done",
+    };
+    try first.send(io, try schema.encodeOpenPane(&first_send, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    const first_receive = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(first_receive);
+    var first_cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var pane_id: schema.PaneId = .invalid;
+    var first_snapshot = false;
+    while (pane_id == .invalid or !first_snapshot) {
+        switch (try schema.decodeServer(try first.receive(io, first_receive))) {
+            .pane_opened => |opened| pane_id = opened.pane_id,
+            .pane_frame => |frame| {
+                try applyFrameCells(&first_cells, frame);
+                first_snapshot = frame.base_frame_id == 0;
+                try first.send(io, try schema.encodeFrameAck(&first_send, .{
+                    .pane_id = frame.pane_id,
+                    .frame_id = frame.frame_id,
+                }));
+            },
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        }
+    }
+
+    var second = try connectRuntimeForTest(io, path);
+    defer second.deinit(io);
+    var second_send: [2048]u8 = undefined;
+    try second.send(io, try schema.encodeOpenPane(&second_send, .{
+        .request_id = @enumFromInt(1),
+        .target = .{ .pane = pane_id },
+        .size = .{ .cols = 80, .rows = 20 },
+        .launch = null,
+    }));
+    const second_receive = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(second_receive);
+    var second_cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var second_opened = false;
+    var second_snapshot = false;
+    while (!second_opened or !second_snapshot) {
+        switch (try schema.decodeServer(try second.receive(io, second_receive))) {
+            .pane_opened => |opened| {
+                try std.testing.expectEqual(pane_id, opened.pane_id);
+                second_opened = true;
+            },
+            .pane_frame => |frame| {
+                // The second client is not the workspace geometry owner, so
+                // its requested 80x20 cannot resize the shared PTY.
+                try std.testing.expectEqual(@as(u16, 40), frame.cols);
+                try std.testing.expectEqual(@as(u16, 8), frame.rows);
+                try applyFrameCells(&second_cells, frame);
+                second_snapshot = frame.base_frame_id == 0;
+                try second.send(io, try schema.encodeFrameAck(&second_send, .{
+                    .pane_id = frame.pane_id,
+                    .frame_id = frame.frame_id,
+                }));
+            },
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        }
+    }
+
+    try first.send(io, try schema.encodePaneInput(&first_send, .{
+        .pane_id = pane_id,
+        .bytes = "BOTH_CLIENTS\n",
+    }));
+    var first_saw_shared = false;
+    while (!first_saw_shared) switch (try schema.decodeServer(try first.receive(io, first_receive))) {
+        .pane_frame => |frame| {
+            try applyFrameCells(&first_cells, frame);
+            first_saw_shared = rowContains(&first_cells, "BOTH_CLIENTS");
+            try first.send(io, try schema.encodeFrameAck(&first_send, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            }));
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+    var second_saw_shared = false;
+    while (!second_saw_shared) switch (try schema.decodeServer(try second.receive(io, second_receive))) {
+        .pane_frame => |frame| {
+            try applyFrameCells(&second_cells, frame);
+            second_saw_shared = rowContains(&second_cells, "BOTH_CLIENTS");
+            try second.send(io, try schema.encodeFrameAck(&second_send, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            }));
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    first.deinit(io);
+    first_open = false;
+    try second.send(io, try schema.encodePaneInput(&second_send, .{
+        .pane_id = pane_id,
+        .bytes = "SECOND_SURVIVES\n",
+    }));
+    while (true) switch (try schema.decodeServer(try second.receive(io, second_receive))) {
+        .pane_frame => |frame| {
+            try applyFrameCells(&second_cells, frame);
+            try second.send(io, try schema.encodeFrameAck(&second_send, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            }));
+            if (rowContains(&second_cells, "SECOND_SURVIVES")) return;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+}
+
 test "a stale attachment command does not disconnect the client" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;

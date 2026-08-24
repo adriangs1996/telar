@@ -174,7 +174,10 @@ pub const Model = struct {
             if (model.indexOf(descriptor.tab_id)) |existing_index| {
                 if (existing_index != index)
                     std.mem.swap(?Tab, &model.items[existing_index], &model.items[index]);
-                model.items[index].?.setLabel(descriptor.label);
+                const existing = &model.items[index].?;
+                existing.setLabel(descriptor.label);
+                if (existing.model.pane_count != descriptor.pane_count)
+                    existing.snapshot_loaded = false;
             } else {
                 if (model.count == max_tabs) return error.TabLimitReached;
                 var cursor = model.count;

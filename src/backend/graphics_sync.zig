@@ -39,6 +39,7 @@ pub const Attachment = struct {
     acknowledged_cursor: schema.frame.Cursor = .{},
     acknowledged_mouse: schema.frame.Mouse = .{},
     acknowledged_input_modes: schema.frame.InputModes = .{},
+    observed_cell_revision: u64 = 0,
     next_frame_id: u64 = 1,
     acknowledged_frame_id: u64 = 0,
     outstanding_frame_id: u64 = 0,

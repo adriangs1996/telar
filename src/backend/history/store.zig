@@ -496,7 +496,7 @@ test "persists sessions and filters command history" {
 
     const request = try model.Query.init(
         @enumFromInt(1),
-        .primary,
+        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
         "git",
         .cwd,
         "/work",
@@ -517,7 +517,7 @@ test "persists sessions and filters command history" {
     // Index path: case-insensitive and substring-capable.
     const indexed = try model.Query.init(
         @enumFromInt(2),
-        .primary,
+        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
         "IT COM",
         .global,
         "",
@@ -533,7 +533,7 @@ test "persists sessions and filters command history" {
     // Below three characters the query takes the scan fallback.
     const short = try model.Query.init(
         @enumFromInt(3),
-        .primary,
+        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
         "gi",
         .global,
         "",

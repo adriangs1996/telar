@@ -382,6 +382,8 @@ pub const Pane = struct {
     graphics_revision: u64 = 0,
     graphics_present: bool = false,
     dirty: bool = true,
+    render_pending: bool = true,
+    cell_revision: u64 = 1,
     output_pending: bool = false,
     ingest_pending: bool = false,
     actor_count: u8 = 0,
@@ -604,6 +606,7 @@ pub const Pane = struct {
             pane.background_override = background;
             pane.semantic_colors_dirty = true;
         }
+        pane.render_pending = true;
         pane.dirty = true;
         pane.graphics_present = pane.terminal.screens.active.kitty_images.images.count() != 0;
         return diagnostics.elapsed(started, diagnostics.now(io));
@@ -834,6 +837,9 @@ pub const Pane = struct {
             .{ .force = force_all, .damaged_rows = pane.damaged_rows },
         );
         pane.semantic_colors_dirty = false;
+        pane.render_pending = false;
+        pane.cell_revision +%= 1;
+        if (pane.cell_revision == 0) pane.cell_revision = 1;
         const cursor = pane.render_state.cursor;
         pane.cursor = if (cursor.visible and cursor.viewport != null and
             cursor.viewport.?.x < pane.screen.w and cursor.viewport.?.y < pane.screen.h)

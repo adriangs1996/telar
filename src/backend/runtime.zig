@@ -26,6 +26,7 @@ const PaneStore = pane_mod.PaneStore;
 const historyClock = pane_mod.historyClock;
 const max_panes = pane_mod.max_panes;
 const WorkspaceStore = workspace_mod.WorkspaceStore;
+const max_workspaces = workspace_mod.max_workspaces;
 const max_tabs_per_workspace = workspace_mod.max_tabs_per_workspace;
 const Attachment = graphics_sync.Attachment;
 const AttachmentStore = graphics_sync.AttachmentStore;
@@ -35,6 +36,7 @@ const enforceGraphicsQuotas = graphics_sync.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_pending_responses = max_panes * 2;
+const max_clients = 8;
 
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
 
@@ -46,6 +48,18 @@ pub const ServeOptions = struct {
     stop: ?*Io.Queue(u8) = null,
     /// Test seam: holds a pane's ingest actor open. See `IngestTestGate`.
     ingest_gate: ?*IngestTestGate = null,
+};
+
+pub const ClientKey = history.model.ClientKey;
+
+const ClientMessageEvent = struct {
+    client: ClientKey,
+    result: anyerror![]u8,
+};
+
+const ClientSentEvent = struct {
+    client: ClientKey,
+    result: anyerror!void,
 };
 
 const PaneOutputEvent = struct {
@@ -78,10 +92,8 @@ const PaneResponseEvent = struct {
 const RuntimeEvent = union(enum) {
     accepted: anyerror!core.transport.SocketChannel,
     handshaken: anyerror!void,
-    client_message: anyerror![]u8,
-    client_sent: anyerror!void,
-    control_message: anyerror![]u8,
-    control_sent: anyerror!void,
+    client_message: ClientMessageEvent,
+    client_sent: ClientSentEvent,
     history_response: anyerror!history.Response,
     pane_input_written: PaneInputEvent,
     pane_response_written: PaneResponseEvent,
@@ -233,17 +245,127 @@ const ResponseQueue = struct {
     }
 };
 
-const ShutdownState = struct {
-    requested: bool = false,
-    primary_request: bool = false,
-    reply_pending: bool = false,
-    reply_in_flight: bool = false,
+const ClientRole = enum { undecided, ui, control };
+
+const ClientSession = struct {
+    key: ClientKey,
+    connection: core.transport.SocketChannel,
+    receive_buffer: []u8,
+    send_buffer: []u8,
+    attachments: AttachmentStore = .{},
+    responses: ResponseQueue = .{},
+    role: ClientRole = .undecided,
+    read_pending: bool = false,
+    send_pending: bool = false,
+    closing: bool = false,
+    close_after_send: bool = false,
+    stopping_pending: bool = false,
+    stopping_in_flight: bool = false,
+    sent_exit_pane: ?schema.PaneId = null,
+
+    fn init(
+        gpa: std.mem.Allocator,
+        key: ClientKey,
+        connection: core.transport.SocketChannel,
+    ) !ClientSession {
+        const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+        errdefer gpa.free(receive_buffer);
+        const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+        return .{
+            .key = key,
+            .connection = connection,
+            .receive_buffer = receive_buffer,
+            .send_buffer = send_buffer,
+        };
+    }
+
+    fn active(session: *const ClientSession) bool {
+        return !session.closing and session.connection.isActive();
+    }
+
+    fn deinit(session: *ClientSession, io: Io, gpa: std.mem.Allocator) void {
+        std.debug.assert(!session.read_pending and !session.send_pending);
+        session.connection.deinit(io);
+        session.attachments.deinit();
+        session.responses.clear();
+        gpa.free(session.receive_buffer);
+        gpa.free(session.send_buffer);
+    }
 };
 
-const ControlSend = enum {
-    none,
-    stop,
-    history,
+const ClientStore = struct {
+    items: [max_clients]?ClientSession = @splat(null),
+    count: usize = 0,
+    next_id: u64 = 1,
+    next_generation: u64 = 1,
+
+    fn add(
+        store: *ClientStore,
+        gpa: std.mem.Allocator,
+        connection: core.transport.SocketChannel,
+    ) !*ClientSession {
+        if (store.count == max_clients) return error.ClientLimitReached;
+        if (store.next_id == 0 or store.next_id == std.math.maxInt(u64) or
+            store.next_generation == 0 or store.next_generation == std.math.maxInt(u64))
+            return error.ClientIdentityExhausted;
+        const key: ClientKey = .{
+            .id = store.next_id,
+            .generation = store.next_generation,
+        };
+        for (&store.items) |*slot| {
+            if (slot.* != null) continue;
+            slot.* = try ClientSession.init(gpa, key, connection);
+            store.next_id += 1;
+            store.next_generation += 1;
+            store.count += 1;
+            return &slot.*.?;
+        }
+        unreachable;
+    }
+
+    fn resolve(store: *ClientStore, key: ClientKey) ?*ClientSession {
+        for (&store.items) |*slot| {
+            const session = if (slot.*) |*value| value else continue;
+            if (session.key.id == key.id and session.key.generation == key.generation)
+                return session;
+        }
+        return null;
+    }
+
+    fn remove(store: *ClientStore, io: Io, gpa: std.mem.Allocator, key: ClientKey) bool {
+        for (&store.items) |*slot| {
+            const session = if (slot.*) |*value| value else continue;
+            if (session.key.id != key.id or session.key.generation != key.generation)
+                continue;
+            session.deinit(io, gpa);
+            slot.* = null;
+            store.count -= 1;
+            return true;
+        }
+        return false;
+    }
+
+    fn deinit(store: *ClientStore, io: Io, gpa: std.mem.Allocator) void {
+        for (&store.items) |*slot| {
+            if (slot.*) |*session| {
+                session.connection.shutdown(io);
+                std.debug.assert(!session.read_pending and !session.send_pending);
+                session.deinit(io, gpa);
+            }
+            slot.* = null;
+        }
+        store.count = 0;
+    }
+};
+
+const ShutdownState = struct {
+    requested: bool = false,
+    initiator: ?ClientKey = null,
+};
+
+const GeometryLease = struct {
+    workspace: schema.WorkspaceLocation,
+    owner: ClientKey,
 };
 
 comptime {
@@ -314,91 +436,45 @@ const Server = struct {
     gpa: std.mem.Allocator,
     select: *Io.Select(RuntimeEvent),
     history_service: *history.Service,
-    receive_buffer: []u8,
-    send_buffer: []u8,
-    control_buffer: []u8,
-    connection: ?core.transport.SocketChannel = null,
-    control_connection: ?core.transport.SocketChannel = null,
+    clients: *ClientStore,
     handshake_slot: ?core.transport.SocketChannel = null,
     handshake_pending: bool = false,
-    control_send: ControlSend = .none,
-    client_read_pending: bool = false,
-    client_send_pending: bool = false,
-    attachments: AttachmentStore = .{},
-    responses: ResponseQueue = .{},
-    sent_exit_pane: ?schema.PaneId = null,
     shutdown: ShutdownState = .{},
+    geometry_leases: [max_workspaces]?GeometryLease = @splat(null),
     workspaces: WorkspaceStore,
     panes: PaneStore,
     metrics: RuntimeMetrics,
 
-    fn activeConnection(server: *Server) ?*core.transport.SocketChannel {
-        return if (server.connection) |*active|
-            if (active.isActive()) active else null
-        else
-            null;
-    }
-
-    fn dropAttachments(server: *Server) void {
-        server.attachments.deinit();
-        server.collectFinished(null);
-    }
-
-    fn dropClient(server: *Server) void {
-        if (server.connection) |*active| active.deinit(server.io);
-        if (!server.client_read_pending and !server.client_send_pending)
-            server.connection = null;
-        server.dropAttachments();
-    }
-
-    fn dropControl(server: *Server) void {
-        if (server.control_connection) |*active| active.deinit(server.io);
-        server.control_connection = null;
-    }
-
-    /// Sends one reply on the control connection; an encode failure drops
-    /// only the control connection.
-    fn replyControl(server: *Server, payload_result: anyerror![]const u8) !void {
-        const reply = payload_result catch {
-            server.dropControl();
-            return;
-        };
-        server.control_send = .history;
-        try server.select.concurrent(.control_sent, sendClient, .{
-            server.io,
-            &server.control_connection.?,
-            reply,
-        });
-    }
-
     fn collect(server: *Server) void {
-        server.collectFinished(
-            if (server.activeConnection() != null) &server.responses else null,
-        );
+        server.collectFinished();
     }
 
     /// Reaps panes whose child exited and which no actor still borrows, then
     /// closes tabs that ran out of panes. Spans three stores, which is why it
     /// lives on the server rather than on any one of them.
-    fn collectFinished(server: *Server, responses: ?*ResponseQueue) void {
+    fn collectFinished(server: *Server) void {
         const store = &server.panes;
         if (store.exited_count == 0) return;
         for (&store.items) |*slot| {
             const pane = slot.* orelse continue;
             if (!pane.readyToDestroy()) continue;
-            if (server.attachments.find(pane.id) != null) continue;
-            const location = pane.location;
-            store.index.remove(schema.id.raw(pane.id));
-            store.exited_count -= 1;
-            slot.* = null;
-            store.count -= 1;
-            pane.destroy();
-            if (store.hasAt(location) or server.workspaces.findTab(location) == null) continue;
+            for (&server.clients.items) |*client_slot| {
+                const client = if (client_slot.*) |*value| value else continue;
+                if (client.attachments.find(pane.id) != null) break;
+            } else {
+                const location = pane.location;
+                store.index.remove(schema.id.raw(pane.id));
+                store.exited_count -= 1;
+                slot.* = null;
+                store.count -= 1;
+                pane.destroy();
+                if (store.hasAt(location) or server.workspaces.findTab(location) == null) continue;
 
-            const workspace_closed = server.workspaces.removeTab(location).?;
-            if (responses) |queue| {
-                if (server.attachments.observes(location.workspace)) {
-                    queue.pushOrDrop(.{ .tab_closed = .{
+                const workspace_closed = server.workspaces.removeTab(location).?;
+                for (&server.clients.items) |*client_slot| {
+                    const client = if (client_slot.*) |*value| value else continue;
+                    if (!client.active() or !client.attachments.observes(location.workspace)) continue;
+                    client.responses.pushOrDrop(.{ .tab_closed = .{
                         .request_id = .none,
                         .location = location,
                         .workspace_closed = workspace_closed,
@@ -408,31 +484,122 @@ const Server = struct {
         }
     }
 
-    fn pumpOrDrop(server: *Server) void {
-        server.pump() catch server.dropClient();
+    fn dropClient(server: *Server, key: ClientKey) void {
+        const session = server.clients.resolve(key) orelse return;
+        if (!session.closing) {
+            session.closing = true;
+            session.connection.shutdown(server.io);
+            session.attachments.deinit();
+            session.responses.clear();
+            server.releaseGeometry(key);
+            server.collect();
+        }
+        server.finalizeClient(key);
     }
 
-    fn pump(server: *Server) !void {
+    fn finalizeClient(server: *Server, key: ClientKey) void {
+        const session = server.clients.resolve(key) orelse return;
+        if (!session.closing or session.read_pending or session.send_pending) return;
+        _ = server.clients.remove(server.io, server.gpa, key);
+    }
+
+    fn holdsGeometry(
+        server: *Server,
+        key: ClientKey,
+        workspace: schema.WorkspaceLocation,
+    ) bool {
+        for (&server.geometry_leases) |*slot| {
+            const lease = slot.* orelse continue;
+            if (!std.meta.eql(lease.workspace, workspace)) continue;
+            return std.meta.eql(lease.owner, key);
+        }
+        for (&server.geometry_leases) |*slot| {
+            if (slot.* != null) continue;
+            slot.* = .{ .workspace = workspace, .owner = key };
+            return true;
+        }
+        return false;
+    }
+
+    fn releaseGeometry(server: *Server, key: ClientKey) void {
+        for (&server.geometry_leases) |*slot| {
+            const lease = slot.* orelse continue;
+            if (std.meta.eql(lease.owner, key)) slot.* = null;
+        }
+    }
+
+    fn notifyWorkspaceChanged(
+        server: *Server,
+        origin: ClientKey,
+        workspace: schema.WorkspaceLocation,
+    ) void {
+        for (&server.clients.items) |*slot| {
+            const session = if (slot.*) |*value| value else continue;
+            if (std.meta.eql(session.key, origin) or !session.active()) continue;
+            if (session.attachments.observes(workspace))
+                session.responses.resync_workspace = workspace;
+        }
+    }
+
+    fn pumpAll(server: *Server) void {
+        for (&server.clients.items) |*slot| {
+            const session = if (slot.*) |*value| value else continue;
+            const key = session.key;
+            server.pump(session) catch server.dropClient(key);
+        }
+        for (server.panes.items) |slot| {
+            const pane = slot orelse continue;
+            server.settlePaneDamage(pane);
+        }
+    }
+
+    fn settlePaneDamage(server: *Server, pane: *Pane) void {
+        if (pane.render_pending) return;
+        for (&server.clients.items) |*slot| {
+            const session = if (slot.*) |*value| value else continue;
+            const attachment = session.attachments.find(pane.id) orelse continue;
+            if (attachment.observed_cell_revision != pane.cell_revision) return;
+        }
+        @memset(pane.damaged_rows, false);
+        pane.dirty = false;
+    }
+
+    fn requestShutdown(server: *Server, initiator: ClientKey) void {
+        if (server.shutdown.requested) return;
+        server.shutdown = .{ .requested = true, .initiator = initiator };
+        for (&server.clients.items) |*slot| {
+            const session = if (slot.*) |*value| value else continue;
+            if (session.active()) session.stopping_pending = true;
+        }
+    }
+
+    fn shutdownDelivered(server: *const Server) bool {
+        if (!server.shutdown.requested) return false;
+        for (&server.clients.items) |*slot| {
+            const session = if (slot.*) |*value| value else continue;
+            if (!session.closing and (session.stopping_pending or
+                session.stopping_in_flight or session.send_pending)) return false;
+        }
+        return true;
+    }
+
+    fn pump(server: *Server, session: *ClientSession) !void {
         const io = server.io;
         const select = server.select;
-        const connection = server.activeConnection();
-        const buffer = server.send_buffer;
-        const attachments = &server.attachments;
+        const buffer = session.send_buffer;
+        const attachments = &session.attachments;
         const panes = &server.panes;
         const workspaces = &server.workspaces;
-        const responses = &server.responses;
-        const send_pending = &server.client_send_pending;
-        const sent_exit_pane = &server.sent_exit_pane;
-        const shutdown = &server.shutdown;
+        const responses = &session.responses;
         const metrics = &server.metrics;
-        if (connection == null or send_pending.*) return;
+        if (!session.active() or session.send_pending) return;
 
-        if (shutdown.reply_pending) {
+        if (session.stopping_pending) {
             const payload = try schema.encodeRuntimeStopping(buffer);
-            shutdown.reply_pending = false;
-            shutdown.reply_in_flight = true;
-            startSend(io, select, connection.?, payload, send_pending) catch |err| {
-                shutdown.reply_in_flight = false;
+            session.stopping_pending = false;
+            session.stopping_in_flight = true;
+            startSessionSend(io, select, session, payload) catch |err| {
+                session.stopping_in_flight = false;
                 return err;
             };
             return;
@@ -441,7 +608,7 @@ const Server = struct {
         if (responses.peekManagement()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
             const payload = try encodeResponse(buffer, entry.response, panes, workspaces, &history_result);
-            try startSend(io, select, connection.?, payload, send_pending);
+            try startSessionSend(io, select, session, payload);
             if (history_result) |result| result.deinit();
             responses.removeAt(entry.offset);
             return;
@@ -452,7 +619,7 @@ const Server = struct {
                 .workspace = workspace,
                 .workspace_closed = workspaces.find(workspace) == null,
             });
-            try startSend(io, select, connection.?, payload, send_pending);
+            try startSessionSend(io, select, session, payload);
             responses.resync_workspace = null;
             if (comptime diagnostics.enabled) metrics.client_resyncs += 1;
             return;
@@ -468,13 +635,15 @@ const Server = struct {
                 const payload = (try encodeFrame(io, buffer, active, true, metrics)) orelse
                     unreachable;
                 active.snapshot_pending = false;
-                try startSend(io, select, connection.?, payload, send_pending);
+                try startSessionSend(io, select, session, payload);
                 attachments.next_send = (index + 1) % attachments.items.len;
                 return;
             }
-            if (active.outstanding_frame_id == 0 and pane.dirty) {
+            if (active.outstanding_frame_id == 0 and
+                (pane.dirty or active.observed_cell_revision != pane.cell_revision))
+            {
                 if (try encodeFrame(io, buffer, active, false, metrics)) |payload| {
-                    try startSend(io, select, connection.?, payload, send_pending);
+                    try startSessionSend(io, select, session, payload);
                     attachments.next_send = (index + 1) % attachments.items.len;
                     return;
                 }
@@ -502,9 +671,9 @@ const Server = struct {
                         .signaled => |signal| @intFromEnum(signal),
                     },
                 });
-                try startSend(io, select, connection.?, payload, send_pending);
+                try startSessionSend(io, select, session, payload);
                 active.exit_sent = true;
-                sent_exit_pane.* = pane.id;
+                session.sent_exit_pane = pane.id;
                 attachments.next_send = (index + 1) % attachments.items.len;
                 return;
             }
@@ -531,7 +700,7 @@ const Server = struct {
                         metrics.graphics_messages += 1;
                         metrics.graphics_bytes += payload.len;
                     }
-                    try startSend(io, select, connection.?, payload, send_pending);
+                    try startSessionSend(io, select, session, payload);
                     attachments.next_send = (index + 1) % attachments.items.len;
                     return;
                 }
@@ -541,7 +710,7 @@ const Server = struct {
         if (responses.peekObservation()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
             const payload = try encodeResponse(buffer, entry.response, panes, workspaces, &history_result);
-            try startSend(io, select, connection.?, payload, send_pending);
+            try startSessionSend(io, select, session, payload);
             if (history_result) |result| result.deinit();
             responses.removeAt(entry.offset);
             return;
@@ -552,15 +721,14 @@ const Server = struct {
     /// `request_failed`; commands for an attachment that has already gone are
     /// counted and ignored. Therefore an error return is an infrastructure
     /// failure, never ordinary client or lifecycle state.
-    fn dispatch(server: *Server, message: schema.ClientMessage) !void {
+    fn dispatch(server: *Server, session: *ClientSession, message: schema.ClientMessage) !void {
         const io = server.io;
         const gpa = server.gpa;
         const select = server.select;
         const panes = &server.panes;
         const workspaces = &server.workspaces;
-        const attachments = &server.attachments;
-        const responses = &server.responses;
-        const shutdown = &server.shutdown;
+        const attachments = &session.attachments;
+        const responses = &session.responses;
         const metrics = &server.metrics;
         const history_service = server.history_service;
         switch (message) {
@@ -597,6 +765,15 @@ const Server = struct {
                         // no actor still borrows them; destroying one here on a
                         // weaker condition was a use-after-free waiting to happen.
                         if (panes.firstAt(location)) |existing| break :pane existing;
+                        if (!server.holdsGeometry(session.key, location.workspace)) {
+                            try queueFailure(
+                                responses,
+                                open.request_id,
+                                .resource_limit,
+                                "workspace geometry is leased by another client",
+                            );
+                            return;
+                        }
                         const fresh = spawnPane(
                             io,
                             gpa,
@@ -617,14 +794,16 @@ const Server = struct {
                     },
                 };
 
-                const resize_result = if (active.ingest_pending)
-                    active.requestResize(open.size)
-                else
-                    active.resize(open.size);
-                resize_result catch {
-                    try queueFailure(responses, open.request_id, .internal, "could not resize pane");
-                    return;
-                };
+                if (server.holdsGeometry(session.key, active.location.workspace)) {
+                    const resize_result = if (active.ingest_pending)
+                        active.requestResize(open.size)
+                    else
+                        active.resize(open.size);
+                    resize_result catch {
+                        try queueFailure(responses, open.request_id, .internal, "could not resize pane");
+                        return;
+                    };
+                }
                 const attachment = try attachments.attach(gpa, active);
                 _ = try attachment.resizeIfNeeded();
                 try responses.push(.{ .pane_opened = .{
@@ -660,6 +839,10 @@ const Server = struct {
                     metrics.stale_client_messages += 1;
                     return;
                 };
+                if (!server.holdsGeometry(session.key, active.pane.location.workspace)) {
+                    metrics.geometry_rejections += 1;
+                    return;
+                }
                 try active.pane.requestResize(resize.size);
                 if (!active.pane.ingest_pending) {
                     retirePaneOnFailure(active.pane, active.pane.applyPendingResize()) catch return;
@@ -722,6 +905,15 @@ const Server = struct {
                     try queueFailure(responses, create.request_id, .pane_not_found, "tab not found");
                     return;
                 }
+                if (!server.holdsGeometry(session.key, create.location.workspace)) {
+                    try queueFailure(
+                        responses,
+                        create.request_id,
+                        .resource_limit,
+                        "workspace geometry is leased by another client",
+                    );
+                    return;
+                }
                 const fresh = spawnPane(
                     io,
                     gpa,
@@ -743,6 +935,7 @@ const Server = struct {
                     .location = fresh.location,
                     .created = true,
                 } });
+                server.notifyWorkspaceChanged(session.key, create.location.workspace);
             },
             .close_pane => |close| {
                 const active = attachments.find(close.pane_id) orelse {
@@ -770,6 +963,15 @@ const Server = struct {
                 } });
             },
             .create_tab => |create| {
+                if (!server.holdsGeometry(session.key, create.workspace)) {
+                    try queueFailure(
+                        responses,
+                        create.request_id,
+                        .resource_limit,
+                        "workspace geometry is leased by another client",
+                    );
+                    return;
+                }
                 var generated_label: [schema.max_tab_label_bytes]u8 = undefined;
                 const created = workspaces.createTab(
                     create.workspace,
@@ -824,6 +1026,7 @@ const Server = struct {
                 @memcpy(pending.label[0..pending.label_len], tab.labelSlice());
                 try responses.push(.{ .tab_created = pending });
                 tab_committed = true;
+                server.notifyWorkspaceChanged(session.key, create.workspace);
             },
             .rename_tab => |rename| {
                 const tab = workspaces.findTab(rename.location) orelse {
@@ -839,6 +1042,7 @@ const Server = struct {
                 };
                 @memcpy(pending.label[0..pending.label_len], rename.label);
                 try responses.push(.{ .tab_renamed = pending });
+                server.notifyWorkspaceChanged(session.key, rename.location.workspace);
             },
             .close_tab => |close| {
                 if (!workspaces.contains(close.location)) {
@@ -852,6 +1056,7 @@ const Server = struct {
                     .location = close.location,
                     .workspace_closed = workspace_closed,
                 } });
+                server.notifyWorkspaceChanged(session.key, close.location.workspace);
             },
             .move_tab => |move| {
                 const workspace = workspaces.find(move.location.workspace) orelse {
@@ -872,9 +1077,13 @@ const Server = struct {
                     .location = move.location,
                     .position = position,
                 } });
+                server.notifyWorkspaceChanged(session.key, move.location.workspace);
             },
             .query_history => |request| {
-                const query = buildHistoryQuery(request, .primary) catch {
+                const query = buildHistoryQuery(request, .{
+                    .client = session.key,
+                    .close_after_reply = session.role == .control,
+                }) catch {
                     try queueFailure(
                         responses,
                         request.request_id,
@@ -896,9 +1105,7 @@ const Server = struct {
                 if (comptime diagnostics.enabled) metrics.history_queries += 1;
             },
             .runtime_stop => {
-                shutdown.requested = true;
-                shutdown.primary_request = true;
-                shutdown.reply_pending = true;
+                server.requestShutdown(session.key);
             },
         }
     }
@@ -927,12 +1134,9 @@ fn serveInternal(
     var telemetry = diagnostics.Sink.init(io, endpoint, telemetry_suffix);
     defer telemetry.deinit(io);
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
-    defer gpa.free(receive_buffer);
-    const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
-    defer gpa.free(send_buffer);
-    const control_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
-    defer gpa.free(control_buffer);
+    const clients = try gpa.create(ClientStore);
+    clients.* = .{};
+    defer gpa.destroy(clients);
 
     var history_service = try history.Service.init(gpa, history_path);
     var history_worker = try io.concurrent(history.runWorker, .{ io, &history_service });
@@ -943,7 +1147,7 @@ fn serveInternal(
         history_service.deinit(io);
     };
 
-    var select_storage: [17 + 5 * max_panes]RuntimeEvent = undefined;
+    var select_storage: [12 + 2 * max_clients + 5 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
@@ -958,9 +1162,7 @@ fn serveInternal(
         .gpa = gpa,
         .select = &select,
         .history_service = &history_service,
-        .receive_buffer = receive_buffer,
-        .send_buffer = send_buffer,
-        .control_buffer = control_buffer,
+        .clients = clients,
         .workspaces = WorkspaceStore.init(gpa),
         .panes = .{
             .graphics_limits = options.graphics,
@@ -972,8 +1174,8 @@ fn serveInternal(
     var telemetry_write_pending = false;
     defer {
         listener.shutdown();
-        if (server.connection) |*active| active.shutdown(io);
-        if (server.control_connection) |*active| active.shutdown(io);
+        for (&server.clients.items) |*slot|
+            if (slot.*) |*session| session.connection.shutdown(io);
         if (server.handshake_slot) |*pending| pending.shutdown(io);
         // `pane_exit` blocks in libc's waitpid and cannot observe Select
         // cancellation. End the PTY sessions first so their waits can finish;
@@ -982,13 +1184,14 @@ fn serveInternal(
         server.panes.shutdown();
         select.cancelDiscard();
         listener.deinit(io);
-        if (server.connection) |*active| active.deinit(io);
-        if (server.control_connection) |*active| active.deinit(io);
         if (server.handshake_slot) |*pending| pending.deinit(io);
-        server.attachments.deinit();
+        for (&server.clients.items) |*slot| if (slot.*) |*session| {
+            session.read_pending = false;
+            session.send_pending = false;
+        };
+        server.clients.deinit(io, gpa);
         server.panes.deinit();
         server.workspaces.deinit();
-        server.responses.clear();
         history_service.closeQueues(io);
         _ = history_worker.await(io) catch {};
         history_service.deinit(io);
@@ -1002,6 +1205,10 @@ fn serveInternal(
                 try select.concurrent(.accepted, acceptClient, .{ io, &listener });
                 continue;
             };
+            if (server.shutdown.requested) {
+                accepted.deinit(io);
+                continue;
+            }
             try select.concurrent(.accepted, acceptClient, .{ io, &listener });
             // The handshake runs in its own actor so a connection that never
             // says hello cannot hold the accept pipeline hostage. One slot,
@@ -1032,44 +1239,35 @@ fn serveInternal(
                 negotiated.deinit(io);
                 continue;
             };
-            if (server.connection != null) {
-                if (server.control_connection != null) {
-                    negotiated.deinit(io);
-                    continue;
-                }
-                server.control_connection = negotiated;
-                try select.concurrent(.control_message, receiveClient, .{
-                    io,
-                    &server.control_connection.?,
-                    control_buffer,
-                });
+            if (server.shutdown.requested) {
+                negotiated.deinit(io);
                 continue;
             }
-            server.connection = negotiated;
-            server.responses.clear();
-            server.dropAttachments();
-            server.sent_exit_pane = null;
-            server.client_read_pending = true;
-            try select.concurrent(.client_message, receiveClient, .{
-                io,
-                &server.connection.?,
-                receive_buffer,
-            });
+            const session = server.clients.add(gpa, negotiated) catch {
+                negotiated.deinit(io);
+                continue;
+            };
+            startSessionRead(io, &select, session) catch {
+                server.dropClient(session.key);
+            };
         },
-        .client_message => |result| {
-            server.client_read_pending = false;
-            const payload = result catch {
-                server.connection.?.deinit(io);
-                if (!server.client_send_pending) server.connection = null;
-                server.dropAttachments();
-                server.responses.clear();
+        .client_message => |event| {
+            const session = server.clients.resolve(event.client) orelse {
+                server.metrics.stale_client_messages += 1;
+                continue;
+            };
+            session.read_pending = false;
+            if (session.closing) {
+                server.finalizeClient(event.client);
+                continue;
+            }
+            const payload = event.result catch {
+                server.dropClient(event.client);
                 continue;
             };
             const decode_started = diagnostics.now(io);
             const message = schema.decodeClient(payload) catch {
-                server.connection.?.deinit(io);
-                if (!server.client_send_pending) server.connection = null;
-                server.dropAttachments();
+                server.dropClient(event.client);
                 continue;
             };
             if (comptime diagnostics.enabled) {
@@ -1078,114 +1276,60 @@ fn serveInternal(
                     diagnostics.elapsed(decode_started, diagnostics.now(io)),
                 );
             }
-            server.dispatch(message) catch |err| {
+            if (session.role == .undecided) session.role = switch (message) {
+                .runtime_stop, .query_history => .control,
+                else => .ui,
+            };
+            server.dispatch(session, message) catch |err| {
                 if (err == error.RuntimeConcurrencyUnavailable) return err;
-                if (server.shutdown.primary_request) return;
-                server.connection.?.deinit(io);
-                if (!server.client_send_pending) server.connection = null;
-                server.dropAttachments();
+                server.dropClient(event.client);
                 continue;
             };
-            server.pump() catch {
-                if (server.shutdown.primary_request) return;
-                server.dropClient();
+            server.pump(session) catch {
+                server.dropClient(event.client);
                 continue;
             };
             if (!server.shutdown.requested) {
-                server.client_read_pending = true;
-                try select.concurrent(.client_message, receiveClient, .{
-                    io,
-                    &server.connection.?,
-                    receive_buffer,
-                });
+                startSessionRead(io, &select, session) catch
+                    server.dropClient(event.client);
+            } else {
+                server.pumpAll();
+                if (server.shutdownDelivered()) return;
             }
         },
-        .client_sent => |result| {
-            server.client_send_pending = false;
-            if (server.shutdown.reply_in_flight) {
-                server.shutdown.reply_in_flight = false;
-                _ = result catch {};
-                return;
-            }
-            result catch {
-                if (server.shutdown.primary_request) return;
-                server.dropClient();
+        .client_sent => |event| {
+            const session = server.clients.resolve(event.client) orelse {
+                server.metrics.stale_client_messages += 1;
                 continue;
             };
-            if (server.sent_exit_pane) |pane_id| {
-                server.sent_exit_pane = null;
-                _ = server.attachments.detach(pane_id);
+            session.send_pending = false;
+            if (session.closing) {
+                server.finalizeClient(event.client);
+                if (server.shutdownDelivered()) return;
+                continue;
+            }
+            event.result catch {
+                server.dropClient(event.client);
+                if (server.shutdownDelivered()) return;
+                continue;
+            };
+            if (session.stopping_in_flight) session.stopping_in_flight = false;
+            if (session.sent_exit_pane) |pane_id| {
+                session.sent_exit_pane = null;
+                _ = session.attachments.detach(pane_id);
                 server.collect();
             }
-            if (server.connection == null or !server.connection.?.isActive()) {
-                if (!server.client_read_pending) server.connection = null;
+            if (session.close_after_send and session.responses.len == 0 and
+                !server.shutdown.requested)
+            {
+                server.dropClient(event.client);
                 continue;
             }
-            server.pump() catch {
-                if (server.shutdown.primary_request) return;
-                server.dropClient();
-            };
-        },
-        .control_message => |result| {
-            const payload = result catch {
-                server.dropControl();
-                continue;
-            };
-            const message = schema.decodeClient(payload) catch {
-                server.dropControl();
-                continue;
-            };
-            switch (message) {
-                .runtime_stop => {
-                    server.shutdown.requested = true;
-                    const reply = try schema.encodeRuntimeStopping(control_buffer);
-                    server.control_send = .stop;
-                    select.concurrent(.control_sent, sendClient, .{
-                        io,
-                        &server.control_connection.?,
-                        reply,
-                    }) catch |err| {
-                        return err;
-                    };
-                },
-                .query_history => |request| {
-                    const query = buildHistoryQuery(request, .control) catch {
-                        try server.replyControl(schema.encodeRequestFailed(control_buffer, .{
-                            .request_id = request.request_id,
-                            .code = .invalid_request,
-                            .message = "invalid history query",
-                        }));
-                        continue;
-                    };
-                    if (!history_service.query(io, query)) {
-                        if (comptime diagnostics.enabled) server.metrics.history_query_failures += 1;
-                        try server.replyControl(schema.encodeRequestFailed(control_buffer, .{
-                            .request_id = request.request_id,
-                            .code = .resource_limit,
-                            .message = "history queue is full",
-                        }));
-                        continue;
-                    }
-                    if (comptime diagnostics.enabled) server.metrics.history_queries += 1;
-                },
-                else => server.dropControl(),
+            server.pump(session) catch server.dropClient(event.client);
+            if (server.shutdown.requested) {
+                server.pumpAll();
+                if (server.shutdownDelivered()) return;
             }
-        },
-        .control_sent => |result| {
-            _ = result catch {};
-            if (server.control_send == .history) {
-                server.control_send = .none;
-                server.dropControl();
-                continue;
-            }
-            server.control_send = .none;
-            // A control client gets the acknowledgement first. The attached
-            // UI then gets an explicit shutdown message so it can leave raw
-            // mode cleanly instead of interpreting EOF as a runtime failure.
-            server.shutdown.primary_request = true;
-            server.shutdown.reply_pending = true;
-            server.pump() catch return;
-            if (!server.client_send_pending) return;
         },
         .history_response => |response_result| {
             const response = response_result catch continue;
@@ -1194,37 +1338,28 @@ fn serveInternal(
                 &history_service,
             });
             switch (response) {
-                .query_result => |result| switch (result.origin) {
-                    .primary => server.responses.push(.{ .history_result = result }) catch {
+                .query_result => |result| {
+                    const session = server.clients.resolve(result.origin.client) orelse {
                         result.deinit();
-                    },
-                    .control => {
-                        defer result.deinit();
-                        if (server.control_connection == null) continue;
-                        var entries: [history.model.max_results]schema.HistoryEntry = undefined;
-                        try server.replyControl(
-                            encodeHistoryResult(control_buffer, result, &entries),
-                        );
-                    },
+                        continue;
+                    };
+                    session.close_after_send = result.origin.close_after_reply;
+                    session.responses.push(.{ .history_result = result }) catch
+                        result.deinit();
                 },
-                .failed => |failure| switch (failure.origin) {
-                    .primary => queueFailure(
-                        &server.responses,
+                .failed => |failure| {
+                    const session = server.clients.resolve(failure.origin.client) orelse
+                        continue;
+                    session.close_after_send = failure.origin.close_after_reply;
+                    queueFailure(
+                        &session.responses,
                         failure.request_id,
                         .internal,
                         failure.message,
-                    ) catch {},
-                    .control => {
-                        if (server.control_connection == null) continue;
-                        try server.replyControl(schema.encodeRequestFailed(control_buffer, .{
-                            .request_id = failure.request_id,
-                            .code = .internal,
-                            .message = failure.message,
-                        }));
-                    },
+                    ) catch {};
                 },
             }
-            server.pumpOrDrop();
+            server.pumpAll();
         },
         .pane_input_written => |event| {
             const active = server.panes.resolve(event.pane) orelse {
@@ -1273,7 +1408,7 @@ fn serveInternal(
                 active.output_done = true;
                 if (active.exit) |exit| active.finishExitedHistory(exit, &server.metrics);
                 server.collect();
-                server.pumpOrDrop();
+                server.pumpAll();
                 continue;
             };
             if (output_len == 0) {
@@ -1283,9 +1418,13 @@ fn serveInternal(
                 if (comptime diagnostics.enabled) {
                     server.metrics.pty_events += 1;
                     server.metrics.pty_bytes += output_len;
-                    if (server.attachments.find(active.id)) |value| {
-                        if (value.outstanding_frame_id != 0)
+                    for (&server.clients.items) |*slot| {
+                        const client = if (slot.*) |*value| value else continue;
+                        const attachment = client.attachments.find(active.id) orelse continue;
+                        if (attachment.outstanding_frame_id != 0) {
                             server.metrics.folded_pty_events += 1;
+                            break;
+                        }
                     }
                 }
                 active.sealHistoryInput();
@@ -1304,7 +1443,7 @@ fn serveInternal(
                 continue;
             }
             server.collect();
-            server.pumpOrDrop();
+            server.pumpAll();
         },
         .pane_ingested => |event| {
             const active = server.panes.resolve(event.pane) orelse {
@@ -1327,10 +1466,13 @@ fn serveInternal(
                 server.metrics.history_dropped += stats.history_dropped;
             }
             retirePaneOnFailure(active, active.applyPendingResize()) catch {};
-            if (server.attachments.find(active.id)) |attachment| {
-                _ = attachment.resizeIfNeeded() catch {
-                    _ = server.attachments.detach(active.id);
-                };
+            for (&server.clients.items) |*slot| {
+                const client = if (slot.*) |*value| value else continue;
+                if (client.attachments.find(active.id)) |attachment| {
+                    _ = attachment.resizeIfNeeded() catch {
+                        _ = client.attachments.detach(active.id);
+                    };
+                }
             }
             enforceGraphicsQuotas(io, active);
             active.observeGraphicsDamage();
@@ -1343,7 +1485,7 @@ fn serveInternal(
                 return err;
             };
             server.collect();
-            server.pumpOrDrop();
+            server.pumpAll();
         },
         .pane_exit => |event| {
             const active = server.panes.resolve(event.pane) orelse {
@@ -1356,7 +1498,7 @@ fn serveInternal(
             server.panes.exited_count += 1;
             if (active.output_done) active.finishExitedHistory(active.exit.?, &server.metrics);
             server.collect();
-            server.pumpOrDrop();
+            server.pumpAll();
         },
         .telemetry_tick => |result| {
             result catch {
@@ -1370,17 +1512,30 @@ fn serveInternal(
             };
             if (telemetry_write_pending) continue;
 
+            var attachment_stores: [max_clients]*const AttachmentStore = undefined;
+            var attachment_store_count: usize = 0;
+            var response_queue_depth: usize = 0;
+            var response_queue_dropped: u64 = 0;
+            for (&server.clients.items) |*slot| {
+                const session = if (slot.*) |*value| value else continue;
+                attachment_stores[attachment_store_count] = &session.attachments;
+                attachment_store_count += 1;
+                response_queue_depth += session.responses.len;
+                response_queue_dropped +|= session.responses.dropped;
+            }
+
             const line = formatRuntimeTelemetry(
                 &telemetry_buffer,
                 io,
                 &server.metrics,
-                &server.attachments,
+                attachment_stores[0..attachment_store_count],
+                server.clients.count,
                 server.workspaces.count,
                 server.workspaces.totalTabs(),
                 &server.panes,
                 &history_service,
-                server.responses.len,
-                server.responses.dropped,
+                response_queue_depth,
+                response_queue_dropped,
             ) catch continue;
             telemetry_write_pending = true;
             select.concurrent(.telemetry_written, writeDiagnostics, .{
@@ -1515,7 +1670,7 @@ fn encodeFrame(
 ) !?[]const u8 {
     const pane = attachment.pane;
     const started = diagnostics.now(io);
-    if (pane.dirty) try pane.render(false);
+    if (pane.render_pending) try pane.render(false);
     var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
     var snapshot = force_snapshot;
     const diff = if (snapshot)
@@ -1540,8 +1695,6 @@ fn encodeFrame(
     if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
         !input_modes_changed)
     {
-        @memset(pane.damaged_rows, false);
-        pane.dirty = false;
         if (comptime diagnostics.enabled) {
             metrics.noop_frames += 1;
             metrics.damaged_rows += diff.damaged_rows;
@@ -1582,10 +1735,9 @@ fn encodeFrame(
     attachment.acknowledged_cursor = pane.cursor;
     attachment.acknowledged_mouse = pane.mouse;
     attachment.acknowledged_input_modes = pane.input_modes;
+    attachment.observed_cell_revision = pane.cell_revision;
     attachment.outstanding_frame_id = frame_id;
     attachment.frame_sent_ns = diagnostics.now(io);
-    @memset(pane.damaged_rows, false);
-    pane.dirty = false;
     if (comptime diagnostics.enabled) {
         var cell_count: u64 = 0;
         for (span_storage[0..span_count]) |span| cell_count += span.cells.len;
@@ -1695,27 +1847,32 @@ fn encodeHistoryResult(
     });
 }
 
-fn startSend(
+fn startSessionSend(
     io: Io,
     select: *Io.Select(RuntimeEvent),
-    connection: *core.transport.SocketChannel,
+    session: *ClientSession,
     payload: []const u8,
-    send_pending: *bool,
 ) !void {
-    std.debug.assert(!send_pending.*);
-    send_pending.* = true;
-    select.concurrent(.client_sent, sendClient, .{ io, connection, payload }) catch |err| {
-        send_pending.* = false;
+    std.debug.assert(!session.send_pending);
+    session.send_pending = true;
+    select.concurrent(.client_sent, sendSession, .{
+        io,
+        session.key,
+        &session.connection,
+        payload,
+    }) catch |err| {
+        session.send_pending = false;
         return err;
     };
 }
 
-fn sendClient(
+fn sendSession(
     io: Io,
+    key: ClientKey,
     connection: *core.transport.SocketChannel,
     payload: []const u8,
-) anyerror!void {
-    try connection.send(io, payload);
+) ClientSentEvent {
+    return .{ .client = key, .result = connection.send(io, payload) };
 }
 
 fn writeDiagnostics(
@@ -1803,12 +1960,31 @@ fn handshakeClient(io: Io, connection: *core.transport.SocketChannel) anyerror!v
     if (response == .rejected) return error.IncompatibleProtocol;
 }
 
-fn receiveClient(
+fn startSessionRead(
     io: Io,
+    select: *Io.Select(RuntimeEvent),
+    session: *ClientSession,
+) !void {
+    std.debug.assert(!session.read_pending);
+    session.read_pending = true;
+    select.concurrent(.client_message, receiveSession, .{
+        io,
+        session.key,
+        &session.connection,
+        session.receive_buffer,
+    }) catch |err| {
+        session.read_pending = false;
+        return err;
+    };
+}
+
+fn receiveSession(
+    io: Io,
+    key: ClientKey,
     connection: *core.transport.SocketChannel,
     buffer: []u8,
-) anyerror![]u8 {
-    return connection.receive(io, buffer);
+) ClientMessageEvent {
+    return .{ .client = key, .result = connection.receive(io, buffer) };
 }
 
 fn readPane(io: Io, pane: *Pane) PaneOutputEvent {

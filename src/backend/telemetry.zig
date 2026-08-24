@@ -17,6 +17,7 @@ pub const RuntimeMetrics = struct {
     client_messages: u64 = 0,
     stale_client_messages: u64 = 0,
     stale_pane_events: u64 = 0,
+    geometry_rejections: u64 = 0,
     input_events: u64 = 0,
     input_bytes: u64 = 0,
     input_write: diagnostics.Timing = .{},
@@ -53,7 +54,8 @@ pub fn formatRuntimeTelemetry(
     buffer: []u8,
     io: Io,
     metrics: *const RuntimeMetrics,
-    attachments: *const AttachmentStore,
+    attachment_stores: []const *const AttachmentStore,
+    client_count: usize,
     workspace_count: usize,
     tab_count: usize,
     panes: *const PaneStore,
@@ -64,6 +66,7 @@ pub fn formatRuntimeTelemetry(
     const now_ns = diagnostics.now(io);
     var outstanding_frames: usize = 0;
     var dirty_panes: usize = 0;
+    var attachment_count: usize = 0;
     var history_prompt_markers: u64 = 0;
     var history_input_markers: u64 = 0;
     var history_output_markers: u64 = 0;
@@ -94,6 +97,19 @@ pub fn formatRuntimeTelemetry(
         pane_input_queue_depth += pane.input_queue.len;
         pane_input_dropped_bytes +|= pane.input_queue.dropped_bytes;
         history_input_dropped +|= pane.history_input_dropped;
+        if (pane.dirty) dirty_panes += 1;
+        history_prompt_markers += pane.history_tracker.aux.prompt_markers;
+        history_input_markers += pane.history_tracker.aux.input_markers;
+        history_output_markers += pane.history_tracker.aux.output_markers;
+        history_finished_markers += pane.history_tracker.aux.finished_markers;
+        history_osc_started += pane.history_tracker.aux.osc_started;
+        history_osc_finished += pane.history_tracker.aux.osc_finished;
+        history_pty_submissions += pane.history_tracker.submissions_armed;
+        history_pty_captures += pane.history_tracker.submissions_captured;
+        history_pty_capture_failures += pane.history_tracker.capture_failures;
+        history_foreground_completions += pane.history_tracker.foreground_completions;
+        history_next_input_completions += pane.history_tracker.next_input_completions;
+        history_auxiliary_completions += pane.history_tracker.auxiliary_completions;
         for (std.enums.values(vt.ScreenSet.Key)) |key| {
             const screen = pane.terminal.screens.get(key) orelse continue;
             graphics_images += screen.kitty_images.images.count();
@@ -103,36 +119,26 @@ pub fn formatRuntimeTelemetry(
                 graphics_loading_bytes += loading.data.items.len;
         }
     }
-    for (attachments.items) |slot| {
-        const active = slot orelse continue;
-        if (active.pane.ingest_pending) continue;
-        if (active.transfer) |transfer| {
-            graphics_transfer_bytes += transfer.pixels.len;
-            graphics_resident_bytes += transfer.pixels.len;
+    for (attachment_stores) |attachments| {
+        attachment_count += attachments.count;
+        for (attachments.items) |slot| {
+            const active = slot orelse continue;
+            if (active.pane.ingest_pending) continue;
+            if (active.transfer) |transfer| {
+                graphics_transfer_bytes += transfer.pixels.len;
+                graphics_resident_bytes += transfer.pixels.len;
+            }
+            if (active.outstanding_frame_id != 0) outstanding_frames += 1;
         }
-        if (active.outstanding_frame_id != 0) outstanding_frames += 1;
-        if (active.pane.dirty) dirty_panes += 1;
-        history_prompt_markers += active.pane.history_tracker.aux.prompt_markers;
-        history_input_markers += active.pane.history_tracker.aux.input_markers;
-        history_output_markers += active.pane.history_tracker.aux.output_markers;
-        history_finished_markers += active.pane.history_tracker.aux.finished_markers;
-        history_osc_started += active.pane.history_tracker.aux.osc_started;
-        history_osc_finished += active.pane.history_tracker.aux.osc_finished;
-        history_pty_submissions += active.pane.history_tracker.submissions_armed;
-        history_pty_captures += active.pane.history_tracker.submissions_captured;
-        history_pty_capture_failures += active.pane.history_tracker.capture_failures;
-        history_foreground_completions += active.pane.history_tracker.foreground_completions;
-        history_next_input_completions += active.pane.history_tracker.next_input_completions;
-        history_auxiliary_completions += active.pane.history_tracker.auxiliary_completions;
     }
     const history_stats = history_service.statsSnapshot();
     var output = Io.Writer.fixed(buffer);
     try output.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
-        "\"workspace_count\":{d},\"tab_count\":{d}," ++
+        "\"client_count\":{d},\"workspace_count\":{d},\"tab_count\":{d}," ++
         "\"pane_count\":{d},\"attachment_count\":{d}," ++
         "\"outstanding_frames\":{d},\"dirty_panes\":{d}," ++
         "\"client_messages\":{d},\"stale_client_messages\":{d}," ++
-        "\"stale_pane_events\":{d}," ++
+        "\"stale_pane_events\":{d},\"geometry_rejections\":{d}," ++
         "\"input_events\":{d},\"input_bytes\":{d}," ++
         "\"pty_events\":{d},\"pty_bytes\":{d},\"folded_pty_events\":{d}," ++
         "\"frames\":{d},\"frame_bytes\":{d},\"frame_cells\":{d}," ++
@@ -143,15 +149,17 @@ pub fn formatRuntimeTelemetry(
         "\"coalesced_bytes_saved\":{d},", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
+        client_count,
         workspace_count,
         tab_count,
         panes.count,
-        attachments.count,
+        attachment_count,
         outstanding_frames,
         dirty_panes,
         metrics.client_messages,
         metrics.stale_client_messages,
         metrics.stale_pane_events,
+        metrics.geometry_rejections,
         metrics.input_events,
         metrics.input_bytes,
         metrics.pty_events,
