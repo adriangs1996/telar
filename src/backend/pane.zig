@@ -836,57 +836,7 @@ pub fn resizeScreenStorage(
 /// `attachedPane`, per event through `collectFinished` - where a linear scan
 /// of the store was O(pane count) each time. Ids are never zero and never
 /// `maxInt`, which the empty and tombstone markers rely on.
-pub fn SlotIndex(comptime capacity: usize) type {
-    comptime std.debug.assert(std.math.isPowerOfTwo(capacity));
-    return struct {
-        pub const Self = @This();
-        pub const empty_key: u64 = 0;
-        pub const tombstone_key: u64 = std.math.maxInt(u64);
-
-        keys: [capacity]u64 = @splat(empty_key),
-        slots: [capacity]u8 = undefined,
-
-        pub fn put(index: *Self, key: u64, slot: usize) void {
-            std.debug.assert(key != empty_key and key != tombstone_key);
-            var probe = std.hash.int(key) % capacity;
-            while (true) : (probe = (probe + 1) % capacity) {
-                switch (index.keys[probe]) {
-                    empty_key, tombstone_key => {
-                        index.keys[probe] = key;
-                        index.slots[probe] = @intCast(slot);
-                        return;
-                    },
-                    else => std.debug.assert(index.keys[probe] != key),
-                }
-            }
-        }
-
-        pub fn get(index: *const Self, key: u64) ?usize {
-            var probe = std.hash.int(key) % capacity;
-            while (true) : (probe = (probe + 1) % capacity) {
-                const found = index.keys[probe];
-                if (found == key) return index.slots[probe];
-                if (found == empty_key) return null;
-            }
-        }
-
-        pub fn remove(index: *Self, key: u64) void {
-            var probe = std.hash.int(key) % capacity;
-            while (true) : (probe = (probe + 1) % capacity) {
-                const found = index.keys[probe];
-                if (found == key) {
-                    index.keys[probe] = tombstone_key;
-                    return;
-                }
-                if (found == empty_key) return;
-            }
-        }
-
-        pub fn reset(index: *Self) void {
-            index.keys = @splat(empty_key);
-        }
-    };
-}
+pub const SlotIndex = core.fixed_index.SlotIndex;
 
 pub const PaneStore = struct {
     items: [max_panes]?*Pane = [_]?*Pane{null} ** max_panes,

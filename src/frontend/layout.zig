@@ -10,6 +10,7 @@ pub const max_panes = schema.max_panes_per_tab;
 const max_nodes = max_panes * 2 - 1;
 const NodeIndex = u8;
 const index_capacity = max_panes * 2;
+const ViewIndex = core.fixed_index.SlotIndex(index_capacity);
 
 pub const Axis = enum {
     /// Children occupy the left and right halves.
@@ -54,11 +55,6 @@ pub const ProspectiveSplit = struct {
     new_content: ui.Rect,
 };
 
-const ViewIndexEntry = struct {
-    pane_id: schema.PaneId = .invalid,
-    view_index: u8 = 0,
-};
-
 /// Immutable geometry consumed by every subsystem during a frame. Building it
 /// is O(panes); pane lookup is bounded open addressing with no allocations.
 pub const Snapshot = struct {
@@ -66,7 +62,7 @@ pub const Snapshot = struct {
     revision: u64 = 0,
     storage: [max_panes]View = undefined,
     len: u8 = 0,
-    index: [index_capacity]ViewIndexEntry = [_]ViewIndexEntry{.{}} ** index_capacity,
+    index: ViewIndex = .{},
 
     pub fn views(snapshot: *const Snapshot) []const View {
         return snapshot.storage[0..snapshot.len];
@@ -74,15 +70,8 @@ pub const Snapshot = struct {
 
     pub fn find(snapshot: *const Snapshot, pane_id: schema.PaneId) ?View {
         if (pane_id == .invalid) return null;
-        var slot = hashPane(pane_id);
-        var probes: usize = 0;
-        while (probes < index_capacity) : (probes += 1) {
-            const entry = snapshot.index[slot];
-            if (entry.pane_id == .invalid) return null;
-            if (entry.pane_id == pane_id) return snapshot.storage[entry.view_index];
-            slot = (slot + 1) & (index_capacity - 1);
-        }
-        return null;
+        const view_index = snapshot.index.get(schema.id.raw(pane_id)) orelse return null;
+        return snapshot.storage[view_index];
     }
 
     pub fn prospectiveSplit(
@@ -164,17 +153,14 @@ pub const Snapshot = struct {
         snapshot.area = area;
         snapshot.revision = revision;
         snapshot.len = 0;
-        @memset(&snapshot.index, .{});
+        snapshot.index.reset();
     }
 
     fn append(snapshot: *Snapshot, view: View) void {
         const view_index = snapshot.len;
         snapshot.storage[view_index] = view;
         snapshot.len += 1;
-        var slot = hashPane(view.pane_id);
-        while (snapshot.index[slot].pane_id != .invalid)
-            slot = (slot + 1) & (index_capacity - 1);
-        snapshot.index[slot] = .{ .pane_id = view.pane_id, .view_index = view_index };
+        snapshot.index.put(schema.id.raw(view.pane_id), view_index);
     }
 };
 
@@ -392,11 +378,6 @@ pub const Layout = struct {
         if (layout.revision == 0) layout.revision = 1;
     }
 };
-
-fn hashPane(pane_id: schema.PaneId) usize {
-    const mixed = schema.id.raw(pane_id) *% 0x9e3779b97f4a7c15;
-    return @as(usize, @truncate(mixed)) & (index_capacity - 1);
-}
 
 fn splitArea(area: ui.Rect, axis: Axis) [2]ui.Rect {
     return switch (axis) {

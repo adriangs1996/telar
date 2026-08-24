@@ -15,11 +15,7 @@ pub const max_panes = layout_mod.max_panes;
 
 const DamageRow = diff.DamageRow;
 const pane_index_capacity = max_panes * 2;
-
-const PaneIndexEntry = struct {
-    pane_id: schema.PaneId = .invalid,
-    slot: u8 = 0,
-};
+const PaneIndex = core.fixed_index.SlotIndex(pane_index_capacity);
 
 const BorderTheme = struct {
     focused: ui.Color,
@@ -86,8 +82,7 @@ pub const Model = struct {
     gpa: std.mem.Allocator,
     layout: layout_mod.Layout = .{},
     panes: [max_panes]?Pane = [_]?Pane{null} ** max_panes,
-    pane_index: [pane_index_capacity]PaneIndexEntry =
-        [_]PaneIndexEntry{.{}} ** pane_index_capacity,
+    pane_index: PaneIndex = .{},
     pane_count: usize = 0,
     location: ?schema.TabLocation = null,
     composed: ?ui.Buffer = null,
@@ -110,7 +105,7 @@ pub const Model = struct {
         if (model.composed) |*buffer| buffer.deinit();
         model.composed = null;
         model.pane_count = 0;
-        @memset(&model.pane_index, .{});
+        model.pane_index.reset();
     }
 
     pub fn focusedPane(model: *Model) ?*Pane {
@@ -120,15 +115,8 @@ pub const Model = struct {
 
     pub fn find(model: *Model, pane_id: schema.PaneId) ?*Pane {
         if (pane_id == .invalid) return null;
-        var index = hashPane(pane_id);
-        var probes: usize = 0;
-        while (probes < pane_index_capacity) : (probes += 1) {
-            const entry = model.pane_index[index];
-            if (entry.pane_id == .invalid) return null;
-            if (entry.pane_id == pane_id) return &model.panes[entry.slot].?;
-            index = (index + 1) & (pane_index_capacity - 1);
-        }
-        return null;
+        const slot = model.pane_index.get(schema.id.raw(pane_id)) orelse return null;
+        return &model.panes[slot].?;
     }
 
     pub fn addRoot(
@@ -206,7 +194,7 @@ pub const Model = struct {
             removed = true;
             break;
         }
-        if (removed) model.rebuildPaneIndex();
+        if (removed) model.pane_index.remove(schema.id.raw(pane_id));
         _ = model.layout.remove(pane_id);
         if (model.pane_count == 0) model.location = null;
         if (removed) model.composition_invalidated = true;
@@ -477,25 +465,9 @@ pub const Model = struct {
     }
 
     fn indexPane(model: *Model, pane_id: schema.PaneId, pane_slot: u8) void {
-        var index = hashPane(pane_id);
-        while (model.pane_index[index].pane_id != .invalid)
-            index = (index + 1) & (pane_index_capacity - 1);
-        model.pane_index[index] = .{ .pane_id = pane_id, .slot = pane_slot };
-    }
-
-    fn rebuildPaneIndex(model: *Model) void {
-        @memset(&model.pane_index, .{});
-        for (&model.panes, 0..) |*slot, slot_index| {
-            const pane = if (slot.*) |*value| value else continue;
-            model.indexPane(pane.id, @intCast(slot_index));
-        }
+        model.pane_index.put(schema.id.raw(pane_id), pane_slot);
     }
 };
-
-fn hashPane(pane_id: schema.PaneId) usize {
-    const mixed = schema.id.raw(pane_id) *% 0x9e3779b97f4a7c15;
-    return @as(usize, @truncate(mixed)) & (pane_index_capacity - 1);
-}
 
 /// Copies each changed run into the composed buffer and the screen at once,
 /// so the composed cache and the terminal patch can never disagree.
