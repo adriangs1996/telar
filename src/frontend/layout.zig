@@ -9,6 +9,7 @@ const ui = core.ui;
 pub const max_panes = schema.max_panes_per_tab;
 const max_nodes = max_panes * 2 - 1;
 const NodeIndex = u8;
+const index_capacity = max_panes * 2;
 
 pub const Axis = enum {
     /// Children occupy the left and right halves.
@@ -53,119 +54,69 @@ pub const ProspectiveSplit = struct {
     new_content: ui.Rect,
 };
 
-pub const Layout = struct {
-    nodes: [max_nodes]Slot = [_]Slot{.{}} ** max_nodes,
-    root: ?NodeIndex = null,
-    focused_pane: schema.PaneId = .invalid,
-    pane_count: u8 = 0,
+const ViewIndexEntry = struct {
+    pane_id: schema.PaneId = .invalid,
+    view_index: u8 = 0,
+};
 
-    pub fn count(layout: *const Layout) usize {
-        return layout.pane_count;
+/// Immutable geometry consumed by every subsystem during a frame. Building it
+/// is O(panes); pane lookup is bounded open addressing with no allocations.
+pub const Snapshot = struct {
+    area: ui.Rect = .{},
+    revision: u64 = 0,
+    storage: [max_panes]View = undefined,
+    len: u8 = 0,
+    index: [index_capacity]ViewIndexEntry = [_]ViewIndexEntry{.{}} ** index_capacity,
+
+    pub fn views(snapshot: *const Snapshot) []const View {
+        return snapshot.storage[0..snapshot.len];
     }
 
-    pub fn focused(layout: *const Layout) ?schema.PaneId {
-        return if (layout.focused_pane == .invalid) null else layout.focused_pane;
-    }
-
-    pub fn contains(layout: *const Layout, pane_id: schema.PaneId) bool {
-        return layout.findLeaf(pane_id) != null;
-    }
-
-    pub fn addRoot(layout: *Layout, pane_id: schema.PaneId) !void {
-        if (pane_id == .invalid) return error.InvalidPaneId;
-        if (layout.root != null) return error.LayoutNotEmpty;
-        layout.nodes[0] = .{ .node = .{ .leaf = pane_id } };
-        layout.root = 0;
-        layout.focused_pane = pane_id;
-        layout.pane_count = 1;
-    }
-
-    pub fn splitFocused(layout: *Layout, pane_id: schema.PaneId, axis: Axis) !void {
-        const focused_pane = layout.focused() orelse return error.LayoutEmpty;
-        try layout.split(focused_pane, pane_id, axis);
-    }
-
-    pub fn split(
-        layout: *Layout,
-        existing_pane: schema.PaneId,
-        new_pane: schema.PaneId,
-        axis: Axis,
-    ) !void {
-        if (new_pane == .invalid) return error.InvalidPaneId;
-        if (layout.contains(new_pane)) return error.DuplicatePane;
-        if (layout.pane_count == max_panes) return error.PaneLimitReached;
-        const target = layout.findLeaf(existing_pane) orelse return error.PaneNotFound;
-
-        const first = layout.allocateNode() orelse return error.NodeLimitReached;
-        errdefer layout.nodes[first] = .{};
-        layout.nodes[first].node = .{ .leaf = .invalid };
-        const second = layout.allocateNode() orelse return error.NodeLimitReached;
-        const parent = layout.nodes[target].parent;
-        layout.nodes[first] = .{ .parent = target, .node = .{ .leaf = existing_pane } };
-        layout.nodes[second] = .{ .parent = target, .node = .{ .leaf = new_pane } };
-        layout.nodes[target] = .{
-            .parent = parent,
-            .node = .{ .split = .{ .axis = axis, .first = first, .second = second } },
-        };
-        layout.focused_pane = new_pane;
-        layout.pane_count += 1;
-    }
-
-    pub fn remove(layout: *Layout, pane_id: schema.PaneId) bool {
-        const leaf = layout.findLeaf(pane_id) orelse return false;
-        const parent = layout.nodes[leaf].parent orelse {
-            layout.nodes[leaf] = .{};
-            layout.root = null;
-            layout.focused_pane = .invalid;
-            layout.pane_count = 0;
-            return true;
-        };
-        const branch = layout.nodes[parent].node.split;
-        const sibling = if (branch.first == leaf) branch.second else branch.first;
-        const grandparent = layout.nodes[parent].parent;
-        const replacement = layout.nodes[sibling].node;
-        layout.nodes[parent] = .{ .parent = grandparent, .node = replacement };
-        switch (replacement) {
-            .split => |children| {
-                layout.nodes[children.first].parent = parent;
-                layout.nodes[children.second].parent = parent;
-            },
-            else => {},
+    pub fn find(snapshot: *const Snapshot, pane_id: schema.PaneId) ?View {
+        if (pane_id == .invalid) return null;
+        var slot = hashPane(pane_id);
+        var probes: usize = 0;
+        while (probes < index_capacity) : (probes += 1) {
+            const entry = snapshot.index[slot];
+            if (entry.pane_id == .invalid) return null;
+            if (entry.pane_id == pane_id) return snapshot.storage[entry.view_index];
+            slot = (slot + 1) & (index_capacity - 1);
         }
-        layout.nodes[leaf] = .{};
-        layout.nodes[sibling] = .{};
-        layout.pane_count -= 1;
-        if (layout.focused_pane == pane_id)
-            layout.focused_pane = layout.firstLeaf(parent).?;
-        return true;
+        return null;
     }
 
-    pub fn focusPane(layout: *Layout, pane_id: schema.PaneId) bool {
-        if (!layout.contains(pane_id)) return false;
-        layout.focused_pane = pane_id;
-        return true;
-    }
-
-    pub fn focusDirection(
-        layout: *Layout,
-        direction: Direction,
-        area: ui.Rect,
-    ) ?schema.PaneId {
-        const current_id = layout.focused() orelse return null;
-        var storage: [max_panes]View = undefined;
-        const visible = layout.views(area, &storage);
-        var current: ?View = null;
-        for (visible) |view| if (view.pane_id == current_id) {
-            current = view;
-            break;
+    pub fn prospectiveSplit(
+        snapshot: *const Snapshot,
+        pane_id: schema.PaneId,
+        axis: Axis,
+        pane_count: usize,
+    ) ?ProspectiveSplit {
+        if (pane_count == max_panes) return null;
+        const view = snapshot.find(pane_id) orelse return null;
+        const enough_space = switch (axis) {
+            // Two bordered PTYs plus their gutter.
+            .horizontal => view.outer.w >= 7 and view.outer.h >= 3,
+            .vertical => view.outer.w >= 3 and view.outer.h >= 7,
         };
-        const source = current orelse return null;
+        if (!enough_space) return null;
+        const first, const second = splitArea(view.outer, axis);
+        return .{
+            .existing_content = borderedContent(first),
+            .new_content = borderedContent(second),
+        };
+    }
 
+    pub fn focusTarget(
+        snapshot: *const Snapshot,
+        current_id: schema.PaneId,
+        direction: Direction,
+    ) ?schema.PaneId {
+        const source = snapshot.find(current_id) orelse return null;
         var candidate: ?schema.PaneId = null;
         var best_score: u64 = std.math.maxInt(u64);
         const source_x = center(source.outer.x, source.outer.w);
         const source_y = center(source.outer.y, source.outer.h);
-        for (visible) |view| {
+        for (snapshot.views()) |view| {
             if (view.pane_id == current_id) continue;
             const candidate_x = center(view.outer.x, view.outer.w);
             const candidate_y = center(view.outer.y, view.outer.h);
@@ -206,7 +157,144 @@ pub const Layout = struct {
                 candidate = view.pane_id;
             }
         }
-        if (candidate) |pane_id| layout.focused_pane = pane_id;
+        return candidate;
+    }
+
+    fn reset(snapshot: *Snapshot, area: ui.Rect, revision: u64) void {
+        snapshot.area = area;
+        snapshot.revision = revision;
+        snapshot.len = 0;
+        @memset(&snapshot.index, .{});
+    }
+
+    fn append(snapshot: *Snapshot, view: View) void {
+        const view_index = snapshot.len;
+        snapshot.storage[view_index] = view;
+        snapshot.len += 1;
+        var slot = hashPane(view.pane_id);
+        while (snapshot.index[slot].pane_id != .invalid)
+            slot = (slot + 1) & (index_capacity - 1);
+        snapshot.index[slot] = .{ .pane_id = view.pane_id, .view_index = view_index };
+    }
+};
+
+pub const Layout = struct {
+    nodes: [max_nodes]Slot = [_]Slot{.{}} ** max_nodes,
+    root: ?NodeIndex = null,
+    focused_pane: schema.PaneId = .invalid,
+    pane_count: u8 = 0,
+    revision: u64 = 1,
+
+    pub fn count(layout: *const Layout) usize {
+        return layout.pane_count;
+    }
+
+    pub fn focused(layout: *const Layout) ?schema.PaneId {
+        return if (layout.focused_pane == .invalid) null else layout.focused_pane;
+    }
+
+    pub fn currentRevision(layout: *const Layout) u64 {
+        return layout.revision;
+    }
+
+    pub fn contains(layout: *const Layout, pane_id: schema.PaneId) bool {
+        return layout.findLeaf(pane_id) != null;
+    }
+
+    pub fn addRoot(layout: *Layout, pane_id: schema.PaneId) !void {
+        if (pane_id == .invalid) return error.InvalidPaneId;
+        if (layout.root != null) return error.LayoutNotEmpty;
+        layout.nodes[0] = .{ .node = .{ .leaf = pane_id } };
+        layout.root = 0;
+        layout.focused_pane = pane_id;
+        layout.pane_count = 1;
+        layout.changed();
+    }
+
+    pub fn splitFocused(layout: *Layout, pane_id: schema.PaneId, axis: Axis) !void {
+        const focused_pane = layout.focused() orelse return error.LayoutEmpty;
+        try layout.split(focused_pane, pane_id, axis);
+    }
+
+    pub fn split(
+        layout: *Layout,
+        existing_pane: schema.PaneId,
+        new_pane: schema.PaneId,
+        axis: Axis,
+    ) !void {
+        if (new_pane == .invalid) return error.InvalidPaneId;
+        if (layout.contains(new_pane)) return error.DuplicatePane;
+        if (layout.pane_count == max_panes) return error.PaneLimitReached;
+        const target = layout.findLeaf(existing_pane) orelse return error.PaneNotFound;
+
+        const first = layout.allocateNode() orelse return error.NodeLimitReached;
+        errdefer layout.nodes[first] = .{};
+        layout.nodes[first].node = .{ .leaf = .invalid };
+        const second = layout.allocateNode() orelse return error.NodeLimitReached;
+        const parent = layout.nodes[target].parent;
+        layout.nodes[first] = .{ .parent = target, .node = .{ .leaf = existing_pane } };
+        layout.nodes[second] = .{ .parent = target, .node = .{ .leaf = new_pane } };
+        layout.nodes[target] = .{
+            .parent = parent,
+            .node = .{ .split = .{ .axis = axis, .first = first, .second = second } },
+        };
+        layout.focused_pane = new_pane;
+        layout.pane_count += 1;
+        layout.changed();
+    }
+
+    pub fn remove(layout: *Layout, pane_id: schema.PaneId) bool {
+        const leaf = layout.findLeaf(pane_id) orelse return false;
+        const parent = layout.nodes[leaf].parent orelse {
+            layout.nodes[leaf] = .{};
+            layout.root = null;
+            layout.focused_pane = .invalid;
+            layout.pane_count = 0;
+            layout.changed();
+            return true;
+        };
+        const branch = layout.nodes[parent].node.split;
+        const sibling = if (branch.first == leaf) branch.second else branch.first;
+        const grandparent = layout.nodes[parent].parent;
+        const replacement = layout.nodes[sibling].node;
+        layout.nodes[parent] = .{ .parent = grandparent, .node = replacement };
+        switch (replacement) {
+            .split => |children| {
+                layout.nodes[children.first].parent = parent;
+                layout.nodes[children.second].parent = parent;
+            },
+            else => {},
+        }
+        layout.nodes[leaf] = .{};
+        layout.nodes[sibling] = .{};
+        layout.pane_count -= 1;
+        if (layout.focused_pane == pane_id)
+            layout.focused_pane = layout.firstLeaf(parent).?;
+        layout.changed();
+        return true;
+    }
+
+    pub fn focusPane(layout: *Layout, pane_id: schema.PaneId) bool {
+        if (!layout.contains(pane_id)) return false;
+        if (layout.focused_pane == pane_id) return true;
+        layout.focused_pane = pane_id;
+        layout.changed();
+        return true;
+    }
+
+    pub fn focusDirection(
+        layout: *Layout,
+        direction: Direction,
+        area: ui.Rect,
+    ) ?schema.PaneId {
+        const current_id = layout.focused() orelse return null;
+        var geometry: Snapshot = .{};
+        layout.snapshot(area, &geometry);
+        const candidate = geometry.focusTarget(current_id, direction);
+        if (candidate) |pane_id| {
+            layout.focused_pane = pane_id;
+            layout.changed();
+        }
         return candidate;
     }
 
@@ -216,19 +304,9 @@ pub const Layout = struct {
         axis: Axis,
         area: ui.Rect,
     ) bool {
-        if (layout.pane_count == max_panes) return false;
-        var storage: [max_panes]View = undefined;
-        for (layout.views(area, &storage)) |view| {
-            if (view.pane_id != pane_id) continue;
-            return switch (axis) {
-                // Each side needs a left border, one PTY column and a right
-                // border. The seventh column is the gutter between boxes.
-                .horizontal => view.outer.w >= 7 and view.outer.h >= 3,
-                // The vertical equivalent: two three-row boxes and a gutter.
-                .vertical => view.outer.w >= 3 and view.outer.h >= 7,
-            };
-        }
-        return false;
+        var geometry: Snapshot = .{};
+        layout.snapshot(area, &geometry);
+        return geometry.prospectiveSplit(pane_id, axis, layout.pane_count) != null;
     }
 
     pub fn prospectiveSplit(
@@ -237,48 +315,32 @@ pub const Layout = struct {
         axis: Axis,
         area: ui.Rect,
     ) ?ProspectiveSplit {
-        if (!layout.canSplit(pane_id, axis, area)) return null;
-        var storage: [max_panes]View = undefined;
-        for (layout.views(area, &storage)) |view| {
-            if (view.pane_id != pane_id) continue;
-            const first, const second = splitArea(view.outer, axis);
-            return .{
-                .existing_content = borderedContent(first),
-                .new_content = borderedContent(second),
-            };
-        }
-        return null;
+        var geometry: Snapshot = .{};
+        layout.snapshot(area, &geometry);
+        return geometry.prospectiveSplit(pane_id, axis, layout.pane_count);
     }
 
-    pub fn views(
-        layout: *const Layout,
-        area: ui.Rect,
-        output: *[max_panes]View,
-    ) []View {
-        const root = layout.root orelse return output[0..0];
+    pub fn snapshot(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
+        output.reset(area, layout.revision);
+        const root = layout.root orelse return;
         const Pending = struct { node: NodeIndex, area: ui.Rect };
         var stack: [max_nodes]Pending = undefined;
         var stack_len: usize = 1;
         stack[0] = .{ .node = root, .area = area };
-        var output_len: usize = 0;
         while (stack_len != 0) {
             stack_len -= 1;
             const pending = stack[stack_len];
             switch (layout.nodes[pending.node].node) {
                 .empty => unreachable,
-                .leaf => |pane_id| {
-                    const has_border = layout.pane_count > 1;
-                    output[output_len] = .{
-                        .pane_id = pane_id,
-                        .outer = pending.area,
-                        .content = if (has_border)
-                            borderedContent(pending.area)
-                        else
-                            pending.area,
-                        .focused = pane_id == layout.focused_pane,
-                    };
-                    output_len += 1;
-                },
+                .leaf => |pane_id| output.append(.{
+                    .pane_id = pane_id,
+                    .outer = pending.area,
+                    .content = if (layout.pane_count > 1)
+                        borderedContent(pending.area)
+                    else
+                        pending.area,
+                    .focused = pane_id == layout.focused_pane,
+                }),
                 .split => |branch| {
                     const first, const second = splitArea(pending.area, branch.axis);
                     stack[stack_len] = .{ .node = branch.second, .area = second };
@@ -288,7 +350,17 @@ pub const Layout = struct {
                 },
             }
         }
-        return output[0..output_len];
+    }
+
+    pub fn views(
+        layout: *const Layout,
+        area: ui.Rect,
+        output: *[max_panes]View,
+    ) []View {
+        var snapshot_output: Snapshot = .{};
+        layout.snapshot(area, &snapshot_output);
+        @memcpy(output[0..snapshot_output.len], snapshot_output.views());
+        return output[0..snapshot_output.len];
     }
 
     fn allocateNode(layout: *Layout) ?NodeIndex {
@@ -314,7 +386,17 @@ pub const Layout = struct {
             .split => |branch| current = branch.first,
         };
     }
+
+    fn changed(layout: *Layout) void {
+        layout.revision +%= 1;
+        if (layout.revision == 0) layout.revision = 1;
+    }
 };
+
+fn hashPane(pane_id: schema.PaneId) usize {
+    const mixed = schema.id.raw(pane_id) *% 0x9e3779b97f4a7c15;
+    return @as(usize, @truncate(mixed)) & (index_capacity - 1);
+}
 
 fn splitArea(area: ui.Rect, axis: Axis) [2]ui.Rect {
     return switch (axis) {
@@ -407,4 +489,31 @@ test "tiny panes reject splits that would create a zero-row PTY" {
     try layout.addRoot(@enumFromInt(1));
     try std.testing.expect(!layout.canSplit(@enumFromInt(1), .vertical, .{ .w = 8, .h = 3 }));
     try std.testing.expect(layout.canSplit(@enumFromInt(1), .horizontal, .{ .w = 8, .h = 3 }));
+}
+
+test "snapshot indexes colliding pane ids and records its source revision" {
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    try layout.splitFocused(@enumFromInt(129), .horizontal);
+
+    var geometry: Snapshot = .{};
+    layout.snapshot(.{ .w = 80, .h = 24 }, &geometry);
+
+    try std.testing.expectEqual(layout.currentRevision(), geometry.revision);
+    try std.testing.expectEqual(@as(u16, 39), geometry.find(@enumFromInt(1)).?.outer.w);
+    try std.testing.expectEqual(@as(u16, 40), geometry.find(@enumFromInt(129)).?.outer.w);
+    try std.testing.expectEqual(@as(?View, null), geometry.find(@enumFromInt(257)));
+}
+
+test "focus changes advance the layout revision" {
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    try layout.splitFocused(@enumFromInt(2), .horizontal);
+    const before = layout.currentRevision();
+
+    try std.testing.expect(layout.focusPane(@enumFromInt(1)));
+    try std.testing.expect(layout.currentRevision() != before);
+    const focused_revision = layout.currentRevision();
+    try std.testing.expect(layout.focusPane(@enumFromInt(1)));
+    try std.testing.expectEqual(focused_revision, layout.currentRevision());
 }

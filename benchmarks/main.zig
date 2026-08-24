@@ -962,8 +962,7 @@ const GraphicsContext = struct {
     fn writer(context: *GraphicsContext) frontend.kitty.KittyGraphicsWriter {
         return .{
             .store = &context.store,
-            .model = &context.model,
-            .area = .{ .w = cols, .h = rows },
+            .layout_snapshot = context.model.layoutSnapshot(.{ .w = cols, .h = rows }),
             .cell_width = 10,
             .cell_height = 20,
         };

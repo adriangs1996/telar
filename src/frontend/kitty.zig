@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const layout = @import("layout.zig");
 const multiplexer = @import("multiplexer.zig");
 const term = @import("term.zig");
 const theme = @import("theme.zig");
@@ -681,8 +682,7 @@ fn identity(pane_id: schema.PaneId, key: graphics.ImageKey) ImageIdentity {
 
 pub const KittyGraphicsWriter = struct {
     store: *Store,
-    model: *multiplexer.Model,
-    area: core.ui.Rect,
+    layout_snapshot: *const layout.Snapshot,
     cell_width: u16,
     cell_height: u16,
 
@@ -818,7 +818,7 @@ pub const KittyGraphicsWriter = struct {
         placement: graphics.Placement,
         image: graphics.Image,
     ) ?OutputPlacement {
-        const view = self.model.viewForPane(pane_id, self.area) orelse return null;
+        const view = self.layout_snapshot.find(pane_id) orelse return null;
         const source = placement.sourceRect(image) catch return null;
         const source_width: u32 = @intCast(source.width);
         const source_height: u32 = @intCast(source.height);
@@ -1368,10 +1368,10 @@ test "unchanged graphics emit no work and resize does not retransmit pixels" {
     });
     var first_bytes: [4096]u8 = undefined;
     var first_writer = Io.Writer.fixed(&first_bytes);
+    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
-        .model = &model,
-        .area = .{ .w = 10, .h = 5 },
+        .layout_snapshot = layout_snapshot,
         .cell_width = 10,
         .cell_height = 20,
     };
@@ -1447,10 +1447,10 @@ test "image transmission is paced across frames by the byte budget" {
         },
     });
 
+    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
-        .model = &model,
-        .area = .{ .w = 10, .h = 5 },
+        .layout_snapshot = layout_snapshot,
         .cell_width = 10,
         .cell_height = 20,
     };

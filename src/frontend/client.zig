@@ -709,11 +709,11 @@ const Client = struct {
             client.metrics.compose.observe(diagnostics.elapsed(compose_started, diagnostics.now(client.io)));
         }
         const cell_size = client.capabilities.cellSize(client.screen.back.w, client.screen.back.h);
+        const layout_snapshot = model.layoutSnapshot(client.view.workbench());
         var graphics_writer: CombinedGraphicsWriter = .{
             .panes = .{
                 .store = client.graphics_store,
-                .model = model,
-                .area = client.view.workbench(),
+                .layout_snapshot = layout_snapshot,
                 .cell_width = cell_size.width,
                 .cell_height = cell_size.height,
             },
@@ -1722,7 +1722,7 @@ const InputHandler = struct {
         const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         const location = model.location orelse return;
-        const prospective = model.layout.prospectiveSplit(
+        const prospective = model.prospectiveSplit(
             pane.id,
             axis,
             handler.client.view.workbench(),

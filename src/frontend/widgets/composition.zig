@@ -18,7 +18,7 @@ const workbench = @import("workbench.zig");
 pub const Input = struct {
     regions: layout.Regions,
     tabs: ?*const tabs_mod.Model,
-    model: *const multiplexer.Model,
+    model: *multiplexer.Model,
     rename_field: ?*tab_rename.Field,
     sidebar_transparent: bool,
 };
