@@ -4,13 +4,13 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const blit = @import("blit.zig");
-const damage = @import("damage.zig");
 const history = @import("history/root.zig");
 const graphics_sync = @import("graphics_sync.zig");
 const media_mod = @import("media.zig");
 const pane_mod = @import("pane.zig");
 const pty = @import("pty.zig");
 const response_queue = @import("response_queue.zig");
+const runtime_encoder = @import("runtime_encoder.zig");
 const telemetry_mod = @import("telemetry.zig");
 const transport = @import("transport.zig");
 const workspace_mod = @import("workspace.zig");
@@ -29,7 +29,6 @@ const historyClock = pane_mod.historyClock;
 const max_panes = pane_mod.max_panes;
 const WorkspaceStore = workspace_mod.WorkspaceStore;
 const max_workspaces = workspace_mod.max_workspaces;
-const max_tabs_per_workspace = workspace_mod.max_tabs_per_workspace;
 const Attachment = graphics_sync.Attachment;
 const AttachmentStore = graphics_sync.AttachmentStore;
 const abandonGraphicsBatch = graphics_sync.abandonGraphicsBatch;
@@ -42,6 +41,8 @@ const PendingResponse = response_queue.PendingResponse;
 const PendingTabCreated = response_queue.PendingTabCreated;
 const PendingTabRenamed = response_queue.PendingTabRenamed;
 const ResponseQueue = response_queue.ResponseQueue;
+const encodeFrame = runtime_encoder.encodeFrame;
+const encodeResponse = runtime_encoder.encodeResponse;
 
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
 
@@ -1600,192 +1601,6 @@ fn spawnPane(
     fresh.wait_pending = true;
     fresh.actorStarted();
     return fresh;
-}
-
-fn encodeFrame(
-    io: Io,
-    buffer: []u8,
-    attachment: *Attachment,
-    force_snapshot: bool,
-    metrics: *RuntimeMetrics,
-) !?[]const u8 {
-    const pane = attachment.pane;
-    const started = diagnostics.now(io);
-    if (pane.render_pending) try pane.render(false);
-    var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
-    var snapshot = force_snapshot;
-    const diff = if (snapshot)
-        damage.Diff{}
-    else
-        damage.collectSpans(
-            pane.screen.cells,
-            attachment.acknowledged.cells,
-            pane.screen.w,
-            pane.damaged_rows,
-            &span_storage,
-        );
-    var span_count = diff.span_count;
-    snapshot = snapshot or diff.snapshot_required;
-
-    const cursor_changed = !std.meta.eql(pane.cursor, attachment.acknowledged_cursor);
-    const mouse_changed = !std.meta.eql(pane.mouse, attachment.acknowledged_mouse);
-    const input_modes_changed = !std.meta.eql(
-        pane.input_modes,
-        attachment.acknowledged_input_modes,
-    );
-    if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
-        !input_modes_changed)
-    {
-        if (comptime diagnostics.enabled) {
-            metrics.noop_frames += 1;
-            metrics.damaged_rows += diff.damaged_rows;
-            metrics.diff_scanned_cells += diff.scanned_cells;
-            metrics.coalesced_spans += diff.coalesced_spans;
-            metrics.bridged_cells += diff.bridged_cells;
-            metrics.coalesced_bytes_saved += diff.bytes_saved;
-            metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
-        }
-        return null;
-    }
-    if (snapshot) {
-        span_storage[0] = .{ .start = 0, .cells = pane.screen.cells };
-        span_count = 1;
-    }
-
-    const frame_id = attachment.next_frame_id;
-    attachment.next_frame_id += 1;
-    const payload = try schema.encodePaneFrame(buffer, .{
-        .pane_id = pane.id,
-        .frame_id = frame_id,
-        .base_frame_id = if (snapshot) 0 else attachment.acknowledged_frame_id,
-        .cols = pane.screen.w,
-        .rows = pane.screen.h,
-        .cursor = pane.cursor,
-        .mouse = pane.mouse,
-        .input_modes = pane.input_modes,
-        .spans = span_storage[0..span_count],
-    });
-    if (snapshot) {
-        @memcpy(attachment.acknowledged.cells, pane.screen.cells);
-    } else {
-        for (span_storage[0..span_count]) |span| {
-            const start: usize = @intCast(span.start);
-            @memcpy(attachment.acknowledged.cells[start..][0..span.cells.len], span.cells);
-        }
-    }
-    attachment.acknowledged_cursor = pane.cursor;
-    attachment.acknowledged_mouse = pane.mouse;
-    attachment.acknowledged_input_modes = pane.input_modes;
-    attachment.observed_cell_revision = pane.cell_revision;
-    attachment.outstanding_frame_id = frame_id;
-    attachment.frame_sent_ns = diagnostics.now(io);
-    if (comptime diagnostics.enabled) {
-        var cell_count: u64 = 0;
-        for (span_storage[0..span_count]) |span| cell_count += span.cells.len;
-        metrics.frames += 1;
-        metrics.frame_bytes += payload.len;
-        metrics.frame_cells += cell_count;
-        metrics.frame_spans += span_count;
-        if (snapshot) metrics.snapshots += 1;
-        if (!snapshot and span_count == 0) metrics.cursor_only_frames += 1;
-        metrics.damaged_rows += diff.damaged_rows;
-        metrics.diff_scanned_cells += diff.scanned_cells;
-        if (!snapshot) {
-            metrics.coalesced_spans += diff.coalesced_spans;
-            metrics.bridged_cells += diff.bridged_cells;
-            metrics.coalesced_bytes_saved += diff.bytes_saved;
-        }
-        metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
-    }
-    return payload;
-}
-
-/// Encodes one queued response against the *current* stores. A response can
-/// outlive what it describes - the workspace of a queued snapshot may close
-/// before the send slot frees up - and encoding must then degrade to a
-/// `request_failed` reply, never to an error that tears the client down.
-fn encodeResponse(
-    buffer: []u8,
-    response: *PendingResponse,
-    panes: *PaneStore,
-    workspaces: *WorkspaceStore,
-    history_result: *?*history.model.QueryResult,
-) ![]const u8 {
-    var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
-    var tab_storage: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
-    var history_storage: [history.model.max_results]schema.HistoryEntry = undefined;
-    return switch (response.*) {
-        .request_failed => |failure| try schema.encodeRequestFailed(buffer, .{
-            .request_id = failure.request_id,
-            .code = failure.code,
-            .message = failure.message,
-        }),
-        .pane_opened => |opened| try schema.encodePaneOpened(buffer, opened),
-        .tab_snapshot => |snapshot| try schema.encodeTabSnapshot(buffer, .{
-            .request_id = snapshot.request_id,
-            .location = snapshot.location,
-            .panes = panes.descriptorsAt(snapshot.location, &descriptor_storage),
-        }),
-        .workspace_snapshot => |snapshot| payload: {
-            const tabs = workspaces.descriptors(snapshot.workspace, panes, &tab_storage) orelse
-                break :payload try schema.encodeRequestFailed(buffer, .{
-                    .request_id = snapshot.request_id,
-                    .code = .workspace_not_found,
-                    .message = "workspace closed before its snapshot was sent",
-                });
-            break :payload try schema.encodeWorkspaceSnapshot(buffer, .{
-                .request_id = snapshot.request_id,
-                .workspace = snapshot.workspace,
-                .tabs = tabs,
-            });
-        },
-        .tab_created => |*created| try schema.encodeTabCreated(buffer, .{
-            .request_id = created.request_id,
-            .location = created.location,
-            .position = created.position,
-            .label = created.labelSlice(),
-            .root_pane_id = created.root_pane_id,
-        }),
-        .tab_renamed => |*renamed| try schema.encodeTabRenamed(buffer, .{
-            .request_id = renamed.request_id,
-            .location = renamed.location,
-            .label = renamed.labelSlice(),
-        }),
-        .tab_closed => |closed| try schema.encodeTabClosed(buffer, closed),
-        .tab_moved => |moved| try schema.encodeTabMoved(buffer, moved),
-        .history_result => |result| payload: {
-            history_result.* = result;
-            break :payload try encodeHistoryResult(buffer, result, &history_storage);
-        },
-    };
-}
-
-fn encodeHistoryResult(
-    buffer: []u8,
-    result: *const history.model.QueryResult,
-    storage: *[history.model.max_results]schema.HistoryEntry,
-) ![]const u8 {
-    std.debug.assert(result.entries.len <= storage.len);
-    for (result.entries, 0..) |entry, index| {
-        storage[index] = .{
-            .id = entry.id,
-            .pane_id = entry.pane_id,
-            .started_at_ms = entry.started_at_ms,
-            .duration_ns = entry.duration_ns,
-            .exit_code = entry.exit_code,
-            .status = switch (entry.status) {
-                .completed => .completed,
-                .interrupted => .interrupted,
-            },
-            .command = entry.command,
-            .cwd = entry.cwd,
-            .workspace_path = entry.workspace_path,
-        };
-    }
-    return schema.encodeHistoryResults(buffer, .{
-        .request_id = result.request_id,
-        .entries = storage[0..result.entries.len],
-    });
 }
 
 fn startSessionSend(
