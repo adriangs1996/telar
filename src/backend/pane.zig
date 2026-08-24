@@ -11,12 +11,10 @@ const blit = @import("blit.zig");
 const escape = @import("history/escape.zig");
 const history = @import("history/root.zig");
 const pty = @import("pty.zig");
-const telemetry = @import("telemetry.zig");
 
 const Io = std.Io;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
-const RuntimeMetrics = telemetry.RuntimeMetrics;
 
 pub const max_panes = schema.max_panes_per_tab;
 
@@ -201,9 +199,6 @@ pub const PaneMediaAllocator = struct {
 
 pub const PaneIngestStats = struct {
     elapsed_ns: u64 = 0,
-    history_input_bytes: u64 = 0,
-    history_captured: u64 = 0,
-    history_dropped: u64 = 0,
 };
 
 pub const PtyResponseQueue = struct {
@@ -310,47 +305,6 @@ pub const PaneInputQueue = struct {
 
 pub const KittyFramingCounter = escape.KittyFramingCounter;
 
-pub const HistoryInputBatch = struct {
-    pub const max_entries = 256;
-    pub const Entry = struct {
-        offset: u32,
-        len: u32,
-        shell_foreground: bool,
-        clock: history.Clock,
-    };
-
-    bytes: [schema.max_input_bytes]u8 = undefined,
-    len: usize = 0,
-    entries: [max_entries]Entry = undefined,
-    entry_count: usize = 0,
-
-    pub fn reset(batch: *HistoryInputBatch) void {
-        batch.len = 0;
-        batch.entry_count = 0;
-    }
-
-    pub fn push(
-        batch: *HistoryInputBatch,
-        bytes: []const u8,
-        shell_foreground: bool,
-        clock: history.Clock,
-    ) bool {
-        if (batch.entry_count == batch.entries.len or bytes.len > batch.bytes.len - batch.len)
-            return false;
-        const offset = batch.len;
-        @memcpy(batch.bytes[offset..][0..bytes.len], bytes);
-        batch.len += bytes.len;
-        batch.entries[batch.entry_count] = .{
-            .offset = @intCast(offset),
-            .len = @intCast(bytes.len),
-            .shell_foreground = shell_foreground,
-            .clock = clock,
-        };
-        batch.entry_count += 1;
-        return true;
-    }
-};
-
 pub const Pane = struct {
     id: schema.PaneId,
     generation: u64,
@@ -392,16 +346,13 @@ pub const Pane = struct {
     close_requested: bool = false,
     exit: ?pty.Exit = null,
     history_service: *history.Service,
-    history_tracker: history.Tracker,
+    history_observer: history.observer.Observer,
     history_session_id: history.SessionId,
     history_sequence: u64 = 0,
     history_session_started: bool = false,
     history_session_finished: bool = false,
+    history_exit_queued: bool = false,
     workspace_path: []u8,
-    history_input_batches: [2]HistoryInputBatch = .{ .{}, .{} },
-    history_input_active: u1 = 0,
-    history_input_worker: ?u1 = null,
-    history_input_dropped: u64 = 0,
     pending_size: ?schema.TerminalSize = null,
     io: Io,
     gpa: std.mem.Allocator,
@@ -452,7 +403,7 @@ pub const Pane = struct {
             .size = size,
             .terminal = undefined,
             .stream = undefined,
-            .history_tracker = undefined,
+            .history_observer = undefined,
             .screen = undefined,
             .damaged_rows = undefined,
         };
@@ -486,8 +437,8 @@ pub const Pane = struct {
                 .height = size.cell_height_px,
             } else null,
         });
-        pane.history_tracker = try .init(gpa, workspace_path, &pane.terminal);
-        errdefer pane.history_tracker.deinit(&pane.terminal);
+        try pane.history_observer.init(io, gpa, workspace_path, size);
+        errdefer pane.history_observer.deinit();
         pane.screen = try .init(gpa, size.cols, size.rows);
         errdefer pane.screen.deinit();
         pane.damaged_rows = try gpa.alloc(bool, size.rows);
@@ -535,7 +486,7 @@ pub const Pane = struct {
     }
 
     pub fn actorStarted(pane: *Pane) void {
-        std.debug.assert(pane.actor_count < 5);
+        std.debug.assert(pane.actor_count < 7);
         pane.actor_count += 1;
     }
 
@@ -560,7 +511,7 @@ pub const Pane = struct {
         gpa.free(pane.damaged_rows);
         pane.screen.deinit();
         pane.render_state.deinit(gpa);
-        pane.history_tracker.deinit(&pane.terminal);
+        pane.history_observer.deinit();
         pane.stream.deinit();
         pane.media_allocator.detach();
         pane.terminal.deinit(gpa);
@@ -568,33 +519,16 @@ pub const Pane = struct {
         gpa.destroy(pane);
     }
 
-    pub fn ingest(pane: *Pane, io: Io, bytes: []const u8, stats: *PaneIngestStats) !u64 {
+    pub fn ingest(pane: *Pane, io: Io, bytes: []const u8) !u64 {
         const started = diagnostics.now(io);
-        var capture_context: CaptureContext = .{ .pane = pane, .ingest_stats = stats };
-        var offset: usize = 0;
-        while (offset < bytes.len) {
-            const remaining = bytes[offset..];
-            const boundary = pane.history_tracker.commitBoundary(remaining);
-            const slice = if (boundary) |len| remaining[0..len] else remaining;
-            const loading_id = if (pane.terminal.screens.active.kitty_images.loading) |loading|
-                loading.image.id
-            else
-                null;
-            const kitty_commands = pane.kitty_framing.observe(slice);
-            pane.stream.nextSlice(slice);
-            pane.enforceIncompleteGraphics(io, loading_id, kitty_commands);
-            pane.observeGraphicsDamage();
-            if (boundary != null)
-                _ = try pane.history_tracker.captureSubmitted(&pane.terminal);
-            pane.history_tracker.observeOutput(
-                slice,
-                historyClock(io),
-                pane.session.shellForeground(),
-                &capture_context,
-                captureCommand,
-            );
-            offset += slice.len;
-        }
+        const loading_id = if (pane.terminal.screens.active.kitty_images.loading) |loading|
+            loading.image.id
+        else
+            null;
+        const kitty_commands = pane.kitty_framing.observe(bytes);
+        pane.stream.nextSlice(bytes);
+        pane.enforceIncompleteGraphics(io, loading_id, kitty_commands);
+        pane.observeGraphicsDamage();
         const foreground = pane.terminal.colors.foreground.override;
         const background = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
@@ -618,46 +552,33 @@ pub const Pane = struct {
         shell_foreground: bool,
         clock: history.Clock,
     ) void {
-        const batch = &pane.history_input_batches[pane.history_input_active];
-        if (!batch.push(bytes, shell_foreground, clock))
-            pane.history_input_dropped +|= 1;
+        pane.history_observer.queueInput(bytes, shell_foreground, clock);
     }
 
-    pub fn sealHistoryInput(pane: *Pane) void {
-        std.debug.assert(pane.history_input_worker == null);
-        const sealed = pane.history_input_active;
-        pane.history_input_active ^= 1;
-        std.debug.assert(pane.history_input_batches[pane.history_input_active].entry_count == 0);
-        pane.history_input_worker = sealed;
+    pub fn queueHistoryOutput(
+        pane: *Pane,
+        bytes: []const u8,
+        shell_foreground: ?bool,
+        clock: history.Clock,
+    ) void {
+        pane.history_observer.queueOutput(bytes, shell_foreground, clock);
     }
 
-    pub fn processHistoryInput(pane: *Pane, stats: *PaneIngestStats) u64 {
-        const index = pane.history_input_worker orelse return 0;
-        const batch = &pane.history_input_batches[index];
-        if (batch.entry_count != 0) {
-            // The cwd probe is a process-inspection syscall; it belongs on
-            // this observation worker, once per input batch, never in the
-            // per-keystroke dispatch path.
-            var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-            if (pane.session.cwd(&cwd_buffer)) |cwd|
-                pane.history_tracker.updateCwd(cwd);
-        }
-        var observed: u64 = 0;
-        var capture_context: CaptureContext = .{ .pane = pane, .ingest_stats = stats };
-        for (batch.entries[0..batch.entry_count]) |entry| {
-            const start: usize = entry.offset;
-            observed += pane.history_tracker.observeInput(
-                &pane.terminal,
-                batch.bytes[start..][0..entry.len],
-                entry.shell_foreground,
-                entry.clock,
-                &capture_context,
-                captureCommand,
-            );
-        }
-        batch.reset();
-        pane.history_input_worker = null;
-        return observed;
+    pub fn processHistoryObservation(
+        pane: *Pane,
+        current_size: schema.TerminalSize,
+        stats: *history.observer.Stats,
+    ) void {
+        var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const cwd = pane.session.cwd(&cwd_buffer);
+        var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
+        pane.history_observer.processSealed(
+            cwd,
+            current_size,
+            stats,
+            &capture_context,
+            captureCommand,
+        );
     }
 
     pub fn enforceIncompleteGraphics(
@@ -732,8 +653,7 @@ pub const Pane = struct {
 
     pub const CaptureContext = struct {
         pane: *Pane,
-        metrics: ?*RuntimeMetrics = null,
-        ingest_stats: ?*PaneIngestStats = null,
+        observation_stats: ?*history.observer.Stats = null,
     };
 
     pub fn captureCommand(context: *CaptureContext, command: history.Command) void {
@@ -746,21 +666,23 @@ pub const Pane = struct {
             .location = pane.location,
             .sequence = pane.history_sequence,
             .workspace_path = pane.workspace_path,
-            .cols = pane.screen.w,
-            .rows = pane.screen.h,
+            .cols = pane.history_observer.terminal.cols,
+            .rows = pane.history_observer.terminal.rows,
         }, command);
-        if (comptime diagnostics.enabled) if (context.metrics) |metrics| {
-            if (submitted) metrics.history_captured += 1 else metrics.history_dropped += 1;
-        };
-        if (comptime diagnostics.enabled) if (context.ingest_stats) |stats| {
-            if (submitted) stats.history_captured += 1 else stats.history_dropped += 1;
-        };
+        if (context.observation_stats) |stats| {
+            if (submitted) stats.captured += 1 else stats.dropped += 1;
+        }
     }
 
     pub fn finishHistory(pane: *Pane) void {
         if (pane.history_session_finished) return;
         var capture_context: CaptureContext = .{ .pane = pane };
-        pane.history_tracker.interrupt(historyClock(pane.io), &capture_context, captureCommand);
+        if (pane.history_observer.enabled)
+            pane.history_observer.tracker.interrupt(
+                historyClock(pane.io),
+                &capture_context,
+                captureCommand,
+            );
         if (pane.history_session_started) {
             _ = pane.history_service.finishSession(
                 pane.io,
@@ -771,14 +693,10 @@ pub const Pane = struct {
         pane.history_session_finished = true;
     }
 
-    pub fn finishExitedHistory(pane: *Pane, exit: pty.Exit, metrics: *RuntimeMetrics) void {
-        var capture_context: CaptureContext = .{ .pane = pane, .metrics = metrics };
-        pane.history_tracker.shellExited(
-            historyClock(pane.io),
-            exit.code(),
-            &capture_context,
-            captureCommand,
-        );
+    pub fn queueExitedHistory(pane: *Pane, exit: pty.Exit) void {
+        if (pane.history_exit_queued) return;
+        pane.history_observer.queueShellExit(historyClock(pane.io), exit.code());
+        pane.history_exit_queued = true;
     }
 
     /// True only when no actor task can still access the pane allocation.
@@ -788,6 +706,8 @@ pub const Pane = struct {
     pub fn readyToDestroy(pane: *const Pane) bool {
         return pane.exit != null and pane.output_done and
             pane.actor_count == 0 and
+            pane.history_observer.worker == null and
+            !pane.history_observer.hasPending() and
             pane.pty_responses.len == 0;
     }
 
@@ -823,6 +743,7 @@ pub const Pane = struct {
         // pending size in place for a retry and the pane fully coherent.
         pane.size = size;
         pane.pending_size = null;
+        pane.history_observer.queueResize(size);
         try pane.render(true);
     }
 
@@ -1156,6 +1077,9 @@ test "a pane is destroyable only when no actor can still borrow it" {
     pane.output_done = true;
     pane.actor_count = 0;
     pane.pty_responses = .{};
+    pane.history_observer.active = 0;
+    pane.history_observer.worker = null;
+    pane.history_observer.batches = .{ .{}, .{} };
     try std.testing.expect(pane.readyToDestroy());
 
     pane.actorStarted();

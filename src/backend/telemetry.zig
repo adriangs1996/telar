@@ -47,6 +47,8 @@ pub const RuntimeMetrics = struct {
     history_candidate_input_bytes: u64 = 0,
     history_queries: u64 = 0,
     history_query_failures: u64 = 0,
+    history_observation_resets: u64 = 0,
+    history_observation_failures: u64 = 0,
     client_resyncs: u64 = 0,
 };
 
@@ -96,20 +98,22 @@ pub fn formatRuntimeTelemetry(
         pty_response_dropped += pane.pty_responses.dropped;
         pane_input_queue_depth += pane.input_queue.len;
         pane_input_dropped_bytes +|= pane.input_queue.dropped_bytes;
-        history_input_dropped +|= pane.history_input_dropped;
+        history_input_dropped +|= pane.history_observer.dropped_events;
         if (pane.dirty) dirty_panes += 1;
-        history_prompt_markers += pane.history_tracker.aux.prompt_markers;
-        history_input_markers += pane.history_tracker.aux.input_markers;
-        history_output_markers += pane.history_tracker.aux.output_markers;
-        history_finished_markers += pane.history_tracker.aux.finished_markers;
-        history_osc_started += pane.history_tracker.aux.osc_started;
-        history_osc_finished += pane.history_tracker.aux.osc_finished;
-        history_pty_submissions += pane.history_tracker.submissions_armed;
-        history_pty_captures += pane.history_tracker.submissions_captured;
-        history_pty_capture_failures += pane.history_tracker.capture_failures;
-        history_foreground_completions += pane.history_tracker.foreground_completions;
-        history_next_input_completions += pane.history_tracker.next_input_completions;
-        history_auxiliary_completions += pane.history_tracker.auxiliary_completions;
+        if (pane.history_observer.worker == null) {
+            history_prompt_markers += pane.history_observer.tracker.aux.prompt_markers;
+            history_input_markers += pane.history_observer.tracker.aux.input_markers;
+            history_output_markers += pane.history_observer.tracker.aux.output_markers;
+            history_finished_markers += pane.history_observer.tracker.aux.finished_markers;
+            history_osc_started += pane.history_observer.tracker.aux.osc_started;
+            history_osc_finished += pane.history_observer.tracker.aux.osc_finished;
+            history_pty_submissions += pane.history_observer.tracker.submissions_armed;
+            history_pty_captures += pane.history_observer.tracker.submissions_captured;
+            history_pty_capture_failures += pane.history_observer.tracker.capture_failures;
+            history_foreground_completions += pane.history_observer.tracker.foreground_completions;
+            history_next_input_completions += pane.history_observer.tracker.next_input_completions;
+            history_auxiliary_completions += pane.history_observer.tracker.auxiliary_completions;
+        }
         for (std.enums.values(vt.ScreenSet.Key)) |key| {
             const screen = pane.terminal.screens.get(key) orelse continue;
             graphics_images += screen.kitty_images.images.count();
@@ -230,6 +234,7 @@ pub fn formatRuntimeTelemetry(
         history_auxiliary_completions,
     });
     try output.print("\"history_queries\":{d},\"history_query_failures\":{d}," ++
+        "\"history_observation_resets\":{d},\"history_observation_failures\":{d}," ++
         "\"client_resyncs\":{d}," ++
         "\"history_queue_depth\":{d},\"history_queue_high_water\":{d}," ++
         "\"history_queue_dropped\":{d}," ++
@@ -244,6 +249,8 @@ pub fn formatRuntimeTelemetry(
         "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
         metrics.history_queries,
         metrics.history_query_failures,
+        metrics.history_observation_resets,
+        metrics.history_observation_failures,
         metrics.client_resyncs,
         history_stats.queued,
         history_stats.queue_high_water,

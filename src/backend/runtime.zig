@@ -72,6 +72,11 @@ const PaneIngestEvent = struct {
     result: anyerror!PaneIngestStats,
 };
 
+const PaneObservationEvent = struct {
+    pane: PaneKey,
+    stats: history.observer.Stats,
+};
+
 const PaneInputEvent = struct {
     pane: PaneKey,
     len: usize,
@@ -99,6 +104,7 @@ const RuntimeEvent = union(enum) {
     pane_response_written: PaneResponseEvent,
     pane_output: PaneOutputEvent,
     pane_ingested: PaneIngestEvent,
+    pane_observed: PaneObservationEvent,
     pane_exit: PaneExitEvent,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
@@ -803,6 +809,7 @@ const Server = struct {
                         try queueFailure(responses, open.request_id, .internal, "could not resize pane");
                         return;
                     };
+                    try schedulePaneObservation(select, active);
                 }
                 const attachment = try attachments.attach(gpa, active);
                 _ = try attachment.resizeIfNeeded();
@@ -831,6 +838,7 @@ const Server = struct {
                     active.pane.session.shellForeground() orelse false,
                     historyClock(io),
                 );
+                try schedulePaneObservation(select, active.pane);
                 _ = active.pane.input_queue.push(input.bytes);
                 try schedulePaneInput(io, select, active.pane);
             },
@@ -846,6 +854,7 @@ const Server = struct {
                 try active.pane.requestResize(resize.size);
                 if (!active.pane.ingest_pending) {
                     retirePaneOnFailure(active.pane, active.pane.applyPendingResize()) catch return;
+                    try schedulePaneObservation(select, active.pane);
                     _ = active.resizeIfNeeded() catch {
                         _ = attachments.detach(resize.pane_id);
                         return;
@@ -891,7 +900,7 @@ const Server = struct {
                     metrics.stale_client_messages += 1;
             },
             .request_tab_snapshot => |request| {
-                if (!workspaces.contains(request.location)) {
+                if (!workspaces.contains(request.location) or panes.countAt(request.location) == 0) {
                     try queueFailure(responses, request.request_id, .tab_not_found, "tab not found");
                     return;
                 }
@@ -901,7 +910,7 @@ const Server = struct {
                 } });
             },
             .create_pane => |create| {
-                if (!workspaces.contains(create.location)) {
+                if (!workspaces.contains(create.location) or panes.countAt(create.location) == 0) {
                     try queueFailure(responses, create.request_id, .pane_not_found, "tab not found");
                     return;
                 }
@@ -1147,7 +1156,7 @@ fn serveInternal(
         history_service.deinit(io);
     };
 
-    var select_storage: [12 + 2 * max_clients + 5 * max_panes]RuntimeEvent = undefined;
+    var select_storage: [12 + 2 * max_clients + 6 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
@@ -1406,14 +1415,20 @@ fn serveInternal(
             active.output_pending = false;
             const output_len = event.result catch {
                 active.output_done = true;
-                if (active.exit) |exit| active.finishExitedHistory(exit, &server.metrics);
+                if (active.exit) |exit| {
+                    active.queueExitedHistory(exit);
+                    try schedulePaneObservation(&select, active);
+                }
                 server.collect();
                 server.pumpAll();
                 continue;
             };
             if (output_len == 0) {
                 active.output_done = true;
-                if (active.exit) |exit| active.finishExitedHistory(exit, &server.metrics);
+                if (active.exit) |exit| {
+                    active.queueExitedHistory(exit);
+                    try schedulePaneObservation(&select, active);
+                }
             } else {
                 if (comptime diagnostics.enabled) {
                     server.metrics.pty_events += 1;
@@ -1427,7 +1442,12 @@ fn serveInternal(
                         }
                     }
                 }
-                active.sealHistoryInput();
+                active.queueHistoryOutput(
+                    active.output_buffer[0..output_len],
+                    active.session.shellForeground(),
+                    historyClock(io),
+                );
+                try schedulePaneObservation(&select, active);
                 active.ingest_pending = true;
                 active.actorStarted();
                 select.concurrent(.pane_ingested, ingestPane, .{
@@ -1461,11 +1481,9 @@ fn serveInternal(
             };
             if (comptime diagnostics.enabled) {
                 server.metrics.ingest.observe(stats.elapsed_ns);
-                server.metrics.history_candidate_input_bytes += stats.history_input_bytes;
-                server.metrics.history_captured += stats.history_captured;
-                server.metrics.history_dropped += stats.history_dropped;
             }
             retirePaneOnFailure(active, active.applyPendingResize()) catch {};
+            try schedulePaneObservation(&select, active);
             for (&server.clients.items) |*slot| {
                 const client = if (slot.*) |*value| value else continue;
                 if (client.attachments.find(active.id)) |attachment| {
@@ -1487,6 +1505,24 @@ fn serveInternal(
             server.collect();
             server.pumpAll();
         },
+        .pane_observed => |event| {
+            const active = server.panes.resolve(event.pane) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            active.actorFinished();
+            active.history_observer.finishSealed();
+            if (comptime diagnostics.enabled) {
+                server.metrics.history_candidate_input_bytes +|= event.stats.input_bytes;
+                server.metrics.history_captured +|= event.stats.captured;
+                server.metrics.history_dropped +|= event.stats.dropped;
+                if (event.stats.failed) server.metrics.history_observation_failures +|= 1;
+                if (event.stats.reset) server.metrics.history_observation_resets +|= 1;
+            }
+            try schedulePaneObservation(&select, active);
+            server.collect();
+            server.pumpAll();
+        },
         .pane_exit => |event| {
             const active = server.panes.resolve(event.pane) orelse {
                 server.metrics.stale_pane_events += 1;
@@ -1496,7 +1532,10 @@ fn serveInternal(
             active.wait_pending = false;
             active.exit = exitOrSynthetic(event.result);
             server.panes.exited_count += 1;
-            if (active.output_done) active.finishExitedHistory(active.exit.?, &server.metrics);
+            if (active.output_done) {
+                active.queueExitedHistory(active.exit.?);
+                try schedulePaneObservation(&select, active);
+            }
             server.collect();
             server.pumpAll();
         },
@@ -2002,10 +2041,28 @@ fn ingestPane(
     if (ingest_gate) |gate| gate.wait(io) catch |err|
         return .{ .pane = pane.key(), .result = err };
     var stats: PaneIngestStats = .{};
-    stats.history_input_bytes = pane.processHistoryInput(&stats);
-    stats.elapsed_ns = pane.ingest(io, pane.output_buffer[0..output_len], &stats) catch |err|
+    stats.elapsed_ns = pane.ingest(io, pane.output_buffer[0..output_len]) catch |err|
         return .{ .pane = pane.key(), .result = err };
     return .{ .pane = pane.key(), .result = stats };
+}
+
+fn schedulePaneObservation(
+    select: *Io.Select(RuntimeEvent),
+    pane: *Pane,
+) !void {
+    if (!pane.history_observer.seal()) return;
+    pane.actorStarted();
+    select.concurrent(.pane_observed, observePane, .{ pane, pane.size }) catch |err| {
+        pane.actorFinished();
+        pane.history_observer.finishSealed();
+        return err;
+    };
+}
+
+fn observePane(pane: *Pane, current_size: schema.TerminalSize) PaneObservationEvent {
+    var stats: history.observer.Stats = .{};
+    pane.processHistoryObservation(current_size, &stats);
+    return .{ .pane = pane.key(), .stats = stats };
 }
 
 /// A resize that cannot get storage retires the affected pane - its state is
