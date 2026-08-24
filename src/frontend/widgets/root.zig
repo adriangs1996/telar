@@ -1,0 +1,21 @@
+//! Small UI components and the explicit composition root for client chrome.
+
+const std = @import("std");
+const context = @import("context.zig");
+
+pub const layout = @import("layout.zig");
+pub const top_bar = @import("top_bar.zig");
+pub const sidebar = @import("sidebar.zig");
+pub const tab_bar = @import("tab_bar.zig");
+pub const tab_rename = @import("tab_rename.zig");
+pub const status_bar = @import("status_bar.zig");
+pub const workbench = @import("workbench.zig");
+pub const composition = @import("composition.zig");
+
+pub const Action = context.Action;
+pub const Hits = context.Hits;
+pub const Context = context.Context;
+
+test {
+    std.testing.refAllDecls(@This());
+}

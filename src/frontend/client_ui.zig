@@ -3,118 +3,22 @@
 const std = @import("std");
 const core = @import("telar-core");
 const diff = @import("diff.zig");
-const edit = @import("edit.zig");
 const kitty = @import("kitty.zig");
 const multiplexer = @import("multiplexer.zig");
 const tabs_mod = @import("tabs.zig");
 const term = @import("term.zig");
 const theme_mod = @import("theme.zig");
 const ui = @import("ui.zig");
+const widgets = @import("widgets/root.zig");
 
 const schema = core.schema;
 
-pub const sidebar_width: u16 = 30;
-pub const minimum_workbench_width: u16 = 20;
+pub const sidebar_width = widgets.layout.sidebar_width;
+pub const minimum_workbench_width = widgets.layout.minimum_workbench_width;
+pub const Regions = widgets.layout.Regions;
+pub const Action = widgets.Action;
 
-pub const Regions = struct {
-    full: ui.Rect,
-    top: ui.Rect,
-    body: ui.Rect,
-    sidebar: ui.Rect,
-    workbench: ui.Rect,
-    bottom: ui.Rect,
-    tabs: ui.Rect,
-    status: ui.Rect,
-
-    pub fn calculate(width: u16, height: u16, sidebar_requested: bool) Regions {
-        const full: ui.Rect = .{ .w = width, .h = height };
-        const top_height: u16 = @intFromBool(height != 0);
-        const bottom_height: u16 = @intFromBool(height >= 2);
-        const top, const below_top = full.splitTop(top_height);
-        const body, const bottom = below_top.splitBottom(bottom_height);
-
-        const can_show_sidebar = sidebar_requested and
-            body.w >= minimum_workbench_width + 12;
-        const requested_width = @min(sidebar_width, body.w -| minimum_workbench_width);
-        const actual_width: u16 = if (can_show_sidebar) requested_width else 0;
-        const sidebar, const workbench = body.splitLeft(actual_width);
-
-        const status_width = @min(@as(u16, 24), bottom.w / 2);
-        const tabs_width = bottom.w - status_width;
-        const tabs, const status = bottom.splitLeft(tabs_width);
-        return .{
-            .full = full,
-            .top = top,
-            .body = body,
-            .sidebar = sidebar,
-            .workbench = workbench,
-            .bottom = bottom,
-            .tabs = tabs,
-            .status = status,
-        };
-    }
-};
-
-pub const Action = union(enum) {
-    toggle_sidebar,
-    focus_pane: schema.PaneId,
-    select_tab: schema.TabId,
-    active_workspace,
-    active_worktree,
-};
-
-const Hits = ui.Hits(Action, 128);
-
-const SidebarSemantic = struct {
-    area: ui.Rect,
-    rows: [multiplexer.max_panes]Row = undefined,
-    row_count: usize = 0,
-    focused_row: ?u16 = null,
-
-    const Row = struct {
-        area: ui.Rect,
-        pane_id: schema.PaneId,
-        focused: bool,
-        hovered: bool,
-    };
-};
-
-const CellSidebarRenderer = struct {
-    fn render(state: *State, semantic: *const SidebarSemantic, transparent: bool) void {
-        const area = semantic.area;
-        if (area.isEmpty()) return;
-        const palette = state.palette();
-        const background: ui.Color = if (transparent) .default else palette.panel_bg;
-        const faint: ui.Style = .{ .fg = palette.overlay0, .bg = background };
-        const heading: ui.Style = .{
-            .fg = palette.accent,
-            .bg = background,
-            .flags = .{ .bold = true },
-        };
-        state.scratch.fill(area, " ", .{ .fg = palette.text, .bg = background });
-        _ = state.scratch.writeText(area, area.x + 1, area.y, "TELAR", heading);
-        if (!transparent and area.w > 1) {
-            const edge_x = area.x + area.w - 1;
-            var y = area.y;
-            while (y < area.y + area.h) : (y += 1)
-                state.scratch.setCell(edge_x, y, "│", 1, faint);
-        }
-        if (area.h <= 2) return;
-        _ = state.scratch.writeText(area, area.x + 1, area.y + 2, "PANES", faint);
-        for (semantic.rows[0..semantic.row_count]) |row| {
-            const style: ui.Style = if (row.focused)
-                .{ .fg = palette.text, .bg = if (transparent) .default else palette.surface0, .flags = .{ .bold = true } }
-            else if (row.hovered)
-                .{ .fg = palette.text, .bg = if (transparent) .default else palette.surface1, .flags = .{ .underline = .single } }
-            else
-                .{ .fg = palette.subtext0, .bg = background };
-            state.scratch.fill(row.area, " ", style);
-            var label_buffer: [48]u8 = undefined;
-            const label = std.fmt.bufPrint(&label_buffer, "  pane {d}", .{schema.id.raw(row.pane_id)}) catch "  pane";
-            _ = state.scratch.writeTruncated(row.area, row.area.x, row.area.y, label, row.area.w, style);
-        }
-    }
-};
+const Hits = widgets.Hits;
 
 pub const Interaction = struct {
     redraw: bool = false,
@@ -135,7 +39,7 @@ pub const RenameInput = union(enum) {
 
 const TabRename = struct {
     tab_id: schema.TabId,
-    field: edit.Field(schema.max_tab_label_bytes),
+    field: widgets.tab_rename.Field,
     pasting: bool = false,
 };
 
@@ -349,273 +253,43 @@ pub const State = struct {
         if (!force and !state.dirty) return .{};
         state.hits.clear();
         state.scratch.clear(.{});
-        drawTop(state, model);
-        const sidebar = buildSidebarSemantic(state, model);
         const hybrid = state.sidebar_rendering == .kitty_hybrid or
             state.sidebar_rendering == .kitty_full;
-        CellSidebarRenderer.render(state, &sidebar, hybrid);
+        var context: widgets.Context = .{
+            .buffer = &state.scratch,
+            .hits = &state.hits,
+            .palette = state.palette(),
+            .hovered = state.hovered,
+        };
+        const composed = widgets.composition.render(&context, .{
+            .regions = state.regions,
+            .tabs = tabs,
+            .model = model,
+            .rename_field = if (state.tab_rename) |*rename| &rename.field else null,
+            .sidebar_transparent = hybrid,
+        });
         if (hybrid) try state.kitty_sidebar.prepare(
-            sidebar.area,
+            composed.sidebar.area,
             state.palette(),
-            sidebar.focused_row,
+            composed.sidebar.focused_row,
             state.cell_width_px,
             state.cell_height_px,
         ) else try state.kitty_sidebar.prepare(.{}, state.palette(), null, 0, 0);
-        drawBottom(state, tabs, model);
-        registerWorkbench(state, model);
 
         var stats: RenderStats = .{};
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.top));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.sidebar));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.bottom));
-        if (state.tab_rename) |*rename| {
-            const prefix = " rename tab: ";
-            const available = state.regions.bottom.w -| ui.measure(prefix) -| 1;
-            const field_view = rename.field.view(available);
+        if (composed.cursor) |cursor| {
             screen.cursor = .{
-                .x = state.regions.bottom.x + ui.measure(prefix) + field_view.cursor,
-                .y = state.regions.bottom.y,
+                .x = cursor.cursor_x,
+                .y = cursor.cursor_y,
             };
         }
         state.dirty = false;
         return stats;
     }
 };
-
-fn drawTop(state: *State, model: *const multiplexer.Model) void {
-    const area = state.regions.top;
-    if (area.isEmpty()) return;
-    const palette = state.palette();
-    const bar_style: ui.Style = .{ .fg = palette.text, .bg = palette.panel_bg };
-    state.scratch.fill(area, " ", bar_style);
-
-    const toggle: ui.Rect = .{ .x = area.x, .y = area.y, .w = @min(area.w, 4), .h = 1 };
-    state.hits.add(toggle, .toggle_sidebar);
-    const toggle_style: ui.Style = if (isHovered(state, .toggle_sidebar))
-        .{
-            .fg = palette.accent,
-            .bg = palette.surface1,
-            .flags = .{ .bold = true, .underline = .single },
-        }
-    else
-        .{ .fg = palette.accent, .bg = palette.panel_bg, .flags = .{ .bold = true } };
-    _ = state.scratch.writeText(toggle, toggle.x, toggle.y, if (state.regions.sidebar.w == 0) "[>]" else "[<]", toggle_style);
-
-    var workspace_buffer: [48]u8 = undefined;
-    var worktree_buffer: [48]u8 = undefined;
-    const workspace, const worktree = locationLabels(
-        model.location,
-        &workspace_buffer,
-        &worktree_buffer,
-    );
-    var x: u16 = toggle.x + toggle.w + 1;
-    const workspace_width = @min(ui.measure(workspace) + 2, area.w -| x);
-    const workspace_rect: ui.Rect = .{ .x = x, .y = area.y, .w = workspace_width, .h = 1 };
-    state.hits.add(workspace_rect, .active_workspace);
-    _ = state.scratch.writeTruncated(workspace_rect, x, area.y, workspace, workspace_width, hoveredBarStyle(state, .active_workspace));
-    x += workspace_width + @intFromBool(workspace_width != 0);
-
-    const worktree_width = area.w -| x;
-    const worktree_rect: ui.Rect = .{ .x = x, .y = area.y, .w = worktree_width, .h = 1 };
-    state.hits.add(worktree_rect, .active_worktree);
-    _ = state.scratch.writeTruncated(worktree_rect, x, area.y, worktree, worktree_width, hoveredBarStyle(state, .active_worktree));
-}
-
-fn buildSidebarSemantic(state: *State, model: *const multiplexer.Model) SidebarSemantic {
-    const area = state.regions.sidebar;
-    var semantic: SidebarSemantic = .{ .area = area };
-    if (area.isEmpty() or area.h <= 2) return semantic;
-
-    var row: u16 = area.y + 3;
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
-        if (row >= area.y + area.h) break;
-        const row_area: ui.Rect = .{
-            .x = area.x,
-            .y = row,
-            .w = area.w -| 1,
-            .h = 1,
-        };
-        const action: Action = .{ .focus_pane = pane.id };
-        state.hits.add(row_area, action);
-        const focused = model.layout.focused() == pane.id;
-        semantic.rows[semantic.row_count] = .{
-            .area = row_area,
-            .pane_id = pane.id,
-            .focused = focused,
-            .hovered = isHovered(state, action),
-        };
-        semantic.row_count += 1;
-        if (focused) semantic.focused_row = row;
-        row += 1;
-    }
-    return semantic;
-}
-
-fn drawBottom(
-    state: *State,
-    tabs: ?*const tabs_mod.Model,
-    model: *const multiplexer.Model,
-) void {
-    const area = state.regions.bottom;
-    if (area.isEmpty()) return;
-    const palette = state.palette();
-    const bar_style: ui.Style = .{ .fg = palette.subtext0, .bg = palette.panel_bg };
-    state.scratch.fill(area, " ", bar_style);
-
-    if (state.tab_rename) |*rename| {
-        const prefix = " rename tab: ";
-        _ = state.scratch.writeText(area, area.x, area.y, prefix, .{
-            .fg = palette.accent,
-            .bg = palette.panel_bg,
-            .flags = .{ .bold = true },
-        });
-        const field_x = area.x + ui.measure(prefix);
-        const field_area: ui.Rect = .{
-            .x = field_x,
-            .y = area.y,
-            .w = area.w -| (field_x - area.x),
-            .h = 1,
-        };
-        const field_view = rename.field.view(field_area.w);
-        _ = state.scratch.writeTruncated(
-            field_area,
-            field_x,
-            area.y,
-            field_view.text,
-            field_area.w,
-            .{
-                .fg = palette.text,
-                .bg = palette.surface0,
-                .flags = .{ .bold = true },
-            },
-        );
-        return;
-    }
-
-    var x = state.regions.tabs.x;
-    if (tabs) |collection| {
-        var first_visible = collection.active_index;
-        var used = tabDisplayWidth(
-            collection.items[first_visible].?.labelSlice(),
-            first_visible,
-            state.regions.tabs.w,
-        );
-        while (first_visible > 0) {
-            const candidate = first_visible - 1;
-            const width = tabDisplayWidth(
-                collection.items[candidate].?.labelSlice(),
-                candidate,
-                state.regions.tabs.w,
-            );
-            if (width > state.regions.tabs.w -| used) break;
-            first_visible = candidate;
-            used += width;
-        }
-        for (collection.items[first_visible..collection.count], first_visible..) |slot, index| {
-            const tab_value = slot.?;
-            var tab_buffer: [schema.max_tab_label_bytes + 16]u8 = undefined;
-            const tab_label = std.fmt.bufPrint(&tab_buffer, " {d}:{s} ", .{
-                index + 1,
-                tab_value.labelSlice(),
-            }) catch " tab ";
-            const remaining = state.regions.tabs.x + state.regions.tabs.w -| x;
-            if (remaining == 0) break;
-            const tab_width = @min(ui.measure(tab_label), remaining);
-            const tab_rect: ui.Rect = .{ .x = x, .y = area.y, .w = tab_width, .h = 1 };
-            const action: Action = .{ .select_tab = tab_value.location.tab_id };
-            state.hits.add(tab_rect, action);
-            const active = index == collection.active_index;
-            const style: ui.Style = if (active)
-                .{
-                    .fg = palette.surface_dim,
-                    .bg = palette.accent,
-                    .flags = .{ .bold = true },
-                }
-            else if (isHovered(state, action))
-                .{
-                    .fg = palette.text,
-                    .bg = palette.surface0,
-                    .flags = .{ .underline = .single },
-                }
-            else
-                bar_style;
-            _ = state.scratch.writeTruncated(tab_rect, x, area.y, tab_label, tab_width, style);
-            x += tab_width;
-        }
-    } else if (model.location) |location| {
-        var tab_buffer: [32]u8 = undefined;
-        const tab_label = std.fmt.bufPrint(&tab_buffer, " tab {d} ", .{
-            schema.id.raw(location.tab_id),
-        }) catch " tab ";
-        const tab_width = @min(ui.measure(tab_label), state.regions.tabs.w);
-        const tab_rect: ui.Rect = .{ .x = x, .y = area.y, .w = tab_width, .h = 1 };
-        _ = state.scratch.writeTruncated(tab_rect, x, area.y, tab_label, tab_width, .{
-            .fg = palette.surface_dim,
-            .bg = palette.accent,
-            .flags = .{ .bold = true },
-        });
-    }
-
-    var status_buffer: [48]u8 = undefined;
-    const status = std.fmt.bufPrint(&status_buffer, "{d} pane{s}  local", .{
-        model.pane_count,
-        if (model.pane_count == 1) "" else "s",
-    }) catch "local";
-    _ = state.scratch.writeRight(state.regions.status, area.y, status, bar_style);
-}
-
-fn decimalDigits(value: usize) u16 {
-    var remaining = value;
-    var digits: u16 = 1;
-    while (remaining >= 10) : (digits += 1) remaining /= 10;
-    return digits;
-}
-
-fn tabDisplayWidth(label: []const u8, index: usize, available: u16) u16 {
-    return @min(ui.measure(label) + decimalDigits(index + 1) + 3, available);
-}
-
-fn registerWorkbench(state: *State, model: *const multiplexer.Model) void {
-    var views: [multiplexer.max_panes]@import("layout.zig").View = undefined;
-    for (model.layout.views(state.regions.workbench, &views)) |view|
-        state.hits.add(view.outer, .{ .focus_pane = view.pane_id });
-}
-
-fn locationLabels(
-    location: ?schema.TabLocation,
-    workspace_buffer: []u8,
-    worktree_buffer: []u8,
-) struct { []const u8, []const u8 } {
-    const value = location orelse return .{ " workspace - ", " worktree - " };
-    return switch (value.workspace) {
-        .workspace => |workspace| .{
-            std.fmt.bufPrint(workspace_buffer, " workspace {d} ", .{schema.id.raw(workspace)}) catch " workspace ",
-            " worktree - ",
-        },
-        .worktree => |worktree| .{
-            " workspace - ",
-            std.fmt.bufPrint(worktree_buffer, " worktree {d} ", .{schema.id.raw(worktree)}) catch " worktree ",
-        },
-    };
-}
-
-fn hoveredBarStyle(state: *const State, action: Action) ui.Style {
-    const palette = state.palette();
-    return if (isHovered(state, action))
-        .{
-            .fg = palette.text,
-            .bg = palette.surface0,
-            .flags = .{ .bold = true, .underline = .single },
-        }
-    else
-        .{ .fg = palette.subtext0, .bg = palette.panel_bg };
-}
-
-fn isHovered(state: *const State, action: Action) bool {
-    const hovered = state.hovered orelse return false;
-    return std.meta.eql(hovered, action);
-}
 
 fn optionalActionEql(a: ?Action, b: ?Action) bool {
     if (a == null or b == null) return a == null and b == null;
