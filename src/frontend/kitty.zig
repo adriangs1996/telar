@@ -17,6 +17,12 @@ fn supportsSharedMemory() bool {
     return builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
 }
 
+/// Whether this client build can map POSIX shared memory the runtime names.
+/// The client declares it to the runtime explicitly; nothing is assumed.
+pub fn clientSupportsSharedMemory() bool {
+    return supportsSharedMemory();
+}
+
 pub const query_image_id = capability_mod.query_image_id;
 pub const capability_timeout_ns = capability_mod.timeout_ns;
 pub const capability_query = capability_mod.query;
@@ -70,7 +76,21 @@ const ImageEntry = struct {
     transmitted: bool = false,
     retire_pending: bool = false,
     force_direct: bool = false,
+    /// The host terminal was handed the shared object's name. Only then does
+    /// retirement wait for the host to consume and unlink it.
+    emitted_shared: bool = false,
+    /// Writer pass that emitted the shared name, for the consume deadline.
+    transmitted_pass: u64 = 0,
 };
+
+/// Writer passes a host may sit on a shared name before the client reclaims
+/// the object and falls back to inline transmission. Roughly three seconds
+/// at the 60Hz pace: far beyond a healthy Ghostty, short enough that a host
+/// that ignored the name cannot pin pane memory credit forever.
+const shared_consume_deadline_passes: u64 = 180;
+/// Consecutive expiries after which the host is deemed unable to consume
+/// shared names at all and every image goes back to inline transmission.
+const shared_expiry_disable_threshold: u8 = 2;
 
 const PlacementEntry = struct {
     placement: graphics.Placement,
@@ -124,6 +144,10 @@ pub const Store = struct {
     next_placement_id: u32 = 1,
     next_shm_id: u64 = 1,
     shared_memory: bool = false,
+    /// Incremented once per writer pass; shared-name emissions stamp it so
+    /// the consume deadline needs no clock.
+    pass_counter: u64 = 0,
+    shared_expiries: u8 = 0,
     damage: bool = false,
     partial: ?PartialTransmission = null,
     // Maps rather than `[max_panes_per_tab]` arrays: one store serves every
@@ -235,7 +259,7 @@ pub const Store = struct {
 
     fn sharedPixelsConsumed(_: *Store, entry: *const ImageEntry) bool {
         const shared = entry.shared orelse return true;
-        if (!entry.transmitted) return true;
+        if (!entry.emitted_shared) return true;
         if (comptime !supportsSharedMemory()) return false;
         const fd = std.c.shm_open(
             shared.sliceZ(),
@@ -250,6 +274,42 @@ pub const Store = struct {
             .NOENT => true,
             else => false,
         };
+    }
+
+    /// Reclaims shared objects a host never consumed. Without this deadline
+    /// one dropped `t=s` command would pin its pane's memory credit forever,
+    /// silently under q=2. Expired images retransmit inline from the still
+    /// valid mapping, and a host that keeps ignoring names loses them for
+    /// the rest of the session.
+    fn expireSharedTransmissions(store: *Store) void {
+        if (comptime !supportsSharedMemory()) return;
+        var images = store.images.iterator();
+        while (images.next()) |entry| {
+            const image = entry.value_ptr;
+            const shared = if (image.shared) |*value| value else continue;
+            if (!image.emitted_shared) continue;
+            if (store.pass_counter -% image.transmitted_pass < shared_consume_deadline_passes)
+                continue;
+            if (store.sharedPixelsConsumed(image)) continue;
+            _ = std.c.shm_unlink(shared.sliceZ());
+            image.emitted_shared = false;
+            image.force_direct = true;
+            image.transmitted = false;
+            // The host dropped the image with the name, so its placements
+            // must follow the inline retransmission.
+            var placements = store.placements.iterator();
+            while (placements.next()) |placement_entry| {
+                if (placement_entry.key_ptr.pane_id != entry.key_ptr.pane_id) continue;
+                if (!std.meta.eql(placement_entry.value_ptr.placement.key, image.metadata.key))
+                    continue;
+                placement_entry.value_ptr.emitted_image_id = null;
+                placement_entry.value_ptr.dirty = true;
+            }
+            store.shared_expiries +|= 1;
+            if (store.shared_expiries >= shared_expiry_disable_threshold)
+                store.shared_memory = false;
+            store.damage = true;
+        }
     }
 
     fn hasPendingSharedRelease(store: *Store) bool {
@@ -286,16 +346,81 @@ pub const Store = struct {
 
     pub fn applyImage(store: *Store, message: schema.graphics.Image) !void {
         if (!try store.acceptRevision(message.pane_id, message.revision)) return;
-        const byte_len = try message.image.validate(graphics.max_image_bytes_per_pane);
-        const key = identity(message.pane_id, message.image.key);
+        const byte_len = try store.admitImage(message.pane_id, message.image);
+        var allocation = try store.allocatePixels(byte_len);
+        errdefer store.freeAllocation(&allocation);
+        try store.commitImage(message.pane_id, message.image, &allocation, 0);
+    }
+
+    /// A complete image whose pixels the runtime already froze into a shared
+    /// memory object it named. The client maps the object read-only: the
+    /// pixels never cross the socket and no copy is made. The mapping serves
+    /// both the compact `t=s` hand-off to the host and the inline fallback,
+    /// and survives the unlink whoever consumes the object performs.
+    pub fn applySharedImage(store: *Store, message: schema.graphics.SharedImage) !void {
+        if (comptime !supportsSharedMemory()) return error.GraphicsSharedMappingFailed;
+        if (!try store.acceptRevision(message.pane_id, message.revision)) return;
+        const byte_len = try store.admitImage(message.pane_id, message.image);
+        var allocation = store.mapSharedPixels(message.name, byte_len) catch {
+            // Nothing references the object if the map fails, so reclaim it
+            // here; unlinking twice is harmless because names are unique.
+            _ = std.c.shm_unlink(message.name.sliceZ());
+            return error.GraphicsSharedMappingFailed;
+        };
+        errdefer store.freeAllocation(&allocation);
+        try store.commitImage(message.pane_id, message.image, &allocation, byte_len);
+        store.removeOtherGenerations(message.pane_id, message.image.key);
+    }
+
+    fn mapSharedPixels(
+        store: *Store,
+        name: graphics.ShmName,
+        byte_len: usize,
+    ) !PixelAllocation {
+        _ = store;
+        if (comptime !supportsSharedMemory()) return error.SharedMemoryUnavailable;
+        const fd = std.c.shm_open(
+            name.sliceZ(),
+            @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+            @as(u16, 0),
+        );
+        if (std.posix.errno(fd) != .SUCCESS) return error.SharedMemoryUnavailable;
+        defer _ = std.c.close(fd);
+        var stat: std.c.Stat = undefined;
+        if (std.c.fstat(fd, &stat) != 0) return error.SharedMemoryUnavailable;
+        if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len)
+            return error.SharedMemoryUnavailable;
+        const map = std.posix.mmap(
+            null,
+            byte_len,
+            .{ .READ = true },
+            std.c.MAP{ .TYPE = .SHARED },
+            fd,
+            0,
+        ) catch return error.SharedMemoryUnavailable;
+        var shared: SharedPixels = .{ .len = 0 };
+        @memcpy(shared.name[0 .. name.len + 1], name.bytes[0 .. name.len + 1]);
+        shared.len = name.len;
+        return .{ .pixels = map, .shared = shared };
+    }
+
+    /// Validates one incoming image against every quota and evicts what it
+    /// supersedes. Returns the pixel length the caller must provide.
+    fn admitImage(
+        store: *Store,
+        pane_id: schema.PaneId,
+        image: graphics.Image,
+    ) !usize {
+        const byte_len = try image.validate(graphics.max_image_bytes_per_pane);
+        const key = identity(pane_id, image.key);
         // A new header supersedes every transfer of this image id that never
         // finished, so evict those before quota accounting rather than let a
         // retransmission flood count against the pane.
-        store.evictReplacedGenerations(message.pane_id, message.image.key);
+        store.evictReplacedGenerations(pane_id, image.key);
         const previous = store.images.get(key);
-        const pane_usage: PaneUsage = store.usage.get(message.pane_id) orelse .{};
-        const logical_count = store.paneLogicalImageCount(message.pane_id, message.image.key.image_id);
-        const replacing = store.hasImageId(message.pane_id, message.image.key.image_id);
+        const pane_usage: PaneUsage = store.usage.get(pane_id) orelse .{};
+        const logical_count = store.paneLogicalImageCount(pane_id, image.key.image_id);
+        const replacing = store.hasImageId(pane_id, image.key.image_id);
         if (previous == null and !replacing and logical_count >= graphics.max_images_per_pane)
             return error.GraphicsImageLimitExceeded;
         const previous_len = if (previous) |entry| entry.pixels.len else 0;
@@ -316,19 +441,29 @@ pub const Store = struct {
 
         if (store.images.fetchRemove(key)) |removed| {
             store.total_bytes -= removed.value.pixels.len;
-            store.noteImageRemoved(message.pane_id, removed.value.pixels.len);
+            store.noteImageRemoved(pane_id, removed.value.pixels.len);
             var removed_entry = removed.value;
             store.freePixels(&removed_entry);
             store.queueDelete(.{ .image = removed.value.external_id });
         }
-        var allocation = try store.allocatePixels(byte_len);
-        errdefer store.freeAllocation(&allocation);
+        return byte_len;
+    }
+
+    fn commitImage(
+        store: *Store,
+        pane_id: schema.PaneId,
+        image: graphics.Image,
+        allocation: *PixelAllocation,
+        received: usize,
+    ) !void {
+        const byte_len = allocation.pixels.len;
         const external_id = try store.allocateImageId();
-        const usage = try store.usageFor(message.pane_id);
-        try store.images.put(store.gpa, key, .{
-            .metadata = message.image,
+        const usage = try store.usageFor(pane_id);
+        try store.images.put(store.gpa, identity(pane_id, image.key), .{
+            .metadata = image,
             .pixels = allocation.pixels,
             .shared = allocation.shared,
+            .received = received,
             .external_id = external_id,
         });
         allocation.pixels = &.{};
@@ -817,6 +952,8 @@ pub const KittyGraphicsWriter = struct {
     }
 
     pub fn write(self: *KittyGraphicsWriter, writer: *Io.Writer) Io.Writer.Error!usize {
+        self.store.pass_counter +%= 1;
+        self.store.expireSharedTransmissions();
         if (!self.store.damage or self.cell_width == 0 or self.cell_height == 0) return 0;
         self.store.collectRetired(null, null);
         var written: usize = 0;
@@ -897,7 +1034,7 @@ pub const KittyGraphicsWriter = struct {
             // Budget spent: the rest keeps its damage and waits for the next
             // frame, so no image can park itself in front of a keystroke.
             if (budget == 0) return written;
-            if (image.shared) |*shared| if (!image.force_direct) {
+            if (image.shared) |*shared| if (!image.force_direct and self.store.shared_memory) {
                 const emitted = try writeSharedTransmission(
                     writer,
                     image.external_id,
@@ -906,6 +1043,8 @@ pub const KittyGraphicsWriter = struct {
                 );
                 written += emitted;
                 image.transmitted = true;
+                image.emitted_shared = true;
+                image.transmitted_pass = self.store.pass_counter;
                 budget -= @min(budget, emitted);
                 continue;
             };
@@ -2386,4 +2525,162 @@ test "sidebar row movement reuses pixels and theme changes retransmit them" {
     var themed = Io.Writer.fixed(&themed_buffer);
     _ = try renderer.write(&themed);
     try std.testing.expect(std.mem.indexOf(u8, themed.buffered(), "a=t") != null);
+}
+
+fn testCreateSharedObject(name: [:0]const u8, pixels: []const u8) !void {
+    const fd = std.c.shm_open(
+        name,
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
+        @as(u16, 0o600),
+    );
+    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(fd));
+    defer _ = std.c.close(fd);
+    try std.testing.expectEqual(@as(c_int, 0), std.c.ftruncate(fd, @intCast(pixels.len)));
+    const map = try std.posix.mmap(
+        null,
+        pixels.len,
+        .{ .READ = true, .WRITE = true },
+        std.c.MAP{ .TYPE = .SHARED },
+        fd,
+        0,
+    );
+    defer std.posix.munmap(map);
+    @memcpy(map[0..pixels.len], pixels);
+}
+
+test "a runtime-named image maps without copying and hands the host its name" {
+    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+
+    var store = Store.initSharedMemory(std.testing.allocator);
+    defer store.deinit();
+    const name = try graphics.ShmName.init("/tlrtest-map-a1");
+    _ = std.c.shm_unlink(name.sliceZ());
+    const source = [_]u8{ 1, 2, 3, 255 };
+    try testCreateSharedObject(name.sliceZ(), &source);
+
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const image: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    try store.applySharedImage(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .image = image,
+        .name = name,
+    });
+    const entry = store.images.get(identity(pane_id, image.key)).?;
+    try std.testing.expectEqual(@as(usize, 4), entry.received);
+    try std.testing.expectEqualSlices(u8, &source, entry.pixels);
+
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{
+            .key = image.key,
+            .virtual_id = 1,
+            .placement_id = 1,
+            .x = 0,
+            .y = 0,
+        },
+    });
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 10, .rows = 5 });
+    var graphics_writer: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+    var output: [1024]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try graphics_writer.write(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "t=s") != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "t=d") == null);
+
+    // Ghostty consumes and unlinks; retiring then releases the credit.
+    try std.testing.expectEqual(@as(c_int, 0), std.c.shm_unlink(name.sliceZ()));
+    try store.deletePlacement(.{
+        .pane_id = pane_id,
+        .revision = 2,
+        .key = image.key,
+        .virtual_id = 1,
+        .placement_id = 1,
+    });
+    try store.deleteImage(.{ .pane_id = pane_id, .revision = 3, .key = image.key });
+    var released_output: [1024]u8 = undefined;
+    var released_writer = Io.Writer.fixed(&released_output);
+    _ = try graphics_writer.write(&released_writer);
+    try std.testing.expectEqual(@as(usize, 0), store.images.count());
+    const credit = store.peekCredit().?;
+    try std.testing.expectEqual(@as(usize, 4), credit.bytes);
+    store.consumeCredit(credit);
+}
+
+test "a host that never consumes shared names loses them and gets pixels inline" {
+    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+
+    var store = Store.initSharedMemory(std.testing.allocator);
+    defer store.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 10, .rows = 5 });
+    var graphics_writer: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+
+    const source = [_]u8{ 9, 9, 9, 255 };
+    for ([_][]const u8{ "/tlrtest-exp-a1", "/tlrtest-exp-a2" }, 1..) |raw_name, generation| {
+        const name = try graphics.ShmName.init(raw_name);
+        _ = std.c.shm_unlink(name.sliceZ());
+        try testCreateSharedObject(name.sliceZ(), &source);
+        try store.applySharedImage(.{
+            .pane_id = pane_id,
+            .revision = generation,
+            .image = .{
+                .key = .{ .image_id = 7, .generation = generation },
+                .format = .rgba,
+                .width = 1,
+                .height = 1,
+                .byte_len = 4,
+            },
+            .name = name,
+        });
+        var output: [4096]u8 = undefined;
+        var writer = Io.Writer.fixed(&output);
+        _ = try graphics_writer.write(&writer);
+        try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "t=s") != null);
+
+        // The host never opens the object. Past the deadline the client
+        // reclaims it and retransmits the pixels inline from the mapping.
+        store.pass_counter +%= shared_consume_deadline_passes;
+        var retry_output: [4096]u8 = undefined;
+        var retry_writer = Io.Writer.fixed(&retry_output);
+        _ = try graphics_writer.write(&retry_writer);
+        try std.testing.expect(std.mem.indexOf(u8, retry_writer.buffered(), "t=d") != null);
+        const missing = std.c.shm_open(
+            name.sliceZ(),
+            @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+            @as(u16, 0),
+        );
+        try std.testing.expectEqual(std.posix.E.NOENT, std.posix.errno(missing));
+    }
+
+    // Two expiries prove the host cannot consume names at all; the session
+    // stops offering them.
+    try std.testing.expect(!store.shared_memory);
 }

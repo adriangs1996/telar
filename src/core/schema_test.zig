@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 39;
+const corpus_len = 41;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -215,6 +215,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .bytes = 4096,
         }),
     ));
+    helper.add("configure_graphics", .client, false, golden.configure_graphics, helper.commit(
+        try schema.encodeConfigureGraphics(helper.space(), .{
+            .shared = true,
+        }),
+    ));
 
     // -- server ------------------------------------------------------------
     helper.add("pane_opened", .server, false, golden.pane_opened, helper.commit(
@@ -390,6 +395,20 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .bytes = &.{ 1, 2, 3, 4 },
         }),
     ));
+    helper.add("graphics_shared_image", .server, false, golden.graphics_shared_image, helper.commit(
+        try schema.encodeGraphicsSharedImage(helper.space(), .{
+            .pane_id = @enumFromInt(1),
+            .revision = 3,
+            .image = .{
+                .key = .{ .image_id = 7, .generation = 8 },
+                .format = .rgba,
+                .width = 2,
+                .height = 2,
+                .byte_len = 16,
+            },
+            .name = try graphics.ShmName.init("/tlr0000002a-7"),
+        }),
+    ));
     helper.add("graphics_placement", .server, false, golden.graphics_placement, helper.commit(
         try schema.encodeGraphicsPlacement(helper.space(), .{
             .pane_id = @enumFromInt(1),
@@ -452,6 +471,7 @@ const golden = struct {
     pub const move_tab = "102c00000000000000000700000000000000030000000000000000";
     pub const request_graphics_snapshot = "110500000000000000";
     pub const graphics_credit = "1205000000000000000010000000000000";
+    pub const configure_graphics = "1301";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
     pub const pane_frame = "820400000000000000010000000000000000000000000000000200010001010000000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
@@ -468,6 +488,7 @@ const golden = struct {
     pub const graphics_snapshot = "8d0100000000000000030000000000000000";
     pub const graphics_image = "8e010000000000000003000000000000000700000008000000000000002002000000020000001000000000000000";
     pub const graphics_image_chunk = "8f0100000000000000030000000000000007000000080000000000000000000000000000000400000001020304";
+    pub const graphics_shared_image = "940100000000000000030000000000000007000000080000000000000020020000000200000010000000000000000e0000002f746c7230303030303032612d37";
     pub const graphics_placement = "90010000000000000003000000000000000700000008000000000000000100000000000000010000000200000003000000000000000000000002000000020000000100000001000000000000000000000000000000";
     pub const graphics_delete_image = "9101000000000000000400000000000000070000000800000000000000";
     pub const graphics_delete_placement = "9201000000000000000500000000000000070000000800000000000000010000000000000001000000";

@@ -89,6 +89,7 @@ pub const ClientTag = enum(u8) {
     move_tab = 0x10,
     request_graphics_snapshot = 0x11,
     graphics_credit = 0x12,
+    configure_graphics = 0x13,
 };
 
 pub const ServerTag = enum(u8) {
@@ -111,6 +112,7 @@ pub const ServerTag = enum(u8) {
     graphics_delete_image = 0x91,
     graphics_delete_placement = 0x92,
     resync_required = 0x93,
+    graphics_shared_image = 0x94,
 };
 
 pub const LaunchView = struct {
@@ -209,6 +211,18 @@ pub const GraphicsCredit = struct {
 
     pub fn validateWire(message: GraphicsCredit) !void {
         if (message.bytes == 0) return error.InvalidGraphicsCredit;
+    }
+};
+
+/// Explicit per-session graphics capability. `shared` declares that this
+/// client shares the runtime's machine and can map POSIX shared memory the
+/// runtime names; the runtime never assumes it. Sent before the first pane
+/// attaches, and the setting applies to attachments created afterwards.
+pub const ConfigureGraphics = struct {
+    shared: bool,
+
+    pub fn validateWire(message: ConfigureGraphics) !void {
+        _ = message;
     }
 };
 
@@ -315,6 +329,7 @@ pub const ClientMessage = union(enum) {
     move_tab: MoveTab,
     request_graphics_snapshot: RequestGraphicsSnapshot,
     graphics_credit: GraphicsCredit,
+    configure_graphics: ConfigureGraphics,
 };
 
 pub const PaneOpened = struct {
@@ -491,6 +506,7 @@ pub const ServerMessage = union(enum) {
     graphics_delete_image: graphics.DeleteImage,
     graphics_delete_placement: graphics.DeletePlacement,
     resync_required: ResyncRequired,
+    graphics_shared_image: graphics.SharedImage,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -540,6 +556,10 @@ pub fn encodeFrameAck(buffer: []u8, message: FrameAck) ![]const u8 {
 
 pub fn encodeGraphicsCredit(buffer: []u8, message: GraphicsCredit) ![]const u8 {
     return encodeDerived(@intFromEnum(ClientTag.graphics_credit), GraphicsCredit, buffer, message);
+}
+
+pub fn encodeConfigureGraphics(buffer: []u8, message: ConfigureGraphics) ![]const u8 {
+    return encodeDerived(@intFromEnum(ClientTag.configure_graphics), ConfigureGraphics, buffer, message);
 }
 
 pub fn encodeRequestSnapshot(buffer: []u8, message: RequestSnapshot) ![]const u8 {
@@ -703,6 +723,9 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .graphics_credit => .{
             .graphics_credit = try Derived(GraphicsCredit).decode(&decoder),
         },
+        .configure_graphics => .{
+            .configure_graphics = try Derived(ConfigureGraphics).decode(&decoder),
+        },
     };
     try decoder.ensureEnd();
     return message;
@@ -750,6 +773,13 @@ pub fn encodeGraphicsImage(buffer: []u8, message: graphics.Image) ![]const u8 {
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.graphics_image));
     try graphics.encodeImage(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeGraphicsSharedImage(buffer: []u8, message: graphics.SharedImage) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.graphics_shared_image));
+    try graphics.encodeSharedImage(&encoder, message);
     return encoder.finish();
 }
 
@@ -902,6 +932,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .graphics_delete_image => .{ .graphics_delete_image = try graphics.decodeDeleteImage(&decoder) },
         .graphics_delete_placement => .{ .graphics_delete_placement = try graphics.decodeDeletePlacement(&decoder) },
         .resync_required => .{ .resync_required = try Derived(ResyncRequired).decode(&decoder) },
+        .graphics_shared_image => .{ .graphics_shared_image = try graphics.decodeSharedImage(&decoder) },
     };
     try decoder.ensureEnd();
     return message;

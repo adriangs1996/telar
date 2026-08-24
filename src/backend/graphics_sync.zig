@@ -5,6 +5,7 @@
 //! bounded transport.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const history = @import("history/root.zig");
@@ -19,6 +20,68 @@ const Pane = pane_mod.Pane;
 const SlotIndex = pane_mod.SlotIndex;
 const max_panes = pane_mod.max_panes;
 
+const shm_supported =
+    builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
+
+/// One counter for every attachment in the process, so a name can never be
+/// reused while any process might still unlink the previous owner of it.
+var shared_freeze_sequence = std.atomic.Value(u64).init(0);
+/// Random per-process prefix. Names stay unguessable so another local user
+/// cannot squat the next one; content is protected by the 0600 mode either
+/// way.
+var shared_freeze_nonce = std.atomic.Value(u32).init(0);
+
+/// Seeds the name prefix from the platform CSPRNG. Called once at server
+/// startup; without it names fall back to a pid-derived prefix that is still
+/// unique but guessable, which only enables the squatting nuisance above.
+pub fn initSharedFreezeNonce(io: Io) void {
+    var bytes: [4]u8 = undefined;
+    io.random(&bytes);
+    shared_freeze_nonce.store(@as(u32, @bitCast(bytes)) | 1, .monotonic);
+}
+
+/// Copies one frozen frame into a fresh runtime-owned shared memory object
+/// and returns its name, or null when the platform or a race denies it and
+/// the caller must fall back to the heap copy. One memcpy, no allocation.
+fn freezeSharedPixels(pixels: []const u8) ?core.graphics.ShmName {
+    if (comptime !shm_supported) return null;
+    var nonce = shared_freeze_nonce.load(.monotonic);
+    if (nonce == 0) {
+        nonce = @as(u32, @bitCast(std.c.getpid())) | 1;
+        shared_freeze_nonce.store(nonce, .monotonic);
+    }
+    const sequence = shared_freeze_sequence.fetchAdd(1, .monotonic);
+    var text: [core.graphics.max_shm_name_bytes]u8 = undefined;
+    const printed = std.fmt.bufPrint(&text, "/tlr{x:0>8}{x}", .{ nonce, sequence }) catch
+        return null;
+    const name = core.graphics.ShmName.init(printed) catch return null;
+    const fd = std.c.shm_open(
+        name.sliceZ(),
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
+        @as(u16, 0o600),
+    );
+    if (std.posix.errno(fd) != .SUCCESS) return null;
+    defer _ = std.c.close(fd);
+    if (std.c.ftruncate(fd, @intCast(pixels.len)) != 0) {
+        _ = std.c.shm_unlink(name.sliceZ());
+        return null;
+    }
+    const map = std.posix.mmap(
+        null,
+        pixels.len,
+        .{ .READ = true, .WRITE = true },
+        std.c.MAP{ .TYPE = .SHARED },
+        fd,
+        0,
+    ) catch {
+        _ = std.c.shm_unlink(name.sliceZ());
+        return null;
+    };
+    defer std.posix.munmap(map);
+    @memcpy(map[0..pixels.len], pixels);
+    return name;
+}
+
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 pub const Attachment = struct {
@@ -27,6 +90,15 @@ pub const Attachment = struct {
     pub const Transfer = struct {
         metadata: core.graphics.Image,
         pixels: []u8,
+        /// Set when the frozen copy lives in a runtime-owned shared memory
+        /// object instead of `pixels`. The client maps it; the host terminal
+        /// unlinks it after consuming, and whoever discards it first unlinks
+        /// it too, which is idempotent because names are never reused.
+        shared_name: ?core.graphics.ShmName = null,
+        /// Bytes reserved against the media allocator for this transfer.
+        /// `pixels.len` for the heap path, the image length for the shared
+        /// path whose `pixels` slice stays empty.
+        reserved_len: usize = 0,
         placements: [core.graphics.max_placements_per_pane]core.graphics.Placement = undefined,
         placement_count: usize = 0,
         placement_index: usize = 0,
@@ -53,6 +125,10 @@ pub const Attachment = struct {
     graphics_batch_active: bool = false,
     observed_graphics_revision: u64 = 0,
     graphics_credit: usize = core.graphics.max_image_bytes_per_pane,
+    /// The client declared it can map runtime-named shared memory. Off by
+    /// default: shared transport is negotiated, never assumed, so a future
+    /// remote client keeps the chunked path.
+    shared_transport: bool = false,
     transfer: ?Transfer = null,
     known_images: [core.graphics.max_images_per_pane]?KnownImage =
         [_]?KnownImage{null} ** core.graphics.max_images_per_pane,
@@ -110,7 +186,12 @@ pub const Attachment = struct {
     pub fn freeTransfer(attachment: *Attachment) void {
         if (attachment.transfer) |transfer| {
             attachment.gpa.free(transfer.pixels);
-            attachment.pane.media_allocator.releaseManual(transfer.pixels.len);
+            attachment.pane.media_allocator.releaseManual(transfer.reserved_len);
+            if (transfer.shared_name) |name| if (!transfer.metadata_sent) {
+                // The client never learned this name, so nobody else can
+                // reclaim the object.
+                _ = std.c.shm_unlink(name.sliceZ());
+            };
         }
         attachment.transfer = null;
     }
@@ -261,12 +342,25 @@ pub fn encodeNextGraphics(
 
     if (attachment.transfer) |*transfer| {
         if (!transfer.metadata_sent) {
-            transfer.metadata_sent = true;
-            return try schema.encodeGraphicsImage(buffer, .{
+            // The flag flips only after a successful encode; on failure the
+            // abandon path still owns the shared object and unlinks it.
+            if (transfer.shared_name) |name| {
+                const payload = try schema.encodeGraphicsSharedImage(buffer, .{
+                    .pane_id = pane.id,
+                    .revision = revision,
+                    .image = transfer.metadata,
+                    .name = name,
+                });
+                transfer.metadata_sent = true;
+                return payload;
+            }
+            const payload = try schema.encodeGraphicsImage(buffer, .{
                 .pane_id = pane.id,
                 .revision = revision,
                 .image = transfer.metadata,
             });
+            transfer.metadata_sent = true;
+            return payload;
         }
         if (transfer.offset < transfer.pixels.len) {
             const remaining = transfer.pixels[transfer.offset..];
@@ -356,9 +450,17 @@ pub fn encodeNextGraphics(
         if (!pane.media_allocator.reserveManual(pixels.len))
             return error.GraphicsQuotaExceeded;
         errdefer pane.media_allocator.releaseManual(pixels.len);
-        const frozen = try attachment.gpa.dupe(u8, pixels);
+        var transfer: Attachment.Transfer = .{
+            .metadata = metadata,
+            .pixels = &.{},
+            .reserved_len = pixels.len,
+        };
+        if (attachment.shared_transport)
+            transfer.shared_name = freezeSharedPixels(pixels);
+        if (transfer.shared_name == null)
+            transfer.pixels = try attachment.gpa.dupe(u8, pixels);
         attachment.graphics_credit -= pixels.len;
-        attachment.transfer = .{ .metadata = metadata, .pixels = frozen };
+        attachment.transfer = transfer;
         var placement_iterator = storage.placements.iterator();
         while (placement_iterator.next()) |placement_entry| {
             if (placement_entry.key_ptr.image_id != image.id) continue;
@@ -708,4 +810,156 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
     try std.testing.expectEqual(@as(usize, 2), screen.kitty_images.images.count());
     try std.testing.expect(screen.kitty_images.imageById(1) == null);
     try std.testing.expect(screen.kitty_images.imageById(3) != null);
+}
+
+test "a shared-transport attachment ships one name instead of pixel chunks" {
+    if (comptime !shm_supported) return error.SkipZigTest;
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try history.Service.init(gpa, ":memory:");
+    defer {
+        service.closeQueues(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&args);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = try schema.id.workspace(1) },
+        .tab_id = try schema.id.tab(1),
+    };
+    const pane = try Pane.create(
+        io,
+        gpa,
+        .{ .id = try schema.id.pane(1), .generation = 1 },
+        location,
+        &command,
+        "/",
+        &service,
+        .{ .cols = 20, .rows = 5 },
+        .{},
+        &budget,
+    );
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    const media = pane.media_allocator.allocator();
+    const source = [_]u8{ 9, 8, 7, 255 };
+    const pixels = try media.dupe(u8, &source);
+    const screen = pane.media.terminal.screens.active;
+    try screen.kitty_images.addImage(io, media, screen, .{
+        .id = 7,
+        .width = 1,
+        .height = 1,
+        .format = .rgba,
+        .data = .{ .complete = pixels },
+    });
+    pane.graphics_present = true;
+    pane.graphics_revision = 1;
+
+    var attachment = try Attachment.init(gpa, pane);
+    defer attachment.deinit();
+    attachment.shared_transport = true;
+    var buffer: [1024]u8 = undefined;
+
+    // Snapshot begin, then the complete image as one small named message.
+    try std.testing.expect((try schema.decodeServer(
+        (try encodeNextGraphics(&buffer, &attachment, core.graphics.max_image_bytes_global, true)).?,
+    )) == .graphics_snapshot);
+    const message = (try schema.decodeServer(
+        (try encodeNextGraphics(&buffer, &attachment, core.graphics.max_image_bytes_global, true)).?,
+    )).graphics_shared_image;
+    try std.testing.expectEqual(@as(u64, 4), message.image.byte_len);
+
+    // The named object holds exactly the frozen pixels, readable by another
+    // process on this machine.
+    const fd = std.c.shm_open(
+        message.name.sliceZ(),
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+        @as(u16, 0),
+    );
+    try std.testing.expect(std.posix.errno(fd) == .SUCCESS);
+    const map = try std.posix.mmap(
+        null,
+        source.len,
+        .{ .READ = true },
+        std.c.MAP{ .TYPE = .SHARED },
+        fd,
+        0,
+    );
+    _ = std.c.close(fd);
+    try std.testing.expectEqualSlices(u8, &source, map[0..source.len]);
+    std.posix.munmap(map);
+
+    // Draining the batch never emits a pixel chunk; ownership of the object
+    // has passed to the client, so it survives the completed transfer.
+    while (try encodeNextGraphics(&buffer, &attachment, core.graphics.max_image_bytes_global, true)) |payload| {
+        try std.testing.expect((try schema.decodeServer(payload)) != .graphics_image_chunk);
+    }
+    const probe = std.c.shm_open(
+        message.name.sliceZ(),
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+        @as(u16, 0),
+    );
+    try std.testing.expect(std.posix.errno(probe) == .SUCCESS);
+    _ = std.c.close(probe);
+    _ = std.c.shm_unlink(message.name.sliceZ());
+}
+
+test "an abandoned unsent shared transfer unlinks its object" {
+    if (comptime !shm_supported) return error.SkipZigTest;
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try history.Service.init(gpa, ":memory:");
+    defer {
+        service.closeQueues(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&args);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = try schema.id.workspace(1) },
+        .tab_id = try schema.id.tab(1),
+    };
+    const pane = try Pane.create(
+        io,
+        gpa,
+        .{ .id = try schema.id.pane(2), .generation = 1 },
+        location,
+        &command,
+        "/",
+        &service,
+        .{ .cols = 20, .rows = 5 },
+        .{},
+        &budget,
+    );
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    const name = freezeSharedPixels(&[_]u8{ 1, 2, 3, 255 }).?;
+    var attachment = try Attachment.init(gpa, pane);
+    defer attachment.deinit();
+    attachment.transfer = .{
+        .metadata = .{
+            .key = .{ .image_id = 7, .generation = 1 },
+            .format = .rgba,
+            .width = 1,
+            .height = 1,
+            .byte_len = 4,
+        },
+        .pixels = &.{},
+        .shared_name = name,
+    };
+    abandonGraphicsBatch(&attachment);
+    const fd = std.c.shm_open(
+        name.sliceZ(),
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+        @as(u16, 0),
+    );
+    try std.testing.expect(std.posix.errno(fd) == .NOENT);
 }

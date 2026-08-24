@@ -139,6 +139,9 @@ const ClientSession = struct {
     stopping_pending: bool = false,
     stopping_in_flight: bool = false,
     sent_exit_pane: ?schema.PaneId = null,
+    /// Declared by the client through `configure_graphics` before it opens
+    /// panes; attachments created afterwards inherit it.
+    shared_graphics: bool = false,
 
     fn create(
         gpa: std.mem.Allocator,
@@ -718,6 +721,7 @@ const Server = struct {
                     try schedulePaneMedia(select, active);
                 }
                 const attachment = try attachments.attach(gpa, active);
+                attachment.shared_transport = session.shared_graphics;
                 _ = try attachment.resizeIfNeeded();
                 try responses.push(.{ .pane_opened = .{
                     .request_id = open.request_id,
@@ -779,6 +783,13 @@ const Server = struct {
                     return;
                 };
                 active.resetGraphics();
+            },
+            .configure_graphics => |configure| {
+                session.shared_graphics = configure.shared;
+                for (&attachments.items) |*slot| {
+                    const attachment = if (slot.*) |*value| value else continue;
+                    attachment.shared_transport = configure.shared;
+                }
             },
             .graphics_credit => |credit| {
                 const active = attachments.find(credit.pane_id) orelse {
@@ -860,7 +871,8 @@ const Server = struct {
                     try queueSpawnFailure(responses, create.request_id, err);
                     return;
                 };
-                _ = try attachments.attach(gpa, fresh);
+                const attachment = try attachments.attach(gpa, fresh);
+                attachment.shared_transport = session.shared_graphics;
                 try responses.push(.{ .pane_opened = .{
                     .request_id = create.request_id,
                     .pane_id = fresh.id,
@@ -946,7 +958,8 @@ const Server = struct {
                     try queueSpawnFailure(responses, create.request_id, err);
                     return;
                 };
-                _ = try attachments.attach(gpa, fresh);
+                const attachment = try attachments.attach(gpa, fresh);
+                attachment.shared_transport = session.shared_graphics;
                 const tab = workspaces.findTab(created.location).?;
                 var pending: PendingTabCreated = .{
                     .request_id = create.request_id,
@@ -1051,6 +1064,7 @@ fn serveInternal(
     options: ServeOptions,
 ) !void {
     try options.graphics.validate();
+    graphics_sync.initSharedFreezeNonce(io);
     const history_path = options.history_path;
     const stop = options.stop;
     const ingest_gate = options.ingest_gate;

@@ -67,14 +67,16 @@ deletes, and snapshot boundaries are separate ordered messages. IPC pixel
 chunks are capped at 1 MiB. The runtime freezes at most one generation per
 attachment while it crosses the socket, folds newer generations, and keeps the
 previous exterior placement visible until the replacement image and placement
-are complete. Moving a placement never retransmits pixels.
+are complete. Moving a placement never retransmits pixels. Each client grants
+an explicit byte credit. The runtime cannot freeze another image until the
+client has retired enough image storage and returned that credit.
 
 The default decoded-memory limits are:
 
 - 64 images and 256 placements per pane.
 - 64 MiB per pane and 256 MiB per runtime.
-- About 21.3 MiB per VT screen with the default pane quota
-  (`min(32 MiB, pane quota / 3)`).
+- 32 MiB per VT screen with the default pane quota
+  (`min(32 MiB, pane quota / 2)`).
 - 64 KiB per child APC payload and 4096 chunks per image.
 - 64 queued PTY replies, each at most 1024 bytes.
 
@@ -92,7 +94,36 @@ media actor per pane. PTY reads resume after the independent text ingest, so
 base64, zlib, allocation, and Ghostty graphics parsing cannot stall cells or
 input. Applications that negotiate shared memory keep bulk pixels out of those
 batches; mapping, copying, and decoding still happen on the media actor under
-the same pane and global quotas.
+the same pane and global quotas. When several complete terminal-browser frames
+arrive in one batch, the actor keeps the newest available shared-memory frame
+for each placement. It does not parse or rewrite other child output.
+
+A client that shares the runtime's machine declares it with an explicit
+`configure_graphics` message before opening panes; nothing is assumed. For such
+clients the runtime freezes each generation into a runtime-owned POSIX
+shared-memory object and sends only its validated name (`graphics_shared_image`)
+instead of pixel chunks; the pixels never cross the socket. The client maps the
+object read-only, without copying, and that one mapping serves both the compact
+`t=s` hand-off to a local Ghostty host and the inline fallback. Names are
+unguessable, unique for the life of the process, at most 31 bytes (Darwin's
+PSHMNAMLEN), and objects are created `0600` with `O_EXCL`.
+
+The host that consumes a `t=s` name unlinks the object; the client unlinks
+whatever it discards, and unlinking twice is harmless because names are never
+reused. A host that has not consumed a name after about three seconds of drawn
+frames loses it: the client unlinks the object, retransmits the pixels inline
+from its mapping, and after two such expiries stops offering names for the rest
+of the session. This keeps one dropped `t=s` command, silent under `q=2`, from
+pinning pane memory credit forever. A client crash can strand at most the
+in-flight objects its credit allowed; macOS offers no way to enumerate and
+sweep them, so that bounded leak is accepted and cleared on reboot.
+
+Only when Ghostty unlinks a consumed name, or the deadline reclaims it, does
+the client retire the image and return the exact byte credit to the runtime.
+Hosts without Kitty graphics shared-memory support and remote sessions retain
+the bounded direct-data fallback, which base64-encodes at most 256 KiB per
+client frame.
+
 Debug telemetry exposes `input_write_*` and `ingest_*` timings. The benchmark
 `backend.kitty.ingest_zlib_rgba_1920x1080` covers the actual APC → base64 →
 zlib → Ghostty path; the transport integration suite holds the ingest actor at
@@ -152,6 +183,12 @@ zero command rows from KGP or injected input. A human pass is still required
 for subjective interaction quality, pixel-perfect clipping, font metrics, DPI
 scaling, and sidebar artwork.
 
+On 2026-08-24 the full-size animated fixture ran for 75 seconds after crossing
+the old 64-generation failure point. Runtime and client telemetry recorded zero
+media resets, media failures, dropped media bytes, client resyncs, stale client
+messages, and outbox saturation. Two screenshots three seconds apart changed
+inside the browser image, confirming that the visible frame had not frozen.
+
 ## Remaining limitations
 
 - No PNG, file, temporary-file, or Unicode-placeholder transport.
@@ -162,5 +199,6 @@ scaling, and sidebar artwork.
 - The reproducible terminal-browser check covers one real graphical pane. ID
   isolation across panes, tab visibility, delete, resize, and layout rebuilds
   are deterministic Store/writer tests rather than an automated GUI pass.
-- The current writer base64-encodes decoded pixels for the exterior terminal;
-  a future local transport may avoid that copy where the security model permits.
+- Runtime-to-client IPC still copies decoded pixels in 1 MiB chunks. Local
+  Ghostty output avoids the second bulk copy and base64 expansion; other hosts
+  use the direct-data fallback.

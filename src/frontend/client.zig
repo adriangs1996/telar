@@ -266,6 +266,7 @@ const Client = struct {
             .history_results => return error.UnexpectedHistoryResults,
             .graphics_snapshot,
             .graphics_image,
+            .graphics_shared_image,
             .graphics_image_chunk,
             .graphics_placement,
             .graphics_delete_image,
@@ -595,6 +596,22 @@ const Client = struct {
                 if (client.tabs.tabForPane(image.pane_id)) |tab|
                     tab.model.setGraphicsPlaceholder(image.pane_id, client.capabilities.kitty_graphics != .supported);
             },
+            .graphics_shared_image => |image| {
+                client.graphics_store.applySharedImage(image) catch |err| switch (err) {
+                    error.GraphicsResyncRequired => try client.requestGraphicsSnapshot(image.pane_id),
+                    // The mapping should never fail on the machine this
+                    // client declared it shares with the runtime. If it does,
+                    // renegotiate down to pixel chunks and resynchronize
+                    // instead of dying over one image.
+                    error.GraphicsSharedMappingFailed => {
+                        try client.enqueue(.{ .configure_graphics = .{ .shared = false } });
+                        try client.requestGraphicsSnapshot(image.pane_id);
+                    },
+                    else => return err,
+                };
+                if (client.tabs.tabForPane(image.pane_id)) |tab|
+                    tab.model.setGraphicsPlaceholder(image.pane_id, client.capabilities.kitty_graphics != .supported);
+            },
             .graphics_image_chunk => |chunk| client.graphics_store.applyChunk(chunk) catch |err| switch (err) {
                 error.GraphicsResyncRequired => try client.requestGraphicsSnapshot(chunk.pane_id),
                 else => return err,
@@ -824,6 +841,14 @@ pub fn run(
     const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
     defer gpa.free(send_buffer);
 
+    // Declared before the first pane opens, so every attachment the runtime
+    // creates for this session already knows whether it may hand this client
+    // shared memory names instead of pixel chunks.
+    const configure_payload = try schema.encodeConfigureGraphics(send_buffer, .{
+        .shared = kitty.clientSupportsSharedMemory(),
+    });
+    try connection.send(io, configure_payload);
+
     const open_payload = try schema.encodeOpenPane(send_buffer, .{
         .request_id = initial_request_id,
         .size = rectSize(view.workbench()) orelse return error.TerminalTooSmall,
@@ -995,6 +1020,7 @@ pub fn run(
                 switch (message) {
                     .graphics_snapshot,
                     .graphics_image,
+                    .graphics_shared_image,
                     .graphics_image_chunk,
                     .graphics_placement,
                     .graphics_delete_image,

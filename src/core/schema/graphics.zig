@@ -4,6 +4,7 @@ const id = @import("id.zig");
 const wire = @import("wire.zig");
 
 pub const PaneId = id.PaneId;
+pub const ShmName = shared.ShmName;
 
 pub const SnapshotPhase = enum(u8) { begin = 0, end = 1 };
 
@@ -25,6 +26,17 @@ pub const ImageChunk = struct {
     key: shared.ImageKey,
     offset: u64,
     bytes: []const u8,
+};
+
+/// A complete image whose pixels live in a runtime-owned POSIX shared memory
+/// object instead of the socket. Only the validated name crosses the wire;
+/// the client maps the object read-only. Local transports only: the client
+/// declares the capability explicitly before the runtime may use this.
+pub const SharedImage = struct {
+    pane_id: PaneId,
+    revision: u64,
+    image: shared.Image,
+    name: shared.ShmName,
 };
 
 pub const Placement = struct {
@@ -94,6 +106,42 @@ pub fn decodeImage(d: *wire.Decoder) !Image {
     };
     _ = try value.image.validate(shared.max_image_bytes_per_pane);
     return value;
+}
+
+pub fn encodeSharedImage(e: *wire.Encoder, value: SharedImage) !void {
+    _ = try value.image.validate(shared.max_image_bytes_per_pane);
+    // Re-validate the buffered name so a corrupted length can never leak
+    // stack bytes onto the wire.
+    _ = try shared.ShmName.init(value.name.slice());
+    try header(e, value.pane_id, value.revision);
+    try imageKey(e, value.image.key);
+    try e.writeByte(@intFromEnum(value.image.format));
+    try e.writeInt(u32, value.image.width);
+    try e.writeInt(u32, value.image.height);
+    try e.writeInt(u64, value.image.byte_len);
+    try e.writeSized32(value.name.slice());
+}
+
+pub fn decodeSharedImage(d: *wire.Decoder) !SharedImage {
+    const h = try decodeHeader(d);
+    const image: shared.Image = .{
+        .key = try decodeImageKey(d),
+        .format = switch (try d.readByte()) {
+            24 => .rgb,
+            32 => .rgba,
+            else => return error.UnsupportedGraphicsFormat,
+        },
+        .width = try d.readInt(u32),
+        .height = try d.readInt(u32),
+        .byte_len = try d.readInt(u64),
+    };
+    _ = try image.validate(shared.max_image_bytes_per_pane);
+    return .{
+        .pane_id = h.pane_id,
+        .revision = h.revision,
+        .image = image,
+        .name = try shared.ShmName.init(try d.readSized32()),
+    };
 }
 
 pub fn encodeImageChunk(e: *wire.Encoder, value: ImageChunk) !void {

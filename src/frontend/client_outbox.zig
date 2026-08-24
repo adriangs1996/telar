@@ -46,6 +46,7 @@ pub const Message = union(enum) {
     move_tab: schema.MoveTab,
     request_graphics_snapshot: schema.RequestGraphicsSnapshot,
     graphics_credit: schema.GraphicsCredit,
+    configure_graphics: schema.ConfigureGraphics,
 };
 
 pub const Stats = struct {
@@ -157,6 +158,7 @@ pub const Outbox = struct {
             .move_tab => |value| schema.encodeMoveTab(buffer, value),
             .request_graphics_snapshot => |value| schema.encodeRequestGraphicsSnapshot(buffer, value),
             .graphics_credit => |value| schema.encodeGraphicsCredit(buffer, value),
+            .configure_graphics => |value| schema.encodeConfigureGraphics(buffer, value),
         };
     }
 
