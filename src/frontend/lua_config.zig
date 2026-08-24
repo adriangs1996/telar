@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const lua = @import("lua-api").c;
 const action_mod = @import("action.zig");
+const config_model = @import("config_model.zig");
 const keybind = @import("keybind.zig");
 const kitty = @import("kitty.zig");
 const theme_mod = @import("theme.zig");
@@ -11,80 +12,29 @@ const theme_mod = @import("theme.zig");
 const Io = std.Io;
 
 pub const api_version: u16 = 1;
-pub const default_memory_limit: usize = 16 * 1024 * 1024;
-pub const default_load_instruction_limit: u64 = 1_000_000;
+pub const default_memory_limit = config_model.default_memory_limit;
+pub const default_load_instruction_limit = config_model.default_load_instruction_limit;
 pub const default_callback_instruction_limit: u64 = 100_000;
 pub const default_callback_deadline_ns: u64 = 10 * std.time.ns_per_ms;
 pub const hook_instruction_interval: u32 = 1_000;
-pub const max_bindings = 256;
-pub const max_binding_keys = 4;
+pub const max_bindings = config_model.max_bindings;
+pub const max_binding_keys = config_model.max_binding_keys;
 pub const max_callbacks = max_bindings;
-pub const max_callback_effects = 16;
-pub const max_expression_keys = 16;
-pub const max_expression_paste_bytes = 4096;
+pub const max_callback_effects = config_model.max_callback_effects;
+pub const max_expression_keys = config_model.max_expression_keys;
+pub const max_expression_paste_bytes = config_model.max_expression_paste_bytes;
 pub const max_config_bytes = 1024 * 1024;
 pub const max_local_modules = 64;
-pub const max_plugins = 32;
-pub const max_plugin_path_bytes = 512;
+pub const max_plugins = config_model.max_plugins;
+pub const max_plugin_path_bytes = config_model.max_plugin_path_bytes;
 pub const max_profile_name_bytes = 64;
-pub const max_history_path_bytes = 1024;
+pub const max_history_path_bytes = config_model.max_history_path_bytes;
 
-pub const ConfiguredBinding = keybind.Binding(action_mod.Action, max_binding_keys);
-
-pub const Diagnostic = struct {
-    buffer: [512]u8 = undefined,
-    len: usize = 0,
-
-    pub fn message(diagnostic: *const Diagnostic) []const u8 {
-        return diagnostic.buffer[0..diagnostic.len];
-    }
-
-    pub fn set(diagnostic: *Diagnostic, comptime format: []const u8, args: anytype) void {
-        const rendered = std.fmt.bufPrint(&diagnostic.buffer, format, args) catch
-            "configuration error";
-        diagnostic.len = rendered.len;
-    }
-};
-
-pub const Snapshot = struct {
-    theme: theme_mod.Theme = theme_mod.default_theme,
-    sidebar_rendering: kitty.SidebarRendering = .automatic,
-    sidebar_visible: bool = true,
-    input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
-    input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
-    bindings: [max_bindings]ConfiguredBinding = undefined,
-    binding_count: u16 = 0,
-    bindings_configured: bool = false,
-    runtime: RuntimeSnapshot = .{},
-    plugins: [max_plugins]PluginSpec = undefined,
-    plugin_count: u8 = 0,
-
-    pub fn bindingSlice(snapshot: *const Snapshot) []const ConfiguredBinding {
-        return snapshot.bindings[0..snapshot.binding_count];
-    }
-};
-
-pub const PluginSpec = struct {
-    path_bytes: [max_plugin_path_bytes]u8 = undefined,
-    path_len: u16,
-    enabled: bool = true,
-
-    pub fn path(spec: *const PluginSpec) []const u8 {
-        return spec.path_bytes[0..spec.path_len];
-    }
-};
-
-pub const RuntimeSnapshot = struct {
-    graphics_pane_bytes: usize = core.graphics.max_image_bytes_per_pane,
-    graphics_global_bytes: usize = core.graphics.max_image_bytes_global,
-    history_path_bytes: [max_history_path_bytes]u8 = undefined,
-    history_path_len: u16 = 0,
-
-    pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
-        if (snapshot.history_path_len == 0) return null;
-        return snapshot.history_path_bytes[0..snapshot.history_path_len];
-    }
-};
+pub const ConfiguredBinding = config_model.ConfiguredBinding;
+pub const Diagnostic = config_model.Diagnostic;
+pub const Snapshot = config_model.Snapshot;
+pub const PluginSpec = config_model.PluginSpec;
+pub const RuntimeSnapshot = config_model.RuntimeSnapshot;
 
 const Callback = struct {
     registry_ref: c_int,
@@ -93,53 +43,12 @@ const Callback = struct {
     trigger_len: u8 = 0,
 };
 
-pub const CallbackContext = struct {
-    sidebar_visible: bool,
-    tab_count: u16,
-    active_tab_index: u16,
-    pane_count: u16,
-    focused_pane_id: u64,
-};
-
-pub const EffectBatch = struct {
-    items: [max_callback_effects]action_mod.Action = undefined,
-    len: u8 = 0,
-
-    pub fn slice(batch: *const EffectBatch) []const action_mod.Action {
-        return batch.items[0..batch.len];
-    }
-};
-
-pub const InputKeys = struct {
-    items: [max_expression_keys]keybind.Key = undefined,
-    len: u8 = 0,
-
-    pub fn slice(keys: *const InputKeys) []const keybind.Key {
-        return keys.items[0..keys.len];
-    }
-};
-
-pub const InputPaste = struct {
-    bytes: [max_expression_paste_bytes]u8 = undefined,
-    len: u16 = 0,
-
-    pub fn slice(paste: *const InputPaste) []const u8 {
-        return paste.bytes[0..paste.len];
-    }
-};
-
-pub const InputDecision = union(enum) {
-    consume,
-    forward_binding: InputKeys,
-    keys: InputKeys,
-    paste: InputPaste,
-};
-
-pub const Limits = struct {
-    memory: usize = default_memory_limit,
-    instructions: u64 = default_load_instruction_limit,
-    deadline_after_ns: u64 = 100 * std.time.ns_per_ms,
-};
+pub const CallbackContext = config_model.CallbackContext;
+pub const EffectBatch = config_model.EffectBatch;
+pub const InputKeys = config_model.InputKeys;
+pub const InputPaste = config_model.InputPaste;
+pub const InputDecision = config_model.InputDecision;
+pub const Limits = config_model.Limits;
 
 const Meter = struct {
     used: usize = 0,
