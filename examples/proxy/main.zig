@@ -501,6 +501,13 @@ pub fn main(init: std.process.Init) !void {
     const master: File = .{ .handle = pty.master, .flags = blocking };
     const wake: File = .{ .handle = winch_pipe[0], .flags = blocking };
 
+    if (proxy_port != null) try host_tty.writeStreamingAll(
+        io,
+        "\x1b]2;telar proxy: HTTPS interception active\x07" ++
+            "\r\n\x1b[1;37;41m TELAR HTTPS INTERCEPTION ACTIVE " ++
+            "(bodies are not stored) \x1b[0m\r\n",
+    );
+
     var slots: [64]event.Event = undefined;
     var queue: event.Queue = .init(&slots);
 
@@ -554,7 +561,10 @@ pub fn main(init: std.process.Init) !void {
                     .ref = open.id,
                     .exit_status = if (finished.status) |code| code else null,
                     .duration_ms = elapsed.toMilliseconds(),
-                    .output = finished.output,
+                    // Terminal output may contain environment secrets. The
+                    // example observes byte counts and command lifecycle but
+                    // does not persist arbitrary output.
+                    .output = null,
                     .truncated = if (finished.truncated) 1 else 0,
                 });
             },

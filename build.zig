@@ -170,6 +170,15 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run the tests");
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
+    const release_step = b.step(
+        "verify-release",
+        "Run correctness, portability, and p99 performance gates",
+    );
+    const release_benchmarks = b.addRunArtifact(benchmarks);
+    release_benchmarks.addArgs(&.{ "--samples", "8", "--sample-ms", "20", "--enforce" });
+    release_step.dependOn(test_step);
+    release_step.dependOn(&release_benchmarks.step);
+    release_step.dependOn(b.getInstallStep());
 
     const Suite = struct {
         path: []const u8,
@@ -323,6 +332,8 @@ pub fn build(b: *std.Build) void {
         "examples/proxy/ca.zig",
         "examples/proxy/tls.zig",
         "examples/proxy/http.zig",
+        "examples/proxy/proxy.zig",
+        "examples/proxy/db.zig",
         "examples/proxy/h2.zig",
         "examples/proxy/osc.zig",
     }) |path| {

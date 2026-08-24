@@ -94,6 +94,10 @@ pub const Store = struct {
             return error.HistoryOpenFailed;
         const opened = db orelse return error.HistoryOpenFailed;
         errdefer _ = c.sqlite3_close(opened);
+        // Callers may select a custom path and bypass the managed-directory
+        // bootstrap. Restrict the database at the persistence boundary too.
+        if (!std.mem.eql(u8, path, ":memory:") and std.c.chmod(path.ptr, 0o600) != 0)
+            return error.HistoryPermissionsFailed;
         _ = c.sqlite3_extended_result_codes(opened, 1);
         if (c.sqlite3_exec(opened, database_schema, null, null, null) != c.SQLITE_OK)
             return error.HistorySchemaFailed;
@@ -447,6 +451,8 @@ test "persists sessions and filters command history" {
     );
     var store = try Store.open(path);
     defer store.close();
+    const database_stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
+    try std.testing.expectEqual(@as(u32, 0o600), database_stat.permissions.toMode() & 0o777);
 
     const session_id: model.SessionId = .{1} ** 16;
     const pane_id = try model.schema.id.pane(7);

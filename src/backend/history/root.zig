@@ -29,6 +29,7 @@ pub const Service = struct {
     request_storage: []model_mod.Request,
     response_storage: []model_mod.Response,
     store: ?store_mod.Store,
+    open_error: ?anyerror = null,
     stats: Stats = .{},
 
     pub const Stats = struct {
@@ -43,6 +44,7 @@ pub const Service = struct {
         sqlite_query_failures: std.atomic.Value(u64) = .init(0),
         sqlite_query_ns: std.atomic.Value(u64) = .init(0),
         sqlite_query_max_ns: std.atomic.Value(u64) = .init(0),
+        sqlite_open_failures: std.atomic.Value(u64) = .init(0),
     };
 
     pub const StatsSnapshot = struct {
@@ -57,6 +59,8 @@ pub const Service = struct {
         sqlite_query_failures: u64,
         sqlite_query_ns: u64,
         sqlite_query_max_ns: u64,
+        sqlite_open_failures: u64,
+        available: bool,
     };
 
     pub fn init(gpa: std.mem.Allocator, database_path: [:0]const u8) !Service {
@@ -64,15 +68,25 @@ pub const Service = struct {
         errdefer gpa.free(request_storage);
         const response_storage = try gpa.alloc(model_mod.Response, response_capacity);
         errdefer gpa.free(response_storage);
-        return .{
+        var open_error: ?anyerror = null;
+        const store = store_mod.Store.open(database_path) catch |err| unavailable: {
+            open_error = err;
+            break :unavailable null;
+        };
+        var service: Service = .{
             .gpa = gpa,
             .requests = .init(request_storage),
             .responses = .init(response_storage),
             .request_storage = request_storage,
             .response_storage = response_storage,
-            // History is best effort. A broken database must not stop PTYs.
-            .store = store_mod.Store.open(database_path) catch null,
+            // History remains best effort, but degradation is explicit in
+            // status and telemetry instead of being erased at startup.
+            .store = store,
+            .open_error = open_error,
         };
+        if (open_error != null)
+            _ = service.stats.sqlite_open_failures.fetchAdd(1, .monotonic);
+        return service;
     }
 
     pub fn closeQueues(service: *Service, io: std.Io) void {
@@ -220,7 +234,13 @@ pub const Service = struct {
             .sqlite_query_failures = service.stats.sqlite_query_failures.load(.monotonic),
             .sqlite_query_ns = service.stats.sqlite_query_ns.load(.monotonic),
             .sqlite_query_max_ns = service.stats.sqlite_query_max_ns.load(.monotonic),
+            .sqlite_open_failures = service.stats.sqlite_open_failures.load(.monotonic),
+            .available = service.store != null,
         };
+    }
+
+    pub fn openError(service: *const Service) ?anyerror {
+        return service.open_error;
     }
 
     fn submit(service: *Service, io: std.Io, request: model_mod.Request) bool {
@@ -327,4 +347,25 @@ pub fn receiveResponse(io: std.Io, service: *Service) anyerror!model_mod.Respons
 
 test {
     std.testing.refAllDecls(@This());
+}
+
+test "database open degradation is explicit" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(
+        &path_buffer,
+        "{s}/missing/history.db",
+        .{directory_buffer[0..directory_len]},
+    );
+
+    var service = try Service.init(std.testing.allocator, path);
+    defer service.deinit(io);
+    const stats = service.statsSnapshot();
+    try std.testing.expect(!stats.available);
+    try std.testing.expectEqual(@as(u64, 1), stats.sqlite_open_failures);
+    try std.testing.expect(service.openError() != null);
 }

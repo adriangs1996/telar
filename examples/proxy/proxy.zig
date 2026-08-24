@@ -450,8 +450,9 @@ fn pumpDirection(
     }
 }
 
-/// Builds the storable rendering of one exchange: redacted heads and whatever
-/// of the bodies fit. Credentials are dropped here, before the text exists.
+/// Builds the storable rendering of one exchange. Bodies are deliberately not
+/// persisted: prompts, replies, and tool payloads may contain credentials for
+/// which no generic redactor can provide a safety guarantee.
 fn renderExchange(
     gpa: std.mem.Allocator,
     request_head: []const u8,
@@ -463,16 +464,30 @@ fn renderExchange(
     errdefer out.deinit();
 
     http.redactedHead(request_head, &out.writer) catch return null;
-    if (request_body.len > 0) {
-        out.writer.print("\n{s}\n", .{request_body}) catch return null;
-    }
+    if (request_body.len > 0)
+        out.writer.print("\n<body omitted: {d} bytes>\n", .{request_body.len}) catch return null;
     out.writer.writeAll("\n--- response ---\n") catch return null;
     http.redactedHead(response_head, &out.writer) catch return null;
-    if (response_body.len > 0) {
-        out.writer.print("\n{s}\n", .{response_body}) catch return null;
-    }
+    if (response_body.len > 0)
+        out.writer.print("\n<body omitted: {d} bytes>\n", .{response_body.len}) catch return null;
 
     return out.toOwnedSlice() catch null;
+}
+
+test "storable exchanges omit request and response bodies" {
+    const rendered = renderExchange(
+        std.testing.allocator,
+        "POST / HTTP/1.1\r\nAuthorization: bearer secret\r\n\r\n",
+        "request-api-key",
+        "HTTP/1.1 200 OK\r\n\r\n",
+        "response-api-key",
+    ).?;
+    defer std.testing.allocator.free(rendered);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "bearer secret") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "request-api-key") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "response-api-key") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "<body omitted: 15 bytes>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "<body omitted: 16 bytes>") != null);
 }
 
 // HostName.connect races connection attempts for all resolved addresses. On

@@ -78,6 +78,8 @@ pub const Timeline = struct {
 
         if (c.sqlite3_open(path.ptr, &timeline.db) != c.SQLITE_OK) return error.OpenFailed;
         errdefer _ = c.sqlite3_close(timeline.db);
+        if (!std.mem.eql(u8, path, ":memory:") and std.c.chmod(path.ptr, 0o600) != 0)
+            return error.OpenFailed;
 
         if (c.sqlite3_exec(timeline.db, schema, null, null, null) != c.SQLITE_OK) {
             return error.SchemaFailed;
@@ -98,11 +100,8 @@ pub const Timeline = struct {
     /// Best effort: a timeline that cannot be written must never take the proxy
     /// down with it.
     ///
-    /// REDACTION SEAM: `row.output` is unfiltered terminal text and routinely
-    /// contains tokens, connection strings and whatever a command printed from
-    /// the environment. Nothing here strips them yet. That has to land before
-    /// this database is trusted, and it belongs here — at the write, not at the
-    /// read, because a read-side filter still leaves the secret on disk.
+    /// Callers must pass only deliberately storable text. HTTP bodies are
+    /// omitted before this seam and terminal output is not persisted.
     ///
     /// Not threadsafe, and does not need to be: every tap publishes through the
     /// event queue and the main loop is the only writer. A second writer would
@@ -149,4 +148,23 @@ fn bindOptText(stmt: *c.sqlite3_stmt, index: c_int, text: ?[]const u8) void {
 
 fn bindInt(stmt: *c.sqlite3_stmt, index: c_int, value: ?i64) void {
     if (value) |v| _ = c.sqlite3_bind_int64(stmt, index, v);
+}
+
+test "timeline database is private" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(
+        &path_buffer,
+        "{s}/timeline.db",
+        .{directory_buffer[0..directory_len]},
+    );
+
+    var timeline = try Timeline.open(path, "test-session");
+    defer timeline.close();
+    const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
+    try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
 }

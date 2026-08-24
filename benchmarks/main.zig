@@ -35,6 +35,7 @@ const usage =
     \\  --samples <count>     Samples per benchmark, default 12
     \\  --sample-ms <ms>      Target duration of each sample, default 40
     \\  --json                Emit JSON Lines for storage and comparison
+    \\  --enforce             Fail when a case exceeds its p99 release budget
     \\  --list                Print benchmark names without running them
     \\  --help                Print this help
 ;
@@ -45,6 +46,7 @@ const Config = struct {
     sample_ns: u64 = 40 * std.time.ns_per_ms,
     json: bool = false,
     list: bool = false,
+    enforce: bool = false,
 
     fn parse(args: []const []const u8) !Config {
         var config: Config = .{};
@@ -72,6 +74,8 @@ const Config = struct {
                 config.json = true;
             } else if (std.mem.eql(u8, arg, "--list")) {
                 config.list = true;
+            } else if (std.mem.eql(u8, arg, "--enforce")) {
+                config.enforce = true;
             } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
                 return error.HelpRequested;
             } else {
@@ -92,6 +96,7 @@ const Case = struct {
     work_per_op: u64,
     work_unit: []const u8,
     payload_bytes_per_op: u64 = 0,
+    p99_budget_ns: u64 = std.time.ns_per_ms,
 };
 
 const cases = [_]Case{
@@ -120,7 +125,12 @@ const cases = [_]Case{
     .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
     .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
-    .{ .name = "backend.kitty.ingest_zlib_rgba_1920x1080", .work_per_op = 1920 * 1080, .work_unit = "pixels" },
+    .{
+        .name = "backend.kitty.ingest_zlib_rgba_1920x1080",
+        .work_per_op = 1920 * 1080,
+        .work_unit = "pixels",
+        .p99_budget_ns = 100 * std.time.ns_per_ms,
+    },
     .{ .name = "frontend.kitty.transmit_rgba_64x64", .work_per_op = 64 * 64, .work_unit = "pixels" },
     .{ .name = "frontend.kitty.idle", .work_per_op = 1, .work_unit = "frames" },
 };
@@ -200,7 +210,8 @@ fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measureme
                 "\"samples\":{d},\"median_ns_per_op\":{d},\"min_ns_per_op\":{d}," ++
                 "\"p95_ns_per_op\":{d},\"p99_ns_per_op\":{d}," ++
                 "\"work_per_op\":{d},\"work_unit\":\"{s}\"," ++
-                "\"work_per_second\":{d},\"payload_bytes_per_op\":{d}}}\n",
+                "\"work_per_second\":{d},\"payload_bytes_per_op\":{d}," ++
+                "\"p99_budget_ns\":{d}}}\n",
             .{
                 case.name,
                 result.iterations,
@@ -213,6 +224,7 @@ fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measureme
                 case.work_unit,
                 rate,
                 case.payload_bytes_per_op,
+                case.p99_budget_ns,
             },
         );
     } else {
@@ -229,6 +241,8 @@ fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measureme
             try writer.print(", payload {d} B/op", .{case.payload_bytes_per_op});
         try writer.writeByte('\n');
     }
+    if (config.enforce and result.p99_ns > case.p99_budget_ns)
+        return error.PerformanceBudgetExceeded;
 }
 
 const Fixture = struct {

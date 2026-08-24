@@ -258,7 +258,8 @@ pub fn formatRuntimeTelemetry(
         history_next_input_completions,
         history_auxiliary_completions,
     });
-    try output.print("\"history_queries\":{d},\"history_query_failures\":{d}," ++
+    try output.print("\"history_available\":{d},\"sqlite_open_failures\":{d}," ++
+        "\"history_queries\":{d},\"history_query_failures\":{d}," ++
         "\"history_observation_resets\":{d},\"history_observation_failures\":{d}," ++
         "\"client_resyncs\":{d}," ++
         "\"history_queue_depth\":{d},\"history_queue_high_water\":{d}," ++
@@ -272,6 +273,8 @@ pub fn formatRuntimeTelemetry(
         "\"ingest_avg_us\":{d},\"ingest_max_us\":{d}," ++
         "\"encode_avg_us\":{d},\"encode_max_us\":{d}," ++
         "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
+        @intFromBool(history_stats.available),
+        history_stats.sqlite_open_failures,
         metrics.history_queries,
         metrics.history_query_failures,
         metrics.history_observation_resets,

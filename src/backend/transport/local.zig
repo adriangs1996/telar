@@ -4,6 +4,10 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Io = std.Io;
 const core = @import("telar-core");
+const c = @cImport({
+    @cInclude("sys/socket.h");
+    @cInclude("unistd.h");
+});
 
 pub const LocalListener = struct {
     listener: Io.net.Server,
@@ -46,7 +50,11 @@ pub const LocalListener = struct {
 
     pub fn accept(listener: *LocalListener, io: Io) !core.transport.SocketChannel {
         std.debug.assert(listener.active);
-        return .init(try listener.listener.accept(io));
+        const stream = try listener.listener.accept(io);
+        errdefer stream.close(io);
+        const peer_uid = try peerUid(stream.socket.handle);
+        if (!sameUserPeer(peer_uid, std.c.geteuid())) return error.PeerNotOwned;
+        return .init(stream);
     }
 
     pub fn deinit(listener: *LocalListener, io: Io) void {
@@ -71,6 +79,42 @@ pub const LocalListener = struct {
         Io.Dir.deleteFileAbsolute(io, path) catch {};
     }
 };
+
+pub fn sameUserPeer(peer_uid: u32, effective_uid: u32) bool {
+    return peer_uid == effective_uid;
+}
+
+fn peerUid(handle: std.c.fd_t) !u32 {
+    return switch (builtin.os.tag) {
+        .linux => linux: {
+            const Credentials = extern struct {
+                pid: i32,
+                uid: u32,
+                gid: u32,
+            };
+            var credentials: Credentials = undefined;
+            var len: std.os.linux.socklen_t = @sizeOf(Credentials);
+            const result = std.os.linux.getsockopt(
+                handle,
+                std.os.linux.SOL.SOCKET,
+                std.os.linux.SO.PEERCRED,
+                @ptrCast(&credentials),
+                &len,
+            );
+            if (std.posix.errno(result) != .SUCCESS or len != @sizeOf(Credentials))
+                return error.PeerCredentialsUnavailable;
+            break :linux credentials.uid;
+        },
+        .macos, .freebsd, .netbsd, .openbsd, .dragonfly => bsd: {
+            var uid: c.uid_t = undefined;
+            var gid: c.gid_t = undefined;
+            if (c.getpeereid(handle, &uid, &gid) != 0)
+                return error.PeerCredentialsUnavailable;
+            break :bsd @intCast(uid);
+        },
+        else => @compileError("local peer authentication is unsupported on this platform"),
+    };
+}
 
 pub const DirectoryTrust = enum {
     trusted,
@@ -218,6 +262,11 @@ test "endpoint directory trust classification" {
         DirectoryTrust.not_a_directory,
         classifyEndpointDirectory(0o100600, 1000, euid),
     );
+}
+
+test "peer authentication rejects a different account" {
+    try std.testing.expect(sameUserPeer(1000, 1000));
+    try std.testing.expect(!sameUserPeer(1001, 1000));
 }
 
 test "a listener refuses a directory another account could rewrite" {
