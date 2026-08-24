@@ -188,19 +188,20 @@ pub fn enforceGraphicsQuotas(io: Io, pane: *Pane) void {
 }
 
 pub fn enforceGraphicsCounts(io: Io, pane: *Pane, screen_key: vt.ScreenSet.Key) void {
-    const screen = pane.terminal.screens.get(screen_key) orelse return;
-    const previous_key = pane.terminal.screens.active_key;
-    const previous = pane.terminal.screens.active;
-    pane.terminal.screens.active_key = screen_key;
-    pane.terminal.screens.active = screen;
+    const terminal = &pane.media.terminal;
+    const screen = terminal.screens.get(screen_key) orelse return;
+    const previous_key = terminal.screens.active_key;
+    const previous = terminal.screens.active;
+    terminal.screens.active_key = screen_key;
+    terminal.screens.active = screen;
     defer {
-        pane.terminal.screens.active_key = previous_key;
-        pane.terminal.screens.active = previous;
+        terminal.screens.active_key = previous_key;
+        terminal.screens.active = previous;
     }
     const storage = &screen.kitty_images;
     const placement_limit = pane.graphics_limits.placements_per_pane / 2;
     if (storage.placements.count() > placement_limit)
-        storage.delete(io, pane.media_allocator.allocator(), &pane.terminal, .{ .all = false });
+        storage.delete(io, pane.media_allocator.allocator(), terminal, .{ .all = false });
 
     const image_limit = pane.graphics_limits.images_per_pane / 2;
     while (storage.images.count() > image_limit) {
@@ -212,7 +213,7 @@ pub fn enforceGraphicsCounts(io: Io, pane: *Pane, screen_key: vt.ScreenSet.Key) 
             oldest_generation = entry.value_ptr.generation;
             oldest_id = entry.key_ptr.*;
         }
-        storage.delete(io, pane.media_allocator.allocator(), &pane.terminal, .{ .id = .{
+        storage.delete(io, pane.media_allocator.allocator(), terminal, .{ .id = .{
             .delete = true,
             .image_id = oldest_id orelse break,
         } });
@@ -234,7 +235,7 @@ pub fn encodeNextGraphics(
     attachment: *Attachment,
 ) !?[]const u8 {
     const pane = attachment.pane;
-    const storage = &pane.terminal.screens.active.kitty_images;
+    const storage = &pane.media.terminal.screens.active.kitty_images;
     if (!attachment.graphics_batch_active) {
         attachment.graphics_target_revision = pane.graphics_revision;
         attachment.graphics_revision = @max(pane.graphics_revision, @as(u64, 1));
@@ -475,7 +476,7 @@ pub fn placementValue(
         .virtual => return null,
     };
     if (pin.garbage) return null;
-    const pages = &pane.terminal.screens.active.pages;
+    const pages = &pane.media.terminal.screens.active.pages;
     const screen_point = pages.pointFromPin(.screen, pin.*) orelse return null;
     const viewport = pages.pointFromPin(.screen, pages.getTopLeft(.viewport)) orelse return null;
     const source = placement.sourceRect(image);
@@ -537,7 +538,7 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
     // inject one directly: the sync layer must skip it, not fail the client.
     const media = pane.media_allocator.allocator();
     const pixels = try media.dupe(u8, &[_]u8{ 1, 2 });
-    const screen = pane.terminal.screens.active;
+    const screen = pane.media.terminal.screens.active;
     try screen.kitty_images.addImage(io, media, screen, .{
         .id = 42,
         .width = 2,
@@ -602,7 +603,7 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
     }
 
     const media = pane.media_allocator.allocator();
-    const screen = pane.terminal.screens.active;
+    const screen = pane.media.terminal.screens.active;
     for (1..4) |image_id| {
         const pixels = try media.dupe(u8, &[_]u8{ 0, 0, 0 });
         try screen.kitty_images.addImage(io, media, screen, .{

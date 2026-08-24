@@ -38,6 +38,9 @@ pub const RuntimeMetrics = struct {
     folded_pty_events: u64 = 0,
     graphics_messages: u64 = 0,
     graphics_bytes: u64 = 0,
+    media_bytes: u64 = 0,
+    media_resets: u64 = 0,
+    media_failures: u64 = 0,
     decode: diagnostics.Timing = .{},
     ingest: diagnostics.Timing = .{},
     encode: diagnostics.Timing = .{},
@@ -86,6 +89,10 @@ pub fn formatRuntimeTelemetry(
     var graphics_resident_bytes: usize = 0;
     var graphics_transfer_bytes: usize = 0;
     var graphics_loading_bytes: usize = 0;
+    var media_queue_events: usize = 0;
+    var media_queue_bytes: usize = 0;
+    var media_dropped_events: u64 = 0;
+    var media_dropped_bytes: u64 = 0;
     var pty_response_queue_depth: usize = 0;
     var pty_response_dropped: u64 = 0;
     var pane_input_queue_depth: usize = 0;
@@ -99,6 +106,12 @@ pub fn formatRuntimeTelemetry(
         pane_input_queue_depth += pane.input_queue.len;
         pane_input_dropped_bytes +|= pane.input_queue.dropped_bytes;
         history_input_dropped +|= pane.history_observer.dropped_events;
+        media_dropped_events +|= pane.media.dropped_events;
+        media_dropped_bytes +|= pane.media.dropped_bytes;
+        for (&pane.media.batches) |*batch| {
+            media_queue_events += batch.event_count;
+            media_queue_bytes += batch.len;
+        }
         if (pane.dirty) dirty_panes += 1;
         if (pane.history_observer.worker == null) {
             history_prompt_markers += pane.history_observer.tracker.aux.prompt_markers;
@@ -114,13 +127,15 @@ pub fn formatRuntimeTelemetry(
             history_next_input_completions += pane.history_observer.tracker.next_input_completions;
             history_auxiliary_completions += pane.history_observer.tracker.auxiliary_completions;
         }
-        for (std.enums.values(vt.ScreenSet.Key)) |key| {
-            const screen = pane.terminal.screens.get(key) orelse continue;
-            graphics_images += screen.kitty_images.images.count();
-            graphics_placements += screen.kitty_images.placements.count();
-            graphics_resident_bytes += screen.kitty_images.total_bytes;
-            if (screen.kitty_images.loading) |loading|
-                graphics_loading_bytes += loading.data.items.len;
+        if (pane.media.worker == null) {
+            for (std.enums.values(vt.ScreenSet.Key)) |key| {
+                const screen = pane.media.terminal.screens.get(key) orelse continue;
+                graphics_images += screen.kitty_images.images.count();
+                graphics_placements += screen.kitty_images.placements.count();
+                graphics_resident_bytes += screen.kitty_images.total_bytes;
+                if (screen.kitty_images.loading) |loading|
+                    graphics_loading_bytes += loading.data.items.len;
+            }
         }
     }
     for (attachment_stores) |attachments| {
@@ -184,6 +199,9 @@ pub fn formatRuntimeTelemetry(
     });
     try output.print(
         "\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
+            "\"media_bytes\":{d},\"media_resets\":{d},\"media_failures\":{d}," ++
+            "\"media_queue_events\":{d},\"media_queue_bytes\":{d}," ++
+            "\"media_dropped_events\":{d},\"media_dropped_bytes\":{d}," ++
             "\"graphics_images\":{d},\"graphics_placements\":{d}," ++
             "\"graphics_resident_bytes\":{d},\"graphics_transfer_bytes\":{d}," ++
             "\"graphics_loading_bytes\":{d}," ++
@@ -193,6 +211,13 @@ pub fn formatRuntimeTelemetry(
         .{
             metrics.graphics_messages,
             metrics.graphics_bytes,
+            metrics.media_bytes,
+            metrics.media_resets,
+            metrics.media_failures,
+            media_queue_events,
+            media_queue_bytes,
+            media_dropped_events,
+            media_dropped_bytes,
             graphics_images,
             graphics_placements,
             graphics_resident_bytes,

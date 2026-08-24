@@ -10,6 +10,7 @@ const core = @import("telar-core");
 const blit = @import("blit.zig");
 const escape = @import("history/escape.zig");
 const history = @import("history/root.zig");
+const media_mod = @import("media.zig");
 const pty = @import("pty.zig");
 
 const Io = std.Io;
@@ -312,6 +313,7 @@ pub const Pane = struct {
     session: pty.Session,
     terminal: vt.Terminal,
     stream: vt.TerminalStream,
+    media: media_mod.Pipeline,
     pty_responses: PtyResponseQueue = .{},
     kitty_framing: KittyFramingCounter = .{},
     kitty_loading_chunks: usize = 0,
@@ -403,6 +405,7 @@ pub const Pane = struct {
             .size = size,
             .terminal = undefined,
             .stream = undefined,
+            .media = undefined,
             .history_observer = undefined,
             .screen = undefined,
             .damaged_rows = undefined,
@@ -410,22 +413,16 @@ pub const Pane = struct {
         pane.terminal = try .init(io, gpa, .{
             .cols = size.cols,
             .rows = size.rows,
-            .kitty_image_storage_limit = @min(
-                core.graphics.max_image_bytes_per_screen,
-                graphics_limits.pane_bytes / 3,
-            ),
+            .kitty_image_storage_limit = 0,
             .kitty_image_loading_limits = .direct,
         });
         errdefer pane.terminal.deinit(gpa);
         var handler = pane.terminal.vtHandler();
-        handler.apc_handler.max_bytes.put(
-            .kitty,
-            graphics_limits.payload_bytes,
-        );
+        handler.apc_handler.enable(.kitty, false);
         handler.effects.write_pty = Pane.writePty;
         handler.effects.size = Pane.reportSize;
         pane.stream = vt.TerminalStream.init(.{
-            .allocator = pane.media_allocator.allocator(),
+            .allocator = gpa,
             .handler = handler,
         });
         errdefer pane.stream.deinit();
@@ -437,6 +434,15 @@ pub const Pane = struct {
                 .height = size.cell_height_px,
             } else null,
         });
+        try pane.media.init(
+            io,
+            pane.media_allocator.allocator(),
+            size,
+            @min(core.graphics.max_image_bytes_per_screen, graphics_limits.pane_bytes / 3),
+            graphics_limits.payload_bytes,
+            Pane.writeMediaPty,
+        );
+        errdefer pane.media.deinit();
         try pane.history_observer.init(io, gpa, workspace_path, size);
         errdefer pane.history_observer.deinit();
         pane.screen = try .init(gpa, size.cols, size.rows);
@@ -486,7 +492,7 @@ pub const Pane = struct {
     }
 
     pub fn actorStarted(pane: *Pane) void {
-        std.debug.assert(pane.actor_count < 7);
+        std.debug.assert(pane.actor_count < 8);
         pane.actor_count += 1;
     }
 
@@ -512,6 +518,7 @@ pub const Pane = struct {
         pane.screen.deinit();
         pane.render_state.deinit(gpa);
         pane.history_observer.deinit();
+        pane.media.deinit();
         pane.stream.deinit();
         pane.media_allocator.detach();
         pane.terminal.deinit(gpa);
@@ -521,14 +528,7 @@ pub const Pane = struct {
 
     pub fn ingest(pane: *Pane, io: Io, bytes: []const u8) !u64 {
         const started = diagnostics.now(io);
-        const loading_id = if (pane.terminal.screens.active.kitty_images.loading) |loading|
-            loading.image.id
-        else
-            null;
-        const kitty_commands = pane.kitty_framing.observe(bytes);
         pane.stream.nextSlice(bytes);
-        pane.enforceIncompleteGraphics(io, loading_id, kitty_commands);
-        pane.observeGraphicsDamage();
         const foreground = pane.terminal.colors.foreground.override;
         const background = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
@@ -542,8 +542,33 @@ pub const Pane = struct {
         }
         pane.render_pending = true;
         pane.dirty = true;
-        pane.graphics_present = pane.terminal.screens.active.kitty_images.images.count() != 0;
         return diagnostics.elapsed(started, diagnostics.now(io));
+    }
+
+    pub fn queueMediaOutput(pane: *Pane, bytes: []const u8) void {
+        pane.media.queueOutput(bytes);
+    }
+
+    pub fn processMedia(
+        pane: *Pane,
+        current_size: schema.TerminalSize,
+        stats: *media_mod.Stats,
+    ) void {
+        if (pane.media.batches[pane.media.worker.?].reset_before) {
+            pane.kitty_framing = .{};
+            pane.kitty_loading_chunks = 0;
+        }
+        pane.media.processSealed(current_size, stats, pane, ingestMediaOutput);
+    }
+
+    fn ingestMediaOutput(pane: *Pane, bytes: []const u8) void {
+        const loading_id = if (pane.media.terminal.screens.active.kitty_images.loading) |loading|
+            loading.image.id
+        else
+            null;
+        const kitty_commands = pane.kitty_framing.observe(bytes);
+        pane.media.stream.nextSlice(bytes);
+        pane.enforceIncompleteGraphics(pane.io, loading_id, kitty_commands);
     }
 
     pub fn queueHistoryInput(
@@ -587,7 +612,7 @@ pub const Pane = struct {
         previous_loading_id: ?u32,
         completed_commands: usize,
     ) void {
-        const storage = &pane.terminal.screens.active.kitty_images;
+        const storage = &pane.media.terminal.screens.active.kitty_images;
         if (previous_loading_id != null or storage.loading != null)
             pane.kitty_loading_chunks +|= completed_commands
         else
@@ -596,7 +621,7 @@ pub const Pane = struct {
         const chunk_limit_exceeded = pane.kitty_loading_chunks > pane.graphics_limits.chunks_per_image;
         const loading = storage.loading orelse {
             if (chunk_limit_exceeded) if (previous_loading_id) |image_id| {
-                storage.delete(io, pane.media_allocator.allocator(), &pane.terminal, .{ .id = .{
+                storage.delete(io, pane.media_allocator.allocator(), &pane.media.terminal, .{ .id = .{
                     .delete = true,
                     .image_id = image_id,
                 } });
@@ -626,7 +651,7 @@ pub const Pane = struct {
     }
 
     pub fn observeGraphicsDamage(pane: *Pane) void {
-        const storage = &pane.terminal.screens.active.kitty_images;
+        const storage = &pane.media.terminal.screens.active.kitty_images;
         if (!storage.dirty) return;
         pane.graphics_revision +%= 1;
         if (pane.graphics_revision == 0) pane.graphics_revision = 1;
@@ -636,6 +661,14 @@ pub const Pane = struct {
     pub fn writePty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
         const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
         const pane: *Pane = @fieldParentPtr("stream", stream);
+        _ = pane.pty_responses.push(response);
+    }
+
+    pub fn writeMediaPty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
+        if (!std.mem.startsWith(u8, response, "\x1b_G")) return;
+        const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
+        const media: *media_mod.Pipeline = @fieldParentPtr("stream", stream);
+        const pane: *Pane = @fieldParentPtr("media", media);
         _ = pane.pty_responses.push(response);
     }
 
@@ -708,6 +741,8 @@ pub const Pane = struct {
             pane.actor_count == 0 and
             pane.history_observer.worker == null and
             !pane.history_observer.hasPending() and
+            pane.media.worker == null and
+            !pane.media.hasPending() and
             pane.pty_responses.len == 0;
     }
 
@@ -744,6 +779,7 @@ pub const Pane = struct {
         pane.size = size;
         pane.pending_size = null;
         pane.history_observer.queueResize(size);
+        pane.media.queueResize(size);
         try pane.render(true);
     }
 
@@ -1080,6 +1116,9 @@ test "a pane is destroyable only when no actor can still borrow it" {
     pane.history_observer.active = 0;
     pane.history_observer.worker = null;
     pane.history_observer.batches = .{ .{}, .{} };
+    pane.media.active = 0;
+    pane.media.worker = null;
+    pane.media.batches = .{ .{}, .{} };
     try std.testing.expect(pane.readyToDestroy());
 
     pane.actorStarted();

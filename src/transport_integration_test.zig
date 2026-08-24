@@ -1424,9 +1424,9 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         else => {},
     };
 
-    // The first PTY burst is now deliberately held inside the same bounded
-    // actor that performs base64/zlib/KGP work. The runtime event loop and PTY
-    // input writer must remain independent of that actor.
+    // The first PTY burst is deliberately held inside the interactive VT
+    // actor. The runtime event loop and PTY input writer must remain
+    // independent of that actor.
     _ = try entered.getOne(io);
     const started = std.Io.Timestamp.now(io, .awake).toNanoseconds();
     try connection.send(io, try schema.encodePaneInput(&send_buffer, .{

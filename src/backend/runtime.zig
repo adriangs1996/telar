@@ -7,6 +7,7 @@ const blit = @import("blit.zig");
 const damage = @import("damage.zig");
 const history = @import("history/root.zig");
 const graphics_sync = @import("graphics_sync.zig");
+const media_mod = @import("media.zig");
 const pane_mod = @import("pane.zig");
 const pty = @import("pty.zig");
 const telemetry_mod = @import("telemetry.zig");
@@ -77,6 +78,11 @@ const PaneObservationEvent = struct {
     stats: history.observer.Stats,
 };
 
+const PaneMediaEvent = struct {
+    pane: PaneKey,
+    stats: media_mod.Stats,
+};
+
 const PaneInputEvent = struct {
     pane: PaneKey,
     len: usize,
@@ -105,6 +111,7 @@ const RuntimeEvent = union(enum) {
     pane_output: PaneOutputEvent,
     pane_ingested: PaneIngestEvent,
     pane_observed: PaneObservationEvent,
+    pane_media: PaneMediaEvent,
     pane_exit: PaneExitEvent,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
@@ -691,6 +698,7 @@ const Server = struct {
             const active = if (attachments.items[index]) |*value| value else continue;
             const pane = active.pane;
             if (pane.ingest_pending) continue;
+            if (pane.media.worker != null) continue;
             if (active.graphics_snapshot != .idle or active.transfer != null or
                 active.observed_graphics_revision != pane.graphics_revision)
             {
@@ -810,6 +818,7 @@ const Server = struct {
                         return;
                     };
                     try schedulePaneObservation(select, active);
+                    try schedulePaneMedia(select, active);
                 }
                 const attachment = try attachments.attach(gpa, active);
                 _ = try attachment.resizeIfNeeded();
@@ -855,6 +864,7 @@ const Server = struct {
                 if (!active.pane.ingest_pending) {
                     retirePaneOnFailure(active.pane, active.pane.applyPendingResize()) catch return;
                     try schedulePaneObservation(select, active.pane);
+                    try schedulePaneMedia(select, active.pane);
                     _ = active.resizeIfNeeded() catch {
                         _ = attachments.detach(resize.pane_id);
                         return;
@@ -1156,7 +1166,7 @@ fn serveInternal(
         history_service.deinit(io);
     };
 
-    var select_storage: [12 + 2 * max_clients + 6 * max_panes]RuntimeEvent = undefined;
+    var select_storage: [12 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
@@ -1448,6 +1458,8 @@ fn serveInternal(
                     historyClock(io),
                 );
                 try schedulePaneObservation(&select, active);
+                active.queueMediaOutput(active.output_buffer[0..output_len]);
+                try schedulePaneMedia(&select, active);
                 active.ingest_pending = true;
                 active.actorStarted();
                 select.concurrent(.pane_ingested, ingestPane, .{
@@ -1484,6 +1496,7 @@ fn serveInternal(
             }
             retirePaneOnFailure(active, active.applyPendingResize()) catch {};
             try schedulePaneObservation(&select, active);
+            try schedulePaneMedia(&select, active);
             for (&server.clients.items) |*slot| {
                 const client = if (slot.*) |*value| value else continue;
                 if (client.attachments.find(active.id)) |attachment| {
@@ -1492,8 +1505,6 @@ fn serveInternal(
                     };
                 }
             }
-            enforceGraphicsQuotas(io, active);
-            active.observeGraphicsDamage();
             try schedulePaneResponse(io, &select, active);
             active.output_pending = true;
             active.actorStarted();
@@ -1520,6 +1531,33 @@ fn serveInternal(
                 if (event.stats.reset) server.metrics.history_observation_resets +|= 1;
             }
             try schedulePaneObservation(&select, active);
+            server.collect();
+            server.pumpAll();
+        },
+        .pane_media => |event| {
+            const active = server.panes.resolve(event.pane) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            active.actorFinished();
+            active.media.finishSealed();
+            if (comptime diagnostics.enabled) {
+                server.metrics.media_bytes +|= event.stats.output_bytes;
+                if (event.stats.failed) server.metrics.media_failures +|= 1;
+                if (event.stats.reset) server.metrics.media_resets +|= 1;
+            }
+            enforceGraphicsQuotas(io, active);
+            active.observeGraphicsDamage();
+            active.graphics_present =
+                active.media.terminal.screens.active.kitty_images.images.count() != 0;
+            if (event.stats.reset) {
+                for (&server.clients.items) |*slot| {
+                    const client = if (slot.*) |*value| value else continue;
+                    if (client.attachments.find(active.id)) |attachment| attachment.resetGraphics();
+                }
+            }
+            try schedulePaneResponse(io, &select, active);
+            try schedulePaneMedia(&select, active);
             server.collect();
             server.pumpAll();
         },
@@ -2062,6 +2100,25 @@ fn schedulePaneObservation(
 fn observePane(pane: *Pane, current_size: schema.TerminalSize) PaneObservationEvent {
     var stats: history.observer.Stats = .{};
     pane.processHistoryObservation(current_size, &stats);
+    return .{ .pane = pane.key(), .stats = stats };
+}
+
+fn schedulePaneMedia(
+    select: *Io.Select(RuntimeEvent),
+    pane: *Pane,
+) !void {
+    if (!pane.media.seal()) return;
+    pane.actorStarted();
+    select.concurrent(.pane_media, processPaneMedia, .{ pane, pane.size }) catch |err| {
+        pane.actorFinished();
+        pane.media.finishSealed();
+        return err;
+    };
+}
+
+fn processPaneMedia(pane: *Pane, current_size: schema.TerminalSize) PaneMediaEvent {
+    var stats: media_mod.Stats = .{};
+    pane.processMedia(current_size, &stats);
     return .{ .pane = pane.key(), .stats = stats };
 }
 
