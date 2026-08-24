@@ -2,13 +2,17 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const action_mod = @import("action.zig");
 const client_view = @import("client_ui.zig");
+const input_mod = @import("input.zig");
 const keybind = @import("keybind.zig");
 const kitty = @import("kitty.zig");
 const layout_mod = @import("layout.zig");
+const lua_config = @import("lua_config.zig");
 const multiplexer = @import("multiplexer.zig");
 const pace = @import("pace.zig");
 const platform = @import("platform.zig");
+const plugin_broker = @import("plugin_broker.zig");
 const term = @import("term.zig");
 const tabs_mod = @import("tabs.zig");
 const theme = @import("theme.zig");
@@ -25,62 +29,7 @@ const max_binding_keys = 4;
 const held_binding_bytes = 128;
 const default_binding_count = 25;
 
-pub const Action = enum {
-    split_horizontal,
-    split_vertical,
-    focus_left,
-    focus_right,
-    focus_up,
-    focus_down,
-    toggle_sidebar,
-    close_pane,
-    new_tab,
-    next_tab,
-    previous_tab,
-    select_tab_1,
-    select_tab_2,
-    select_tab_3,
-    select_tab_4,
-    select_tab_5,
-    select_tab_6,
-    select_tab_7,
-    select_tab_8,
-    select_tab_9,
-    rename_tab,
-    close_tab,
-    move_tab_previous,
-    move_tab_next,
-    detach,
-
-    pub fn parse(name: []const u8) !Action {
-        if (std.mem.eql(u8, name, "split-horizontal")) return .split_horizontal;
-        if (std.mem.eql(u8, name, "split-vertical")) return .split_vertical;
-        if (std.mem.eql(u8, name, "focus-left")) return .focus_left;
-        if (std.mem.eql(u8, name, "focus-right")) return .focus_right;
-        if (std.mem.eql(u8, name, "focus-up")) return .focus_up;
-        if (std.mem.eql(u8, name, "focus-down")) return .focus_down;
-        if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
-        if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
-        if (std.mem.eql(u8, name, "new-tab")) return .new_tab;
-        if (std.mem.eql(u8, name, "next-tab")) return .next_tab;
-        if (std.mem.eql(u8, name, "previous-tab")) return .previous_tab;
-        if (std.mem.eql(u8, name, "rename-tab")) return .rename_tab;
-        if (std.mem.eql(u8, name, "close-tab")) return .close_tab;
-        if (std.mem.eql(u8, name, "move-tab-previous")) return .move_tab_previous;
-        if (std.mem.eql(u8, name, "move-tab-next")) return .move_tab_next;
-        if (std.mem.eql(u8, name, "select-tab-1")) return .select_tab_1;
-        if (std.mem.eql(u8, name, "select-tab-2")) return .select_tab_2;
-        if (std.mem.eql(u8, name, "select-tab-3")) return .select_tab_3;
-        if (std.mem.eql(u8, name, "select-tab-4")) return .select_tab_4;
-        if (std.mem.eql(u8, name, "select-tab-5")) return .select_tab_5;
-        if (std.mem.eql(u8, name, "select-tab-6")) return .select_tab_6;
-        if (std.mem.eql(u8, name, "select-tab-7")) return .select_tab_7;
-        if (std.mem.eql(u8, name, "select-tab-8")) return .select_tab_8;
-        if (std.mem.eql(u8, name, "select-tab-9")) return .select_tab_9;
-        if (std.mem.eql(u8, name, "detach")) return .detach;
-        return error.UnknownAction;
-    }
-};
+pub const Action = action_mod.Action;
 
 pub const ConfiguredBinding = keybind.Binding(Action, max_binding_keys);
 const InputRouter = keybind.Router(
@@ -96,8 +45,21 @@ pub const Options = struct {
     cwd: []const u8,
     endpoint: []const u8,
     bindings: []const ConfiguredBinding = &.{},
+    bindings_configured: bool = false,
     theme: theme.Theme = theme.default_theme,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
+    sidebar_visible: bool = true,
+    input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
+    input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
+    lua_generation: ?*lua_config.Generation = null,
+    config_path: ?[]const u8 = null,
+    config_mtime_ns: i128 = 0,
+    theme_locked: bool = false,
+    sidebar_renderer_locked: bool = false,
+    plugin_registry: ?*plugin_broker.Registry = null,
+    trust_store: ?*core.plugin.TrustStore = null,
+    trust_path: ?[]const u8 = null,
+    profile: ?[]const u8 = null,
 };
 
 const ClientMetrics = struct {
@@ -156,6 +118,22 @@ const ClientEvent = union(enum) {
     draw: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
+    config_reload: anyerror!ConfigReload,
+    plugin_result: anyerror!plugin_broker.WorkerResult,
+};
+
+const ConfigReload = union(enum) {
+    unchanged: i128,
+    loaded: struct {
+        generation: *lua_config.Generation,
+        registry: *plugin_broker.Registry,
+        trust_store: *core.plugin.TrustStore,
+        mtime_ns: i128,
+    },
+    failed: struct {
+        diagnostic: lua_config.Diagnostic,
+        mtime_ns: i128,
+    },
 };
 
 const PendingSplit = struct {
@@ -282,6 +260,7 @@ const initial_request_id: schema.RequestId = @enumFromInt(1);
 /// loose local threaded through fourteen-argument calls.
 const Client = struct {
     io: Io,
+    gpa: std.mem.Allocator,
     connection: *core.transport.SocketChannel,
     send_buffer: []u8,
     writer: *Io.Writer,
@@ -294,6 +273,15 @@ const Client = struct {
     graphics_store: *kitty.Store,
     capabilities: *kitty.TerminalCapabilities,
     input_file: File,
+    lua_generation: *?*lua_config.Generation,
+    config_diagnostic: lua_config.Diagnostic = .{},
+    plugin_registry: *?*plugin_broker.Registry,
+    trust_store: *?*core.plugin.TrustStore,
+    sidebar_rendering: kitty.SidebarRendering,
+    config_mtime_ns: i128,
+    next_config_generation: u64 = 2,
+    plugin_pending: bool = false,
+    paste_pane: ?schema.PaneId = null,
 
     input_started: bool = false,
     next_request_id: u64 = 2,
@@ -713,6 +701,28 @@ const Client = struct {
         const compose_started = diagnostics.now(client.io);
         const composed = try model.renderThemed(client.screen, client.view.workbench(), client.view.palette());
         const chrome = try client.view.render(client.screen, client.tabs, model, composed.full);
+        if (client.config_diagnostic.len != 0 and client.screen.back.h != 0) {
+            const palette = client.view.palette();
+            const banner: core.ui.Rect = .{
+                .y = client.screen.back.h - 1,
+                .w = client.screen.back.w,
+                .h = 1,
+            };
+            const style: core.ui.Style = .{
+                .fg = palette.text,
+                .bg = palette.red,
+                .flags = .{ .bold = true },
+            };
+            client.screen.back.fill(banner, " ", style);
+            const prefix_width = client.screen.back.writeText(banner, 0, banner.y, "TELAR CONFIG  ", style);
+            _ = client.screen.back.writeText(
+                banner,
+                prefix_width,
+                banner.y,
+                client.config_diagnostic.message(),
+                style,
+            );
+        }
         if (comptime diagnostics.enabled) {
             client.metrics.composed_panes += composed.panes;
             client.metrics.composed_cells += composed.cells;
@@ -764,6 +774,12 @@ pub fn run(
 ) !u8 {
     const io = init.io;
     const gpa = init.gpa;
+    var lua_generation = options.lua_generation;
+    defer if (lua_generation) |generation| generation.deinit();
+    var plugin_registry = options.plugin_registry;
+    defer if (plugin_registry) |registry| gpa.destroy(registry);
+    var trust_store = options.trust_store;
+    defer if (trust_store) |store| gpa.destroy(store);
 
     var telemetry_suffix_buffer: [64]u8 = undefined;
     const telemetry_suffix = std.fmt.bufPrint(
@@ -815,6 +831,7 @@ pub fn run(
         options.theme,
     );
     defer view.deinit();
+    if (!options.sidebar_visible) view.toggleSidebar();
     try view.configureSidebar(
         options.sidebar_rendering,
         capabilities.kitty_graphics,
@@ -844,7 +861,13 @@ pub fn run(
     });
     try connection.send(io, open_payload);
 
-    var select_storage: [9]ClientEvent = undefined;
+    var reload_orphan: ?*lua_config.Generation = null;
+    defer if (reload_orphan) |generation| generation.deinit();
+    var reload_registry_orphan: ?*plugin_broker.Registry = null;
+    defer if (reload_registry_orphan) |registry| gpa.destroy(registry);
+    var reload_trust_orphan: ?*core.plugin.TrustStore = null;
+    defer if (reload_trust_orphan) |store| gpa.destroy(store);
+    var select_storage: [11]ClientEvent = undefined;
     var select = Io.Select(ClientEvent).init(io, &select_storage);
     defer select.cancelDiscard();
     try select.concurrent(.resized, waitResize, .{ io, &watcher });
@@ -856,11 +879,13 @@ pub fn run(
     }
 
     var defaults = try defaultBindings();
-    const configured_bindings = if (options.bindings.len == 0)
-        defaults[0..]
+    const configured_bindings = if (options.bindings_configured)
+        options.bindings
     else
-        options.bindings;
+        defaults[0..];
     var input_router = try InputRouter.init(configured_bindings);
+    input_router.escape_timeout_ns = options.input_escape_timeout_ns;
+    input_router.sequence_timeout_ns = options.input_sequence_timeout_ns;
     var input_timeout_pending = false;
     var binding_timeout_pending = false;
     var telemetry_buffer: [4096]u8 = undefined;
@@ -868,6 +893,7 @@ pub fn run(
     var metrics: ClientMetrics = .{ .started_ns = diagnostics.now(io) };
     var client: Client = .{
         .io = io,
+        .gpa = gpa,
         .connection = connection,
         .send_buffer = send_buffer,
         .writer = writer,
@@ -880,7 +906,27 @@ pub fn run(
         .graphics_store = &graphics_store,
         .capabilities = &capabilities,
         .input_file = input_file,
+        .lua_generation = &lua_generation,
+        .plugin_registry = &plugin_registry,
+        .trust_store = &trust_store,
+        .sidebar_rendering = options.sidebar_rendering,
+        .config_mtime_ns = options.config_mtime_ns,
     };
+    if (options.config_path) |path|
+        try select.concurrent(.config_reload, waitConfigReload, .{
+            io,
+            gpa,
+            path,
+            client.config_mtime_ns,
+            client.next_config_generation,
+            options.profile,
+            client.lua_generation.*.?,
+            client.plugin_registry.*.?,
+            options.trust_path.?,
+            &reload_orphan,
+            &reload_registry_orphan,
+            &reload_trust_orphan,
+        });
 
     while (true) switch (try select.await()) {
         .input => |result| {
@@ -914,7 +960,7 @@ pub fn run(
             if (capabilities.expire()) {
                 const cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
                 try view.configureSidebar(
-                    options.sidebar_rendering,
+                    client.sidebar_rendering,
                     capabilities.kitty_graphics,
                     cell_size.width,
                     cell_size.height,
@@ -940,7 +986,7 @@ pub fn run(
             host_size.cell_width_px = cell_size.width;
             host_size.cell_height_px = cell_size.height;
             try view.configureSidebar(
-                options.sidebar_rendering,
+                client.sidebar_rendering,
                 capabilities.kitty_graphics,
                 cell_size.width,
                 cell_size.height,
@@ -1032,7 +1078,282 @@ pub fn run(
             telemetry_write_pending = false;
             result catch telemetry.deinit(io);
         },
+        .config_reload => |result| {
+            const reload = try result;
+            switch (reload) {
+                .unchanged => |mtime_ns| client.config_mtime_ns = mtime_ns,
+                .failed => |failure| {
+                    client.config_diagnostic = failure.diagnostic;
+                    client.config_mtime_ns = failure.mtime_ns;
+                    try client.requestDraw();
+                },
+                .loaded => |loaded| {
+                    const snapshot = &loaded.generation.snapshot;
+                    const requested_sidebar = if (options.sidebar_renderer_locked)
+                        client.sidebar_rendering
+                    else
+                        snapshot.sidebar_rendering;
+                    _ = requested_sidebar.resolve(capabilities.kitty_graphics) catch |err| {
+                        client.config_diagnostic.set(
+                            "reloaded sidebar renderer is unavailable: {s}",
+                            .{@errorName(err)},
+                        );
+                        client.config_mtime_ns = loaded.mtime_ns;
+                        reload_orphan = null;
+                        reload_registry_orphan = null;
+                        reload_trust_orphan = null;
+                        loaded.generation.deinit();
+                        gpa.destroy(loaded.registry);
+                        gpa.destroy(loaded.trust_store);
+                        try client.requestDraw();
+                        if (options.config_path) |path|
+                            try select.concurrent(.config_reload, waitConfigReload, .{
+                                io,
+                                gpa,
+                                path,
+                                client.config_mtime_ns,
+                                client.next_config_generation,
+                                options.profile,
+                                client.lua_generation.*.?,
+                                client.plugin_registry.*.?,
+                                options.trust_path.?,
+                                &reload_orphan,
+                                &reload_registry_orphan,
+                                &reload_trust_orphan,
+                            });
+                        continue;
+                    };
+                    const bindings = if (snapshot.bindings_configured)
+                        snapshot.bindingSlice()
+                    else
+                        defaults[0..];
+                    var replacement = InputRouter.init(bindings) catch |err| {
+                        client.config_diagnostic.set(
+                            "reloaded keymap is invalid: {s}",
+                            .{@errorName(err)},
+                        );
+                        client.config_mtime_ns = loaded.mtime_ns;
+                        reload_orphan = null;
+                        reload_registry_orphan = null;
+                        reload_trust_orphan = null;
+                        loaded.generation.deinit();
+                        gpa.destroy(loaded.registry);
+                        gpa.destroy(loaded.trust_store);
+                        try client.requestDraw();
+                        if (options.config_path) |path|
+                            try select.concurrent(.config_reload, waitConfigReload, .{
+                                io,
+                                gpa,
+                                path,
+                                client.config_mtime_ns,
+                                client.next_config_generation,
+                                options.profile,
+                                client.lua_generation.*.?,
+                                client.plugin_registry.*.?,
+                                options.trust_path.?,
+                                &reload_orphan,
+                                &reload_registry_orphan,
+                                &reload_trust_orphan,
+                            });
+                        continue;
+                    };
+                    replacement.escape_timeout_ns = snapshot.input_escape_timeout_ns;
+                    replacement.sequence_timeout_ns = snapshot.input_sequence_timeout_ns;
+
+                    input_router = replacement;
+                    if (!options.theme_locked) view.setTheme(snapshot.theme);
+                    client.sidebar_rendering = requested_sidebar;
+                    view.setSidebarVisible(snapshot.sidebar_visible);
+                    const cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
+                    try view.configureSidebar(
+                        client.sidebar_rendering,
+                        capabilities.kitty_graphics,
+                        cell_size.width,
+                        cell_size.height,
+                    );
+                    if (tabs.active()) |active|
+                        try resizeAttached(io, connection, send_buffer, &active.model, view.workbench());
+
+                    const previous = client.lua_generation.*;
+                    client.lua_generation.* = loaded.generation;
+                    reload_orphan = null;
+                    const previous_registry = client.plugin_registry.*;
+                    client.plugin_registry.* = loaded.registry;
+                    reload_registry_orphan = null;
+                    const previous_trust = client.trust_store.*;
+                    client.trust_store.* = loaded.trust_store;
+                    reload_trust_orphan = null;
+                    if (previous) |old| old.deinit();
+                    if (previous_registry) |old| gpa.destroy(old);
+                    if (previous_trust) |old| gpa.destroy(old);
+                    client.config_mtime_ns = loaded.mtime_ns;
+                    client.next_config_generation += 1;
+                    client.config_diagnostic.len = 0;
+                    try client.requestDraw();
+                },
+            }
+            if (options.config_path) |path|
+                try select.concurrent(.config_reload, waitConfigReload, .{
+                    io,
+                    gpa,
+                    path,
+                    client.config_mtime_ns,
+                    client.next_config_generation,
+                    options.profile,
+                    client.lua_generation.*.?,
+                    client.plugin_registry.*.?,
+                    options.trust_path.?,
+                    &reload_orphan,
+                    &reload_registry_orphan,
+                    &reload_trust_orphan,
+                });
+        },
+        .plugin_result => |result| {
+            client.plugin_pending = false;
+            const worker_result = result catch |err| {
+                client.config_diagnostic.set("plugin worker failed: {s}", .{@errorName(err)});
+                try client.requestDraw();
+                continue;
+            };
+            const registry = client.plugin_registry.* orelse {
+                client.config_diagnostic.set("plugin registry changed while action was running", .{});
+                try client.requestDraw();
+                continue;
+            };
+            registry.authorizeBatch(
+                worker_result.package_index,
+                worker_result.plugin_id,
+                worker_result.digest,
+                &worker_result.batch,
+            ) catch |err| {
+                client.config_diagnostic.set("plugin effect denied: {s}", .{@errorName(err)});
+                try client.requestDraw();
+                continue;
+            };
+            client.config_diagnostic.len = 0;
+            var handler: InputHandler = .{ .client = &client };
+            for (worker_result.batch.slice()) |effect|
+                if (try handler.applyNativeAction(effect) == .stop) return 0;
+            if (handler.redraw) try client.requestDraw();
+        },
     };
+}
+
+fn waitConfigReload(
+    io: Io,
+    gpa: std.mem.Allocator,
+    path: []const u8,
+    known_mtime_ns: i128,
+    generation_number: u64,
+    profile: ?[]const u8,
+    current_generation: *const lua_config.Generation,
+    current_registry: *const plugin_broker.Registry,
+    trust_path: []const u8,
+    orphan: *?*lua_config.Generation,
+    registry_orphan: *?*plugin_broker.Registry,
+    trust_orphan: *?*core.plugin.TrustStore,
+) anyerror!ConfigReload {
+    try io.sleep(.fromSeconds(1), .awake);
+    const mtime_ns = current_generation.watchFingerprint(io, path) ^
+        @as(i128, current_registry.watchFingerprint(gpa, io)) ^
+        @as(i128, trustWatchFingerprint(io, trust_path));
+    if (mtime_ns == known_mtime_ns) return .{ .unchanged = mtime_ns };
+    var diagnostic: lua_config.Diagnostic = .{};
+    const generation = lua_config.Generation.loadFileProfile(
+        gpa,
+        io,
+        path,
+        generation_number,
+        profile,
+        &diagnostic,
+    ) catch return .{ .failed = .{
+        .diagnostic = diagnostic,
+        .mtime_ns = mtime_ns,
+    } };
+    orphan.* = generation;
+    const trust = loadReloadTrustStore(gpa, io, trust_path) catch |err| {
+        orphan.* = null;
+        generation.deinit();
+        diagnostic.set("cannot load plugin trust store: {s}", .{@errorName(err)});
+        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
+    };
+    trust_orphan.* = trust;
+    const registry = gpa.create(plugin_broker.Registry) catch {
+        orphan.* = null;
+        trust_orphan.* = null;
+        generation.deinit();
+        gpa.destroy(trust);
+        diagnostic.set("cannot allocate reloaded plugin registry", .{});
+        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
+    };
+    registry.* = plugin_broker.Registry.loadWithTrust(
+        gpa,
+        io,
+        generation.configDir(),
+        generation.pluginSlice(),
+        trust,
+    ) catch |err| {
+        gpa.destroy(registry);
+        orphan.* = null;
+        trust_orphan.* = null;
+        generation.deinit();
+        gpa.destroy(trust);
+        diagnostic.set("cannot load plugins: {s}", .{@errorName(err)});
+        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
+    };
+    registry.validateConfiguredActions(generation.snapshot.bindingSlice()) catch |err| {
+        gpa.destroy(registry);
+        orphan.* = null;
+        trust_orphan.* = null;
+        generation.deinit();
+        gpa.destroy(trust);
+        diagnostic.set("invalid configured plugin action: {s}", .{@errorName(err)});
+        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
+    };
+    registry_orphan.* = registry;
+    return .{ .loaded = .{
+        .generation = generation,
+        .registry = registry,
+        .trust_store = trust,
+        .mtime_ns = generation.watchFingerprint(io, path) ^
+            @as(i128, registry.watchFingerprint(gpa, io)) ^
+            @as(i128, trustWatchFingerprint(io, trust_path)),
+    } };
+}
+
+pub fn trustWatchFingerprint(io: Io, path: []const u8) u64 {
+    var hasher = std.hash.Wyhash.init(0x74656c61722d7472);
+    hasher.update(path);
+    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch {
+        hasher.update("\x00missing");
+        return hasher.final();
+    };
+    hasher.update(std.mem.asBytes(&stat.kind));
+    hasher.update(std.mem.asBytes(&stat.size));
+    hasher.update(std.mem.asBytes(&stat.mtime.nanoseconds));
+    return hasher.final();
+}
+
+fn loadReloadTrustStore(
+    gpa: std.mem.Allocator,
+    io: Io,
+    path: []const u8,
+) !*core.plugin.TrustStore {
+    const store = try gpa.create(core.plugin.TrustStore);
+    errdefer gpa.destroy(store);
+    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
+        error.FileNotFound => {
+            store.* = .{};
+            return store;
+        },
+        else => return err,
+    };
+    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0)
+        return error.InsecureTrustStore;
+    const source = try Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
+    defer gpa.free(source);
+    store.* = try core.plugin.TrustStore.parse(gpa, source);
+    return store;
 }
 
 fn readInput(io: Io, input: File) anyerror!InputChunk {
@@ -1101,13 +1422,65 @@ const InputHandler = struct {
         }
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
-        // Recorded exception to `docs/engineering-invariants.md` ("Raw host
-        // input is not copied to the child"): keyboard bytes are forwarded in
-        // the host terminal's encoding, so a child in application-cursor or
-        // keypad mode (DECCKM/DECKPAM) receives host-mode sequences. Mouse
-        // already re-encodes per child modes (`encodeSgrMouse`); fixing keys
-        // the same way needs the child's input modes in `schema.frame`, which
-        // crosses into core and the runtime and is planned follow-up work.
+        try handler.sendPaneBytes(pane, bytes);
+    }
+
+    pub fn key(handler: *InputHandler, value: keybind.Key) !void {
+        if (handler.client.view.renamedTab() != null) {
+            var editing_bytes: [32]u8 = undefined;
+            return handler.forward(try input_mod.encodeKey(&editing_bytes, value, .{}));
+        }
+        const pane = handler.activeModel().focusedPane() orelse return;
+        if (!pane.attached) return;
+        var encoded: [32]u8 = undefined;
+        try handler.sendPaneBytes(
+            pane,
+            try input_mod.encodeKey(&encoded, value, pane.input_modes),
+        );
+    }
+
+    fn sendPaste(handler: *InputHandler, text: []const u8) !void {
+        const pane = handler.activeModel().focusedPane() orelse return;
+        if (!pane.attached) return;
+        var encoded: [lua_config.max_expression_paste_bytes + 16]u8 = undefined;
+        try handler.sendPaneBytes(
+            pane,
+            try input_mod.encodePaste(&encoded, text, pane.input_modes),
+        );
+    }
+
+    pub fn pasteStart(handler: *InputHandler) !void {
+        if (handler.client.view.renamedTab() != null)
+            return handler.forward("\x1b[200~");
+        const pane = handler.activeModel().focusedPane() orelse return;
+        if (!pane.attached) return;
+        handler.client.paste_pane = pane.id;
+        if (pane.input_modes.bracketed_paste)
+            try handler.sendPaneBytes(pane, "\x1b[200~");
+    }
+
+    pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
+        if (handler.client.view.renamedTab() != null) return handler.forward(text);
+        const pane_id = handler.client.paste_pane orelse return;
+        const pane = handler.client.tabs.findPane(pane_id) orelse return;
+        if (pane.attached) try handler.sendPaneBytes(pane, text);
+    }
+
+    pub fn pasteEnd(handler: *InputHandler) !void {
+        if (handler.client.view.renamedTab() != null)
+            return handler.forward("\x1b[201~");
+        const pane_id = handler.client.paste_pane orelse return;
+        handler.client.paste_pane = null;
+        const pane = handler.client.tabs.findPane(pane_id) orelse return;
+        if (pane.attached and pane.input_modes.bracketed_paste)
+            try handler.sendPaneBytes(pane, "\x1b[201~");
+    }
+
+    fn sendPaneBytes(
+        handler: *InputHandler,
+        pane: *multiplexer.Pane,
+        bytes: []const u8,
+    ) !void {
         const started = diagnostics.now(handler.client.io);
         const payload = try schema.encodePaneInput(handler.client.send_buffer, .{
             .pane_id = pane.id,
@@ -1198,7 +1571,7 @@ const InputHandler = struct {
         }
         handler.client.graphics_store.invalidatePlacements();
         try handler.client.view.configureSidebar(
-            handler.client.options.sidebar_rendering,
+            handler.client.sidebar_rendering,
             handler.client.capabilities.kitty_graphics,
             cell_size.width,
             cell_size.height,
@@ -1212,12 +1585,105 @@ const InputHandler = struct {
     pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
         if (handler.client.view.renamedTab() != null) return .continue_routing;
         switch (value) {
-            .split_horizontal => try handler.beginSplit(.horizontal),
-            .split_vertical => try handler.beginSplit(.vertical),
-            .focus_left => handler.moveFocus(.left),
-            .focus_right => handler.moveFocus(.right),
-            .focus_up => handler.moveFocus(.up),
-            .focus_down => handler.moveFocus(.down),
+            .lua_callback => |reference| {
+                const generation = handler.client.lua_generation.* orelse
+                    return .continue_routing;
+                const batch = generation.invokeCallback(
+                    reference,
+                    handler.callbackContext(),
+                    &handler.client.config_diagnostic,
+                ) catch {
+                    handler.redraw = true;
+                    return .continue_routing;
+                };
+                for (batch.slice()) |effect| switch (effect) {
+                    .plugin => |requested| {
+                        const registry = handler.client.plugin_registry.* orelse {
+                            handler.client.config_diagnostic.set(
+                                "Lua callback referenced a plugin but no registry is active",
+                                .{},
+                            );
+                            handler.redraw = true;
+                            return .continue_routing;
+                        };
+                        _ = registry.resolve(requested) catch |err| {
+                            handler.client.config_diagnostic.set(
+                                "Lua callback returned an invalid plugin action: {s}",
+                                .{@errorName(err)},
+                            );
+                            handler.redraw = true;
+                            return .continue_routing;
+                        };
+                    },
+                    else => {},
+                };
+                handler.client.config_diagnostic.len = 0;
+                for (batch.slice()) |effect|
+                    if (try handler.action(effect) == .stop) return .stop;
+                return .continue_routing;
+            },
+            .lua_expr => |reference| {
+                const generation = handler.client.lua_generation.* orelse
+                    return .continue_routing;
+                const decision = generation.invokeExpression(
+                    reference,
+                    handler.callbackContext(),
+                    &handler.client.config_diagnostic,
+                ) catch {
+                    handler.redraw = true;
+                    return .continue_routing;
+                };
+                handler.client.config_diagnostic.len = 0;
+                switch (decision) {
+                    .consume => {},
+                    .forward_binding => |keys| for (keys.slice()) |key_value|
+                        try handler.key(key_value),
+                    .keys => |keys| for (keys.slice()) |key_value|
+                        try handler.key(key_value),
+                    .paste => |paste| try handler.sendPaste(paste.slice()),
+                }
+                return .continue_routing;
+            },
+            .plugin => |requested| {
+                if (handler.client.plugin_pending) return .continue_routing;
+                const registry = handler.client.plugin_registry.* orelse
+                    return .continue_routing;
+                const invocation = registry.resolve(requested) catch |err| {
+                    handler.client.config_diagnostic.set(
+                        "plugin action cannot be resolved: {s}",
+                        .{@errorName(err)},
+                    );
+                    handler.redraw = true;
+                    return .continue_routing;
+                };
+                const request = try registry.workerRequest(
+                    invocation,
+                    handler.callbackContext(),
+                );
+                try handler.client.select.concurrent(
+                    .plugin_result,
+                    plugin_broker.executeWorker,
+                    .{ handler.client.io, handler.client.gpa, request },
+                );
+                handler.client.plugin_pending = true;
+                return .continue_routing;
+            },
+            else => return handler.applyNativeAction(value),
+        }
+    }
+
+    fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control {
+        switch (value) {
+            .split_pane => |direction| try handler.beginSplit(switch (direction) {
+                .horizontal => .horizontal,
+                .vertical => .vertical,
+            }),
+            .focus_pane => |direction| handler.moveFocus(switch (direction) {
+                .left => .left,
+                .right => .right,
+                .up => .up,
+                .down => .down,
+            }),
             .toggle_sidebar => {
                 handler.client.view.toggleSidebar();
                 try resizeAttached(
@@ -1231,24 +1697,17 @@ const InputHandler = struct {
             },
             .close_pane => try handler.closeFocused(),
             .new_tab => try handler.createTab(),
-            .next_tab => try handler.selectTabOffset(1),
-            .previous_tab => try handler.selectTabOffset(-1),
-            .select_tab_1 => try handler.selectTabPosition(0),
-            .select_tab_2 => try handler.selectTabPosition(1),
-            .select_tab_3 => try handler.selectTabPosition(2),
-            .select_tab_4 => try handler.selectTabPosition(3),
-            .select_tab_5 => try handler.selectTabPosition(4),
-            .select_tab_6 => try handler.selectTabPosition(5),
-            .select_tab_7 => try handler.selectTabPosition(6),
-            .select_tab_8 => try handler.selectTabPosition(7),
-            .select_tab_9 => try handler.selectTabPosition(8),
+            .select_tab_offset => |offset| try handler.selectTabOffset(offset),
+            .select_tab => |position| try handler.selectTabPosition(position),
             .rename_tab => if (handler.client.tabs.active()) |tab| {
                 handler.client.view.beginTabRename(tab.location.tab_id, tab.labelSlice());
                 handler.redraw = true;
             },
             .close_tab => try handler.closeTab(),
-            .move_tab_previous => try handler.moveTab(.previous),
-            .move_tab_next => try handler.moveTab(.next),
+            .move_tab => |direction| try handler.moveTab(switch (direction) {
+                .previous => .previous,
+                .next => .next,
+            }),
             .detach => {
                 for (handler.client.tabs.items[0..handler.client.tabs.count]) |*slot| {
                     const tab = if (slot.*) |*item| item else continue;
@@ -1256,8 +1715,21 @@ const InputHandler = struct {
                 }
                 return .stop;
             },
+            .lua_callback, .lua_expr, .plugin => unreachable,
         }
         return .continue_routing;
+    }
+
+    fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
+        const model = handler.activeModel();
+        const focused = model.focusedPane();
+        return .{
+            .sidebar_visible = handler.client.view.sidebar_requested,
+            .tab_count = @intCast(handler.client.tabs.count),
+            .active_tab_index = @intCast(handler.client.tabs.activeIndex() orelse 0),
+            .pane_count = @intCast(model.pane_count),
+            .focused_pane_id = if (focused) |pane| schema.id.raw(pane.id) else 0,
+        };
     }
 
     fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
@@ -1415,31 +1887,31 @@ const InputHandler = struct {
 
 fn defaultBindings() ![default_binding_count]ConfiguredBinding {
     return .{
-        try .parse(&.{ "ctrl+b", "%" }, .split_horizontal),
-        try .parse(&.{ "ctrl+b", "\"" }, .split_vertical),
-        try .parse(&.{ "ctrl+b", "left" }, .focus_left),
-        try .parse(&.{ "ctrl+b", "right" }, .focus_right),
-        try .parse(&.{ "ctrl+b", "up" }, .focus_up),
-        try .parse(&.{ "ctrl+b", "down" }, .focus_down),
+        try .parse(&.{ "ctrl+b", "%" }, .{ .split_pane = .horizontal }),
+        try .parse(&.{ "ctrl+b", "\"" }, .{ .split_pane = .vertical }),
+        try .parse(&.{ "ctrl+b", "left" }, .{ .focus_pane = .left }),
+        try .parse(&.{ "ctrl+b", "right" }, .{ .focus_pane = .right }),
+        try .parse(&.{ "ctrl+b", "up" }, .{ .focus_pane = .up }),
+        try .parse(&.{ "ctrl+b", "down" }, .{ .focus_pane = .down }),
         try .parse(&.{ "ctrl+b", "s" }, .toggle_sidebar),
         try .parse(&.{ "ctrl+b", "x" }, .close_pane),
         try .parse(&.{ "ctrl+b", "d" }, .detach),
         try .parse(&.{ "ctrl+b", "c" }, .new_tab),
-        try .parse(&.{ "ctrl+b", "n" }, .next_tab),
-        try .parse(&.{ "ctrl+b", "p" }, .previous_tab),
-        try .parse(&.{ "ctrl+b", "1" }, .select_tab_1),
-        try .parse(&.{ "ctrl+b", "2" }, .select_tab_2),
-        try .parse(&.{ "ctrl+b", "3" }, .select_tab_3),
-        try .parse(&.{ "ctrl+b", "4" }, .select_tab_4),
-        try .parse(&.{ "ctrl+b", "5" }, .select_tab_5),
-        try .parse(&.{ "ctrl+b", "6" }, .select_tab_6),
-        try .parse(&.{ "ctrl+b", "7" }, .select_tab_7),
-        try .parse(&.{ "ctrl+b", "8" }, .select_tab_8),
-        try .parse(&.{ "ctrl+b", "9" }, .select_tab_9),
+        try .parse(&.{ "ctrl+b", "n" }, .{ .select_tab_offset = 1 }),
+        try .parse(&.{ "ctrl+b", "p" }, .{ .select_tab_offset = -1 }),
+        try .parse(&.{ "ctrl+b", "1" }, .{ .select_tab = 0 }),
+        try .parse(&.{ "ctrl+b", "2" }, .{ .select_tab = 1 }),
+        try .parse(&.{ "ctrl+b", "3" }, .{ .select_tab = 2 }),
+        try .parse(&.{ "ctrl+b", "4" }, .{ .select_tab = 3 }),
+        try .parse(&.{ "ctrl+b", "5" }, .{ .select_tab = 4 }),
+        try .parse(&.{ "ctrl+b", "6" }, .{ .select_tab = 5 }),
+        try .parse(&.{ "ctrl+b", "7" }, .{ .select_tab = 6 }),
+        try .parse(&.{ "ctrl+b", "8" }, .{ .select_tab = 7 }),
+        try .parse(&.{ "ctrl+b", "9" }, .{ .select_tab = 8 }),
         try .parse(&.{ "ctrl+b", "T" }, .rename_tab),
         try .parse(&.{ "ctrl+b", "X" }, .close_tab),
-        try .parse(&.{ "ctrl+b", "," }, .move_tab_previous),
-        try .parse(&.{ "ctrl+b", "." }, .move_tab_next),
+        try .parse(&.{ "ctrl+b", "," }, .{ .move_tab = .previous }),
+        try .parse(&.{ "ctrl+b", "." }, .{ .move_tab = .next }),
     };
 }
 
@@ -1752,10 +2224,13 @@ test {
 }
 
 test "configured action names cover multiplexer operations" {
-    try std.testing.expectEqual(Action.detach, try Action.parse("detach"));
-    try std.testing.expectEqual(Action.split_horizontal, try Action.parse("split-horizontal"));
-    try std.testing.expectEqual(Action.close_pane, try Action.parse("close-pane"));
-    try std.testing.expectEqual(Action.toggle_sidebar, try Action.parse("toggle-sidebar"));
+    try std.testing.expectEqualDeep(Action.detach, try Action.parse("detach"));
+    try std.testing.expectEqualDeep(
+        Action{ .split_pane = .horizontal },
+        try Action.parse("split-horizontal"),
+    );
+    try std.testing.expectEqualDeep(Action.close_pane, try Action.parse("close-pane"));
+    try std.testing.expectEqualDeep(Action.toggle_sidebar, try Action.parse("toggle-sidebar"));
     try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));
 }
 

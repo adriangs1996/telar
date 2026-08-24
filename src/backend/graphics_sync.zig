@@ -38,6 +38,7 @@ pub const Attachment = struct {
     acknowledged: core.ui.Buffer,
     acknowledged_cursor: schema.frame.Cursor = .{},
     acknowledged_mouse: schema.frame.Mouse = .{},
+    acknowledged_input_modes: schema.frame.InputModes = .{},
     next_frame_id: u64 = 1,
     acknowledged_frame_id: u64 = 0,
     outstanding_frame_id: u64 = 0,

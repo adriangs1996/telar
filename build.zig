@@ -18,6 +18,8 @@ pub fn build(b: *std.Build) void {
         .optimize = vt_optimize,
     }).module("ghostty-vt");
 
+    const lua_api = addLua(b, target, optimize, "lua");
+
     // The width tables, behind a module name so the drawing layer never names
     // its provider. Everything that draws imports `unicode`; only this line
     // decides which implementation answers, which is what keeps the drawing
@@ -55,6 +57,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     frontend.addImport("telar-core", core);
+    frontend.addImport("lua-api", lua_api);
 
     // One shipped binary contains both the client and runtime entry points.
     const exe = b.addExecutable(.{
@@ -84,6 +87,7 @@ pub fn build(b: *std.Build) void {
         .ReleaseFast
     else
         optimize;
+    const bench_lua_api = addLua(b, target, bench_optimize, "lua-bench");
     const bench_unicode = b.createModule(.{
         .root_source_file = b.path("src/core/unicode.zig"),
         .target = target,
@@ -112,6 +116,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     bench_frontend.addImport("telar-core", bench_core);
+    bench_frontend.addImport("lua-api", bench_lua_api);
 
     const benchmarks = b.addExecutable(.{
         .name = "telar-benchmarks",
@@ -185,12 +190,19 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/core/diagnostics.zig" },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
         .{ .path = "src/core/schema_test.zig", .schema = true },
+        .{ .path = "src/core/plugin.zig" },
         .{ .path = "src/frontend/ui.zig" },
         .{ .path = "src/frontend/term.zig", .libc = true },
         .{ .path = "src/frontend/frame.zig", .libc = true },
         .{ .path = "src/frontend/pace.zig" },
         .{ .path = "src/frontend/edit.zig" },
         .{ .path = "src/frontend/keybind.zig" },
+        .{ .path = "src/frontend/action.zig" },
+        .{ .path = "src/frontend/input.zig" },
+        .{ .path = "src/frontend/lua_config.zig", .libc = true },
+        .{ .path = "src/frontend/plugin_broker.zig", .libc = true },
+        .{ .path = "src/frontend/plugin_protocol.zig", .libc = true },
+        .{ .path = "src/frontend/plugin_worker.zig", .libc = true },
         .{ .path = "src/frontend/layout.zig" },
         .{ .path = "src/frontend/multiplexer.zig", .libc = true },
         .{ .path = "src/frontend/client.zig", .libc = true },
@@ -225,6 +237,7 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addImport("telar-core", core);
         tests.root_module.addImport("telar-backend", backend);
         tests.root_module.addImport("telar-frontend", frontend);
+        tests.root_module.addImport("lua-api", lua_api);
         if (suite.vt) tests.root_module.addImport("ghostty-vt", ghostty_vt);
         const run_tests = b.addRunArtifact(tests);
         test_step.dependOn(&run_tests.step);
@@ -343,4 +356,70 @@ pub fn build(b: *std.Build) void {
         cross_step.dependOn(&check.step);
     }
     test_step.dependOn(cross_step);
+}
+
+fn addLua(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    name: []const u8,
+) *std.Build.Module {
+    const source_root = b.path("vendor/lua-5.5.1/src");
+    const lua = b.addLibrary(.{
+        .name = name,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    lua.root_module.addIncludePath(source_root);
+    lua.root_module.addCSourceFiles(.{
+        .root = source_root,
+        .files = &.{
+            "lapi.c",
+            "lauxlib.c",
+            "lbaselib.c",
+            "lcode.c",
+            "lcorolib.c",
+            "lctype.c",
+            "ldebug.c",
+            "ldo.c",
+            "ldump.c",
+            "lfunc.c",
+            "lgc.c",
+            "llex.c",
+            "lmathlib.c",
+            "lmem.c",
+            "lobject.c",
+            "lopcodes.c",
+            "lparser.c",
+            "lstate.c",
+            "lstring.c",
+            "lstrlib.c",
+            "ltable.c",
+            "ltablib.c",
+            "ltm.c",
+            "lundump.c",
+            "lutf8lib.c",
+            "lvm.c",
+            "lzio.c",
+        },
+        .flags = if (target.result.os.tag == .windows)
+            &.{"-std=c99"}
+        else
+            &.{ "-std=c99", "-DLUA_USE_POSIX" },
+    });
+    if (target.result.os.tag != .windows)
+        lua.root_module.linkSystemLibrary("m", .{});
+
+    const api = b.createModule(.{
+        .root_source_file = b.path("src/frontend/lua_api.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    api.addIncludePath(source_root);
+    api.linkLibrary(lua);
+    return api;
 }

@@ -367,6 +367,7 @@ pub const Pane = struct {
     output_buffer: [output_chunk_size]u8 = undefined,
     cursor: schema.frame.Cursor = .{},
     mouse: schema.frame.Mouse = .{},
+    input_modes: schema.frame.InputModes = .{},
     foreground_override: ?vt.color.RGB = null,
     background_override: ?vt.color.RGB = null,
     semantic_colors_dirty: bool = false,
@@ -483,6 +484,7 @@ pub const Pane = struct {
         pane.foreground_override = pane.terminal.colors.foreground.override;
         pane.background_override = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
+        pane.input_modes = pane.inputModeState();
         try pane.render(true);
         pane.history_session_started = history_service.startSession(
             io,
@@ -513,6 +515,15 @@ pub const Pane = struct {
             .tracking = tracking,
             .sgr = modes.get(.mouse_format_sgr) or pixels,
             .pixels = pixels,
+        };
+    }
+
+    pub fn inputModeState(pane: *const Pane) schema.frame.InputModes {
+        const modes = &pane.terminal.modes;
+        return .{
+            .cursor_keys = modes.get(.cursor_keys),
+            .keypad_keys = modes.get(.keypad_keys),
+            .bracketed_paste = modes.get(.bracketed_paste),
         };
     }
 
@@ -561,6 +572,7 @@ pub const Pane = struct {
         const foreground = pane.terminal.colors.foreground.override;
         const background = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
+        pane.input_modes = pane.inputModeState();
         if (!std.meta.eql(pane.foreground_override, foreground) or
             !std.meta.eql(pane.background_override, background))
         {

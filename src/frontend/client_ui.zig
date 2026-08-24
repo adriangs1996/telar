@@ -208,6 +208,11 @@ pub const State = struct {
         state.dirty = true;
     }
 
+    pub fn setSidebarVisible(state: *State, visible: bool) void {
+        if (state.sidebar_requested == visible) return;
+        state.toggleSidebar();
+    }
+
     pub fn invalidate(state: *State) void {
         state.dirty = true;
     }

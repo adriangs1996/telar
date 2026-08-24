@@ -29,6 +29,7 @@ pub const Pane = struct {
     attached: bool,
     cursor: schema.frame.Cursor = .{},
     mouse: schema.frame.Mouse = .{},
+    input_modes: schema.frame.InputModes = .{},
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
     graphics_placeholder: bool = false,
@@ -229,6 +230,7 @@ pub const Model = struct {
         errdefer if (replacement_damage) |rows| model.gpa.free(rows);
         const applied = try frame_apply.applyBuffer(&pane.buffer, &pane.cursor, frame);
         pane.mouse = frame.mouse;
+        pane.input_modes = frame.input_modes;
         if (replacement_damage) |rows| {
             @memset(rows, .{});
             model.gpa.free(pane.damage_rows);

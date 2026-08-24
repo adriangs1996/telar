@@ -90,6 +90,10 @@ pub const Model = struct {
         return &model.items[model.active_index].?;
     }
 
+    pub fn activeIndex(model: *const Model) ?usize {
+        return if (model.count == 0) null else model.active_index;
+    }
+
     pub fn find(model: *Model, tab_id: schema.TabId) ?*Tab {
         for (model.items[0..model.count]) |*slot| {
             const tab = if (slot.*) |*value| value else continue;

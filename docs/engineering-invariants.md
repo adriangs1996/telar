@@ -45,10 +45,21 @@ A design is incomplete while any item is unknown.
 
 - Carries input, PTY bytes, VT state, cell damage, and terminal responses.
 - Drains the PTY before rendering or observation work.
-- Performs no filesystem, database, JSON, Lua, process-tree, network, or plugin
-  work.
+- Built-in input routing performs no filesystem, database, JSON, Lua,
+  process-tree, network, or plugin work.
+- After the native router matches an explicit user binding, it may call a
+  client-owned Lua callback. The callback has hard memory, instruction,
+  wall-time, result-count, and result-byte limits. Its latency affects only
+  that client. Runtime input, PTYs, and other clients continue independently.
+- A Lua binding receives an immutable value snapshot and returns validated
+  semantic effects or semantic input. It cannot retain Zig pointers, mutate
+  client state reentrantly, emit terminal bytes, or call runtime internals.
+- Runtime Lua and downloaded plugin Lua never execute synchronously in this
+  path. Native bindings never enter Lua.
 - Allocates nothing in steady state. Fixed buffers and bounded rings cover
-  expected bursts.
+  expected bursts. Invoking an explicit Lua binding may allocate only inside
+  its quota-accounted client VM; the router and runtime side remain
+  allocation-free.
 - Coalesces obsolete frames. It does not queue a visual replay.
 
 ### Media
@@ -181,16 +192,30 @@ A design is incomplete while any item is unknown.
 
 - Treat configuration Lua as trusted user code whose failures still require
   containment.
-- Evaluate configuration in a disposable loader, then convert its returned
-  table into validated, typed Telar values. No live Lua value crosses into a
-  runtime or render loop.
+- Runtime configuration is evaluated in a disposable loader and converted to
+  validated, typed Telar values. No live Lua value enters the runtime.
+- Client configuration without callbacks is also disposable. When it declares
+  Lua callbacks, the client owns one live VM generation containing those
+  closures. The VM is client state and never enters the runtime, renderer, or
+  another client.
+- Callback APIs append bounded semantic effects to a batch. Zig validates the
+  complete batch after Lua returns and before applying any effect. Lua never
+  receives mutable Telar objects or borrowed pointers.
 - A config reload builds and validates a complete replacement before one atomic
-  swap. Failure keeps the previous configuration active.
+  swap. Client reload replaces the typed snapshot, callback registry, and Lua
+  VM as one generation. Failure keeps the previous generation active; stale
+  completions are discarded by generation.
 - The default config environment exposes pure constructors and data. Filesystem,
   process, network, debug, native module, and control-socket access require an
   explicit user decision.
 - Config declares semantic actions and stable IDs. It does not patch internal
   structs or emit terminal bytes.
+- Normal Lua bindings return semantic effects. Expression bindings return
+  semantic keys, paste, consume, or forward decisions; the client encodes them
+  for the focused child's terminal modes. Error and timeout consume the
+  matched binding unless its configuration declares another safe fallback.
+- Closure state is ephemeral and is lost on reload. Durable state uses a
+  host-managed typed API and is never restored as Lua bytecode or closures.
 - Config has an API version. Reject incompatible versions with a concrete
   migration error.
 
@@ -205,6 +230,9 @@ A design is incomplete while any item is unknown.
   alone.
 - Pin installed source to an immutable revision. Show build and startup commands
   before authorization.
+- Bind execution authority to a whole-package digest. Execute a private,
+  revalidated invocation snapshot so mutable package files cannot change
+  between inspection and worker startup.
 - A plugin receives scoped API capabilities through a broker, not the runtime's
   global control socket or credentials.
 - Enforce memory, instruction, wall-time, output, child-process, concurrency,

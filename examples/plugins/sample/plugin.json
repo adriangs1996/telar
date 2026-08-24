@@ -1,0 +1,12 @@
+{
+  "api_version": 1,
+  "id": "dev.telar.sample",
+  "version": "0.1.0",
+  "entry": "plugin.lua",
+  "source": {
+    "url": "local:examples/plugins/sample",
+    "revision": "development"
+  },
+  "actions": ["toggle"],
+  "capabilities": []
+}

@@ -1,0 +1,94 @@
+//! Bounded semantic actions produced by native and Lua keybindings.
+//!
+//! The input router stores these values directly. Strings, Lua closures and
+//! plugin names are resolved while compiling configuration so routing remains
+//! allocation-free and never retains configuration-owned memory.
+
+const std = @import("std");
+
+pub const CallbackRef = struct {
+    generation: u64,
+    id: u32,
+};
+
+pub const PluginAction = struct {
+    plugin: u64,
+    action: u64,
+};
+
+pub const SplitDirection = enum(u8) { horizontal, vertical };
+pub const Direction = enum(u8) { left, right, up, down };
+pub const TabMove = enum(u8) { previous, next };
+
+pub const Action = union(enum) {
+    split_pane: SplitDirection,
+    focus_pane: Direction,
+    toggle_sidebar,
+    close_pane,
+    new_tab,
+    select_tab_offset: i8,
+    select_tab: u8,
+    rename_tab,
+    close_tab,
+    move_tab: TabMove,
+    detach,
+    lua_callback: CallbackRef,
+    lua_expr: CallbackRef,
+    plugin: PluginAction,
+
+    /// Parses stable built-in action names used by configuration and tests.
+    pub fn parse(name: []const u8) !Action {
+        if (std.mem.eql(u8, name, "split-horizontal"))
+            return .{ .split_pane = .horizontal };
+        if (std.mem.eql(u8, name, "split-vertical"))
+            return .{ .split_pane = .vertical };
+        if (std.mem.eql(u8, name, "focus-left"))
+            return .{ .focus_pane = .left };
+        if (std.mem.eql(u8, name, "focus-right"))
+            return .{ .focus_pane = .right };
+        if (std.mem.eql(u8, name, "focus-up"))
+            return .{ .focus_pane = .up };
+        if (std.mem.eql(u8, name, "focus-down"))
+            return .{ .focus_pane = .down };
+        if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
+        if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
+        if (std.mem.eql(u8, name, "new-tab")) return .new_tab;
+        if (std.mem.eql(u8, name, "next-tab"))
+            return .{ .select_tab_offset = 1 };
+        if (std.mem.eql(u8, name, "previous-tab"))
+            return .{ .select_tab_offset = -1 };
+        if (std.mem.eql(u8, name, "rename-tab")) return .rename_tab;
+        if (std.mem.eql(u8, name, "close-tab")) return .close_tab;
+        if (std.mem.eql(u8, name, "move-tab-previous"))
+            return .{ .move_tab = .previous };
+        if (std.mem.eql(u8, name, "move-tab-next"))
+            return .{ .move_tab = .next };
+        if (std.mem.eql(u8, name, "detach")) return .detach;
+
+        const prefix = "select-tab-";
+        if (std.mem.startsWith(u8, name, prefix)) {
+            const one_based = std.fmt.parseUnsigned(u8, name[prefix.len..], 10) catch
+                return error.UnknownAction;
+            if (one_based == 0) return error.UnknownAction;
+            return .{ .select_tab = one_based - 1 };
+        }
+        return error.UnknownAction;
+    }
+};
+
+test "built-in names compile to parameterized actions" {
+    try std.testing.expectEqualDeep(
+        Action{ .split_pane = .horizontal },
+        try Action.parse("split-horizontal"),
+    );
+    try std.testing.expectEqualDeep(
+        Action{ .select_tab = 8 },
+        try Action.parse("select-tab-9"),
+    );
+    try std.testing.expectEqualDeep(
+        Action{ .select_tab_offset = -1 },
+        try Action.parse("previous-tab"),
+    );
+    try std.testing.expectError(error.UnknownAction, Action.parse("select-tab-0"));
+    try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));
+}

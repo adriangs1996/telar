@@ -18,7 +18,32 @@ pub const std_options: std.Options = .{ .log_level = .err };
 const RunOptions = struct {
     command: pty.Command,
     theme: frontend.theme.Theme = frontend.theme.default_theme,
+    theme_set: bool = false,
     sidebar_rendering: frontend.kitty.SidebarRendering = .automatic,
+    sidebar_renderer_set: bool = false,
+    config: ?[*:0]const u8 = null,
+    no_config: bool = false,
+    profile: ?[*:0]const u8 = null,
+};
+
+const ConfigCheckOptions = struct {
+    path: ?[*:0]const u8 = null,
+    profile: ?[*:0]const u8 = null,
+};
+
+const PluginWorkerOptions = struct {
+    entry: [*:0]const u8,
+    action: [*:0]const u8,
+    context: frontend.lua_config.CallbackContext,
+};
+
+const PluginCommand = enum { inspect, install, trust };
+
+const PluginOptions = struct {
+    command: PluginCommand,
+    path: [*:0]const u8,
+    capabilities: [@typeInfo(core.plugin.Capability).@"enum".fields.len]core.plugin.Capability = undefined,
+    capability_count: u8 = 0,
 };
 
 const Cli = union(enum) {
@@ -26,6 +51,9 @@ const Cli = union(enum) {
     version,
     server: ServerOptions,
     history: HistoryOptions,
+    config_check: ConfigCheckOptions,
+    plugin_worker: PluginWorkerOptions,
+    plugin: PluginOptions,
     run: RunOptions,
 
     fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !Cli {
@@ -41,6 +69,67 @@ const Cli = union(enum) {
             return .{ .server = try ServerOptions.parse(args[2..]) };
         if (std.mem.eql(u8, first, "history"))
             return .{ .history = try HistoryOptions.parse(args[2..]) };
+        if (std.mem.eql(u8, first, "config")) {
+            if (args.len < 3 or !std.mem.eql(u8, std.mem.span(args[2]), "check"))
+                return error.UnknownConfigAction;
+            var check: ConfigCheckOptions = .{};
+            var check_index: usize = 3;
+            while (check_index < args.len) {
+                if (std.mem.eql(u8, std.mem.span(args[check_index]), "--profile")) {
+                    if (check.profile != null) return error.DuplicateProfileOption;
+                    if (check_index + 1 >= args.len) return error.MissingProfileName;
+                    check.profile = args[check_index + 1];
+                    check_index += 2;
+                } else {
+                    if (check.path != null) return error.TooManyConfigArguments;
+                    check.path = args[check_index];
+                    check_index += 1;
+                }
+            }
+            return .{ .config_check = check };
+        }
+        if (std.mem.eql(u8, first, "plugin-worker")) {
+            if (args.len != 9) return error.InvalidPluginWorkerArguments;
+            return .{ .plugin_worker = .{
+                .entry = args[2],
+                .action = args[3],
+                .context = .{
+                    .sidebar_visible = try parseWorkerBool(args[4]),
+                    .tab_count = try std.fmt.parseUnsigned(u16, std.mem.span(args[5]), 10),
+                    .active_tab_index = try std.fmt.parseUnsigned(u16, std.mem.span(args[6]), 10),
+                    .pane_count = try std.fmt.parseUnsigned(u16, std.mem.span(args[7]), 10),
+                    .focused_pane_id = try std.fmt.parseUnsigned(u64, std.mem.span(args[8]), 10),
+                },
+            } };
+        }
+        if (std.mem.eql(u8, first, "plugin")) {
+            if (args.len < 4) return error.MissingPluginArguments;
+            var plugin_options: PluginOptions = .{
+                .command = if (std.mem.eql(u8, std.mem.span(args[2]), "inspect"))
+                    .inspect
+                else if (std.mem.eql(u8, std.mem.span(args[2]), "install"))
+                    .install
+                else if (std.mem.eql(u8, std.mem.span(args[2]), "trust"))
+                    .trust
+                else
+                    return error.UnknownPluginAction,
+                .path = args[3],
+            };
+            var plugin_arg: usize = 4;
+            while (plugin_arg < args.len) {
+                if (!std.mem.eql(u8, std.mem.span(args[plugin_arg]), "--capability") or
+                    plugin_arg + 1 >= args.len) return error.InvalidPluginArguments;
+                if (plugin_options.capability_count == plugin_options.capabilities.len)
+                    return error.TooManyPluginCapabilities;
+                plugin_options.capabilities[plugin_options.capability_count] =
+                    try core.plugin.Capability.parse(std.mem.span(args[plugin_arg + 1]));
+                plugin_options.capability_count += 1;
+                plugin_arg += 2;
+            }
+            if (plugin_options.command != .trust and plugin_options.capability_count != 0)
+                return error.InvalidPluginArguments;
+            return .{ .plugin = plugin_options };
+        }
 
         var options: RunOptions = .{ .command = undefined };
         var theme_set = false;
@@ -60,6 +149,7 @@ const Cli = union(enum) {
                 options.theme = frontend.theme.fromName(std.mem.span(args[command_start + 1])) orelse
                     return error.UnknownTheme;
                 theme_set = true;
+                options.theme_set = true;
                 command_start += 2;
                 continue;
             }
@@ -68,6 +158,7 @@ const Cli = union(enum) {
                 options.theme = frontend.theme.fromName(arg["--theme=".len..]) orelse
                     return error.UnknownTheme;
                 theme_set = true;
+                options.theme_set = true;
                 command_start += 1;
                 continue;
             }
@@ -78,6 +169,7 @@ const Cli = union(enum) {
                     std.mem.span(args[command_start + 1]),
                 );
                 sidebar_renderer_set = true;
+                options.sidebar_renderer_set = true;
                 command_start += 2;
                 continue;
             }
@@ -87,6 +179,41 @@ const Cli = union(enum) {
                     arg["--sidebar-renderer=".len..],
                 );
                 sidebar_renderer_set = true;
+                options.sidebar_renderer_set = true;
+                command_start += 1;
+                continue;
+            }
+            if (std.mem.eql(u8, arg, "--config")) {
+                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
+                if (command_start + 1 >= args.len) return error.MissingConfigPath;
+                options.config = args[command_start + 1];
+                command_start += 2;
+                continue;
+            }
+            if (std.mem.startsWith(u8, arg, "--config=")) {
+                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
+                if (arg["--config=".len..].len == 0) return error.MissingConfigPath;
+                options.config = args[command_start] + "--config=".len;
+                command_start += 1;
+                continue;
+            }
+            if (std.mem.eql(u8, arg, "--no-config")) {
+                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
+                options.no_config = true;
+                command_start += 1;
+                continue;
+            }
+            if (std.mem.eql(u8, arg, "--profile")) {
+                if (options.profile != null) return error.DuplicateProfileOption;
+                if (command_start + 1 >= args.len) return error.MissingProfileName;
+                options.profile = args[command_start + 1];
+                command_start += 2;
+                continue;
+            }
+            if (std.mem.startsWith(u8, arg, "--profile=")) {
+                if (options.profile != null) return error.DuplicateProfileOption;
+                if (arg["--profile=".len..].len == 0) return error.MissingProfileName;
+                options.profile = args[command_start] + "--profile=".len;
                 command_start += 1;
                 continue;
             }
@@ -96,9 +223,17 @@ const Cli = union(enum) {
             if (delimiter_seen) return error.MissingCommand else try defaultShell(environ)
         else
             try pty.Command.fromArgv(args[command_start..]);
+        if (options.no_config and options.profile != null) return error.ProfileWithoutConfig;
         return .{ .run = options };
     }
 };
+
+fn parseWorkerBool(value: [*:0]const u8) !bool {
+    const text = std.mem.span(value);
+    if (std.mem.eql(u8, text, "0")) return false;
+    if (std.mem.eql(u8, text, "1")) return true;
+    return error.InvalidPluginWorkerArguments;
+}
 
 const HistoryAction = enum {
     list,
@@ -189,6 +324,11 @@ const ServerOptions = struct {
     mode: ServerMode = .foreground,
     socket: ?[*:0]const u8 = null,
     graphics: backend.runtime.GraphicsLimits = .{},
+    graphics_pane_set: bool = false,
+    graphics_global_set: bool = false,
+    config: ?[*:0]const u8 = null,
+    no_config: bool = false,
+    profile: ?[*:0]const u8 = null,
 
     fn parse(args: []const [*:0]const u8) !ServerOptions {
         var options: ServerOptions = .{};
@@ -217,10 +357,26 @@ const ServerOptions = struct {
             } else if (std.mem.eql(u8, arg, "--graphics-pane-mib")) {
                 if (index + 1 >= args.len) return error.MissingGraphicsPaneLimit;
                 options.graphics.pane_bytes = try parseMebibytes(args[index + 1]);
+                options.graphics_pane_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--graphics-global-mib")) {
                 if (index + 1 >= args.len) return error.MissingGraphicsGlobalLimit;
                 options.graphics.global_bytes = try parseMebibytes(args[index + 1]);
+                options.graphics_global_set = true;
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--config")) {
+                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
+                if (index + 1 >= args.len) return error.MissingConfigPath;
+                options.config = args[index + 1];
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--no-config")) {
+                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
+                options.no_config = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--profile")) {
+                if (options.profile != null) return error.DuplicateProfileOption;
+                if (index + 1 >= args.len) return error.MissingProfileName;
+                options.profile = args[index + 1];
                 index += 2;
             } else {
                 return error.UnknownServerOption;
@@ -228,6 +384,7 @@ const ServerOptions = struct {
         }
         if (options.action == .stop and options.mode != .foreground)
             return error.ConflictingServerAction;
+        if (options.no_config and options.profile != null) return error.ProfileWithoutConfig;
         try options.graphics.validate();
         return options;
     }
@@ -310,6 +467,7 @@ fn launchDaemon(
     init: std.process.Init,
     endpoint: *const core.endpoint.Local,
     graphics: backend.runtime.GraphicsLimits,
+    config: RuntimeConfigSelection,
 ) !void {
     if (std.c.setsid() < 0) return error.DetachFailed;
 
@@ -327,7 +485,9 @@ fn launchDaemon(
         "{d}",
         .{graphics.global_bytes / (1024 * 1024)},
     );
-    const argv = [_][]const u8{
+    var argv: [13][]const u8 = undefined;
+    var argc: usize = 0;
+    for ([_][]const u8{
         executable,
         "server",
         "--daemonized",
@@ -337,9 +497,25 @@ fn launchDaemon(
         pane_mib,
         "--graphics-global-mib",
         global_mib,
-    };
+    }) |arg| {
+        argv[argc] = arg;
+        argc += 1;
+    }
+    if (config.path) |path| {
+        argv[argc] = "--config";
+        argv[argc + 1] = std.mem.span(path);
+        argc += 2;
+    } else if (config.disabled) {
+        argv[argc] = "--no-config";
+        argc += 1;
+    }
+    if (config.profile) |profile| {
+        argv[argc] = "--profile";
+        argv[argc + 1] = std.mem.span(profile);
+        argc += 2;
+    }
     const daemon = try std.process.spawn(init.io, .{
-        .argv = &argv,
+        .argv = argv[0..argc],
         .cwd = .{ .path = "/" },
         .stdin = .ignore,
         .stdout = .ignore,
@@ -348,18 +524,40 @@ fn launchDaemon(
     _ = daemon;
 }
 
-fn startRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !void {
+const RuntimeConfigSelection = struct {
+    path: ?[*:0]const u8 = null,
+    disabled: bool = false,
+    profile: ?[*:0]const u8 = null,
+};
+
+fn startRuntime(
+    init: std.process.Init,
+    endpoint: *const core.endpoint.Local,
+    config: RuntimeConfigSelection,
+) !void {
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const executable = try executablePath(init.io, &executable_buffer);
-    const argv = [_][]const u8{
-        executable,
-        "server",
-        "--background",
-        "--socket",
-        endpoint.path(),
-    };
+    var argv: [9][]const u8 = undefined;
+    var argc: usize = 0;
+    for ([_][]const u8{ executable, "server", "--background", "--socket", endpoint.path() }) |arg| {
+        argv[argc] = arg;
+        argc += 1;
+    }
+    if (config.path) |path| {
+        argv[argc] = "--config";
+        argv[argc + 1] = std.mem.span(path);
+        argc += 2;
+    } else if (config.disabled) {
+        argv[argc] = "--no-config";
+        argc += 1;
+    }
+    if (config.profile) |profile| {
+        argv[argc] = "--profile";
+        argv[argc + 1] = std.mem.span(profile);
+        argc += 2;
+    }
     var launcher = try std.process.spawn(init.io, .{
-        .argv = &argv,
+        .argv = argv[0..argc],
         .stdin = .ignore,
         .stdout = .ignore,
         .stderr = .ignore,
@@ -391,6 +589,7 @@ fn finishHandshake(io: Io, connection: core.transport.SocketChannel) !core.trans
 fn connectRuntime(
     init: std.process.Init,
     endpoint: *const core.endpoint.Local,
+    config: RuntimeConfigSelection,
 ) !core.transport.SocketChannel {
     const first = frontend.transport.local.connect(init.io, endpoint.path()) catch |err| switch (err) {
         error.PermissionDenied,
@@ -404,7 +603,7 @@ fn connectRuntime(
     if (first) |connection| return finishHandshake(init.io, connection);
 
     try prepareManagedDirectory(init.io, endpoint);
-    try startRuntime(init, endpoint);
+    try startRuntime(init, endpoint, config);
     for (0..runtime_start_attempts) |_| {
         if (frontend.transport.local.connect(init.io, endpoint.path())) |connection| {
             return finishHandshake(init.io, connection);
@@ -481,23 +680,61 @@ fn prepareHistoryDatabase(io: Io, history_path: HistoryPath) !void {
 }
 
 fn runServer(init: std.process.Init, options: ServerOptions) !void {
+    var resolved_options = options;
+    var configured_history_path: ?[:0]const u8 = null;
+    var configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const endpoint = try resolveEndpoint(init, options.socket);
     if (options.action == .stop) return stopRuntime(init, &endpoint);
 
-    switch (options.mode) {
-        .background_launcher => return launchDaemon(init, &endpoint, options.graphics),
+    var config_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    if (try loadConfigGeneration(
+        init,
+        options.config,
+        options.no_config,
+        options.profile,
+        &config_path_buffer,
+    )) |generation| {
+        defer generation.deinit();
+        if (!resolved_options.graphics_pane_set)
+            resolved_options.graphics.pane_bytes = generation.snapshot.runtime.graphics_pane_bytes;
+        if (!resolved_options.graphics_global_set)
+            resolved_options.graphics.global_bytes = generation.snapshot.runtime.graphics_global_bytes;
+        if (generation.snapshot.runtime.historyPath()) |history_path| {
+            const resolved = if (std.fs.path.isAbsolute(history_path))
+                try init.gpa.dupe(u8, history_path)
+            else
+                try std.fs.path.resolve(init.gpa, &.{ generation.configDir(), history_path });
+            defer init.gpa.free(resolved);
+            configured_history_path = try std.fmt.bufPrintZ(
+                &configured_history_buffer,
+                "{s}",
+                .{resolved},
+            );
+        }
+    }
+    try resolved_options.graphics.validate();
+
+    switch (resolved_options.mode) {
+        .background_launcher => return launchDaemon(init, &endpoint, resolved_options.graphics, .{
+            .path = resolved_options.config,
+            .disabled = resolved_options.no_config,
+            .profile = resolved_options.profile,
+        }),
         .foreground, .daemonized => {},
     }
 
     try prepareManagedDirectory(init.io, &endpoint);
     var history_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const history_path = try resolveHistoryPath(init, &history_buffer);
+    const history_path: HistoryPath = if (configured_history_path) |path|
+        .{ .path = path, .managed_directory = null }
+    else
+        try resolveHistoryPath(init, &history_buffer);
     try prepareHistoryDatabase(init.io, history_path);
     try backend.runtime.serve(
         init.io,
         init.gpa,
         endpoint.path(),
-        .{ .graphics = options.graphics, .history_path = history_path.path },
+        .{ .graphics = resolved_options.graphics, .history_path = history_path.path },
     );
 }
 
@@ -559,18 +796,325 @@ fn runClient(
 
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const cwd_len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
+    var config_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const generation = try loadConfigGeneration(
+        init,
+        options.config,
+        options.no_config,
+        options.profile,
+        &config_path_buffer,
+    );
+    const config_path: ?[]const u8 = if (generation != null)
+        if (options.config) |value|
+            std.mem.span(value)
+        else
+            try frontend.lua_config.defaultPath(init.minimal.environ, &config_path_buffer)
+    else
+        null;
+    var config_mtime_ns = if (config_path) |path|
+        generation.?.watchFingerprint(init.io, path)
+    else
+        0;
+    const snapshot = if (generation) |value| &value.snapshot else null;
+    var plugin_registry: ?*frontend.plugin_broker.Registry = null;
+    var trust_store: ?*core.plugin.TrustStore = null;
+    var trust_path: ?[]const u8 = null;
+    if (generation) |value| {
+        var trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const resolved_trust_path = resolveTrustPath(
+            init.minimal.environ,
+            &trust_path_buffer,
+        ) catch |err| {
+            value.deinit();
+            return err;
+        };
+        const loaded_trust = loadTrustStore(
+            init,
+            resolved_trust_path,
+        ) catch |err| {
+            value.deinit();
+            return err;
+        };
+        trust_store = init.gpa.create(core.plugin.TrustStore) catch |err| {
+            value.deinit();
+            return err;
+        };
+        trust_store.?.* = loaded_trust;
+        const registry_value = frontend.plugin_broker.Registry.loadWithTrust(
+            init.gpa,
+            init.io,
+            value.configDir(),
+            value.pluginSlice(),
+            trust_store.?,
+        ) catch |err| {
+            init.gpa.destroy(trust_store.?);
+            value.deinit();
+            return err;
+        };
+        registry_value.validateConfiguredActions(value.snapshot.bindingSlice()) catch |err| {
+            init.gpa.destroy(trust_store.?);
+            value.deinit();
+            return err;
+        };
+        plugin_registry = init.gpa.create(frontend.plugin_broker.Registry) catch |err| {
+            init.gpa.destroy(trust_store.?);
+            value.deinit();
+            return err;
+        };
+        plugin_registry.?.* = registry_value;
+        config_mtime_ns ^= @as(i128, plugin_registry.?.watchFingerprint(init.gpa, init.io));
+        config_mtime_ns ^= @as(i128, frontend.client.trustWatchFingerprint(init.io, resolved_trust_path));
+        trust_path = resolved_trust_path;
+    }
     return frontend.client.run(init, connection, .{
         .arguments = argument_storage[0..argument_count],
         .cwd = cwd_buffer[0..cwd_len],
         .endpoint = endpoint,
-        .theme = options.theme,
-        .sidebar_rendering = options.sidebar_rendering,
+        .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
+        .bindings_configured = if (snapshot) |value| value.bindings_configured else false,
+        .theme = if (options.theme_set)
+            options.theme
+        else if (snapshot) |value|
+            value.theme
+        else
+            options.theme,
+        .sidebar_rendering = if (options.sidebar_renderer_set)
+            options.sidebar_rendering
+        else if (snapshot) |value|
+            value.sidebar_rendering
+        else
+            options.sidebar_rendering,
+        .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
+        .input_escape_timeout_ns = if (snapshot) |value|
+            value.input_escape_timeout_ns
+        else
+            frontend.keybind.default_escape_timeout_ns,
+        .input_sequence_timeout_ns = if (snapshot) |value|
+            value.input_sequence_timeout_ns
+        else
+            frontend.keybind.default_sequence_timeout_ns,
+        .lua_generation = generation,
+        .config_path = config_path,
+        .config_mtime_ns = config_mtime_ns,
+        .theme_locked = options.theme_set,
+        .sidebar_renderer_locked = options.sidebar_renderer_set,
+        .plugin_registry = plugin_registry,
+        .trust_store = trust_store,
+        .trust_path = trust_path,
+        .profile = if (options.profile) |value| std.mem.span(value) else null,
     });
+}
+
+fn loadConfigGeneration(
+    init: std.process.Init,
+    override: ?[*:0]const u8,
+    disabled: bool,
+    profile: ?[*:0]const u8,
+    path_buffer: []u8,
+) !?*frontend.lua_config.Generation {
+    if (disabled) return null;
+    const explicit = override != null or profile != null;
+    const path = if (override) |value|
+        std.mem.span(value)
+    else
+        try frontend.lua_config.defaultPath(init.minimal.environ, path_buffer);
+    Io.Dir.cwd().access(init.io, path, .{}) catch |err| switch (err) {
+        error.FileNotFound => if (explicit) return err else return null,
+        else => |other| return other,
+    };
+    var diagnostic: frontend.lua_config.Diagnostic = .{};
+    return frontend.lua_config.Generation.loadFileProfile(
+        init.gpa,
+        init.io,
+        path,
+        1,
+        if (profile) |value| std.mem.span(value) else null,
+        &diagnostic,
+    ) catch |err| {
+        std.debug.print("telar config: {s}\n", .{diagnostic.message()});
+        return err;
+    };
+}
+
+fn runConfigCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = if (options.path) |value|
+        std.mem.span(value)
+    else
+        try frontend.lua_config.defaultPath(init.minimal.environ, &path_buffer);
+    var diagnostic: frontend.lua_config.Diagnostic = .{};
+    const generation = frontend.lua_config.Generation.loadFileProfile(
+        init.gpa,
+        init.io,
+        path,
+        1,
+        if (options.profile) |value| std.mem.span(value) else null,
+        &diagnostic,
+    ) catch |err| {
+        std.debug.print("telar config: {s}\n", .{diagnostic.message()});
+        return err;
+    };
+    defer generation.deinit();
+    const registry = try frontend.plugin_broker.Registry.load(
+        init.gpa,
+        init.io,
+        generation.configDir(),
+        generation.pluginSlice(),
+    );
+    try registry.validateConfiguredActions(generation.snapshot.bindingSlice());
+    try File.stdout().writeStreamingAll(init.io, "telar config: OK\n");
+}
+
+fn runPluginCommand(init: std.process.Init, options: PluginOptions) !void {
+    const package = try frontend.plugin_broker.inspectPackage(
+        init.gpa,
+        init.io,
+        std.mem.span(options.path),
+    );
+    switch (options.command) {
+        .inspect => {
+            var buffer: [4096]u8 = undefined;
+            var output = File.stdout().writerStreaming(init.io, &buffer);
+            const writer = &output.interface;
+            try writer.print("id: {s}\nversion: {s}\nsource: {s}\nrevision: {s}\ndigest: ", .{
+                package.manifest.id(),
+                package.manifest.version(),
+                package.manifest.source(),
+                package.manifest.revision(),
+            });
+            for (package.digest) |byte| try writer.print("{x:0>2}", .{byte});
+            try writer.writeAll("\nactions:");
+            for (package.manifest.actions[0..package.manifest.action_count]) |*action|
+                try writer.print(" {s}", .{action.slice()});
+            try writer.writeAll("\ncapabilities:");
+            var iterator = package.manifest.capabilities.iterator();
+            while (iterator.next()) |capability|
+                try writer.print(" {s}", .{capability.canonicalName()});
+            try writer.writeByte('\n');
+            try writer.flush();
+        },
+        .install => {
+            var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const base = try resolvePluginInstallBase(init.minimal.environ, &base_buffer);
+            const digest_hex = std.fmt.bytesToHex(package.digest, .lower);
+            var destination_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const destination = try std.fmt.bufPrint(
+                &destination_buffer,
+                "{s}/{s}/{s}",
+                .{ base, package.manifest.id(), &digest_hex },
+            );
+            try frontend.plugin_broker.installPackage(
+                init.gpa,
+                init.io,
+                &package,
+                destination,
+            );
+            var output_buffer: [std.fs.max_path_bytes + 64]u8 = undefined;
+            const output = try std.fmt.bufPrint(
+                &output_buffer,
+                "telar plugin installed: {s}\n",
+                .{destination},
+            );
+            try File.stdout().writeStreamingAll(init.io, output);
+        },
+        .trust => {
+            var granted = core.plugin.CapabilitySet.initEmpty();
+            if (options.capability_count == 0) {
+                granted = package.manifest.capabilities;
+            } else for (options.capabilities[0..options.capability_count]) |capability| {
+                if (!package.manifest.capabilities.contains(capability))
+                    return error.CapabilityNotDeclared;
+                if (granted.contains(capability)) return error.DuplicateCapability;
+                granted.insert(capability);
+            }
+            var trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const trust_path = try resolveTrustPath(init.minimal.environ, &trust_path_buffer);
+            var store = try loadTrustStore(init, trust_path);
+            try store.upsert(&package.manifest, package.digest, granted);
+            try writeTrustStore(init, trust_path, &store);
+            try File.stdout().writeStreamingAll(init.io, "telar plugin trust updated\n");
+        },
+    }
+}
+
+fn resolvePluginInstallBase(environ: std.process.Environ, buffer: []u8) ![]const u8 {
+    if (environ.getPosix("XDG_DATA_HOME")) |base| {
+        if (base.len != 0) return std.fmt.bufPrint(buffer, "{s}/telar/plugins", .{base});
+    }
+    const home = environ.getPosix("HOME") orelse return error.HomeDirectoryUnavailable;
+    if (home.len == 0) return error.HomeDirectoryUnavailable;
+    return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/plugins", .{home});
+}
+
+fn resolveTrustPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
+    if (environ.getPosix("XDG_CONFIG_HOME")) |base| {
+        if (base.len != 0) return std.fmt.bufPrint(buffer, "{s}/telar/trust.json", .{base});
+    }
+    const home = environ.getPosix("HOME") orelse return error.HomeDirectoryUnavailable;
+    if (home.len == 0) return error.HomeDirectoryUnavailable;
+    return std.fmt.bufPrint(buffer, "{s}/.config/telar/trust.json", .{home});
+}
+
+fn loadTrustStore(init: std.process.Init, path: []const u8) !core.plugin.TrustStore {
+    const stat = Io.Dir.cwd().statFile(init.io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
+        error.FileNotFound => return .{},
+        else => |other| return other,
+    };
+    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0)
+        return error.InsecureTrustStore;
+    const source = try Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(64 * 1024));
+    defer init.gpa.free(source);
+    return core.plugin.TrustStore.parse(init.gpa, source);
+}
+
+fn writeTrustStore(
+    init: std.process.Init,
+    path: []const u8,
+    store: *const core.plugin.TrustStore,
+) !void {
+    const directory = std.fs.path.dirname(path) orelse return error.InvalidTrustStorePath;
+    _ = try Io.Dir.cwd().createDirPathStatus(
+        init.io,
+        directory,
+        File.Permissions.fromMode(0o700),
+    );
+    try Io.Dir.cwd().setFilePermissions(
+        init.io,
+        directory,
+        File.Permissions.fromMode(0o700),
+        .{ .follow_symlinks = false },
+    );
+    var nonce: [16]u8 = undefined;
+    try init.io.randomSecure(&nonce);
+    const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
+    var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const temp = try std.fmt.bufPrint(
+        &temp_buffer,
+        "{s}.tmp-{s}",
+        .{ path, &nonce_hex },
+    );
+    var committed = false;
+    defer if (!committed) Io.Dir.cwd().deleteFile(init.io, temp) catch {};
+    var file = try Io.Dir.cwd().createFile(init.io, temp, .{
+        .truncate = true,
+        .permissions = File.Permissions.fromMode(0o600),
+    });
+    var file_open = true;
+    defer if (file_open) file.close(init.io);
+    var output_buffer: [4096]u8 = undefined;
+    var output = file.writer(init.io, &output_buffer);
+    try store.writeJson(&output.interface);
+    try output.interface.flush();
+    try file.sync(init.io);
+    file.close(init.io);
+    file_open = false;
+    try Io.Dir.cwd().rename(temp, Io.Dir.cwd(), path, init.io);
+    committed = true;
 }
 
 fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
     const endpoint = try resolveEndpoint(init, options.socket);
-    var connection = try connectRuntime(init, &endpoint);
+    var connection = try connectRuntime(init, &endpoint, .{});
     defer connection.deinit(init.io);
 
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -693,9 +1237,13 @@ fn writeHistoryField(writer: *Io.Writer, value: []const u8) !void {
 }
 
 const usage =
-    \\Usage: telar [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
+    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
     \\       telar server
     \\       telar server stop
+    \\       telar config check [PATH] [--profile NAME]
+    \\       telar plugin inspect PATH
+    \\       telar plugin install PATH
+    \\       telar plugin trust PATH [--capability NAME]...
     \\       telar history list [options]
     \\       telar history search <query> [options]
     \\
@@ -708,6 +1256,10 @@ const usage =
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history
     \\  history search   Search command history
+    \\  config check     Compile and validate config.lua, then exit
+    \\  plugin inspect   Validate a package and print its immutable identity
+    \\  plugin install   Copy a package into the content-addressed local store
+    \\  plugin trust     Grant declared capabilities to one exact package digest
     \\
     \\History options:
     \\  --cwd            Restrict results to the current directory
@@ -718,6 +1270,9 @@ const usage =
     \\  --socket PATH    Query a specific local runtime
     \\
     \\Options:
+    \\  --config PATH     Load a specific Lua configuration
+    \\  --no-config       Do not load Lua configuration
+    \\  --profile NAME    Overlay a named Lua profile before CLI options
     \\  --theme NAME      UI theme: vesper, catppuccin, tokyo-night, terminal
     \\  --sidebar-renderer MODE  automatic, cells, kitty-hybrid, kitty-full
     \\Server options:
@@ -751,9 +1306,21 @@ pub fn main(init: std.process.Init) !void {
         .version => try File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try runServer(init, options),
         .history => |options| try runHistory(init, options),
+        .config_check => |options| try runConfigCheck(init, options),
+        .plugin_worker => |options| try frontend.plugin_worker.run(
+            init,
+            std.mem.span(options.entry),
+            std.mem.span(options.action),
+            options.context,
+        ),
+        .plugin => |options| try runPluginCommand(init, options),
         .run => |options| {
             const endpoint = try resolveEndpoint(init, null);
-            var connection = try connectRuntime(init, &endpoint);
+            var connection = try connectRuntime(init, &endpoint, .{
+                .path = options.config,
+                .disabled = options.no_config,
+                .profile = options.profile,
+            });
             defer connection.deinit(init.io);
 
             const code = try runClient(init, &connection, &options, endpoint.path());
@@ -824,6 +1391,38 @@ test "CLI selects and validates the sidebar renderer" {
 test "CLI rejects an empty command after the delimiter" {
     const args = [_][*:0]const u8{ "telar", "--" };
     try std.testing.expectError(error.MissingCommand, Cli.parse(&args, .empty));
+}
+
+test "CLI parses config profiles and rejects profile without config" {
+    const args = [_][*:0]const u8{ "telar", "--config", "config.lua", "--profile", "remote" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqualStrings("remote", std.mem.span(cli.run.profile.?));
+
+    const disabled = [_][*:0]const u8{ "telar", "--no-config", "--profile", "remote" };
+    try std.testing.expectError(error.ProfileWithoutConfig, Cli.parse(&disabled, .empty));
+
+    const check = [_][*:0]const u8{ "telar", "config", "check", "config.lua", "--profile", "remote" };
+    const parsed_check = try Cli.parse(&check, .empty);
+    try std.testing.expectEqualStrings("config.lua", std.mem.span(parsed_check.config_check.path.?));
+    try std.testing.expectEqualStrings("remote", std.mem.span(parsed_check.config_check.profile.?));
+}
+
+test "CLI keeps plugin inspection installation and trust separate" {
+    const install = [_][*:0]const u8{ "telar", "plugin", "install", "./plugin" };
+    const parsed_install = try Cli.parse(&install, .empty);
+    try std.testing.expectEqual(PluginCommand.install, parsed_install.plugin.command);
+
+    const trust = [_][*:0]const u8{
+        "telar",
+        "plugin",
+        "trust",
+        "./plugin",
+        "--capability",
+        "history.read",
+    };
+    const parsed_trust = try Cli.parse(&trust, .empty);
+    try std.testing.expectEqual(PluginCommand.trust, parsed_trust.plugin.command);
+    try std.testing.expectEqual(core.plugin.Capability.history_read, parsed_trust.plugin.capabilities[0]);
 }
 
 test "CLI recognizes the runtime server" {

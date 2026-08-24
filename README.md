@@ -9,6 +9,17 @@ is how they are laid out on screen.
 
 Written in Zig 0.16. Very early.
 
+## Configuration and plugins
+
+Telar uses a versioned Lua configuration with semantic keybindings, bounded
+inline callbacks, expression bindings, profiles, atomic reload, and typed
+runtime settings. Plugins are content-addressed packages executed in isolated
+workers with digest-bound capability grants.
+
+See [docs/configuration.md](docs/configuration.md) and
+[docs/plugins.md](docs/plugins.md). A complete configuration and plugin package
+live under [`examples/`](examples/).
+
 ## Themes
 
 Vesper is the default client theme. Catppuccin Mocha, Tokyo Night, and a
@@ -81,7 +92,7 @@ zig build bench
 
 The benchmark target uses `ReleaseFast` when the main build mode is `Debug`.
 It measures damage collection, frame encoding and decoding, client application
-plus terminal output, keybinding routing, cursor-only output, direct KGP
+plus terminal output, native keybinding routing, bounded Lua callbacks, cursor-only output, direct KGP
 encoding, the no-damage KGP path, and a 1920×1080 RGBA upload through APC,
 base64, zlib, and Ghostty. Cell workloads use a fixed 154×37 screen: a one-cell
 patch, a representative fragmented patch with 56 spans of 24 cells, and a full

@@ -1,7 +1,7 @@
 //! Key sequences between host terminal input and application actions.
 //!
-//! Configuration is deliberately outside this file. A TOML loader can parse
-//! strings into `Key` values and hand the resulting bindings to `Router.init`.
+//! Configuration is deliberately outside this file. The Lua loader parses
+//! strings into `Key` values and hands the resulting bindings to `Router.init`.
 //! The router then owns a sorted, bounded copy. Routing performs no allocation
 //! and never has to retain slices owned by the configuration parser.
 
@@ -21,7 +21,7 @@ pub const default_sequence_timeout_ns: u64 = 1000 * std.time.ns_per_ms;
 /// Parses one key chord from configuration syntax.
 ///
 /// Examples are `ctrl+b`, `ctrl+shift+left`, `escape`, `space`, and `ñ`.
-/// Sequences stay arrays at this layer so a future TOML representation can use
+/// Sequences stay arrays at this layer so configuration can use
 /// `keys = ["ctrl+b", "d"]` without another string grammar.
 pub fn parseKey(text: []const u8) !Key {
     if (text.len == 0) return error.EmptyKey;
@@ -287,6 +287,8 @@ pub fn Router(
         depth: u8 = 0,
         held: [held_capacity]u8 = undefined,
         held_len: usize = 0,
+        held_keys: [max_keys]Key = undefined,
+        held_key_len: u8 = 0,
         input: [input_capacity]u8 = undefined,
         input_start: usize = 0,
         input_end: usize = 0,
@@ -294,6 +296,7 @@ pub fn Router(
         binding_since_ns: ?u64 = null,
         output: [input_capacity + held_capacity]u8 = undefined,
         output_len: usize = 0,
+        pasting: bool = false,
         escape_timeout_ns: u64 = default_escape_timeout_ns,
         sequence_timeout_ns: u64 = default_sequence_timeout_ns,
 
@@ -313,11 +316,6 @@ pub fn Router(
         /// `handler.action(action)` returns `.stop` when the action ends input
         /// processing, for example after detaching the client.
         pub fn feed(router: *Self, bytes: []const u8, now_ns: u64, handler: anytype) !Control {
-            if (router.map.isEmpty()) {
-                if (bytes.len != 0) try handler.forward(bytes);
-                return .continue_routing;
-            }
-
             var offset: usize = 0;
             while (offset < bytes.len) {
                 router.compactInput();
@@ -354,7 +352,8 @@ pub fn Router(
                 if (try router.drain(now_ns, true, handler) == .stop) return .stop;
             } else {
                 try router.replayBinding(handler);
-                try router.appendOutput(pending, handler);
+                if (comptime !@hasDecl(@TypeOf(handler.*), "key"))
+                    try router.appendOutput(pending, handler);
                 router.input_start = 0;
                 router.input_end = 0;
                 router.input_since_ns = null;
@@ -387,14 +386,37 @@ pub fn Router(
 
                 router.input_since_ns = null;
                 const raw = pending[0..parsed.len];
+                if (router.pasting and std.meta.activeTag(parsed.event) != .paste_end) {
+                    try router.flushOutput(handler);
+                    if (comptime @hasDecl(@TypeOf(handler.*), "pasteContent"))
+                        try handler.pasteContent(raw)
+                    else
+                        try router.appendOutput(raw, handler);
+                    router.input_start += parsed.len;
+                    continue;
+                }
                 switch (parsed.event) {
                     .key => |key| {
                         const was_pending = router.depth != 0;
                         switch (router.routeKey(key, raw)) {
-                            .forward => |forwarded| try router.appendOutput(forwarded, handler),
+                            .forward => |forwarded| {
+                                if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+                                    try router.flushOutput(handler);
+                                    try handler.key(forwarded.key);
+                                } else {
+                                    try router.appendOutput(forwarded.raw, handler);
+                                }
+                            },
                             .replay => |replay| {
-                                try router.appendOutput(replay.held, handler);
-                                try router.appendOutput(replay.current, handler);
+                                if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+                                    try router.flushOutput(handler);
+                                    for (replay.held_keys[0..replay.held_key_len]) |held_key|
+                                        try handler.key(held_key);
+                                    try handler.key(replay.current_key);
+                                } else {
+                                    try router.appendOutput(replay.held_raw[0..replay.held_raw_len], handler);
+                                    try router.appendOutput(replay.current_raw, handler);
+                                }
                             },
                             .pending => {
                                 if (!was_pending) router.binding_since_ns = now_ns;
@@ -433,9 +455,28 @@ pub fn Router(
                         if (comptime @hasDecl(@TypeOf(handler.*), "terminalResponse"))
                             try handler.terminalResponse(response);
                     },
-                    .paste_start, .paste_end, .incomplete => {
+                    .paste_start => {
                         try router.replayBinding(handler);
-                        try router.appendOutput(raw, handler);
+                        try router.flushOutput(handler);
+                        router.pasting = true;
+                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteStart"))
+                            try handler.pasteStart()
+                        else
+                            try router.appendOutput(raw, handler);
+                    },
+                    .paste_end => {
+                        try router.replayBinding(handler);
+                        try router.flushOutput(handler);
+                        router.pasting = false;
+                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteEnd"))
+                            try handler.pasteEnd()
+                        else
+                            try router.appendOutput(raw, handler);
+                    },
+                    .incomplete => {
+                        try router.replayBinding(handler);
+                        if (comptime !@hasDecl(@TypeOf(handler.*), "key"))
+                            try router.appendOutput(raw, handler);
                     },
                 }
                 router.input_start += parsed.len;
@@ -449,8 +490,15 @@ pub fn Router(
         }
 
         const Routed = union(enum) {
-            forward: []const u8,
-            replay: struct { held: []const u8, current: []const u8 },
+            forward: struct { key: Key, raw: []const u8 },
+            replay: struct {
+                held_keys: [max_keys]Key,
+                held_key_len: u8,
+                held_raw: [held_capacity]u8,
+                held_raw_len: usize,
+                current_key: Key,
+                current_raw: []const u8,
+            },
             pending,
             action: Action,
         };
@@ -461,10 +509,22 @@ pub fn Router(
             else
                 router.candidates;
             const matched = router.map.matchingRange(range, router.depth, key) orelse {
-                if (router.depth == 0) return .{ .forward = raw };
-                const held = router.held[0..router.held_len];
+                if (router.depth == 0) return .{ .forward = .{ .key = key, .raw = raw } };
+                const held_key_len = router.held_key_len;
+                const held_raw_len = router.held_len;
+                var held_keys: [max_keys]Key = undefined;
+                var held_raw: [held_capacity]u8 = undefined;
+                @memcpy(held_keys[0..held_key_len], router.held_keys[0..held_key_len]);
+                @memcpy(held_raw[0..held_raw_len], router.held[0..held_raw_len]);
                 router.resetMatch();
-                return .{ .replay = .{ .held = held, .current = raw } };
+                return .{ .replay = .{
+                    .held_keys = held_keys,
+                    .held_key_len = held_key_len,
+                    .held_raw = held_raw,
+                    .held_raw_len = held_raw_len,
+                    .current_key = key,
+                    .current_raw = raw,
+                } };
             };
 
             const next_depth: usize = router.depth + 1;
@@ -476,12 +536,26 @@ pub fn Router(
             }
 
             if (router.held_len + raw.len > router.held.len) {
-                const held = router.held[0..router.held_len];
+                const held_key_len = router.held_key_len;
+                const held_raw_len = router.held_len;
+                var held_keys: [max_keys]Key = undefined;
+                var held_raw: [held_capacity]u8 = undefined;
+                @memcpy(held_keys[0..held_key_len], router.held_keys[0..held_key_len]);
+                @memcpy(held_raw[0..held_raw_len], router.held[0..held_raw_len]);
                 router.resetMatch();
-                return .{ .replay = .{ .held = held, .current = raw } };
+                return .{ .replay = .{
+                    .held_keys = held_keys,
+                    .held_key_len = held_key_len,
+                    .held_raw = held_raw,
+                    .held_raw_len = held_raw_len,
+                    .current_key = key,
+                    .current_raw = raw,
+                } };
             }
             @memcpy(router.held[router.held_len..][0..raw.len], raw);
             router.held_len += raw.len;
+            router.held_keys[router.held_key_len] = key;
+            router.held_key_len += 1;
             router.candidates = matched;
             router.depth = @intCast(next_depth);
             return .pending;
@@ -489,16 +563,22 @@ pub fn Router(
 
         fn replayBinding(router: *Self, handler: anytype) !void {
             if (router.depth == 0) return;
-            const held = router.held[0..router.held_len];
+            if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+                try router.flushOutput(handler);
+                for (router.held_keys[0..router.held_key_len]) |held_key|
+                    try handler.key(held_key);
+            } else {
+                try router.appendOutput(router.held[0..router.held_len], handler);
+            }
             router.resetMatch();
             router.binding_since_ns = null;
-            try router.appendOutput(held, handler);
         }
 
         fn resetMatch(router: *Self) void {
             router.candidates = .{ .start = 0, .end = router.map.len };
             router.depth = 0;
             router.held_len = 0;
+            router.held_key_len = 0;
         }
 
         fn clear(router: *Self) void {
@@ -508,6 +588,7 @@ pub fn Router(
             router.input_since_ns = null;
             router.binding_since_ns = null;
             router.output_len = 0;
+            router.pasting = false;
         }
 
         fn appendOutput(router: *Self, bytes: []const u8, handler: anytype) !void {
@@ -538,7 +619,8 @@ pub fn Router(
 
         fn recoverFullInput(router: *Self, handler: anytype) !void {
             try router.replayBinding(handler);
-            try router.appendOutput(router.input[router.input_start..router.input_end], handler);
+            if (comptime !@hasDecl(@TypeOf(handler.*), "key"))
+                try router.appendOutput(router.input[router.input_start..router.input_end], handler);
             router.input_start = 0;
             router.input_end = 0;
             router.input_since_ns = null;

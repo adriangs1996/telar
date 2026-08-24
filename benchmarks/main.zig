@@ -110,6 +110,7 @@ const cases = [_]Case{
     .{ .name = "frontend.pipeline.fragmented", .work_per_op = fragmented_span_count * fragmented_span_cells, .work_unit = "cells" },
     .{ .name = "frontend.pipeline.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.keybind.route", .work_per_op = 12, .work_unit = "keys" },
+    .{ .name = "frontend.lua.callback", .work_per_op = 1, .work_unit = "callbacks" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.client_ui.chrome.tabs_1", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
@@ -608,6 +609,51 @@ fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
     return context.checksum;
 }
 
+const LuaCallbackContext = struct {
+    generation: *frontend.lua_config.Generation,
+    reference: frontend.action.CallbackRef,
+    diagnostic: frontend.lua_config.Diagnostic = .{},
+
+    fn init(gpa: std.mem.Allocator, io: Io) !LuaCallbackContext {
+        var diagnostic: frontend.lua_config.Diagnostic = .{};
+        const generation = try frontend.lua_config.Generation.loadSource(
+            gpa,
+            io,
+            "local t=require('telar'); return { api_version=1, client={ keybindings={ t.bind({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
+            "@benchmark.lua",
+            1,
+            &diagnostic,
+        );
+        return .{
+            .generation = generation,
+            .reference = generation.snapshot.bindings[0].action.lua_callback,
+        };
+    }
+
+    fn deinit(context: *LuaCallbackContext) void {
+        context.generation.deinit();
+    }
+};
+
+fn runLuaCallback(context: *LuaCallbackContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        const batch = try context.generation.invokeCallback(
+            context.reference,
+            .{
+                .sidebar_visible = true,
+                .tab_count = 8,
+                .active_tab_index = 3,
+                .pane_count = 4,
+                .focused_pane_id = 7,
+            },
+            &context.diagnostic,
+        );
+        checksum +%= batch.len;
+    }
+    return checksum;
+}
+
 const CursorContext = struct {
     screen: frontend.term.Screen,
     output: []u8,
@@ -1075,6 +1121,19 @@ fn execute(
     if (config.includes(keybind_case.name)) {
         var context = try KeybindContext.init();
         try writeResult(writer, config, keybind_case, try measure(io, config, &context, runKeybind));
+    }
+
+    const lua_callback_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(lua_callback_case.name)) {
+        var context = try LuaCallbackContext.init(gpa, io);
+        defer context.deinit();
+        try writeResult(
+            writer,
+            config,
+            lua_callback_case,
+            try measure(io, config, &context, runLuaCallback),
+        );
     }
 
     const pacer_case = cases[case_index];

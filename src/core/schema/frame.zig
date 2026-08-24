@@ -10,7 +10,7 @@ pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
-pub const body_header_size = 38;
+pub const body_header_size = 41;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
@@ -37,6 +37,14 @@ pub const Mouse = struct {
     pixels: bool = false,
 };
 
+/// Child-controlled modes required to encode semantic keyboard and paste
+/// input. The runtime derives these from its VT; the client never guesses.
+pub const InputModes = struct {
+    cursor_keys: bool = false,
+    keypad_keys: bool = false,
+    bracketed_paste: bool = false,
+};
+
 pub const Span = struct {
     start: u32,
     cells: []const ui.Cell,
@@ -52,6 +60,7 @@ pub const Frame = struct {
     rows: u16,
     cursor: Cursor = .{},
     mouse: Mouse = .{},
+    input_modes: InputModes = .{},
     spans: []const Span,
 };
 
@@ -63,6 +72,7 @@ pub const FrameView = struct {
     rows: u16,
     cursor: Cursor,
     mouse: Mouse,
+    input_modes: InputModes,
     span_count: u16,
     encoded_spans: []const u8,
 
@@ -141,6 +151,9 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     try encoder.writeByte(@intFromEnum(frame.mouse.tracking));
     try encoder.writeByte(@intFromBool(frame.mouse.sgr));
     try encoder.writeByte(@intFromBool(frame.mouse.pixels));
+    try encoder.writeByte(@intFromBool(frame.input_modes.cursor_keys));
+    try encoder.writeByte(@intFromBool(frame.input_modes.keypad_keys));
+    try encoder.writeByte(@intFromBool(frame.input_modes.bracketed_paste));
     try encoder.writeInt(u16, @intCast(frame.spans.len));
 
     for (frame.spans) |span| {
@@ -182,6 +195,11 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         },
         .sgr = try decoder.readBool(),
         .pixels = try decoder.readBool(),
+    };
+    const input_modes: InputModes = .{
+        .cursor_keys = try decoder.readBool(),
+        .keypad_keys = try decoder.readBool(),
+        .bracketed_paste = try decoder.readBool(),
     };
     const span_count = try decoder.readInt(u16);
 
@@ -235,6 +253,7 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         .rows = rows,
         .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
         .mouse = mouse,
+        .input_modes = input_modes,
         .span_count = span_count,
         .encoded_spans = decoder.consumed(spans_start),
     };
@@ -493,13 +512,13 @@ test "a style run pays two bytes per ordinary cell" {
         .spans = &spans,
     });
 
-    // Header and span: 50 bytes. The first cell carries the five-byte default
+    // Header and span: 53 bytes. The first cell carries the five-byte default
     // style and costs seven bytes. Each following space costs only its packed
     // header and text byte.
-    try std.testing.expectEqual(@as(usize, 61), encoder.finish().len);
-    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[50]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[57]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[59]);
+    try std.testing.expectEqual(@as(usize, 64), encoder.finish().len);
+    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[53]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[60]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[62]);
 }
 
 test "cell run size accounts for inherited style" {

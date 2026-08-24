@@ -1397,7 +1397,13 @@ fn encodeFrame(
 
     const cursor_changed = !std.meta.eql(pane.cursor, attachment.acknowledged_cursor);
     const mouse_changed = !std.meta.eql(pane.mouse, attachment.acknowledged_mouse);
-    if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed) {
+    const input_modes_changed = !std.meta.eql(
+        pane.input_modes,
+        attachment.acknowledged_input_modes,
+    );
+    if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
+        !input_modes_changed)
+    {
         @memset(pane.damaged_rows, false);
         pane.dirty = false;
         if (comptime diagnostics.enabled) {
@@ -1426,6 +1432,7 @@ fn encodeFrame(
         .rows = pane.screen.h,
         .cursor = pane.cursor,
         .mouse = pane.mouse,
+        .input_modes = pane.input_modes,
         .spans = span_storage[0..span_count],
     });
     if (snapshot) {
@@ -1438,6 +1445,7 @@ fn encodeFrame(
     }
     attachment.acknowledged_cursor = pane.cursor;
     attachment.acknowledged_mouse = pane.mouse;
+    attachment.acknowledged_input_modes = pane.input_modes;
     attachment.outstanding_frame_id = frame_id;
     attachment.frame_sent_ns = diagnostics.now(io);
     @memset(pane.damaged_rows, false);

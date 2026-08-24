@@ -12,6 +12,7 @@ pub const handshake = @import("schema/handshake.zig");
 pub const endpoint = @import("endpoint.zig");
 pub const diagnostics = @import("diagnostics.zig");
 pub const graphics = @import("graphics.zig");
+pub const plugin = @import("plugin.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());
