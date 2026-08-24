@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const action_mod = @import("action.zig");
 const client_outbox = @import("client_outbox.zig");
+const client_requests = @import("client_requests.zig");
 const client_view = @import("client_ui.zig");
 const input_mod = @import("input.zig");
 const keybind = @import("keybind.zig");
@@ -143,121 +144,6 @@ const ConfigReload = union(enum) {
     },
 };
 
-const PendingSplit = struct {
-    request_id: schema.RequestId,
-    target_pane: schema.PaneId,
-    tab_id: schema.TabId,
-    axis: layout_mod.Axis,
-};
-
-const PendingClose = struct {
-    request_id: schema.RequestId,
-    pane_id: schema.PaneId,
-    tab_id: schema.TabId,
-};
-
-const PendingTabRequest = struct {
-    request_id: schema.RequestId,
-    tab_id: schema.TabId,
-};
-
-const PendingTabOperation = union(enum) {
-    create: schema.RequestId,
-    rename: PendingTabRequest,
-    close: PendingTabRequest,
-    move: PendingTabRequest,
-
-    fn requestId(operation: PendingTabOperation) schema.RequestId {
-        return switch (operation) {
-            .create => |request_id| request_id,
-            inline else => |request| request.request_id,
-        };
-    }
-
-    fn tabId(operation: PendingTabOperation) ?schema.TabId {
-        return switch (operation) {
-            .create => null,
-            inline else => |request| request.tab_id,
-        };
-    }
-};
-
-const PendingTabSnapshot = struct {
-    request_id: schema.RequestId,
-    tab_id: schema.TabId,
-};
-
-const PendingAttachment = struct {
-    request_id: schema.RequestId,
-    pane_id: schema.PaneId,
-    tab_id: schema.TabId,
-};
-
-const PendingAttachments = struct {
-    entries: [multiplexer.max_panes]?PendingAttachment =
-        [_]?PendingAttachment{null} ** multiplexer.max_panes,
-
-    fn add(pending: *PendingAttachments, entry: PendingAttachment) !void {
-        for (&pending.entries) |*slot| {
-            if (slot.* == null) {
-                slot.* = entry;
-                return;
-            }
-        }
-        return error.TooManyPendingAttachments;
-    }
-
-    fn take(pending: *PendingAttachments, request_id: schema.RequestId) ?schema.PaneId {
-        for (&pending.entries) |*slot| {
-            const entry = slot.* orelse continue;
-            if (entry.request_id != request_id) continue;
-            slot.* = null;
-            return entry.pane_id;
-        }
-        return null;
-    }
-
-    fn cancelTab(
-        pending: *PendingAttachments,
-        tab_id: schema.TabId,
-        ignored: *IgnoredRequests,
-    ) !void {
-        for (&pending.entries) |*slot| {
-            const entry = slot.* orelse continue;
-            if (entry.tab_id != tab_id) continue;
-            try ignored.add(entry.request_id);
-            slot.* = null;
-        }
-    }
-};
-
-const IgnoredRequests = struct {
-    const capacity = multiplexer.max_panes + 4;
-
-    entries: [capacity]schema.RequestId = @splat(.none),
-
-    fn add(ignored: *IgnoredRequests, request_id: schema.RequestId) !void {
-        std.debug.assert(request_id != .none);
-        for (&ignored.entries) |*entry| {
-            if (entry.* == request_id) return;
-            if (entry.* == .none) {
-                entry.* = request_id;
-                return;
-            }
-        }
-        return error.TooManyIgnoredRequests;
-    }
-
-    fn take(ignored: *IgnoredRequests, request_id: schema.RequestId) bool {
-        for (&ignored.entries) |*entry| {
-            if (entry.* != request_id) continue;
-            entry.* = .none;
-            return true;
-        }
-        return false;
-    }
-};
-
 /// The request that opens the first pane; everything else is numbered by
 /// `Client.nextId`.
 const initial_request_id: schema.RequestId = @enumFromInt(1);
@@ -293,13 +179,7 @@ const Client = struct {
 
     input_read_pending: bool = false,
     next_request_id: u64 = 2,
-    workspace_snapshot_request_id: ?schema.RequestId = null,
-    tab_snapshot: ?PendingTabSnapshot = null,
-    pending_split: ?PendingSplit = null,
-    pending_close: ?PendingClose = null,
-    pending_tab_operation: ?PendingTabOperation = null,
-    pending_attachments: PendingAttachments = .{},
-    ignored_requests: IgnoredRequests = .{},
+    requests: client_requests.Tracker = .{},
     pacer: pace.Pacer = .{},
     draw_pending: bool = false,
     draw_due_ns: u64 = 0,
@@ -323,6 +203,27 @@ const Client = struct {
     fn enqueueRename(client: *Client, rename: schema.RenameTab) !void {
         try client.outbox.pushRename(rename);
         try client.pumpOutbox();
+    }
+
+    fn enqueueRequest(
+        client: *Client,
+        request_id: schema.RequestId,
+        continuation: client_requests.Continuation,
+        message: client_outbox.Message,
+    ) !void {
+        try client.requests.add(request_id, continuation);
+        errdefer _ = client.requests.take(request_id);
+        try client.enqueue(message);
+    }
+
+    fn enqueueRenameRequest(
+        client: *Client,
+        rename: schema.RenameTab,
+        continuation: client_requests.Continuation,
+    ) !void {
+        try client.requests.add(rename.request_id, continuation);
+        errdefer _ = client.requests.take(rename.request_id);
+        try client.enqueueRename(rename);
     }
 
     fn pumpOutbox(client: *Client) !void {
@@ -393,58 +294,71 @@ const Client = struct {
     }
 
     fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
-        if (opened.request_id == initial_request_id and client.tabs.count == 0) {
-            try client.tabs.bootstrap(
-                opened.pane_id,
-                opened.location,
-                rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-            );
-            client.view.invalidate();
-            try client.scheduleInputRead();
-            const workspace_request_id = try client.nextId();
-            client.workspace_snapshot_request_id = workspace_request_id;
-            try client.enqueue(.{ .request_workspace_snapshot = .{
-                .request_id = workspace_request_id,
-                .workspace = opened.location.workspace,
-            } });
-            const tab_request_id = try client.nextId();
-            client.tab_snapshot = .{ .request_id = tab_request_id, .tab_id = opened.location.tab_id };
-            try client.enqueue(.{ .request_tab_snapshot = .{
-                .request_id = tab_request_id,
-                .location = opened.location,
-            } });
-        } else if (client.pending_split != null and
-            client.pending_split.?.request_id == opened.request_id)
-        {
-            const split = client.pending_split.?;
-            const tab = client.tabs.tabForPane(split.target_pane) orelse
-                return error.UnexpectedPane;
-            const model = &tab.model;
-            if (model.find(split.target_pane) != null) {
-                try model.split(split.target_pane, opened.pane_id, opened.location, split.axis, client.view.workbench());
-            } else {
-                try model.addDiscovered(opened.pane_id, opened.location, client.view.workbench());
-                try model.markAttached(opened.pane_id);
-            }
-            client.view.invalidate();
-            client.pending_split = null;
-            try client.resizeAttached(model, client.view.workbench());
-        } else if (client.pending_attachments.take(opened.request_id)) |expected| {
-            if (expected != opened.pane_id) return error.UnexpectedPane;
-            const pane = client.tabs.findPane(opened.pane_id) orelse return error.UnexpectedPane;
-            pane.attached = true;
-        } else {
+        const continuation = client.requests.take(opened.request_id) orelse
             return error.UnexpectedRequest;
+        switch (continuation) {
+            .initial_open => {
+                if (client.tabs.count != 0) return error.UnexpectedRequest;
+                try client.tabs.bootstrap(
+                    opened.pane_id,
+                    opened.location,
+                    rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+                );
+                client.view.invalidate();
+                try client.scheduleInputRead();
+                const workspace_request_id = try client.nextId();
+                try client.enqueueRequest(
+                    workspace_request_id,
+                    .{ .workspace_snapshot = opened.location.workspace },
+                    .{ .request_workspace_snapshot = .{
+                        .request_id = workspace_request_id,
+                        .workspace = opened.location.workspace,
+                    } },
+                );
+                const tab_request_id = try client.nextId();
+                try client.enqueueRequest(
+                    tab_request_id,
+                    .{ .tab_snapshot = opened.location },
+                    .{ .request_tab_snapshot = .{
+                        .request_id = tab_request_id,
+                        .location = opened.location,
+                    } },
+                );
+            },
+            .split => |split| {
+                if (!std.meta.eql(split.location, opened.location))
+                    return error.UnexpectedPane;
+                const tab = client.tabs.tabForPane(split.target_pane) orelse
+                    return error.UnexpectedPane;
+                const model = &tab.model;
+                if (model.find(split.target_pane) != null) {
+                    try model.split(split.target_pane, opened.pane_id, opened.location, split.axis, client.view.workbench());
+                } else {
+                    try model.addDiscovered(opened.pane_id, opened.location, client.view.workbench());
+                    try model.markAttached(opened.pane_id);
+                }
+                client.view.invalidate();
+                try client.resizeAttached(model, client.view.workbench());
+            },
+            .attach_pane => |attachment| {
+                if (attachment.pane_id != opened.pane_id or
+                    !std.meta.eql(attachment.location, opened.location))
+                    return error.UnexpectedPane;
+                const pane = client.tabs.findPane(opened.pane_id) orelse
+                    return error.UnexpectedPane;
+                pane.attached = true;
+            },
+            else => return error.UnexpectedRequest,
         }
         try client.requestDraw();
     }
 
     fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
-        const pending = client.tab_snapshot orelse return error.UnexpectedTabSnapshot;
-        if (snapshot.request_id != pending.request_id or
-            snapshot.location.tab_id != pending.tab_id)
+        const continuation = client.requests.take(snapshot.request_id) orelse
             return error.UnexpectedTabSnapshot;
-        client.tab_snapshot = null;
+        if (continuation != .tab_snapshot or
+            !std.meta.eql(continuation.tab_snapshot, snapshot.location))
+            return error.UnexpectedTabSnapshot;
         const tab = try client.tabs.reconcileTab(snapshot, client.view.workbench());
         const model = &tab.model;
         client.view.invalidate();
@@ -455,26 +369,29 @@ const Client = struct {
             const size = model.contentSize(pane.id, client.view.workbench()) orelse
                 return error.PaneTooSmall;
             const request_id = try client.nextId();
-            try client.enqueue(.{ .open_pane = .{
-                .request_id = request_id,
-                .target = .{ .pane = pane.id },
-                .size = size,
-                .launch = null,
-            } });
-            try client.pending_attachments.add(.{
-                .request_id = request_id,
-                .pane_id = pane.id,
-                .tab_id = snapshot.location.tab_id,
-            });
+            try client.enqueueRequest(
+                request_id,
+                .{ .attach_pane = .{
+                    .pane_id = pane.id,
+                    .location = snapshot.location,
+                } },
+                .{ .open_pane = .{
+                    .request_id = request_id,
+                    .target = .{ .pane = pane.id },
+                    .size = size,
+                    .launch = null,
+                } },
+            );
         }
         try client.requestDraw();
     }
 
     fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
-        if (client.workspace_snapshot_request_id == null or
-            snapshot.request_id != client.workspace_snapshot_request_id.?)
+        const continuation = client.requests.take(snapshot.request_id) orelse
             return error.UnexpectedWorkspaceSnapshot;
-        client.workspace_snapshot_request_id = null;
+        if (continuation != .workspace_snapshot or
+            !std.meta.eql(continuation.workspace_snapshot, snapshot.workspace))
+            return error.UnexpectedWorkspaceSnapshot;
         var canonical_tabs: [tabs_mod.max_tabs]schema.TabId = undefined;
         var canonical_count: usize = 0;
         var iterator = snapshot.tabs();
@@ -491,18 +408,18 @@ const Client = struct {
             ) == null) releaseTabGraphics(client.graphics_store, tab);
         }
         try client.tabs.reconcileWorkspace(snapshot);
-        if (client.tab_snapshot == null) {
+        if (!client.requests.has(.tab_snapshot)) {
             if (client.tabs.active()) |active| {
                 if (!active.snapshot_loaded) {
                     const request_id = try client.nextId();
-                    client.tab_snapshot = .{
-                        .request_id = request_id,
-                        .tab_id = active.location.tab_id,
-                    };
-                    try client.enqueue(.{ .request_tab_snapshot = .{
-                        .request_id = request_id,
-                        .location = active.location,
-                    } });
+                    try client.enqueueRequest(
+                        request_id,
+                        .{ .tab_snapshot = active.location },
+                        .{ .request_tab_snapshot = .{
+                            .request_id = request_id,
+                            .location = active.location,
+                        } },
+                    );
                 }
             }
         }
@@ -511,14 +428,15 @@ const Client = struct {
     }
 
     fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
-        const operation = client.pending_tab_operation orelse return error.UnexpectedTabCreated;
-        if (operation != .create or operation.requestId() != created.request_id)
+        const continuation = client.requests.take(created.request_id) orelse
+            return error.UnexpectedTabCreated;
+        if (continuation != .create_tab or
+            !std.meta.eql(continuation.create_tab, created.location.workspace))
             return error.UnexpectedTabCreated;
         if (client.tabs.active()) |current| {
             var handler: InputHandler = .{ .client = client };
             try handler.detachTab(current);
         }
-        client.pending_tab_operation = null;
         _ = try client.tabs.addCreated(
             created,
             rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
@@ -528,10 +446,11 @@ const Client = struct {
     }
 
     fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
-        const operation = client.pending_tab_operation orelse return error.UnexpectedTabRenamed;
-        if (operation != .rename or operation.requestId() != renamed.request_id)
+        const continuation = client.requests.take(renamed.request_id) orelse
             return error.UnexpectedTabRenamed;
-        client.pending_tab_operation = null;
+        if (continuation != .rename_tab or
+            !std.meta.eql(continuation.rename_tab, renamed.location))
+            return error.UnexpectedTabRenamed;
         if (!client.tabs.rename(renamed.location.tab_id, renamed.label))
             return error.UnexpectedTab;
         client.view.invalidate();
@@ -541,40 +460,13 @@ const Client = struct {
     fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
         const lifecycle_event = closed.request_id == .none;
         if (lifecycle_event) {
-            if (client.pending_split != null and
-                client.pending_split.?.tab_id == closed.location.tab_id)
-            {
-                try client.ignored_requests.add(client.pending_split.?.request_id);
-                client.pending_split = null;
-            }
-            if (client.pending_close != null and
-                client.pending_close.?.tab_id == closed.location.tab_id)
-            {
-                try client.ignored_requests.add(client.pending_close.?.request_id);
-                client.pending_close = null;
-            }
-            if (client.tab_snapshot != null and
-                client.tab_snapshot.?.tab_id == closed.location.tab_id)
-            {
-                try client.ignored_requests.add(client.tab_snapshot.?.request_id);
-                client.tab_snapshot = null;
-            }
-            try client.pending_attachments.cancelTab(
-                closed.location.tab_id,
-                &client.ignored_requests,
-            );
-            if (client.pending_tab_operation) |operation| {
-                if (operation.tabId() == closed.location.tab_id) {
-                    try client.ignored_requests.add(operation.requestId());
-                    client.pending_tab_operation = null;
-                }
-            }
+            client.requests.ignoreTab(closed.location.tab_id);
         } else {
-            const operation = client.pending_tab_operation orelse
+            const continuation = client.requests.take(closed.request_id) orelse
                 return error.UnexpectedTabClosed;
-            if (operation != .close or operation.requestId() != closed.request_id)
+            if (continuation != .close_tab or
+                !std.meta.eql(continuation.close_tab, closed.location))
                 return error.UnexpectedTabClosed;
-            client.pending_tab_operation = null;
         }
         const was_active = client.tabs.activeConst() != null and
             client.tabs.activeConst().?.location.tab_id == closed.location.tab_id;
@@ -590,11 +482,14 @@ const Client = struct {
         if (was_active) {
             const active = client.tabs.active().?;
             const request_id = try client.nextId();
-            client.tab_snapshot = .{ .request_id = request_id, .tab_id = active.location.tab_id };
-            try client.enqueue(.{ .request_tab_snapshot = .{
-                .request_id = request_id,
-                .location = active.location,
-            } });
+            try client.enqueueRequest(
+                request_id,
+                .{ .tab_snapshot = active.location },
+                .{ .request_tab_snapshot = .{
+                    .request_id = request_id,
+                    .location = active.location,
+                } },
+            );
         }
         client.view.invalidate();
         try client.requestDraw();
@@ -602,10 +497,11 @@ const Client = struct {
     }
 
     fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
-        const operation = client.pending_tab_operation orelse return error.UnexpectedTabMoved;
-        if (operation != .move or operation.requestId() != moved.request_id)
+        const continuation = client.requests.take(moved.request_id) orelse
             return error.UnexpectedTabMoved;
-        client.pending_tab_operation = null;
+        if (continuation != .move_tab or
+            !std.meta.eql(continuation.move_tab, moved.location))
+            return error.UnexpectedTabMoved;
         _ = client.tabs.move(moved.location.tab_id, moved.position);
         client.view.invalidate();
         try client.requestDraw();
@@ -642,8 +538,7 @@ const Client = struct {
         const tab = client.tabs.tabForPane(exited.pane_id);
         if (tab) |value| _ = value.model.removePane(exited.pane_id);
         client.view.invalidate();
-        if (client.pending_close != null and client.pending_close.?.pane_id == exited.pane_id)
-            client.pending_close = null;
+        _ = client.requests.completePaneClose(exited.pane_id);
         if (client.tabs.active()) |active| {
             if (active.model.pane_count != 0)
                 try client.resizeAttached(&active.model, client.view.workbench());
@@ -652,44 +547,39 @@ const Client = struct {
     }
 
     fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
-        if (client.ignored_requests.take(failure.request_id)) {
-            // A lifecycle event can overtake an operation that was already
-            // queued for the tab the runtime destroyed.
-        } else if (client.pending_split != null and
-            client.pending_split.?.request_id == failure.request_id)
-        {
-            client.pending_split = null;
-            if (client.tabs.active()) |active|
-                try client.resizeAttached(&active.model, client.view.workbench());
-        } else if (client.pending_close != null and
-            client.pending_close.?.request_id == failure.request_id)
-        {
-            client.pending_close = null;
-        } else if (client.pending_attachments.take(failure.request_id)) |pane_id| {
-            if (client.tabs.tabForPane(pane_id)) |tab| _ = tab.model.removePane(pane_id);
-            client.view.invalidate();
-            if (client.tabs.active()) |active|
-                try client.resizeAttached(&active.model, client.view.workbench());
-        } else if (client.pending_tab_operation != null and
-            client.pending_tab_operation.?.requestId() == failure.request_id)
-        {
-            const operation = client.pending_tab_operation.?;
-            client.pending_tab_operation = null;
-            if (operation == .close) {
+        const continuation = client.requests.take(failure.request_id) orelse {
+            std.debug.print("telar runtime: {s}\n", .{failure.message});
+            return error.UnexpectedRequestFailure;
+        };
+        switch (continuation) {
+            .ignored, .close_pane, .rename_tab, .move_tab => {},
+            .split => {
+                if (client.tabs.active()) |active|
+                    try client.resizeAttached(&active.model, client.view.workbench());
+            },
+            .attach_pane => |attachment| {
+                if (client.tabs.tabForPane(attachment.pane_id)) |tab|
+                    _ = tab.model.removePane(attachment.pane_id);
+                client.view.invalidate();
+                if (client.tabs.active()) |active|
+                    try client.resizeAttached(&active.model, client.view.workbench());
+            },
+            .close_tab => {
                 const active = client.tabs.active().?;
                 const request_id = try client.nextId();
-                client.tab_snapshot = .{
-                    .request_id = request_id,
-                    .tab_id = active.location.tab_id,
-                };
-                try client.enqueue(.{ .request_tab_snapshot = .{
-                    .request_id = request_id,
-                    .location = active.location,
-                } });
-            }
-        } else {
-            std.debug.print("telar runtime: {s}\n", .{failure.message});
-            return error.RuntimeRequestFailed;
+                try client.enqueueRequest(
+                    request_id,
+                    .{ .tab_snapshot = active.location },
+                    .{ .request_tab_snapshot = .{
+                        .request_id = request_id,
+                        .location = active.location,
+                    } },
+                );
+            },
+            .initial_open, .workspace_snapshot, .tab_snapshot, .create_tab => {
+                std.debug.print("telar runtime: {s}\n", .{failure.message});
+                return error.RuntimeRequestFailed;
+            },
         }
         try client.requestDraw();
     }
@@ -697,13 +587,16 @@ const Client = struct {
     fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !void {
         const workspace = client.tabs.workspace orelse return error.UnexpectedResync;
         if (!std.meta.eql(workspace, required.workspace)) return error.UnexpectedResync;
-        if (client.workspace_snapshot_request_id != null) return;
+        if (client.requests.has(.workspace_snapshot)) return;
         const request_id = try client.nextId();
-        client.workspace_snapshot_request_id = request_id;
-        try client.enqueue(.{ .request_workspace_snapshot = .{
-            .request_id = request_id,
-            .workspace = workspace,
-        } });
+        try client.enqueueRequest(
+            request_id,
+            .{ .workspace_snapshot = workspace },
+            .{ .request_workspace_snapshot = .{
+                .request_id = request_id,
+                .workspace = workspace,
+            } },
+        );
     }
 
     fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
@@ -1010,6 +903,7 @@ pub fn run(
         .sidebar_rendering = options.sidebar_rendering,
         .config_mtime_ns = options.config_mtime_ns,
     };
+    try client.requests.add(initial_request_id, .initial_open);
     if (options.config_path) |path|
         try select.concurrent(.config_reload, waitConfigReload, .{
             io,
@@ -1489,7 +1383,7 @@ const InputHandler = struct {
     }
 
     fn selectTab(handler: *InputHandler, tab_id: schema.TabId) !void {
-        if (handler.client.tab_snapshot != null) return;
+        if (handler.client.requests.has(.tab_snapshot)) return;
         const current = handler.client.tabs.active() orelse return;
         if (current.location.tab_id == tab_id) return;
         if (handler.client.tabs.indexOf(tab_id) == null) return;
@@ -1502,14 +1396,14 @@ const InputHandler = struct {
         }
         active.model.composition_invalidated = true;
         const request_id = try handler.client.nextId();
-        try handler.client.enqueue(.{ .request_tab_snapshot = .{
-            .request_id = request_id,
-            .location = active.location,
-        } });
-        handler.client.tab_snapshot = .{
-            .request_id = request_id,
-            .tab_id = tab_id,
-        };
+        try handler.client.enqueueRequest(
+            request_id,
+            .{ .tab_snapshot = active.location },
+            .{ .request_tab_snapshot = .{
+                .request_id = request_id,
+                .location = active.location,
+            } },
+        );
         handler.client.view.invalidate();
         handler.redraw = true;
     }
@@ -1823,7 +1717,7 @@ const InputHandler = struct {
     }
 
     fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
-        if (handler.client.pending_split != null or handler.client.pending_close != null) return;
+        if (handler.client.requests.has(.pane_operation)) return;
         const model = handler.activeModel();
         const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
@@ -1842,20 +1736,22 @@ const InputHandler = struct {
             .pane_id = pane.id,
             .size = existing_size,
         } });
-        handler.client.enqueue(.{ .create_pane = .{
-            .request_id = request_id,
-            .location = location,
-            .size = new_size,
-            .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
-        } }) catch |err| {
+        handler.client.enqueueRequest(
+            request_id,
+            .{ .split = .{
+                .target_pane = pane.id,
+                .location = location,
+                .axis = axis,
+            } },
+            .{ .create_pane = .{
+                .request_id = request_id,
+                .location = location,
+                .size = new_size,
+                .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
+            } },
+        ) catch |err| {
             try handler.restoreFocusedSize(pane.id);
             return err;
-        };
-        handler.client.pending_split = .{
-            .request_id = request_id,
-            .target_pane = pane.id,
-            .tab_id = location.tab_id,
-            .axis = axis,
         };
     }
 
@@ -1875,32 +1771,35 @@ const InputHandler = struct {
     }
 
     fn closeFocused(handler: *InputHandler) !void {
-        if (handler.client.pending_close != null or handler.client.pending_split != null) return;
+        if (handler.client.requests.has(.pane_operation)) return;
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
+        const location = handler.client.tabs.active().?.location;
         const request_id = try handler.client.nextId();
-        try handler.client.enqueue(.{ .close_pane = .{
-            .request_id = request_id,
-            .pane_id = pane.id,
-        } });
-        handler.client.pending_close = .{
-            .request_id = request_id,
-            .pane_id = pane.id,
-            .tab_id = handler.client.tabs.active().?.location.tab_id,
-        };
+        try handler.client.enqueueRequest(
+            request_id,
+            .{ .close_pane = .{ .pane_id = pane.id, .location = location } },
+            .{ .close_pane = .{
+                .request_id = request_id,
+                .pane_id = pane.id,
+            } },
+        );
     }
 
     fn createTab(handler: *InputHandler) !void {
-        if (handler.client.pending_tab_operation != null) return;
+        if (handler.client.requests.has(.tab_operation)) return;
         const workspace = handler.client.tabs.workspace orelse return;
         const request_id = try handler.client.nextId();
-        try handler.client.enqueue(.{ .create_tab = .{
-            .request_id = request_id,
-            .workspace = workspace,
-            .size = rectSize(handler.client.view.workbench()) orelse return,
-            .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
-        } });
-        handler.client.pending_tab_operation = .{ .create = request_id };
+        try handler.client.enqueueRequest(
+            request_id,
+            .{ .create_tab = workspace },
+            .{ .create_tab = .{
+                .request_id = request_id,
+                .workspace = workspace,
+                .size = rectSize(handler.client.view.workbench()) orelse return,
+                .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
+            } },
+        );
     }
 
     fn selectTabOffset(handler: *InputHandler, offset: isize) !void {
@@ -1917,49 +1816,48 @@ const InputHandler = struct {
     }
 
     fn closeTab(handler: *InputHandler) !void {
-        if (handler.client.pending_tab_operation != null) return;
+        if (handler.client.requests.has(.tab_operation)) return;
         const tab = handler.client.tabs.active() orelse return;
         const request_id = try handler.client.nextId();
         try handler.detachTab(tab);
-        try handler.client.enqueue(.{ .close_tab = .{
-            .request_id = request_id,
-            .location = tab.location,
-        } });
-        handler.client.pending_tab_operation = .{ .close = .{
-            .request_id = request_id,
-            .tab_id = tab.location.tab_id,
-        } };
+        try handler.client.enqueueRequest(
+            request_id,
+            .{ .close_tab = tab.location },
+            .{ .close_tab = .{
+                .request_id = request_id,
+                .location = tab.location,
+            } },
+        );
     }
 
     fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
-        if (handler.client.pending_tab_operation != null) return;
+        if (handler.client.requests.has(.tab_operation)) return;
         const tab = handler.client.tabs.active() orelse return;
         const request_id = try handler.client.nextId();
-        try handler.client.enqueue(.{ .move_tab = .{
-            .request_id = request_id,
-            .location = tab.location,
-            .direction = direction,
-        } });
-        handler.client.pending_tab_operation = .{ .move = .{
-            .request_id = request_id,
-            .tab_id = tab.location.tab_id,
-        } };
+        try handler.client.enqueueRequest(
+            request_id,
+            .{ .move_tab = tab.location },
+            .{ .move_tab = .{
+                .request_id = request_id,
+                .location = tab.location,
+                .direction = direction,
+            } },
+        );
     }
 
     fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
-        if (handler.client.pending_tab_operation != null) return;
+        if (handler.client.requests.has(.tab_operation)) return;
         const tab_id = handler.client.view.renamedTab() orelse return;
         const tab = handler.client.tabs.find(tab_id) orelse return;
         const request_id = try handler.client.nextId();
-        try handler.client.enqueueRename(.{
-            .request_id = request_id,
-            .location = tab.location,
-            .label = label,
-        });
-        handler.client.pending_tab_operation = .{ .rename = .{
-            .request_id = request_id,
-            .tab_id = tab.location.tab_id,
-        } };
+        try handler.client.enqueueRenameRequest(
+            .{
+                .request_id = request_id,
+                .location = tab.location,
+                .label = label,
+            },
+            .{ .rename_tab = tab.location },
+        );
         handler.client.view.finishTabRename();
     }
 };
@@ -2296,6 +2194,7 @@ test {
     _ = @import("diff.zig");
     _ = @import("kitty.zig");
     _ = @import("client_ui.zig");
+    _ = @import("client_requests.zig");
     _ = @import("tabs.zig");
     _ = @import("theme.zig");
     _ = @import("platform.zig");
@@ -2383,34 +2282,4 @@ test "closing a tab releases the graphics its panes held" {
     releaseTabGraphics(&store, tabs.active().?);
     try std.testing.expect(!store.hasPaneGraphics(@enumFromInt(7)));
     try std.testing.expectEqual(@as(usize, 0), store.total_bytes);
-}
-
-test "pending attachments are removed by request id" {
-    var pending: PendingAttachments = .{};
-    try pending.add(.{
-        .request_id = @enumFromInt(7),
-        .pane_id = @enumFromInt(3),
-        .tab_id = @enumFromInt(2),
-    });
-    try std.testing.expectEqual(
-        @as(schema.PaneId, @enumFromInt(3)),
-        pending.take(@enumFromInt(7)).?,
-    );
-    try std.testing.expect(pending.take(@enumFromInt(7)) == null);
-}
-
-test "closing a tab cancels its pending attachments" {
-    var pending: PendingAttachments = .{};
-    var ignored: IgnoredRequests = .{};
-    try pending.add(.{
-        .request_id = @enumFromInt(7),
-        .pane_id = @enumFromInt(3),
-        .tab_id = @enumFromInt(2),
-    });
-
-    try pending.cancelTab(@enumFromInt(2), &ignored);
-
-    try std.testing.expect(pending.take(@enumFromInt(7)) == null);
-    try std.testing.expect(ignored.take(@enumFromInt(7)));
-    try std.testing.expect(!ignored.take(@enumFromInt(7)));
 }

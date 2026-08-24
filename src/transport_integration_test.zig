@@ -1725,6 +1725,55 @@ test "input to one pane flows while another pane's PTY is wedged" {
     try std.testing.expect(forwarded);
 }
 
+test "a stale attachment command does not disconnect the client" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/stale-command.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{ .stop = &stop } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, path);
+    defer connection.deinit(io);
+    var send_buffer: [2048]u8 = undefined;
+    try connection.send(io, try schema.encodeDetachPane(&send_buffer, .{
+        .pane_id = @enumFromInt(999),
+    }));
+
+    const arguments = [_][]const u8{ "/bin/sh", "-c", "sleep 1" };
+    const request_id: schema.RequestId = @enumFromInt(1);
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = request_id,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+    for (0..32) |_| switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .pane_opened => |opened| {
+            try std.testing.expectEqual(request_id, opened.request_id);
+            return;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+    return error.PaneOpenTimedOut;
+}
+
 fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     for (0..200) |_| {
         var connection = frontend.transport.local.connect(io, path) catch {

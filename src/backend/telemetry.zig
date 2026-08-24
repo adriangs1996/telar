@@ -15,6 +15,7 @@ const PaneStore = pane_mod.PaneStore;
 pub const RuntimeMetrics = struct {
     started_ns: u64,
     client_messages: u64 = 0,
+    stale_client_messages: u64 = 0,
     input_events: u64 = 0,
     input_bytes: u64 = 0,
     input_write: diagnostics.Timing = .{},
@@ -129,7 +130,8 @@ pub fn formatRuntimeTelemetry(
         "\"workspace_count\":{d},\"tab_count\":{d}," ++
         "\"pane_count\":{d},\"attachment_count\":{d}," ++
         "\"outstanding_frames\":{d},\"dirty_panes\":{d}," ++
-        "\"client_messages\":{d},\"input_events\":{d},\"input_bytes\":{d}," ++
+        "\"client_messages\":{d},\"stale_client_messages\":{d}," ++
+        "\"input_events\":{d},\"input_bytes\":{d}," ++
         "\"pty_events\":{d},\"pty_bytes\":{d},\"folded_pty_events\":{d}," ++
         "\"frames\":{d},\"frame_bytes\":{d},\"frame_cells\":{d}," ++
         "\"frame_spans\":{d},\"snapshots\":{d}," ++
@@ -146,6 +148,7 @@ pub fn formatRuntimeTelemetry(
         outstanding_frames,
         dirty_panes,
         metrics.client_messages,
+        metrics.stale_client_messages,
         metrics.input_events,
         metrics.input_bytes,
         metrics.pty_events,

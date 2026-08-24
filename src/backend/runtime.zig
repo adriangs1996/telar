@@ -547,6 +547,10 @@ const Server = struct {
         }
     }
 
+    /// Applies one decoded client command. Domain rejection is represented by
+    /// `request_failed`; commands for an attachment that has already gone are
+    /// counted and ignored. Therefore an error return is an infrastructure
+    /// failure, never ordinary client or lifecycle state.
     fn dispatch(server: *Server, message: schema.ClientMessage) !void {
         const io = server.io;
         const gpa = server.gpa;
@@ -630,22 +634,31 @@ const Server = struct {
                 } });
             },
             .pane_input => |input| {
-                const active = (try attachedPane(attachments, input.pane_id)).pane;
-                if (active.exit != null) return;
+                const active = attachments.find(input.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
+                if (active.pane.exit != null) {
+                    metrics.stale_client_messages += 1;
+                    return;
+                }
                 if (comptime diagnostics.enabled) {
                     metrics.input_events += 1;
                     metrics.input_bytes += input.bytes.len;
                 }
-                active.queueHistoryInput(
+                active.pane.queueHistoryInput(
                     input.bytes,
-                    active.session.shellForeground() orelse false,
+                    active.pane.session.shellForeground() orelse false,
                     historyClock(io),
                 );
-                _ = active.input_queue.push(input.bytes);
-                try schedulePaneInput(io, select, active);
+                _ = active.pane.input_queue.push(input.bytes);
+                try schedulePaneInput(io, select, active.pane);
             },
             .pane_resize => |resize| {
-                const active = try attachedPane(attachments, resize.pane_id);
+                const active = attachments.find(resize.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
                 try active.pane.requestResize(resize.size);
                 if (!active.pane.ingest_pending) {
                     retirePaneOnFailure(active.pane, active.pane.applyPendingResize()) catch return;
@@ -661,12 +674,21 @@ const Server = struct {
                     try schedulePaneResponse(io, select, active.pane);
             },
             .request_graphics_snapshot => |request| {
-                const active = try attachedPane(attachments, request.pane_id);
+                const active = attachments.find(request.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
                 active.resetGraphics();
             },
             .frame_ack => |ack| {
-                const active = try attachedPane(attachments, ack.pane_id);
-                if (ack.frame_id != active.outstanding_frame_id) return;
+                const active = attachments.find(ack.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
+                if (ack.frame_id != active.outstanding_frame_id) {
+                    metrics.stale_client_messages += 1;
+                    return;
+                }
                 if (comptime diagnostics.enabled) {
                     metrics.ack.observe(diagnostics.elapsed(active.frame_sent_ns, diagnostics.now(io)));
                 }
@@ -674,11 +696,15 @@ const Server = struct {
                 active.outstanding_frame_id = 0;
             },
             .request_snapshot => |request| {
-                const active = try attachedPane(attachments, request.pane_id);
+                const active = attachments.find(request.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
                 active.snapshot_pending = true;
             },
             .detach_pane => |detach| {
-                if (!attachments.detach(detach.pane_id)) return error.PaneNotFound;
+                if (!attachments.detach(detach.pane_id))
+                    metrics.stale_client_messages += 1;
             },
             .request_tab_snapshot => |request| {
                 if (!workspaces.contains(request.location)) {
@@ -1649,13 +1675,6 @@ fn startSend(
         send_pending.* = false;
         return err;
     };
-}
-
-fn attachedPane(
-    attachments: *AttachmentStore,
-    message_id: schema.PaneId,
-) !*Attachment {
-    return attachments.find(message_id) orelse error.PaneNotFound;
 }
 
 fn sendClient(
