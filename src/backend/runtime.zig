@@ -141,20 +141,23 @@ const ClientSession = struct {
     stopping_in_flight: bool = false,
     sent_exit_pane: ?schema.PaneId = null,
 
-    fn init(
+    fn create(
         gpa: std.mem.Allocator,
         key: ClientKey,
         connection: core.transport.SocketChannel,
-    ) !ClientSession {
+    ) !*ClientSession {
         const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
         errdefer gpa.free(receive_buffer);
         const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
-        return .{
+        errdefer gpa.free(send_buffer);
+        const session = try gpa.create(ClientSession);
+        session.* = .{
             .key = key,
             .connection = connection,
             .receive_buffer = receive_buffer,
             .send_buffer = send_buffer,
         };
+        return session;
     }
 
     fn active(session: *const ClientSession) bool {
@@ -172,7 +175,7 @@ const ClientSession = struct {
 };
 
 const ClientStore = struct {
-    items: [max_clients]?ClientSession = @splat(null),
+    items: [max_clients]?*ClientSession = @splat(null),
     count: usize = 0,
     next_id: u64 = 1,
     next_generation: u64 = 1,
@@ -192,18 +195,19 @@ const ClientStore = struct {
         };
         for (&store.items) |*slot| {
             if (slot.* != null) continue;
-            slot.* = try ClientSession.init(gpa, key, connection);
+            const session = try ClientSession.create(gpa, key, connection);
+            slot.* = session;
             store.next_id += 1;
             store.next_generation += 1;
             store.count += 1;
-            return &slot.*.?;
+            return session;
         }
         unreachable;
     }
 
     fn resolve(store: *ClientStore, key: ClientKey) ?*ClientSession {
         for (&store.items) |*slot| {
-            const session = if (slot.*) |*value| value else continue;
+            const session = slot.* orelse continue;
             if (session.key.id == key.id and session.key.generation == key.generation)
                 return session;
         }
@@ -212,10 +216,11 @@ const ClientStore = struct {
 
     fn remove(store: *ClientStore, io: Io, gpa: std.mem.Allocator, key: ClientKey) bool {
         for (&store.items) |*slot| {
-            const session = if (slot.*) |*value| value else continue;
+            const session = slot.* orelse continue;
             if (session.key.id != key.id or session.key.generation != key.generation)
                 continue;
             session.deinit(io, gpa);
+            gpa.destroy(session);
             slot.* = null;
             store.count -= 1;
             return true;
@@ -225,10 +230,11 @@ const ClientStore = struct {
 
     fn deinit(store: *ClientStore, io: Io, gpa: std.mem.Allocator) void {
         for (&store.items) |*slot| {
-            if (slot.*) |*session| {
+            if (slot.*) |session| {
                 session.connection.shutdown(io);
                 std.debug.assert(!session.read_pending and !session.send_pending);
                 session.deinit(io, gpa);
+                gpa.destroy(session);
             }
             slot.* = null;
         }
@@ -337,7 +343,7 @@ const Server = struct {
             const pane = slot.* orelse continue;
             if (!pane.readyToDestroy()) continue;
             for (&server.clients.items) |*client_slot| {
-                const client = if (client_slot.*) |*value| value else continue;
+                const client = client_slot.* orelse continue;
                 if (client.attachments.find(pane.id) != null) break;
             } else {
                 const location = pane.location;
@@ -350,7 +356,7 @@ const Server = struct {
 
                 const workspace_closed = server.workspaces.removeTab(location).?;
                 for (&server.clients.items) |*client_slot| {
-                    const client = if (client_slot.*) |*value| value else continue;
+                    const client = client_slot.* orelse continue;
                     if (!client.active() or !client.attachments.observes(location.workspace)) continue;
                     client.responses.pushOrDrop(.{ .tab_closed = .{
                         .request_id = .none,
@@ -412,7 +418,7 @@ const Server = struct {
         workspace: schema.WorkspaceLocation,
     ) void {
         for (&server.clients.items) |*slot| {
-            const session = if (slot.*) |*value| value else continue;
+            const session = slot.* orelse continue;
             if (std.meta.eql(session.key, origin) or !session.active()) continue;
             if (session.attachments.observes(workspace))
                 session.responses.resync_workspace = workspace;
@@ -421,7 +427,7 @@ const Server = struct {
 
     fn pumpAll(server: *Server) void {
         for (&server.clients.items) |*slot| {
-            const session = if (slot.*) |*value| value else continue;
+            const session = slot.* orelse continue;
             const key = session.key;
             server.pump(session) catch server.dropClient(key);
         }
@@ -434,7 +440,7 @@ const Server = struct {
     fn settlePaneDamage(server: *Server, pane: *Pane) void {
         if (pane.render_pending) return;
         for (&server.clients.items) |*slot| {
-            const session = if (slot.*) |*value| value else continue;
+            const session = slot.* orelse continue;
             const attachment = session.attachments.find(pane.id) orelse continue;
             if (attachment.observed_cell_revision != pane.cell_revision) return;
         }
@@ -446,7 +452,7 @@ const Server = struct {
         if (server.shutdown.requested) return;
         server.shutdown = .{ .requested = true, .initiator = initiator };
         for (&server.clients.items) |*slot| {
-            const session = if (slot.*) |*value| value else continue;
+            const session = slot.* orelse continue;
             if (session.active()) session.stopping_pending = true;
         }
     }
@@ -454,7 +460,7 @@ const Server = struct {
     fn shutdownDelivered(server: *const Server) bool {
         if (!server.shutdown.requested) return false;
         for (&server.clients.items) |*slot| {
-            const session = if (slot.*) |*value| value else continue;
+            const session = slot.* orelse continue;
             if (!session.closing and (session.stopping_pending or
                 session.stopping_in_flight or session.send_pending)) return false;
         }
@@ -1059,7 +1065,7 @@ fn serveInternal(
     defer {
         listener.shutdown();
         for (&server.clients.items) |*slot|
-            if (slot.*) |*session| session.connection.shutdown(io);
+            if (slot.*) |session| session.connection.shutdown(io);
         if (server.handshake_slot) |*pending| pending.shutdown(io);
         // `pane_exit` blocks in libc's waitpid and cannot observe Select
         // cancellation. End the PTY sessions first so their waits can finish;
@@ -1069,7 +1075,7 @@ fn serveInternal(
         select.cancelDiscard();
         listener.deinit(io);
         if (server.handshake_slot) |*pending| pending.deinit(io);
-        for (&server.clients.items) |*slot| if (slot.*) |*session| {
+        for (&server.clients.items) |*slot| if (slot.*) |session| {
             session.read_pending = false;
             session.send_pending = false;
         };
@@ -1309,7 +1315,7 @@ fn serveInternal(
                     server.metrics.pty_events += 1;
                     server.metrics.pty_bytes += output_len;
                     for (&server.clients.items) |*slot| {
-                        const client = if (slot.*) |*value| value else continue;
+                        const client = slot.* orelse continue;
                         const attachment = client.attachments.find(active.id) orelse continue;
                         if (attachment.outstanding_frame_id != 0) {
                             server.metrics.folded_pty_events += 1;
@@ -1363,7 +1369,7 @@ fn serveInternal(
             try schedulePaneObservation(&select, active);
             try schedulePaneMedia(&select, active);
             for (&server.clients.items) |*slot| {
-                const client = if (slot.*) |*value| value else continue;
+                const client = slot.* orelse continue;
                 if (client.attachments.find(active.id)) |attachment| {
                     _ = attachment.resizeIfNeeded() catch {
                         _ = client.attachments.detach(active.id);
@@ -1417,7 +1423,7 @@ fn serveInternal(
                 active.media.terminal.screens.active.kitty_images.images.count() != 0;
             if (event.stats.reset) {
                 for (&server.clients.items) |*slot| {
-                    const client = if (slot.*) |*value| value else continue;
+                    const client = slot.* orelse continue;
                     if (client.attachments.find(active.id)) |attachment| attachment.resetGraphics();
                 }
             }
@@ -1459,7 +1465,7 @@ fn serveInternal(
             var response_queue_depth: usize = 0;
             var response_queue_dropped: u64 = 0;
             for (&server.clients.items) |*slot| {
-                const session = if (slot.*) |*value| value else continue;
+                const session = slot.* orelse continue;
                 attachment_stores[attachment_store_count] = &session.attachments;
                 attachment_store_count += 1;
                 response_queue_depth += session.responses.len;
@@ -1832,6 +1838,25 @@ test "a wait failure becomes a synthetic exit instead of a runtime error" {
         pty.Exit{ .exited = 7 },
         exitOrSynthetic(pty.Exit{ .exited = 7 }),
     );
+}
+
+test "client session storage stays off the runtime stack" {
+    try std.testing.expect(@sizeOf(ClientStore) < @sizeOf(ClientSession));
+
+    const session = try ClientSession.create(
+        std.testing.allocator,
+        .{ .id = 1, .generation = 1 },
+        .{ .stream = undefined },
+    );
+    defer {
+        std.testing.allocator.free(session.receive_buffer);
+        std.testing.allocator.free(session.send_buffer);
+        std.testing.allocator.destroy(session);
+    }
+
+    try std.testing.expectEqual(@as(u64, 1), session.key.id);
+    try std.testing.expectEqual(core.transport.max_frame_size, session.receive_buffer.len);
+    try std.testing.expectEqual(core.transport.max_frame_size, session.send_buffer.len);
 }
 
 test "a full response queue drops notifications instead of failing" {
