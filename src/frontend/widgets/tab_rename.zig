@@ -9,10 +9,7 @@ const schema = core.schema;
 
 pub const Field = edit.Field(schema.max_tab_label_bytes);
 
-pub const Output = struct {
-    cursor_x: u16,
-    cursor_y: u16,
-};
+pub const Output = widget.Cursor;
 
 pub fn render(context: *widget.Context, area: ui.Rect, field: *Field) Output {
     const prefix = " rename tab: ";

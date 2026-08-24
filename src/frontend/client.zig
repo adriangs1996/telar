@@ -1385,6 +1385,11 @@ const InputHandler = struct {
         return &handler.client.tabs.active().?.model;
     }
 
+    pub fn capturesKeys(handler: *const InputHandler) bool {
+        return handler.client.view.renamedTab() != null or
+            handler.client.view.sidebarCapturesKeyboard();
+    }
+
     fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
         for (&tab.model.panes) |*slot| {
             const pane = if (slot.*) |*item| item else continue;
@@ -1443,6 +1448,10 @@ const InputHandler = struct {
             var editing_bytes: [32]u8 = undefined;
             return handler.forward(try input_mod.encodeKey(&editing_bytes, value, .{}));
         }
+        if (handler.client.view.handleSidebarKey(value)) {
+            handler.redraw = true;
+            return;
+        }
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         var encoded: [32]u8 = undefined;
@@ -1465,6 +1474,7 @@ const InputHandler = struct {
     pub fn pasteStart(handler: *InputHandler) !void {
         if (handler.client.view.renamedTab() != null)
             return handler.forward("\x1b[200~");
+        if (handler.client.view.sidebarCapturesKeyboard()) return;
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         handler.client.paste_pane = pane.id;
@@ -1474,6 +1484,10 @@ const InputHandler = struct {
 
     pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
         if (handler.client.view.renamedTab() != null) return handler.forward(text);
+        if (handler.client.view.pasteIntoSidebar(text)) {
+            handler.redraw = true;
+            return;
+        }
         const pane_id = handler.client.paste_pane orelse return;
         const pane = handler.client.tabs.findPane(pane_id) orelse return;
         if (pane.attached) try handler.sendPaneBytes(pane, text);
@@ -1482,6 +1496,7 @@ const InputHandler = struct {
     pub fn pasteEnd(handler: *InputHandler) !void {
         if (handler.client.view.renamedTab() != null)
             return handler.forward("\x1b[201~");
+        if (handler.client.view.sidebarCapturesKeyboard()) return;
         const pane_id = handler.client.paste_pane orelse return;
         handler.client.paste_pane = null;
         const pane = handler.client.tabs.findPane(pane_id) orelse return;

@@ -397,6 +397,15 @@ pub fn Router(
                 }
                 switch (parsed.event) {
                     .key => |key| {
+                        if (comptime @hasDecl(@TypeOf(handler.*), "capturesKeys")) {
+                            if (handler.capturesKeys()) {
+                                try router.replayBinding(handler);
+                                try router.flushOutput(handler);
+                                try handler.key(key);
+                                router.input_start += parsed.len;
+                                continue;
+                            }
+                        }
                         const was_pending = router.depth != 0;
                         switch (router.routeKey(key, raw)) {
                             .forward => |forwarded| {
@@ -663,6 +672,28 @@ const Capture = struct {
     }
 };
 
+const GreedyCapture = struct {
+    keys: [8]Key = undefined,
+    key_count: usize = 0,
+    action_count: usize = 0,
+
+    fn capturesKeys(_: *const GreedyCapture) bool {
+        return true;
+    }
+
+    fn key(capture: *GreedyCapture, value: Key) !void {
+        capture.keys[capture.key_count] = value;
+        capture.key_count += 1;
+    }
+
+    fn forward(_: *GreedyCapture, _: []const u8) !void {}
+
+    fn action(capture: *GreedyCapture, _: TestAction) !Control {
+        capture.action_count += 1;
+        return .continue_routing;
+    }
+};
+
 const MouseCapture = struct {
     forwarded: usize = 0,
     mouse_events: usize = 0,
@@ -725,6 +756,18 @@ test "configuration keys parse into semantic chords" {
     const shifted_char = try parseKey("shift+a");
     try testing.expect(!shifted_char.mods.shift);
     try testing.expect(shifted_char.code.char.eql("A"));
+}
+
+test "an active editor receives keys before configured bindings" {
+    const bindings = [_]TestBinding{try .parse(&.{"a"}, .palette)};
+    var router = try TestRouter.init(&bindings);
+    var capture: GreedyCapture = .{};
+
+    _ = try router.feed("a", 0, &capture);
+
+    try testing.expectEqual(@as(usize, 1), capture.key_count);
+    try testing.expectEqual(@as(usize, 0), capture.action_count);
+    try testing.expectEqualDeep(Key{ .code = .{ .char = .init("a") } }, capture.keys[0]);
 }
 
 test "configuration rejects malformed keys" {

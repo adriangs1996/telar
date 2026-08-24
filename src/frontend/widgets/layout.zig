@@ -2,7 +2,8 @@
 
 const ui = @import("../ui.zig");
 
-pub const sidebar_width: u16 = 30;
+pub const minimum_sidebar_width: u16 = 42;
+pub const sidebar_width: u16 = 62;
 pub const minimum_workbench_width: u16 = 20;
 
 pub const Regions = struct {
@@ -23,7 +24,7 @@ pub const Regions = struct {
         const body, const bottom = below_top.splitBottom(bottom_height);
 
         const can_show_sidebar = sidebar_requested and
-            body.w >= minimum_workbench_width + 12;
+            body.w >= minimum_workbench_width + minimum_sidebar_width;
         const requested_width = @min(sidebar_width, body.w -| minimum_workbench_width);
         const actual_width: u16 = if (can_show_sidebar) requested_width else 0;
         const sidebar, const workbench = body.splitLeft(actual_width);
@@ -47,13 +48,19 @@ pub const Regions = struct {
 test "regions expose the complete chrome layout" {
     const regions = Regions.calculate(120, 40, true);
     try @import("std").testing.expectEqual(ui.Rect{ .w = 120, .h = 1 }, regions.top);
-    try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 1, .w = 30, .h = 38 }, regions.sidebar);
-    try @import("std").testing.expectEqual(ui.Rect{ .x = 30, .y = 1, .w = 90, .h = 38 }, regions.workbench);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 1, .w = 62, .h = 38 }, regions.sidebar);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 62, .y = 1, .w = 58, .h = 38 }, regions.workbench);
     try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 39, .w = 120, .h = 1 }, regions.bottom);
 }
 
-test "narrow layouts suppress the sidebar without changing requested state" {
-    const regions = Regions.calculate(31, 20, true);
+test "layouts below the minimum useful sidebar width suppress it" {
+    const regions = Regions.calculate(61, 20, true);
     try @import("std").testing.expect(regions.sidebar.isEmpty());
-    try @import("std").testing.expectEqual(@as(u16, 31), regions.workbench.w);
+    try @import("std").testing.expectEqual(@as(u16, 61), regions.workbench.w);
+}
+
+test "sidebar grows from forty two to sixty two columns" {
+    try @import("std").testing.expectEqual(@as(u16, 42), Regions.calculate(62, 20, true).sidebar.w);
+    try @import("std").testing.expectEqual(@as(u16, 52), Regions.calculate(72, 20, true).sidebar.w);
+    try @import("std").testing.expectEqual(@as(u16, 62), Regions.calculate(120, 20, true).sidebar.w);
 }

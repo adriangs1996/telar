@@ -20,12 +20,14 @@ pub const Input = struct {
     tabs: ?*const tabs_mod.Model,
     model: *multiplexer.Model,
     rename_field: ?*tab_rename.Field,
+    sidebar_snapshot: *const sidebar.Snapshot,
+    sidebar_state: *sidebar.State,
     sidebar_transparent: bool,
 };
 
 pub const Output = struct {
     sidebar: sidebar.Semantic,
-    cursor: ?tab_rename.Output,
+    cursor: ?context_mod.Cursor,
 };
 
 pub fn render(context: *context_mod.Context, input: Input) Output {
@@ -37,7 +39,8 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
 
     const sidebar_output = sidebar.render(context, .{
         .area = input.regions.sidebar,
-        .model = input.model,
+        .snapshot = input.sidebar_snapshot,
+        .state = input.sidebar_state,
         .transparent = input.sidebar_transparent,
     });
 
@@ -55,7 +58,10 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
     };
 
     workbench.register(context, input.regions.workbench, input.model);
-    return .{ .sidebar = sidebar_output, .cursor = cursor };
+    return .{
+        .sidebar = sidebar_output,
+        .cursor = if (cursor) |value| value else sidebar_output.cursor,
+    };
 }
 
 fn bottomStyle(context: *const context_mod.Context) ui.Style {

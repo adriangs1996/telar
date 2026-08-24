@@ -17,7 +17,7 @@ The client owns exterior capability detection, pixel geometry, exterior IDs,
 physical placements, layout clipping, pending exterior deletes, and the hybrid
 sidebar framebuffers. Pane exterior IDs use the low range below `0x40000000`.
 Telar UI images use the high range beginning at `0x80000001`; child z-indices
-are clamped to `[-1000, 1000]`, while sidebar layers use `-10` and `-9`.
+are clamped to `[-1000, 1000]`, while sidebar layers use `-10` through `-8`.
 
 `telar-core` contains only bounded wire values, formats, rectangles, clipping,
 and schema messages. It contains no parser, allocator, PTY, or terminal writer.
@@ -131,12 +131,17 @@ a deterministic gate and proves input reaches the child before it is released.
 
 ## Sidebar renderers
 
-`CellSidebarRenderer` draws the portable semantic sidebar into `ui.Buffer`.
-`KittySidebarRenderer` owns reusable RGBA layers for the rounded panel,
-selection, and graphical activity indicator. Text, editable fields, cursor,
-and hit targets remain cells. Hover changes do not dirty either graphical
-layer. Both renderers use the same semantic row model, so hit testing does not
-depend on KGP.
+The cell widget draws the complete semantic sidebar into `ui.Buffer`.
+`KittySidebarRenderer` owns four reusable RGBA asset families: the rounded
+panel, one whole-task selection card, the provider-mark atlas, and the control
+atlas. Text, editable fields, cursor, selection marker, hover, and hit targets
+remain cells. Hover does not enter the KGP preparation contract and therefore
+cannot dirty graphical pixels or placements. Both renderers consume the same
+semantic frame, so hit testing does not depend on KGP.
+
+The client renders an empty bounded task snapshot until runtime agent detection
+exists. The adapter and ownership rules for later data are recorded in
+[`sidebar.md`](sidebar.md).
 
 `kitty-full` is an experimental alias of the hybrid backend. It intentionally
 does not rasterize text yet.
