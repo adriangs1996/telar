@@ -88,6 +88,7 @@ pub const ClientTag = enum(u8) {
     close_tab = 0x0f,
     move_tab = 0x10,
     request_graphics_snapshot = 0x11,
+    graphics_credit = 0x12,
 };
 
 pub const ServerTag = enum(u8) {
@@ -202,6 +203,15 @@ pub const FrameAck = struct {
     }
 };
 
+pub const GraphicsCredit = struct {
+    pane_id: PaneId,
+    bytes: u64,
+
+    pub fn validateWire(message: GraphicsCredit) !void {
+        if (message.bytes == 0) return error.InvalidGraphicsCredit;
+    }
+};
+
 pub const RequestSnapshot = struct {
     pane_id: PaneId,
     /// Last frame applied by the client. Zero means it has no pane state.
@@ -304,6 +314,7 @@ pub const ClientMessage = union(enum) {
     close_tab: CloseTab,
     move_tab: MoveTab,
     request_graphics_snapshot: RequestGraphicsSnapshot,
+    graphics_credit: GraphicsCredit,
 };
 
 pub const PaneOpened = struct {
@@ -527,6 +538,10 @@ pub fn encodeFrameAck(buffer: []u8, message: FrameAck) ![]const u8 {
     return encodeDerived(@intFromEnum(ClientTag.frame_ack), FrameAck, buffer, message);
 }
 
+pub fn encodeGraphicsCredit(buffer: []u8, message: GraphicsCredit) ![]const u8 {
+    return encodeDerived(@intFromEnum(ClientTag.graphics_credit), GraphicsCredit, buffer, message);
+}
+
 pub fn encodeRequestSnapshot(buffer: []u8, message: RequestSnapshot) ![]const u8 {
     return encodeDerived(@intFromEnum(ClientTag.request_snapshot), RequestSnapshot, buffer, message);
 }
@@ -684,6 +699,9 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .move_tab => .{ .move_tab = try Derived(MoveTab).decode(&decoder) },
         .request_graphics_snapshot => .{
             .request_graphics_snapshot = try Derived(RequestGraphicsSnapshot).decode(&decoder),
+        },
+        .graphics_credit => .{
+            .graphics_credit = try Derived(GraphicsCredit).decode(&decoder),
         },
     };
     try decoder.ensureEnd();

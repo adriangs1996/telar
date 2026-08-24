@@ -52,6 +52,7 @@ pub const Attachment = struct {
     graphics_target_revision: u64 = 0,
     graphics_batch_active: bool = false,
     observed_graphics_revision: u64 = 0,
+    graphics_credit: usize = core.graphics.max_image_bytes_per_pane,
     transfer: ?Transfer = null,
     known_images: [core.graphics.max_images_per_pane]?KnownImage =
         [_]?KnownImage{null} ** core.graphics.max_images_per_pane,
@@ -234,6 +235,8 @@ pub fn abandonGraphicsBatch(attachment: *Attachment) void {
 pub fn encodeNextGraphics(
     buffer: []u8,
     attachment: *Attachment,
+    global_credit: usize,
+    live_storage_available: bool,
 ) !?[]const u8 {
     const pane = attachment.pane;
     const storage = &pane.media.terminal.screens.active.kitty_images;
@@ -292,7 +295,13 @@ pub fn encodeNextGraphics(
                 .placement = placement,
             });
         }
+        const completed_key = transfer.metadata.key;
         attachment.freeTransfer();
+        forgetReplacedGenerations(attachment, completed_key);
+        // The frozen copy is the only media state safe to read while the
+        // pane's media actor is running. Resume the live storage walk after
+        // the scheduler observes an idle media boundary.
+        if (!live_storage_available) return null;
     }
 
     // Keep the currently displayed generation until its replacement image and
@@ -342,10 +351,13 @@ pub fn encodeNextGraphics(
             .byte_len = pixels.len,
         };
         _ = try metadata.validate(pane.graphics_storage_limit);
+        if (pixels.len > attachment.graphics_credit or pixels.len > global_credit)
+            return null;
         if (!pane.media_allocator.reserveManual(pixels.len))
             return error.GraphicsQuotaExceeded;
         errdefer pane.media_allocator.releaseManual(pixels.len);
         const frozen = try attachment.gpa.dupe(u8, pixels);
+        attachment.graphics_credit -= pixels.len;
         attachment.transfer = .{ .metadata = metadata, .pixels = frozen };
         var placement_iterator = storage.placements.iterator();
         while (placement_iterator.next()) |placement_entry| {
@@ -361,7 +373,7 @@ pub fn encodeNextGraphics(
             attachment.transfer.?.placements[index] = placement;
             attachment.transfer.?.placement_count += 1;
         }
-        return encodeNextGraphics(buffer, attachment);
+        return encodeNextGraphics(buffer, attachment, global_credit, live_storage_available);
     }
 
     for (&attachment.known_placements) |*slot| {
@@ -422,6 +434,20 @@ pub fn rememberImage(attachment: *Attachment, key: core.graphics.ImageKey) !void
         return;
     };
     return error.GraphicsImageLimitReached;
+}
+
+/// Once a replacement and all of its placements have crossed the transport,
+/// older generations of the same logical image no longer need attachment
+/// slots. The client retires them as part of the same atomic handoff.
+fn forgetReplacedGenerations(attachment: *Attachment, current: core.graphics.ImageKey) void {
+    for (&attachment.known_images) |*slot| {
+        const known = slot.* orelse continue;
+        if (known.key.image_id == current.image_id and
+            known.key.generation != current.generation)
+        {
+            slot.* = null;
+        }
+    }
 }
 
 pub fn forgetPlacementsForImage(attachment: *Attachment, key: core.graphics.ImageKey) void {
@@ -523,7 +549,12 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
     const buffer = try gpa.alloc(u8, 64 * 1024);
     defer gpa.free(buffer);
     var messages: usize = 0;
-    while (try encodeNextGraphics(buffer, &attachment)) |_| {
+    while (try encodeNextGraphics(
+        buffer,
+        &attachment,
+        core.graphics.max_image_bytes_global,
+        true,
+    )) |_| {
         messages += 1;
         try std.testing.expect(messages < 64);
     }
@@ -537,6 +568,92 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
     try std.testing.expectEqual(Attachment.SnapshotState.idle, attachment.graphics_snapshot);
     try std.testing.expect(!attachment.graphics_batch_active);
     try std.testing.expectEqual(pane.graphics_revision, attachment.observed_graphics_revision);
+}
+
+test "graphics transfers wait for pane and client memory credit" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try history.Service.init(gpa, ":memory:");
+    defer {
+        service.closeQueues(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&args);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = try schema.id.workspace(1) },
+        .tab_id = try schema.id.tab(1),
+    };
+    const pane = try Pane.create(
+        io,
+        gpa,
+        .{ .id = try schema.id.pane(1), .generation = 1 },
+        location,
+        &command,
+        "/",
+        &service,
+        .{ .cols = 20, .rows = 5 },
+        .{},
+        &budget,
+    );
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    const media = pane.media_allocator.allocator();
+    const pixels = try media.dupe(u8, &[_]u8{ 1, 2, 3, 255 });
+    const screen = pane.media.terminal.screens.active;
+    try screen.kitty_images.addImage(io, media, screen, .{
+        .id = 7,
+        .width = 1,
+        .height = 1,
+        .format = .rgba,
+        .data = .{ .complete = pixels },
+    });
+    pane.graphics_present = true;
+    pane.graphics_revision = 1;
+
+    var attachment = try Attachment.init(gpa, pane);
+    defer attachment.deinit();
+    var buffer: [1024]u8 = undefined;
+
+    // Snapshot framing itself consumes no image memory.
+    try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 3, true) != null);
+    attachment.graphics_credit = 3;
+    try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 4, true) == null);
+    try std.testing.expect(attachment.transfer == null);
+
+    attachment.graphics_credit = 4;
+    try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 3, true) == null);
+    try std.testing.expect(attachment.transfer == null);
+
+    const payload = (try encodeNextGraphics(&buffer, &attachment, 4, true)).?;
+    try std.testing.expect((try schema.decodeServer(payload)) == .graphics_image);
+    try std.testing.expectEqual(@as(usize, 0), attachment.graphics_credit);
+    try std.testing.expect(attachment.transfer != null);
+}
+
+test "completed replacements do not exhaust attachment image slots" {
+    var attachment: Attachment = undefined;
+    attachment.known_images =
+        [_]?Attachment.KnownImage{null} ** core.graphics.max_images_per_pane;
+
+    const replacements = core.graphics.max_images_per_pane * 2;
+    for (1..replacements + 1) |generation| {
+        const key: core.graphics.ImageKey = .{
+            .image_id = 7,
+            .generation = generation,
+        };
+        try rememberImage(&attachment, key);
+        forgetReplacedGenerations(&attachment, key);
+        try std.testing.expect(knowsImage(&attachment, key));
+    }
+
+    var known_count: usize = 0;
+    for (attachment.known_images) |slot| known_count += @intFromBool(slot != null);
+    try std.testing.expectEqual(@as(usize, 1), known_count);
 }
 
 test "graphics quota enforcement evicts oldest images on the ingested pane" {

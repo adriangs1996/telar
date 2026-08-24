@@ -397,7 +397,7 @@ pub const Pane = struct {
             .gpa = gpa,
             .history_service = history_service,
             .graphics_limits = graphics_limits,
-            .graphics_storage_limit = graphics_limits.pane_bytes / 3,
+            .graphics_storage_limit = graphics_limits.pane_bytes / 2,
             .media_allocator = .init(gpa, graphics_budget, graphics_limits.pane_bytes),
             .history_session_id = history_service.newSessionId(io),
             .workspace_path = workspace_copy,
@@ -438,7 +438,7 @@ pub const Pane = struct {
             io,
             pane.media_allocator.allocator(),
             size,
-            @min(core.graphics.max_image_bytes_per_screen, graphics_limits.pane_bytes / 3),
+            @min(core.graphics.max_image_bytes_per_screen, graphics_limits.pane_bytes / 2),
             graphics_limits.payload_bytes,
             Pane.writeMediaPty,
         );

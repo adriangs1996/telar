@@ -512,6 +512,11 @@ fn runClient(
         else
             options.sidebar_rendering,
         .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
+        .host_shared_memory = init.minimal.environ.getPosix("SSH_CONNECTION") == null and
+            if (init.minimal.environ.getPosix("TERM_PROGRAM")) |program|
+                std.ascii.eqlIgnoreCase(program, "ghostty")
+            else
+                false,
         .input_escape_timeout_ns = if (snapshot) |value|
             value.input_escape_timeout_ns
         else

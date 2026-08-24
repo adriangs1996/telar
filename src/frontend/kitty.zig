@@ -1,6 +1,7 @@
 //! Client-side Kitty graphics capability detection, storage, and emission.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const core = @import("telar-core");
 const layout = @import("layout.zig");
 const multiplexer = @import("multiplexer.zig");
@@ -12,6 +13,10 @@ const Io = std.Io;
 const schema = core.schema;
 const graphics = core.graphics;
 
+fn supportsSharedMemory() bool {
+    return builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
+}
+
 pub const query_image_id = capability_mod.query_image_id;
 pub const capability_timeout_ns = capability_mod.timeout_ns;
 pub const capability_query = capability_mod.query;
@@ -20,11 +25,10 @@ pub const TerminalCapabilities = capability_mod.TerminalCapabilities;
 pub const SidebarRendering = capability_mod.SidebarRendering;
 pub const ResolvedSidebarRendering = capability_mod.ResolvedSidebarRendering;
 
-/// Encoded image bytes one frame may put on the wire. Media shares the
-/// interactive writer with cell output, so a 64MB child image must never sit
-/// between a keystroke and its echo; at 256KB per frame a transfer costs a
-/// few milliseconds of local tty bandwidth per frame and a 1MB image
-/// completes within four frames.
+/// Encoded image bytes one frame may put on the direct-data fallback wire.
+/// Media shares the interactive writer with cell output, so a 64MB child image
+/// must never sit between a keystroke and its echo. Local Ghostty sessions use
+/// a compact shared-memory command instead.
 pub const transmission_budget_per_frame: usize = 256 * 1024;
 
 const ImageIdentity = struct {
@@ -38,14 +42,34 @@ const PlacementIdentity = struct {
     virtual_id: u64,
 };
 
+const SharedPixels = struct {
+    name: [64]u8 = undefined,
+    len: u8,
+
+    fn slice(shared: *const SharedPixels) []const u8 {
+        return shared.name[0..shared.len];
+    }
+
+    fn sliceZ(shared: *const SharedPixels) [:0]const u8 {
+        return shared.name[0..shared.len :0];
+    }
+};
+
+const PixelAllocation = struct {
+    pixels: []u8,
+    shared: ?SharedPixels = null,
+};
+
 const ImageEntry = struct {
     metadata: graphics.Image,
     pixels: []u8,
+    shared: ?SharedPixels = null,
     received: usize = 0,
     chunks: usize = 0,
     external_id: u32,
     transmitted: bool = false,
     retire_pending: bool = false,
+    force_direct: bool = false,
 };
 
 const PlacementEntry = struct {
@@ -76,7 +100,13 @@ const PartialTransmission = struct {
 };
 
 pub const Store = struct {
-    const PaneUsage = struct { count: usize = 0, bytes: usize = 0, placements: usize = 0 };
+    pub const Credit = struct { pane_id: schema.PaneId, bytes: usize };
+    const PaneUsage = struct {
+        count: usize = 0,
+        bytes: usize = 0,
+        placements: usize = 0,
+        released_bytes: usize = 0,
+    };
     const RevisionState = struct {
         latest: u64 = 0,
         snapshot: ?u64 = null,
@@ -92,6 +122,8 @@ pub const Store = struct {
     total_bytes: usize = 0,
     next_image_id: u32 = 1,
     next_placement_id: u32 = 1,
+    next_shm_id: u64 = 1,
+    shared_memory: bool = false,
     damage: bool = false,
     partial: ?PartialTransmission = null,
     // Maps rather than `[max_panes_per_tab]` arrays: one store serves every
@@ -106,9 +138,13 @@ pub const Store = struct {
         return .{ .gpa = gpa };
     }
 
+    pub fn initSharedMemory(gpa: std.mem.Allocator) Store {
+        return .{ .gpa = gpa, .shared_memory = supportsSharedMemory() };
+    }
+
     pub fn deinit(store: *Store) void {
         var images = store.images.iterator();
-        while (images.next()) |entry| store.gpa.free(entry.value_ptr.pixels);
+        while (images.next()) |entry| store.freePixels(entry.value_ptr);
         store.images.deinit(store.gpa);
         store.placements.deinit(store.gpa);
         store.revisions.deinit(store.gpa);
@@ -116,11 +152,121 @@ pub const Store = struct {
         store.usage.deinit(store.gpa);
     }
 
+    fn allocatePixels(store: *Store, byte_len: usize) !PixelAllocation {
+        if (store.shared_memory) {
+            if (store.allocateSharedPixels(byte_len)) |allocation|
+                return allocation
+            else |_| {}
+        }
+        return .{ .pixels = try store.gpa.alloc(u8, byte_len) };
+    }
+
+    fn allocateSharedPixels(store: *Store, byte_len: usize) !PixelAllocation {
+        if (comptime !supportsSharedMemory()) return error.SharedMemoryUnavailable;
+
+        var attempts: u8 = 0;
+        while (attempts < 8) : (attempts += 1) {
+            const sequence = store.next_shm_id;
+            store.next_shm_id +%= 1;
+            if (store.next_shm_id == 0) store.next_shm_id = 1;
+            var shared: SharedPixels = .{ .len = 0 };
+            const name = std.fmt.bufPrintZ(
+                &shared.name,
+                "/telar-{d}-{x}",
+                .{ std.c.getpid(), sequence },
+            ) catch return error.SharedMemoryUnavailable;
+            shared.len = @intCast(name.len);
+            const fd = std.c.shm_open(
+                name,
+                @as(c_int, @bitCast(std.c.O{
+                    .ACCMODE = .RDWR,
+                    .CREAT = true,
+                    .EXCL = true,
+                })),
+                @as(u16, 0o600),
+            );
+            switch (std.posix.errno(fd)) {
+                .SUCCESS => {},
+                .EXIST => continue,
+                else => return error.SharedMemoryUnavailable,
+            }
+            defer _ = std.c.close(fd);
+            errdefer _ = std.c.shm_unlink(name);
+            if (std.c.ftruncate(fd, @intCast(byte_len)) != 0)
+                return error.SharedMemoryUnavailable;
+            const map = std.posix.mmap(
+                null,
+                byte_len,
+                .{ .READ = true, .WRITE = true },
+                std.c.MAP{ .TYPE = .SHARED },
+                fd,
+                0,
+            ) catch return error.SharedMemoryUnavailable;
+            return .{ .pixels = map, .shared = shared };
+        }
+        return error.SharedMemoryUnavailable;
+    }
+
+    fn freeAllocation(store: *Store, allocation: *PixelAllocation) void {
+        if (allocation.pixels.len == 0) return;
+        var entry: ImageEntry = .{
+            .metadata = undefined,
+            .pixels = allocation.pixels,
+            .shared = allocation.shared,
+            .external_id = 0,
+        };
+        store.freePixels(&entry);
+        allocation.pixels = &.{};
+        allocation.shared = null;
+    }
+
+    fn freePixels(store: *Store, entry: *ImageEntry) void {
+        if (entry.shared) |*shared| {
+            if (comptime supportsSharedMemory()) {
+                _ = std.c.shm_unlink(shared.sliceZ());
+                std.posix.munmap(@alignCast(entry.pixels));
+            }
+        } else {
+            store.gpa.free(entry.pixels);
+        }
+        entry.pixels = &.{};
+        entry.shared = null;
+    }
+
+    fn sharedPixelsConsumed(_: *Store, entry: *const ImageEntry) bool {
+        const shared = entry.shared orelse return true;
+        if (!entry.transmitted) return true;
+        if (comptime !supportsSharedMemory()) return false;
+        const fd = std.c.shm_open(
+            shared.sliceZ(),
+            @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+            @as(u16, 0),
+        );
+        return switch (std.posix.errno(fd)) {
+            .SUCCESS => consumed: {
+                _ = std.c.close(fd);
+                break :consumed false;
+            },
+            .NOENT => true,
+            else => false,
+        };
+    }
+
+    fn hasPendingSharedRelease(store: *Store) bool {
+        var images = store.images.iterator();
+        while (images.next()) |entry| {
+            if (!entry.value_ptr.retire_pending or
+                store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id)) continue;
+            if (!store.sharedPixelsConsumed(entry.value_ptr)) return true;
+        }
+        return false;
+    }
+
     pub fn applySnapshot(store: *Store, message: schema.graphics.Snapshot) !void {
         const revision = try store.revisionState(message.pane_id);
         switch (message.phase) {
             .begin => {
-                store.clearPaneData(message.pane_id);
+                store.clearPaneData(message.pane_id, true);
                 revision.latest = message.revision;
                 revision.snapshot = message.revision;
                 revision.awaiting_snapshot = false;
@@ -171,18 +317,22 @@ pub const Store = struct {
         if (store.images.fetchRemove(key)) |removed| {
             store.total_bytes -= removed.value.pixels.len;
             store.noteImageRemoved(message.pane_id, removed.value.pixels.len);
-            store.gpa.free(removed.value.pixels);
+            var removed_entry = removed.value;
+            store.freePixels(&removed_entry);
             store.queueDelete(.{ .image = removed.value.external_id });
         }
-        const pixels = try store.gpa.alloc(u8, byte_len);
-        errdefer store.gpa.free(pixels);
+        var allocation = try store.allocatePixels(byte_len);
+        errdefer store.freeAllocation(&allocation);
         const external_id = try store.allocateImageId();
         const usage = try store.usageFor(message.pane_id);
         try store.images.put(store.gpa, key, .{
             .metadata = message.image,
-            .pixels = pixels,
+            .pixels = allocation.pixels,
+            .shared = allocation.shared,
             .external_id = external_id,
         });
+        allocation.pixels = &.{};
+        allocation.shared = null;
         usage.count += 1;
         usage.bytes += byte_len;
         store.total_bytes += byte_len;
@@ -254,7 +404,8 @@ pub const Store = struct {
         const removed = store.images.fetchRemove(key) orelse return;
         store.total_bytes -= removed.value.pixels.len;
         store.noteImageRemoved(key.pane_id, removed.value.pixels.len);
-        store.gpa.free(removed.value.pixels);
+        var removed_entry = removed.value;
+        store.freePixels(&removed_entry);
         store.queueDelete(.{ .image = removed.value.external_id });
     }
 
@@ -293,12 +444,12 @@ pub const Store = struct {
     }
 
     pub fn clearPane(store: *Store, pane_id: schema.PaneId) void {
-        store.clearPaneData(pane_id);
+        store.clearPaneData(pane_id, false);
         store.removeRevision(pane_id);
         store.setPaneVisible(pane_id, true) catch {};
     }
 
-    fn clearPaneData(store: *Store, pane_id: schema.PaneId) void {
+    fn clearPaneData(store: *Store, pane_id: schema.PaneId, release_credit: bool) void {
         var placements = store.placements.iterator();
         while (placements.next()) |entry| {
             if (entry.key_ptr.pane_id != pane_id) continue;
@@ -308,12 +459,40 @@ pub const Store = struct {
         while (images.next()) |entry| {
             if (entry.key_ptr.pane_id != pane_id) continue;
             store.total_bytes -= entry.value_ptr.pixels.len;
-            store.gpa.free(entry.value_ptr.pixels);
+            store.freePixels(entry.value_ptr);
             store.queueDelete(.{ .image = entry.value_ptr.external_id });
             _ = store.images.removeByPtr(entry.key_ptr);
         }
-        _ = store.usage.remove(pane_id);
+        if (store.usage.getPtr(pane_id)) |usage| {
+            if (release_credit)
+                usage.released_bytes +|= usage.bytes
+            else
+                usage.released_bytes = 0;
+            usage.count = 0;
+            usage.bytes = 0;
+            usage.placements = 0;
+            store.pruneUsage(pane_id, usage.*);
+        }
         store.damage = true;
+    }
+
+    pub fn peekCredit(store: *Store) ?Credit {
+        var usage = store.usage.iterator();
+        while (usage.next()) |entry| {
+            if (entry.value_ptr.released_bytes == 0) continue;
+            return .{
+                .pane_id = entry.key_ptr.*,
+                .bytes = entry.value_ptr.released_bytes,
+            };
+        }
+        return null;
+    }
+
+    pub fn consumeCredit(store: *Store, credit: Credit) void {
+        const usage = store.usage.getPtr(credit.pane_id) orelse unreachable;
+        std.debug.assert(credit.bytes != 0 and credit.bytes <= usage.released_bytes);
+        usage.released_bytes -= credit.bytes;
+        store.pruneUsage(credit.pane_id, usage.*);
     }
 
     pub fn invalidatePlacements(store: *Store) void {
@@ -413,6 +592,7 @@ pub const Store = struct {
         const usage = store.usage.getPtr(pane_id) orelse return;
         usage.count -= 1;
         usage.bytes -= bytes;
+        usage.released_bytes +|= bytes;
         store.pruneUsage(pane_id, usage.*);
     }
 
@@ -423,7 +603,7 @@ pub const Store = struct {
     }
 
     fn pruneUsage(store: *Store, pane_id: schema.PaneId, usage: PaneUsage) void {
-        if (usage.count == 0 and usage.placements == 0)
+        if (usage.count == 0 and usage.placements == 0 and usage.released_bytes == 0)
             _ = store.usage.remove(pane_id);
     }
 
@@ -516,7 +696,8 @@ pub const Store = struct {
                 if (pane_id) |expected| if (entry.key_ptr.pane_id != expected) continue;
                 if (image_id) |expected| if (entry.key_ptr.image_id != expected) continue;
                 if (!entry.value_ptr.retire_pending or
-                    store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id)) continue;
+                    store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id) or
+                    !store.sharedPixelsConsumed(entry.value_ptr)) continue;
                 retired[count] = entry.key_ptr.*;
                 count += 1;
                 if (count == retired.len) break;
@@ -586,7 +767,7 @@ pub const Store = struct {
                 entry.value_ptr.received == entry.value_ptr.pixels.len) continue;
             store.total_bytes -= entry.value_ptr.pixels.len;
             store.noteImageRemoved(pane_id, entry.value_ptr.pixels.len);
-            store.gpa.free(entry.value_ptr.pixels);
+            store.freePixels(entry.value_ptr);
             store.queueDelete(.{ .image = entry.value_ptr.external_id });
             _ = store.images.removeByPtr(entry.key_ptr);
             store.damage = true;
@@ -637,6 +818,7 @@ pub const KittyGraphicsWriter = struct {
 
     pub fn write(self: *KittyGraphicsWriter, writer: *Io.Writer) Io.Writer.Error!usize {
         if (!self.store.damage or self.cell_width == 0 or self.cell_height == 0) return 0;
+        self.store.collectRetired(null, null);
         var written: usize = 0;
         var budget: usize = transmission_budget_per_frame;
 
@@ -687,7 +869,10 @@ pub const KittyGraphicsWriter = struct {
             self.store.delete_len = 0;
             self.store.delete_overflow = false;
             var reset_images = self.store.images.iterator();
-            while (reset_images.next()) |entry| entry.value_ptr.transmitted = false;
+            while (reset_images.next()) |entry| {
+                entry.value_ptr.transmitted = false;
+                entry.value_ptr.force_direct = true;
+            }
             var reset_placements = self.store.placements.iterator();
             while (reset_placements.next()) |entry| {
                 entry.value_ptr.emitted_image_id = null;
@@ -712,6 +897,18 @@ pub const KittyGraphicsWriter = struct {
             // Budget spent: the rest keeps its damage and waits for the next
             // frame, so no image can park itself in front of a keystroke.
             if (budget == 0) return written;
+            if (image.shared) |*shared| if (!image.force_direct) {
+                const emitted = try writeSharedTransmission(
+                    writer,
+                    image.external_id,
+                    image.metadata,
+                    shared.slice(),
+                );
+                written += emitted;
+                image.transmitted = true;
+                budget -= @min(budget, emitted);
+                continue;
+            };
             const progress = try writeTransmissionChunks(
                 writer,
                 image.external_id,
@@ -783,7 +980,8 @@ pub const KittyGraphicsWriter = struct {
                 placement.placement.key.image_id,
             );
         }
-        self.store.damage = self.store.delete_len != 0 or self.store.delete_overflow;
+        self.store.damage = self.store.delete_len != 0 or self.store.delete_overflow or
+            self.store.hasPendingSharedRelease();
         return written;
     }
 
@@ -989,6 +1187,26 @@ pub fn writeTransmission(
         std.math.maxInt(usize),
     );
     return progress.written;
+}
+
+pub fn writeSharedTransmission(
+    writer: *Io.Writer,
+    external_id: u32,
+    image: graphics.Image,
+    name: []const u8,
+) Io.Writer.Error!usize {
+    const Encoder = std.base64.standard.Encoder;
+    var encoded: [128]u8 = undefined;
+    const payload = Encoder.encode(encoded[0..Encoder.calcSize(name.len)], name);
+    var written = try printCounted(
+        writer,
+        "\x1b_Ga=t,f={d},s={d},v={d},t=s,i={d},q=2;",
+        .{ @intFromEnum(image.format), image.width, image.height, external_id },
+    );
+    try writer.writeAll(payload);
+    try writer.writeAll("\x1b\\");
+    written += payload.len + 2;
+    return written;
 }
 
 /// Closes an interrupted chunked transfer with an empty final chunk. The
@@ -1969,11 +2187,153 @@ test "pane usage counters match a full recount" {
             if (entry.key_ptr.pane_id == pane_id) counted.placements += 1;
         }
         const tracked: Store.PaneUsage = store.usage.get(pane_id) orelse .{};
-        try std.testing.expectEqual(counted, tracked);
+        try std.testing.expectEqual(counted.count, tracked.count);
+        try std.testing.expectEqual(counted.bytes, tracked.bytes);
+        try std.testing.expectEqual(counted.placements, tracked.placements);
         try std.testing.expectEqual(counted.count != 0, store.hasPaneGraphics(pane_id));
     }
-    // A pane with nothing left holds no usage entry at all.
+    const credit = store.peekCredit().?;
+    try std.testing.expectEqual(second_pane, credit.pane_id);
+    try std.testing.expectEqual(@as(usize, 4), credit.bytes);
+    store.consumeCredit(credit);
+    // A pane with nothing left and no unreturned credit holds no usage entry.
     try std.testing.expect(!store.usage.contains(second_pane));
+}
+
+test "snapshot replacement returns client image credit" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const image: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
+    try store.applySnapshot(.{ .pane_id = pane_id, .revision = 2, .phase = .begin });
+
+    const credit = store.peekCredit().?;
+    try std.testing.expectEqual(pane_id, credit.pane_id);
+    try std.testing.expectEqual(@as(usize, 4), credit.bytes);
+    store.consumeCredit(credit);
+    try std.testing.expect(store.peekCredit() == null);
+
+    // Detaching destroys client state; there is no runtime attachment left
+    // to receive credit for those bytes.
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 2, .image = image });
+    store.clearPane(pane_id);
+    try std.testing.expect(store.peekCredit() == null);
+}
+
+test "shared client pixels have a bounded POSIX lifetime" {
+    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+
+    var store = Store.initSharedMemory(std.testing.allocator);
+    defer store.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const image: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
+    const shared = store.images.get(identity(pane_id, image.key)).?.shared.?;
+    const fd = std.c.shm_open(
+        shared.sliceZ(),
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+        @as(u16, 0),
+    );
+    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(fd));
+    _ = std.c.close(fd);
+
+    try store.applyChunk(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .key = image.key,
+        .offset = 0,
+        .bytes = &.{ 1, 2, 3, 255 },
+    });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{
+            .key = image.key,
+            .virtual_id = 1,
+            .placement_id = 1,
+            .x = 0,
+            .y = 0,
+        },
+    });
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 10, .rows = 5 });
+    var graphics_writer: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+    var output: [1024]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try graphics_writer.write(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "t=s") != null);
+    try std.testing.expect(store.partial == null);
+
+    try store.deletePlacement(.{
+        .pane_id = pane_id,
+        .revision = 2,
+        .key = image.key,
+        .virtual_id = 1,
+        .placement_id = 1,
+    });
+    try store.deleteImage(.{ .pane_id = pane_id, .revision = 3, .key = image.key });
+    try std.testing.expectEqual(@as(usize, 1), store.images.count());
+    try std.testing.expect(store.peekCredit() == null);
+    var waiting_output: [1024]u8 = undefined;
+    var waiting_writer = Io.Writer.fixed(&waiting_output);
+    _ = try graphics_writer.write(&waiting_writer);
+    try std.testing.expect(store.damage);
+
+    // Ghostty unlinks the object after copying it. Until then the client keeps
+    // the mapping resident and cannot return its memory credit to the runtime.
+    try std.testing.expectEqual(@as(c_int, 0), std.c.shm_unlink(shared.sliceZ()));
+    var released_output: [1024]u8 = undefined;
+    var released_writer = Io.Writer.fixed(&released_output);
+    _ = try graphics_writer.write(&released_writer);
+    try std.testing.expectEqual(@as(usize, 0), store.images.count());
+    const credit = store.peekCredit().?;
+    try std.testing.expectEqual(@as(usize, 4), credit.bytes);
+    store.consumeCredit(credit);
+    const missing = std.c.shm_open(
+        shared.sliceZ(),
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+        @as(u16, 0),
+    );
+    try std.testing.expectEqual(std.posix.E.NOENT, std.posix.errno(missing));
+}
+
+test "shared transmission sends only a KGP resource name" {
+    var output: [256]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    const written = try writeSharedTransmission(&writer, 7, .{
+        .key = .{ .image_id = 7, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    }, "/telar-test");
+    try std.testing.expectEqualStrings(
+        "\x1b_Ga=t,f=32,s=1,v=1,t=s,i=7,q=2;L3RlbGFyLXRlc3Q=\x1b\\",
+        writer.buffered(),
+    );
+    try std.testing.expectEqual(writer.buffered().len, written);
 }
 
 test "graphics revisions ignore stale deltas and validate snapshots" {

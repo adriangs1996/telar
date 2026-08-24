@@ -475,6 +475,17 @@ const Server = struct {
         return true;
     }
 
+    fn availableGraphicsCredit(attachments: *const AttachmentStore) usize {
+        var outstanding: usize = 0;
+        for (attachments.items) |slot| {
+            const attachment = slot orelse continue;
+            outstanding +|= core.graphics.max_image_bytes_per_pane -
+                @min(attachment.graphics_credit, core.graphics.max_image_bytes_per_pane);
+        }
+        return core.graphics.max_image_bytes_global -|
+            @min(outstanding, core.graphics.max_image_bytes_global);
+    }
+
     fn pump(server: *Server, session: *ClientSession) !void {
         const io = server.io;
         const select = server.select;
@@ -576,15 +587,21 @@ const Server = struct {
             const index = (attachments.next_send + checked) % attachments.items.len;
             const active = if (attachments.items[index]) |*value| value else continue;
             const pane = active.pane;
-            if (pane.ingest_pending) continue;
-            if (pane.media.worker != null) continue;
+            const frozen_transfer = active.transfer != null;
+            if (pane.ingest_pending and !frozen_transfer) continue;
+            if (pane.media.worker != null and !frozen_transfer) continue;
             if (active.graphics_snapshot != .idle or active.transfer != null or
                 active.observed_graphics_revision != pane.graphics_revision)
             {
                 // Media failure leaves the text terminal usable: give up on this
                 // graphics revision, keep every cell frame flowing, and retry
                 // when the pane's graphics actually change again.
-                const graphics_payload = encodeNextGraphics(buffer, active) catch payload: {
+                const graphics_payload = encodeNextGraphics(
+                    buffer,
+                    active,
+                    availableGraphicsCredit(attachments),
+                    pane.media.worker == null,
+                ) catch payload: {
                     abandonGraphicsBatch(active);
                     break :payload null;
                 };
@@ -762,6 +779,21 @@ const Server = struct {
                     return;
                 };
                 active.resetGraphics();
+            },
+            .graphics_credit => |credit| {
+                const active = attachments.find(credit.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
+                const bytes = std.math.cast(usize, credit.bytes) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
+                if (bytes > core.graphics.max_image_bytes_per_pane - active.graphics_credit) {
+                    metrics.stale_client_messages += 1;
+                    return;
+                }
+                active.graphics_credit += bytes;
             },
             .frame_ack => |ack| {
                 const active = attachments.find(ack.pane_id) orelse {
@@ -1426,6 +1458,7 @@ fn serveInternal(
             active.media.finishSealed();
             if (comptime diagnostics.enabled) {
                 server.metrics.media_bytes +|= event.stats.output_bytes;
+                server.metrics.media_discarded_frames +|= event.stats.discarded_frames;
                 if (event.stats.failed) server.metrics.media_failures +|= 1;
                 if (event.stats.reset) server.metrics.media_resets +|= 1;
             }
@@ -1440,6 +1473,7 @@ fn serveInternal(
                 }
             }
             try schedulePaneResponse(io, &select, active);
+            server.pumpAll();
             try schedulePaneMedia(&select, active);
             server.collect();
             server.pumpAll();

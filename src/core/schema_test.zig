@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 38;
+const corpus_len = 39;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -207,6 +207,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add("request_graphics_snapshot", .client, false, golden.request_graphics_snapshot, helper.commit(
         try schema.encodeRequestGraphicsSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(5),
+        }),
+    ));
+    helper.add("graphics_credit", .client, false, golden.graphics_credit, helper.commit(
+        try schema.encodeGraphicsCredit(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .bytes = 4096,
         }),
     ));
 
@@ -445,6 +451,7 @@ const golden = struct {
     pub const close_tab = "0f2b000000000000000007000000000000000300000000000000";
     pub const move_tab = "102c00000000000000000700000000000000030000000000000000";
     pub const request_graphics_snapshot = "110500000000000000";
+    pub const graphics_credit = "1205000000000000000010000000000000";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
     pub const pane_frame = "820400000000000000010000000000000000000000000000000200010001010000000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
@@ -762,6 +769,16 @@ test "fixed client messages round trip" {
         .frame_id = 8,
     }))).frame_ack;
     try std.testing.expectEqual(@as(u64, 8), ack.frame_id);
+
+    const credit = (try schema.decodeClient(try schema.encodeGraphicsCredit(&buffer, .{
+        .pane_id = @enumFromInt(3),
+        .bytes = 4096,
+    }))).graphics_credit;
+    try std.testing.expectEqual(@as(u64, 4096), credit.bytes);
+    try std.testing.expectError(error.InvalidGraphicsCredit, schema.encodeGraphicsCredit(&buffer, .{
+        .pane_id = @enumFromInt(3),
+        .bytes = 0,
+    }));
 
     const snapshot = (try schema.decodeClient(try schema.encodeRequestSnapshot(&buffer, .{
         .pane_id = @enumFromInt(3),

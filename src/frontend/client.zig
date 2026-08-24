@@ -59,6 +59,7 @@ pub const Options = struct {
     theme: theme.Theme = theme.default_theme,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
+    host_shared_memory: bool = false,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
     input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
     lua_generation: ?*lua_config.Generation = null,
@@ -208,6 +209,17 @@ const Client = struct {
             client.outbox.send_pending = false;
             return err;
         };
+    }
+
+    fn returnGraphicsCredits(client: *Client) !void {
+        while (client.graphics_store.peekCredit()) |credit| {
+            client.outbox.push(.{ .graphics_credit = .{
+                .pane_id = credit.pane_id,
+                .bytes = @intCast(credit.bytes),
+            } }) catch break;
+            client.graphics_store.consumeCredit(credit);
+        }
+        try client.pumpOutbox();
     }
 
     fn scheduleInputRead(client: *Client) !void {
@@ -695,6 +707,7 @@ const Client = struct {
             .write = CombinedGraphicsWriter.writeOpaque,
         };
         try flushScreen(client.io, client.screen, client.writer, client.metrics);
+        try client.returnGraphicsCredits();
         const presented_ns = monotonic(client.io);
         for (&model.panes) |*slot| {
             const pane = if (slot.*) |*value| value else continue;
@@ -797,7 +810,10 @@ pub fn run(
     );
     var tabs = tabs_mod.Model.init(gpa);
     defer tabs.deinit();
-    var graphics_store = kitty.Store.init(gpa);
+    var graphics_store = if (options.host_shared_memory)
+        kitty.Store.initSharedMemory(gpa)
+    else
+        kitty.Store.init(gpa);
     defer graphics_store.deinit();
 
     var watcher = try platform.ResizeWatcher.init(&tty);
@@ -992,12 +1008,13 @@ pub fn run(
                 metrics.decode.observe(diagnostics.elapsed(decode_started, diagnostics.now(io)));
             }
             if (try client.handleServer(message)) |status| return status;
+            try client.returnGraphicsCredits();
             try select.concurrent(.server, receive, .{ io, connection, receive_buffer });
         },
         .sent => |result| {
             try result;
             client.outbox.popSent();
-            try client.pumpOutbox();
+            try client.returnGraphicsCredits();
             try client.scheduleInputRead();
         },
         .draw => |result| {

@@ -39,6 +39,7 @@ pub const RuntimeMetrics = struct {
     graphics_messages: u64 = 0,
     graphics_bytes: u64 = 0,
     media_bytes: u64 = 0,
+    media_discarded_frames: u64 = 0,
     media_resets: u64 = 0,
     media_failures: u64 = 0,
     decode: diagnostics.Timing = .{},
@@ -199,7 +200,8 @@ pub fn formatRuntimeTelemetry(
     });
     try output.print(
         "\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
-            "\"media_bytes\":{d},\"media_resets\":{d},\"media_failures\":{d}," ++
+            "\"media_bytes\":{d},\"media_discarded_frames\":{d}," ++
+            "\"media_resets\":{d},\"media_failures\":{d}," ++
             "\"media_queue_events\":{d},\"media_queue_bytes\":{d}," ++
             "\"media_dropped_events\":{d},\"media_dropped_bytes\":{d}," ++
             "\"graphics_images\":{d},\"graphics_placements\":{d}," ++
@@ -212,6 +214,7 @@ pub fn formatRuntimeTelemetry(
             metrics.graphics_messages,
             metrics.graphics_bytes,
             metrics.media_bytes,
+            metrics.media_discarded_frames,
             metrics.media_resets,
             metrics.media_failures,
             media_queue_events,
