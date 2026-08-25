@@ -25,6 +25,11 @@ pub const max_pty_response_bytes = 1024;
 
 pub const max_pty_responses = 64;
 
+/// How long a child's synchronized-output block (DEC mode 2026) may hold
+/// frames back before it is ignored. Same value ghostty uses to reset the
+/// mode when a program forgets to close its block.
+pub const max_sync_hold_ns = 1000 * std.time.ns_per_ms;
+
 /// Stable identity for work that can finish after the pane lifecycle moved
 /// on. Generation makes future id reuse safe without changing actor events.
 pub const PaneKey = struct {
@@ -357,6 +362,9 @@ pub const Pane = struct {
     proxy_token: ?[16]u8 = null,
     workspace_path: []u8,
     pending_size: ?schema.TerminalSize = null,
+    /// When the child's synchronized-output block started holding frames
+    /// back, null while no hold is active. See `holdFrames`.
+    sync_hold_started_ns: ?u64 = null,
     io: Io,
     gpa: std.mem.Allocator,
 
@@ -785,6 +793,26 @@ pub const Pane = struct {
         try pane.render(true);
     }
 
+    /// Whether the child is inside a synchronized-output block (DEC private
+    /// mode 2026) and its frames must be held. A client of that mode - neovim
+    /// is one - repaints without hiding the cursor and relies on the terminal
+    /// presenting only the finished screen; a frame emitted mid-block shows
+    /// the cursor wherever the repaint happens to be. The deadline matches
+    /// ghostty's and exists so a child that never closes the block cannot
+    /// freeze its pane.
+    pub fn holdFrames(pane: *Pane, io: Io) bool {
+        if (!pane.terminal.modes.get(.synchronized_output)) {
+            pane.sync_hold_started_ns = null;
+            return false;
+        }
+        const now_ns: u64 = @intCast(@max(Io.Timestamp.now(io, .awake).nanoseconds, 0));
+        const started = pane.sync_hold_started_ns orelse {
+            pane.sync_hold_started_ns = now_ns;
+            return true;
+        };
+        return now_ns -| started < max_sync_hold_ns;
+    }
+
     pub fn render(pane: *Pane, force: bool) !void {
         try pane.render_state.update(pane.gpa, &pane.terminal);
         const force_all = force or pane.semantic_colors_dirty;
@@ -1086,6 +1114,36 @@ test "a pane is destroyable only when no actor can still borrow it" {
     pane.pty_responses.clear();
     pane.exit = null;
     try std.testing.expect(!pane.readyToDestroy());
+}
+
+test "a child's synchronized-output block holds frames until it closes or expires" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var pane: Pane = undefined;
+    pane.terminal = try vt.Terminal.init(io, gpa, .{ .cols = 10, .rows = 4 });
+    defer pane.terminal.deinit(gpa);
+    pane.sync_hold_started_ns = null;
+
+    // No block: frames flow and no hold is recorded.
+    try std.testing.expect(!pane.holdFrames(io));
+    try std.testing.expectEqual(@as(?u64, null), pane.sync_hold_started_ns);
+
+    // Inside the block frames are held, against one stable deadline.
+    pane.terminal.modes.set(.synchronized_output, true);
+    try std.testing.expect(pane.holdFrames(io));
+    const started = pane.sync_hold_started_ns.?;
+    try std.testing.expect(pane.holdFrames(io));
+    try std.testing.expectEqual(started, pane.sync_hold_started_ns.?);
+
+    // A block the child never closes expires instead of freezing the pane.
+    pane.sync_hold_started_ns = started -| max_sync_hold_ns;
+    try std.testing.expect(!pane.holdFrames(io));
+
+    // Closing the block releases the hold and forgets the deadline.
+    pane.sync_hold_started_ns = started;
+    pane.terminal.modes.set(.synchronized_output, false);
+    try std.testing.expect(!pane.holdFrames(io));
+    try std.testing.expectEqual(@as(?u64, null), pane.sync_hold_started_ns);
 }
 
 test "a failed resize cannot split the screen from its damage flags" {

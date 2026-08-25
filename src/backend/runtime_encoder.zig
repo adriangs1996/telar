@@ -29,6 +29,11 @@ pub fn encodeFrame(
     metrics: *RuntimeMetrics,
 ) !?[]const u8 {
     const pane = attachment.pane;
+    // A child mid synchronized-output block (DEC 2026) has not finished its
+    // frame; holding keeps intermediate cursor positions and torn repaints
+    // off every client's screen. Forced snapshots still go out: an attach
+    // cannot wait on a child, and the next incremental frame settles it.
+    if (!force_snapshot and pane.holdFrames(io)) return null;
     const started = diagnostics.now(io);
     if (pane.render_pending) try pane.render(false);
     var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
