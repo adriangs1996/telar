@@ -119,6 +119,20 @@ const ConfigReload = union(enum) {
     },
 };
 
+const WorkspaceClosureAction = union(enum) {
+    stay,
+    exit,
+    switch_to: schema.WorkspaceId,
+};
+
+fn workspaceClosureAction(
+    workspace_closed: bool,
+    previous_workspace: ?schema.WorkspaceId,
+) WorkspaceClosureAction {
+    if (!workspace_closed) return .stay;
+    return if (previous_workspace) |workspace| .{ .switch_to = workspace } else .exit;
+}
+
 /// The request that opens the first pane; everything else is numbered by
 /// `Client.nextId`.
 const initial_request_id: schema.RequestId = @enumFromInt(1);
@@ -335,8 +349,19 @@ const Client = struct {
             .pane_exited => |exited| try client.handlePaneExited(exited),
             .request_failed => |failure| try client.handleRequestFailed(failure),
             .resync_required => |required| {
-                if (required.workspace_closed) return 0;
-                try client.handleResyncRequired(required);
+                switch (workspaceClosureAction(
+                    required.workspace_closed,
+                    required.previous_workspace,
+                )) {
+                    .stay => try client.handleResyncRequired(required),
+                    .exit => return 0,
+                    .switch_to => |previous| {
+                        var handler: InputHandler = .{ .client = client };
+                        try handler.switchWorkspaceResolved(previous);
+                        try client.requestDraw();
+                        return null;
+                    },
+                }
             },
             .runtime_stopping => return 0,
             .history_results => return error.UnexpectedHistoryResults,
@@ -637,7 +662,17 @@ const Client = struct {
             if (lifecycle_event) return null;
             return error.UnexpectedTab;
         }
-        if (closed.workspace_closed or client.tabs.count == 0) return 0;
+        switch (workspaceClosureAction(closed.workspace_closed, closed.previous_workspace)) {
+            .stay => {},
+            .exit => return 0,
+            .switch_to => |previous| {
+                var handler: InputHandler = .{ .client = client };
+                try handler.switchWorkspaceResolved(previous);
+                try client.requestDraw();
+                return null;
+            },
+        }
+        if (client.tabs.count == 0) return error.WorkspaceHasNoTabs;
         if (was_active) {
             const active = client.tabs.active().?;
             try client.syncPaneFocus(&active.model);
@@ -1633,6 +1668,14 @@ const InputHandler = struct {
             .workspace => |id| if (id == workspace) return,
             .worktree => {},
         };
+        try handler.switchWorkspaceResolved(workspace);
+    }
+
+    /// Starts a handoff chosen from runtime-owned workspace state. Unlike an
+    /// interactive selection, it must not consult the client's stale list.
+    fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
+        const client = handler.client;
+        if (client.requests.count != 0) return error.WorkspaceSwitchWhileRequestPending;
         try client.clearPaneFocus();
         for (&client.tabs.items) |*slot| {
             const tab = if (slot.*) |*value| value else continue;
@@ -2248,6 +2291,21 @@ fn preferredPaneCwd(
 ) []const u8 {
     if (observed.len != 0) return observed;
     return workspace_path orelse initial;
+}
+
+test "workspace closure exits only when no predecessor survives" {
+    try std.testing.expectEqualDeep(
+        WorkspaceClosureAction.stay,
+        workspaceClosureAction(false, null),
+    );
+    try std.testing.expectEqualDeep(
+        WorkspaceClosureAction.exit,
+        workspaceClosureAction(true, null),
+    );
+    try std.testing.expectEqualDeep(
+        WorkspaceClosureAction{ .switch_to = @enumFromInt(7) },
+        workspaceClosureAction(true, @enumFromInt(7)),
+    );
 }
 
 test "pane launch cwd prefers the focused pane observation" {

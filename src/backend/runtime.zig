@@ -576,14 +576,15 @@ const Server = struct {
                 pane.destroy();
                 if (store.hasAt(location) or server.workspaces.findTab(location) == null) continue;
 
-                const workspace_closed = server.workspaces.removeTab(location).?;
+                const removal = server.workspaces.removeTab(location).?;
                 for (&server.clients.items) |*client_slot| {
                     const client = client_slot.* orelse continue;
                     if (!client.active() or !client.attachments.observes(location.workspace)) continue;
                     client.responses.pushOrDrop(.{ .tab_closed = .{
                         .request_id = .none,
                         .location = location,
-                        .workspace_closed = workspace_closed,
+                        .workspace_closed = removal.workspace_closed,
+                        .previous_workspace = removal.previous_workspace,
                     } });
                 }
             }
@@ -663,11 +664,31 @@ const Server = struct {
         origin: ClientKey,
         workspace: schema.WorkspaceLocation,
     ) void {
+        server.notifyWorkspaceChangedWithFallback(origin, workspace, null);
+    }
+
+    fn notifyWorkspaceClosed(
+        server: *Server,
+        origin: ClientKey,
+        workspace: schema.WorkspaceLocation,
+        previous_workspace: ?schema.WorkspaceId,
+    ) void {
+        server.notifyWorkspaceChangedWithFallback(origin, workspace, previous_workspace);
+    }
+
+    fn notifyWorkspaceChangedWithFallback(
+        server: *Server,
+        origin: ClientKey,
+        workspace: schema.WorkspaceLocation,
+        previous_workspace: ?schema.WorkspaceId,
+    ) void {
         for (&server.clients.items) |*slot| {
             const session = slot.* orelse continue;
             if (std.meta.eql(session.key, origin) or !session.active()) continue;
-            if (session.attachments.observes(workspace))
+            if (session.attachments.observes(workspace)) {
                 session.responses.resync_workspace = workspace;
+                session.responses.resync_previous_workspace = previous_workspace;
+            }
         }
     }
 
@@ -759,9 +780,11 @@ const Server = struct {
             const payload = try schema.encodeResyncRequired(buffer, .{
                 .workspace = workspace,
                 .workspace_closed = workspaces.find(workspace) == null,
+                .previous_workspace = responses.resync_previous_workspace,
             });
             try startSessionSend(io, select, session, payload);
             responses.resync_workspace = null;
+            responses.resync_previous_workspace = null;
             if (comptime diagnostics.enabled) metrics.client_resyncs += 1;
             return;
         }
@@ -1395,13 +1418,22 @@ const Server = struct {
                     return;
                 }
                 panes.closeAt(close.location);
-                const workspace_closed = workspaces.removeTab(close.location).?;
+                const removal = workspaces.removeTab(close.location).?;
                 try responses.push(.{ .tab_closed = .{
                     .request_id = close.request_id,
                     .location = close.location,
-                    .workspace_closed = workspace_closed,
+                    .workspace_closed = removal.workspace_closed,
+                    .previous_workspace = removal.previous_workspace,
                 } });
-                server.notifyWorkspaceChanged(session.key, close.location.workspace);
+                if (removal.workspace_closed) {
+                    server.notifyWorkspaceClosed(
+                        session.key,
+                        close.location.workspace,
+                        removal.previous_workspace,
+                    );
+                } else {
+                    server.notifyWorkspaceChanged(session.key, close.location.workspace);
+                }
             },
             .move_tab => |move| {
                 const workspace = workspaces.find(move.location.workspace) orelse {
@@ -2467,6 +2499,7 @@ test "a full response queue drops notifications instead of failing" {
         location.workspace,
         queue.resync_workspace.?,
     );
+    try std.testing.expect(queue.resync_previous_workspace == null);
     queue.head = 0;
     queue.len = 0;
 }

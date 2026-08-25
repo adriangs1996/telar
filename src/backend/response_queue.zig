@@ -66,6 +66,7 @@ pub const ResponseQueue = struct {
     len: u8 = 0,
     dropped: u64 = 0,
     resync_workspace: ?schema.WorkspaceLocation = null,
+    resync_previous_workspace: ?schema.WorkspaceId = null,
 
     pub const Entry = struct {
         offset: u8,
@@ -85,8 +86,14 @@ pub const ResponseQueue = struct {
         queue.push(response) catch {
             switch (response) {
                 .history_result => |result| result.deinit(),
-                .tab_closed => |closed| queue.resync_workspace = closed.location.workspace,
-                .tab_moved => |moved| queue.resync_workspace = moved.location.workspace,
+                .tab_closed => |closed| {
+                    queue.resync_workspace = closed.location.workspace;
+                    queue.resync_previous_workspace = closed.previous_workspace;
+                },
+                .tab_moved => |moved| {
+                    queue.resync_workspace = moved.location.workspace;
+                    queue.resync_previous_workspace = null;
+                },
                 else => {},
             }
             queue.dropped += 1;
@@ -143,6 +150,7 @@ pub const ResponseQueue = struct {
         }
         queue.head = 0;
         queue.resync_workspace = null;
+        queue.resync_previous_workspace = null;
     }
 };
 
@@ -160,5 +168,31 @@ test "management responses overtake observation work" {
     try std.testing.expectEqual(@as(u8, 1), queue.peekManagement().?.offset);
     try std.testing.expectEqual(@as(u8, 0), queue.peekObservation().?.offset);
     // The fake pointer only tests ordering and must not reach `clear`.
+    queue.len = 0;
+}
+
+test "a dropped workspace close preserves its handoff target" {
+    var queue: ResponseQueue = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .tab_id = @enumFromInt(3),
+    };
+    while (queue.len < queue.items.len) try queue.push(.{ .tab_moved = .{
+        .request_id = .none,
+        .location = location,
+        .position = 0,
+    } });
+    queue.pushOrDrop(.{ .tab_closed = .{
+        .request_id = .none,
+        .location = location,
+        .workspace_closed = true,
+        .previous_workspace = @enumFromInt(6),
+    } });
+
+    try std.testing.expectEqualDeep(location.workspace, queue.resync_workspace.?);
+    try std.testing.expectEqual(
+        @as(schema.WorkspaceId, @enumFromInt(6)),
+        queue.resync_previous_workspace.?,
+    );
     queue.len = 0;
 }

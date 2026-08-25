@@ -163,6 +163,13 @@ pub fn Derived(comptime T: type) type {
                     try validatePaneId(value);
                     try encoder.writeInt(u64, id.raw(value));
                 },
+                ?id.WorkspaceId => {
+                    try encoder.writeByte(@intFromBool(value != null));
+                    if (value) |workspace_id| {
+                        if (workspace_id == .invalid) return error.InvalidWorkspaceId;
+                        try encoder.writeInt(u64, id.raw(workspace_id));
+                    }
+                },
                 types.TabLocation => try encodeTabLocation(encoder, value),
                 types.WorkspaceLocation => try encodeWorkspaceLocation(encoder, value),
                 types.TerminalSize => {
@@ -186,6 +193,10 @@ pub fn Derived(comptime T: type) type {
                 else
                     try id.request(try decoder.readInt(u64)),
                 id.PaneId => try id.pane(try decoder.readInt(u64)),
+                ?id.WorkspaceId => if (try decoder.readBool())
+                    try id.workspace(try decoder.readInt(u64))
+                else
+                    null,
                 types.TabLocation => try decodeTabLocation(decoder),
                 types.WorkspaceLocation => try decodeWorkspaceLocation(decoder),
                 types.TerminalSize => try decodeSize(decoder),

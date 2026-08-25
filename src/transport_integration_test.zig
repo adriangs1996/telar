@@ -1142,14 +1142,28 @@ test "explicit workspace creation and selection use identity instead of path" {
         else => {},
     };
 
-    try connection.send(io, try schema.encodeDetachPane(&send_buffer, .{ .pane_id = first.pane_id }));
-    try connection.send(io, try schema.encodeDetachPane(&send_buffer, .{ .pane_id = second.pane_id }));
     const first_workspace = switch (first.location.workspace) {
         .workspace => |workspace| workspace,
         .worktree => unreachable,
     };
-    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+    try connection.send(io, try schema.encodeCloseTab(&send_buffer, .{
         .request_id = @enumFromInt(6),
+        .location = second.location,
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .tab_closed => |closed| {
+            try std.testing.expect(closed.workspace_closed);
+            try std.testing.expectEqual(first_workspace, closed.previous_workspace.?);
+            break;
+        },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeDetachPane(&send_buffer, .{ .pane_id = first.pane_id }));
+    try connection.send(io, try schema.encodeDetachPane(&send_buffer, .{ .pane_id = second.pane_id }));
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(7),
         .target = .{ .workspace = first_workspace },
         .size = .{ .cols = 40, .rows = 8 },
         .launch = null,
@@ -1300,6 +1314,7 @@ test "runtime owns the complete tab lifecycle" {
     while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
         .tab_closed => |closed| {
             try std.testing.expect(closed.workspace_closed);
+            try std.testing.expect(closed.previous_workspace == null);
             break;
         },
         .request_failed => return error.RuntimeRequestFailed,

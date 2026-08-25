@@ -435,14 +435,41 @@ pub const TabRenamed = struct {
     label: []const u8,
 };
 
+fn validateWorkspaceClosure(
+    workspace: WorkspaceLocation,
+    workspace_closed: bool,
+    previous_workspace: ?WorkspaceId,
+) !void {
+    if (!workspace_closed and previous_workspace != null)
+        return error.UnexpectedPreviousWorkspace;
+    if (previous_workspace) |previous| {
+        const closed = switch (workspace) {
+            .workspace => |workspace_id| workspace_id,
+            .worktree => return error.InvalidWorkspaceSuccessor,
+        };
+        if (previous == closed) return error.InvalidWorkspaceSuccessor;
+    }
+}
+
 pub const TabClosed = struct {
     /// `.none` identifies a lifecycle event emitted by the runtime rather than
     /// the response to an explicit close request.
     request_id: RequestId,
     location: TabLocation,
     workspace_closed: bool,
+    /// Canonical predecessor in the runtime's workspace order. Present only
+    /// when this close removed the workspace and another workspace survives.
+    previous_workspace: ?WorkspaceId = null,
 
     pub const wire_allow_zero_request_id = true;
+
+    pub fn validateWire(message: TabClosed) !void {
+        try validateWorkspaceClosure(
+            message.location.workspace,
+            message.workspace_closed,
+            message.previous_workspace,
+        );
+    }
 };
 
 pub const TabMoved = struct {
@@ -454,6 +481,15 @@ pub const TabMoved = struct {
 pub const ResyncRequired = struct {
     workspace: WorkspaceLocation,
     workspace_closed: bool,
+    previous_workspace: ?WorkspaceId = null,
+
+    pub fn validateWire(message: ResyncRequired) !void {
+        try validateWorkspaceClosure(
+            message.workspace,
+            message.workspace_closed,
+            message.previous_workspace,
+        );
+    }
 };
 
 pub const TabSnapshot = struct {

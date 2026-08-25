@@ -263,19 +263,53 @@ pub const WorkspaceStore = struct {
         };
     }
 
-    pub fn removeTab(store: *WorkspaceStore, location: schema.TabLocation) ?bool {
+    pub const TabRemoval = struct {
+        workspace_closed: bool,
+        previous_workspace: ?schema.WorkspaceId = null,
+    };
+
+    pub fn removeTab(store: *WorkspaceStore, location: schema.TabLocation) ?TabRemoval {
         const workspace = store.find(location.workspace) orelse return null;
         if (!workspace.removeTab(location.tab_id)) return null;
         store.bumpRevision();
         const workspace_closed = workspace.tab_count == 0;
+        var previous_workspace: ?schema.WorkspaceId = null;
         if (workspace_closed) {
             const workspace_id = switch (location.workspace) {
                 .workspace => |id| id,
                 .worktree => unreachable,
             };
+            previous_workspace = store.previousWorkspace(workspace_id);
             store.remove(workspace_id);
         }
-        return workspace_closed;
+        return .{
+            .workspace_closed = workspace_closed,
+            .previous_workspace = previous_workspace,
+        };
+    }
+
+    /// Returns the preceding workspace in the same stable order exposed by
+    /// `listEntries`, wrapping from the first slot to the last.
+    pub fn previousWorkspace(
+        store: *const WorkspaceStore,
+        workspace_id: schema.WorkspaceId,
+    ) ?schema.WorkspaceId {
+        if (store.count < 2) return null;
+        var current_index: ?usize = null;
+        for (store.items, 0..) |slot, index| {
+            const workspace = slot orelse continue;
+            if (workspace.id == workspace_id) {
+                current_index = index;
+                break;
+            }
+        }
+        const current = current_index orelse return null;
+        for (1..store.items.len) |offset| {
+            const index = (current + store.items.len - offset) % store.items.len;
+            const workspace = store.items[index] orelse continue;
+            return workspace.id;
+        }
+        return null;
     }
 
     pub fn totalTabs(store: *const WorkspaceStore) usize {
@@ -482,8 +516,48 @@ test "workspace tabs create rename reorder and close" {
     try std.testing.expectEqual(@as(usize, 3), snapshot.tabs.len);
     try std.testing.expectEqualStrings("server", snapshot.tabs[0].label);
 
-    try std.testing.expectEqual(false, store.removeTab(logs.location).?);
-    try std.testing.expectEqual(false, store.removeTab(generated.location).?);
-    try std.testing.expectEqual(true, store.removeTab(ensured.location).?);
+    try std.testing.expect(!store.removeTab(logs.location).?.workspace_closed);
+    try std.testing.expect(!store.removeTab(generated.location).?.workspace_closed);
+    const removal = store.removeTab(ensured.location).?;
+    try std.testing.expect(removal.workspace_closed);
+    try std.testing.expect(removal.previous_workspace == null);
     try std.testing.expectEqual(@as(usize, 0), store.count);
+}
+
+test "closing a workspace selects its canonical predecessor" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const first = try store.create("/work/first", "first");
+    const second = try store.create("/work/second", "second");
+    const third = try store.create("/work/third", "third");
+    const first_id = switch (first.workspace) {
+        .workspace => |id| id,
+        .worktree => unreachable,
+    };
+    const third_id = switch (third.workspace) {
+        .workspace => |id| id,
+        .worktree => unreachable,
+    };
+
+    const middle = store.removeTab(.{
+        .workspace = second.workspace,
+        .tab_id = store.find(second.workspace).?.defaultTab(),
+    }).?;
+    try std.testing.expect(middle.workspace_closed);
+    try std.testing.expectEqual(first_id, middle.previous_workspace.?);
+
+    const wrapped = store.removeTab(.{
+        .workspace = first.workspace,
+        .tab_id = store.find(first.workspace).?.defaultTab(),
+    }).?;
+    try std.testing.expect(wrapped.workspace_closed);
+    try std.testing.expectEqual(third_id, wrapped.previous_workspace.?);
+
+    const last = store.removeTab(.{
+        .workspace = third.workspace,
+        .tab_id = store.find(third.workspace).?.defaultTab(),
+    }).?;
+    try std.testing.expect(last.workspace_closed);
+    try std.testing.expect(last.previous_workspace == null);
 }

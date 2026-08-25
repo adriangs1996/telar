@@ -384,6 +384,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = .none,
             .location = location,
             .workspace_closed = true,
+            .previous_workspace = @enumFromInt(6),
         }),
     ));
     helper.add("tab_moved", .server, false, golden.tab_moved, helper.commit(
@@ -396,7 +397,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add("resync_required", .server, false, golden.resync_required, helper.commit(
         try schema.encodeResyncRequired(helper.space(), .{
             .workspace = .{ .workspace = @enumFromInt(7) },
-            .workspace_closed = false,
+            .workspace_closed = true,
+            .previous_workspace = @enumFromInt(6),
         }),
     ));
     helper.add("graphics_snapshot", .server, false, golden.graphics_snapshot, helper.commit(
@@ -577,9 +579,9 @@ const golden = struct {
     pub const workspace_snapshot = "883200000000000000000700000000000000050074656c6172020003000000000000000000020004006d61696e04000000000000000100010004006c6f6773";
     pub const tab_created = "8933000000000000000007000000000000000300000000000000010004006c6f67730900000000000000";
     pub const tab_renamed = "8a340000000000000000070000000000000003000000000000000600736572766572";
-    pub const tab_closed = "8b0000000000000000000700000000000000030000000000000001";
+    pub const tab_closed = "8b0000000000000000000700000000000000030000000000000001010600000000000000";
     pub const tab_moved = "8c360000000000000000070000000000000003000000000000000000";
-    pub const resync_required = "9300070000000000000000";
+    pub const resync_required = "9300070000000000000001010600000000000000";
     pub const graphics_snapshot = "8d0100000000000000030000000000000000";
     pub const graphics_image = "8e010000000000000003000000000000000700000008000000000000002002000000020000001000000000000000";
     pub const graphics_image_chunk = "8f0100000000000000030000000000000007000000080000000000000000000000000000000400000001020304";
@@ -1342,6 +1344,32 @@ test "truncated client and server messages are rejected" {
     for (0..server_payload.len) |length| {
         try std.testing.expectError(error.Truncated, schema.decodeServer(server_payload[0..length]));
     }
+}
+
+test "workspace closure handoffs are present only for a different surviving workspace" {
+    var buffer: [128]u8 = undefined;
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .tab_id = @enumFromInt(3),
+    };
+    try std.testing.expectError(
+        error.UnexpectedPreviousWorkspace,
+        schema.encodeTabClosed(&buffer, .{
+            .request_id = .none,
+            .location = location,
+            .workspace_closed = false,
+            .previous_workspace = @enumFromInt(6),
+        }),
+    );
+    try std.testing.expectError(
+        error.InvalidWorkspaceSuccessor,
+        schema.encodeTabClosed(&buffer, .{
+            .request_id = .none,
+            .location = location,
+            .workspace_closed = true,
+            .previous_workspace = @enumFromInt(7),
+        }),
+    );
 }
 
 test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
