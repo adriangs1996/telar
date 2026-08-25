@@ -814,10 +814,12 @@ fn drawFooter(context: *widget.Context, area: ui.Rect, y: u16, background: ui.Co
 
 fn drawRule(context: *widget.Context, area: ui.Rect, y: u16, background: ui.Color) u16 {
     const style: ui.Style = .{ .fg = context.palette.surface1, .bg = background };
+    // Tees belong to the frame, not the rule: keep the border color continuous.
+    const tee_style: ui.Style = .{ .fg = context.palette.overlay0, .bg = background };
     var x = area.x + 1;
     while (x < area.x + area.w - 1) : (x += 1) _ = context.buffer.writeText(area, x, y, "\u{2500}", style);
-    _ = context.buffer.writeText(area, area.x, y, "\u{251c}", style);
-    _ = context.buffer.writeText(area, area.x + area.w - 1, y, "\u{2524}", style);
+    _ = context.buffer.writeText(area, area.x, y, "\u{251c}", tee_style);
+    _ = context.buffer.writeText(area, area.x + area.w - 1, y, "\u{2524}", tee_style);
     return y + 1;
 }
 
