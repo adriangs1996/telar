@@ -27,6 +27,9 @@ pub const Action = union(enum) {
     toggle_pane_fullscreen,
     toggle_sidebar,
     toggle_workspace_list,
+    new_workspace,
+    rename_workspace,
+    select_workspace: u8,
     close_pane,
     new_tab,
     select_tab_offset: i8,
@@ -65,6 +68,8 @@ pub const Action = union(enum) {
             return .toggle_pane_fullscreen;
         if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
         if (std.mem.eql(u8, name, "toggle-workspace-list")) return .toggle_workspace_list;
+        if (std.mem.eql(u8, name, "new-workspace")) return .new_workspace;
+        if (std.mem.eql(u8, name, "rename-workspace")) return .rename_workspace;
         if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
         if (std.mem.eql(u8, name, "new-tab")) return .new_tab;
         if (std.mem.eql(u8, name, "next-tab"))
@@ -86,6 +91,13 @@ pub const Action = union(enum) {
             if (one_based == 0) return error.UnknownAction;
             return .{ .select_tab = one_based - 1 };
         }
+        const workspace_prefix = "select-workspace-";
+        if (std.mem.startsWith(u8, name, workspace_prefix)) {
+            const one_based = std.fmt.parseUnsigned(u8, name[workspace_prefix.len..], 10) catch
+                return error.UnknownAction;
+            if (one_based == 0) return error.UnknownAction;
+            return .{ .select_workspace = one_based - 1 };
+        }
         return error.UnknownAction;
     }
 };
@@ -100,6 +112,10 @@ test "built-in names compile to parameterized actions" {
         try Action.parse("select-tab-9"),
     );
     try std.testing.expectEqualDeep(
+        Action{ .select_workspace = 4 },
+        try Action.parse("select-workspace-5"),
+    );
+    try std.testing.expectEqualDeep(
         Action{ .select_tab_offset = -1 },
         try Action.parse("previous-tab"),
     );
@@ -111,6 +127,9 @@ test "built-in names compile to parameterized actions" {
         Action.toggle_pane_fullscreen,
         try Action.parse("toggle-pane-fullscreen"),
     );
+    try std.testing.expectEqual(Action.new_workspace, try Action.parse("new-workspace"));
+    try std.testing.expectEqual(Action.rename_workspace, try Action.parse("rename-workspace"));
     try std.testing.expectError(error.UnknownAction, Action.parse("select-tab-0"));
+    try std.testing.expectError(error.UnknownAction, Action.parse("select-workspace-0"));
     try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));
 }

@@ -20,11 +20,13 @@ pub const Tab = struct {
         gpa: std.mem.Allocator,
         location: schema.TabLocation,
         label: []const u8,
+        pane_gaps: bool,
     ) Tab {
         var tab: Tab = .{
             .location = location,
             .model = .init(gpa),
         };
+        tab.model.setPaneGaps(pane_gaps);
         tab.setLabel(label);
         return tab;
     }
@@ -52,6 +54,7 @@ pub const Model = struct {
     items: [max_tabs]?Tab = [_]?Tab{null} ** max_tabs,
     count: usize = 0,
     active_index: usize = 0,
+    pane_gaps: bool = true,
 
     pub fn init(gpa: std.mem.Allocator) Model {
         return .{ .gpa = gpa };
@@ -67,6 +70,13 @@ pub const Model = struct {
         model.workspace_name_len = 0;
     }
 
+    pub fn setPaneGaps(model: *Model, enabled: bool) void {
+        if (model.pane_gaps == enabled) return;
+        model.pane_gaps = enabled;
+        for (model.items[0..model.count]) |*slot|
+            if (slot.*) |*tab| tab.model.setPaneGaps(enabled);
+    }
+
     pub fn bootstrap(
         model: *Model,
         pane_id: schema.PaneId,
@@ -74,7 +84,7 @@ pub const Model = struct {
         size: schema.TerminalSize,
     ) !void {
         if (model.count != 0) return error.ModelNotEmpty;
-        var tab = Tab.init(model.gpa, location, "main");
+        var tab = Tab.init(model.gpa, location, "main", model.pane_gaps);
         errdefer tab.deinit();
         try tab.model.addRoot(pane_id, location, size);
         model.items[0] = tab;
@@ -99,6 +109,10 @@ pub const Model = struct {
 
     pub fn workspaceName(model: *const Model) []const u8 {
         return model.workspace_name[0..model.workspace_name_len];
+    }
+
+    pub fn displayedWorkspaceName(model: *const Model) []const u8 {
+        return model.workspaceName();
     }
 
     pub fn find(model: *Model, tab_id: schema.TabId) ?*Tab {
@@ -196,7 +210,7 @@ pub const Model = struct {
                 model.items[index] = Tab.init(model.gpa, .{
                     .workspace = snapshot.workspace,
                     .tab_id = descriptor.tab_id,
-                }, descriptor.label);
+                }, descriptor.label, model.pane_gaps);
                 model.count += 1;
             }
         }
@@ -218,7 +232,7 @@ pub const Model = struct {
         var cursor = model.count;
         while (cursor > created.position) : (cursor -= 1)
             model.items[cursor] = model.items[cursor - 1];
-        var tab = Tab.init(model.gpa, created.location, created.label);
+        var tab = Tab.init(model.gpa, created.location, created.label, model.pane_gaps);
         errdefer tab.deinit();
         try tab.model.addRoot(created.root_pane_id, created.location, size);
         tab.snapshot_loaded = true;
@@ -311,6 +325,59 @@ test "selection wraps and moving tabs preserves the active identity" {
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
     try std.testing.expect(model.move(@enumFromInt(1), 1));
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
+}
+
+test "displayed workspace name stays canonical when pane cwd changes" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    try model.bootstrap(@enumFromInt(1), .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 20, .rows = 5 });
+    @memcpy(model.workspace_name[0..5], "telar");
+    model.workspace_name_len = 5;
+
+    const tab = model.active().?;
+    try std.testing.expect(try tab.model.find(@enumFromInt(1)).?.setCwd("/work/telar"));
+    try std.testing.expectEqualStrings("telar", model.displayedWorkspaceName());
+    try tab.model.split(
+        @enumFromInt(1),
+        @enumFromInt(2),
+        tab.location,
+        .horizontal,
+        .{ .x = 0, .y = 0, .w = 20, .h = 5 },
+    );
+    try std.testing.expect(try tab.model.find(@enumFromInt(2)).?.setCwd("/work/agents/"));
+    try std.testing.expect(tab.model.focusPane(@enumFromInt(2)));
+    try std.testing.expectEqualStrings("telar", model.displayedWorkspaceName());
+    try std.testing.expect(tab.model.focusPane(@enumFromInt(1)));
+    try std.testing.expectEqualStrings("telar", model.displayedWorkspaceName());
+}
+
+test "pane gap configuration reaches current and future tabs" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.setPaneGaps(false);
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    try model.bootstrap(@enumFromInt(1), .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(!model.active().?.model.layout.pane_gaps);
+
+    const created = try model.addCreated(.{
+        .request_id = @enumFromInt(2),
+        .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(!created.model.layout.pane_gaps);
+
+    model.setPaneGaps(true);
+    for (model.items[0..model.count]) |slot|
+        try std.testing.expect(slot.?.model.layout.pane_gaps);
 }
 
 test "workspace snapshots restore labels and order without losing pane layouts" {

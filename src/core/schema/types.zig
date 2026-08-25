@@ -40,6 +40,7 @@ pub const TerminalSize = struct {
 pub const PaneTarget = union(enum) {
     default,
     pane: id.PaneId,
+    workspace: id.WorkspaceId,
 };
 
 /// A workspace-like container. Worktrees use the same tab model as their

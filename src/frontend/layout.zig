@@ -66,6 +66,7 @@ pub const ProspectiveSplit = struct {
 pub const Snapshot = struct {
     area: ui.Rect = .{},
     revision: u64 = 0,
+    pane_gaps: bool = true,
     storage: [max_panes]View = undefined,
     len: u8 = 0,
     index: ViewIndex = .{},
@@ -88,13 +89,18 @@ pub const Snapshot = struct {
     ) ?ProspectiveSplit {
         if (pane_count == max_panes) return null;
         const view = snapshot.find(pane_id) orelse return null;
+        const minimum_split_extent: u16 = 6 + @as(u16, @intFromBool(snapshot.pane_gaps));
         const enough_space = switch (axis) {
-            // Two bordered PTYs plus their gutter.
-            .horizontal => view.outer.w >= 7 and view.outer.h >= 3,
-            .vertical => view.outer.w >= 3 and view.outer.h >= 7,
+            .horizontal => view.outer.w >= minimum_split_extent and view.outer.h >= 3,
+            .vertical => view.outer.w >= 3 and view.outer.h >= minimum_split_extent,
         };
         if (!enough_space) return null;
-        const first, const second = splitArea(view.outer, axis, default_split_ratio);
+        const first, const second = splitArea(
+            view.outer,
+            axis,
+            default_split_ratio,
+            snapshot.pane_gaps,
+        );
         return .{
             .existing_content = borderedContent(first),
             .new_content = borderedContent(second),
@@ -155,9 +161,10 @@ pub const Snapshot = struct {
         return candidate;
     }
 
-    fn reset(snapshot: *Snapshot, area: ui.Rect, revision: u64) void {
+    fn reset(snapshot: *Snapshot, area: ui.Rect, revision: u64, pane_gaps: bool) void {
         snapshot.area = area;
         snapshot.revision = revision;
+        snapshot.pane_gaps = pane_gaps;
         snapshot.len = 0;
         snapshot.index.reset();
     }
@@ -176,6 +183,7 @@ pub const Layout = struct {
     focused_pane: schema.PaneId = .invalid,
     pane_count: u8 = 0,
     fullscreen: bool = false,
+    pane_gaps: bool = true,
     revision: u64 = 1,
 
     pub fn count(layout: *const Layout) usize {
@@ -192,6 +200,13 @@ pub const Layout = struct {
 
     pub fn isFullscreen(layout: *const Layout) bool {
         return layout.fullscreen;
+    }
+
+    pub fn setPaneGaps(layout: *Layout, enabled: bool) bool {
+        if (layout.pane_gaps == enabled) return false;
+        layout.pane_gaps = enabled;
+        layout.changed();
+        return true;
     }
 
     pub fn contains(layout: *const Layout, pane_id: schema.PaneId) bool {
@@ -363,7 +378,7 @@ pub const Layout = struct {
 
     pub fn snapshot(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
         if (!layout.fullscreen) return layout.snapshotTiled(area, output);
-        output.reset(area, layout.revision);
+        output.reset(area, layout.revision, layout.pane_gaps);
         const pane_id = layout.focused() orelse return;
         output.append(.{
             .pane_id = pane_id,
@@ -374,7 +389,7 @@ pub const Layout = struct {
     }
 
     fn snapshotTiled(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
-        output.reset(area, layout.revision);
+        output.reset(area, layout.revision, layout.pane_gaps);
         const root = layout.root orelse return;
         const Pending = struct { node: NodeIndex, area: ui.Rect };
         var stack: [max_nodes]Pending = undefined;
@@ -399,6 +414,7 @@ pub const Layout = struct {
                         pending.area,
                         branch.axis,
                         branch.ratio,
+                        layout.pane_gaps,
                     );
                     stack[stack_len] = .{ .node = branch.second, .area = second };
                     stack_len += 1;
@@ -461,7 +477,12 @@ pub const Layout = struct {
             path_len -= 1;
             const child = path[path_len];
             const branch = layout.nodes[current].node.split;
-            const first, const second = splitArea(current_area, branch.axis, branch.ratio);
+            const first, const second = splitArea(
+                current_area,
+                branch.axis,
+                branch.ratio,
+                layout.pane_gaps,
+            );
             current_area = if (branch.first == child) first else second;
             current = child;
         }
@@ -474,7 +495,7 @@ pub const Layout = struct {
         area: ui.Rect,
         ratio: u16,
     ) bool {
-        const first, const second = splitArea(area, branch.axis, ratio);
+        const first, const second = splitArea(area, branch.axis, ratio, layout.pane_gaps);
         const first_extent = extent(first, branch.axis);
         const second_extent = extent(second, branch.axis);
         return first_extent >= layout.minimumExtent(branch.first, branch.axis) and
@@ -489,7 +510,7 @@ pub const Layout = struct {
                 const first = layout.minimumExtent(branch.first, axis);
                 const second = layout.minimumExtent(branch.second, axis);
                 if (branch.axis == axis)
-                    return first +| 1 +| second;
+                    return first +| @intFromBool(layout.pane_gaps) +| second;
                 return @max(first, second);
             },
         };
@@ -525,11 +546,11 @@ pub const Layout = struct {
     }
 };
 
-fn splitArea(area: ui.Rect, axis: Axis, ratio: u16) [2]ui.Rect {
+fn splitArea(area: ui.Rect, axis: Axis, ratio: u16, pane_gaps: bool) [2]ui.Rect {
     std.debug.assert(ratio <= ratio_scale);
     return switch (axis) {
         .horizontal => horizontal: {
-            const gutter: u16 = @intFromBool(area.w >= 3);
+            const gutter: u16 = @intFromBool(pane_gaps and area.w >= 3);
             const usable = area.w - gutter;
             const first_width: u16 = @intCast(
                 @as(u32, usable) * ratio / ratio_scale,
@@ -545,7 +566,7 @@ fn splitArea(area: ui.Rect, axis: Axis, ratio: u16) [2]ui.Rect {
             };
         },
         .vertical => vertical: {
-            const gutter: u16 = @intFromBool(area.h >= 5);
+            const gutter: u16 = @intFromBool(pane_gaps and area.h >= 5);
             const usable = area.h - gutter;
             const first_height: u16 = @intCast(
                 @as(u32, usable) * ratio / ratio_scale,
@@ -595,6 +616,29 @@ test "splits produce non-overlapping bordered content rectangles" {
     try std.testing.expectEqual(ui.Rect{ .x = 40, .w = 40, .h = 24 }, visible[1].outer);
     try std.testing.expectEqual(@as(u16, 1), visible[1].outer.x - visible[0].outer.w);
     try std.testing.expect(visible[1].focused);
+}
+
+test "disabled pane gaps remove the empty cell between borders" {
+    var layout: Layout = .{};
+    try std.testing.expect(layout.setPaneGaps(false));
+    try std.testing.expect(!layout.setPaneGaps(false));
+    try layout.addRoot(@enumFromInt(1));
+    try layout.splitFocused(@enumFromInt(2), .horizontal);
+
+    var storage: [max_panes]View = undefined;
+    const visible = layout.views(.{ .w = 80, .h = 24 }, &storage);
+    try std.testing.expectEqual(ui.Rect{ .w = 40, .h = 24 }, visible[0].outer);
+    try std.testing.expectEqual(ui.Rect{ .x = 40, .w = 40, .h = 24 }, visible[1].outer);
+    try std.testing.expectEqual(visible[0].outer.w, visible[1].outer.x);
+}
+
+test "disabled pane gaps permit the smallest pair of bordered panes" {
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    const area: ui.Rect = .{ .w = 6, .h = 3 };
+    try std.testing.expect(!layout.canSplit(@enumFromInt(1), .horizontal, area));
+    _ = layout.setPaneGaps(false);
+    try std.testing.expect(layout.canSplit(@enumFromInt(1), .horizontal, area));
 }
 
 test "directional focus follows pane geometry" {

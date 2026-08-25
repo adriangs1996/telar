@@ -776,7 +776,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "sidebar", "input", "keybindings" },
+            &.{ "prefix", "theme", "sidebar", "pane_gaps", "input", "keybindings" },
             "config.client",
             diagnostic,
         );
@@ -794,6 +794,17 @@ pub const Generation = struct {
         _ = lua.lua_getfield(state, absolute, "sidebar");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseSidebar(-1, diagnostic);
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "pane_gaps");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                pop(state, 1);
+                diagnostic.set("config.client.pane_gaps must be a boolean", .{});
+                return error.InvalidConfig;
+            }
+            generation.snapshot.pane_gaps = lua.lua_toboolean(state, -1) != 0;
+        }
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "input");
@@ -1155,6 +1166,15 @@ pub const Generation = struct {
             }
             return .{ .select_tab = @intCast(one_based - 1) };
         }
+        if (std.mem.eql(u8, kind, "select-workspace")) {
+            try ensureOnlyFields(state, absolute, &.{ "kind", "index" }, "action", diagnostic);
+            const one_based = try requiredIntegerField(state, absolute, "index", diagnostic);
+            if (one_based <= 0 or one_based > 256) {
+                diagnostic.set("select-workspace index must be in 1..256", .{});
+                return error.InvalidConfig;
+            }
+            return .{ .select_workspace = @intCast(one_based - 1) };
+        }
         if (std.mem.eql(u8, kind, "select-tab-offset")) {
             try ensureOnlyFields(state, absolute, &.{ "kind", "offset" }, "action", diagnostic);
             const offset = try requiredIntegerField(state, absolute, "offset", diagnostic);
@@ -1204,13 +1224,30 @@ pub fn defaultPath(
     environ: std.process.Environ,
     buffer: []u8,
 ) ![]const u8 {
-    if (environ.getPosix("XDG_CONFIG_HOME")) |base| {
+    return resolveDefaultPath(
+        environ.getPosix("TELAR_DEVELOPMENT_CONFIG"),
+        environ.getPosix("XDG_CONFIG_HOME"),
+        environ.getPosix("HOME"),
+        buffer,
+    );
+}
+
+fn resolveDefaultPath(
+    development: ?[]const u8,
+    xdg_config_home: ?[]const u8,
+    home: ?[]const u8,
+    buffer: []u8,
+) ![]const u8 {
+    if (development) |path| {
+        if (path.len != 0) return std.fmt.bufPrint(buffer, "{s}", .{path});
+    }
+    if (xdg_config_home) |base| {
         if (base.len != 0)
             return std.fmt.bufPrint(buffer, "{s}/telar/config.lua", .{base});
     }
-    const home = environ.getPosix("HOME") orelse return error.HomeDirectoryUnavailable;
-    if (home.len == 0) return error.HomeDirectoryUnavailable;
-    return std.fmt.bufPrint(buffer, "{s}/.config/telar/config.lua", .{home});
+    const home_path = home orelse return error.HomeDirectoryUnavailable;
+    if (home_path.len == 0) return error.HomeDirectoryUnavailable;
+    return std.fmt.bufPrint(buffer, "{s}/.config/telar/config.lua", .{home_path});
 }
 
 const bootstrap =
@@ -1255,6 +1292,9 @@ const bootstrap =
     \\function telar.action.select_tab(options)
     \\  return { kind = "select-tab", index = options.index }
     \\end
+    \\function telar.action.select_workspace(options)
+    \\  return { kind = "select-workspace", index = options.index }
+    \\end
     \\function telar.action.select_tab_offset(options)
     \\  return { kind = "select-tab-offset", offset = options.offset }
     \\end
@@ -1266,7 +1306,7 @@ const bootstrap =
     \\end
     \\for _, name in ipairs({
     \\  "toggle-pane-fullscreen", "toggle-sidebar", "toggle-workspace-list",
-    \\  "close-pane", "new-tab", "rename-tab", "close-tab", "detach",
+    \\  "new-workspace", "rename-workspace", "close-pane", "new-tab", "rename-tab", "close-tab", "detach",
     \\}) do
     \\  local stable_name = name
     \\  telar.action[name:gsub("-", "_")] = function()
@@ -1765,6 +1805,32 @@ fn monotonic(io: Io) u64 {
     return @intCast(@max(timestamp.nanoseconds, 0));
 }
 
+test "development config path overrides user config lookup" {
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+
+    try std.testing.expectEqualStrings(
+        "/repo/dev/config.lua",
+        try resolveDefaultPath(
+            "/repo/dev/config.lua",
+            "/xdg",
+            "/home/user",
+            &buffer,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "/xdg/telar/config.lua",
+        try resolveDefaultPath("", "/xdg", "/home/user", &buffer),
+    );
+    try std.testing.expectEqualStrings(
+        "/home/user/.config/telar/config.lua",
+        try resolveDefaultPath(null, "", "/home/user", &buffer),
+    );
+    try std.testing.expectError(
+        error.HomeDirectoryUnavailable,
+        resolveDefaultPath(null, null, null, &buffer),
+    );
+}
+
 test "Lua VM evaluates source under a bounded allocator" {
     var vm = try Vm.init(std.testing.io, .{
         .deadline_after_ns = default_callback_deadline_ns,
@@ -1802,6 +1868,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\    colors = { accent = "#010203" },
         \\  }),
         \\  sidebar = { visible = false, renderer = "cells" },
+        \\  pane_gaps = false,
         \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
         \\  keybindings = {
         \\    telar.bind({ "%" }, telar.action.split_pane({ direction = "horizontal" })),
@@ -1828,6 +1895,7 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expectEqual(@as(u16, 5), generation.snapshot.binding_count);
     try std.testing.expectEqual(@as(u16, 1), generation.callback_count);
     try std.testing.expect(!generation.snapshot.sidebar_visible);
+    try std.testing.expect(!generation.snapshot.pane_gaps);
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
@@ -1878,6 +1946,25 @@ test "client config rejects an incompatible API version" {
     );
     try std.testing.expectEqualStrings(
         "config.api_version is 1; this Telar accepts 2",
+        diagnostic.message(),
+    );
+}
+
+test "client config rejects non-boolean pane gaps" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(
+        error.InvalidConfig,
+        Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            "return { api_version = 2, client = { pane_gaps = 0 } }",
+            "@config.lua",
+            1,
+            &diagnostic,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "config.client.pane_gaps must be a boolean",
         diagnostic.message(),
     );
 }

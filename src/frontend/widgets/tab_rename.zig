@@ -8,11 +8,16 @@ const ui = @import("../ui.zig");
 const schema = core.schema;
 
 pub const Field = edit.Field(schema.max_tab_label_bytes);
+pub const Kind = enum { rename_tab, create_workspace, rename_workspace };
 
 pub const Output = widget.Cursor;
 
-pub fn render(context: *widget.Context, area: ui.Rect, field: *Field) Output {
-    const prefix = " rename tab: ";
+pub fn render(context: *widget.Context, area: ui.Rect, field: *Field, kind: Kind) Output {
+    const prefix = switch (kind) {
+        .rename_tab => " rename tab: ",
+        .create_workspace => " new workspace: ",
+        .rename_workspace => " rename workspace: ",
+    };
     _ = context.buffer.writeText(area, area.x, area.y, prefix, .{
         .fg = context.palette.accent,
         .bg = context.palette.panel_bg,

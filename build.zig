@@ -96,6 +96,10 @@ pub fn build(b: *std.Build) void {
 
     const run_exe = b.addRunArtifact(exe);
     run_exe.step.dependOn(b.getInstallStep());
+    run_exe.setEnvironmentVariable(
+        "TELAR_DEVELOPMENT_CONFIG",
+        b.pathFromRoot("dev/config.lua"),
+    );
     if (b.args) |args| run_exe.addArgs(args);
     b.step("run", "Run telar").dependOn(&run_exe.step);
 

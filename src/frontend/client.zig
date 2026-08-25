@@ -61,6 +61,7 @@ pub const Options = struct {
     theme: theme.Theme = theme.default_theme,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
+    pane_gaps: bool = true,
     host_shared_memory: bool = false,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
     input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
@@ -191,10 +192,11 @@ const Client = struct {
     next_config_generation: u64 = 2,
     plugin_pending: bool = false,
     paste_pane: ?schema.PaneId = null,
-    /// Owns the cwd of an in-flight workspace switch while the outbox borrows
-    /// it; valid because only one `.initial_open` request can be pending.
-    switch_path: [schema.max_cwd_bytes]u8 = undefined,
-    switch_path_len: u16 = 0,
+    /// Owns the cwd borrowed by one queued `create_workspace` launch.
+    workspace_create_path: [schema.max_cwd_bytes]u8 = undefined,
+    workspace_create_path_len: u16 = 0,
+    workspace_create_name: [schema.max_tab_label_bytes]u8 = undefined,
+    workspace_create_name_len: u8 = 0,
 
     input_read_pending: bool = false,
     next_request_id: u64 = 2,
@@ -224,6 +226,11 @@ const Client = struct {
         try client.pumpOutbox();
     }
 
+    fn enqueueWorkspaceRename(client: *Client, rename: schema.RenameWorkspace) !void {
+        try client.outbox.pushWorkspaceRename(rename);
+        try client.pumpOutbox();
+    }
+
     fn enqueueRequest(
         client: *Client,
         request_id: schema.RequestId,
@@ -243,6 +250,15 @@ const Client = struct {
         try client.requests.add(rename.request_id, continuation);
         errdefer _ = client.requests.take(rename.request_id);
         try client.enqueueRename(rename);
+    }
+
+    fn enqueueWorkspaceRenameRequest(
+        client: *Client,
+        rename: schema.RenameWorkspace,
+    ) !void {
+        try client.requests.add(rename.request_id, .{ .rename_workspace = rename.workspace });
+        errdefer _ = client.requests.take(rename.request_id);
+        try client.enqueueWorkspaceRename(rename);
     }
 
     fn pumpOutbox(client: *Client) !void {
@@ -304,6 +320,7 @@ const Client = struct {
             .tab_closed => |closed| return client.handleTabClosed(closed),
             .tab_moved => |moved| try client.handleTabMoved(moved),
             .pane_frame => |frame| try client.handlePaneFrame(frame),
+            .pane_cwd => |cwd| try client.handlePaneCwd(cwd),
             .pane_exited => |exited| try client.handlePaneExited(exited),
             .request_failed => |failure| try client.handleRequestFailed(failure),
             .resync_required => |required| {
@@ -375,6 +392,13 @@ const Client = struct {
         try client.requestDraw();
     }
 
+    fn handlePaneCwd(client: *Client, message: schema.PaneCwd) !void {
+        const pane = client.tabs.findPane(message.pane_id) orelse return;
+        if (!try pane.setCwd(message.cwd)) return;
+        client.view.invalidate();
+        try client.requestDraw();
+    }
+
     fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
         var entries: [schema.max_workspace_list_entries]widgets.workspace_model.EntryInput = undefined;
         var count: usize = 0;
@@ -402,33 +426,18 @@ const Client = struct {
         const continuation = client.requests.take(opened.request_id) orelse
             return error.UnexpectedRequest;
         switch (continuation) {
-            .initial_open => {
-                if (client.tabs.count != 0) return error.UnexpectedRequest;
-                try client.tabs.bootstrap(
-                    opened.pane_id,
-                    opened.location,
-                    rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-                );
-                client.view.invalidate();
-                try client.scheduleInputRead();
-                const workspace_request_id = try client.nextId();
-                try client.enqueueRequest(
-                    workspace_request_id,
-                    .{ .workspace_snapshot = opened.location.workspace },
-                    .{ .request_workspace_snapshot = .{
-                        .request_id = workspace_request_id,
-                        .workspace = opened.location.workspace,
-                    } },
-                );
-                const tab_request_id = try client.nextId();
-                try client.enqueueRequest(
-                    tab_request_id,
-                    .{ .tab_snapshot = opened.location },
-                    .{ .request_tab_snapshot = .{
-                        .request_id = tab_request_id,
-                        .location = opened.location,
-                    } },
-                );
+            .initial_open => try client.bootstrapWorkspace(opened),
+            .create_workspace => {
+                if (!opened.created) return error.UnexpectedRequest;
+                for (&client.tabs.items) |*slot| {
+                    const tab = if (slot.*) |*value| value else continue;
+                    for (&tab.model.panes) |*pane_slot| {
+                        const pane = if (pane_slot.*) |*value| value else continue;
+                        try client.graphics_store.setPaneVisible(pane.id, false);
+                    }
+                }
+                client.tabs.deinit();
+                try client.bootstrapWorkspace(opened);
             },
             .split => |split| {
                 if (!std.meta.eql(split.location, opened.location))
@@ -456,6 +465,35 @@ const Client = struct {
             else => return error.UnexpectedRequest,
         }
         try client.requestDraw();
+    }
+
+    fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
+        if (client.tabs.count != 0) return error.UnexpectedRequest;
+        try client.tabs.bootstrap(
+            opened.pane_id,
+            opened.location,
+            rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+        );
+        client.view.invalidate();
+        try client.scheduleInputRead();
+        const workspace_request_id = try client.nextId();
+        try client.enqueueRequest(
+            workspace_request_id,
+            .{ .workspace_snapshot = opened.location.workspace },
+            .{ .request_workspace_snapshot = .{
+                .request_id = workspace_request_id,
+                .workspace = opened.location.workspace,
+            } },
+        );
+        const tab_request_id = try client.nextId();
+        try client.enqueueRequest(
+            tab_request_id,
+            .{ .tab_snapshot = opened.location },
+            .{ .request_tab_snapshot = .{
+                .request_id = tab_request_id,
+                .location = opened.location,
+            } },
+        );
     }
 
     fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
@@ -494,8 +532,12 @@ const Client = struct {
     fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
         const continuation = client.requests.take(snapshot.request_id) orelse
             return error.UnexpectedWorkspaceSnapshot;
-        if (continuation != .workspace_snapshot or
-            !std.meta.eql(continuation.workspace_snapshot, snapshot.workspace))
+        const expected_workspace = switch (continuation) {
+            .workspace_snapshot => |workspace| workspace,
+            .rename_workspace => |workspace| workspace,
+            else => return error.UnexpectedWorkspaceSnapshot,
+        };
+        if (!std.meta.eql(expected_workspace, snapshot.workspace))
             return error.UnexpectedWorkspaceSnapshot;
         var canonical_tabs: [tabs_mod.max_tabs]schema.TabId = undefined;
         var canonical_count: usize = 0;
@@ -662,7 +704,7 @@ const Client = struct {
             return error.UnexpectedRequestFailure;
         };
         switch (continuation) {
-            .ignored, .close_pane, .rename_tab, .move_tab => {},
+            .ignored, .close_pane, .rename_tab, .rename_workspace, .move_tab => {},
             .split => {
                 if (client.tabs.active()) |active|
                     try client.resizeAttached(&active.model, client.view.workbench());
@@ -686,6 +728,7 @@ const Client = struct {
                     } },
                 );
             },
+            .create_workspace => std.debug.print("telar runtime: {s}\n", .{failure.message}),
             .initial_open, .workspace_snapshot, .tab_snapshot, .create_tab => {
                 std.debug.print("telar runtime: {s}\n", .{failure.message});
                 return error.RuntimeRequestFailed;
@@ -954,6 +997,7 @@ pub fn run(
     );
     var tabs = tabs_mod.Model.init(gpa);
     defer tabs.deinit();
+    tabs.setPaneGaps(options.pane_gaps);
     var graphics_store = if (options.host_shared_memory)
         kitty.Store.initSharedMemory(gpa)
     else
@@ -1311,6 +1355,7 @@ pub fn run(
                     if (!options.theme_locked) view.setTheme(snapshot.theme);
                     client.sidebar_rendering = requested_sidebar;
                     view.setSidebarVisible(snapshot.sidebar_visible);
+                    tabs.setPaneGaps(snapshot.pane_gaps);
                     const cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
                     try view.configureSidebar(
                         client.sidebar_rendering,
@@ -1518,7 +1563,7 @@ const InputHandler = struct {
     }
 
     pub fn capturesKeys(handler: *const InputHandler) bool {
-        return handler.client.view.renamedTab() != null or
+        return handler.client.view.hasNamePrompt() or
             handler.client.view.sidebarCapturesKeyboard();
     }
 
@@ -1560,16 +1605,12 @@ const InputHandler = struct {
         handler.redraw = true;
     }
 
-    /// Switching reuses the attach-or-create open: walk away from every pane
-    /// so the runtime releases this client's geometry lease, reset the
-    /// disposable tab model, and run the initial open again against the
-    /// target workspace's path. The runtime attaches to that workspace's
-    /// default pane instead of spawning a new one.
+    /// Switching targets the runtime identity, not its path. Multiple explicit
+    /// workspaces may share one cwd and must remain independently selectable.
     fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
         const client = handler.client;
-        if (client.requests.has(.initial_open)) return;
-        const list = &client.view.workspace_list;
-        const index = list.indexOf(workspace) orelse return;
+        if (client.requests.count != 0) return;
+        if (client.view.workspace_list.indexOf(workspace) == null) return;
         if (client.tabs.workspace) |current| switch (current) {
             .workspace => |id| if (id == workspace) return,
             .worktree => {},
@@ -1579,23 +1620,15 @@ const InputHandler = struct {
             try handler.detachTab(tab);
         }
         client.tabs.deinit();
-        // The outbox borrows the launch path until the message is encoded, so
-        // it lives in client-owned storage; one switch in flight at a time is
-        // guaranteed by the `.initial_open` guard above.
-        const path = list.pathAt(index);
-        @memcpy(client.switch_path[0..path.len], path);
-        client.switch_path_len = @intCast(path.len);
         const request_id = try client.nextId();
         try client.enqueueRequest(
             request_id,
             .initial_open,
             .{ .open_pane = .{
                 .request_id = request_id,
+                .target = .{ .workspace = workspace },
                 .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-                .launch = .{
-                    .cwd = client.switch_path[0..client.switch_path_len],
-                    .arguments = client.options.arguments,
-                },
+                .launch = null,
             } },
         );
         client.view.invalidate();
@@ -1604,10 +1637,15 @@ const InputHandler = struct {
 
     pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
         if (bytes.len == 0) return;
-        if (handler.client.view.renamedTab() != null) {
-            switch (handler.client.view.handleRenameInput(bytes)) {
+        if (handler.client.view.hasNamePrompt()) {
+            switch (handler.client.view.handleNameInput(bytes)) {
                 .editing, .cancelled => {},
-                .submitted => |label| try handler.submitTabRename(label),
+                .submitted => |name| if (handler.client.view.creatingWorkspace())
+                    try handler.submitWorkspaceCreate(name)
+                else if (handler.client.view.renamedWorkspace() != null)
+                    try handler.submitWorkspaceRename(name)
+                else
+                    try handler.submitTabRename(name),
             }
             handler.redraw = true;
             return;
@@ -1618,7 +1656,7 @@ const InputHandler = struct {
     }
 
     pub fn key(handler: *InputHandler, value: keybind.Key) !void {
-        if (handler.client.view.renamedTab() != null) {
+        if (handler.client.view.hasNamePrompt()) {
             var editing_bytes: [32]u8 = undefined;
             return handler.forward(try input_mod.encodeKey(&editing_bytes, value, .{}));
         }
@@ -1646,7 +1684,7 @@ const InputHandler = struct {
     }
 
     pub fn pasteStart(handler: *InputHandler) !void {
-        if (handler.client.view.renamedTab() != null)
+        if (handler.client.view.hasNamePrompt())
             return handler.forward("\x1b[200~");
         if (handler.client.view.sidebarCapturesKeyboard()) return;
         const pane = handler.activeModel().focusedPane() orelse return;
@@ -1657,7 +1695,7 @@ const InputHandler = struct {
     }
 
     pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
-        if (handler.client.view.renamedTab() != null) return handler.forward(text);
+        if (handler.client.view.hasNamePrompt()) return handler.forward(text);
         if (handler.client.view.pasteIntoSidebar(text)) {
             handler.redraw = true;
             return;
@@ -1668,7 +1706,7 @@ const InputHandler = struct {
     }
 
     pub fn pasteEnd(handler: *InputHandler) !void {
-        if (handler.client.view.renamedTab() != null)
+        if (handler.client.view.hasNamePrompt())
             return handler.forward("\x1b[201~");
         if (handler.client.view.sidebarCapturesKeyboard()) return;
         const pane_id = handler.client.paste_pane orelse return;
@@ -1776,7 +1814,7 @@ const InputHandler = struct {
     }
 
     pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
-        if (handler.client.view.renamedTab() != null) return .continue_routing;
+        if (handler.client.view.hasNamePrompt()) return .continue_routing;
         switch (value) {
             .lua_callback => |reference| {
                 const generation = handler.client.lua_generation.* orelse
@@ -1897,6 +1935,15 @@ const InputHandler = struct {
                 handler.client.view.toggleWorkspaceList();
                 handler.redraw = true;
             },
+            .new_workspace => try handler.beginWorkspaceCreate(),
+            .rename_workspace => if (handler.client.tabs.workspace) |workspace| {
+                handler.client.view.beginWorkspaceRename(
+                    workspace,
+                    handler.client.tabs.workspaceName(),
+                );
+                handler.redraw = true;
+            },
+            .select_workspace => |position| try handler.selectWorkspacePosition(position),
             .close_pane => try handler.closeFocused(),
             .new_tab => try handler.createTab(),
             .select_tab_offset => |offset| try handler.selectTabOffset(offset),
@@ -1965,7 +2012,7 @@ const InputHandler = struct {
                 .request_id = request_id,
                 .location = location,
                 .size = new_size,
-                .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
+                .launch = .{ .cwd = paneLaunchCwd(handler.client, pane), .arguments = handler.client.options.arguments },
             } },
         ) catch |err| {
             try handler.restoreFocusedSize(pane.id);
@@ -2045,6 +2092,73 @@ const InputHandler = struct {
         );
     }
 
+    fn beginWorkspaceCreate(handler: *InputHandler) !void {
+        const client = handler.client;
+        if (client.requests.count != 0) return;
+        const pane = handler.activeModel().focusedPane() orelse return;
+        if (!pane.attached) return;
+        client.view.beginWorkspaceCreate();
+        handler.redraw = true;
+    }
+
+    fn submitWorkspaceCreate(handler: *InputHandler, name: []const u8) !void {
+        const client = handler.client;
+        if (client.requests.count != 0 or !client.view.creatingWorkspace()) return;
+        const pane = handler.activeModel().focusedPane() orelse return;
+        if (!pane.attached) return;
+        const cwd = paneLaunchCwd(client, pane);
+        @memcpy(client.workspace_create_path[0..cwd.len], cwd);
+        client.workspace_create_path_len = @intCast(cwd.len);
+        @memcpy(client.workspace_create_name[0..name.len], name);
+        client.workspace_create_name_len = @intCast(name.len);
+        const request_id = try client.nextId();
+        try client.enqueueRequest(
+            request_id,
+            .create_workspace,
+            .{ .create_workspace = .{
+                .request_id = request_id,
+                .size = rectSize(client.view.workbench()) orelse return,
+                .name = client.workspace_create_name[0..client.workspace_create_name_len],
+                .launch = .{
+                    .cwd = client.workspace_create_path[0..client.workspace_create_path_len],
+                    .arguments = client.options.arguments,
+                },
+            } },
+        );
+        client.view.finishNamePrompt();
+    }
+
+    fn submitWorkspaceRename(handler: *InputHandler, name: []const u8) !void {
+        const client = handler.client;
+        if (client.requests.has(.workspace_operation)) return;
+        const workspace = client.view.renamedWorkspace() orelse return;
+        const request_id = try client.nextId();
+        try client.enqueueWorkspaceRenameRequest(.{
+            .request_id = request_id,
+            .workspace = workspace,
+            .name = name,
+        });
+        client.view.finishNamePrompt();
+    }
+
+    fn paneLaunchCwd(client: *const Client, pane: *const multiplexer.Pane) []const u8 {
+        return preferredPaneCwd(
+            pane.cwdSlice(),
+            currentWorkspacePath(client),
+            client.options.cwd,
+        );
+    }
+
+    fn currentWorkspacePath(client: *const Client) ?[]const u8 {
+        const current = client.tabs.workspace orelse return null;
+        const workspace_id = switch (current) {
+            .workspace => |id| id,
+            .worktree => return null,
+        };
+        const index = client.view.workspace_list.indexOf(workspace_id) orelse return null;
+        return client.view.workspace_list.pathAt(index);
+    }
+
     fn selectTabOffset(handler: *InputHandler, offset: isize) !void {
         if (handler.client.tabs.count < 2) return;
         const count: isize = @intCast(handler.client.tabs.count);
@@ -2056,6 +2170,12 @@ const InputHandler = struct {
     fn selectTabPosition(handler: *InputHandler, position: usize) !void {
         if (position >= handler.client.tabs.count) return;
         try handler.selectTab(handler.client.tabs.items[position].?.location.tab_id);
+    }
+
+    fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
+        const workspaces = &handler.client.view.workspace_list;
+        const workspace = workspaces.workspaceAtPosition(position) orelse return;
+        try handler.switchWorkspace(workspace);
     }
 
     fn closeTab(handler: *InputHandler) !void {
@@ -2101,11 +2221,35 @@ const InputHandler = struct {
             },
             .{ .rename_tab = tab.location },
         );
-        handler.client.view.finishTabRename();
+        handler.client.view.finishNamePrompt();
     }
 };
 
 const defaultBindings = default_bindings.load;
+
+fn preferredPaneCwd(
+    observed: []const u8,
+    workspace_path: ?[]const u8,
+    initial: []const u8,
+) []const u8 {
+    if (observed.len != 0) return observed;
+    return workspace_path orelse initial;
+}
+
+test "pane launch cwd prefers the focused pane observation" {
+    try std.testing.expectEqualStrings(
+        "/work/agents",
+        preferredPaneCwd("/work/agents", "/work/telar", "/initial"),
+    );
+    try std.testing.expectEqualStrings(
+        "/work/telar",
+        preferredPaneCwd("", "/work/telar", "/initial"),
+    );
+    try std.testing.expectEqualStrings(
+        "/initial",
+        preferredPaneCwd("", null, "/initial"),
+    );
+}
 
 /// Drops every image, placement, and revision the store holds for the panes
 /// of a tab that no longer exists.

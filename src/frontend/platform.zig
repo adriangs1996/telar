@@ -69,11 +69,13 @@ pub const enter_sequence =
     "\x1b[?1006h" ++ // in the SGR encoding
     "\x1b[?1016h" ++ // report SGR coordinates in pixels when supported
     "\x1b[?2004h" ++ // bracket pastes, so a newline in one is text not Enter
+    "\x1b[>1u" ++ // disambiguate Ctrl+key from legacy C0 bytes
     "\x1b[2J"; // start from a blank screen
 
 /// Undone in the reverse order, so a terminal that ignores one of them still
 /// ends up with the modes it started with.
 pub const leave_sequence =
+    "\x1b[<u" ++ // pop keyboard flags while still on the alternate screen
     "\x1b[?2004l" ++
     "\x1b[?1016l\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l" ++
     "\x1b[?25h" ++
@@ -118,6 +120,16 @@ comptime {
         @compileError("platform is missing installCrashRestore");
     if (!@hasDecl(impl, "emergencyRestore"))
         @compileError("platform is missing emergencyRestore");
+}
+
+test "host keyboard disambiguation stays inside the alternate screen" {
+    const enter_alternate = std.mem.indexOf(u8, enter_sequence, "\x1b[?1049h").?;
+    const push_keyboard = std.mem.indexOf(u8, enter_sequence, "\x1b[>1u").?;
+    try std.testing.expect(enter_alternate < push_keyboard);
+
+    const pop_keyboard = std.mem.indexOf(u8, leave_sequence, "\x1b[<u").?;
+    const leave_alternate = std.mem.indexOf(u8, leave_sequence, "\x1b[?1049l").?;
+    try std.testing.expect(pop_keyboard < leave_alternate);
 }
 
 fn assertFn(comptime T: type, comptime name: []const u8, comptime Want: type) void {

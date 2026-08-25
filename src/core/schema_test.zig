@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 46;
+const corpus_len = 50;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -100,6 +100,34 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .target = .{ .pane = @enumFromInt(41) },
             .size = .{ .cols = 80, .rows = 24 },
             .launch = null,
+        }),
+    ));
+    helper.add("open_workspace", .client, false, golden.open_workspace, helper.commit(
+        try schema.encodeOpenPane(helper.space(), .{
+            .request_id = @enumFromInt(3),
+            .target = .{ .workspace = @enumFromInt(7) },
+            .size = .{ .cols = 80, .rows = 24 },
+            .launch = null,
+        }),
+    ));
+    helper.add("create_workspace", .client, false, golden.create_workspace, helper.commit(
+        try schema.encodeCreateWorkspace(helper.space(), .{
+            .request_id = @enumFromInt(4),
+            .size = .{ .cols = 80, .rows = 24 },
+            .name = "agents",
+            .launch = .{
+                .cwd = "/work",
+                .arguments = &arguments,
+                .environment_mode = .replace,
+                .environment = &environment,
+            },
+        }),
+    ));
+    helper.add("rename_workspace", .client, false, golden.rename_workspace, helper.commit(
+        try schema.encodeRenameWorkspace(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .workspace = .{ .workspace = @enumFromInt(7) },
+            .name = "agents",
         }),
     ));
     helper.add("pane_input", .client, true, golden.pane_input, helper.commit(
@@ -498,6 +526,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .entries = &workspace_list_entries,
         }),
     ));
+    helper.add("pane_cwd", .server, false, golden.pane_cwd, helper.commit(
+        try schema.encodePaneCwd(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .cwd = "/work/telar",
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -509,6 +543,9 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
 const golden = struct {
     pub const open_pane_default = "01090000000000000000780028000800100005002f776f726b020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
     pub const open_pane_attach = "0102000000000000000129000000000000005000180000000000";
+    pub const open_workspace = "0103000000000000000207000000000000005000180000000000";
+    pub const create_workspace = "150400000000000000500018000000000006006167656e747305002f776f726b020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
+    pub const rename_workspace = "16050000000000000000070000000000000006006167656e7473";
     pub const pane_input = "020300000000000000616263";
     pub const pane_resize = "0303000000000000005a001e0000000000";
     pub const frame_ack = "0403000000000000000800000000000000";
@@ -553,6 +590,7 @@ const golden = struct {
     pub const agent_snapshot = "9609000000000000000100050000000000000007000000000000002a0000000102030405060708090a0b0c0d0e0f10020100015f0b00000000000000e803000000000000d007000000000000";
     pub const system_metrics = "9705000000000000002a5c000154";
     pub const workspace_list = "98030000000000000002000700000000000000050074656c61720b002f776f726b2f74656c61720200090000000000000003006170690900" ++ "2f776f726b2f617069" ++ "0100";
+    pub const pane_cwd = "9905000000000000000b002f776f726b2f74656c6172";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {
@@ -677,6 +715,24 @@ test "placements with a zero virtual id are rejected on both sides" {
         @memset(bytes[virtual_id_offset..][0..8], 0);
         try std.testing.expectError(error.InvalidGraphicsIdentity, schema.decodeServer(bytes));
     }
+}
+
+test "pane cwd rejects empty nul-containing and oversized paths" {
+    var buffer: [schema.max_cwd_bytes + 32]u8 = undefined;
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try std.testing.expectError(
+        error.InvalidByteString,
+        schema.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = "" }),
+    );
+    try std.testing.expectError(
+        error.EmbeddedNul,
+        schema.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = "/work\x00hidden" }),
+    );
+    const oversized = [_]u8{'x'} ** (schema.max_cwd_bytes + 1);
+    try std.testing.expectError(
+        error.InvalidByteString,
+        schema.encodePaneCwd(&buffer, .{ .pane_id = pane_id, .cwd = &oversized }),
+    );
 }
 
 test "a large real-world screen fits the frame budget" {
@@ -830,6 +886,45 @@ test "explicit pane attachment has no launch payload" {
     }))).open_pane;
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(41)), decoded.target.pane);
     try std.testing.expect(decoded.launch == null);
+}
+
+test "explicit workspace attachment and creation round trip" {
+    var buffer: [512]u8 = undefined;
+    const attached = (try schema.decodeClient(try schema.encodeOpenPane(&buffer, .{
+        .request_id = @enumFromInt(2),
+        .target = .{ .workspace = @enumFromInt(7) },
+        .size = .{ .cols = 80, .rows = 24 },
+        .launch = null,
+    }))).open_pane;
+    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(7)), attached.target.workspace);
+    try std.testing.expect(attached.launch == null);
+
+    const arguments = [_][]const u8{"/bin/sh"};
+    const created = (try schema.decodeClient(try schema.encodeCreateWorkspace(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .size = .{ .cols = 80, .rows = 24 },
+        .name = "agents",
+        .launch = .{ .cwd = "/work/project", .arguments = &arguments },
+    }))).create_workspace;
+    try std.testing.expectEqualStrings("agents", created.name);
+    try std.testing.expectEqualStrings("/work/project", created.launch.cwd);
+    var iterator = created.launch.arguments();
+    try std.testing.expectEqualStrings("/bin/sh", (try iterator.next()).?);
+    try std.testing.expect((try iterator.next()) == null);
+
+    try std.testing.expectError(error.InvalidByteString, schema.encodeCreateWorkspace(&buffer, .{
+        .request_id = @enumFromInt(4),
+        .size = .{ .cols = 80, .rows = 24 },
+        .name = "",
+        .launch = .{ .cwd = "/work/project", .arguments = &arguments },
+    }));
+
+    const renamed = (try schema.decodeClient(try schema.encodeRenameWorkspace(&buffer, .{
+        .request_id = @enumFromInt(5),
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .name = "runtime",
+    }))).rename_workspace;
+    try std.testing.expectEqualStrings("runtime", renamed.name);
 }
 
 test "fixed client messages round trip" {

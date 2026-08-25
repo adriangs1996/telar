@@ -99,6 +99,8 @@ pub const ClientTag = enum(u8) {
     graphics_credit = 0x12,
     configure_graphics = 0x13,
     request_runtime_state = 0x14,
+    create_workspace = 0x15,
+    rename_workspace = 0x16,
 };
 
 pub const ServerTag = enum(u8) {
@@ -126,6 +128,7 @@ pub const ServerTag = enum(u8) {
     agent_snapshot = 0x96,
     system_metrics = 0x97,
     workspace_list = 0x98,
+    pane_cwd = 0x99,
 };
 
 pub const LaunchView = struct {
@@ -197,6 +200,29 @@ pub const OpenPaneView = struct {
     target: PaneTarget,
     size: TerminalSize,
     launch: ?LaunchView,
+};
+
+/// Forces a named workspace identity at `launch.cwd`. Unlike `open_pane`, this
+/// never attaches to an existing workspace with the same path. The name is
+/// explicit and remains independent from pane cwd changes.
+pub const CreateWorkspace = struct {
+    request_id: RequestId,
+    size: TerminalSize,
+    name: []const u8,
+    launch: Launch,
+};
+
+pub const CreateWorkspaceView = struct {
+    request_id: RequestId,
+    size: TerminalSize,
+    name: []const u8,
+    launch: LaunchView,
+};
+
+pub const RenameWorkspace = struct {
+    request_id: RequestId,
+    workspace: WorkspaceLocation,
+    name: []const u8,
 };
 
 pub const PaneInput = struct {
@@ -344,6 +370,8 @@ pub const ClientMessage = union(enum) {
     graphics_credit: GraphicsCredit,
     configure_graphics: ConfigureGraphics,
     request_runtime_state: void,
+    create_workspace: CreateWorkspaceView,
+    rename_workspace: RenameWorkspace,
 };
 
 pub const PaneOpened = struct {
@@ -357,6 +385,11 @@ pub const PaneExited = struct {
     pane_id: PaneId,
     kind: ExitKind,
     value: u32,
+};
+
+pub const PaneCwd = struct {
+    pane_id: PaneId,
+    cwd: []const u8,
 };
 
 pub const RequestFailed = struct {
@@ -621,6 +654,7 @@ pub const ServerMessage = union(enum) {
     agent_snapshot: AgentSnapshotView,
     system_metrics: SystemMetrics,
     workspace_list: WorkspaceListView,
+    pane_cwd: PaneCwd,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -642,9 +676,39 @@ pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
             try encoder.writeByte(1);
             try encoder.writeInt(u64, id.raw(pane_id));
         },
+        .workspace => |workspace_id| {
+            if (workspace_id == .invalid) return error.InvalidWorkspaceId;
+            if (message.launch != null) return error.UnexpectedLaunch;
+            try encoder.writeByte(2);
+            try encoder.writeInt(u64, id.raw(workspace_id));
+        },
     }
     try encodeSize(&encoder, message.size);
     if (default_launch) |launch| try encodeLaunch(&encoder, launch);
+    return encoder.finish();
+}
+
+pub fn encodeCreateWorkspace(buffer: []u8, message: CreateWorkspace) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try message.size.validate();
+    try validateTabLabel(message.name, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.create_workspace));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeSize(&encoder, message.size);
+    try encoder.writeSized16(message.name);
+    try encodeLaunch(&encoder, message.launch);
+    return encoder.finish();
+}
+
+pub fn encodeRenameWorkspace(buffer: []u8, message: RenameWorkspace) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateTabLabel(message.name, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.rename_workspace));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeWorkspaceLocation(&encoder, message.workspace);
+    try encoder.writeSized16(message.name);
     return encoder.finish();
 }
 
@@ -850,6 +914,8 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
             .configure_graphics = try Derived(ConfigureGraphics).decode(&decoder),
         },
         .request_runtime_state => .{ .request_runtime_state = {} },
+        .create_workspace => .{ .create_workspace = try decodeCreateWorkspace(&decoder) },
+        .rename_workspace => .{ .rename_workspace = try decodeRenameWorkspace(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -868,6 +934,16 @@ pub fn encodePaneFrame(buffer: []u8, message: frame.Frame) ![]const u8 {
 
 pub fn encodePaneExited(buffer: []u8, message: PaneExited) ![]const u8 {
     return encodeDerived(@intFromEnum(ServerTag.pane_exited), PaneExited, buffer, message);
+}
+
+pub fn encodePaneCwd(buffer: []u8, message: PaneCwd) ![]const u8 {
+    try validatePaneId(message.pane_id);
+    try validateBytes(message.cwd, max_cwd_bytes, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.pane_cwd));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeSized16(message.cwd);
+    return encoder.finish();
 }
 
 pub fn encodeRequestFailed(buffer: []u8, message: RequestFailed) ![]const u8 {
@@ -1112,6 +1188,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .agent_snapshot => .{ .agent_snapshot = try decodeAgentSnapshot(&decoder) },
         .system_metrics => .{ .system_metrics = try Derived(SystemMetrics).decode(&decoder) },
         .workspace_list => .{ .workspace_list = try decodeWorkspaceList(&decoder) },
+        .pane_cwd => .{ .pane_cwd = try decodePaneCwd(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -1159,14 +1236,31 @@ fn decodeOpenPane(decoder: *wire.Decoder) !OpenPaneView {
             const pane_id = try id.pane(try decoder.readInt(u64));
             break :pane .{ .pane = pane_id };
         },
+        2 => workspace: {
+            const workspace_id = try id.workspace(try decoder.readInt(u64));
+            break :workspace .{ .workspace = workspace_id };
+        },
         else => return error.InvalidPaneTarget,
     };
     const size = try decodeSize(decoder);
     const launch = switch (target) {
         .default => try decodeLaunch(decoder),
-        .pane => null,
+        .pane, .workspace => null,
     };
     return .{ .request_id = request_id, .target = target, .size = size, .launch = launch };
+}
+
+fn decodeCreateWorkspace(decoder: *wire.Decoder) !CreateWorkspaceView {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const size = try decodeSize(decoder);
+    const name = try decoder.readSized16();
+    try validateTabLabel(name, false);
+    return .{
+        .request_id = request_id,
+        .size = size,
+        .name = name,
+        .launch = try decodeLaunch(decoder),
+    };
 }
 
 fn decodeLaunch(decoder: *wire.Decoder) !LaunchView {
@@ -1216,6 +1310,13 @@ fn decodePaneInput(decoder: *wire.Decoder) !PaneInput {
     return .{ .pane_id = pane_id, .bytes = bytes };
 }
 
+fn decodePaneCwd(decoder: *wire.Decoder) !PaneCwd {
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const cwd = try decoder.readSized16();
+    try validateBytes(cwd, max_cwd_bytes, false);
+    return .{ .pane_id = pane_id, .cwd = cwd };
+}
+
 fn decodeCreatePane(decoder: *wire.Decoder) !CreatePaneView {
     return .{
         .request_id = try id.request(try decoder.readInt(u64)),
@@ -1245,6 +1346,14 @@ fn decodeRenameTab(decoder: *wire.Decoder) !RenameTab {
     const label = try decoder.readSized16();
     try validateTabLabel(label, false);
     return .{ .request_id = request_id, .location = location, .label = label };
+}
+
+fn decodeRenameWorkspace(decoder: *wire.Decoder) !RenameWorkspace {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const workspace = try decodeWorkspaceLocation(decoder);
+    const name = try decoder.readSized16();
+    try validateTabLabel(name, false);
+    return .{ .request_id = request_id, .workspace = workspace, .name = name };
 }
 
 fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {

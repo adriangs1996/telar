@@ -29,6 +29,17 @@ const OwnedRename = struct {
     }
 };
 
+const OwnedWorkspaceRename = struct {
+    request_id: schema.RequestId,
+    workspace: schema.WorkspaceLocation,
+    name: [schema.max_tab_label_bytes]u8 = undefined,
+    len: u8,
+
+    fn slice(rename: *const OwnedWorkspaceRename) []const u8 {
+        return rename.name[0..rename.len];
+    }
+};
+
 pub const Message = union(enum) {
     open_pane: schema.OpenPane,
     pane_input: OwnedInput,
@@ -47,6 +58,8 @@ pub const Message = union(enum) {
     request_graphics_snapshot: schema.RequestGraphicsSnapshot,
     graphics_credit: schema.GraphicsCredit,
     configure_graphics: schema.ConfigureGraphics,
+    create_workspace: schema.CreateWorkspace,
+    rename_workspace: OwnedWorkspaceRename,
 };
 
 pub const Stats = struct {
@@ -77,7 +90,7 @@ pub const Outbox = struct {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
             .frame_ack => |ack| return outbox.pushAck(ack),
-            .pane_input, .rename_tab => unreachable,
+            .pane_input, .rename_tab, .rename_workspace => unreachable,
             else => {},
         }
         try outbox.append(message);
@@ -117,6 +130,18 @@ pub const Outbox = struct {
         };
         @memcpy(owned.label[0..rename.label.len], rename.label);
         try outbox.append(.{ .rename_tab = owned });
+    }
+
+    pub fn pushWorkspaceRename(outbox: *Outbox, rename: schema.RenameWorkspace) !void {
+        if (rename.name.len == 0 or rename.name.len > schema.max_tab_label_bytes)
+            return error.InvalidWorkspaceName;
+        var owned: OwnedWorkspaceRename = .{
+            .request_id = rename.request_id,
+            .workspace = rename.workspace,
+            .len = @intCast(rename.name.len),
+        };
+        @memcpy(owned.name[0..rename.name.len], rename.name);
+        try outbox.append(.{ .rename_workspace = owned });
     }
 
     pub fn peek(outbox: *const Outbox) ?*const Message {
@@ -159,6 +184,12 @@ pub const Outbox = struct {
             .request_graphics_snapshot => |value| schema.encodeRequestGraphicsSnapshot(buffer, value),
             .graphics_credit => |value| schema.encodeGraphicsCredit(buffer, value),
             .configure_graphics => |value| schema.encodeConfigureGraphics(buffer, value),
+            .create_workspace => |value| schema.encodeCreateWorkspace(buffer, value),
+            .rename_workspace => |*value| schema.encodeRenameWorkspace(buffer, .{
+                .request_id = value.request_id,
+                .workspace = value.workspace,
+                .name = value.slice(),
+            }),
         };
     }
 

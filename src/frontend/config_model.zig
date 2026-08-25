@@ -70,6 +70,7 @@ pub const Snapshot = struct {
     theme: theme.Theme = theme.default_theme,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
+    pane_gaps: bool = true,
     prefix: keybind.Key = keybind.default_prefix,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
     input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,

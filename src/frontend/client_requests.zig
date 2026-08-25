@@ -23,6 +23,8 @@ pub const PaneOperation = struct {
 
 pub const Continuation = union(enum) {
     initial_open,
+    create_workspace,
+    rename_workspace: schema.WorkspaceLocation,
     workspace_snapshot: schema.WorkspaceLocation,
     tab_snapshot: schema.TabLocation,
     split: Split,
@@ -37,6 +39,7 @@ pub const Continuation = union(enum) {
     fn group(continuation: Continuation) Group {
         return switch (continuation) {
             .initial_open => .initial_open,
+            .create_workspace, .rename_workspace => .workspace_operation,
             .workspace_snapshot => .workspace_snapshot,
             .tab_snapshot => .tab_snapshot,
             .split, .close_pane => .pane_operation,
@@ -52,13 +55,14 @@ pub const Continuation = union(enum) {
             .split => |split| split.location.tab_id,
             .close_pane, .attach_pane => |operation| operation.location.tab_id,
             .rename_tab, .close_tab, .move_tab => |location| location.tab_id,
-            .initial_open, .workspace_snapshot, .create_tab, .ignored => null,
+            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .create_tab, .ignored => null,
         };
     }
 };
 
 pub const Group = enum {
     initial_open,
+    workspace_operation,
     workspace_snapshot,
     tab_snapshot,
     pane_operation,

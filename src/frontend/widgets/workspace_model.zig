@@ -98,6 +98,11 @@ pub const Snapshot = struct {
         return snapshot.entries[index].workspace;
     }
 
+    pub fn workspaceAtPosition(snapshot: *const Snapshot, position: usize) ?schema.WorkspaceId {
+        if (position >= snapshot.count) return null;
+        return snapshot.workspaceAt(position);
+    }
+
     pub fn indexOf(snapshot: *const Snapshot, workspace: schema.WorkspaceId) ?usize {
         for (snapshot.entries[0..snapshot.count], 0..) |entry, index|
             if (entry.workspace == workspace) return index;
@@ -105,7 +110,7 @@ pub const Snapshot = struct {
     }
 };
 
-fn truncateName(name: []const u8) []const u8 {
+pub fn truncateName(name: []const u8) []const u8 {
     if (name.len <= max_name_bytes) return name;
     var end: usize = max_name_bytes;
     // Never split a UTF-8 sequence: back up over continuation bytes.
@@ -125,6 +130,9 @@ test "replacement rejects stale revisions and copies into fixed storage" {
     try std.testing.expectEqual(@as(usize, 2), snapshot.count);
     try std.testing.expectEqualStrings("telar", snapshot.nameAt(0));
     try std.testing.expectEqualStrings("/work/api", snapshot.pathAt(1));
+    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(1)), snapshot.workspaceAtPosition(0).?);
+    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(2)), snapshot.workspaceAtPosition(1).?);
+    try std.testing.expect(snapshot.workspaceAtPosition(2) == null);
     try std.testing.expectEqual(@as(usize, 1), snapshot.indexOf(@enumFromInt(2)).?);
     try std.testing.expect(snapshot.indexOf(@enumFromInt(9)) == null);
 }

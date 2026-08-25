@@ -844,6 +844,29 @@ test "a configured sequence runs once and does not reach the pane" {
     try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
 }
 
+test "CSI-u Ctrl bindings route without colliding with Backspace or Enter" {
+    const bindings = [_]TestBinding{
+        try .parse(&.{"ctrl+h"}, .detach),
+        try .parse(&.{"ctrl+j"}, .palette),
+        try .parse(&.{"ctrl+k"}, .next),
+        try .parse(&.{"ctrl+l"}, .detach),
+    };
+    var router = try TestRouter.init(&bindings);
+    var capture: Capture = .{};
+
+    _ = try router.feed(
+        "\x1b[104;5u\x1b[106;5u\x1b[107;5u\x1b[108;5u",
+        100,
+        &capture,
+    );
+    try testing.expectEqualSlices(
+        TestAction,
+        &.{ .detach, .palette, .next, .detach },
+        capture.actions[0..capture.action_len],
+    );
+    try testing.expectEqual(@as(usize, 0), capture.len);
+}
+
 test "a semantic mouse handler consumes reports before they reach the pane" {
     const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
     var router = try TestRouter.init(&bindings);

@@ -331,6 +331,45 @@ pub const PaneInputQueue = struct {
 
 pub const KittyFramingCounter = escape.KittyFramingCounter;
 
+pub const CwdState = struct {
+    bytes: [schema.max_cwd_bytes]u8 = undefined,
+    len: u16 = 0,
+    revision: u64 = 1,
+
+    pub fn init(path: []const u8) !CwdState {
+        var state: CwdState = .{};
+        if (!state.set(path)) return error.InvalidCwd;
+        return state;
+    }
+
+    pub fn slice(state: *const CwdState) []const u8 {
+        return state.bytes[0..state.len];
+    }
+
+    /// Invalid observations and repeated values are ignored. The fixed buffer
+    /// makes updates allocation-free and keeps every wire value bounded.
+    pub fn update(state: *CwdState, path: []const u8) bool {
+        if (!validCwd(path) or std.mem.eql(u8, state.slice(), path)) return false;
+        @memcpy(state.bytes[0..path.len], path);
+        state.len = @intCast(path.len);
+        state.revision +%= 1;
+        if (state.revision == 0) state.revision = 1;
+        return true;
+    }
+
+    fn set(state: *CwdState, path: []const u8) bool {
+        if (!validCwd(path)) return false;
+        @memcpy(state.bytes[0..path.len], path);
+        state.len = @intCast(path.len);
+        return true;
+    }
+
+    fn validCwd(path: []const u8) bool {
+        return path.len != 0 and path.len <= schema.max_cwd_bytes and
+            std.mem.indexOfScalar(u8, path, 0) == null;
+    }
+};
+
 pub const Pane = struct {
     id: schema.PaneId,
     generation: u64,
@@ -383,6 +422,7 @@ pub const Pane = struct {
     history_exit_queued: bool = false,
     proxy_token: ?[16]u8 = null,
     workspace_path: []u8,
+    cwd: CwdState,
     pending_size: ?schema.TerminalSize = null,
     /// When the child's synchronized-output block started holding frames
     /// back, null while no hold is active. See `holdFrames`.
@@ -426,6 +466,7 @@ pub const Pane = struct {
             .history_session_id = history_service.newSessionId(io),
             .started_at_ms = 0,
             .workspace_path = workspace_copy,
+            .cwd = try .init(workspace_path),
             .session = undefined,
             .size = size,
             .terminal = undefined,
@@ -651,6 +692,10 @@ pub const Pane = struct {
             &capture_context,
             captureCommand,
         );
+    }
+
+    pub fn updateObservedCwd(pane: *Pane) bool {
+        return pane.cwd.update(pane.history_observer.currentCwd());
     }
 
     pub fn enforceIncompleteGraphics(
@@ -1053,6 +1098,25 @@ pub fn historyClock(io: Io) history.osc.Clock {
         .real_ms = Io.Timestamp.now(io, .real).toMilliseconds(),
         .awake_ns = @intCast(Io.Timestamp.now(io, .awake).toNanoseconds()),
     };
+}
+
+test "cwd state is bounded and advances only for a new valid path" {
+    var state = try CwdState.init("/work/telar");
+    try std.testing.expectEqualStrings("/work/telar", state.slice());
+    try std.testing.expectEqual(@as(u64, 1), state.revision);
+    try std.testing.expect(!state.update("/work/telar"));
+    try std.testing.expectEqual(@as(u64, 1), state.revision);
+
+    try std.testing.expect(state.update("/work/agents"));
+    try std.testing.expectEqualStrings("/work/agents", state.slice());
+    try std.testing.expectEqual(@as(u64, 2), state.revision);
+
+    try std.testing.expect(!state.update(""));
+    try std.testing.expect(!state.update("/work\x00hidden"));
+    const oversized = [_]u8{'x'} ** (schema.max_cwd_bytes + 1);
+    try std.testing.expect(!state.update(&oversized));
+    try std.testing.expectEqualStrings("/work/agents", state.slice());
+    try std.testing.expectError(error.InvalidCwd, CwdState.init(""));
 }
 
 test "pane store rejects an event from another generation" {

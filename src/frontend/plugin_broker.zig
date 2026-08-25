@@ -156,12 +156,13 @@ pub const Registry = struct {
             return error.StalePluginWorker;
         for (batch.slice()) |effect| {
             const capability: ?plugin.Capability = switch (effect) {
-                .split_pane, .close_pane, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
+                .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
                 .focus_pane,
                 .resize_pane,
                 .toggle_pane_fullscreen,
                 .toggle_sidebar,
                 .toggle_workspace_list,
+                .select_workspace,
                 .select_tab_offset,
                 .select_tab,
                 => null,

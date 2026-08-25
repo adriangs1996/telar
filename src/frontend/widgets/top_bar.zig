@@ -92,13 +92,23 @@ fn renderList(
 ) void {
     const snapshot = input.workspaces;
     const available = row_end -| start_x;
-    const collapsed = input.collapsed or !listFits(snapshot, available);
+    const active_index = if (active_id) |id| snapshot.indexOf(id) else null;
+    const collapsed = input.collapsed or
+        !listFits(snapshot, active_index, input.workspace_name, available);
     var x = start_x;
 
-    const active_index = if (active_id) |id| snapshot.indexOf(id) else null;
     if (collapsed) {
         const shown = active_index orelse 0;
-        x = drawWorkspace(context, snapshot, shown, active_index, x, row_end, y);
+        x = drawWorkspace(
+            context,
+            snapshot,
+            shown,
+            active_index,
+            input.workspace_name,
+            x,
+            row_end,
+            y,
+        );
         if (snapshot.count > 1) {
             var counter_buffer: [8]u8 = undefined;
             const counter = std.fmt.bufPrint(&counter_buffer, " +{d} ", .{
@@ -120,7 +130,16 @@ fn renderList(
 
     for (0..snapshot.count) |index| {
         if (x >= row_end) break;
-        x = drawWorkspace(context, snapshot, index, active_index, x, row_end, y);
+        x = drawWorkspace(
+            context,
+            snapshot,
+            index,
+            active_index,
+            input.workspace_name,
+            x,
+            row_end,
+            y,
+        );
     }
 }
 
@@ -129,12 +148,15 @@ fn drawWorkspace(
     snapshot: *const workspace_model.Snapshot,
     index: usize,
     active_index: ?usize,
+    active_name: []const u8,
     x: u16,
     row_end: u16,
     y: u16,
 ) u16 {
     var label_buffer: [workspace_model.max_name_bytes + 2]u8 = undefined;
-    const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{snapshot.nameAt(index)}) catch
+    const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
+        workspaceNameAt(snapshot, index, active_index, active_name),
+    }) catch
         " workspace ";
     const width = @min(ui.measure(label), row_end -| x);
     if (width == 0) return x;
@@ -188,13 +210,29 @@ fn renderFallback(
     _ = context.buffer.writeTruncated(rect, x, y, workspace, width, style);
 }
 
-fn listFits(snapshot: *const workspace_model.Snapshot, available: u16) bool {
+fn listFits(
+    snapshot: *const workspace_model.Snapshot,
+    active_index: ?usize,
+    active_name: []const u8,
+    available: u16,
+) bool {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
-        total +|= ui.measure(snapshot.nameAt(index)) + 2;
+        total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) + 2;
         if (total > available) return false;
     }
     return true;
+}
+
+fn workspaceNameAt(
+    snapshot: *const workspace_model.Snapshot,
+    index: usize,
+    active_index: ?usize,
+    active_name: []const u8,
+) []const u8 {
+    if (active_name.len != 0 and active_index != null and active_index.? == index)
+        return workspace_model.truncateName(active_name);
+    return snapshot.nameAt(index);
 }
 
 fn activeWorkspaceId(location: ?schema.TabLocation) ?schema.WorkspaceId {
@@ -261,6 +299,21 @@ test "the list collapses when the row cannot fit every workspace" {
     };
     _ = try snapshot.replace(.{ .revision = 1, .entries = &entries });
     // " telar " + " api " = 12 columns.
-    try std.testing.expect(listFits(&snapshot, 12));
-    try std.testing.expect(!listFits(&snapshot, 11));
+    try std.testing.expect(listFits(&snapshot, null, "", 12));
+    try std.testing.expect(!listFits(&snapshot, null, "", 11));
+}
+
+test "the active name replaces only the active workspace snapshot name" {
+    var snapshot: workspace_model.Snapshot = .{};
+    const entries = [_]workspace_model.EntryInput{
+        .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
+    };
+    _ = try snapshot.replace(.{ .revision = 1, .entries = &entries });
+
+    try std.testing.expectEqualStrings("agents", workspaceNameAt(&snapshot, 0, 0, "agents"));
+    try std.testing.expectEqualStrings("api", workspaceNameAt(&snapshot, 1, 0, "agents"));
+    // " agents " + " api " = 13 columns.
+    try std.testing.expect(listFits(&snapshot, 0, "agents", 13));
+    try std.testing.expect(!listFits(&snapshot, 0, "agents", 12));
 }

@@ -530,6 +530,10 @@ pub fn parse(input: []const u8) ?Parsed {
     }
 
     switch (input[final]) {
+        // Kitty's disambiguation mode reports modified text keys as CSI-u,
+        // keeping Ctrl+H distinct from Backspace and Ctrl+J from Enter.
+        'u' => return parseKittyKey(input[2..final], length) orelse
+            .{ .event = .incomplete, .len = length },
         // `ESC [ 1 ; mod X` - a modified arrow, Home or End.
         'A' => return key(.up, modsOf(params[1]), length),
         'B' => return key(.down, modsOf(params[1]), length),
@@ -568,6 +572,41 @@ pub fn parse(input: []const u8) ?Parsed {
     // nobody asked for, and dropping one unknown sequence beats desynchronising
     // the whole stream.
     return .{ .event = .incomplete, .len = length };
+}
+
+fn parseKittyKey(body: []const u8, length: usize) ?Parsed {
+    var fields = std.mem.splitScalar(u8, body, ';');
+    const codepoint_text = fields.next() orelse return null;
+    if (codepoint_text.len == 0) return null;
+    const modifier_text = fields.next();
+    if (fields.next() != null) return null;
+
+    const codepoint = std.fmt.parseUnsigned(u32, codepoint_text, 10) catch return null;
+    const modifier = if (modifier_text) |value|
+        if (value.len == 0)
+            return null
+        else
+            std.fmt.parseUnsigned(u32, value, 10) catch return null
+    else
+        1;
+    if (modifier == 0) return null;
+    const modifier_bits = modifier - 1;
+    const unsupported_modifier_bits = modifier_bits & ~@as(u32, 0b1100_0111);
+    if (unsupported_modifier_bits != 0) return null;
+
+    const code: Event.Key.Code = switch (codepoint) {
+        9 => .tab,
+        13 => .enter,
+        27 => .escape,
+        127 => .backspace,
+        else => character: {
+            const scalar = std.math.cast(u21, codepoint) orelse return null;
+            var bytes: [4]u8 = undefined;
+            const len = std.unicode.utf8Encode(scalar, &bytes) catch return null;
+            break :character .{ .char = .init(bytes[0..len]) };
+        },
+    };
+    return key(code, modsOf((modifier_bits & 0b111) + 1), length);
 }
 
 fn parseApc(input: []const u8) Parsed {
@@ -1107,6 +1146,24 @@ test "modifiers arrive as modifiers, not as different keys" {
     // not express at all.
     const both = parse("\x1b[1;6D").?.event.key;
     try testing.expect(both.mods.ctrl and both.mods.shift);
+}
+
+test "Kitty keyboard mode disambiguates Ctrl keys from legacy controls" {
+    const cases = [_]struct { sequence: []const u8, letter: []const u8 }{
+        .{ .sequence = "\x1b[104;5u", .letter = "h" },
+        .{ .sequence = "\x1b[106;5u", .letter = "j" },
+        .{ .sequence = "\x1b[107;5u", .letter = "k" },
+        .{ .sequence = "\x1b[108;5u", .letter = "l" },
+    };
+    for (cases) |case| {
+        const parsed = parse(case.sequence).?;
+        try testing.expectEqual(case.sequence.len, parsed.len);
+        try testing.expect(parsed.event.key.mods.ctrl);
+        try testing.expect(parsed.event.key.code.char.eql(case.letter));
+    }
+
+    try testing.expectEqual(KeyCode.escape, parse("\x1b[27u").?.event.key.code);
+    try testing.expectEqual(KeyCode.enter, parse("\x1b[13u").?.event.key.code);
 }
 
 test "an absent modifier parameter is no modifiers, not every modifier" {

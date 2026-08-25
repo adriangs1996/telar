@@ -21,6 +21,7 @@ pub const Input = struct {
     tabs: ?*const tabs_mod.Model,
     model: *multiplexer.Model,
     rename_field: ?*tab_rename.Field,
+    rename_kind: tab_rename.Kind,
     sidebar_snapshot: *const sidebar.Snapshot,
     sidebar_state: *sidebar.State,
     sidebar_transparent: bool,
@@ -40,7 +41,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .area = input.regions.top,
         .sidebar_visible = !input.regions.sidebar.isEmpty(),
         .location = input.model.location,
-        .workspace_name = if (input.tabs) |tabs| tabs.workspaceName() else "",
+        .workspace_name = if (input.tabs) |tabs| tabs.displayedWorkspaceName() else "",
         .workspaces = input.workspaces,
         .collapsed = input.workspace_list_collapsed,
         .proxy_tls_active = input.proxy_tls_active,
@@ -55,7 +56,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
 
     context.buffer.fill(input.regions.bottom, " ", bottomStyle(context));
     const cursor = if (input.rename_field) |field|
-        tab_rename.render(context, input.regions.bottom, field)
+        tab_rename.render(context, input.regions.bottom, field, input.rename_kind)
     else block: {
         tab_bar.render(context, .{
             .area = input.regions.tabs,

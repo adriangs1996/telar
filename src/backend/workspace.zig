@@ -36,11 +36,21 @@ pub const Tab = struct {
 pub const Workspace = struct {
     id: schema.WorkspaceId,
     path: []u8,
+    explicit_name: [schema.max_tab_label_bytes]u8 = undefined,
+    explicit_name_len: u8 = 0,
     tabs: [max_tabs_per_workspace]?Tab = [_]?Tab{null} ** max_tabs_per_workspace,
     tab_count: usize = 0,
 
     pub fn name(workspace: *const Workspace) []const u8 {
+        if (workspace.explicit_name_len != 0)
+            return workspace.explicit_name[0..workspace.explicit_name_len];
         return std.fs.path.basename(workspace.path);
+    }
+
+    fn setExplicitName(workspace: *Workspace, name_value: []const u8) void {
+        std.debug.assert(name_value.len != 0 and name_value.len <= workspace.explicit_name.len);
+        @memcpy(workspace.explicit_name[0..name_value.len], name_value);
+        workspace.explicit_name_len = @intCast(name_value.len);
     }
 
     pub fn defaultTab(workspace: *const Workspace) schema.TabId {
@@ -117,9 +127,9 @@ pub const WorkspaceStore = struct {
     count: usize = 0,
     next_id: u64 = 1,
     next_tab_id: u64 = 1,
-    /// Covers what `workspace_list` shows: the set of workspaces, their paths,
-    /// and their tab counts. Tab labels are not on the list, so renames do not
-    /// bump it. Starts at 1 and never returns to 0, like the agent store.
+    /// Covers what `workspace_list` shows: the set of workspaces, their names,
+    /// paths, and tab counts. Tab labels are not on the list, so tab renames do
+    /// not bump it. Starts at 1 and never returns to 0, like the agent store.
     revision: u64 = 1,
 
     pub fn init(gpa: std.mem.Allocator) WorkspaceStore {
@@ -145,6 +155,39 @@ pub const WorkspaceStore = struct {
                     .created = false,
                 };
         }
+        return .{ .location = try store.insert(path, null), .created = true };
+    }
+
+    /// Creates a distinct workspace even when another workspace uses the same
+    /// launch path. Interactive `new_workspace` depends on identity, not path
+    /// uniqueness; `ensure` remains the attach-or-create operation.
+    pub fn create(
+        store: *WorkspaceStore,
+        path: []const u8,
+        name_value: []const u8,
+    ) !schema.TabLocation {
+        if (name_value.len == 0 or name_value.len > schema.max_tab_label_bytes)
+            return error.InvalidWorkspaceName;
+        return store.insert(path, name_value);
+    }
+
+    pub fn rename(
+        store: *WorkspaceStore,
+        location: schema.WorkspaceLocation,
+        name_value: []const u8,
+    ) !void {
+        if (name_value.len == 0 or name_value.len > schema.max_tab_label_bytes)
+            return error.InvalidWorkspaceName;
+        const workspace = store.find(location) orelse return error.WorkspaceNotFound;
+        workspace.setExplicitName(name_value);
+        store.bumpRevision();
+    }
+
+    fn insert(
+        store: *WorkspaceStore,
+        path: []const u8,
+        explicit_name: ?[]const u8,
+    ) !schema.TabLocation {
         if (store.count == max_workspaces) return error.WorkspaceLimitReached;
         const path_copy = try store.gpa.dupe(u8, path);
         errdefer store.gpa.free(path_copy);
@@ -155,16 +198,14 @@ pub const WorkspaceStore = struct {
         for (&store.items) |*slot| {
             if (slot.* == null) {
                 var workspace: Workspace = .{ .id = workspace_id, .path = path_copy };
+                if (explicit_name) |name_value| workspace.setExplicitName(name_value);
                 _ = try workspace.appendTab(.init(tab_id, "main"));
                 slot.* = workspace;
                 store.count += 1;
                 store.bumpRevision();
                 return .{
-                    .location = .{
-                        .workspace = .{ .workspace = workspace_id },
-                        .tab_id = tab_id,
-                    },
-                    .created = true,
+                    .workspace = .{ .workspace = workspace_id },
+                    .tab_id = tab_id,
                 };
             }
         }
@@ -312,7 +353,7 @@ pub const WorkspaceStore = struct {
     }
 };
 
-test "the list revision tracks membership and tab counts, not labels" {
+test "the list revision tracks workspace names, membership and tab counts" {
     var store = WorkspaceStore.init(std.testing.allocator);
     defer store.deinit();
     const initial = store.revision;
@@ -329,15 +370,19 @@ test "the list revision tracks membership and tab counts, not labels" {
     store.findTab(logs.location).?.setLabel("server");
     try std.testing.expectEqual(after_create, store.revision);
 
+    try store.rename(ensured.location.workspace, "agents");
+    try std.testing.expect(store.revision != after_create);
+    const after_rename = store.revision;
+
     var output: [max_workspaces]schema.WorkspaceListEntry = undefined;
     const entries = store.listEntries(&output);
     try std.testing.expectEqual(@as(usize, 1), entries.len);
-    try std.testing.expectEqualStrings("project", entries[0].name);
+    try std.testing.expectEqualStrings("agents", entries[0].name);
     try std.testing.expectEqualStrings("/work/project", entries[0].path);
     try std.testing.expectEqual(@as(u16, 2), entries[0].tab_count);
 
     _ = store.removeTab(logs.location).?;
-    try std.testing.expect(store.revision != after_create);
+    try std.testing.expect(store.revision != after_rename);
 }
 
 test "workspace and default tab identities are stable per path" {
@@ -360,6 +405,22 @@ test "workspace and default tab identities are stable per path" {
     try std.testing.expectEqual(@as(usize, 2), store.count);
 }
 
+test "explicit creation permits distinct workspaces with the same path" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const first = try store.create("/work/project", "frontend");
+    const second = try store.create("/work/project", "backend");
+    try std.testing.expect(!std.meta.eql(first, second));
+    try std.testing.expectEqual(@as(usize, 2), store.count);
+    try std.testing.expectEqualStrings(
+        store.find(first.workspace).?.path,
+        store.find(second.workspace).?.path,
+    );
+    try std.testing.expectEqualStrings("frontend", store.find(first.workspace).?.name());
+    try std.testing.expectEqualStrings("backend", store.find(second.workspace).?.name());
+}
+
 test "workspace name is the final path segment" {
     var store = WorkspaceStore.init(std.testing.allocator);
     defer store.deinit();
@@ -367,6 +428,15 @@ test "workspace name is the final path segment" {
     const ensured = try store.ensure("/work/telar");
     const workspace = store.find(ensured.location.workspace).?;
     try std.testing.expectEqualStrings("telar", workspace.name());
+}
+
+test "workspace rename replaces the path-derived name" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const ensured = try store.ensure("/work/telar");
+    try store.rename(ensured.location.workspace, "agents");
+    try std.testing.expectEqualStrings("agents", store.find(ensured.location.workspace).?.name());
 }
 
 test "an uncommitted workspace can be rolled back" {

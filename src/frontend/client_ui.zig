@@ -40,14 +40,18 @@ pub const RenderStats = struct {
     damaged: usize = 0,
 };
 
-pub const RenameInput = union(enum) {
+pub const NameInput = union(enum) {
     editing,
     cancelled,
     submitted: []const u8,
 };
 
-const TabRename = struct {
-    tab_id: schema.TabId,
+const NamePrompt = struct {
+    target: union(enum) {
+        tab: schema.TabId,
+        create_workspace,
+        rename_workspace: schema.WorkspaceLocation,
+    },
     field: widgets.tab_rename.Field,
     pasting: bool = false,
 };
@@ -59,7 +63,7 @@ pub const State = struct {
     hits: Hits = .{},
     sidebar_requested: bool = true,
     hovered: ?Action = null,
-    tab_rename: ?TabRename = null,
+    name_prompt: ?NamePrompt = null,
     sidebar_snapshot: widgets.sidebar.Snapshot = .{},
     sidebar: widgets.sidebar.State = .{},
     workspace_list: widgets.workspace_model.Snapshot = .{},
@@ -221,18 +225,70 @@ pub const State = struct {
     }
 
     pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
-        state.tab_rename = .{ .tab_id = tab_id, .field = .init(label) };
+        state.name_prompt = .{ .target = .{ .tab = tab_id }, .field = .init(label) };
+        state.sidebar.search_active = false;
+        state.hovered = null;
+        state.dirty = true;
+    }
+
+    pub fn beginWorkspaceCreate(state: *State) void {
+        state.name_prompt = .{ .target = .create_workspace, .field = .init("") };
+        state.sidebar.search_active = false;
+        state.hovered = null;
+        state.dirty = true;
+    }
+
+    pub fn beginWorkspaceRename(
+        state: *State,
+        workspace: schema.WorkspaceLocation,
+        name: []const u8,
+    ) void {
+        const editable_name = if (name.len <= schema.max_tab_label_bytes) name else "";
+        state.name_prompt = .{
+            .target = .{ .rename_workspace = workspace },
+            .field = .init(editable_name),
+        };
         state.sidebar.search_active = false;
         state.hovered = null;
         state.dirty = true;
     }
 
     pub fn renamedTab(state: *const State) ?schema.TabId {
-        return if (state.tab_rename) |rename| rename.tab_id else null;
+        const prompt = state.name_prompt orelse return null;
+        return switch (prompt.target) {
+            .tab => |tab_id| tab_id,
+            .create_workspace, .rename_workspace => null,
+        };
     }
 
-    pub fn handleRenameInput(state: *State, bytes: []const u8) RenameInput {
-        const rename = if (state.tab_rename) |*value| value else return .editing;
+    pub fn creatingWorkspace(state: *const State) bool {
+        const prompt = state.name_prompt orelse return false;
+        return std.meta.activeTag(prompt.target) == .create_workspace;
+    }
+
+    pub fn renamedWorkspace(state: *const State) ?schema.WorkspaceLocation {
+        const prompt = state.name_prompt orelse return null;
+        return switch (prompt.target) {
+            .rename_workspace => |workspace| workspace,
+            .tab, .create_workspace => null,
+        };
+    }
+
+    pub fn hasNamePrompt(state: *const State) bool {
+        return state.name_prompt != null;
+    }
+
+    fn namePromptKind(state: *const State) widgets.tab_rename.Kind {
+        const prompt = state.name_prompt orelse return .rename_tab;
+        return switch (prompt.target) {
+            .tab => .rename_tab,
+            .create_workspace => .create_workspace,
+            .rename_workspace => .rename_workspace,
+        };
+    }
+
+    pub fn handleNameInput(state: *State, bytes: []const u8) NameInput {
+        const rename = if (state.name_prompt) |*value| value else return .editing;
         var offset: usize = 0;
         while (offset < bytes.len) {
             const parsed = term.parse(bytes[offset..]) orelse {
@@ -259,7 +315,7 @@ pub const State = struct {
                         return .{ .submitted = rename.field.text() };
                     },
                     .escape => {
-                        state.tab_rename = null;
+                        state.name_prompt = null;
                         state.dirty = true;
                         return .cancelled;
                     },
@@ -280,8 +336,8 @@ pub const State = struct {
         return .editing;
     }
 
-    pub fn finishTabRename(state: *State) void {
-        state.tab_rename = null;
+    pub fn finishNamePrompt(state: *State) void {
+        state.name_prompt = null;
         state.dirty = true;
     }
 
@@ -292,7 +348,7 @@ pub const State = struct {
         mouse: term.Event.Mouse,
     ) Interaction {
         var result: Interaction = .{};
-        if (state.tab_rename != null) return result;
+        if (state.name_prompt != null) return result;
         const hovered = state.hits.at(mouse.x, mouse.y);
         if (!optionalActionEql(state.hovered, hovered)) {
             state.hovered = hovered;
@@ -425,7 +481,8 @@ pub const State = struct {
             .regions = state.regions,
             .tabs = tabs,
             .model = model,
-            .rename_field = if (state.tab_rename) |*rename| &rename.field else null,
+            .rename_field = if (state.name_prompt) |*prompt| &prompt.field else null,
+            .rename_kind = state.namePromptKind(),
             .sidebar_snapshot = &state.sidebar_snapshot,
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
@@ -810,9 +867,9 @@ test "rename input consumes an unparseable tail instead of spinning" {
     var state = try State.init(std.testing.allocator, 80, 24);
     defer state.deinit();
     state.beginTabRename(@enumFromInt(3), "logs");
-    try std.testing.expect(state.handleRenameInput("\x1b[123") == .editing);
+    try std.testing.expect(state.handleNameInput("\x1b[123") == .editing);
     // The field is untouched and editing continues normally afterwards.
-    const submitted = state.handleRenameInput("!\r");
+    const submitted = state.handleNameInput("!\r");
     try std.testing.expect(submitted == .submitted);
     try std.testing.expectEqualStrings("logs!", submitted.submitted);
 }
@@ -821,8 +878,37 @@ test "tab rename edits clusters and submits a non-empty label" {
     var state = try State.init(std.testing.allocator, 80, 24);
     defer state.deinit();
     state.beginTabRename(@enumFromInt(3), "logs");
-    try std.testing.expect(state.handleRenameInput("\x7f") == .editing);
-    const submitted = state.handleRenameInput("í\r");
+    try std.testing.expect(state.handleNameInput("\x7f") == .editing);
+    const submitted = state.handleNameInput("í\r");
     try std.testing.expect(submitted == .submitted);
     try std.testing.expectEqualStrings("logí", submitted.submitted);
+}
+
+test "workspace creation prompt requires an explicit non-empty name" {
+    var state = try State.init(std.testing.allocator, 80, 24);
+    defer state.deinit();
+    state.beginWorkspaceCreate();
+    try std.testing.expect(state.hasNamePrompt());
+    try std.testing.expect(state.creatingWorkspace());
+    try std.testing.expect(state.renamedTab() == null);
+    try std.testing.expect(state.handleNameInput("\r") == .editing);
+
+    const submitted = state.handleNameInput("agents\r");
+    try std.testing.expect(submitted == .submitted);
+    try std.testing.expectEqualStrings("agents", submitted.submitted);
+    state.finishNamePrompt();
+    try std.testing.expect(!state.hasNamePrompt());
+}
+
+test "workspace rename starts with the canonical name" {
+    var state = try State.init(std.testing.allocator, 80, 24);
+    defer state.deinit();
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
+    state.beginWorkspaceRename(workspace, "telar");
+
+    try std.testing.expectEqualDeep(workspace, state.renamedWorkspace().?);
+    try std.testing.expect(!state.creatingWorkspace());
+    const submitted = state.handleNameInput("\x7f\x7f\x7f\x7f\x7fagents\r");
+    try std.testing.expect(submitted == .submitted);
+    try std.testing.expectEqualStrings("agents", submitted.submitted);
 }

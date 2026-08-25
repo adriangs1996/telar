@@ -9,6 +9,7 @@ const term = @import("term.zig");
 const theme = @import("theme.zig");
 
 const schema = core.schema;
+const max_cwd_name_bytes = 48;
 const ui = core.ui;
 
 pub const max_panes = layout_mod.max_panes;
@@ -35,6 +36,7 @@ pub const Pane = struct {
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
     graphics_placeholder: bool = false,
+    cwd: []u8 = &.{},
 
     fn init(
         gpa: std.mem.Allocator,
@@ -58,6 +60,7 @@ pub const Pane = struct {
     }
 
     fn deinit(pane: *Pane) void {
+        if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
         pane.gpa.free(pane.damage_rows);
         pane.buffer.deinit();
     }
@@ -69,7 +72,82 @@ pub const Pane = struct {
     fn markSpan(pane: *Pane, start: u32, count: u32) void {
         diff.markRows(pane.damage_rows, pane.buffer.w, start, count);
     }
+
+    pub fn setCwd(pane: *Pane, path: []const u8) !bool {
+        std.debug.assert(path.len != 0 and path.len <= schema.max_cwd_bytes);
+        if (std.mem.eql(u8, pane.cwd, path)) return false;
+        const display_changed = !std.mem.eql(u8, pane.cwdName(), displayCwdName(path));
+        const replacement = try pane.gpa.dupe(u8, path);
+        if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
+        pane.cwd = replacement;
+        return display_changed;
+    }
+
+    pub fn cwdName(pane: *const Pane) []const u8 {
+        return displayCwdName(pane.cwd);
+    }
+
+    pub fn cwdSlice(pane: *const Pane) []const u8 {
+        return pane.cwd;
+    }
 };
+
+fn displayCwdName(path: []const u8) []const u8 {
+    if (path.len == 0) return "";
+    const basename = cwdBaseName(path);
+    if (!validCwdName(basename)) return "";
+    return truncateCwdName(basename);
+}
+
+fn cwdBaseName(path: []const u8) []const u8 {
+    var end = path.len;
+    while (end > 1 and isPathSeparator(path[end - 1])) end -= 1;
+    const trimmed = path[0..end];
+    if (trimmed.len == 1 and isPathSeparator(trimmed[0])) return trimmed;
+    const separator = std.mem.lastIndexOfAny(u8, trimmed, "/\\") orelse return trimmed;
+    const name = trimmed[separator + 1 ..];
+    return if (name.len == 0) trimmed else name;
+}
+
+fn truncateCwdName(name: []const u8) []const u8 {
+    if (name.len <= max_cwd_name_bytes) return name;
+    var end: usize = max_cwd_name_bytes;
+    while (end > 0 and name[end] & 0b1100_0000 == 0b1000_0000) end -= 1;
+    return name[0..end];
+}
+
+fn validCwdName(name: []const u8) bool {
+    if (!std.unicode.utf8ValidateSlice(name)) return false;
+    for (name) |byte| if (byte < 0x20 or byte == 0x7f) return false;
+    return true;
+}
+
+fn isPathSeparator(byte: u8) bool {
+    return byte == '/' or byte == '\\';
+}
+
+test "pane cwd names use a bounded basename" {
+    try std.testing.expectEqualStrings("telar", cwdBaseName("/work/telar"));
+    try std.testing.expectEqualStrings("telar", cwdBaseName("/work/telar/"));
+    try std.testing.expectEqualStrings("/", cwdBaseName("/"));
+    try std.testing.expectEqualStrings("api", cwdBaseName("C:\\work\\api\\"));
+    try std.testing.expectEqualStrings("relative", cwdBaseName("relative"));
+
+    var pane: Pane = undefined;
+    pane.gpa = std.testing.allocator;
+    pane.cwd = &.{};
+    defer if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
+    const long_name = [_]u8{'x'} ** (max_cwd_name_bytes + 1);
+    try std.testing.expect(try pane.setCwd("/work/telar"));
+    try std.testing.expectEqualStrings("telar", pane.cwdName());
+    try std.testing.expect(try pane.setCwd(&long_name));
+    try std.testing.expectEqual(@as(usize, max_cwd_name_bytes), pane.cwdName().len);
+    try std.testing.expect(try pane.setCwd("/work/\xff"));
+    try std.testing.expectEqualStrings("", pane.cwdName());
+    try std.testing.expect(!try pane.setCwd("/work/\x1b[31m"));
+    try std.testing.expect(!try pane.setCwd("/other/\x1b[31m"));
+    try std.testing.expectEqualStrings("/other/\x1b[31m", pane.cwdSlice());
+}
 
 pub const RenderStats = struct {
     panes: usize = 0,
@@ -108,12 +186,28 @@ pub const Model = struct {
         model.pane_index.reset();
     }
 
+    pub fn setPaneGaps(model: *Model, enabled: bool) void {
+        if (!model.layout.setPaneGaps(enabled)) return;
+        model.composition_invalidated = true;
+    }
+
     pub fn focusedPane(model: *Model) ?*Pane {
         const pane_id = model.layout.focused() orelse return null;
         return model.find(pane_id);
     }
 
+    pub fn focusedPaneConst(model: *const Model) ?*const Pane {
+        const pane_id = model.layout.focused() orelse return null;
+        return model.findConst(pane_id);
+    }
+
     pub fn find(model: *Model, pane_id: schema.PaneId) ?*Pane {
+        if (pane_id == .invalid) return null;
+        const slot = model.pane_index.get(schema.id.raw(pane_id)) orelse return null;
+        return &model.panes[slot].?;
+    }
+
+    pub fn findConst(model: *const Model, pane_id: schema.PaneId) ?*const Pane {
         if (pane_id == .invalid) return null;
         const slot = model.pane_index.get(schema.id.raw(pane_id)) orelse return null;
         return &model.panes[slot].?;

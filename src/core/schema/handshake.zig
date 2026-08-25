@@ -15,7 +15,7 @@ pub const schema_version: *const [2]u8 = "06";
 /// golden corpus" recomputes the hash, so an encoding change cannot ship
 /// without updating this constant. Do not keep the old decoder until rolling
 /// upgrades become a supported product requirement.
-pub const schema_id: SchemaId = (schema_version.* ++ "72f459".*);
+pub const schema_id: SchemaId = (schema_version.* ++ "7e68e4".*);
 
 pub const magic: [8]u8 = "TELARIPC".*;
 

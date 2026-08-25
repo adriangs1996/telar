@@ -5,7 +5,7 @@ const config_model = @import("config_model.zig");
 const keybind = @import("keybind.zig");
 
 pub const max_keys = config_model.max_binding_keys;
-pub const count = 31;
+pub const count = 33;
 pub const Binding = keybind.Binding(action.Action, max_keys);
 
 pub fn load(prefix: keybind.Key) ![count]Binding {
@@ -23,6 +23,8 @@ pub fn load(prefix: keybind.Key) ![count]Binding {
         try prefixed(prefix, "z", .toggle_pane_fullscreen),
         try prefixed(prefix, "s", .toggle_sidebar),
         try prefixed(prefix, "w", .toggle_workspace_list),
+        try prefixed(prefix, "N", .new_workspace),
+        try prefixed(prefix, "W", .rename_workspace),
         try prefixed(prefix, "x", .close_pane),
         try prefixed(prefix, "d", .detach),
         try prefixed(prefix, "c", .new_tab),

@@ -42,6 +42,12 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
         },
         .detach => try writer.writeByte(11),
         .toggle_workspace_list => try writer.writeByte(14),
+        .new_workspace => try writer.writeByte(15),
+        .rename_workspace => try writer.writeByte(16),
+        .select_workspace => |value| {
+            try writer.writeByte(17);
+            try writer.writeByte(value);
+        },
         .lua_callback, .lua_expr, .plugin => return error.InvalidWorkerEffect,
     };
     return writer.buffered();
@@ -84,6 +90,9 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
             ) orelse return error.InvalidWorkerEffect },
             13 => .toggle_pane_fullscreen,
             14 => .toggle_workspace_list,
+            15 => .new_workspace,
+            16 => .rename_workspace,
+            17 => .{ .select_workspace = try byte(bytes, &offset) },
             else => return error.UnknownWorkerEffect,
         };
     }
@@ -105,7 +114,9 @@ test "plugin result protocol round trips semantic effects" {
     batch.items[2] = .{ .resize_pane = .down };
     batch.items[3] = .toggle_pane_fullscreen;
     batch.items[4] = .toggle_sidebar;
-    batch.len = 5;
+    batch.items[5] = .new_workspace;
+    batch.items[6] = .{ .select_workspace = 3 };
+    batch.len = 7;
     var buffer: [max_bytes]u8 = undefined;
     try std.testing.expectEqualDeep(batch, try decode(try encode(&buffer, &batch)));
 }

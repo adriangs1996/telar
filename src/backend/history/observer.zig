@@ -188,6 +188,11 @@ pub const Observer = struct {
         return observer.worker == null and observer.batches[observer.active].event_count != 0;
     }
 
+    pub fn currentCwd(observer: *const Observer) []const u8 {
+        if (!observer.enabled) return "";
+        return observer.tracker.currentCwd();
+    }
+
     pub fn seal(observer: *Observer) bool {
         if (!observer.hasPending()) return false;
         const sealed = observer.active;

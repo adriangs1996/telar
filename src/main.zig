@@ -577,6 +577,7 @@ fn runClient(
         else
             options.sidebar_rendering,
         .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
+        .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
         .host_shared_memory = init.minimal.environ.getPosix("SSH_CONNECTION") == null and
             if (init.minimal.environ.getPosix("TERM_PROGRAM")) |program|
                 std.ascii.eqlIgnoreCase(program, "ghostty")
@@ -983,6 +984,7 @@ const usage =
     \\  % / "             Split left/right or top/bottom
     \\  Arrow keys       Focus a pane by direction
     \\  s                Toggle the sidebar
+    \\  N                Create and select a workspace
     \\  x                Close the focused pane
     \\  c                Create and select a tab
     \\  n / p            Select the next or previous tab

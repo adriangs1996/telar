@@ -824,6 +824,22 @@ const Server = struct {
             const index = (attachments.next_send + checked) % attachments.items.len;
             const active = if (attachments.items[index]) |*value| value else continue;
             const pane = active.pane;
+            if (active.observed_cwd_revision == pane.cwd.revision) continue;
+            const payload = try schema.encodePaneCwd(buffer, .{
+                .pane_id = pane.id,
+                .cwd = pane.cwd.slice(),
+            });
+            active.observed_cwd_revision = pane.cwd.revision;
+            try startSessionSend(io, select, session, payload);
+            attachments.next_send = (index + 1) % attachments.items.len;
+            return;
+        }
+
+        checked = 0;
+        while (checked < attachments.items.len) : (checked += 1) {
+            const index = (attachments.next_send + checked) % attachments.items.len;
+            const active = if (attachments.items[index]) |*value| value else continue;
+            const pane = active.pane;
             if (pane.ingest_pending) continue;
             if (active.snapshot_pending) {
                 const payload = (try encodeFrame(io, buffer, active, true, metrics)) orelse
@@ -947,6 +963,31 @@ const Server = struct {
                         }
                         break :pane existing;
                     },
+                    .workspace => |wanted| pane: {
+                        const workspace = workspaces.find(.{ .workspace = wanted }) orelse {
+                            try queueFailure(
+                                responses,
+                                open.request_id,
+                                .workspace_not_found,
+                                "workspace not found",
+                            );
+                            return;
+                        };
+                        const location: schema.TabLocation = .{
+                            .workspace = .{ .workspace = wanted },
+                            .tab_id = workspace.defaultTab(),
+                        };
+                        const existing = panes.firstAt(location) orelse {
+                            try queueFailure(
+                                responses,
+                                open.request_id,
+                                .pane_not_found,
+                                "workspace has no running pane",
+                            );
+                            return;
+                        };
+                        break :pane existing;
+                    },
                     .default => pane: {
                         const launch = open.launch.?;
                         const ensured = workspaces.ensure(launch.cwd) catch {
@@ -1009,6 +1050,80 @@ const Server = struct {
                     .location = active.location,
                     .created = created,
                 } });
+            },
+            .create_workspace => |create| {
+                const location = workspaces.create(create.launch.cwd, create.name) catch {
+                    try queueFailure(
+                        responses,
+                        create.request_id,
+                        .resource_limit,
+                        "could not create workspace",
+                    );
+                    return;
+                };
+                const workspace_id = switch (location.workspace) {
+                    .workspace => |id| id,
+                    .worktree => unreachable,
+                };
+                var workspace_committed = false;
+                defer if (!workspace_committed) {
+                    workspaces.remove(workspace_id);
+                    server.releaseGeometryFor(session.key, location.workspace);
+                };
+                if (!server.holdsGeometry(session.key, location.workspace)) {
+                    try queueFailure(
+                        responses,
+                        create.request_id,
+                        .resource_limit,
+                        "workspace geometry is unavailable",
+                    );
+                    return;
+                }
+                const fresh = server.launchPane(location, create.size, create.launch) catch |err| {
+                    try queueSpawnFailure(responses, create.request_id, err);
+                    return;
+                };
+                workspace_committed = true;
+                // A UI session observes one workspace. Preserve the current
+                // attachments until the replacement pane is running, then
+                // commit the handoff before acknowledging creation.
+                const previous_workspace = attachments.workspace;
+                attachments.deinit();
+                if (previous_workspace) |previous|
+                    server.releaseGeometryFor(session.key, previous);
+                const attachment = try attachments.attach(gpa, fresh);
+                attachment.shared_transport = session.shared_graphics;
+                _ = try attachment.resizeIfNeeded();
+                try responses.push(.{ .pane_opened = .{
+                    .request_id = create.request_id,
+                    .pane_id = fresh.id,
+                    .location = fresh.location,
+                    .created = true,
+                } });
+            },
+            .rename_workspace => |rename| {
+                workspaces.rename(rename.workspace, rename.name) catch |err| {
+                    switch (err) {
+                        error.WorkspaceNotFound => try queueFailure(
+                            responses,
+                            rename.request_id,
+                            .workspace_not_found,
+                            "workspace not found",
+                        ),
+                        else => try queueFailure(
+                            responses,
+                            rename.request_id,
+                            .internal,
+                            "could not rename workspace",
+                        ),
+                    }
+                    return;
+                };
+                try responses.push(.{ .workspace_snapshot = .{
+                    .request_id = rename.request_id,
+                    .workspace = rename.workspace,
+                } });
+                server.notifyWorkspaceChanged(session.key, rename.workspace);
             },
             .pane_input => |input| {
                 const active = attachments.find(input.pane_id) orelse {
@@ -1120,6 +1235,7 @@ const Server = struct {
                 if (!attachments.detach(detach.pane_id)) {
                     metrics.stale_client_messages += 1;
                 } else if (detached_workspace) |left| {
+                    if (attachments.count == 0) attachments.workspace = null;
                     // A client that walked away from a workspace gives its
                     // geometry lease back, so switching workspaces does not
                     // pin the abandoned one against other clients.
@@ -1812,6 +1928,7 @@ fn serveInternal(
             };
             active.actorFinished();
             active.history_observer.finishSealed();
+            _ = active.updateObservedCwd();
             if (comptime diagnostics.enabled) {
                 server.metrics.history_candidate_input_bytes +|= event.stats.input_bytes;
                 server.metrics.history_captured +|= event.stats.captured;
