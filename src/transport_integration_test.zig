@@ -290,6 +290,110 @@ test "runtime stops with a live pane and removes its endpoint" {
     );
 }
 
+test "partial pane actor startup aborts only that launch" {
+    for ([_]backend.history.LaunchPhase{
+        .pane_registration,
+        .wait_actor,
+        .output_actor,
+    }) |phase| try expectPartialLaunchRecovery(phase);
+}
+
+fn expectPartialLaunchRecovery(phase: backend.history.LaunchPhase) !void {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/launch-fault.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var fault: backend.runtime.LaunchTestFault = .{ .phase = phase };
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+        .launch_fault = &fault,
+    } });
+    var server_finished = false;
+    defer if (!server_finished) {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    };
+
+    var connection = try connectRuntimeForTest(io, path);
+    var connection_open = true;
+    defer if (connection_open) connection.deinit(io);
+    var send_buffer: [1024]u8 = undefined;
+    const arguments = [_][]const u8{ "/bin/sleep", "600" };
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    var receive_buffer: [4096]u8 = undefined;
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .request_failed => |failed| {
+            try std.testing.expectEqual(schema.FailureCode.spawn_failed, failed.code);
+            break;
+        },
+        .pane_opened => return error.AbortedPaneBecameVisible,
+        .runtime_stopping => return error.UnexpectedRuntimeShutdown,
+        else => {},
+    };
+    try std.testing.expect(fault.claimed.load(.acquire));
+
+    // The failed default launch removed both its provisional workspace and
+    // geometry lease. A second request for the same cwd can commit normally.
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+    var pane_id: schema.PaneId = .invalid;
+    while (pane_id == .invalid) switch (try schema.decodeServer(
+        try connection.receive(io, &receive_buffer),
+    )) {
+        .pane_opened => |opened| {
+            try std.testing.expect(opened.created);
+            try std.testing.expectEqual(@as(u64, 2), schema.id.raw(opened.pane_id));
+            pane_id = opened.pane_id;
+        },
+        .request_failed => return error.SecondPaneLaunchFailed,
+        .runtime_stopping => return error.UnexpectedRuntimeShutdown,
+        else => {},
+    };
+
+    connection.deinit(io);
+    connection_open = false;
+    var reconnected = try connectRuntimeForTest(io, path);
+    defer reconnected.deinit(io);
+    try reconnected.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(3),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+    while (true) switch (try schema.decodeServer(try reconnected.receive(io, &receive_buffer))) {
+        .pane_opened => |opened| {
+            try std.testing.expect(!opened.created);
+            try std.testing.expectEqual(pane_id, opened.pane_id);
+            break;
+        },
+        .request_failed => return error.ReconnectCreatedDuplicatePane,
+        .runtime_stopping => return error.UnexpectedRuntimeShutdown,
+        else => {},
+    };
+
+    stop.putOneUncancelable(io, 0) catch unreachable;
+    try server.await(io);
+    server_finished = true;
+}
+
 test "runtime destroys a pane after its shell exits" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;

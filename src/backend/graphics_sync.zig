@@ -216,6 +216,7 @@ pub const AttachmentStore = struct {
         gpa: std.mem.Allocator,
         pane: *Pane,
     ) !*Attachment {
+        std.debug.assert(pane.launch_state == .running);
         if (store.find(pane.id)) |existing| return existing;
         if (store.workspace) |workspace| {
             if (!std.meta.eql(workspace, pane.location.workspace))

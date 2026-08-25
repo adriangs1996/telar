@@ -17,6 +17,22 @@ const database_schema =
     \\);
     \\INSERT INTO history_schema(version)
     \\SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM history_schema);
+    \\UPDATE history_schema SET version = 2 WHERE version < 2;
+    \\CREATE TABLE IF NOT EXISTS launch_attempt (
+    \\  id              INTEGER PRIMARY KEY,
+    \\  pane_id         INTEGER NOT NULL,
+    \\  pane_generation INTEGER NOT NULL,
+    \\  location_kind   INTEGER NOT NULL,
+    \\  location_id     INTEGER NOT NULL,
+    \\  tab_id          INTEGER NOT NULL,
+    \\  workspace_path  TEXT NOT NULL,
+    \\  shell           TEXT NOT NULL,
+    \\  started_at_ms   INTEGER NOT NULL,
+    \\  failed_at_ms    INTEGER NOT NULL,
+    \\  phase           INTEGER NOT NULL,
+    \\  cause           TEXT NOT NULL,
+    \\  UNIQUE(pane_id, pane_generation)
+    \\);
     \\CREATE TABLE IF NOT EXISTS session (
     \\  id             BLOB PRIMARY KEY,
     \\  pane_id        INTEGER NOT NULL,
@@ -67,6 +83,13 @@ const insert_session_sql =
     \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);
 ;
 
+const insert_launch_attempt_sql =
+    \\INSERT INTO launch_attempt
+    \\  (pane_id, pane_generation, location_kind, location_id, tab_id,
+    \\   workspace_path, shell, started_at_ms, failed_at_ms, phase, cause)
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
+;
+
 const finish_session_sql =
     \\UPDATE session SET finished_at_ms = ?2 WHERE id = ?1 AND finished_at_ms IS NULL;
 ;
@@ -81,6 +104,7 @@ const insert_command_sql =
 
 pub const Store = struct {
     db: *c.sqlite3,
+    insert_launch_attempt: *c.sqlite3_stmt,
     insert_session: *c.sqlite3_stmt,
     finish_session: *c.sqlite3_stmt,
     insert_command: *c.sqlite3_stmt,
@@ -105,6 +129,8 @@ pub const Store = struct {
         try ensureTabColumn(opened, "command", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
         const fts_available = enableCommandSearchIndex(opened);
 
+        const insert_launch_attempt = try prepare(opened, insert_launch_attempt_sql);
+        errdefer _ = c.sqlite3_finalize(insert_launch_attempt);
         const insert_session = try prepare(opened, insert_session_sql);
         errdefer _ = c.sqlite3_finalize(insert_session);
         const finish_session = try prepare(opened, finish_session_sql);
@@ -113,6 +139,7 @@ pub const Store = struct {
         errdefer _ = c.sqlite3_finalize(insert_command);
         return .{
             .db = opened,
+            .insert_launch_attempt = insert_launch_attempt,
             .insert_session = insert_session,
             .finish_session = finish_session,
             .insert_command = insert_command,
@@ -124,7 +151,26 @@ pub const Store = struct {
         _ = c.sqlite3_finalize(store.insert_command);
         _ = c.sqlite3_finalize(store.finish_session);
         _ = c.sqlite3_finalize(store.insert_session);
+        _ = c.sqlite3_finalize(store.insert_launch_attempt);
         _ = c.sqlite3_close(store.db);
+    }
+
+    pub fn insertLaunchAttempt(store: *Store, value: *const model.LaunchAttempt) !void {
+        const stmt = store.insert_launch_attempt;
+        defer reset(stmt);
+        _ = c.sqlite3_bind_int64(stmt, 1, @intCast(model.schema.id.raw(value.pane_id)));
+        _ = c.sqlite3_bind_int64(stmt, 2, @intCast(value.pane_generation));
+        const location = locationColumns(value.location);
+        _ = c.sqlite3_bind_int(stmt, 3, location.kind);
+        _ = c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
+        _ = c.sqlite3_bind_int64(stmt, 5, @intCast(model.schema.id.raw(value.location.tab_id)));
+        bindText(stmt, 6, value.workspace_path);
+        bindText(stmt, 7, value.shell);
+        _ = c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
+        _ = c.sqlite3_bind_int64(stmt, 9, value.failed_at_ms);
+        _ = c.sqlite3_bind_int(stmt, 10, @intFromEnum(value.phase));
+        bindText(stmt, 11, value.cause);
+        try stepDone(stmt);
     }
 
     pub fn startSession(store: *Store, value: *const model.SessionStarted) !void {
@@ -460,6 +506,40 @@ test "persists sessions and filters command history" {
         .workspace = .{ .workspace = try model.schema.id.workspace(3) },
         .tab_id = try model.schema.id.tab(2),
     };
+    const attempt: model.LaunchAttempt = .{
+        .pane_id = pane_id,
+        .pane_generation = 11,
+        .location = location,
+        .started_at_ms = 500,
+        .failed_at_ms = 600,
+        .phase = .output_actor,
+        .workspace_path = @constCast("/work"),
+        .shell = @constCast("/bin/zsh"),
+        .cause = @constCast("InjectedLaunchFailure"),
+    };
+    try store.insertLaunchAttempt(&attempt);
+    try std.testing.expectError(error.HistoryWriteFailed, store.insertLaunchAttempt(&attempt));
+
+    const attempt_stmt = try prepare(
+        store.db,
+        "SELECT pane_generation, phase, cause FROM launch_attempt WHERE pane_id = 7;",
+    );
+    defer _ = c.sqlite3_finalize(attempt_stmt);
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(attempt_stmt));
+    try std.testing.expectEqual(@as(c_longlong, 11), c.sqlite3_column_int64(attempt_stmt, 0));
+    try std.testing.expectEqual(
+        @as(c_int, @intFromEnum(model.LaunchPhase.output_actor)),
+        c.sqlite3_column_int(attempt_stmt, 1),
+    );
+    const cause_len: usize = @intCast(c.sqlite3_column_bytes(attempt_stmt, 2));
+    const cause = c.sqlite3_column_text(attempt_stmt, 2)[0..cause_len];
+    try std.testing.expectEqualStrings("InjectedLaunchFailure", cause);
+
+    const empty_session_stmt = try prepare(store.db, "SELECT count(*) FROM session;");
+    defer _ = c.sqlite3_finalize(empty_session_stmt);
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(empty_session_stmt));
+    try std.testing.expectEqual(@as(c_longlong, 0), c.sqlite3_column_int64(empty_session_stmt, 0));
+
     const session: model.SessionStarted = .{
         .id = session_id,
         .pane_id = pane_id,

@@ -13,6 +13,12 @@ pub const encoded_entry_overhead_bytes = 46;
 
 pub const SessionId = [16]u8;
 
+pub const LaunchPhase = enum(u8) {
+    pane_registration = 0,
+    wait_actor = 1,
+    output_actor = 2,
+};
+
 pub const ClientKey = struct {
     id: u64,
     generation: u64,
@@ -41,6 +47,25 @@ pub const SessionStarted = struct {
 pub const SessionFinished = struct {
     id: SessionId,
     finished_at_ms: i64,
+};
+
+pub const LaunchAttempt = struct {
+    pane_id: schema.PaneId,
+    pane_generation: u64,
+    location: schema.TabLocation,
+    started_at_ms: i64,
+    failed_at_ms: i64,
+    phase: LaunchPhase,
+    workspace_path: []u8,
+    shell: []u8,
+    cause: []u8,
+
+    pub fn deinit(value: *LaunchAttempt, gpa: std.mem.Allocator) void {
+        gpa.free(value.workspace_path);
+        gpa.free(value.shell);
+        gpa.free(value.cause);
+        gpa.destroy(value);
+    }
 };
 
 pub const CommandFinished = struct {
@@ -127,6 +152,7 @@ pub const Query = struct {
 };
 
 pub const Request = union(enum) {
+    launch_attempt: *LaunchAttempt,
     session_started: *SessionStarted,
     session_finished: SessionFinished,
     command_finished: *CommandFinished,
@@ -177,6 +203,7 @@ pub const Response = union(enum) {
 
 pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
     switch (request) {
+        .launch_attempt => |value| value.deinit(gpa),
         .session_started => |value| value.deinit(gpa),
         .command_finished => |value| value.deinit(gpa),
         .session_finished, .query => {},

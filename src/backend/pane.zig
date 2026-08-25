@@ -37,6 +37,26 @@ pub const PaneKey = struct {
     generation: u64,
 };
 
+pub const LaunchState = enum {
+    starting,
+    running,
+    aborting,
+
+    pub fn commit(state: *LaunchState) void {
+        std.debug.assert(state.* == .starting);
+        state.* = .running;
+    }
+
+    pub fn abort(state: *LaunchState) void {
+        std.debug.assert(state.* == .starting);
+        state.* = .aborting;
+    }
+
+    pub fn discoverable(state: LaunchState) bool {
+        return state == .running;
+    }
+};
+
 /// Runtime-owned KGP budgets. Values may be lowered by future user
 /// configuration but never raised past the protocol hard limits shared with
 /// clients, so every snapshot remains decodable by every compatible client.
@@ -315,6 +335,7 @@ pub const Pane = struct {
     id: schema.PaneId,
     generation: u64,
     location: schema.TabLocation,
+    launch_state: LaunchState = .starting,
     session: pty.Session,
     terminal: vt.Terminal,
     stream: vt.TerminalStream,
@@ -355,6 +376,7 @@ pub const Pane = struct {
     history_service: *history.Service,
     history_observer: history.observer.Observer,
     history_session_id: history.SessionId,
+    started_at_ms: i64,
     history_sequence: u64 = 0,
     history_session_started: bool = false,
     history_session_finished: bool = false,
@@ -385,13 +407,6 @@ pub const Pane = struct {
 
         const workspace_copy = try gpa.dupe(u8, workspace_path);
         errdefer gpa.free(workspace_copy);
-        var session: pty.Session = try .spawn(command, .{
-            .cols = size.cols,
-            .rows = size.rows,
-            .cell_width_px = size.cell_width_px,
-            .cell_height_px = size.cell_height_px,
-        });
-        errdefer session.deinit();
 
         // `gpa.create` returns undefined memory, so declared defaults do not
         // apply on their own; the struct literal makes the compiler enforce
@@ -409,8 +424,9 @@ pub const Pane = struct {
             .graphics_storage_limit = graphics_limits.pane_bytes / 2,
             .media_allocator = .init(gpa, graphics_budget, graphics_limits.pane_bytes),
             .history_session_id = history_service.newSessionId(io),
+            .started_at_ms = 0,
             .workspace_path = workspace_copy,
-            .session = session,
+            .session = undefined,
             .size = size,
             .terminal = undefined,
             .stream = undefined,
@@ -426,6 +442,7 @@ pub const Pane = struct {
             .kitty_image_loading_limits = .direct,
         });
         errdefer pane.terminal.deinit(gpa);
+        errdefer pane.render_state.deinit(gpa);
         var handler = pane.terminal.vtHandler();
         handler.apc_handler.enable(.kitty, false);
         handler.effects.write_pty = Pane.writePty;
@@ -464,16 +481,36 @@ pub const Pane = struct {
         pane.mouse = pane.mouseState();
         pane.input_modes = pane.inputModeState();
         try pane.render(true);
-        pane.history_session_started = history_service.startSession(
-            io,
+
+        // Spawn last. Once the child exists, Pane.create cannot fail and
+        // erase evidence that a process ran before launch commit.
+        pane.session = try .spawn(command, .{
+            .cols = size.cols,
+            .rows = size.rows,
+            .cell_width_px = size.cell_width_px,
+            .cell_height_px = size.cell_height_px,
+        });
+        pane.started_at_ms = Io.Timestamp.now(io, .real).toMilliseconds();
+        return pane;
+    }
+
+    pub fn commitLaunch(pane: *Pane, shell: []const u8) void {
+        pane.launch_state.commit();
+        pane.history_session_started = pane.history_service.startSession(
+            pane.io,
             pane.history_session_id,
             pane.id,
             pane.location,
             pane.workspace_path,
-            std.mem.span(command.file),
-            Io.Timestamp.now(io, .real).toMilliseconds(),
+            shell,
+            pane.started_at_ms,
         );
-        return pane;
+    }
+
+    pub fn abortLaunch(pane: *Pane) void {
+        pane.launch_state.abort();
+        pane.close_requested = true;
+        pane.session.shutdown();
     }
 
     pub fn mouseState(pane: *const Pane) schema.frame.Mouse {
@@ -888,6 +925,11 @@ pub const PaneStore = struct {
         return pane;
     }
 
+    pub fn findRunning(store: *PaneStore, pane_id: schema.PaneId) ?*Pane {
+        const pane = store.find(pane_id) orelse return null;
+        return if (pane.launch_state.discoverable()) pane else null;
+    }
+
     pub fn resolve(store: *PaneStore, key: PaneKey) ?*Pane {
         const pane = store.find(key.id) orelse return null;
         if (pane.generation != key.generation) return null;
@@ -897,7 +939,8 @@ pub const PaneStore = struct {
     pub fn firstAt(store: *PaneStore, location: schema.TabLocation) ?*Pane {
         for (store.items) |slot| {
             const pane = slot orelse continue;
-            if (!pane.close_requested and pane.exit == null and
+            if (pane.launch_state.discoverable() and
+                !pane.close_requested and pane.exit == null and
                 std.meta.eql(pane.location, location)) return pane;
         }
         return null;
@@ -911,7 +954,7 @@ pub const PaneStore = struct {
         var len: usize = 0;
         for (store.items) |slot| {
             const pane = slot orelse continue;
-            if (pane.close_requested or pane.exit != null or
+            if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null or
                 !std.meta.eql(pane.location, location)) continue;
             output[len] = .{
                 .pane_id = pane.id,
@@ -926,7 +969,8 @@ pub const PaneStore = struct {
         var count: u16 = 0;
         for (store.items) |slot| {
             const pane = slot orelse continue;
-            if (!pane.close_requested and pane.exit == null and
+            if (pane.launch_state.discoverable() and
+                !pane.close_requested and pane.exit == null and
                 std.meta.eql(pane.location, location)) count += 1;
         }
         return count;
@@ -1085,6 +1129,86 @@ test "the slot index survives collisions, removals, and slot reuse" {
     index.reset();
     try std.testing.expectEqual(@as(?usize, null), index.get(1));
     try std.testing.expectEqual(@as(?usize, null), index.get(17));
+}
+
+test "pane launch state settles exactly once" {
+    var committed: LaunchState = .starting;
+    committed.commit();
+    try std.testing.expectEqual(LaunchState.running, committed);
+    try std.testing.expect(committed.discoverable());
+
+    var aborted: LaunchState = .starting;
+    aborted.abort();
+    try std.testing.expectEqual(LaunchState.aborting, aborted);
+    try std.testing.expect(!aborted.discoverable());
+}
+
+test "PaneStore discovers only committed launches" {
+    const pane_id = try schema.id.pane(1);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = try schema.id.workspace(1) },
+        .tab_id = try schema.id.tab(1),
+    };
+    var pane: Pane = undefined;
+    pane.id = pane_id;
+    pane.generation = 1;
+    pane.location = location;
+    pane.launch_state = .starting;
+    pane.close_requested = false;
+    pane.exit = null;
+
+    var store: PaneStore = .{};
+    try store.insert(&pane);
+    try std.testing.expect(store.find(pane_id) == &pane);
+    try std.testing.expect(store.findRunning(pane_id) == null);
+    try std.testing.expect(store.firstAt(location) == null);
+    try std.testing.expectEqual(@as(u16, 0), store.countAt(location));
+    try std.testing.expect(store.hasAt(location));
+
+    pane.launch_state.commit();
+    try std.testing.expect(store.findRunning(pane_id) == &pane);
+    try std.testing.expect(store.firstAt(location) == &pane);
+    try std.testing.expectEqual(@as(u16, 1), store.countAt(location));
+}
+
+test "pane creation releases every partial allocation" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var history_service = try history.Service.init(gpa, ":memory:");
+    defer history_service.deinit(io);
+    const argv = [_][*:0]const u8{"/bin/true"};
+    const command = try pty.Command.fromArgv(&argv);
+    const limits: GraphicsLimits = .{};
+    var fail_index: usize = 0;
+    var completed = false;
+    while (!completed) : (fail_index += 1) {
+        try std.testing.expect(fail_index < 256);
+        var failing: std.testing.FailingAllocator = .init(gpa, .{ .fail_index = fail_index });
+        var budget = GraphicsBudget.init(limits.global_bytes);
+        const result = Pane.create(
+            io,
+            failing.allocator(),
+            .{ .id = @enumFromInt(1), .generation = 1 },
+            .{
+                .workspace = .{ .workspace = @enumFromInt(1) },
+                .tab_id = @enumFromInt(1),
+            },
+            &command,
+            "/work/telar",
+            &history_service,
+            .{ .cols = 20, .rows = 5 },
+            limits,
+            &budget,
+        );
+        if (result) |pane| {
+            pane.abortLaunch();
+            pane.destroy();
+            completed = true;
+        } else |err| {
+            try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+        try std.testing.expectEqual(@as(usize, 0), budget.used);
+    }
 }
 
 test "a pane is destroyable only when no actor can still borrow it" {

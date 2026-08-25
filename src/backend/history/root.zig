@@ -18,6 +18,7 @@ pub const Status = terminal_mod.Status;
 pub const Query = model_mod.Query;
 pub const Response = model_mod.Response;
 pub const SessionId = model_mod.SessionId;
+pub const LaunchPhase = model_mod.LaunchPhase;
 
 const request_capacity = 64;
 const response_capacity = 4;
@@ -119,6 +120,45 @@ pub const Service = struct {
         var session_id: SessionId = undefined;
         io.random(&session_id);
         return session_id;
+    }
+
+    pub fn recordLaunchAttempt(
+        service: *Service,
+        io: std.Io,
+        pane_id: model_mod.schema.PaneId,
+        pane_generation: u64,
+        location: model_mod.schema.TabLocation,
+        workspace_path: []const u8,
+        shell: []const u8,
+        started_at_ms: i64,
+        phase: LaunchPhase,
+        cause: []const u8,
+    ) bool {
+        const value = service.gpa.create(model_mod.LaunchAttempt) catch return false;
+        value.* = .{
+            .pane_id = pane_id,
+            .pane_generation = pane_generation,
+            .location = location,
+            .started_at_ms = started_at_ms,
+            .failed_at_ms = std.Io.Timestamp.now(io, .real).toMilliseconds(),
+            .phase = phase,
+            .workspace_path = service.gpa.dupe(u8, workspace_path) catch {
+                service.gpa.destroy(value);
+                return false;
+            },
+            .shell = service.gpa.dupe(u8, shell) catch {
+                service.gpa.free(value.workspace_path);
+                service.gpa.destroy(value);
+                return false;
+            },
+            .cause = service.gpa.dupe(u8, cause) catch {
+                service.gpa.free(value.shell);
+                service.gpa.free(value.workspace_path);
+                service.gpa.destroy(value);
+                return false;
+            },
+        };
+        return service.submit(io, .{ .launch_attempt = value });
     }
 
     pub fn startSession(
@@ -265,6 +305,15 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
         };
         _ = service.stats.queued.fetchSub(1, .monotonic);
         switch (request) {
+            .launch_attempt => |value| {
+                defer value.deinit(service.gpa);
+                const started = std.Io.Timestamp.now(io, .awake);
+                const result = if (service.store) |*store|
+                    store.insertLaunchAttempt(value)
+                else
+                    error.HistoryUnavailable;
+                observeWrite(service, elapsedSince(io, started), result);
+            },
             .session_started => |value| {
                 defer value.deinit(service.gpa);
                 const started = std.Io.Timestamp.now(io, .awake);
@@ -368,4 +417,32 @@ test "database open degradation is explicit" {
     try std.testing.expect(!stats.available);
     try std.testing.expectEqual(@as(u64, 1), stats.sqlite_open_failures);
     try std.testing.expect(service.openError() != null);
+}
+
+test "launch attempt recording releases every partial allocation" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var fail_index: usize = 0;
+    var completed = false;
+    while (!completed) : (fail_index += 1) {
+        try std.testing.expect(fail_index < 8);
+        var service = try Service.init(gpa, ":memory:");
+        var failing: std.testing.FailingAllocator = .init(gpa, .{ .fail_index = fail_index });
+        service.gpa = failing.allocator();
+        completed = service.recordLaunchAttempt(
+            io,
+            @enumFromInt(7),
+            3,
+            .{
+                .workspace = .{ .workspace = @enumFromInt(2) },
+                .tab_id = @enumFromInt(5),
+            },
+            "/work/telar",
+            "/bin/sh",
+            1_000,
+            .output_actor,
+            "InjectedLaunchFailure",
+        );
+        service.deinit(io);
+    }
 }

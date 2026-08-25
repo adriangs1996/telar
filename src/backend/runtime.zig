@@ -57,6 +57,8 @@ pub const ServeOptions = struct {
     stop: ?*Io.Queue(u8) = null,
     /// Test seam: holds a pane's ingest actor open. See `IngestTestGate`.
     ingest_gate: ?*IngestTestGate = null,
+    /// Test seam: fails one pane launch at a selected post-spawn phase.
+    launch_fault: ?*LaunchTestFault = null,
 };
 
 pub const ProxyOptions = struct {
@@ -340,6 +342,19 @@ pub const IngestTestGate = struct {
     }
 };
 
+/// One-shot integration seam for post-spawn launch recovery. Production entry
+/// points never install this fault.
+pub const LaunchTestFault = struct {
+    phase: history.LaunchPhase,
+    claimed: std.atomic.Value(bool) = .init(false),
+
+    fn inject(fault: *LaunchTestFault, phase: history.LaunchPhase) !void {
+        if (fault.phase != phase) return;
+        if (fault.claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) return;
+        return error.InjectedLaunchFailure;
+    }
+};
+
 /// Everything one running runtime instance owns: the wire endpoints, the
 /// stores, and the send state. Event arms and helpers used to thread a dozen
 /// pointers each; they now share this struct.
@@ -351,6 +366,7 @@ const Server = struct {
     child_environment: *const pty.Environment,
     inherited_environment: std.process.Environ,
     proxy_service: ?*proxy_mod.service.Service,
+    launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     handshake_slot: ?core.transport.SocketChannel = null,
     handshake_pending: bool = false,
@@ -364,6 +380,175 @@ const Server = struct {
 
     fn collect(server: *Server) void {
         server.collectFinished();
+    }
+
+    fn injectLaunchFault(server: *Server, phase: history.LaunchPhase) !void {
+        if (server.launch_fault) |fault| try fault.inject(phase);
+    }
+
+    fn recordLaunchFailure(
+        server: *Server,
+        pane: *const Pane,
+        shell: []const u8,
+        phase: history.LaunchPhase,
+        cause: anyerror,
+    ) void {
+        _ = server.history_service.recordLaunchAttempt(
+            server.io,
+            pane.id,
+            pane.generation,
+            pane.location,
+            pane.workspace_path,
+            shell,
+            pane.started_at_ms,
+            phase,
+            @errorName(cause),
+        );
+    }
+
+    fn revokePaneCredential(server: *Server, pane: *Pane) void {
+        const token = if (pane.proxy_token) |*value| value else return;
+        if (server.proxy_service) |service| service.unregisterCredential(.{
+            .pane_id = pane.id,
+            .pane_generation = pane.generation,
+            .token = token.*,
+        });
+        std.crypto.secureZero(u8, token);
+        pane.proxy_token = null;
+    }
+
+    fn abortPaneLaunch(
+        server: *Server,
+        pane: *Pane,
+        shell: []const u8,
+        phase: history.LaunchPhase,
+        cause: anyerror,
+    ) void {
+        server.recordLaunchFailure(pane, shell, phase, cause);
+        server.revokePaneCredential(pane);
+        pane.abortLaunch();
+    }
+
+    /// Starts a pane and returns only after the runtime can observe both its
+    /// output and exit. Client attachment and response delivery happen later.
+    fn launchPane(
+        server: *Server,
+        location: schema.TabLocation,
+        size: schema.TerminalSize,
+        launch: schema.LaunchView,
+    ) !*Pane {
+        const pane_key = try server.panes.allocateKey();
+        var proxy_environment: ?pty.Environment = null;
+        defer if (proxy_environment) |*owned| owned.deinit();
+        var proxy_token: ?[proxy_mod.identity.token_bytes]u8 = null;
+        defer if (proxy_token) |*token| std.crypto.secureZero(u8, token);
+        var proxy_credential: ?proxy_mod.identity.Credential = null;
+        defer if (proxy_credential) |*credential| std.crypto.secureZero(u8, &credential.token);
+        var proxy_registered = false;
+        errdefer if (proxy_registered) if (server.proxy_service) |service|
+            service.unregisterCredential(proxy_credential.?);
+        const child_environment = if (server.proxy_service) |service| block: {
+            var token = proxy_mod.identity.randomToken(server.io);
+            defer std.crypto.secureZero(u8, &token);
+            proxy_token = token;
+            const credential: proxy_mod.identity.Credential = .{
+                .pane_id = pane_key.id,
+                .pane_generation = pane_key.generation,
+                .token = token,
+            };
+            try service.registerCredential(credential);
+            proxy_credential = credential;
+            proxy_registered = true;
+            var proxy_url_buffer: [256]u8 = undefined;
+            defer std.crypto.secureZero(u8, &proxy_url_buffer);
+            const proxy_url = try service.credentialUrl(&proxy_url_buffer, credential);
+            const overrides = [_]pty.Environment.Override{
+                .{ .name = "HTTPS_PROXY", .value = proxy_url },
+                .{ .name = "https_proxy", .value = proxy_url },
+                .{ .name = "NODE_USE_ENV_PROXY", .value = "1" },
+                .{ .name = "NODE_EXTRA_CA_CERTS", .value = service.certificate_path },
+                .{ .name = "SSL_CERT_FILE", .value = service.bundle_path },
+                .{ .name = "CURL_CA_BUNDLE", .value = service.bundle_path },
+                .{ .name = "REQUESTS_CA_BUNDLE", .value = service.bundle_path },
+                .{ .name = "AWS_CA_BUNDLE", .value = service.bundle_path },
+                .{ .name = "TELAR_PROXY_TLS", .value = "1" },
+            };
+            proxy_environment = try pty.Environment.initWithOverrides(
+                server.gpa,
+                server.inherited_environment,
+                "telar",
+                &overrides,
+            );
+            break :block &proxy_environment.?;
+        } else server.child_environment;
+        var command = try OwnedCommand.init(server.gpa, launch, child_environment);
+        defer command.deinit();
+        const shell = std.mem.span(command.command.file);
+        const fresh = try Pane.create(
+            server.io,
+            server.gpa,
+            pane_key,
+            location,
+            &command.command,
+            launch.cwd,
+            server.history_service,
+            size,
+            server.panes.graphics_limits,
+            &server.panes.graphics_budget,
+        );
+
+        server.panes.insert(fresh) catch |err| {
+            server.recordLaunchFailure(fresh, shell, .pane_registration, err);
+            fresh.abortLaunch();
+            fresh.destroy();
+            return err;
+        };
+        fresh.proxy_token = proxy_token;
+        proxy_registered = false;
+        server.injectLaunchFault(.pane_registration) catch |err| {
+            server.abortPaneLaunch(fresh, shell, .pane_registration, err);
+            server.panes.removeAndDestroy(fresh);
+            return err;
+        };
+
+        // The wait actor goes first. If output scheduling then fails, this
+        // actor owns process reaping while the aborting pane stays allocated.
+        fresh.wait_pending = true;
+        fresh.actorStarted();
+        server.injectLaunchFault(.wait_actor) catch |err| {
+            fresh.actorFinished();
+            fresh.wait_pending = false;
+            server.abortPaneLaunch(fresh, shell, .wait_actor, err);
+            server.panes.removeAndDestroy(fresh);
+            return err;
+        };
+        server.select.concurrent(.pane_exit, waitPane, .{fresh}) catch |err| {
+            fresh.actorFinished();
+            fresh.wait_pending = false;
+            server.abortPaneLaunch(fresh, shell, .wait_actor, err);
+            server.panes.removeAndDestroy(fresh);
+            return err;
+        };
+
+        fresh.output_pending = true;
+        fresh.actorStarted();
+        server.injectLaunchFault(.output_actor) catch |err| {
+            fresh.actorFinished();
+            fresh.output_pending = false;
+            fresh.output_done = true;
+            server.abortPaneLaunch(fresh, shell, .output_actor, err);
+            return err;
+        };
+        server.select.concurrent(.pane_output, readPane, .{ server.io, fresh }) catch |err| {
+            fresh.actorFinished();
+            fresh.output_pending = false;
+            fresh.output_done = true;
+            server.abortPaneLaunch(fresh, shell, .output_actor, err);
+            return err;
+        };
+
+        fresh.commitLaunch(shell);
+        return fresh;
     }
 
     /// Reaps panes whose child exited and which no actor still borrows, then
@@ -385,12 +570,7 @@ const Server = struct {
                 slot.* = null;
                 store.count -= 1;
                 _ = server.agents.remove(pane.key());
-                if (server.proxy_service) |service| if (pane.proxy_token) |token|
-                    service.unregisterCredential(.{
-                        .pane_id = pane.id,
-                        .pane_generation = pane.generation,
-                        .token = token,
-                    });
+                server.revokePaneCredential(pane);
                 pane.destroy();
                 if (store.hasAt(location) or server.workspaces.findTab(location) == null) continue;
 
@@ -757,7 +937,7 @@ const Server = struct {
                 var created = false;
                 const active = switch (open.target) {
                     .pane => |wanted| pane: {
-                        const existing = panes.find(wanted) orelse {
+                        const existing = panes.findRunning(wanted) orelse {
                             try queueFailure(responses, open.request_id, .pane_not_found, "pane not found");
                             return;
                         };
@@ -778,7 +958,10 @@ const Server = struct {
                             .workspace => |id| id,
                             .worktree => unreachable,
                         };
-                        defer if (!workspace_committed) workspaces.remove(workspace_id);
+                        defer if (!workspace_committed) {
+                            workspaces.remove(workspace_id);
+                            server.releaseGeometryFor(session.key, ensured.location.workspace);
+                        };
                         const location = ensured.location;
                         // `firstAt` never returns a closing or exited pane, so a
                         // hit is always reusable. Exited panes are reaped only by
@@ -795,20 +978,7 @@ const Server = struct {
                             );
                             return;
                         }
-                        const fresh = spawnPane(
-                            io,
-                            gpa,
-                            select,
-                            panes,
-                            server.child_environment,
-                            server.inherited_environment,
-                            server.proxy_service,
-                            location,
-                            open.size,
-                            launch,
-                            history_service,
-                        ) catch |err| {
-                            if (err == error.RuntimeConcurrencyUnavailable) return err;
+                        const fresh = server.launchPane(location, open.size, launch) catch |err| {
                             try queueSpawnFailure(responses, open.request_id, err);
                             return;
                         };
@@ -981,20 +1151,11 @@ const Server = struct {
                     );
                     return;
                 }
-                const fresh = spawnPane(
-                    io,
-                    gpa,
-                    select,
-                    panes,
-                    server.child_environment,
-                    server.inherited_environment,
-                    server.proxy_service,
+                const fresh = server.launchPane(
                     create.location,
                     create.size,
                     create.launch,
-                    history_service,
                 ) catch |err| {
-                    if (err == error.RuntimeConcurrencyUnavailable) return err;
                     try queueSpawnFailure(responses, create.request_id, err);
                     return;
                 };
@@ -1070,23 +1231,15 @@ const Server = struct {
                 defer if (!tab_committed) {
                     _ = workspaces.removeTab(created.location);
                 };
-                const fresh = spawnPane(
-                    io,
-                    gpa,
-                    select,
-                    panes,
-                    server.child_environment,
-                    server.inherited_environment,
-                    server.proxy_service,
+                const fresh = server.launchPane(
                     created.location,
                     create.size,
                     create.launch,
-                    history_service,
                 ) catch |err| {
-                    if (err == error.RuntimeConcurrencyUnavailable) return err;
                     try queueSpawnFailure(responses, create.request_id, err);
                     return;
                 };
+                tab_committed = true;
                 const attachment = try attachments.attach(gpa, fresh);
                 attachment.shared_transport = session.shared_graphics;
                 const tab = workspaces.findTab(created.location).?;
@@ -1100,7 +1253,6 @@ const Server = struct {
                 };
                 @memcpy(pending.label[0..pending.label_len], tab.labelSlice());
                 try responses.push(.{ .tab_created = pending });
-                tab_committed = true;
                 server.notifyWorkspaceChanged(session.key, create.workspace);
             },
             .rename_tab => |rename| {
@@ -1265,6 +1417,7 @@ fn serveInternal(
         .child_environment = &child_environment,
         .inherited_environment = options.environment,
         .proxy_service = proxy_service,
+        .launch_fault = options.launch_fault,
         .clients = clients,
         .workspaces = WorkspaceStore.init(gpa),
         .panes = .{
@@ -1387,8 +1540,7 @@ fn serveInternal(
                 .runtime_stop, .query_history => .control,
                 else => .ui,
             };
-            server.dispatch(session, message) catch |err| {
-                if (err == error.RuntimeConcurrencyUnavailable) return err;
+            server.dispatch(session, message) catch {
                 server.dropClient(event.client);
                 continue;
             };
@@ -1724,16 +1876,13 @@ fn serveInternal(
             active.wait_pending = false;
             active.exit = exitOrSynthetic(event.result);
             _ = server.agents.remove(active.key());
-            if (server.proxy_service) |service| if (active.proxy_token) |*token| {
-                service.unregisterCredential(.{
-                    .pane_id = active.id,
-                    .pane_generation = active.generation,
-                    .token = token.*,
-                });
-                std.crypto.secureZero(u8, token);
-                active.proxy_token = null;
-            };
+            server.revokePaneCredential(active);
             server.panes.exited_count += 1;
+            if (active.launch_state == .aborting) {
+                server.collect();
+                server.pumpAll();
+                continue;
+            }
             if (active.output_done) {
                 active.queueExitedHistory(active.exit.?);
                 try schedulePaneObservation(&select, active);
@@ -1871,110 +2020,6 @@ fn queueSpawnFailure(
             "could not start pane process",
         ),
     }
-}
-
-fn spawnPane(
-    io: Io,
-    gpa: std.mem.Allocator,
-    select: *Io.Select(RuntimeEvent),
-    panes: *PaneStore,
-    environment: *const pty.Environment,
-    inherited_environment: std.process.Environ,
-    proxy_service: ?*proxy_mod.service.Service,
-    location: schema.TabLocation,
-    size: schema.TerminalSize,
-    launch: schema.LaunchView,
-    history_service: *history.Service,
-) !*Pane {
-    const pane_key = try panes.allocateKey();
-    var proxy_environment: ?pty.Environment = null;
-    defer if (proxy_environment) |*owned| owned.deinit();
-    var proxy_token: ?[proxy_mod.identity.token_bytes]u8 = null;
-    defer if (proxy_token) |*token| std.crypto.secureZero(u8, token);
-    var proxy_credential: ?proxy_mod.identity.Credential = null;
-    defer if (proxy_credential) |*credential| std.crypto.secureZero(u8, &credential.token);
-    var proxy_registered = false;
-    errdefer if (proxy_registered) if (proxy_service) |service|
-        service.unregisterCredential(proxy_credential.?);
-    const child_environment = if (proxy_service) |service| block: {
-        var token = proxy_mod.identity.randomToken(io);
-        defer std.crypto.secureZero(u8, &token);
-        proxy_token = token;
-        const credential: proxy_mod.identity.Credential = .{
-            .pane_id = pane_key.id,
-            .pane_generation = pane_key.generation,
-            .token = token,
-        };
-        try service.registerCredential(credential);
-        proxy_credential = credential;
-        proxy_registered = true;
-        var proxy_url_buffer: [256]u8 = undefined;
-        defer std.crypto.secureZero(u8, &proxy_url_buffer);
-        const proxy_url = try service.credentialUrl(&proxy_url_buffer, credential);
-        const overrides = [_]pty.Environment.Override{
-            .{ .name = "HTTPS_PROXY", .value = proxy_url },
-            .{ .name = "https_proxy", .value = proxy_url },
-            .{ .name = "NODE_USE_ENV_PROXY", .value = "1" },
-            .{ .name = "NODE_EXTRA_CA_CERTS", .value = service.certificate_path },
-            .{ .name = "SSL_CERT_FILE", .value = service.bundle_path },
-            .{ .name = "CURL_CA_BUNDLE", .value = service.bundle_path },
-            .{ .name = "REQUESTS_CA_BUNDLE", .value = service.bundle_path },
-            .{ .name = "AWS_CA_BUNDLE", .value = service.bundle_path },
-            .{ .name = "TELAR_PROXY_TLS", .value = "1" },
-        };
-        proxy_environment = try pty.Environment.initWithOverrides(
-            gpa,
-            inherited_environment,
-            "telar",
-            &overrides,
-        );
-        break :block &proxy_environment.?;
-    } else environment;
-    var command = try OwnedCommand.init(gpa, launch, child_environment);
-    defer command.deinit();
-    const fresh = fresh: {
-        const created = try Pane.create(
-            io,
-            gpa,
-            pane_key,
-            location,
-            &command.command,
-            launch.cwd,
-            history_service,
-            size,
-            panes.graphics_limits,
-            &panes.graphics_budget,
-        );
-        errdefer created.destroy();
-        try panes.insert(created);
-        created.proxy_token = proxy_token;
-        proxy_registered = false;
-        break :fresh created;
-    };
-    select.concurrent(.pane_output, readPane, .{ io, fresh }) catch |err| {
-        if (proxy_service) |service| if (fresh.proxy_token) |token|
-            service.unregisterCredential(.{
-                .pane_id = fresh.id,
-                .pane_generation = fresh.generation,
-                .token = token,
-            });
-        panes.removeAndDestroy(fresh);
-        return err;
-    };
-    fresh.output_pending = true;
-    fresh.actorStarted();
-    select.concurrent(.pane_exit, waitPane, .{fresh}) catch {
-        // The output actor already owns `fresh`, so this cannot be recovered
-        // as a failed request without risking a use-after-free. Stop the
-        // runtime; its normal teardown shuts down the PTY, joins the actor and
-        // only then destroys the pane.
-        fresh.close_requested = true;
-        fresh.session.shutdown();
-        return error.RuntimeConcurrencyUnavailable;
-    };
-    fresh.wait_pending = true;
-    fresh.actorStarted();
-    return fresh;
 }
 
 fn startSessionSend(
