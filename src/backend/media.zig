@@ -28,7 +28,18 @@ pub const image_loading_limits: vt.kitty.graphics.LoadingImage.Limits = .{
 
 pub const Stats = struct {
     output_bytes: u64 = 0,
+    /// Shared frames folded because a newer frame of the same placement was
+    /// available in the batch: latest-wins working as designed.
     discarded_frames: u64 = 0,
+    /// Shared frames dropped because no frame of their placement passed the
+    /// availability probe: the producer's object was gone or over the limit.
+    /// Sustained growth here means the pane shows a stale image.
+    unavailable_frames: u64 = 0,
+    /// Shared frames actually fed to the media terminal. Together with the
+    /// two counters above this partitions every frame, so `forwarded` moving
+    /// while the graphics revision stays still isolates a silent load
+    /// failure inside the emulator.
+    forwarded_frames: u64 = 0,
     reset: bool = false,
     failed: bool = false,
 };
@@ -232,7 +243,7 @@ pub const Pipeline = struct {
             .output => |output| {
                 const start: usize = output.offset;
                 const bytes = batch.bytes[start..][0..output.len];
-                stats.discarded_frames +|= filterAtomicSharedFrames(
+                const filtered = filterAtomicSharedFrames(
                     bytes,
                     pipeline.storage_limit,
                     context,
@@ -240,6 +251,9 @@ pub const Pipeline = struct {
                     {},
                     sharedFrameAvailable,
                 );
+                stats.discarded_frames +|= filtered.discarded;
+                stats.unavailable_frames +|= filtered.unavailable;
+                stats.forwarded_frames +|= filtered.forwarded;
                 stats.output_bytes +|= bytes.len;
             },
             .resize => |size| pipeline.stream.handler.resize(vtResize(size)) catch {
@@ -281,6 +295,12 @@ pub const Pipeline = struct {
 /// replacement for each placement; mapping older frames would spend the pane
 /// quota and then overwrite the result. Bytes outside this exact shape remain
 /// untouched and therefore keep Ghostty as the sole terminal emulator.
+pub const FilterStats = struct {
+    discarded: u64 = 0,
+    unavailable: u64 = 0,
+    forwarded: u64 = 0,
+};
+
 fn filterAtomicSharedFrames(
     bytes: []const u8,
     storage_limit: usize,
@@ -288,10 +308,10 @@ fn filterAtomicSharedFrames(
     comptime observe_output: fn (@TypeOf(context), []const u8) void,
     availability_context: anytype,
     comptime available: fn (@TypeOf(availability_context), []const u8, usize, usize) bool,
-) u64 {
+) FilterStats {
     var emitted_until: usize = 0;
     var search_from: usize = 0;
-    var discarded: u64 = 0;
+    var filtered: FilterStats = .{};
 
     while (findSharedFrame(bytes, search_from)) |first| {
         var selected: [core.graphics.max_placements_per_pane]SelectedSharedFrame = undefined;
@@ -325,10 +345,16 @@ fn filterAtomicSharedFrames(
             var frame_start = first.start;
             while (frame_start < group_end) {
                 const frame = sharedFrameAt(bytes, frame_start) orelse unreachable;
-                if (selectedFrameStart(selected[0..selected_count], frame.key) == frame.start) {
+                const chosen = selectedFrameStart(selected[0..selected_count], frame.key);
+                if (chosen == frame.start) {
                     observe_output(context, bytes[frame.start..frame.end]);
+                    filtered.forwarded +|= 1;
+                } else if (chosen == null) {
+                    // No frame of this placement survived the availability
+                    // probe; the pane keeps its stale image this batch.
+                    filtered.unavailable +|= 1;
                 } else {
-                    discarded +|= 1;
+                    filtered.discarded +|= 1;
                 }
                 frame_start = frame.end;
             }
@@ -338,7 +364,7 @@ fn filterAtomicSharedFrames(
     }
 
     observeNonEmpty(context, observe_output, bytes[emitted_until..]);
-    return discarded;
+    return filtered;
 }
 
 fn observeNonEmpty(
@@ -608,7 +634,7 @@ test "atomic shared-memory frames are latest-wins per placement" {
     var output: TestOutput = .{};
 
     try std.testing.expectEqual(
-        @as(u64, 1),
+        FilterStats{ .discarded = 1, .unavailable = 0, .forwarded = 2 },
         filterAtomicSharedFrames(
             input,
             4,
@@ -627,7 +653,7 @@ test "shared frame folding falls back to the newest available resource" {
     var output: TestOutput = .{};
 
     try std.testing.expectEqual(
-        @as(u64, 1),
+        FilterStats{ .discarded = 1, .unavailable = 0, .forwarded = 1 },
         filterAtomicSharedFrames(
             "head" ++ first ++ latest ++ "tail",
             4,
@@ -645,7 +671,7 @@ test "unavailable shared frames cannot delete the current image" {
     var output: TestOutput = .{};
 
     try std.testing.expectEqual(
-        @as(u64, 1),
+        FilterStats{ .discarded = 0, .unavailable = 1, .forwarded = 0 },
         filterAtomicSharedFrames(
             "head" ++ frame ++ "tail",
             4,

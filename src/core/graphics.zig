@@ -7,8 +7,14 @@ const std = @import("std");
 
 pub const max_images_per_pane: usize = 64;
 pub const max_placements_per_pane: usize = 256;
-pub const max_image_bytes_per_pane: usize = 64 * 1024 * 1024;
-pub const max_image_bytes_global: usize = 256 * 1024 * 1024;
+/// The quotas must admit one full-pane RGBA frame on the largest display a
+/// pane can cover: a 6K panel is 6016x3384x4 = 78 MiB. The per-screen cap
+/// holds one such frame; the pane cap holds its resident copy, the incoming
+/// replacement being loaded, and one frozen client transfer at once. A pane
+/// that cannot ingest its own full-size frame turns latest-wins into a
+/// permanently stale image, which reads as a frozen or black pane.
+pub const max_image_bytes_per_pane: usize = 256 * 1024 * 1024;
+pub const max_image_bytes_global: usize = 512 * 1024 * 1024;
 pub const max_image_bytes_per_screen: usize = max_image_bytes_per_pane / 2;
 pub const max_encoded_chunk_bytes: usize = 64 * 1024;
 pub const max_ipc_chunk_bytes: usize = 1024 * 1024;
@@ -199,6 +205,18 @@ fn addExtent(start: i64, extent: u64) ?i64 {
 fn scaleCeil(value: u64, numerator: u64, denominator: u64) u64 {
     const product = std.math.mul(u128, value, numerator) catch unreachable;
     return @intCast((product + denominator - 1) / denominator);
+}
+
+test "one full-pane frame on a 6K display fits the media quotas" {
+    // The regression this guards: a fullscreen terminal-browser pane on a
+    // Pro Display XDR produced frames over the old 32 MiB per-screen cap,
+    // so every shared frame was rejected and the pane froze on its first
+    // black paint while smaller split panes kept working.
+    const frame: usize = 6016 * 3384 * 4;
+    try std.testing.expect(max_image_bytes_per_screen >= frame);
+    // Resident generation + incoming load + one frozen client transfer.
+    try std.testing.expect(max_image_bytes_per_pane >= 3 * frame);
+    try std.testing.expect(max_image_bytes_global >= max_image_bytes_per_pane);
 }
 
 test "image lengths reject mismatches overflow and quotas" {

@@ -130,6 +130,10 @@ pub const Attachment = struct {
     /// default: shared transport is negotiated, never assumed, so a future
     /// remote client keeps the chunked path.
     shared_transport: bool = false,
+    /// Image and placement messages encoded since the runtime last harvested
+    /// them into its telemetry counters.
+    sent_images: u32 = 0,
+    sent_placements: u32 = 0,
     transfer: ?Transfer = null,
     known_images: [core.graphics.max_images_per_pane]?KnownImage =
         [_]?KnownImage{null} ** core.graphics.max_images_per_pane,
@@ -354,6 +358,7 @@ pub fn encodeNextGraphics(
                     .name = name,
                 });
                 transfer.metadata_sent = true;
+                attachment.sent_images +|= 1;
                 return payload;
             }
             const payload = try schema.encodeGraphicsImage(buffer, .{
@@ -362,6 +367,7 @@ pub fn encodeNextGraphics(
                 .image = transfer.metadata,
             });
             transfer.metadata_sent = true;
+            attachment.sent_images +|= 1;
             return payload;
         }
         if (transfer.offset < transfer.pixels.len) {
@@ -385,6 +391,7 @@ pub fn encodeNextGraphics(
                 known.placement = placement
             else
                 try rememberPlacement(attachment, placement);
+            attachment.sent_placements +|= 1;
             return try schema.encodeGraphicsPlacement(buffer, .{
                 .pane_id = pane.id,
                 .revision = revision,
@@ -420,6 +427,90 @@ pub fn encodeNextGraphics(
         });
     }
 
+    switch (try stageNextTransfer(attachment, global_credit)) {
+        .staged => return encodeNextGraphics(
+            buffer,
+            attachment,
+            global_credit,
+            live_storage_available,
+        ),
+        .blocked => return null,
+        .idle => {},
+    }
+
+    for (&attachment.known_placements) |*slot| {
+        const known = slot.* orelse continue;
+        if (findPlacement(storage, known.placement.virtual_id) != null) continue;
+        slot.* = null;
+        return try schema.encodeGraphicsDeletePlacement(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .key = known.placement.key,
+            .virtual_id = known.placement.virtual_id,
+            .placement_id = known.placement.placement_id,
+        });
+    }
+
+    var placement_iterator = storage.placements.iterator();
+    while (placement_iterator.next()) |entry| {
+        const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
+        if (!knowsImage(attachment, .{ .image_id = image.id, .generation = image.generation }))
+            continue;
+        const placement = placementValue(pane, entry.key_ptr.*, entry.value_ptr.*, image) orelse
+            continue;
+        if (knownPlacement(attachment, placement.virtual_id)) |known| {
+            if (std.meta.eql(known.placement, placement)) continue;
+            known.placement = placement;
+        } else try rememberPlacement(attachment, placement);
+        attachment.sent_placements +|= 1;
+        return try schema.encodeGraphicsPlacement(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .placement = placement,
+        });
+    }
+
+    attachment.observed_graphics_revision = attachment.graphics_target_revision;
+    attachment.graphics_batch_active = false;
+    if (attachment.graphics_snapshot == .open) {
+        attachment.graphics_snapshot = .idle;
+        return try schema.encodeGraphicsSnapshot(buffer, .{
+            .pane_id = pane.id,
+            .revision = revision,
+            .phase = .end,
+        });
+    }
+    return null;
+}
+
+pub const StageResult = enum {
+    /// A transfer was frozen; the send loop can drain it without touching
+    /// live storage again.
+    staged,
+    /// The next image exceeds the client's or the runtime's memory credit;
+    /// the walk must stop until credit returns.
+    blocked,
+    /// Nothing left to freeze for this attachment.
+    idle,
+};
+
+/// Freezes the next unknown image and its placements into the attachment.
+///
+/// Split out of `encodeNextGraphics` so the runtime can call it at the
+/// media-idle boundary it already owns - right after `finishSealed` - rather
+/// than hoping the transport happens to be ready inside that window. Live
+/// storage is read here, so the caller must hold the same guarantee the send
+/// loop's `live_storage_available` expresses: the pane's media actor is not
+/// running. A frozen transfer then crosses the transport at any later moment,
+/// which is what keeps a continuously streaming pane from ceiling out at the
+/// rate of coincidences between "media idle" and "socket ready".
+pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageResult {
+    if (attachment.transfer != null) return .staged;
+    // The begin branch of the walk resets known state and frees any transfer;
+    // staging before it would only create work for it to throw away.
+    if (attachment.graphics_snapshot == .begin_pending) return .idle;
+    const pane = attachment.pane;
+    const storage = &pane.media.terminal.screens.active.kitty_images;
     var image_iterator = storage.images.iterator();
     while (image_iterator.next()) |entry| {
         const image = entry.value_ptr;
@@ -448,7 +539,7 @@ pub fn encodeNextGraphics(
         };
         _ = try metadata.validate(pane.graphics_storage_limit);
         if (pixels.len > attachment.graphics_credit or pixels.len > global_credit)
-            return null;
+            return .blocked;
         if (!pane.media_allocator.reserveManual(pixels.len))
             return error.GraphicsQuotaExceeded;
         errdefer pane.media_allocator.releaseManual(pixels.len);
@@ -477,51 +568,9 @@ pub fn encodeNextGraphics(
             attachment.transfer.?.placements[index] = placement;
             attachment.transfer.?.placement_count += 1;
         }
-        return encodeNextGraphics(buffer, attachment, global_credit, live_storage_available);
+        return .staged;
     }
-
-    for (&attachment.known_placements) |*slot| {
-        const known = slot.* orelse continue;
-        if (findPlacement(storage, known.placement.virtual_id) != null) continue;
-        slot.* = null;
-        return try schema.encodeGraphicsDeletePlacement(buffer, .{
-            .pane_id = pane.id,
-            .revision = revision,
-            .key = known.placement.key,
-            .virtual_id = known.placement.virtual_id,
-            .placement_id = known.placement.placement_id,
-        });
-    }
-
-    var placement_iterator = storage.placements.iterator();
-    while (placement_iterator.next()) |entry| {
-        const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
-        if (!knowsImage(attachment, .{ .image_id = image.id, .generation = image.generation }))
-            continue;
-        const placement = placementValue(pane, entry.key_ptr.*, entry.value_ptr.*, image) orelse
-            continue;
-        if (knownPlacement(attachment, placement.virtual_id)) |known| {
-            if (std.meta.eql(known.placement, placement)) continue;
-            known.placement = placement;
-        } else try rememberPlacement(attachment, placement);
-        return try schema.encodeGraphicsPlacement(buffer, .{
-            .pane_id = pane.id,
-            .revision = revision,
-            .placement = placement,
-        });
-    }
-
-    attachment.observed_graphics_revision = attachment.graphics_target_revision;
-    attachment.graphics_batch_active = false;
-    if (attachment.graphics_snapshot == .open) {
-        attachment.graphics_snapshot = .idle;
-        return try schema.encodeGraphicsSnapshot(buffer, .{
-            .pane_id = pane.id,
-            .revision = revision,
-            .phase = .end,
-        });
-    }
-    return null;
+    return .idle;
 }
 
 pub fn knowsImage(attachment: *const Attachment, key: core.graphics.ImageKey) bool {
@@ -737,6 +786,92 @@ test "graphics transfers wait for pane and client memory credit" {
     try std.testing.expect((try schema.decodeServer(payload)) == .graphics_image);
     try std.testing.expectEqual(@as(usize, 0), attachment.graphics_credit);
     try std.testing.expect(attachment.transfer != null);
+}
+
+test "a staged transfer drains while the media actor stays busy" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try history.Service.init(gpa, ":memory:");
+    defer {
+        service.closeQueues(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&args);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = try schema.id.workspace(1) },
+        .tab_id = try schema.id.tab(1),
+    };
+    const pane = try Pane.create(
+        io,
+        gpa,
+        .{ .id = try schema.id.pane(1), .generation = 1 },
+        location,
+        &command,
+        "/",
+        &service,
+        .{ .cols = 20, .rows = 5 },
+        .{},
+        &budget,
+    );
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    const media = pane.media_allocator.allocator();
+    const pixels = try media.dupe(u8, &[_]u8{ 1, 2, 3, 255 });
+    const screen = pane.media.terminal.screens.active;
+    try screen.kitty_images.addImage(io, media, screen, .{
+        .id = 7,
+        .width = 1,
+        .height = 1,
+        .format = .rgba,
+        .data = .{ .complete = pixels },
+    });
+    pane.graphics_present = true;
+    pane.graphics_revision = 1;
+
+    var attachment = try Attachment.init(gpa, pane);
+    defer attachment.deinit();
+    var buffer: [1024]u8 = undefined;
+    const credit = core.graphics.max_image_bytes_global;
+
+    // Staging refuses to outrun the snapshot begin, which resets the state
+    // it would have written.
+    try std.testing.expectEqual(StageResult.idle, try stageNextTransfer(&attachment, credit));
+    try std.testing.expect((try schema.decodeServer(
+        (try encodeNextGraphics(&buffer, &attachment, credit, true)).?,
+    )) == .graphics_snapshot);
+
+    // The runtime stages at its media-idle boundary; the send loop then
+    // drains the frozen copy while the media actor is busy again.
+    try std.testing.expectEqual(StageResult.staged, try stageNextTransfer(&attachment, credit));
+    try std.testing.expect(attachment.transfer != null);
+    try std.testing.expect((try schema.decodeServer(
+        (try encodeNextGraphics(&buffer, &attachment, credit, false)).?,
+    )) == .graphics_image);
+    try std.testing.expect((try schema.decodeServer(
+        (try encodeNextGraphics(&buffer, &attachment, credit, false)).?,
+    )) == .graphics_image_chunk);
+    try std.testing.expectEqual(@as(u32, 1), attachment.sent_images);
+
+    // With the transfer drained the walk needs live storage; the batch stays
+    // open instead of closing blind.
+    try std.testing.expect((try encodeNextGraphics(&buffer, &attachment, credit, false)) == null);
+    try std.testing.expect(attachment.graphics_batch_active);
+    try std.testing.expect(attachment.transfer == null);
+
+    // Once the media actor rests, the batch completes normally.
+    var closed = false;
+    while (try encodeNextGraphics(&buffer, &attachment, credit, true)) |payload| {
+        const message = try schema.decodeServer(payload);
+        if (message == .graphics_snapshot and message.graphics_snapshot.phase == .end)
+            closed = true;
+    }
+    try std.testing.expect(closed);
+    try std.testing.expectEqual(pane.graphics_revision, attachment.observed_graphics_revision);
 }
 
 test "completed replacements do not exhaust attachment image slots" {

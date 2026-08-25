@@ -36,6 +36,23 @@ pub const ResolvedSidebarRendering = capability_mod.ResolvedSidebarRendering;
 /// a compact shared-memory command instead.
 pub const transmission_budget_per_frame: usize = 256 * 1024;
 
+/// Budget multiplier once host input has been quiet for `idle_boost_after_ns`.
+/// The cost model is the first keystroke after an idle stretch: at most one
+/// boosted frame of graphics sits ahead of its echo in the host parser, and
+/// nothing was typed while those bytes went out. While input is live the
+/// baseline budget keeps media out of the keystroke's way.
+pub const idle_transmission_boost: usize = 8;
+/// Host input younger than this keeps the baseline transmission budget.
+pub const idle_boost_after_ns: u64 = 250 * std.time.ns_per_ms;
+
+/// Raw pixel bytes one frame may push through the zlib deflater before an
+/// inline transmission. Bounds the writer's compression work per pass to
+/// about two milliseconds at the ~300 MiB/s a `.fastest` deflate measures.
+pub const compression_slice_per_frame: usize = 512 * 1024;
+/// Below this raw size the o=z probe, header, and deflate overhead outweigh
+/// the saved wire bytes.
+const compression_min_bytes: usize = 8 * 1024;
+
 const ImageIdentity = struct {
     pane_id: schema.PaneId,
     image_id: u32,
@@ -65,6 +82,16 @@ const PixelAllocation = struct {
     shared: ?SharedPixels = null,
 };
 
+/// In-progress deflate of one image's pixels. Heap-allocated and never moved,
+/// because the compressor holds pointers into the allocating writer and the
+/// window buffer.
+const Compression = struct {
+    allocating: Io.Writer.Allocating,
+    window: [std.compress.flate.max_window_len]u8,
+    compress: std.compress.flate.Compress,
+    offset: usize,
+};
+
 const ImageEntry = struct {
     metadata: graphics.Image,
     pixels: []u8,
@@ -75,6 +102,11 @@ const ImageEntry = struct {
     transmitted: bool = false,
     retire_pending: bool = false,
     force_direct: bool = false,
+    /// Finished zlib stream of `pixels`, freed once the transmission closes.
+    compressed: ?[]u8 = null,
+    compression: ?*Compression = null,
+    /// Deflate did not pay for itself (or failed); ship raw and never retry.
+    incompressible: bool = false,
     /// The host terminal was handed the shared object's name. Only then does
     /// retirement wait for the host to consume and unlink it.
     emitted_shared: bool = false,
@@ -114,6 +146,9 @@ const PartialTransmission = struct {
     key: ImageIdentity,
     external_id: u32,
     offset: usize,
+    /// The open transfer streams the entry's compressed bytes, so a resume
+    /// must keep reading the same buffer the header's `o=z` promised.
+    compressed: bool = false,
     fallback_count: usize = 0,
     fallbacks: [graphics.max_placements_per_pane]FallbackPlacement = undefined,
 };
@@ -143,6 +178,9 @@ pub const Store = struct {
     next_placement_id: u32 = 1,
     next_shm_id: u64 = 1,
     shared_memory: bool = false,
+    /// The host answered the `o=z` capability probe, so inline transmissions
+    /// may ship a zlib stream instead of raw pixels.
+    host_zlib: bool = false,
     /// Incremented once per writer pass; shared-name emissions stamp it so
     /// the consume deadline needs no clock.
     pass_counter: u64 = 0,
@@ -244,6 +282,7 @@ pub const Store = struct {
     }
 
     fn freePixels(store: *Store, entry: *ImageEntry) void {
+        store.freeCompression(entry);
         if (entry.shared) |*shared| {
             if (comptime supportsSharedMemory()) {
                 _ = std.c.shm_unlink(shared.sliceZ());
@@ -254,6 +293,87 @@ pub const Store = struct {
         }
         entry.pixels = &.{};
         entry.shared = null;
+    }
+
+    fn freeCompression(store: *Store, entry: *ImageEntry) void {
+        if (entry.compression) |state| {
+            state.allocating.deinit();
+            store.gpa.destroy(state);
+            entry.compression = null;
+        }
+        if (entry.compressed) |bytes| {
+            store.gpa.free(bytes);
+            entry.compressed = null;
+        }
+    }
+
+    /// Advances one image's deflate by at most `budget` raw bytes. Returns
+    /// true once a transmission source exists: the finished zlib stream, or
+    /// the raw pixels when the host lacks o=z, the image is too small, or
+    /// the deflate did not pay for itself. The compressed copy is transient
+    /// working memory outside the pane quota: it is bounded by the raw size
+    /// it must undercut and freed as soon as the transmission closes.
+    fn advanceCompression(store: *Store, entry: *ImageEntry, budget: *usize) bool {
+        if (entry.compressed != null or entry.incompressible) return true;
+        if (!store.host_zlib or entry.pixels.len < compression_min_bytes) return true;
+        if (budget.* == 0) return false;
+        const state = entry.compression orelse create: {
+            const state = store.gpa.create(Compression) catch {
+                entry.incompressible = true;
+                return true;
+            };
+            // The compressor asserts a non-empty output buffer at init; the
+            // allocating writer grows it past this seed as the stream needs.
+            state.allocating = Io.Writer.Allocating.initCapacity(store.gpa, 4096) catch {
+                store.gpa.destroy(state);
+                entry.incompressible = true;
+                return true;
+            };
+            state.offset = 0;
+            state.compress = std.compress.flate.Compress.init(
+                &state.allocating.writer,
+                &state.window,
+                .zlib,
+                .fastest,
+            ) catch {
+                state.allocating.deinit();
+                store.gpa.destroy(state);
+                entry.incompressible = true;
+                return true;
+            };
+            entry.compression = state;
+            break :create state;
+        };
+        const take = @min(budget.*, entry.pixels.len - state.offset);
+        state.compress.writer.writeAll(entry.pixels[state.offset..][0..take]) catch {
+            store.freeCompression(entry);
+            entry.incompressible = true;
+            return true;
+        };
+        state.offset += take;
+        budget.* -= take;
+        if (state.offset < entry.pixels.len) return false;
+        state.compress.finish() catch {
+            store.freeCompression(entry);
+            entry.incompressible = true;
+            return true;
+        };
+        const compressed = state.allocating.toOwnedSlice() catch {
+            store.freeCompression(entry);
+            entry.incompressible = true;
+            return true;
+        };
+        state.allocating.deinit();
+        store.gpa.destroy(state);
+        entry.compression = null;
+        // The saved wire bytes must justify the host's inflate work.
+        if (compressed.len >= entry.pixels.len - entry.pixels.len / 8) {
+            store.gpa.free(compressed);
+            entry.incompressible = true;
+        } else {
+            entry.compressed = compressed;
+        }
+        return true;
     }
 
     fn sharedPixelsConsumed(_: *Store, entry: *const ImageEntry) bool {
@@ -944,6 +1064,26 @@ pub const KittyGraphicsWriter = struct {
     layout_snapshot: *const layout.Snapshot,
     cell_width: u16,
     cell_height: u16,
+    /// Encoded-byte budget for this pass. The client boosts it while host
+    /// input is idle; the default protects the keystroke echo.
+    budget: usize = transmission_budget_per_frame,
+    /// Emission counts accumulated across this writer's passes; the client
+    /// folds them into its telemetry after each flush.
+    stats: Stats = .{},
+
+    pub const Stats = struct {
+        /// Images handed to the host as a shared-memory name.
+        shared_images: u64 = 0,
+        /// Images whose inline transmission closed, compressed or raw.
+        inline_images: u64 = 0,
+        /// The subset of `inline_images` that shipped as a zlib stream.
+        compressed_images: u64 = 0,
+        /// Chunk-emission calls; divided by `inline_images` this is the
+        /// passes-per-image pacing the budget policy produces.
+        transmission_passes: u64 = 0,
+        /// Passes that advanced a deflate by at least one slice.
+        compress_passes: u64 = 0,
+    };
 
     pub fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
         const self: *KittyGraphicsWriter = @ptrCast(@alignCast(context));
@@ -956,7 +1096,9 @@ pub const KittyGraphicsWriter = struct {
         if (!self.store.damage or self.cell_width == 0 or self.cell_height == 0) return 0;
         self.store.collectRetired(null, null);
         var written: usize = 0;
-        var budget: usize = transmission_budget_per_frame;
+        var budget: usize = self.budget;
+        var compress_budget: usize = compression_slice_per_frame;
+        var compressing = false;
 
         // An open chunked transfer owns the graphics stream: the protocol
         // forbids other graphics escapes between its chunks, so it either
@@ -975,21 +1117,29 @@ pub const KittyGraphicsWriter = struct {
                 self.store.partial = null;
             } else {
                 const entry = self.store.images.getPtr(partial.key).?;
+                // The open transfer's header already declared its encoding,
+                // so the resume reads the buffer that header described.
+                const source = if (partial.compressed) entry.compressed.? else entry.pixels;
+                self.stats.transmission_passes += 1;
                 const progress = try writeTransmissionChunks(
                     writer,
                     partial.external_id,
                     entry.metadata,
-                    entry.pixels,
+                    source,
                     partial.offset,
                     budget,
+                    partial.compressed,
                 );
                 written += progress.written;
-                if (progress.offset < entry.pixels.len) {
+                if (progress.offset < source.len) {
                     self.store.partial.?.offset = progress.offset;
                     // Damage stays set; the next frame resumes here.
                     return written;
                 }
                 entry.transmitted = true;
+                self.stats.inline_images += 1;
+                self.stats.compressed_images += @intFromBool(partial.compressed);
+                self.store.freeCompression(entry);
                 self.store.partial = null;
                 written += try self.writeFallbackPlacements(writer, partial, entry.*);
                 self.store.collectRetired(
@@ -1044,29 +1194,48 @@ pub const KittyGraphicsWriter = struct {
                 image.transmitted = true;
                 image.emitted_shared = true;
                 image.transmitted_pass = self.store.pass_counter;
+                self.stats.shared_images += 1;
                 budget -= @min(budget, emitted);
                 continue;
             };
+            // A still-deflating image keeps its wire budget for the others;
+            // its own transmission starts once the stream is finished.
+            const compress_budget_before = compress_budget;
+            const source_ready = self.store.advanceCompression(image, &compress_budget);
+            self.stats.compress_passes +=
+                @intFromBool(compress_budget != compress_budget_before);
+            if (!source_ready) {
+                compressing = true;
+                continue;
+            }
+            const compressed = image.compressed != null;
+            const source = image.compressed orelse image.pixels;
+            self.stats.transmission_passes += 1;
             const progress = try writeTransmissionChunks(
                 writer,
                 image.external_id,
                 image.metadata,
-                image.pixels,
+                source,
                 0,
                 budget,
+                compressed,
             );
             written += progress.written;
-            if (progress.offset < image.pixels.len) {
+            if (progress.offset < source.len) {
                 self.store.partial = .{
                     .key = entry.key_ptr.*,
                     .external_id = image.external_id,
                     .offset = progress.offset,
+                    .compressed = compressed,
                 };
                 self.store.capturePartialPlacements();
                 // The open transfer forbids emitting anything else.
                 return written;
             }
             image.transmitted = true;
+            self.stats.inline_images += 1;
+            self.stats.compressed_images += @intFromBool(compressed);
+            self.store.freeCompression(image);
             budget -= @min(budget, progress.written);
         }
 
@@ -1118,8 +1287,8 @@ pub const KittyGraphicsWriter = struct {
                 placement.placement.key.image_id,
             );
         }
-        self.store.damage = self.store.delete_len != 0 or self.store.delete_overflow or
-            self.store.hasPendingSharedRelease();
+        self.store.damage = compressing or self.store.delete_len != 0 or
+            self.store.delete_overflow or self.store.hasPendingSharedRelease();
         return written;
     }
 
@@ -1284,6 +1453,7 @@ pub fn writeTransmissionChunks(
     pixels: []const u8,
     start_offset: usize,
     budget: usize,
+    compressed: bool,
 ) Io.Writer.Error!ChunkProgress {
     const Encoder = std.base64.standard.Encoder;
     const raw_chunk_size = 3072;
@@ -1296,8 +1466,9 @@ pub fn writeTransmissionChunks(
         const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], pixels[offset..][0..take]);
         const more = offset + take < pixels.len;
         if (offset == 0) {
-            written += try printCounted(writer, "\x1b_Ga=t,f={d},s={d},v={d},t=d,i={d},q=2,m={d};", .{
-                @intFromEnum(image.format), image.width, image.height, external_id, @intFromBool(more),
+            written += try printCounted(writer, "\x1b_Ga=t,f={d},s={d},v={d},t=d,i={d},q=2{s},m={d};", .{
+                @intFromEnum(image.format), image.width,                    image.height,
+                external_id,                if (compressed) ",o=z" else "", @intFromBool(more),
             });
         } else {
             written += try printCounted(writer, "\x1b_Gm={d};", .{@intFromBool(more)});
@@ -1323,6 +1494,7 @@ pub fn writeTransmission(
         pixels,
         0,
         std.math.maxInt(usize),
+        false,
     );
     return progress.written;
 }
@@ -1616,7 +1788,9 @@ fn providerAtlasSourceCount() u32 {
 
 test "capability query and replies are exact" {
     try std.testing.expectEqualStrings(
-        "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\x1b[14t\x1b[16t\x1b[?1016$p\x1b[c",
+        "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" ++
+            "\x1b_Gi=32,s=1,v=1,a=q,t=d,f=24,o=z;eJxjYGAAAAADAAE=\x1b\\" ++
+            "\x1b[14t\x1b[16t\x1b[?1016$p\x1b[c",
         capability_query,
     );
     var capabilities: TerminalCapabilities = .{};
@@ -1625,6 +1799,11 @@ test "capability query and replies are exact" {
         .supported = true,
     } }));
     try std.testing.expectEqual(Support.supported, capabilities.kitty_graphics);
+    try std.testing.expect(capabilities.observe(.{ .kitty_graphics = .{
+        .image_id = 32,
+        .supported = true,
+    } }));
+    try std.testing.expectEqual(Support.supported, capabilities.kitty_zlib);
 }
 
 test "automatic sidebar renderer falls back while capability is absent" {
@@ -1827,6 +2006,254 @@ test "image transmission is paced across frames by the byte budget" {
     // Idle afterwards: no work left.
     var idle = Io.Writer.fixed(frame_buffer);
     try std.testing.expectEqual(@as(usize, 0), try graphics_writer.write(&idle));
+}
+
+/// One pane holding a complete 512x256 RGBA image with one placement, the
+/// shape the budget and compression tests all exercise.
+const TransmissionFixture = struct {
+    const metadata: graphics.Image = .{
+        .key = .{ .image_id = 1, .generation = 1 },
+        .format = .rgba,
+        .width = 512,
+        .height = 256,
+        .byte_len = 512 * 256 * 4,
+    };
+
+    model: multiplexer.Model,
+    store: Store,
+
+    fn init(pixels: []const u8) !TransmissionFixture {
+        std.debug.assert(pixels.len == metadata.byte_len);
+        const location: schema.TabLocation = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        };
+        var model = multiplexer.Model.init(std.testing.allocator);
+        errdefer model.deinit();
+        try model.addRoot(@enumFromInt(1), location, .{ .cols = 10, .rows = 5 });
+        var store = Store.init(std.testing.allocator);
+        errdefer store.deinit();
+        try store.applyImage(.{ .pane_id = @enumFromInt(1), .revision = 1, .image = metadata });
+        try store.applyChunk(.{
+            .pane_id = @enumFromInt(1),
+            .revision = 1,
+            .key = metadata.key,
+            .offset = 0,
+            .bytes = pixels,
+        });
+        try store.applyPlacement(.{
+            .pane_id = @enumFromInt(1),
+            .revision = 1,
+            .placement = .{
+                .key = metadata.key,
+                .virtual_id = 1,
+                .placement_id = 1,
+                .x = 0,
+                .y = 0,
+            },
+        });
+        return .{ .model = model, .store = store };
+    }
+
+    fn deinit(fixture: *TransmissionFixture) void {
+        fixture.store.deinit();
+        fixture.model.deinit();
+    }
+
+    fn writer(fixture: *TransmissionFixture, budget: usize) KittyGraphicsWriter {
+        return .{
+            .store = &fixture.store,
+            .layout_snapshot = fixture.model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+            .cell_width = 10,
+            .cell_height = 20,
+            .budget = budget,
+        };
+    }
+};
+
+/// Concatenates the base64-decoded payloads of every `a=t` transmission and
+/// `m=` continuation chunk in `bytes`, in stream order.
+fn decodeTransmissionPayloads(gpa: std.mem.Allocator, bytes: []const u8) ![]u8 {
+    var collected: Io.Writer.Allocating = .init(gpa);
+    defer collected.deinit();
+    var search: usize = 0;
+    while (std.mem.indexOfPos(u8, bytes, search, "\x1b_G")) |start| {
+        const end = std.mem.indexOfPos(u8, bytes, start, "\x1b\\") orelse break;
+        search = end + 2;
+        const body = bytes[start + 3 .. end];
+        const separator = std.mem.indexOfScalar(u8, body, ';') orelse continue;
+        const control = body[0..separator];
+        if (std.mem.indexOf(u8, control, "a=t") == null and
+            !std.mem.startsWith(u8, control, "m=")) continue;
+        const encoded = body[separator + 1 ..];
+        const Decoder = std.base64.standard.Decoder;
+        var decoded: [4096]u8 = undefined;
+        const decoded_len = try Decoder.calcSizeForSlice(encoded);
+        try Decoder.decode(decoded[0..decoded_len], encoded);
+        try collected.writer.writeAll(decoded[0..decoded_len]);
+    }
+    return collected.toOwnedSlice();
+}
+
+fn inflateExact(gpa: std.mem.Allocator, compressed: []const u8, expected_len: usize) ![]u8 {
+    var input = std.Io.Reader.fixed(compressed);
+    var window: [std.compress.flate.max_window_len]u8 = undefined;
+    var decompress = std.compress.flate.Decompress.init(&input, .zlib, &window);
+    const inflated = try gpa.alloc(u8, expected_len);
+    errdefer gpa.free(inflated);
+    const inflated_len = try decompress.reader.readSliceShort(inflated);
+    try std.testing.expectEqual(expected_len, inflated_len);
+    return inflated;
+}
+
+test "an idle input budget transmits and places a large frame in one pass" {
+    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+    defer std.testing.allocator.free(pixels);
+    @memset(pixels, 0xab);
+    var fixture = try TransmissionFixture.init(pixels);
+    defer fixture.deinit();
+
+    var graphics_writer = fixture.writer(
+        transmission_budget_per_frame * idle_transmission_boost,
+    );
+    const frame_buffer = try std.testing.allocator.alloc(u8, 2 * 1024 * 1024);
+    defer std.testing.allocator.free(frame_buffer);
+    var writer = Io.Writer.fixed(frame_buffer);
+    _ = try graphics_writer.write(&writer);
+
+    // The whole image and its placement went out; nothing is pending, so a
+    // 60Hz pace delivers one of these frames per tick instead of one per
+    // four ticks under the baseline budget.
+    try std.testing.expect(fixture.store.partial == null);
+    try std.testing.expect(!fixture.store.damage);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=p") != null);
+    try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.inline_images);
+    try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.transmission_passes);
+    try std.testing.expectEqual(@as(u64, 0), graphics_writer.stats.compressed_images);
+}
+
+test "a zlib host ships a deflated stream that inflates to the pixels" {
+    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+    defer std.testing.allocator.free(pixels);
+    // Browser-frame shape: flat fills with a sparse noise band.
+    var prng = std.Random.DefaultPrng.init(9);
+    for (pixels, 0..) |*byte, index| {
+        byte.* = if (index % 16 == 3) prng.random().int(u8) else 0x30;
+    }
+    var fixture = try TransmissionFixture.init(pixels);
+    defer fixture.deinit();
+    fixture.store.host_zlib = true;
+
+    var graphics_writer = fixture.writer(transmission_budget_per_frame);
+    const frame_buffer = try std.testing.allocator.alloc(u8, 2 * 1024 * 1024);
+    defer std.testing.allocator.free(frame_buffer);
+    var collected: Io.Writer.Allocating = .init(std.testing.allocator);
+    defer collected.deinit();
+
+    var frames: usize = 0;
+    var total_written: usize = 0;
+    while (true) {
+        frames += 1;
+        try std.testing.expect(frames < 16);
+        var writer = Io.Writer.fixed(frame_buffer);
+        total_written += try graphics_writer.write(&writer);
+        try collected.writer.writeAll(writer.buffered());
+        if (!fixture.store.damage) break;
+    }
+
+    // The header advertises the compression the payload actually carries.
+    try std.testing.expect(std.mem.indexOf(u8, collected.written(), "o=z") != null);
+    try std.testing.expect(total_written < pixels.len / 4);
+    const payload = try decodeTransmissionPayloads(std.testing.allocator, collected.written());
+    defer std.testing.allocator.free(payload);
+    const inflated = try inflateExact(std.testing.allocator, payload, pixels.len);
+    defer std.testing.allocator.free(inflated);
+    try std.testing.expectEqualSlices(u8, pixels, inflated);
+    // The transient zlib copy is gone once the transmission closed.
+    const entry = fixture.store.images.getPtr(.{
+        .pane_id = @enumFromInt(1),
+        .image_id = 1,
+        .generation = 1,
+    }).?;
+    try std.testing.expect(entry.compressed == null and entry.compression == null);
+    try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.inline_images);
+    try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.compressed_images);
+    try std.testing.expect(graphics_writer.stats.compress_passes >= 1);
+}
+
+test "incompressible pixels fall back to a raw transmission" {
+    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+    defer std.testing.allocator.free(pixels);
+    var prng = std.Random.DefaultPrng.init(11);
+    prng.random().bytes(pixels);
+    var fixture = try TransmissionFixture.init(pixels);
+    defer fixture.deinit();
+    fixture.store.host_zlib = true;
+
+    var graphics_writer = fixture.writer(transmission_budget_per_frame * idle_transmission_boost);
+    const frame_buffer = try std.testing.allocator.alloc(u8, 4 * 1024 * 1024);
+    defer std.testing.allocator.free(frame_buffer);
+    var collected: Io.Writer.Allocating = .init(std.testing.allocator);
+    defer collected.deinit();
+    var frames: usize = 0;
+    while (true) {
+        frames += 1;
+        try std.testing.expect(frames < 16);
+        var writer = Io.Writer.fixed(frame_buffer);
+        _ = try graphics_writer.write(&writer);
+        try collected.writer.writeAll(writer.buffered());
+        if (!fixture.store.damage) break;
+    }
+
+    try std.testing.expect(std.mem.indexOf(u8, collected.written(), "o=z") == null);
+    const payload = try decodeTransmissionPayloads(std.testing.allocator, collected.written());
+    defer std.testing.allocator.free(payload);
+    try std.testing.expectEqualSlices(u8, pixels, payload);
+}
+
+test "a compressed transmission resumes across frames" {
+    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+    defer std.testing.allocator.free(pixels);
+    // Compressible enough to keep the zlib stream, large enough that its
+    // encoding still spans several baseline budgets.
+    var prng = std.Random.DefaultPrng.init(13);
+    for (0..pixels.len / 4) |pixel| {
+        const noise = prng.random().int(u8);
+        pixels[pixel * 4 + 0] = if (pixel % 3 == 0) noise else 0x20;
+        pixels[pixel * 4 + 1] = if (pixel % 3 == 1) noise else 0x20;
+        pixels[pixel * 4 + 2] = 0x20;
+        pixels[pixel * 4 + 3] = 0xff;
+    }
+    var fixture = try TransmissionFixture.init(pixels);
+    defer fixture.deinit();
+    fixture.store.host_zlib = true;
+
+    var graphics_writer = fixture.writer(64 * 1024);
+    const frame_buffer = try std.testing.allocator.alloc(u8, 2 * 1024 * 1024);
+    defer std.testing.allocator.free(frame_buffer);
+    var collected: Io.Writer.Allocating = .init(std.testing.allocator);
+    defer collected.deinit();
+    var frames: usize = 0;
+    var resumed = false;
+    while (true) {
+        frames += 1;
+        try std.testing.expect(frames < 64);
+        var writer = Io.Writer.fixed(frame_buffer);
+        _ = try graphics_writer.write(&writer);
+        try collected.writer.writeAll(writer.buffered());
+        if (fixture.store.partial != null) {
+            try std.testing.expect(fixture.store.partial.?.compressed);
+            resumed = true;
+        }
+        if (!fixture.store.damage) break;
+    }
+
+    try std.testing.expect(resumed);
+    const payload = try decodeTransmissionPayloads(std.testing.allocator, collected.written());
+    defer std.testing.allocator.free(payload);
+    const inflated = try inflateExact(std.testing.allocator, payload, pixels.len);
+    defer std.testing.allocator.free(inflated);
+    try std.testing.expectEqualSlices(u8, pixels, inflated);
 }
 
 test "continuous replacements complete and hand off without a blank frame" {

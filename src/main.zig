@@ -1178,7 +1178,7 @@ test "server graphics memory quotas are configurable and bounded" {
         "telar",
         "server",
         "--graphics-pane-mib",
-        "65",
+        "257",
     };
     try std.testing.expectError(error.InvalidGraphicsLimits, Cli.parse(&invalid, .empty));
 }

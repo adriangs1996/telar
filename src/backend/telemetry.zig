@@ -38,8 +38,22 @@ pub const RuntimeMetrics = struct {
     folded_pty_events: u64 = 0,
     graphics_messages: u64 = 0,
     graphics_bytes: u64 = 0,
+    /// Image transfers whose metadata crossed the transport: the runtime's
+    /// delivered-images counter, so throughput needs no bytes-per-message
+    /// heuristics.
+    graphics_images_sent: u64 = 0,
+    graphics_placements_sent: u64 = 0,
+    /// Transfers frozen eagerly at a media-idle boundary rather than by the
+    /// send loop catching one.
+    graphics_transfers_staged: u64 = 0,
     media_bytes: u64 = 0,
     media_discarded_frames: u64 = 0,
+    /// Shared frames dropped with no replacement ingested: the pane kept a
+    /// stale image for that batch. Sustained growth is a frozen picture.
+    media_unavailable_frames: u64 = 0,
+    /// Shared frames fed to the media terminal. Moving while the graphics
+    /// revision stays still isolates a silent emulator load failure.
+    media_forwarded_frames: u64 = 0,
     media_resets: u64 = 0,
     media_failures: u64 = 0,
     decode: diagnostics.Timing = .{},
@@ -209,7 +223,10 @@ pub fn formatRuntimeTelemetry(
     });
     try output.print(
         "\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
+            "\"graphics_images_sent\":{d},\"graphics_placements_sent\":{d}," ++
+            "\"graphics_transfers_staged\":{d}," ++
             "\"media_bytes\":{d},\"media_discarded_frames\":{d}," ++
+            "\"media_unavailable_frames\":{d},\"media_forwarded_frames\":{d}," ++
             "\"media_resets\":{d},\"media_failures\":{d}," ++
             "\"media_queue_events\":{d},\"media_queue_bytes\":{d}," ++
             "\"media_dropped_events\":{d},\"media_dropped_bytes\":{d}," ++
@@ -222,8 +239,13 @@ pub fn formatRuntimeTelemetry(
         .{
             metrics.graphics_messages,
             metrics.graphics_bytes,
+            metrics.graphics_images_sent,
+            metrics.graphics_placements_sent,
+            metrics.graphics_transfers_staged,
             metrics.media_bytes,
             metrics.media_discarded_frames,
+            metrics.media_unavailable_frames,
+            metrics.media_forwarded_frames,
             metrics.media_resets,
             metrics.media_failures,
             media_queue_events,

@@ -179,6 +179,9 @@ const Client = struct {
     draw_due_ns: u64 = 0,
     pending_updates: usize = 0,
     last_presented_ns: ?u64 = null,
+    /// When the host terminal last delivered input bytes. Zero until the
+    /// first read, so a fresh session starts on the boosted media budget.
+    last_input_ns: u64 = 0,
     sidebar_animation_pending: bool = false,
     reported_focus: ?schema.PaneId = null,
     reported_focus_events: bool = false,
@@ -799,6 +802,10 @@ const Client = struct {
     }
 
     fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
+        if (comptime diagnostics.enabled) switch (message) {
+            .graphics_image, .graphics_shared_image => client.metrics.graphics_images += 1,
+            else => {},
+        };
         switch (message) {
             .graphics_snapshot => |snapshot| client.graphics_store.applySnapshot(snapshot) catch |err| switch (err) {
                 error.GraphicsResyncRequired => try client.requestGraphicsSnapshot(snapshot.pane_id),
@@ -925,12 +932,20 @@ const Client = struct {
         }
         const cell_size = client.capabilities.cellSize(client.screen.back.w, client.screen.back.h);
         const layout_snapshot = model.layoutSnapshot(client.view.workbench());
+        client.graphics_store.host_zlib = client.capabilities.kitty_zlib == .supported;
+        // Media rides the interactive writer, so its budget follows the user:
+        // baseline while input is live, boosted once the host has been quiet.
+        const media_budget = if (monotonic(client.io) -| client.last_input_ns >= kitty.idle_boost_after_ns)
+            kitty.transmission_budget_per_frame * kitty.idle_transmission_boost
+        else
+            kitty.transmission_budget_per_frame;
         var graphics_writer: CombinedGraphicsWriter = .{
             .panes = .{
                 .store = client.graphics_store,
                 .layout_snapshot = layout_snapshot,
                 .cell_width = cell_size.width,
                 .cell_height = cell_size.height,
+                .budget = media_budget,
             },
             .sidebar = client.view.kittySidebar(),
             .metrics = client.metrics,
@@ -940,6 +955,14 @@ const Client = struct {
             .write = CombinedGraphicsWriter.writeOpaque,
         };
         try flushScreen(client.io, client.screen, client.writer, client.metrics);
+        if (comptime diagnostics.enabled) {
+            const graphics_stats = graphics_writer.panes.stats;
+            client.metrics.pane_shared_images += graphics_stats.shared_images;
+            client.metrics.pane_inline_images += graphics_stats.inline_images;
+            client.metrics.pane_compressed_images += graphics_stats.compressed_images;
+            client.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
+            client.metrics.pane_compress_passes += graphics_stats.compress_passes;
+        }
         try client.returnGraphicsCredits();
         const presented_ns = monotonic(client.io);
         for (&model.panes) |*slot| {
@@ -1156,6 +1179,7 @@ pub fn run(
             client.input_read_pending = false;
             const chunk = try result;
             if (chunk.len == 0) return 0;
+            client.last_input_ns = monotonic(io);
             var handler: InputHandler = .{ .client = &client };
             if (try input_router.feed(chunk.slice(), monotonic(io), &handler) == .stop)
                 return 0;

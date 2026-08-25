@@ -133,6 +133,18 @@ const cases = [_]Case{
     },
     .{ .name = "frontend.kitty.transmit_rgba_64x64", .work_per_op = 64 * 64, .work_unit = "pixels" },
     .{ .name = "frontend.kitty.idle", .work_per_op = 1, .work_unit = "frames" },
+    .{
+        .name = "frontend.kitty.transmit_rgba_480x360",
+        .work_per_op = 480 * 360,
+        .work_unit = "pixels",
+        .p99_budget_ns = 5 * std.time.ns_per_ms,
+    },
+    .{
+        .name = "frontend.kitty.transmit_rgba_480x360_zlib",
+        .work_per_op = 480 * 360,
+        .work_unit = "pixels",
+        .p99_budget_ns = 10 * std.time.ns_per_ms,
+    },
 };
 
 const Measurement = struct {
@@ -768,7 +780,7 @@ const ClientUiContext = struct {
 fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        context.view.hovered = if (iteration & 1 == 0) .active_workspace else .active_worktree;
+        context.view.hovered = if (iteration & 1 == 0) .active_workspace else .toggle_workspace_list;
         context.view.invalidate();
         const stats = try context.view.render(
             &context.screen,
@@ -1009,6 +1021,124 @@ fn runGraphicsIdle(context: *GraphicsContext, iterations: usize) !u64 {
         var graphics_writer = context.writer();
         checksum +%= try graphics_writer.write(&output);
     }
+    return checksum;
+}
+
+/// A full inline delivery of one browser-frame-sized image: the media path's
+/// unit of throughput. One op is every writer pass an unbounded budget needs
+/// until the store goes idle, so the zlib variant includes its deflate.
+const TransmitContext = struct {
+    const width = 480;
+    const height = 360;
+    const raw_len = width * height * 4;
+
+    gpa: std.mem.Allocator,
+    store: frontend.kitty.Store,
+    model: frontend.multiplexer.Model,
+    output: []u8,
+
+    fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
+        var store = frontend.kitty.Store.init(gpa);
+        errdefer store.deinit();
+        store.host_zlib = zlib;
+        var model = frontend.multiplexer.Model.init(gpa);
+        errdefer model.deinit();
+        const pane_id: schema.PaneId = @enumFromInt(1);
+        try model.addRoot(pane_id, .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        }, .{ .cols = cols, .rows = rows });
+
+        // Browser-frame shape: flat fills, a gradient, and a text-like band
+        // of sparse noise. Pure random would defeat the zlib variant, pure
+        // flat would flatter it.
+        const pixels = try gpa.alloc(u8, raw_len);
+        defer gpa.free(pixels);
+        var prng = std.Random.DefaultPrng.init(7);
+        const random = prng.random();
+        for (0..height) |y| {
+            for (0..width) |x| {
+                const index = (y * width + x) * 4;
+                if (y % 40 < 28) {
+                    pixels[index + 0] = @intCast(30 + (x * 40) / width);
+                    pixels[index + 1] = 34;
+                    pixels[index + 2] = 40;
+                } else {
+                    const value: u8 = if (random.uintLessThan(u8, 8) == 0) 220 else 24;
+                    pixels[index + 0] = value;
+                    pixels[index + 1] = value;
+                    pixels[index + 2] = value;
+                }
+                pixels[index + 3] = 255;
+            }
+        }
+        const metadata: core.graphics.Image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgba,
+            .width = width,
+            .height = height,
+            .byte_len = raw_len,
+        };
+        try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = metadata });
+        try store.applyChunk(.{
+            .pane_id = pane_id,
+            .revision = 1,
+            .key = metadata.key,
+            .offset = 0,
+            .bytes = pixels,
+        });
+        try store.applyPlacement(.{
+            .pane_id = pane_id,
+            .revision = 1,
+            .placement = .{
+                .key = metadata.key,
+                .virtual_id = 1,
+                .placement_id = 1,
+                .x = 0,
+                .y = 0,
+            },
+        });
+        const output = try gpa.alloc(u8, 4 * 1024 * 1024);
+        return .{ .gpa = gpa, .store = store, .model = model, .output = output };
+    }
+
+    fn deinit(context: *TransmitContext) void {
+        context.gpa.free(context.output);
+        context.model.deinit();
+        context.store.deinit();
+    }
+
+    fn deliver(context: *TransmitContext) !u64 {
+        var images = context.store.images.iterator();
+        while (images.next()) |entry| {
+            entry.value_ptr.transmitted = false;
+            entry.value_ptr.incompressible = false;
+        }
+        var placements = context.store.placements.iterator();
+        while (placements.next()) |entry| {
+            entry.value_ptr.emitted_image_id = null;
+            entry.value_ptr.dirty = true;
+        }
+        context.store.damage = true;
+        var written: u64 = 0;
+        while (context.store.damage) {
+            var output = Io.Writer.fixed(context.output);
+            var graphics_writer: frontend.kitty.KittyGraphicsWriter = .{
+                .store = &context.store,
+                .layout_snapshot = context.model.layoutSnapshot(.{ .w = cols, .h = rows }),
+                .cell_width = 10,
+                .cell_height = 20,
+                .budget = std.math.maxInt(usize),
+            };
+            written += try graphics_writer.write(&output);
+        }
+        return written;
+    }
+};
+
+fn runTransmitDelivery(context: *TransmitContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| checksum +%= try context.deliver();
     return checksum;
 }
 
@@ -1282,12 +1412,29 @@ fn execute(
         );
     }
     const graphics_idle_case = cases[case_index];
+    case_index += 1;
     if (config.includes(graphics_idle_case.name)) try writeResult(
         writer,
         config,
         graphics_idle_case,
         try measure(io, config, &graphics_context, runGraphicsIdle),
     );
+
+    inline for ([_]bool{ false, true }) |zlib| {
+        var transmit_case = cases[case_index];
+        case_index += 1;
+        if (config.includes(transmit_case.name)) {
+            var context = try TransmitContext.init(gpa, zlib);
+            defer context.deinit();
+            transmit_case.payload_bytes_per_op = try context.deliver();
+            try writeResult(
+                writer,
+                config,
+                transmit_case,
+                try measure(io, config, &context, runTransmitDelivery),
+            );
+        }
+    }
 }
 
 pub fn main(init: std.process.Init) !void {

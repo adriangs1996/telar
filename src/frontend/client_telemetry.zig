@@ -18,6 +18,19 @@ pub const Metrics = struct {
     server_bytes: u64 = 0,
     graphics_messages: u64 = 0,
     graphics_bytes: u64 = 0,
+    /// Image transfers received from the runtime (headers and shared names).
+    graphics_images: u64 = 0,
+    /// Pane images handed to the host as a shared-memory name.
+    pane_shared_images: u64 = 0,
+    /// Pane images whose inline transmission closed, compressed or raw.
+    pane_inline_images: u64 = 0,
+    /// The subset of `pane_inline_images` shipped as a zlib stream.
+    pane_compressed_images: u64 = 0,
+    /// Chunk-emission calls; against `pane_inline_images` this measures the
+    /// passes-per-image pacing of the transmission budget.
+    pane_transmission_passes: u64 = 0,
+    /// Writer passes that advanced an image deflate by at least one slice.
+    pane_compress_passes: u64 = 0,
     frames: u64 = 0,
     frame_cells: u64 = 0,
     frame_spans: u64 = 0,
@@ -77,6 +90,7 @@ pub fn format(
         "\"outbox_high_water\":{d},\"outbox_saturated\":{d}," ++
         "\"outbox_coalesced_input\":{d},\"outbox_coalesced_resize\":{d}," ++
         "\"outbox_coalesced_ack\":{d},\"kitty_graphics\":\"{s}\"," ++
+        "\"kitty_zlib\":\"{s}\"," ++
         "\"mouse_pixels\":\"{s}\",\"sidebar_renderer\":\"{s}\"," ++
         "\"cell_width_px\":{d},\"cell_height_px\":{d}," ++
         "\"input_events\":{d},\"input_bytes\":{d}," ++
@@ -97,6 +111,7 @@ pub fn format(
         state.outbox.stats.coalesced_resize,
         state.outbox.stats.coalesced_ack,
         @tagName(state.capabilities.kitty_graphics),
+        @tagName(state.capabilities.kitty_zlib),
         @tagName(state.capabilities.mouse_pixels),
         @tagName(state.sidebar_rendering),
         state.capabilities.cell_width_px,
@@ -107,6 +122,9 @@ pub fn format(
         metrics.server_bytes,
     });
     try writer.print("\"graphics_messages\":{d},\"graphics_bytes\":{d}," ++
+        "\"graphics_images\":{d},\"pane_shared_images\":{d}," ++
+        "\"pane_inline_images\":{d},\"pane_compressed_images\":{d}," ++
+        "\"pane_transmission_passes\":{d},\"pane_compress_passes\":{d}," ++
         "\"frames\":{d},\"frame_cells\":{d},\"frame_spans\":{d}," ++
         "\"snapshots\":{d},\"composed_panes\":{d},\"composed_cells\":{d}," ++
         "\"composed_damage_cells\":{d},\"full_compositions\":{d}," ++
@@ -118,6 +136,12 @@ pub fn format(
         "\"pacer_drawn\":{d},\"pacer_throttled\":{d},\"pacer_absorbed\":{d}", .{
         metrics.graphics_messages,
         metrics.graphics_bytes,
+        metrics.graphics_images,
+        metrics.pane_shared_images,
+        metrics.pane_inline_images,
+        metrics.pane_compressed_images,
+        metrics.pane_transmission_passes,
+        metrics.pane_compress_passes,
         metrics.frames,
         metrics.frame_cells,
         metrics.frame_spans,

@@ -941,7 +941,11 @@ const Server = struct {
                     if (comptime diagnostics.enabled) {
                         metrics.graphics_messages += 1;
                         metrics.graphics_bytes += payload.len;
+                        metrics.graphics_images_sent +|= active.sent_images;
+                        metrics.graphics_placements_sent +|= active.sent_placements;
                     }
+                    active.sent_images = 0;
+                    active.sent_placements = 0;
                     try startSessionSend(io, select, session, payload);
                     attachments.next_send = (index + 1) % attachments.items.len;
                     return;
@@ -2030,6 +2034,8 @@ fn serveInternal(
             if (comptime diagnostics.enabled) {
                 server.metrics.media_bytes +|= event.stats.output_bytes;
                 server.metrics.media_discarded_frames +|= event.stats.discarded_frames;
+                server.metrics.media_unavailable_frames +|= event.stats.unavailable_frames;
+                server.metrics.media_forwarded_frames +|= event.stats.forwarded_frames;
                 if (event.stats.failed) server.metrics.media_failures +|= 1;
                 if (event.stats.reset) server.metrics.media_resets +|= 1;
             }
@@ -2041,6 +2047,33 @@ fn serveInternal(
                 for (&server.clients.items) |*slot| {
                     const client = slot.* orelse continue;
                     if (client.attachments.find(active.id)) |attachment| attachment.resetGraphics();
+                }
+            }
+            // The media actor is idle exactly here, before its reschedule
+            // below. Freeze the next transfer for every attachment of this
+            // pane now, so the send loop can drain it whenever the transport
+            // becomes ready instead of betting on catching this window open.
+            // This lets a continuously streaming pane sync at the ingest rate
+            // rather than at the rate of media-idle/socket-ready coincidences.
+            for (&server.clients.items) |*slot| {
+                const client = slot.* orelse continue;
+                const attachment = client.attachments.find(active.id) orelse continue;
+                if (attachment.transfer != null) continue;
+                if (!attachment.graphics_batch_active and
+                    attachment.observed_graphics_revision == active.graphics_revision)
+                    continue;
+                const staged = graphics_sync.stageNextTransfer(
+                    attachment,
+                    Server.availableGraphicsCredit(&client.attachments),
+                ) catch blk: {
+                    abandonGraphicsBatch(attachment);
+                    break :blk .idle;
+                };
+                switch (staged) {
+                    .staged => if (comptime diagnostics.enabled) {
+                        server.metrics.graphics_transfers_staged +|= 1;
+                    },
+                    .blocked, .idle => {},
                 }
             }
             try schedulePaneResponse(io, &select, active);
