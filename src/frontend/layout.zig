@@ -11,6 +11,11 @@ const max_nodes = max_panes * 2 - 1;
 const NodeIndex = u8;
 const index_capacity = max_panes * 2;
 const ViewIndex = core.fixed_index.SlotIndex(index_capacity);
+const ratio_scale: u16 = 10_000;
+const default_split_ratio: u16 = ratio_scale / 2;
+const minimum_split_ratio: u16 = ratio_scale / 10;
+const maximum_split_ratio: u16 = ratio_scale - minimum_split_ratio;
+pub const resize_step: u16 = ratio_scale / 20;
 
 pub const Axis = enum {
     /// Children occupy the left and right halves.
@@ -28,6 +33,7 @@ pub const Direction = enum {
 
 const Split = struct {
     axis: Axis,
+    ratio: u16 = default_split_ratio,
     first: NodeIndex,
     second: NodeIndex,
 };
@@ -88,7 +94,7 @@ pub const Snapshot = struct {
             .vertical => view.outer.w >= 3 and view.outer.h >= 7,
         };
         if (!enough_space) return null;
-        const first, const second = splitArea(view.outer, axis);
+        const first, const second = splitArea(view.outer, axis, default_split_ratio);
         return .{
             .existing_content = borderedContent(first),
             .new_content = borderedContent(second),
@@ -169,6 +175,7 @@ pub const Layout = struct {
     root: ?NodeIndex = null,
     focused_pane: schema.PaneId = .invalid,
     pane_count: u8 = 0,
+    fullscreen: bool = false,
     revision: u64 = 1,
 
     pub fn count(layout: *const Layout) usize {
@@ -183,6 +190,10 @@ pub const Layout = struct {
         return layout.revision;
     }
 
+    pub fn isFullscreen(layout: *const Layout) bool {
+        return layout.fullscreen;
+    }
+
     pub fn contains(layout: *const Layout, pane_id: schema.PaneId) bool {
         return layout.findLeaf(pane_id) != null;
     }
@@ -194,6 +205,7 @@ pub const Layout = struct {
         layout.root = 0;
         layout.focused_pane = pane_id;
         layout.pane_count = 1;
+        layout.fullscreen = false;
         layout.changed();
     }
 
@@ -222,7 +234,11 @@ pub const Layout = struct {
         layout.nodes[second] = .{ .parent = target, .node = .{ .leaf = new_pane } };
         layout.nodes[target] = .{
             .parent = parent,
-            .node = .{ .split = .{ .axis = axis, .first = first, .second = second } },
+            .node = .{ .split = .{
+                .axis = axis,
+                .first = first,
+                .second = second,
+            } },
         };
         layout.focused_pane = new_pane;
         layout.pane_count += 1;
@@ -236,6 +252,7 @@ pub const Layout = struct {
             layout.root = null;
             layout.focused_pane = .invalid;
             layout.pane_count = 0;
+            layout.fullscreen = false;
             layout.changed();
             return true;
         };
@@ -256,6 +273,7 @@ pub const Layout = struct {
         layout.pane_count -= 1;
         if (layout.focused_pane == pane_id)
             layout.focused_pane = layout.firstLeaf(parent).?;
+        if (layout.pane_count <= 1) layout.fullscreen = false;
         layout.changed();
         return true;
     }
@@ -275,13 +293,50 @@ pub const Layout = struct {
     ) ?schema.PaneId {
         const current_id = layout.focused() orelse return null;
         var geometry: Snapshot = .{};
-        layout.snapshot(area, &geometry);
+        layout.snapshotTiled(area, &geometry);
         const candidate = geometry.focusTarget(current_id, direction);
         if (candidate) |pane_id| {
             layout.focused_pane = pane_id;
             layout.changed();
         }
         return candidate;
+    }
+
+    /// Moves the nearest split edge in `direction` by five percent. If the
+    /// requested edge is outside the tab, the nearest opposite edge moves in
+    /// that direction instead. Ratios stay bounded and every leaf retains at
+    /// least one content cell along the resized axis.
+    pub fn resizeFocused(
+        layout: *Layout,
+        direction: Direction,
+        area: ui.Rect,
+    ) bool {
+        const leaf = layout.findLeaf(layout.focused_pane) orelse return false;
+        const target = layout.resizeSplit(leaf, direction) orelse return false;
+        const branch = layout.nodes[target].node.split;
+        const previous = branch.ratio;
+        const adjusted = switch (direction) {
+            .left, .up => previous -| resize_step,
+            .right, .down => previous +| resize_step,
+        };
+        const candidate = std.math.clamp(
+            adjusted,
+            minimum_split_ratio,
+            maximum_split_ratio,
+        );
+        if (candidate == previous) return false;
+        const target_area = layout.nodeArea(target, area);
+        if (!layout.ratioFits(branch, target_area, candidate)) return false;
+        layout.nodes[target].node.split.ratio = candidate;
+        layout.changed();
+        return true;
+    }
+
+    pub fn toggleFullscreen(layout: *Layout) bool {
+        if (layout.pane_count <= 1) return false;
+        layout.fullscreen = !layout.fullscreen;
+        layout.changed();
+        return true;
     }
 
     pub fn canSplit(
@@ -307,6 +362,18 @@ pub const Layout = struct {
     }
 
     pub fn snapshot(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
+        if (!layout.fullscreen) return layout.snapshotTiled(area, output);
+        output.reset(area, layout.revision);
+        const pane_id = layout.focused() orelse return;
+        output.append(.{
+            .pane_id = pane_id,
+            .outer = area,
+            .content = area,
+            .focused = true,
+        });
+    }
+
+    fn snapshotTiled(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
         output.reset(area, layout.revision);
         const root = layout.root orelse return;
         const Pending = struct { node: NodeIndex, area: ui.Rect };
@@ -328,7 +395,11 @@ pub const Layout = struct {
                     .focused = pane_id == layout.focused_pane,
                 }),
                 .split => |branch| {
-                    const first, const second = splitArea(pending.area, branch.axis);
+                    const first, const second = splitArea(
+                        pending.area,
+                        branch.axis,
+                        branch.ratio,
+                    );
                     stack[stack_len] = .{ .node = branch.second, .area = second };
                     stack_len += 1;
                     stack[stack_len] = .{ .node = branch.first, .area = first };
@@ -347,6 +418,81 @@ pub const Layout = struct {
         layout.snapshot(area, &snapshot_output);
         @memcpy(output[0..snapshot_output.len], snapshot_output.views());
         return output[0..snapshot_output.len];
+    }
+
+    fn resizeSplit(
+        layout: *const Layout,
+        leaf: NodeIndex,
+        direction: Direction,
+    ) ?NodeIndex {
+        const target_axis: Axis = switch (direction) {
+            .left, .right => .horizontal,
+            .up, .down => .vertical,
+        };
+        var fallback: ?NodeIndex = null;
+        var child = leaf;
+        while (layout.nodes[child].parent) |parent| {
+            const branch = layout.nodes[parent].node.split;
+            if (branch.axis == target_axis) {
+                const child_is_first = branch.first == child;
+                const requested_edge = switch (direction) {
+                    .left, .up => !child_is_first,
+                    .right, .down => child_is_first,
+                };
+                if (requested_edge) return parent;
+                if (fallback == null) fallback = parent;
+            }
+            child = parent;
+        }
+        return fallback;
+    }
+
+    fn nodeArea(layout: *const Layout, target: NodeIndex, area: ui.Rect) ui.Rect {
+        var path: [max_nodes]NodeIndex = undefined;
+        var path_len: usize = 0;
+        var current = target;
+        while (layout.nodes[current].parent) |parent| {
+            path[path_len] = current;
+            path_len += 1;
+            current = parent;
+        }
+        var current_area = area;
+        while (path_len != 0) {
+            path_len -= 1;
+            const child = path[path_len];
+            const branch = layout.nodes[current].node.split;
+            const first, const second = splitArea(current_area, branch.axis, branch.ratio);
+            current_area = if (branch.first == child) first else second;
+            current = child;
+        }
+        return current_area;
+    }
+
+    fn ratioFits(
+        layout: *const Layout,
+        branch: Split,
+        area: ui.Rect,
+        ratio: u16,
+    ) bool {
+        const first, const second = splitArea(area, branch.axis, ratio);
+        const first_extent = extent(first, branch.axis);
+        const second_extent = extent(second, branch.axis);
+        return first_extent >= layout.minimumExtent(branch.first, branch.axis) and
+            second_extent >= layout.minimumExtent(branch.second, branch.axis);
+    }
+
+    fn minimumExtent(layout: *const Layout, node_index: NodeIndex, axis: Axis) u16 {
+        return switch (layout.nodes[node_index].node) {
+            .empty => 0,
+            .leaf => 3,
+            .split => |branch| {
+                const first = layout.minimumExtent(branch.first, axis);
+                const second = layout.minimumExtent(branch.second, axis);
+                if (branch.axis == axis)
+                    return first +| 1 +| second;
+                return @max(first, second);
+            },
+        };
     }
 
     fn allocateNode(layout: *Layout) ?NodeIndex {
@@ -379,12 +525,15 @@ pub const Layout = struct {
     }
 };
 
-fn splitArea(area: ui.Rect, axis: Axis) [2]ui.Rect {
+fn splitArea(area: ui.Rect, axis: Axis, ratio: u16) [2]ui.Rect {
+    std.debug.assert(ratio <= ratio_scale);
     return switch (axis) {
         .horizontal => horizontal: {
             const gutter: u16 = @intFromBool(area.w >= 3);
             const usable = area.w - gutter;
-            const first_width = usable / 2;
+            const first_width: u16 = @intCast(
+                @as(u32, usable) * ratio / ratio_scale,
+            );
             break :horizontal .{
                 .{ .x = area.x, .y = area.y, .w = first_width, .h = area.h },
                 .{
@@ -398,7 +547,9 @@ fn splitArea(area: ui.Rect, axis: Axis) [2]ui.Rect {
         .vertical => vertical: {
             const gutter: u16 = @intFromBool(area.h >= 5);
             const usable = area.h - gutter;
-            const first_height = usable / 2;
+            const first_height: u16 = @intCast(
+                @as(u32, usable) * ratio / ratio_scale,
+            );
             break :vertical .{
                 .{ .x = area.x, .y = area.y, .w = area.w, .h = first_height },
                 .{
@@ -409,6 +560,13 @@ fn splitArea(area: ui.Rect, axis: Axis) [2]ui.Rect {
                 },
             };
         },
+    };
+}
+
+fn extent(area: ui.Rect, axis: Axis) u16 {
+    return switch (axis) {
+        .horizontal => area.w,
+        .vertical => area.h,
     };
 }
 
@@ -450,6 +608,111 @@ test "directional focus follows pane geometry" {
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), layout.focusDirection(.left, area).?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), layout.focusDirection(.right, area).?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(3)), layout.focusDirection(.down, area).?);
+}
+
+test "directional resize grows and shrinks horizontal and vertical panes" {
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+
+    var horizontal: Layout = .{};
+    try horizontal.addRoot(@enumFromInt(1));
+    try horizontal.splitFocused(@enumFromInt(2), .horizontal);
+    try std.testing.expect(horizontal.focusPane(@enumFromInt(1)));
+    var geometry: Snapshot = .{};
+    horizontal.snapshot(area, &geometry);
+    const horizontal_before = geometry.find(@enumFromInt(1)).?.outer.w;
+    try std.testing.expect(horizontal.resizeFocused(.right, area));
+    horizontal.snapshot(area, &geometry);
+    try std.testing.expect(geometry.find(@enumFromInt(1)).?.outer.w > horizontal_before);
+    try std.testing.expect(horizontal.resizeFocused(.left, area));
+    horizontal.snapshot(area, &geometry);
+    try std.testing.expectEqual(horizontal_before, geometry.find(@enumFromInt(1)).?.outer.w);
+
+    var vertical: Layout = .{};
+    try vertical.addRoot(@enumFromInt(1));
+    try vertical.splitFocused(@enumFromInt(2), .vertical);
+    try std.testing.expect(vertical.focusPane(@enumFromInt(1)));
+    vertical.snapshot(area, &geometry);
+    const vertical_before = geometry.find(@enumFromInt(1)).?.outer.h;
+    try std.testing.expect(vertical.resizeFocused(.down, area));
+    vertical.snapshot(area, &geometry);
+    try std.testing.expect(geometry.find(@enumFromInt(1)).?.outer.h > vertical_before);
+    try std.testing.expect(vertical.resizeFocused(.up, area));
+    vertical.snapshot(area, &geometry);
+    try std.testing.expectEqual(vertical_before, geometry.find(@enumFromInt(1)).?.outer.h);
+}
+
+test "resize selects the nearest matching ancestor and preserves usable pane content" {
+    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    try layout.splitFocused(@enumFromInt(2), .horizontal);
+    try layout.splitFocused(@enumFromInt(3), .vertical);
+
+    var geometry: Snapshot = .{};
+    layout.snapshot(area, &geometry);
+    const left_before = geometry.find(@enumFromInt(1)).?.outer.w;
+    const focused_before = geometry.find(@enumFromInt(3)).?.outer.h;
+    try std.testing.expect(layout.resizeFocused(.left, area));
+    layout.snapshot(area, &geometry);
+    try std.testing.expect(geometry.find(@enumFromInt(1)).?.outer.w < left_before);
+    try std.testing.expectEqual(focused_before, geometry.find(@enumFromInt(3)).?.outer.h);
+
+    var constrained: Layout = .{};
+    try constrained.addRoot(@enumFromInt(4));
+    try constrained.splitFocused(@enumFromInt(5), .horizontal);
+    try std.testing.expect(constrained.focusPane(@enumFromInt(4)));
+    while (constrained.resizeFocused(.right, .{ .w = 7, .h = 3 })) {}
+    constrained.snapshot(.{ .w = 7, .h = 3 }, &geometry);
+    for (geometry.views()) |view| {
+        try std.testing.expect(view.content.w >= 1);
+        try std.testing.expect(view.content.h >= 1);
+    }
+}
+
+test "fullscreen toggles one pane without destroying the tiled layout" {
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    try std.testing.expect(!layout.toggleFullscreen());
+    try layout.splitFocused(@enumFromInt(2), .horizontal);
+    try std.testing.expect(layout.focusPane(@enumFromInt(1)));
+    try std.testing.expect(layout.resizeFocused(.right, area));
+
+    var geometry: Snapshot = .{};
+    layout.snapshot(area, &geometry);
+    const first_width = geometry.find(@enumFromInt(1)).?.outer.w;
+    const second_width = geometry.find(@enumFromInt(2)).?.outer.w;
+
+    try std.testing.expect(layout.toggleFullscreen());
+    try std.testing.expect(layout.isFullscreen());
+    layout.snapshot(area, &geometry);
+    try std.testing.expectEqual(@as(usize, 1), geometry.views().len);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), geometry.views()[0].pane_id);
+    try std.testing.expectEqual(area, geometry.views()[0].outer);
+    try std.testing.expectEqual(area, geometry.views()[0].content);
+
+    try std.testing.expectEqual(
+        @as(schema.PaneId, @enumFromInt(2)),
+        layout.focusDirection(.right, area).?,
+    );
+    layout.snapshot(area, &geometry);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), geometry.views()[0].pane_id);
+
+    try std.testing.expect(layout.toggleFullscreen());
+    try std.testing.expect(!layout.isFullscreen());
+    layout.snapshot(area, &geometry);
+    try std.testing.expectEqual(@as(usize, 2), geometry.views().len);
+    try std.testing.expectEqual(first_width, geometry.find(@enumFromInt(1)).?.outer.w);
+    try std.testing.expectEqual(second_width, geometry.find(@enumFromInt(2)).?.outer.w);
+}
+
+test "removing a fullscreen pane clears fullscreen when one pane remains" {
+    var layout: Layout = .{};
+    try layout.addRoot(@enumFromInt(1));
+    try layout.splitFocused(@enumFromInt(2), .horizontal);
+    try std.testing.expect(layout.toggleFullscreen());
+    try std.testing.expect(layout.remove(@enumFromInt(2)));
+    try std.testing.expect(!layout.isFullscreen());
 }
 
 test "removing a leaf compacts its parent and preserves the sibling" {

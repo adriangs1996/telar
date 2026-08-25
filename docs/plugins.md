@@ -69,7 +69,7 @@ Configuration binds it through stable plugin and action IDs:
 
 ```lua
 telar.bind(
-  { "ctrl+b", "p" },
+  { "p" },
   telar.action.plugin({ plugin = "dev.example.plugin", action = "toggle" })
 )
 ```

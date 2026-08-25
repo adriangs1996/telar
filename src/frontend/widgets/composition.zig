@@ -35,6 +35,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .area = input.regions.top,
         .sidebar_visible = !input.regions.sidebar.isEmpty(),
         .location = input.model.location,
+        .workspace_name = if (input.tabs) |tabs| tabs.workspaceName() else "",
     });
 
     const sidebar_output = sidebar.render(context, .{

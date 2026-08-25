@@ -8,6 +8,7 @@ const frame = @import("frame.zig");
 
 pub const max_input_bytes = 64 * 1024;
 pub const max_cwd_bytes = 4096;
+pub const max_workspace_name_bytes = max_cwd_bytes;
 pub const max_argument_count = 64;
 pub const max_argument_bytes = 128 * 1024;
 pub const max_environment_count = 256;

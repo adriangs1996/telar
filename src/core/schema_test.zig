@@ -327,6 +327,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try schema.encodeWorkspaceSnapshot(helper.space(), .{
             .request_id = @enumFromInt(50),
             .workspace = .{ .workspace = @enumFromInt(7) },
+            .name = "telar",
             .tabs = &descriptors,
         }),
     ));
@@ -479,7 +480,7 @@ const golden = struct {
     pub const runtime_stopping = "85";
     pub const tab_snapshot = "86040000000000000001020000000000000006000000000000000200030000000000000000090000000000000001";
     pub const history_results = "87210000000000000002000b0000000000000003000000000000000068e5cf8b01000010a40000000000000107000000000e0000007a6967206275696c6420746573740b002f776f726b2f74656c61720b002f776f726b2f74656c61720c000000000000000300000000000000e86be5cf8b0100000900000000000000000109000000736c656570203630300b002f776f726b2f74656c61720b002f776f726b2f74656c6172";
-    pub const workspace_snapshot = "883200000000000000000700000000000000020003000000000000000000020004006d61696e04000000000000000100010004006c6f6773";
+    pub const workspace_snapshot = "883200000000000000000700000000000000050074656c6172020003000000000000000000020004006d61696e04000000000000000100010004006c6f6773";
     pub const tab_created = "8933000000000000000007000000000000000300000000000000010004006c6f67730900000000000000";
     pub const tab_renamed = "8a340000000000000000070000000000000003000000000000000600736572766572";
     pub const tab_closed = "8b0000000000000000000700000000000000030000000000000001";
@@ -570,8 +571,10 @@ test "a workspace snapshot with zero tabs round trips" {
     const decoded = (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(&buffer, .{
         .request_id = @enumFromInt(60),
         .workspace = .{ .workspace = @enumFromInt(7) },
+        .name = "telar",
         .tabs = &.{},
     }))).workspace_snapshot;
+    try std.testing.expectEqualStrings("telar", decoded.name);
     try std.testing.expectEqual(@as(u16, 0), decoded.tab_count);
     var tabs = decoded.tabs();
     try std.testing.expectEqual(@as(?schema.TabDescriptor, null), tabs.next());
@@ -896,8 +899,10 @@ test "tab lifecycle server messages round trip" {
     const snapshot = (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(&buffer, .{
         .request_id = @enumFromInt(50),
         .workspace = workspace,
+        .name = "telar",
         .tabs = &descriptors,
     }))).workspace_snapshot;
+    try std.testing.expectEqualStrings("telar", snapshot.name);
     var tabs = snapshot.tabs();
     try std.testing.expectEqualDeep(descriptors[0], (try tabs.next()).?);
     try std.testing.expectEqualDeep(descriptors[1], (try tabs.next()).?);

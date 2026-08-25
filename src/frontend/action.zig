@@ -23,6 +23,8 @@ pub const TabMove = enum(u8) { previous, next };
 pub const Action = union(enum) {
     split_pane: SplitDirection,
     focus_pane: Direction,
+    resize_pane: Direction,
+    toggle_pane_fullscreen,
     toggle_sidebar,
     close_pane,
     new_tab,
@@ -50,6 +52,16 @@ pub const Action = union(enum) {
             return .{ .focus_pane = .up };
         if (std.mem.eql(u8, name, "focus-down"))
             return .{ .focus_pane = .down };
+        if (std.mem.eql(u8, name, "resize-left"))
+            return .{ .resize_pane = .left };
+        if (std.mem.eql(u8, name, "resize-right"))
+            return .{ .resize_pane = .right };
+        if (std.mem.eql(u8, name, "resize-up"))
+            return .{ .resize_pane = .up };
+        if (std.mem.eql(u8, name, "resize-down"))
+            return .{ .resize_pane = .down };
+        if (std.mem.eql(u8, name, "toggle-pane-fullscreen"))
+            return .toggle_pane_fullscreen;
         if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
         if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
         if (std.mem.eql(u8, name, "new-tab")) return .new_tab;
@@ -88,6 +100,14 @@ test "built-in names compile to parameterized actions" {
     try std.testing.expectEqualDeep(
         Action{ .select_tab_offset = -1 },
         try Action.parse("previous-tab"),
+    );
+    try std.testing.expectEqualDeep(
+        Action{ .resize_pane = .up },
+        try Action.parse("resize-up"),
+    );
+    try std.testing.expectEqualDeep(
+        Action.toggle_pane_fullscreen,
+        try Action.parse("toggle-pane-fullscreen"),
     );
     try std.testing.expectError(error.UnknownAction, Action.parse("select-tab-0"));
     try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));

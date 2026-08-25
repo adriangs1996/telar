@@ -11,7 +11,7 @@ const theme_mod = @import("theme.zig");
 
 const Io = std.Io;
 
-pub const api_version: u16 = 1;
+pub const api_version: u16 = 2;
 pub const default_memory_limit = config_model.default_memory_limit;
 pub const default_load_instruction_limit = config_model.default_load_instruction_limit;
 pub const default_callback_instruction_limit: u64 = 100_000;
@@ -19,6 +19,7 @@ pub const default_callback_deadline_ns: u64 = 10 * std.time.ns_per_ms;
 pub const hook_instruction_interval: u32 = 1_000;
 pub const max_bindings = config_model.max_bindings;
 pub const max_binding_keys = config_model.max_binding_keys;
+pub const max_binding_suffix_keys = max_binding_keys - 1;
 pub const max_callbacks = max_bindings;
 pub const max_callback_effects = config_model.max_callback_effects;
 pub const max_expression_keys = config_model.max_expression_keys;
@@ -237,6 +238,7 @@ pub const Generation = struct {
             return err;
         };
         generation.parseSnapshot(diagnostic) catch |err| return err;
+        generation.syncCallbackTriggers();
         lua.lua_settop(generation.vm.state, 0);
         return generation;
     }
@@ -727,10 +729,15 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "theme", "sidebar", "input", "keybindings" },
+            &.{ "prefix", "theme", "sidebar", "input", "keybindings" },
             "config.client",
             diagnostic,
         );
+
+        _ = lua.lua_getfield(state, absolute, "prefix");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parsePrefix(-1, diagnostic);
+        pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "theme");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
@@ -751,6 +758,22 @@ pub const Generation = struct {
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseBindings(-1, diagnostic);
         pop(state, 1);
+    }
+
+    fn parsePrefix(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const value = string(generation.vm.state, index) orelse {
+            diagnostic.set("config.client.prefix must be a string", .{});
+            return error.InvalidConfig;
+        };
+        const prefix = keybind.parseKey(value) catch |err| {
+            diagnostic.set("invalid config.client.prefix: {s}", .{@errorName(err)});
+            return error.InvalidConfig;
+        };
+        generation.snapshot.prefix = prefix;
+        for (generation.snapshot.bindings[0..generation.snapshot.binding_count], 0..) |*binding, binding_index| {
+            if (generation.snapshot.bindings_prefixed[binding_index])
+                binding.keys[0] = prefix;
+        }
     }
 
     fn parseInputOptions(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -844,7 +867,7 @@ pub const Generation = struct {
         generation.snapshot.binding_count = 0;
         for (0..count) |binding_index| {
             _ = lua.lua_geti(state, absolute, @intCast(binding_index + 1));
-            generation.snapshot.bindings[binding_index] = generation.parseBinding(
+            const parsed = generation.parseBinding(
                 -1,
                 binding_index,
                 diagnostic,
@@ -852,17 +875,24 @@ pub const Generation = struct {
                 pop(state, 1);
                 return err;
             };
+            generation.snapshot.bindings[binding_index] = parsed.binding;
+            generation.snapshot.bindings_prefixed[binding_index] = parsed.prefixed;
             pop(state, 1);
         }
         generation.snapshot.binding_count = @intCast(count);
     }
+
+    const ParsedBinding = struct {
+        binding: ConfiguredBinding,
+        prefixed: bool,
+    };
 
     fn parseBinding(
         generation: *Generation,
         index: c_int,
         binding_index: usize,
         diagnostic: *Diagnostic,
-    ) !ConfiguredBinding {
+    ) !ParsedBinding {
         const state = generation.vm.state;
         const absolute = lua.lua_absindex(state, index);
         if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
@@ -872,10 +902,20 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "keys", "action", "expression" },
+            &.{ "keys", "action", "expression", "prefixed" },
             "keybinding",
             diagnostic,
         );
+
+        _ = lua.lua_getfield(state, absolute, "prefixed");
+        const prefixed = if (lua.lua_type(state, -1) == lua.LUA_TBOOLEAN)
+            lua.lua_toboolean(state, -1) != 0
+        else {
+            pop(state, 1);
+            diagnostic.set("keybinding {d}.prefixed must be a boolean", .{binding_index + 1});
+            return error.InvalidConfig;
+        };
+        pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "keys");
         if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
@@ -884,22 +924,33 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
         const key_count = lua.lua_rawlen(state, -1);
-        if (key_count == 0 or key_count > max_binding_keys) {
+        const key_limit: usize = if (prefixed) max_binding_suffix_keys else max_binding_keys;
+        if (key_count == 0 or key_count > key_limit) {
             pop(state, 1);
             diagnostic.set(
                 "keybinding {d}.keys must contain 1..{d} keys",
-                .{ binding_index + 1, max_binding_keys },
+                .{ binding_index + 1, key_limit },
             );
             return error.InvalidConfig;
         }
-        var keys: [max_binding_keys][]const u8 = undefined;
+        var keys: [max_binding_keys]keybind.Key = undefined;
+        const key_offset: usize = @intFromBool(prefixed);
+        if (prefixed) keys[0] = generation.snapshot.prefix;
         for (0..key_count) |key_index| {
             _ = lua.lua_geti(state, -1, @intCast(key_index + 1));
-            keys[key_index] = string(state, -1) orelse {
+            const name = string(state, -1) orelse {
                 pop(state, 2);
                 diagnostic.set(
                     "keybinding {d}.keys[{d}] must be a string",
                     .{ binding_index + 1, key_index + 1 },
+                );
+                return error.InvalidConfig;
+            };
+            keys[key_offset + key_index] = keybind.parseKey(name) catch |err| {
+                pop(state, 2);
+                diagnostic.set(
+                    "invalid keybinding {d}: {s}",
+                    .{ binding_index + 1, @errorName(err) },
                 );
                 return error.InvalidConfig;
             };
@@ -925,7 +976,8 @@ pub const Generation = struct {
             return err;
         };
         pop(state, 1);
-        const binding = ConfiguredBinding.parse(keys[0..key_count], action) catch |err| {
+        const total_key_count = key_offset + key_count;
+        const binding = ConfiguredBinding.init(keys[0..total_key_count], action) catch |err| {
             diagnostic.set("invalid keybinding {d}: {s}", .{ binding_index + 1, @errorName(err) });
             return error.InvalidConfig;
         };
@@ -937,7 +989,18 @@ pub const Generation = struct {
             },
             else => {},
         }
-        return binding;
+        return .{ .binding = binding, .prefixed = prefixed };
+    }
+
+    fn syncCallbackTriggers(generation: *Generation) void {
+        for (generation.snapshot.bindings[0..generation.snapshot.binding_count]) |*binding| switch (binding.action) {
+            .lua_callback, .lua_expr => |reference| {
+                const callback = &generation.callbacks[reference.id];
+                @memcpy(callback.trigger[0..binding.len], binding.keys[0..binding.len]);
+                callback.trigger_len = binding.len;
+            },
+            else => {},
+        };
     }
 
     fn parseAction(
@@ -1011,10 +1074,12 @@ pub const Generation = struct {
                 return error.InvalidConfig;
             } };
         }
-        if (std.mem.eql(u8, kind, "focus-pane")) {
+        if (std.mem.eql(u8, kind, "focus-pane") or
+            std.mem.eql(u8, kind, "resize-pane"))
+        {
             try ensureOnlyFields(state, absolute, &.{ "kind", "direction" }, "action", diagnostic);
             const direction = try requiredStringField(state, absolute, "direction", diagnostic);
-            return .{ .focus_pane = if (std.mem.eql(u8, direction, "left"))
+            const parsed_direction: action_mod.Direction = if (std.mem.eql(u8, direction, "left"))
                 .left
             else if (std.mem.eql(u8, direction, "right"))
                 .right
@@ -1023,9 +1088,16 @@ pub const Generation = struct {
             else if (std.mem.eql(u8, direction, "down"))
                 .down
             else {
-                diagnostic.set("focus-pane direction must be left, right, up, or down", .{});
+                diagnostic.set(
+                    "{s} direction must be left, right, up, or down",
+                    .{kind},
+                );
                 return error.InvalidConfig;
-            } };
+            };
+            return if (std.mem.eql(u8, kind, "focus-pane"))
+                .{ .focus_pane = parsed_direction }
+            else
+                .{ .resize_pane = parsed_direction };
         }
         if (std.mem.eql(u8, kind, "select-tab")) {
             try ensureOnlyFields(state, absolute, &.{ "kind", "index" }, "action", diagnostic);
@@ -1102,10 +1174,16 @@ const bootstrap =
     \\function telar.theme(value) return value end
     \\function telar.plugin(value) return value end
     \\function telar.bind(keys, action)
-    \\  return { keys = keys, action = action, expression = false }
+    \\  return { keys = keys, action = action, expression = false, prefixed = true }
     \\end
     \\function telar.bind_expr(keys, callback)
-    \\  return { keys = keys, action = callback, expression = true }
+    \\  return { keys = keys, action = callback, expression = true, prefixed = true }
+    \\end
+    \\function telar.bind_global(keys, action)
+    \\  return { keys = keys, action = action, expression = false, prefixed = false }
+    \\end
+    \\function telar.bind_expr_global(keys, callback)
+    \\  return { keys = keys, action = callback, expression = true, prefixed = false }
     \\end
     \\function telar.input.consume() return { input_kind = "consume" } end
     \\function telar.input.forward() return { input_kind = "forward" } end
@@ -1124,6 +1202,9 @@ const bootstrap =
     \\function telar.action.focus_pane(options)
     \\  return { kind = "focus-pane", direction = options.direction }
     \\end
+    \\function telar.action.resize_pane(options)
+    \\  return { kind = "resize-pane", direction = options.direction }
+    \\end
     \\function telar.action.select_tab(options)
     \\  return { kind = "select-tab", index = options.index }
     \\end
@@ -1137,8 +1218,8 @@ const bootstrap =
     \\  return { kind = "plugin", plugin = options.plugin, action = options.action }
     \\end
     \\for _, name in ipairs({
-    \\  "toggle-sidebar", "close-pane", "new-tab", "rename-tab",
-    \\  "close-tab", "detach",
+    \\  "toggle-pane-fullscreen", "toggle-sidebar", "close-pane", "new-tab",
+    \\  "rename-tab", "close-tab", "detach",
     \\}) do
     \\  local stable_name = name
     \\  telar.action[name:gsub("-", "_")] = function()
@@ -1666,8 +1747,9 @@ test "Lua VM interrupts an instruction loop" {
 test "client config compiles theme, bindings, and callbacks" {
     const source =
         \\local telar = require("telar")
-        \\local config = telar.config({ api_version = 1 })
+        \\local config = telar.config({ api_version = 2 })
         \\config.client = {
+        \\  prefix = "ctrl+s",
         \\  theme = telar.theme({
         \\    base = "vesper",
         \\    colors = { accent = "#010203" },
@@ -1675,10 +1757,13 @@ test "client config compiles theme, bindings, and callbacks" {
         \\  sidebar = { visible = false, renderer = "cells" },
         \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
         \\  keybindings = {
-        \\    telar.bind({ "ctrl+b", "%" }, telar.action.split_pane({ direction = "horizontal" })),
-        \\    telar.bind({ "ctrl+b", "g" }, function(ctx)
+        \\    telar.bind({ "%" }, telar.action.split_pane({ direction = "horizontal" })),
+        \\    telar.bind({ "g" }, function(ctx)
         \\      return telar.action.toggle_sidebar()
         \\    end),
+        \\    telar.bind_global({ "ctrl+g" }, telar.action.detach()),
+        \\    telar.bind({ "R" }, telar.action.resize_pane({ direction = "right" })),
+        \\    telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
         \\  },
         \\}
         \\return config
@@ -1693,7 +1778,7 @@ test "client config compiles theme, bindings, and callbacks" {
         &diagnostic,
     );
     defer generation.deinit();
-    try std.testing.expectEqual(@as(u16, 2), generation.snapshot.binding_count);
+    try std.testing.expectEqual(@as(u16, 5), generation.snapshot.binding_count);
     try std.testing.expectEqual(@as(u16, 1), generation.callback_count);
     try std.testing.expect(!generation.snapshot.sidebar_visible);
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
@@ -1711,6 +1796,87 @@ test "client config compiles theme, bindings, and callbacks" {
         action_mod.Action{ .lua_callback = .{ .generation = 7, .id = 0 } },
         generation.snapshot.bindings[1].action,
     );
+    const ctrl_s = try keybind.parseKey("ctrl+s");
+    try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.prefix);
+    try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.bindings[0].keys[0]);
+    try std.testing.expectEqualDeep(try keybind.parseKey("%"), generation.snapshot.bindings[0].keys[1]);
+    try std.testing.expectEqual(@as(u8, 2), generation.snapshot.bindings[0].len);
+    try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.bindings[1].keys[0]);
+    try std.testing.expectEqualDeep(try keybind.parseKey("g"), generation.snapshot.bindings[1].keys[1]);
+    try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+g"), generation.snapshot.bindings[2].keys[0]);
+    try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[2].len);
+    try std.testing.expectEqual(action_mod.Action.detach, generation.snapshot.bindings[2].action);
+    try std.testing.expectEqualDeep(
+        action_mod.Action{ .resize_pane = .right },
+        generation.snapshot.bindings[3].action,
+    );
+    try std.testing.expectEqual(
+        action_mod.Action.toggle_pane_fullscreen,
+        generation.snapshot.bindings[4].action,
+    );
+}
+
+test "client config rejects an incompatible API version" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(
+        error.IncompatibleConfigApi,
+        Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            "return { api_version = 1 }",
+            "@config.lua",
+            1,
+            &diagnostic,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "config.api_version is 1; this Telar accepts 2",
+        diagnostic.message(),
+    );
+}
+
+test "client config rejects invalid prefixes" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(
+        error.InvalidConfig,
+        Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            "return { api_version = 2, client = { prefix = 'ctrl' } }",
+            "@config.lua",
+            1,
+            &diagnostic,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "invalid config.client.prefix: MissingKey",
+        diagnostic.message(),
+    );
+}
+
+test "client config rejects invalid resize directions" {
+    const source =
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { keybindings = {
+        \\  telar.bind({ "r" }, telar.action.resize_pane({ direction = "diagonal" })),
+        \\} } }
+    ;
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(
+        error.InvalidConfig,
+        Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            source,
+            "@config.lua",
+            1,
+            &diagnostic,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "resize-pane direction must be left, right, up, or down",
+        diagnostic.message(),
+    );
 }
 
 test "client config rejects unknown fields without replacing a generation" {
@@ -1720,7 +1886,7 @@ test "client config rejects unknown fields without replacing a generation" {
         Generation.loadSource(
             std.testing.allocator,
             std.testing.io,
-            "return { api_version = 1, client = { typo = true } }",
+            "return { api_version = 2, client = { typo = true } }",
             "@config.lua",
             1,
             &diagnostic,
@@ -1733,9 +1899,9 @@ test "Lua callback receives an immutable snapshot and returns bounded effects" {
     const source =
         \\local telar = require("telar")
         \\return {
-        \\  api_version = 1,
+        \\  api_version = 2,
         \\  client = { keybindings = {
-        \\    telar.bind({ "ctrl+b", "s" }, function(ctx)
+        \\    telar.bind({ "s" }, function(ctx)
         \\      if ctx.tab_count ~= 3 or ctx.active_tab_index ~= 2 then error("bad context") end
         \\      return { telar.action.toggle_sidebar(), telar.action.focus_pane({ direction = "left" }) }
         \\    end),
@@ -1775,9 +1941,9 @@ test "Lua expression returns semantic input instead of terminal bytes" {
     const source =
         \\local telar = require("telar")
         \\return {
-        \\  api_version = 1,
+        \\  api_version = 2,
         \\  client = { keybindings = {
-        \\    telar.bind_expr({ "ctrl+b", "h" }, function(ctx)
+        \\    telar.bind_expr({ "h" }, function(ctx)
         \\      return telar.input.keys({ "left", "enter" })
         \\    end),
         \\  } },
@@ -1813,8 +1979,8 @@ test "Lua expression returns semantic input instead of terminal bytes" {
 test "Lua callback cannot mutate its context" {
     const source =
         \\local telar = require("telar")
-        \\return { api_version = 1, client = { keybindings = {
-        \\  telar.bind({ "ctrl+b", "m" }, function(ctx)
+        \\return { api_version = 2, client = { keybindings = {
+        \\  telar.bind({ "m" }, function(ctx)
         \\    ctx.tab_count = 99
         \\    return telar.action.toggle_sidebar()
         \\  end),
@@ -1850,8 +2016,8 @@ test "Lua callback cannot mutate its context" {
 test "Lua callback execution is interrupted by its instruction budget" {
     const source =
         \\local telar = require("telar")
-        \\return { api_version = 1, client = { keybindings = {
-        \\  telar.bind({ "ctrl+b", "l" }, function(ctx) while true do end end),
+        \\return { api_version = 2, client = { keybindings = {
+        \\  telar.bind({ "l" }, function(ctx) while true do end end),
         \\} } }
     ;
     var diagnostic: Diagnostic = .{};
@@ -1886,7 +2052,7 @@ test "configuration environment excludes ambient authority" {
     const generation = try Generation.loadSource(
         std.testing.allocator,
         std.testing.io,
-        "return { api_version = 1, client = { sidebar = { visible = io == nil and os == nil and debug == nil } } }",
+        "return { api_version = 2, client = { sidebar = { visible = io == nil and os == nil and debug == nil } } }",
         "@config.lua",
         1,
         &diagnostic,
@@ -1900,7 +2066,7 @@ test "runtime config compiles bounded graphics quotas" {
     const generation = try Generation.loadSource(
         std.testing.allocator,
         std.testing.io,
-        "return { api_version = 1, runtime = { history = { path = 'state/history.db' }, graphics = { pane_mib = 32, global_mib = 128 } } }",
+        "return { api_version = 2, runtime = { history = { path = 'state/history.db' }, graphics = { pane_mib = 32, global_mib = 128 } } }",
         "@config.lua",
         1,
         &diagnostic,
@@ -1923,12 +2089,23 @@ test "runtime config compiles bounded graphics quotas" {
 test "profile overlays base config before CLI locks are applied" {
     const source =
         \\return {
-        \\  api_version = 1,
-        \\  client = { sidebar = { visible = true, renderer = "automatic" } },
+        \\  api_version = 2,
+        \\  client = {
+        \\    prefix = "ctrl+b",
+        \\    sidebar = { visible = true, renderer = "automatic" },
+        \\    keybindings = {
+        \\      require("telar").bind_expr({ "f" }, function(ctx)
+        \\        return require("telar").input.forward()
+        \\      end),
+        \\    },
+        \\  },
         \\  runtime = { graphics = { pane_mib = 64, global_mib = 256 } },
         \\  profiles = {
         \\    remote = {
-        \\      client = { sidebar = { visible = false, renderer = "cells" } },
+        \\      client = {
+        \\        prefix = "ctrl+s",
+        \\        sidebar = { visible = false, renderer = "cells" },
+        \\      },
         \\      runtime = { graphics = { pane_mib = 16, global_mib = 64 } },
         \\    },
         \\  },
@@ -1949,6 +2126,24 @@ test "profile overlays base config before CLI locks are applied" {
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(usize, 16 * 1024 * 1024), generation.snapshot.runtime.graphics_pane_bytes);
     try std.testing.expectEqual(@as(usize, 64 * 1024 * 1024), generation.snapshot.runtime.graphics_global_bytes);
+    const binding = generation.snapshot.bindings[0];
+    try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+s"), binding.keys[0]);
+    try std.testing.expectEqualDeep(try keybind.parseKey("f"), binding.keys[1]);
+    const decision = try generation.invokeExpression(
+        binding.action.lua_expr,
+        .{
+            .sidebar_visible = false,
+            .tab_count = 1,
+            .active_tab_index = 0,
+            .pane_count = 1,
+            .focused_pane_id = 1,
+        },
+        &diagnostic,
+    );
+    try std.testing.expect(decision == .forward_binding);
+    try std.testing.expectEqual(@as(u8, 2), decision.forward_binding.len);
+    try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+s"), decision.forward_binding.items[0]);
+    try std.testing.expectEqualDeep(try keybind.parseKey("f"), decision.forward_binding.items[1]);
 }
 
 test "selected profile must exist" {
@@ -1958,7 +2153,7 @@ test "selected profile must exist" {
         Generation.loadSourceProfile(
             std.testing.allocator,
             std.testing.io,
-            "return { api_version = 1, profiles = {} }",
+            "return { api_version = 2, profiles = {} }",
             "@config.lua",
             1,
             "missing",
@@ -1975,7 +2170,7 @@ test "unselected profiles are still validated deeply" {
         Generation.loadSource(
             std.testing.allocator,
             std.testing.io,
-            "return { api_version = 1, profiles = { broken = { client = { typo = true } } } }",
+            "return { api_version = 2, profiles = { broken = { client = { typo = true } } } }",
             "@config.lua",
             1,
             &diagnostic,
@@ -1998,7 +2193,7 @@ test "local modules are contained and participate in reload fingerprints" {
         defer config.close(io);
         try config.writeStreamingAll(
             io,
-            "local s = require('settings'); return { api_version = 1, client = { sidebar = s } }",
+            "local s = require('settings'); return { api_version = 2, client = { sidebar = s } }",
         );
     }
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -2054,7 +2249,7 @@ test "local require rejects a symlink escaping the config directory" {
         defer config.close(io);
         try config.writeStreamingAll(
             io,
-            "require('escape'); return { api_version = 1 }",
+            "require('escape'); return { api_version = 2 }",
         );
     }
     var config_directory_buffer: [std.fs.max_path_bytes]u8 = undefined;

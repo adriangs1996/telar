@@ -20,6 +20,7 @@ const codec = @import("codec.zig");
 
 pub const max_input_bytes = types.max_input_bytes;
 pub const max_cwd_bytes = types.max_cwd_bytes;
+pub const max_workspace_name_bytes = types.max_workspace_name_bytes;
 pub const max_argument_count = types.max_argument_count;
 pub const max_argument_bytes = types.max_argument_bytes;
 pub const max_environment_count = types.max_environment_count;
@@ -355,12 +356,14 @@ pub const RequestFailed = struct {
 pub const WorkspaceSnapshot = struct {
     request_id: RequestId,
     workspace: WorkspaceLocation,
+    name: []const u8,
     tabs: []const TabDescriptor,
 };
 
 pub const WorkspaceSnapshotView = struct {
     request_id: RequestId,
     workspace: WorkspaceLocation,
+    name: []const u8,
     tab_count: u16,
     encoded_tabs: []const u8,
 
@@ -833,11 +836,13 @@ pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
 
 pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]const u8 {
     try validateRequestId(message.request_id);
+    try validateBytes(message.name, max_workspace_name_bytes, false);
     if (message.tabs.len > max_tabs_per_workspace) return error.TooManyTabs;
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.workspace_snapshot));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encodeWorkspaceLocation(&encoder, message.workspace);
+    try encoder.writeSized16(message.name);
     try encoder.writeInt(u16, @intCast(message.tabs.len));
     for (message.tabs, 0..) |tab, index| {
         if (tab.tab_id == .invalid) return error.InvalidTabId;
@@ -1134,6 +1139,8 @@ fn decodeTabSnapshot(decoder: *wire.Decoder) !TabSnapshotView {
 fn decodeWorkspaceSnapshot(decoder: *wire.Decoder) !WorkspaceSnapshotView {
     const request_id = try id.request(try decoder.readInt(u64));
     const workspace = try decodeWorkspaceLocation(decoder);
+    const name = try decoder.readSized16();
+    try validateBytes(name, max_workspace_name_bytes, false);
     const tab_count = try decoder.readInt(u16);
     if (tab_count > max_tabs_per_workspace) return error.InvalidTabCount;
     const tabs_start = decoder.index;
@@ -1152,6 +1159,7 @@ fn decodeWorkspaceSnapshot(decoder: *wire.Decoder) !WorkspaceSnapshotView {
     return .{
         .request_id = request_id,
         .workspace = workspace,
+        .name = name,
         .tab_count = tab_count,
         .encoded_tabs = decoder.consumed(tabs_start),
     };

@@ -54,6 +54,7 @@ pub const Options = struct {
     arguments: []const []const u8,
     cwd: []const u8,
     endpoint: []const u8,
+    prefix: keybind.Key = keybind.default_prefix,
     bindings: []const ConfiguredBinding = &.{},
     bindings_configured: bool = false,
     theme: theme.Theme = theme.default_theme,
@@ -879,7 +880,7 @@ pub fn run(
             try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
     }
 
-    var defaults = try defaultBindings();
+    var defaults = try defaultBindings(options.prefix);
     const configured_bindings = if (options.bindings_configured)
         options.bindings
     else
@@ -1138,6 +1139,8 @@ pub fn run(
                             });
                         continue;
                     };
+                    if (!snapshot.bindings_configured)
+                        defaults = defaultBindings(snapshot.prefix) catch unreachable;
                     const bindings = if (snapshot.bindings_configured)
                         snapshot.bindingSlice()
                     else
@@ -1537,6 +1540,7 @@ const InputHandler = struct {
         const interaction = handler.client.view.handleMouse(handler.client.tabs, model, cell_event);
         if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
         if (interaction.layout_changed) {
+            handler.client.graphics_store.invalidatePlacements();
             try handler.client.resizeAttached(
                 handler.activeModel(),
                 handler.client.view.workbench(),
@@ -1695,14 +1699,22 @@ const InputHandler = struct {
                 .horizontal => .horizontal,
                 .vertical => .vertical,
             }),
-            .focus_pane => |direction| handler.moveFocus(switch (direction) {
+            .focus_pane => |direction| try handler.moveFocus(switch (direction) {
                 .left => .left,
                 .right => .right,
                 .up => .up,
                 .down => .down,
             }),
+            .resize_pane => |direction| try handler.resizePane(switch (direction) {
+                .left => .left,
+                .right => .right,
+                .up => .up,
+                .down => .down,
+            }),
+            .toggle_pane_fullscreen => try handler.togglePaneFullscreen(),
             .toggle_sidebar => {
                 handler.client.view.toggleSidebar();
+                handler.client.graphics_store.invalidatePlacements();
                 try handler.client.resizeAttached(
                     handler.activeModel(),
                     handler.client.view.workbench(),
@@ -1793,11 +1805,36 @@ const InputHandler = struct {
         } });
     }
 
-    fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) void {
+    fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) !void {
         if (handler.activeModel().focusDirection(direction, handler.client.view.workbench()) != null) {
+            if (handler.activeModel().layout.isFullscreen()) {
+                handler.client.graphics_store.invalidatePlacements();
+                try handler.client.resizeAttached(
+                    handler.activeModel(),
+                    handler.client.view.workbench(),
+                );
+            }
             handler.client.view.invalidate();
             handler.redraw = true;
         }
+    }
+
+    fn resizePane(handler: *InputHandler, direction: layout_mod.Direction) !void {
+        const model = handler.activeModel();
+        if (!model.resizeFocused(direction, handler.client.view.workbench())) return;
+        handler.client.graphics_store.invalidatePlacements();
+        try handler.client.resizeAttached(model, handler.client.view.workbench());
+        handler.client.view.invalidate();
+        handler.redraw = true;
+    }
+
+    fn togglePaneFullscreen(handler: *InputHandler) !void {
+        const model = handler.activeModel();
+        if (!model.toggleFullscreen()) return;
+        handler.client.graphics_store.invalidatePlacements();
+        try handler.client.resizeAttached(model, handler.client.view.workbench());
+        handler.client.view.invalidate();
+        handler.redraw = true;
     }
 
     fn closeFocused(handler: *InputHandler) !void {
@@ -2059,12 +2096,33 @@ test "configured action names cover multiplexer operations" {
         try Action.parse("split-horizontal"),
     );
     try std.testing.expectEqualDeep(Action.close_pane, try Action.parse("close-pane"));
+    try std.testing.expectEqualDeep(
+        Action{ .resize_pane = .left },
+        try Action.parse("resize-left"),
+    );
+    try std.testing.expectEqualDeep(
+        Action.toggle_pane_fullscreen,
+        try Action.parse("toggle-pane-fullscreen"),
+    );
     try std.testing.expectEqualDeep(Action.toggle_sidebar, try Action.parse("toggle-sidebar"));
     try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));
 }
 
 test "default bindings compile without ambiguous prefixes" {
-    var bindings = try defaultBindings();
+    const prefix = try keybind.parseKey("ctrl+s");
+    var bindings = try defaultBindings(prefix);
+    var resize_directions: std.EnumSet(action_mod.Direction) = .initEmpty();
+    var fullscreen = false;
+    for (bindings) |binding| {
+        try std.testing.expectEqualDeep(prefix, binding.keys[0]);
+        switch (binding.action) {
+            .resize_pane => |direction| resize_directions.insert(direction),
+            .toggle_pane_fullscreen => fullscreen = true,
+            else => {},
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 4), resize_directions.count());
+    try std.testing.expect(fullscreen);
     _ = try InputRouter.init(&bindings);
 }
 

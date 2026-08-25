@@ -11,6 +11,7 @@ pub const Input = struct {
     area: ui.Rect,
     sidebar_visible: bool,
     location: ?schema.TabLocation,
+    workspace_name: []const u8,
 };
 
 pub fn render(context: *widget.Context, input: Input) void {
@@ -37,10 +38,11 @@ pub fn render(context: *widget.Context, input: Input) void {
         toggle_style,
     );
 
-    var workspace_buffer: [48]u8 = undefined;
+    var workspace_buffer: [schema.max_workspace_name_bytes + 12]u8 = undefined;
     var worktree_buffer: [48]u8 = undefined;
     const workspace, const worktree = locationLabels(
         input.location,
+        input.workspace_name,
         &workspace_buffer,
         &worktree_buffer,
     );
@@ -73,13 +75,17 @@ pub fn render(context: *widget.Context, input: Input) void {
 
 fn locationLabels(
     location: ?schema.TabLocation,
+    workspace_name: []const u8,
     workspace_buffer: []u8,
     worktree_buffer: []u8,
 ) struct { []const u8, []const u8 } {
     const value = location orelse return .{ " workspace - ", " worktree - " };
     return switch (value.workspace) {
         .workspace => |workspace| .{
-            std.fmt.bufPrint(workspace_buffer, " workspace {d} ", .{schema.id.raw(workspace)}) catch " workspace ",
+            if (workspace_name.len == 0)
+                std.fmt.bufPrint(workspace_buffer, " workspace {d} ", .{schema.id.raw(workspace)}) catch " workspace "
+            else
+                std.fmt.bufPrint(workspace_buffer, " workspace {s} ", .{workspace_name}) catch " workspace ",
             " worktree - ",
         },
         .worktree => |worktree| .{
@@ -98,4 +104,21 @@ fn hoveredStyle(context: *const widget.Context, action: widget.Action) ui.Style 
         }
     else
         .{ .fg = context.palette.subtext0, .bg = context.palette.panel_bg };
+}
+
+test "workspace label uses the name from the runtime snapshot" {
+    var workspace_buffer: [schema.max_workspace_name_bytes + 12]u8 = undefined;
+    var worktree_buffer: [48]u8 = undefined;
+    const workspace, const worktree = locationLabels(
+        .{
+            .workspace = .{ .workspace = @enumFromInt(7) },
+            .tab_id = @enumFromInt(3),
+        },
+        "telar",
+        &workspace_buffer,
+        &worktree_buffer,
+    );
+
+    try std.testing.expectEqualStrings(" workspace telar ", workspace);
+    try std.testing.expectEqualStrings(" worktree - ", worktree);
 }

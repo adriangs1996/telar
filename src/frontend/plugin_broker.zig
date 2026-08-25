@@ -157,7 +157,13 @@ pub const Registry = struct {
         for (batch.slice()) |effect| {
             const capability: ?plugin.Capability = switch (effect) {
                 .split_pane, .close_pane, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
-                .focus_pane, .toggle_sidebar, .select_tab_offset, .select_tab => null,
+                .focus_pane,
+                .resize_pane,
+                .toggle_pane_fullscreen,
+                .toggle_sidebar,
+                .select_tab_offset,
+                .select_tab,
+                => null,
                 .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
             };
             if (capability) |required| try registry.authorize(package_index, required);

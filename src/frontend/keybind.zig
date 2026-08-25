@@ -17,12 +17,13 @@ pub const Control = enum {
 
 pub const default_escape_timeout_ns: u64 = 25 * std.time.ns_per_ms;
 pub const default_sequence_timeout_ns: u64 = 1000 * std.time.ns_per_ms;
+pub const default_prefix = parseKey("ctrl+b") catch unreachable;
 
 /// Parses one key chord from configuration syntax.
 ///
 /// Examples are `ctrl+b`, `ctrl+shift+left`, `escape`, `space`, and `ñ`.
-/// Sequences stay arrays at this layer so configuration can use
-/// `keys = ["ctrl+b", "d"]` without another string grammar.
+/// Sequences stay arrays at this layer so configuration can parse a prefix and
+/// its suffixes without another string grammar.
 pub fn parseKey(text: []const u8) !Key {
     if (text.len == 0) return error.EmptyKey;
 

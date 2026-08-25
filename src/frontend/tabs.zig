@@ -47,6 +47,8 @@ pub const Tab = struct {
 pub const Model = struct {
     gpa: std.mem.Allocator,
     workspace: ?schema.WorkspaceLocation = null,
+    workspace_name: [schema.max_workspace_name_bytes]u8 = undefined,
+    workspace_name_len: u16 = 0,
     items: [max_tabs]?Tab = [_]?Tab{null} ** max_tabs,
     count: usize = 0,
     active_index: usize = 0,
@@ -62,6 +64,7 @@ pub const Model = struct {
         }
         model.count = 0;
         model.workspace = null;
+        model.workspace_name_len = 0;
     }
 
     pub fn bootstrap(
@@ -92,6 +95,10 @@ pub const Model = struct {
 
     pub fn activeIndex(model: *const Model) ?usize {
         return if (model.count == 0) null else model.active_index;
+    }
+
+    pub fn workspaceName(model: *const Model) []const u8 {
+        return model.workspace_name[0..model.workspace_name_len];
     }
 
     pub fn find(model: *Model, tab_id: schema.TabId) ?*Tab {
@@ -166,6 +173,9 @@ pub const Model = struct {
     pub fn reconcileWorkspace(model: *Model, snapshot: schema.WorkspaceSnapshotView) !void {
         if (model.workspace == null or !std.meta.eql(model.workspace.?, snapshot.workspace))
             return error.UnexpectedWorkspace;
+
+        @memcpy(model.workspace_name[0..snapshot.name.len], snapshot.name);
+        model.workspace_name_len = @intCast(snapshot.name.len);
 
         const active_id = model.activeConst().?.location.tab_id;
         var iterator = snapshot.tabs();
@@ -274,6 +284,7 @@ pub const Model = struct {
         if (model.count == 0) {
             model.active_index = 0;
             model.workspace = null;
+            model.workspace_name_len = 0;
             return true;
         }
         model.active_index = model.indexOf(active_id) orelse @min(index, model.count - 1);
@@ -318,10 +329,12 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     const decoded = (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(&buffer, .{
         .request_id = @enumFromInt(4),
         .workspace = workspace,
+        .name = "telar",
         .tabs = &descriptors,
     }))).workspace_snapshot;
     try model.reconcileWorkspace(decoded);
 
+    try std.testing.expectEqualStrings("telar", model.workspaceName());
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.items[0].?.location.tab_id);
     try std.testing.expectEqualStrings("logs", model.items[0].?.labelSlice());
     try std.testing.expect(model.find(@enumFromInt(1)).?.model.find(@enumFromInt(7)) != null);

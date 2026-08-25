@@ -42,8 +42,8 @@ pub fn run(
     try writer.writeAll(
         \\"] 
         \\if type(callback) ~= "function" then error("plugin action is not a function") end
-        \\return { api_version = 1, client = { keybindings = {
-        \\  telar.bind({ "escape" }, callback),
+        \\return { api_version = 2, client = { keybindings = {
+        \\  telar.bind_global({ "escape" }, callback),
         \\} } }
     );
 

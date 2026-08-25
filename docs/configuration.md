@@ -14,15 +14,16 @@ Configuration precedence is:
 3. the selected `--profile` overlay;
 4. explicit CLI options.
 
-The file must return a table with `api_version = 1`. Unknown fields are errors.
+The file must return a table with `api_version = 2`. Unknown fields are errors.
 The complete schema is demonstrated by [`examples/config.lua`](../examples/config.lua).
 
 ```lua
 local telar = require("telar")
 
 return telar.config({
-  api_version = 1,
+  api_version = 2,
   client = {
+    prefix = "ctrl+s",
     theme = telar.theme({
       base = "vesper",
       colors = { accent = "#ffc799" },
@@ -30,7 +31,10 @@ return telar.config({
     sidebar = { visible = true, renderer = "automatic" },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     keybindings = {
-      telar.bind({ "ctrl+b", "s" }, telar.action.toggle_sidebar()),
+      telar.bind({ "s" }, telar.action.toggle_sidebar()),
+      telar.bind({ "shift+left" }, telar.action.resize_pane({ direction = "left" })),
+      telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
+      telar.bind_global({ "ctrl+shift+s" }, telar.action.detach()),
     },
   },
   runtime = {
@@ -51,15 +55,39 @@ return telar.config({
 
 ## Bindings
 
-`telar.bind(keys, action)` accepts a semantic built-in action, a constructor
-such as `split_pane`, `focus_pane`, `select_tab`, `select_tab_offset`,
-`move_tab`, or `plugin`, or a Lua callback. Built-in action names are stable
-configuration API; Lua never emits terminal bytes or calls internal Zig state.
+`client.prefix` is one key chord and defaults to `"ctrl+b"`. `telar.bind` and
+`telar.bind_expr` prepend it to their `keys`, so `{ "s" }` matches
+`prefix`, then `s`. Changing the prefix also changes the compiled default
+keymap and prefixed bindings inherited by a profile.
+
+Use `telar.bind_global` and `telar.bind_expr_global` for sequences that must not
+use the prefix. A prefixed binding accepts one to four suffix keys. A global
+binding accepts one to five keys. Setting `client.keybindings` replaces the
+default keymap; it does not extend it.
+
+`telar.bind` and `telar.bind_global` accept a semantic built-in action, a
+constructor such as `split_pane`, `focus_pane`, `select_tab`,
+`resize_pane`, `select_tab_offset`, `move_tab`, or `plugin`, or a Lua callback. The
+`telar.bind_expr` variants require a Lua callback. Built-in action names are
+stable configuration API; Lua never emits terminal bytes or calls internal Zig
+state.
+
+`telar.action.resize_pane({ direction = ... })` accepts `"left"`, `"right"`,
+`"up"`, or `"down"`. Each invocation moves the nearest matching split edge by
+5%. Telar refuses a resize that would leave any pane without a content cell.
+The default bindings are `prefix`, then `shift+left`, `shift+right`, `shift+up`,
+or `shift+down`.
+
+`telar.action.toggle_pane_fullscreen()` makes the focused pane occupy the whole
+tab. The client retains the tiled layout and its split ratios, so invoking the
+action again restores the previous geometry. Directional focus still selects
+another pane while fullscreen is active. The default binding is `prefix`, then
+`z`. A tab with one pane ignores the action.
 
 A callback receives an immutable snapshot:
 
 ```lua
-telar.bind({ "ctrl+b", "s" }, function(ctx)
+telar.bind({ "s" }, function(ctx)
   -- sidebar_visible, tab_count, active_tab_index, pane_count, focused_pane_id
   if ctx.sidebar_visible then
     return telar.action.toggle_sidebar()

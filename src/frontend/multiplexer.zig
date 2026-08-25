@@ -214,10 +214,25 @@ pub const Model = struct {
         area: ui.Rect,
     ) ?schema.PaneId {
         const previous = model.layout.focused() orelse return null;
-        const focused = model.layoutSnapshot(area).focusTarget(previous, direction) orelse return null;
-        std.debug.assert(model.layout.focusPane(focused));
+        const focused = model.layout.focusDirection(direction, area) orelse return null;
         if (previous != focused) model.composition_invalidated = true;
         return focused;
+    }
+
+    pub fn resizeFocused(
+        model: *Model,
+        direction: layout_mod.Direction,
+        area: ui.Rect,
+    ) bool {
+        if (!model.layout.resizeFocused(direction, area)) return false;
+        model.composition_invalidated = true;
+        return true;
+    }
+
+    pub fn toggleFullscreen(model: *Model) bool {
+        if (!model.layout.toggleFullscreen()) return false;
+        model.composition_invalidated = true;
+        return true;
     }
 
     pub fn applyFrame(
@@ -330,7 +345,8 @@ pub const Model = struct {
         for (snapshot.views()) |view| {
             const pane = model.find(view.pane_id) orelse continue;
             stats.panes += 1;
-            if (model.layout.count() > 1) drawBorder(target, view, palette);
+            if (model.layout.count() > 1 and !model.layout.isFullscreen())
+                drawBorder(target, view, palette);
             target.pushClip(view.content);
             defer target.popClip();
             const rows = @min(view.content.h, pane.buffer.h);
@@ -593,6 +609,37 @@ test "two pane buffers compose into their layout rectangles" {
     try std.testing.expect(!screen.back.cells[20].style.flags.inverse);
     try std.testing.expectEqualStrings(" ", screen.back.cells[19].text());
     try std.testing.expect(!screen.back.cells[19].style.flags.inverse);
+}
+
+test "fullscreen composes only the focused pane across the whole tab" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const area: ui.Rect = .{ .w = 40, .h = 7 };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 20, .rows = 6 });
+    try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+    try std.testing.expect(model.focusPane(@enumFromInt(1)));
+    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "x", 1, .{});
+    model.find(@enumFromInt(2)).?.buffer.setCell(0, 0, "y", 1, .{});
+    try std.testing.expect(model.toggleFullscreen());
+
+    try std.testing.expectEqual(
+        schema.TerminalSize{ .cols = 40, .rows = 7 },
+        model.contentSize(@enumFromInt(1), area).?,
+    );
+    try std.testing.expectEqual(@as(?schema.TerminalSize, null), model.contentSize(@enumFromInt(2), area));
+    var screen = try term.Screen.init(gpa, area.w, area.h);
+    defer screen.deinit();
+    const stats = try model.render(&screen, area);
+    try std.testing.expectEqual(@as(usize, 1), stats.panes);
+    try std.testing.expectEqualStrings("x", screen.back.cells[0].text());
+
+    try std.testing.expect(model.toggleFullscreen());
+    try std.testing.expect(model.contentSize(@enumFromInt(2), area) != null);
 }
 
 test "pane borders use the selected theme without coloring pane contents" {

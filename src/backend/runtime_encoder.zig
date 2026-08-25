@@ -146,7 +146,11 @@ pub fn encodeResponse(
             .panes = panes.descriptorsAt(snapshot.location, &descriptor_storage),
         }),
         .workspace_snapshot => |snapshot| payload: {
-            const tabs = workspaces.descriptors(snapshot.workspace, panes, &tab_storage) orelse
+            const descriptor_snapshot = workspaces.descriptors(
+                snapshot.workspace,
+                panes,
+                &tab_storage,
+            ) orelse
                 break :payload try schema.encodeRequestFailed(buffer, .{
                     .request_id = snapshot.request_id,
                     .code = .workspace_not_found,
@@ -155,7 +159,8 @@ pub fn encodeResponse(
             break :payload try schema.encodeWorkspaceSnapshot(buffer, .{
                 .request_id = snapshot.request_id,
                 .workspace = snapshot.workspace,
-                .tabs = tabs,
+                .name = descriptor_snapshot.name,
+                .tabs = descriptor_snapshot.tabs,
             });
         },
         .tab_created => |*created| try schema.encodeTabCreated(buffer, .{

@@ -497,6 +497,7 @@ fn runClient(
         .arguments = argument_storage[0..argument_count],
         .cwd = cwd_buffer[0..cwd_len],
         .endpoint = endpoint,
+        .prefix = if (snapshot) |value| value.prefix else frontend.keybind.default_prefix,
         .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
         .bindings_configured = if (snapshot) |value| value.bindings_configured else false,
         .theme = if (options.theme_set)

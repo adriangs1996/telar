@@ -665,7 +665,7 @@ const LuaCallbackContext = struct {
         const generation = try frontend.lua_config.Generation.loadSource(
             gpa,
             io,
-            "local t=require('telar'); return { api_version=1, client={ keybindings={ t.bind({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
+            "local t=require('telar'); return { api_version=2, client={ keybindings={ t.bind_global({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
             "@benchmark.lua",
             1,
             &diagnostic,

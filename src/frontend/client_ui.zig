@@ -292,13 +292,24 @@ pub const State = struct {
                 result.layout_changed = true;
             },
             .focus_pane => |pane_id| {
+                const previous = model.layout.focused();
                 if (model.focusPane(pane_id)) {
+                    result.layout_changed = model.layout.isFullscreen() and
+                        previous != model.layout.focused();
                     state.dirty = true;
                     result.redraw = true;
                 }
             },
             .select_tab => |tab_id| if (tabs != null and tabs.?.indexOf(tab_id) != null) {
-                result.select_tab = tab_id;
+                switch (mouse.button & 0b11) {
+                    0 => result.select_tab = tab_id,
+                    2 => {
+                        const tab = tabs.?.find(tab_id).?;
+                        state.beginTabRename(tab_id, tab.labelSlice());
+                        result.redraw = true;
+                    },
+                    else => {},
+                }
             },
             .active_workspace, .active_worktree => {},
             .sidebar_focus_search => {
@@ -326,7 +337,12 @@ pub const State = struct {
             .sidebar_select_task => |key| {
                 state.sidebar.selected_task = key;
                 if (state.sidebar_snapshot.find(key)) |task| {
-                    if (task.pane_id) |pane_id| _ = model.focusPane(pane_id);
+                    if (task.pane_id) |pane_id| {
+                        const previous = model.layout.focused();
+                        _ = model.focusPane(pane_id);
+                        result.layout_changed = model.layout.isFullscreen() and
+                            previous != model.layout.focused();
+                    }
                 }
                 state.dirty = true;
                 result.redraw = true;
@@ -537,6 +553,7 @@ test "sidebar task snapshots focus linked panes and stable hover requests no ext
         .horizontal,
         state.workbench(),
     );
+    try std.testing.expect(model.toggleFullscreen());
     const tasks = [_]widgets.sidebar.TaskInput{.{
         .key = .{ .id = 10, .generation = 1 },
         .pane_id = @enumFromInt(1),
@@ -553,7 +570,8 @@ test "sidebar task snapshots focus linked panes and stable hover requests no ext
     try std.testing.expect(state.handleMouse(null, &model, first_row).redraw);
     try std.testing.expect(!state.handleMouse(null, &model, first_row).redraw);
     const click = term.Event.Mouse{ .x = 4, .y = 11, .kind = .press };
-    _ = state.handleMouse(null, &model, click);
+    const interaction = state.handleMouse(null, &model, click);
+    try std.testing.expect(interaction.layout_changed);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
 }
 
@@ -677,6 +695,16 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     const click = term.Event.Mouse{ .x = 1, .y = 23, .kind = .press };
     const interaction = state.handleMouse(&tabs, model, click);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
+
+    const rename = state.handleMouse(&tabs, model, .{
+        .x = 1,
+        .y = 23,
+        .kind = .press,
+        .button = 2,
+    });
+    try std.testing.expect(rename.redraw);
+    try std.testing.expect(rename.select_tab == null);
+    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), state.renamedTab().?);
 }
 
 test "rename input consumes an unparseable tail instead of spinning" {

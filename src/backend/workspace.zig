@@ -39,6 +39,10 @@ pub const Workspace = struct {
     tabs: [max_tabs_per_workspace]?Tab = [_]?Tab{null} ** max_tabs_per_workspace,
     tab_count: usize = 0,
 
+    pub fn name(workspace: *const Workspace) []const u8 {
+        return std.fs.path.basename(workspace.path);
+    }
+
     pub fn defaultTab(workspace: *const Workspace) schema.TabId {
         std.debug.assert(workspace.tab_count != 0);
         return workspace.tabs[0].?.id;
@@ -101,6 +105,11 @@ pub const WorkspaceStore = struct {
     pub const Ensured = struct {
         location: schema.TabLocation,
         created: bool,
+    };
+
+    pub const DescriptorSnapshot = struct {
+        name: []const u8,
+        tabs: []const schema.TabDescriptor,
     };
 
     gpa: std.mem.Allocator,
@@ -235,7 +244,7 @@ pub const WorkspaceStore = struct {
         workspace_location: schema.WorkspaceLocation,
         panes: *const PaneStore,
         output: *[max_tabs_per_workspace]schema.TabDescriptor,
-    ) ?[]const schema.TabDescriptor {
+    ) ?DescriptorSnapshot {
         const workspace = store.find(workspace_location) orelse return null;
         for (workspace.tabs[0..workspace.tab_count], 0..) |*slot, index| {
             const tab = &slot.*.?;
@@ -250,7 +259,10 @@ pub const WorkspaceStore = struct {
                 .label = tab.labelSlice(),
             };
         }
-        return output[0..workspace.tab_count];
+        return .{
+            .name = workspace.name(),
+            .tabs = output[0..workspace.tab_count],
+        };
     }
 
     pub fn remove(store: *WorkspaceStore, workspace_id: schema.WorkspaceId) void {
@@ -285,6 +297,15 @@ test "workspace and default tab identities are stable per path" {
     unknown_tab.tab_id = try schema.id.tab(999);
     try std.testing.expect(!store.contains(unknown_tab));
     try std.testing.expectEqual(@as(usize, 2), store.count);
+}
+
+test "workspace name is the final path segment" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+
+    const ensured = try store.ensure("/work/telar");
+    const workspace = store.find(ensured.location.workspace).?;
+    try std.testing.expectEqualStrings("telar", workspace.name());
 }
 
 test "an uncommitted workspace can be rolled back" {
@@ -326,8 +347,9 @@ test "workspace tabs create rename reorder and close" {
         &panes,
         &descriptors,
     ).?;
-    try std.testing.expectEqual(@as(usize, 3), snapshot.len);
-    try std.testing.expectEqualStrings("server", snapshot[0].label);
+    try std.testing.expectEqualStrings("project", snapshot.name);
+    try std.testing.expectEqual(@as(usize, 3), snapshot.tabs.len);
+    try std.testing.expectEqualStrings("server", snapshot.tabs[0].label);
 
     try std.testing.expectEqual(false, store.removeTab(logs.location).?);
     try std.testing.expectEqual(false, store.removeTab(generated.location).?);

@@ -18,6 +18,11 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writer.writeByte(2);
             try writer.writeByte(@intFromEnum(value));
         },
+        .resize_pane => |value| {
+            try writer.writeByte(12);
+            try writer.writeByte(@intFromEnum(value));
+        },
+        .toggle_pane_fullscreen => try writer.writeByte(13),
         .toggle_sidebar => try writer.writeByte(3),
         .close_pane => try writer.writeByte(4),
         .new_tab => try writer.writeByte(5),
@@ -72,6 +77,11 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             11 => .detach,
+            12 => .{ .resize_pane = std.enums.fromInt(
+                action_mod.Direction,
+                try byte(bytes, &offset),
+            ) orelse return error.InvalidWorkerEffect },
+            13 => .toggle_pane_fullscreen,
             else => return error.UnknownWorkerEffect,
         };
     }
@@ -90,8 +100,10 @@ test "plugin result protocol round trips semantic effects" {
     var batch: lua_config.EffectBatch = .{};
     batch.items[0] = .{ .focus_pane = .left };
     batch.items[1] = .{ .select_tab_offset = -1 };
-    batch.items[2] = .toggle_sidebar;
-    batch.len = 3;
+    batch.items[2] = .{ .resize_pane = .down };
+    batch.items[3] = .toggle_pane_fullscreen;
+    batch.items[4] = .toggle_sidebar;
+    batch.len = 5;
     var buffer: [max_bytes]u8 = undefined;
     try std.testing.expectEqualDeep(batch, try decode(try encode(&buffer, &batch)));
 }
