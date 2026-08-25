@@ -417,6 +417,10 @@ const Server = struct {
             session.responses.clear();
             server.releaseGeometry(key);
             server.collect();
+            // Deliver the resync notices now rather than on the next tick.
+            // Re-entry from a pump failure is bounded: every dropClient marks
+            // its session closing, and closing sessions are never pumped.
+            server.pumpAll();
         }
         server.finalizeClient(key);
     }
@@ -448,7 +452,13 @@ const Server = struct {
     fn releaseGeometry(server: *Server, key: ClientKey) void {
         for (&server.geometry_leases) |*slot| {
             const lease = slot.* orelse continue;
-            if (std.meta.eql(lease.owner, key)) slot.* = null;
+            if (!std.meta.eql(lease.owner, key)) continue;
+            slot.* = null;
+            // The lease is free but the runtime does not know any surviving
+            // client's size. Resync the observers so one re-offers its
+            // geometry and takes the lease over; without this the pane keeps
+            // the departed client's size until an unrelated resize.
+            server.notifyWorkspaceChanged(key, lease.workspace);
         }
     }
 
@@ -459,8 +469,10 @@ const Server = struct {
     ) void {
         for (&server.geometry_leases) |*slot| {
             const lease = slot.* orelse continue;
-            if (std.meta.eql(lease.owner, key) and std.meta.eql(lease.workspace, workspace))
+            if (std.meta.eql(lease.owner, key) and std.meta.eql(lease.workspace, workspace)) {
                 slot.* = null;
+                server.notifyWorkspaceChanged(key, workspace);
+            }
         }
     }
 

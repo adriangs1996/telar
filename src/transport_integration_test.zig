@@ -1906,14 +1906,40 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .pane_id = pane_id,
         .bytes = "SECOND_SURVIVES\n",
     }));
-    while (true) switch (try schema.decodeServer(try second.receive(io, second_receive))) {
+    var second_saw_survives = false;
+    var lease_released = false;
+    while (!second_saw_survives or !lease_released) switch (try schema.decodeServer(try second.receive(io, second_receive))) {
         .pane_frame => |frame| {
             try applyFrameCells(&second_cells, frame);
             try second.send(io, try schema.encodeFrameAck(&second_send, .{
                 .pane_id = frame.pane_id,
                 .frame_id = frame.frame_id,
             }));
-            if (rowContains(&second_cells, "SECOND_SURVIVES")) return;
+            if (rowContains(&second_cells, "SECOND_SURVIVES")) second_saw_survives = true;
+        },
+        // The owner's disconnect frees the geometry lease and the runtime
+        // resyncs the survivor so it can re-offer its own size.
+        .resync_required => lease_released = true,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    // The survivor re-offers its geometry, takes the lease over, and the
+    // shared PTY finally adopts its 80x20.
+    try second.send(io, try schema.encodePaneResize(&second_send, .{
+        .pane_id = pane_id,
+        .size = .{ .cols = 80, .rows = 20 },
+    }));
+    var resized_cells: [80 * 20]core.ui.Cell = @splat(.{});
+    while (true) switch (try schema.decodeServer(try second.receive(io, second_receive))) {
+        .pane_frame => |frame| {
+            try second.send(io, try schema.encodeFrameAck(&second_send, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            }));
+            if (frame.cols != 80 or frame.rows != 20) continue;
+            try applyFrameCells(&resized_cells, frame);
+            return;
         },
         .request_failed => return error.RuntimeRequestFailed,
         else => {},

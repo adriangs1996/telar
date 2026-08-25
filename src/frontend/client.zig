@@ -525,6 +525,11 @@ const Client = struct {
                             .location = active.location,
                         } },
                     );
+                } else {
+                    // A resync can mean the geometry lease was released.
+                    // Re-offer this client's sizes; the runtime adopts them
+                    // when the lease is free and ignores them otherwise.
+                    try client.resizeAttached(&active.model, client.view.workbench());
                 }
             }
         }
