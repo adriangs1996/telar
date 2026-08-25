@@ -8,6 +8,10 @@ return telar.config({
       pane_mib = 64,
       global_mib = 256,
     },
+    proxy = {
+      enabled = false,
+      ca_dir = "state/proxy",
+    },
   },
 
   plugins = {

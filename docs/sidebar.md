@@ -1,17 +1,16 @@
 # Sidebar integration contract
 
-The sidebar is implemented even though the runtime does not detect agents yet.
-Production therefore renders the complete chrome against an empty snapshot.
-Detection plugs in by replacing that snapshot; it does not own layout, focus,
-search, scrolling, hit targets, or physical KGP placements.
+The runtime publishes bounded agent snapshots assembled from ProxyTLS activity
+and terminal-screen hints. Detection replaces the client snapshot; it does not
+own layout, focus, search, scrolling, hit targets, or physical KGP placements.
 
 ## Ownership
 
-The future runtime owns agent truth and publishes stable task identity. The
-client keeps one disposable `widgets.sidebar.Snapshot` replica and all visible
-interaction state in `widgets.sidebar.State`. Killing the client loses the
-selected tab, selected task, search text, scope expansion, and scroll offset.
-It does not alter any runtime task or agent.
+The runtime owns agent truth and publishes stable `(pane_id, generation)` task
+identity. The client keeps one disposable `widgets.sidebar.Snapshot` replica
+and all visible interaction state in `widgets.sidebar.State`. Killing the
+client loses the selected tab, selected task, search text, scope expansion, and
+scroll offset. It does not alter any runtime task or agent.
 
 `Snapshot.replace` is the client adapter boundary. An observation or IPC
 handler supplies a revision and `TaskInput` values. Replacement:
@@ -57,14 +56,28 @@ The sidebar is visible only when the client can reserve 42 columns for it and
 threshold the layout hides it while preserving `sidebar_requested`, so a later
 resize restores it without changing user intent.
 
-## Future detector wiring
+## Detector wiring
 
-When agent detection exists, its frontend message handler should:
+The frontend message handler:
 
-1. validate the runtime message and its revision;
-2. map runtime agent, shell, and host records to bounded `TaskInput` values;
-3. call `client_ui.State.replaceSidebarSnapshot`;
-4. request one client redraw when replacement succeeds.
+1. validates the runtime message and its revision;
+2. maps runtime agent records to bounded `TaskInput` values;
+3. calls `client_ui.State.replaceSidebarSnapshot`;
+4. requests one client redraw when replacement succeeds.
 
 Detection remains on the observation path. Snapshot rendering and input
 routing perform no filesystem, process, JSON, network, or plugin work.
+
+Proxy request start and response activity mark an agent as working; completion
+marks it ready, while failures visible to the protocol observer mark it failed.
+This includes HTTP/1.1 and HPACK-decoded HTTP/2 response statuses of 400 or
+greater, plus HTTP/2 stream resets.
+HTTP/2 activity is keyed by connection and stream. Completing one multiplexed
+stream leaves the agent working while another stream is active; a
+connection-level failure settles every remaining stream for that connection.
+A visible permission prompt is stronger than network activity. Terminal
+working hints also override an early network completion. A ready prompt
+requires established Claude identity and three samples before it can recover a
+missing proxy completion. Every record carries its source, confidence, process
+and session identity, sequence, timestamps, and expiry. None of these
+presentation hints authorizes approval or input.

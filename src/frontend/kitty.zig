@@ -2753,7 +2753,12 @@ test "a runtime-named image maps without copying and hands the host its name" {
 
     var store = Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
-    const name = try graphics.ShmName.init("/tlrtest-map-a1");
+    var name_buffer: [64]u8 = undefined;
+    const name = try graphics.ShmName.init(try std.fmt.bufPrint(
+        &name_buffer,
+        "/tlrtest-map-{d}",
+        .{std.c.getpid()},
+    ));
     _ = std.c.shm_unlink(name.sliceZ());
     const source = [_]u8{ 1, 2, 3, 255 };
     try testCreateSharedObject(name.sliceZ(), &source);
@@ -2844,8 +2849,13 @@ test "a host that never consumes shared names loses them and gets pixels inline"
     };
 
     const source = [_]u8{ 9, 9, 9, 255 };
-    for ([_][]const u8{ "/tlrtest-exp-a1", "/tlrtest-exp-a2" }, 1..) |raw_name, generation| {
-        const name = try graphics.ShmName.init(raw_name);
+    for ([_][]const u8{ "a1", "a2" }, 1..) |suffix, generation| {
+        var name_buffer: [64]u8 = undefined;
+        const name = try graphics.ShmName.init(try std.fmt.bufPrint(
+            &name_buffer,
+            "/tlrtest-exp-{s}-{d}",
+            .{ suffix, std.c.getpid() },
+        ));
         _ = std.c.shm_unlink(name.sliceZ());
         try testCreateSharedObject(name.sliceZ(), &source);
         try store.applySharedImage(.{

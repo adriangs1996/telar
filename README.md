@@ -9,6 +9,15 @@ is how they are laid out on screen.
 
 Written in Zig 0.16. Very early.
 
+The runtime links system SQLite and libnghttp2. On macOS with Homebrew:
+
+```sh
+brew install sqlite libnghttp2
+```
+
+Use `zig build -Dnghttp2=/path/to/prefix` when libnghttp2 is installed under a
+different prefix.
+
 ## Configuration and plugins
 
 Telar uses a versioned Lua configuration with semantic keybindings, bounded
@@ -17,8 +26,10 @@ runtime settings. Plugins are content-addressed packages executed in isolated
 workers with digest-bound capability grants.
 
 See [docs/configuration.md](docs/configuration.md) and
-[docs/plugins.md](docs/plugins.md). A complete configuration and plugin package
-live under [`examples/`](examples/).
+[docs/plugins.md](docs/plugins.md). The opt-in TLS interception proxy, its
+agent-state contract, and its bounded semantic transformation boundary are
+documented in [docs/proxy-tls.md](docs/proxy-tls.md). A complete configuration
+and plugin package live under [`examples/`](examples/).
 
 ## Themes
 

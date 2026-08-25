@@ -1,7 +1,7 @@
 //! Bounded presentation data for the client-owned task sidebar.
 //!
-//! Agent detection will eventually populate this snapshot from runtime data.
-//! The widget deliberately consumes this type instead of the multiplexer so
+//! Agent detection populates this snapshot from bounded runtime IPC. The
+//! widget deliberately consumes this type instead of the multiplexer so
 //! detection, IPC, and rendering can evolve without sharing live state.
 
 const std = @import("std");
@@ -14,7 +14,7 @@ pub const section_count = @typeInfo(Section).@"enum".fields.len;
 
 pub const TaskKey = struct {
     id: u64,
-    generation: u32,
+    generation: u64,
 };
 
 pub const Tab = enum(u2) {

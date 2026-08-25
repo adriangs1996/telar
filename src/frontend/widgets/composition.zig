@@ -23,6 +23,7 @@ pub const Input = struct {
     sidebar_snapshot: *const sidebar.Snapshot,
     sidebar_state: *sidebar.State,
     sidebar_transparent: bool,
+    proxy_tls_active: bool,
 };
 
 pub const Output = struct {
@@ -54,7 +55,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
             .tabs = input.tabs,
             .model = input.model,
         });
-        status_bar.render(context, input.regions.status, input.model);
+        status_bar.render(context, input.regions.status, input.model, input.proxy_tls_active);
         break :block null;
     };
 

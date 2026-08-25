@@ -63,6 +63,7 @@ pub const State = struct {
     sidebar: widgets.sidebar.State = .{},
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
+    proxy_tls_active: bool = false,
     kitty_sidebar: kitty.KittySidebarRenderer,
     cell_width_px: u16 = 0,
     cell_height_px: u16 = 0,
@@ -130,6 +131,12 @@ pub const State = struct {
     }
 
     pub fn invalidate(state: *State) void {
+        state.dirty = true;
+    }
+
+    pub fn setProxyTlsActive(state: *State, active: bool) void {
+        if (state.proxy_tls_active == active) return;
+        state.proxy_tls_active = active;
         state.dirty = true;
     }
 
@@ -392,6 +399,7 @@ pub const State = struct {
             .sidebar_snapshot = &state.sidebar_snapshot,
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
+            .proxy_tls_active = state.proxy_tls_active,
         });
         if (hybrid) {
             var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;

@@ -4,9 +4,11 @@
 //! core data for a frontend, but it never imports frontend code.
 
 pub const pty = @import("pty.zig");
+pub const agent = @import("agent.zig");
 pub const blit = @import("blit.zig");
 pub const damage = @import("damage.zig");
 pub const history = @import("history/root.zig");
+pub const proxy = @import("proxy/root.zig");
 pub const media = @import("media.zig");
 pub const transport = @import("transport.zig");
 pub const runtime = @import("runtime.zig");

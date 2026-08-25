@@ -354,6 +354,7 @@ pub const Pane = struct {
     history_session_started: bool = false,
     history_session_finished: bool = false,
     history_exit_queued: bool = false,
+    proxy_token: ?[16]u8 = null,
     workspace_path: []u8,
     pending_size: ?schema.TerminalSize = null,
     io: Io,
@@ -523,6 +524,7 @@ pub const Pane = struct {
         pane.media_allocator.detach();
         pane.terminal.deinit(gpa);
         pane.session.deinit();
+        if (pane.proxy_token) |*token| std.crypto.secureZero(u8, token);
         gpa.destroy(pane);
     }
 

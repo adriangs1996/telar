@@ -250,6 +250,38 @@ const HistoryPath = struct {
     managed_directory: ?[]const u8,
 };
 
+fn resolveProxyDirectory(init: std.process.Init, buffer: []u8) ![]const u8 {
+    const base = if (std.process.Environ.getPosix(init.minimal.environ, "XDG_DATA_HOME")) |path|
+        if (path.len != 0) path else null
+    else
+        null;
+    if (base) |data_home| return std.fmt.bufPrint(buffer, "{s}/telar/proxy", .{data_home});
+    const home = std.process.Environ.getPosix(init.minimal.environ, "HOME") orelse
+        return error.HomeDirectoryUnavailable;
+    if (home.len == 0) return error.HomeDirectoryUnavailable;
+    return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/proxy", .{home});
+}
+
+fn prepareProxyDirectory(io: Io, directory: []const u8) !void {
+    const permissions = File.Permissions.fromMode(0o700);
+    _ = try Io.Dir.cwd().createDirPathStatus(io, directory, permissions);
+    const stat = try Io.Dir.cwd().statFile(io, directory, .{ .follow_symlinks = false });
+    if (stat.kind != .directory) return error.InvalidProxyDirectory;
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch
+        return error.NameTooLong;
+    var native_stat: std.c.Stat = undefined;
+    if (std.c.fstatat(std.c.AT.FDCWD, path_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0)
+        return error.InvalidProxyDirectory;
+    if (native_stat.uid != std.c.getuid()) return error.WrongOwner;
+    try Io.Dir.cwd().setFilePermissions(
+        io,
+        directory,
+        permissions,
+        .{ .follow_symlinks = false },
+    );
+}
+
 fn resolveHistoryPath(
     init: std.process.Init,
     buffer: []u8,
@@ -314,6 +346,9 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     var resolved_options = options;
     var configured_history_path: ?[:0]const u8 = null;
     var configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var proxy_enabled = false;
+    var configured_proxy_directory: ?[]u8 = null;
+    defer if (configured_proxy_directory) |directory| init.gpa.free(directory);
     const endpoint = try resolveEndpoint(init, options.socket);
     if (options.action == .stop) return stopRuntime(init, &endpoint);
 
@@ -342,6 +377,13 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
                 .{resolved},
             );
         }
+        proxy_enabled = generation.snapshot.runtime.proxy_enabled;
+        if (proxy_enabled) if (generation.snapshot.runtime.proxyCaDir()) |ca_dir| {
+            configured_proxy_directory = if (std.fs.path.isAbsolute(ca_dir))
+                try init.gpa.dupe(u8, ca_dir)
+            else
+                try std.fs.path.resolve(init.gpa, &.{ generation.configDir(), ca_dir });
+        };
     }
     try resolved_options.graphics.validate();
 
@@ -361,6 +403,27 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     else
         try resolveHistoryPath(init, &history_buffer);
     try prepareHistoryDatabase(init.io, history_path);
+    var default_proxy_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const proxy_directory = if (proxy_enabled)
+        configured_proxy_directory orelse try init.gpa.dupe(
+            u8,
+            try resolveProxyDirectory(init, &default_proxy_buffer),
+        )
+    else
+        null;
+    defer if (proxy_enabled and configured_proxy_directory == null)
+        init.gpa.free(proxy_directory.?);
+    var proxy_key_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const proxy_options: ?backend.runtime.ProxyOptions = if (proxy_directory) |directory| block: {
+        try prepareProxyDirectory(init.io, directory);
+        break :block .{
+            .key_path = try std.fmt.bufPrint(&proxy_key_buffer, "{s}/ca-key.pem", .{directory}),
+            .certificate_path = try std.fmt.bufPrint(&proxy_cert_buffer, "{s}/ca-cert.pem", .{directory}),
+            .bundle_path = try std.fmt.bufPrint(&proxy_bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+        };
+    } else null;
     try backend.runtime.serve(
         init.io,
         init.gpa,
@@ -369,6 +432,7 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
             .graphics = resolved_options.graphics,
             .environment = init.minimal.environ,
             .history_path = history_path.path,
+            .proxy = proxy_options,
         },
     );
 }

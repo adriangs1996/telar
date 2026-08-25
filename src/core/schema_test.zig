@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 41;
+const corpus_len = 44;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -219,6 +219,9 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try schema.encodeConfigureGraphics(helper.space(), .{
             .shared = true,
         }),
+    ));
+    helper.add("request_runtime_state", .client, false, golden.request_runtime_state, helper.commit(
+        try schema.encodeRequestRuntimeState(helper.space()),
     ));
 
     // -- server ------------------------------------------------------------
@@ -443,6 +446,29 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .placement_id = 1,
         }),
     ));
+    helper.add("proxy_status", .server, false, golden.proxy_status, helper.commit(
+        try schema.encodeProxyStatus(helper.space(), .{ .active = true }),
+    ));
+    const agent_entries = [_]schema.AgentSnapshotEntry{.{
+        .pane_id = @enumFromInt(5),
+        .pane_generation = 7,
+        .process_id = 42,
+        .session_id = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 },
+        .provider = .codex,
+        .status = .working,
+        .source = .proxy_tls,
+        .authority = .active,
+        .confidence = 95,
+        .sequence = 11,
+        .observed_at_ms = 1000,
+        .expires_at_ms = 2000,
+    }};
+    helper.add("agent_snapshot", .server, false, golden.agent_snapshot, helper.commit(
+        try schema.encodeAgentSnapshot(helper.space(), .{
+            .revision = 9,
+            .entries = &agent_entries,
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -473,6 +499,7 @@ const golden = struct {
     pub const request_graphics_snapshot = "110500000000000000";
     pub const graphics_credit = "1205000000000000000010000000000000";
     pub const configure_graphics = "1301";
+    pub const request_runtime_state = "14";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
     pub const pane_frame = "820400000000000000010000000000000000000000000000000200010001010000000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
@@ -493,6 +520,8 @@ const golden = struct {
     pub const graphics_placement = "90010000000000000003000000000000000700000008000000000000000100000000000000010000000200000003000000000000000000000002000000020000000100000001000000000000000000000000000000";
     pub const graphics_delete_image = "9101000000000000000400000000000000070000000800000000000000";
     pub const graphics_delete_placement = "9201000000000000000500000000000000070000000800000000000000010000000000000001000000";
+    pub const proxy_status = "9501";
+    pub const agent_snapshot = "9609000000000000000100050000000000000007000000000000002a0000000102030405060708090a0b0c0d0e0f10020100015f0b00000000000000e803000000000000d007000000000000";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {
@@ -1123,6 +1152,40 @@ test "malformed application messages are rejected" {
         .pane_id = .invalid,
         .bytes = "x",
     }));
+
+    const agent_entry: schema.AgentSnapshotEntry = .{
+        .pane_id = @enumFromInt(3),
+        .pane_generation = 4,
+        .process_id = 5,
+        .session_id = .{0x5a} ** 16,
+        .provider = .codex,
+        .status = .working,
+        .source = .proxy_tls,
+        .authority = .active,
+        .confidence = 95,
+        .sequence = 6,
+        .observed_at_ms = 7,
+        .expires_at_ms = 8,
+    };
+    const duplicate_entries = [_]schema.AgentSnapshotEntry{ agent_entry, agent_entry };
+    var agent_buffer: [256]u8 = undefined;
+    try std.testing.expectError(error.DuplicateAgentEntry, schema.encodeAgentSnapshot(
+        &agent_buffer,
+        .{ .revision = 1, .entries = &duplicate_entries },
+    ));
+
+    const single = try schema.encodeAgentSnapshot(
+        &agent_buffer,
+        .{ .revision = 1, .entries = &.{agent_entry} },
+    );
+    const entry_offset = 1 + @sizeOf(u64) + @sizeOf(u16);
+    const entry_len = single.len - entry_offset;
+    @memcpy(agent_buffer[single.len..][0..entry_len], single[entry_offset..]);
+    std.mem.writeInt(u16, agent_buffer[1 + @sizeOf(u64) .. entry_offset], 2, .little);
+    try std.testing.expectError(
+        error.DuplicateAgentEntry,
+        schema.decodeServer(agent_buffer[0 .. single.len + entry_len]),
+    );
 }
 
 test "truncated client and server messages are rejected" {

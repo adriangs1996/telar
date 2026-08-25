@@ -30,6 +30,7 @@ pub const max_plugins = config_model.max_plugins;
 pub const max_plugin_path_bytes = config_model.max_plugin_path_bytes;
 pub const max_profile_name_bytes = 64;
 pub const max_history_path_bytes = config_model.max_history_path_bytes;
+pub const max_proxy_path_bytes = config_model.max_proxy_path_bytes;
 
 pub const ConfiguredBinding = config_model.ConfiguredBinding;
 pub const Diagnostic = config_model.Diagnostic;
@@ -657,10 +658,14 @@ pub const Generation = struct {
             diagnostic.set("config.runtime must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(state, absolute, &.{ "graphics", "history" }, "config.runtime", diagnostic);
+        try ensureOnlyFields(state, absolute, &.{ "graphics", "history", "proxy" }, "config.runtime", diagnostic);
         _ = lua.lua_getfield(state, absolute, "history");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseHistory(-1, diagnostic);
+        pop(state, 1);
+        _ = lua.lua_getfield(state, absolute, "proxy");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseProxy(-1, diagnostic);
         pop(state, 1);
         _ = lua.lua_getfield(state, absolute, "graphics");
         defer pop(state, 1);
@@ -700,6 +705,48 @@ pub const Generation = struct {
             diagnostic.set("runtime graphics limits are outside Telar's safe bounds", .{});
             return error.InvalidConfig;
         }
+    }
+
+    fn parseProxy(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.proxy must be a table", .{});
+            return error.InvalidConfig;
+        }
+        try ensureOnlyFields(
+            state,
+            absolute,
+            &.{ "enabled", "ca_dir" },
+            "config.runtime.proxy",
+            diagnostic,
+        );
+        _ = lua.lua_getfield(state, absolute, "enabled");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                pop(state, 1);
+                diagnostic.set("config.runtime.proxy.enabled must be a boolean", .{});
+                return error.InvalidConfig;
+            }
+            generation.snapshot.runtime.proxy_enabled = lua.lua_toboolean(state, -1) != 0;
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "ca_dir");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) == lua.LUA_TNIL) return;
+        const path = string(state, -1) orelse {
+            diagnostic.set("config.runtime.proxy.ca_dir must be a string", .{});
+            return error.InvalidConfig;
+        };
+        if (path.len == 0 or path.len > max_proxy_path_bytes or
+            std.mem.indexOfScalar(u8, path, 0) != null)
+        {
+            diagnostic.set("config.runtime.proxy.ca_dir is invalid", .{});
+            return error.InvalidConfig;
+        }
+        @memcpy(generation.snapshot.runtime.proxy_ca_dir_bytes[0..path.len], path);
+        generation.snapshot.runtime.proxy_ca_dir_len = @intCast(path.len);
     }
 
     fn parseHistory(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -2061,12 +2108,12 @@ test "configuration environment excludes ambient authority" {
     try std.testing.expect(generation.snapshot.sidebar_visible);
 }
 
-test "runtime config compiles bounded graphics quotas" {
+test "runtime config compiles bounded graphics and ProxyTLS values" {
     var diagnostic: Diagnostic = .{};
     const generation = try Generation.loadSource(
         std.testing.allocator,
         std.testing.io,
-        "return { api_version = 2, runtime = { history = { path = 'state/history.db' }, graphics = { pane_mib = 32, global_mib = 128 } } }",
+        "return { api_version = 2, runtime = { history = { path = 'state/history.db' }, graphics = { pane_mib = 32, global_mib = 128 }, proxy = { enabled = true, ca_dir = 'state/proxy' } } }",
         "@config.lua",
         1,
         &diagnostic,
@@ -2083,6 +2130,30 @@ test "runtime config compiles bounded graphics quotas" {
     try std.testing.expectEqualStrings(
         "state/history.db",
         generation.snapshot.runtime.historyPath().?,
+    );
+    try std.testing.expect(generation.snapshot.runtime.proxy_enabled);
+    try std.testing.expectEqualStrings(
+        "state/proxy",
+        generation.snapshot.runtime.proxyCaDir().?,
+    );
+}
+
+test "runtime ProxyTLS config rejects live Lua middleware closures" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(
+        error.InvalidConfig,
+        Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            "return { api_version = 2, runtime = { proxy = { enabled = true, middleware = function() end } } }",
+            "@config.lua",
+            1,
+            &diagnostic,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "unknown field config.runtime.proxy.middleware",
+        diagnostic.message(),
     );
 }
 

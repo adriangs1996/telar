@@ -990,7 +990,7 @@ fn runGraphicsTransmission(context: *GraphicsContext, iterations: usize) !u64 {
         while (images.next()) |entry| entry.value_ptr.transmitted = false;
         var placements = context.store.placements.iterator();
         while (placements.next()) |entry| {
-            entry.value_ptr.emitted = false;
+            entry.value_ptr.emitted_image_id = null;
             entry.value_ptr.dirty = true;
         }
         context.store.damage = true;

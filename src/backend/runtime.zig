@@ -3,6 +3,7 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
+const agent_mod = @import("agent.zig");
 const blit = @import("blit.zig");
 const history = @import("history/root.zig");
 const graphics_sync = @import("graphics_sync.zig");
@@ -10,6 +11,7 @@ const media_mod = @import("media.zig");
 const pane_mod = @import("pane.zig");
 const pty = @import("pty.zig");
 const response_queue = @import("response_queue.zig");
+const proxy_mod = @import("proxy/root.zig");
 const runtime_encoder = @import("runtime_encoder.zig");
 const telemetry_mod = @import("telemetry.zig");
 const transport = @import("transport.zig");
@@ -49,10 +51,17 @@ pub const ServeOptions = struct {
     environment: std.process.Environ,
     /// SQLite database for durable history; the default keeps it in memory.
     history_path: [:0]const u8 = ":memory:",
+    proxy: ?ProxyOptions = null,
     /// Test seam: stops the otherwise long-lived runtime without signals.
     stop: ?*Io.Queue(u8) = null,
     /// Test seam: holds a pane's ingest actor open. See `IngestTestGate`.
     ingest_gate: ?*IngestTestGate = null,
+};
+
+pub const ProxyOptions = struct {
+    key_path: []const u8,
+    certificate_path: []const u8,
+    bundle_path: []const u8,
 };
 
 pub const ClientKey = history.model.ClientKey;
@@ -119,6 +128,8 @@ const RuntimeEvent = union(enum) {
     pane_exit: PaneExitEvent,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
+    proxy_event: anyerror!proxy_mod.middleware.Event,
+    agent_tick: anyerror!void,
     stopped: anyerror!void,
 };
 
@@ -142,6 +153,9 @@ const ClientSession = struct {
     /// Declared by the client through `configure_graphics` before it opens
     /// panes; attachments created afterwards inherit it.
     shared_graphics: bool = false,
+    runtime_state_requested: bool = false,
+    proxy_status_sent: bool = false,
+    agent_revision_sent: u64 = 0,
 
     fn create(
         gpa: std.mem.Allocator,
@@ -331,6 +345,8 @@ const Server = struct {
     select: *Io.Select(RuntimeEvent),
     history_service: *history.Service,
     child_environment: *const pty.Environment,
+    inherited_environment: std.process.Environ,
+    proxy_service: ?*proxy_mod.service.Service,
     clients: *ClientStore,
     handshake_slot: ?core.transport.SocketChannel = null,
     handshake_pending: bool = false,
@@ -338,6 +354,7 @@ const Server = struct {
     geometry_leases: [max_workspaces]?GeometryLease = @splat(null),
     workspaces: WorkspaceStore,
     panes: PaneStore,
+    agents: agent_mod.Store = .{},
     metrics: RuntimeMetrics,
 
     fn collect(server: *Server) void {
@@ -362,6 +379,13 @@ const Server = struct {
                 store.exited_count -= 1;
                 slot.* = null;
                 store.count -= 1;
+                _ = server.agents.remove(pane.key());
+                if (server.proxy_service) |service| if (pane.proxy_token) |token|
+                    service.unregisterCredential(.{
+                        .pane_id = pane.id,
+                        .pane_generation = pane.generation,
+                        .token = token,
+                    });
                 pane.destroy();
                 if (store.hasAt(location) or server.workspaces.findTab(location) == null) continue;
 
@@ -531,6 +555,28 @@ const Server = struct {
             return;
         }
 
+        if (session.runtime_state_requested and !session.proxy_status_sent) {
+            const payload = try schema.encodeProxyStatus(buffer, .{
+                .active = server.proxy_service != null,
+            });
+            try startSessionSend(io, select, session, payload);
+            session.proxy_status_sent = true;
+            return;
+        }
+
+        if (session.runtime_state_requested and
+            session.agent_revision_sent < server.agents.revision)
+        {
+            var entry_storage: [agent_mod.max_records]schema.AgentSnapshotEntry = undefined;
+            const payload = try schema.encodeAgentSnapshot(buffer, .{
+                .revision = server.agents.revision,
+                .entries = server.agents.snapshot(&entry_storage),
+            });
+            try startSessionSend(io, select, session, payload);
+            session.agent_revision_sent = server.agents.revision;
+            return;
+        }
+
         var checked: usize = 0;
         while (checked < attachments.items.len) : (checked += 1) {
             const index = (attachments.next_send + checked) % attachments.items.len;
@@ -693,6 +739,8 @@ const Server = struct {
                             select,
                             panes,
                             server.child_environment,
+                            server.inherited_environment,
+                            server.proxy_service,
                             location,
                             open.size,
                             launch,
@@ -791,6 +839,9 @@ const Server = struct {
                     attachment.shared_transport = configure.shared;
                 }
             },
+            .request_runtime_state => {
+                session.runtime_state_requested = true;
+            },
             .graphics_credit => |credit| {
                 const active = attachments.find(credit.pane_id) orelse {
                     metrics.stale_client_messages += 1;
@@ -862,6 +913,8 @@ const Server = struct {
                     select,
                     panes,
                     server.child_environment,
+                    server.inherited_environment,
+                    server.proxy_service,
                     create.location,
                     create.size,
                     create.launch,
@@ -949,6 +1002,8 @@ const Server = struct {
                     select,
                     panes,
                     server.child_environment,
+                    server.inherited_environment,
+                    server.proxy_service,
                     created.location,
                     create.size,
                     create.launch,
@@ -1070,6 +1125,26 @@ fn serveInternal(
     const ingest_gate = options.ingest_gate;
     var child_environment = try pty.Environment.init(gpa, options.environment, "telar");
     defer child_environment.deinit();
+    const proxy_service = if (options.proxy) |proxy_options|
+        try proxy_mod.service.Service.create(io, gpa, .{
+            .key = proxy_options.key_path,
+            .certificate = proxy_options.certificate_path,
+            .bundle = proxy_options.bundle_path,
+        })
+    else
+        null;
+    var proxy_service_owned = proxy_service != null;
+    errdefer if (proxy_service_owned) if (proxy_service) |service| service.destroy();
+    var proxy_worker = if (proxy_service) |service|
+        try io.concurrent(proxy_mod.service.Service.run, .{service})
+    else
+        null;
+    defer if (proxy_service) |service| {
+        if (proxy_worker) |*worker| worker.cancel(io) catch {};
+        service.events.close(io);
+        service.destroy();
+        proxy_service_owned = false;
+    };
 
     var listener = try transport.local.LocalListener.listen(io, endpoint);
     var telemetry_suffix_buffer: [64]u8 = undefined;
@@ -1094,11 +1169,14 @@ fn serveInternal(
         history_service.deinit(io);
     };
 
-    var select_storage: [12 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
+    var select_storage: [14 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
     try select.concurrent(.history_response, history.receiveResponse, .{ io, &history_service });
+    if (proxy_service) |service|
+        try select.concurrent(.proxy_event, proxy_mod.service.Service.receive, .{ service, io });
+    try select.concurrent(.agent_tick, waitForAgentTick, .{io});
     if (comptime diagnostics.enabled) {
         if (telemetry.available())
             try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
@@ -1110,6 +1188,8 @@ fn serveInternal(
         .select = &select,
         .history_service = &history_service,
         .child_environment = &child_environment,
+        .inherited_environment = options.environment,
+        .proxy_service = proxy_service,
         .clients = clients,
         .workspaces = WorkspaceStore.init(gpa),
         .panes = .{
@@ -1118,7 +1198,7 @@ fn serveInternal(
         },
         .metrics = .{ .started_ns = diagnostics.now(io) },
     };
-    var telemetry_buffer: [4096]u8 = undefined;
+    var telemetry_buffer: [8192]u8 = undefined;
     var telemetry_write_pending = false;
     defer {
         listener.shutdown();
@@ -1131,6 +1211,10 @@ fn serveInternal(
         // has been joined, because Darwin's close waits behind blocked writes.
         server.panes.shutdown();
         select.cancelDiscard();
+        if (proxy_worker) |*worker| {
+            worker.cancel(io) catch {};
+            proxy_worker = null;
+        }
         listener.deinit(io);
         if (server.handshake_slot) |*pending| pending.deinit(io);
         for (&server.clients.items) |*slot| if (slot.*) |session| {
@@ -1309,6 +1393,49 @@ fn serveInternal(
             }
             server.pumpAll();
         },
+        .proxy_event => |event_result| {
+            var event = event_result catch continue;
+            defer std.crypto.secureZero(u8, &event.credential.token);
+            if (proxy_service) |service|
+                try select.concurrent(.proxy_event, proxy_mod.service.Service.receive, .{ service, io });
+            const key: PaneKey = .{
+                .id = event.credential.pane_id,
+                .generation = event.credential.pane_generation,
+            };
+            const active = server.panes.resolve(key) orelse {
+                server.metrics.stale_pane_events += 1;
+                continue;
+            };
+            const expected = active.proxy_token orelse continue;
+            if (!std.crypto.timing_safe.eql([proxy_mod.identity.token_bytes]u8, expected, event.credential.token))
+                continue;
+            if (comptime diagnostics.enabled) server.metrics.proxy_observations +|= 1;
+            _ = server.agents.observeProxy(
+                agent_mod.Identity.fromPane(active),
+                event.provider,
+                switch (event.phase) {
+                    .request_started => .request_started,
+                    .response_activity => .response_activity,
+                    .response_finished => .response_finished,
+                    .request_failed => .request_failed,
+                },
+                switch (event.protocol) {
+                    .http11 => .http11,
+                    .h2 => .h2,
+                    .upgraded => .upgraded,
+                },
+                event.connection_id,
+                event.stream_id,
+                event.observed_at_ms,
+            );
+            server.pumpAll();
+        },
+        .agent_tick => |result| {
+            result catch continue;
+            try select.concurrent(.agent_tick, waitForAgentTick, .{io});
+            _ = server.agents.expire(Io.Timestamp.now(io, .real).toMilliseconds());
+            server.pumpAll();
+        },
         .pane_input_written => |event| {
             const active = server.panes.resolve(event.pane) orelse {
                 server.metrics.stale_pane_events += 1;
@@ -1459,6 +1586,21 @@ fn serveInternal(
                 if (event.stats.failed) server.metrics.history_observation_failures +|= 1;
                 if (event.stats.reset) server.metrics.history_observation_resets +|= 1;
             }
+            if (event.stats.agent_signal) |signal| {
+                _ = server.agents.observeScreen(
+                    agent_mod.Identity.fromPane(active),
+                    .{
+                        .provider = signal.provider,
+                        .status = switch (signal.status) {
+                            .working => .working,
+                            .blocked => .blocked,
+                            .ready => .ready,
+                        },
+                        .confidence = signal.confidence,
+                    },
+                    Io.Timestamp.now(io, .real).toMilliseconds(),
+                );
+            }
             try schedulePaneObservation(&select, active);
             server.collect();
             server.pumpAll();
@@ -1500,6 +1642,16 @@ fn serveInternal(
             active.actorFinished();
             active.wait_pending = false;
             active.exit = exitOrSynthetic(event.result);
+            _ = server.agents.remove(active.key());
+            if (server.proxy_service) |service| if (active.proxy_token) |*token| {
+                service.unregisterCredential(.{
+                    .pane_id = active.id,
+                    .pane_generation = active.generation,
+                    .token = token.*,
+                });
+                std.crypto.secureZero(u8, token);
+                active.proxy_token = null;
+            };
             server.panes.exited_count += 1;
             if (active.output_done) {
                 active.queueExitedHistory(active.exit.?);
@@ -1544,6 +1696,27 @@ fn serveInternal(
                 &history_service,
                 response_queue_depth,
                 response_queue_dropped,
+                proxy_service != null,
+                if (proxy_service) |service|
+                    service.active_connections.load(.monotonic)
+                else
+                    0,
+                if (proxy_service) |service|
+                    service.dropped_events.load(.monotonic)
+                else
+                    0,
+                if (proxy_service) |service|
+                    service.rejected_connections.load(.monotonic)
+                else
+                    0,
+                if (proxy_service) |service|
+                    service.connection_limit_drops.load(.monotonic)
+                else
+                    0,
+                if (proxy_service) |service|
+                    service.h2_decode_failures.load(.monotonic)
+                else
+                    0,
             ) catch continue;
             telemetry_write_pending = true;
             select.concurrent(.telemetry_written, writeDiagnostics, .{
@@ -1625,14 +1798,59 @@ fn spawnPane(
     select: *Io.Select(RuntimeEvent),
     panes: *PaneStore,
     environment: *const pty.Environment,
+    inherited_environment: std.process.Environ,
+    proxy_service: ?*proxy_mod.service.Service,
     location: schema.TabLocation,
     size: schema.TerminalSize,
     launch: schema.LaunchView,
     history_service: *history.Service,
 ) !*Pane {
-    var command = try OwnedCommand.init(gpa, launch, environment);
-    defer command.deinit();
     const pane_key = try panes.allocateKey();
+    var proxy_environment: ?pty.Environment = null;
+    defer if (proxy_environment) |*owned| owned.deinit();
+    var proxy_token: ?[proxy_mod.identity.token_bytes]u8 = null;
+    defer if (proxy_token) |*token| std.crypto.secureZero(u8, token);
+    var proxy_credential: ?proxy_mod.identity.Credential = null;
+    defer if (proxy_credential) |*credential| std.crypto.secureZero(u8, &credential.token);
+    var proxy_registered = false;
+    errdefer if (proxy_registered) if (proxy_service) |service|
+        service.unregisterCredential(proxy_credential.?);
+    const child_environment = if (proxy_service) |service| block: {
+        var token = proxy_mod.identity.randomToken(io);
+        defer std.crypto.secureZero(u8, &token);
+        proxy_token = token;
+        const credential: proxy_mod.identity.Credential = .{
+            .pane_id = pane_key.id,
+            .pane_generation = pane_key.generation,
+            .token = token,
+        };
+        try service.registerCredential(credential);
+        proxy_credential = credential;
+        proxy_registered = true;
+        var proxy_url_buffer: [256]u8 = undefined;
+        defer std.crypto.secureZero(u8, &proxy_url_buffer);
+        const proxy_url = try service.credentialUrl(&proxy_url_buffer, credential);
+        const overrides = [_]pty.Environment.Override{
+            .{ .name = "HTTPS_PROXY", .value = proxy_url },
+            .{ .name = "https_proxy", .value = proxy_url },
+            .{ .name = "NODE_USE_ENV_PROXY", .value = "1" },
+            .{ .name = "NODE_EXTRA_CA_CERTS", .value = service.certificate_path },
+            .{ .name = "SSL_CERT_FILE", .value = service.bundle_path },
+            .{ .name = "CURL_CA_BUNDLE", .value = service.bundle_path },
+            .{ .name = "REQUESTS_CA_BUNDLE", .value = service.bundle_path },
+            .{ .name = "AWS_CA_BUNDLE", .value = service.bundle_path },
+            .{ .name = "TELAR_PROXY_TLS", .value = "1" },
+        };
+        proxy_environment = try pty.Environment.initWithOverrides(
+            gpa,
+            inherited_environment,
+            "telar",
+            &overrides,
+        );
+        break :block &proxy_environment.?;
+    } else environment;
+    var command = try OwnedCommand.init(gpa, launch, child_environment);
+    defer command.deinit();
     const fresh = fresh: {
         const created = try Pane.create(
             io,
@@ -1648,9 +1866,17 @@ fn spawnPane(
         );
         errdefer created.destroy();
         try panes.insert(created);
+        created.proxy_token = proxy_token;
+        proxy_registered = false;
         break :fresh created;
     };
     select.concurrent(.pane_output, readPane, .{ io, fresh }) catch |err| {
+        if (proxy_service) |service| if (fresh.proxy_token) |token|
+            service.unregisterCredential(.{
+                .pane_id = fresh.id,
+                .pane_generation = fresh.generation,
+                .token = token,
+            });
         panes.removeAndDestroy(fresh);
         return err;
     };
@@ -1772,6 +1998,10 @@ fn writePaneResponse(io: Io, pane: *Pane, bytes: []const u8) PaneResponseEvent {
 
 fn waitForStop(io: Io, stop: *Io.Queue(u8)) anyerror!void {
     _ = try stop.getOne(io);
+}
+
+fn waitForAgentTick(io: Io) anyerror!void {
+    try io.sleep(.fromSeconds(1), .awake);
 }
 
 fn acceptClient(io: Io, listener: *transport.local.LocalListener) anyerror!core.transport.SocketChannel {

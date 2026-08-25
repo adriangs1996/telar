@@ -10,6 +10,7 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
+const agent_detection = @import("agent_detection.zig");
 const terminal_history = @import("terminal.zig");
 
 const Io = std.Io;
@@ -24,6 +25,7 @@ pub const Stats = struct {
     dropped: u64 = 0,
     reset: bool = false,
     failed: bool = false,
+    agent_signal: ?agent_detection.Signal = null,
 };
 
 const Input = struct {
@@ -94,6 +96,7 @@ pub const Observer = struct {
     dropped_bytes: u64 = 0,
     resets: u64 = 0,
     failures: u64 = 0,
+    detector: agent_detection.Detector = .{},
 
     pub fn init(
         observer: *Observer,
@@ -120,6 +123,7 @@ pub const Observer = struct {
         observer.dropped_bytes = 0;
         observer.resets = 0;
         observer.failures = 0;
+        observer.detector = .{};
     }
 
     pub fn deinit(observer: *Observer) void {
@@ -209,6 +213,7 @@ pub const Observer = struct {
     ) void {
         const index = observer.worker orelse return;
         const batch = &observer.batches[index];
+        observer.detector.resetSample();
         if (batch.reset_before) {
             const reset_cwd = cwd orelse if (observer.enabled)
                 observer.tracker.currentCwd()
@@ -262,6 +267,7 @@ pub const Observer = struct {
             ),
             .interrupt => |clock| observer.tracker.interrupt(clock, context, on_command),
         };
+        stats.agent_signal = observer.detector.signal();
     }
 
     fn observeOutput(
@@ -272,6 +278,7 @@ pub const Observer = struct {
         context: anytype,
         comptime on_command: fn (@TypeOf(context), terminal_history.Command) void,
     ) void {
+        observer.detector.observe(bytes);
         var offset: usize = 0;
         while (offset < bytes.len) {
             const remaining = bytes[offset..];

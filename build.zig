@@ -19,6 +19,21 @@ pub fn build(b: *std.Build) void {
     }).module("ghostty-vt");
 
     const lua_api = addLua(b, target, optimize, "lua");
+    const tls = b.dependency("tls", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("tls");
+    const nghttp2_prefix = b.option(
+        []const u8,
+        "nghttp2",
+        "Prefix of a libnghttp2 installation",
+    ) orelse if (target.result.os.tag == .macos)
+        if (target.result.cpu.arch == .aarch64)
+            "/opt/homebrew/opt/libnghttp2"
+        else
+            "/usr/local/opt/libnghttp2"
+    else
+        "/usr";
 
     // The width tables, behind a module name so the drawing layer never names
     // its provider. Everything that draws imports `unicode`; only this line
@@ -48,6 +63,10 @@ pub fn build(b: *std.Build) void {
     });
     backend.addImport("telar-core", core);
     backend.addImport("ghostty-vt", ghostty_vt);
+    backend.addImport("tls", tls);
+    backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
+    backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
+    backend.linkSystemLibrary("nghttp2", .{});
     backend.linkSystemLibrary("sqlite3", .{});
 
     const frontend = b.addModule("telar-frontend", .{
@@ -108,6 +127,10 @@ pub fn build(b: *std.Build) void {
     });
     bench_backend.addImport("telar-core", bench_core);
     bench_backend.addImport("ghostty-vt", ghostty_vt);
+    bench_backend.addImport("tls", tls);
+    bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
+    bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
+    bench_backend.linkSystemLibrary("nghttp2", .{});
     bench_backend.linkSystemLibrary("sqlite3", .{});
     const bench_frontend = b.createModule(.{
         .root_source_file = b.path("src/frontend/root.zig"),
@@ -240,6 +263,9 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/client.zig", .libc = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
+        .{ .path = "src/backend/history/agent_detection.zig" },
+        .{ .path = "src/backend/agent.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/proxy/root.zig", .libc = true },
         .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/damage.zig" },
         .{ .path = "src/backend/history/root.zig", .vt = true, .libc = true },
@@ -271,6 +297,10 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addImport("telar-backend", backend);
         tests.root_module.addImport("telar-frontend", frontend);
         tests.root_module.addImport("lua-api", lua_api);
+        tests.root_module.addImport("tls", tls);
+        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
+        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
+        tests.root_module.linkSystemLibrary("nghttp2", .{});
         if (suite.vt) tests.root_module.addImport("ghostty-vt", ghostty_vt);
         const run_tests = b.addRunArtifact(tests);
         test_step.dependOn(&run_tests.step);
@@ -305,17 +335,6 @@ pub fn build(b: *std.Build) void {
     // sqlite3 and libnghttp2 from the system, and telar's whole point is that
     // the core builds anywhere with nothing but a Zig compiler. Someone who
     // wants the proxy asks for it.
-    const tls = b.dependency("tls", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("tls");
-
-    const nghttp2_prefix = b.option(
-        []const u8,
-        "nghttp2",
-        "Prefix of a libnghttp2 installation",
-    ) orelse "/opt/homebrew/opt/libnghttp2";
-
     const proxyModule = struct {
         fn make(
             bb: *std.Build,

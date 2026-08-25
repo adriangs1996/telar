@@ -53,6 +53,7 @@ pub const RuntimeMetrics = struct {
     history_query_failures: u64 = 0,
     history_observation_resets: u64 = 0,
     history_observation_failures: u64 = 0,
+    proxy_observations: u64 = 0,
     client_resyncs: u64 = 0,
 };
 
@@ -68,6 +69,12 @@ pub fn formatRuntimeTelemetry(
     history_service: *const history.Service,
     response_queue_depth: usize,
     response_queue_dropped: u64,
+    proxy_active: bool,
+    proxy_active_connections: u32,
+    proxy_dropped_events: u64,
+    proxy_rejected_connections: u64,
+    proxy_connection_limit_drops: u64,
+    proxy_h2_decode_failures: u64,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
     var outstanding_frames: usize = 0;
@@ -261,6 +268,21 @@ pub fn formatRuntimeTelemetry(
         history_next_input_completions,
         history_auxiliary_completions,
     });
+    try output.print(
+        "\"proxy_active\":{d},\"proxy_observations\":{d}," ++
+            "\"proxy_active_connections\":{d},\"proxy_dropped_events\":{d}," ++
+            "\"proxy_rejected_connections\":{d},\"proxy_connection_limit_drops\":{d}," ++
+            "\"proxy_h2_decode_failures\":{d},",
+        .{
+            @intFromBool(proxy_active),
+            metrics.proxy_observations,
+            proxy_active_connections,
+            proxy_dropped_events,
+            proxy_rejected_connections,
+            proxy_connection_limit_drops,
+            proxy_h2_decode_failures,
+        },
+    );
     try output.print("\"history_available\":{d},\"sqlite_open_failures\":{d}," ++
         "\"history_queries\":{d},\"history_query_failures\":{d}," ++
         "\"history_observation_resets\":{d},\"history_observation_failures\":{d}," ++

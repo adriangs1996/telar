@@ -40,6 +40,7 @@ return telar.config({
   runtime = {
     history = { path = "state/history.db" },
     graphics = { pane_mib = 64, global_mib = 256 },
+    proxy = { enabled = false, ca_dir = "state/proxy" },
   },
   plugins = {
     telar.plugin({ path = "plugins/sample", enabled = true }),
@@ -129,7 +130,21 @@ shows the error in the client. Closure state is intentionally lost on reload.
 The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
-`config.lua`; its parent directory must already exist. Explicit server CLI
+`config.lua`; its parent directory must already exist. `runtime.proxy` accepts
+only `enabled` and `ca_dir`. ProxyTLS is disabled by default. A relative
+`ca_dir` is also resolved beside `config.lua`; Telar creates it owner-only and
+stores its private CA and derived trust bundle there with owner-only file
+permissions. Explicit server CLI
 graphics limits still override the Lua values. Runtime-owned settings take
 effect when the long-lived runtime starts; restart that runtime to apply a
 changed runtime profile.
+
+No proxy callback is accepted by the runtime configuration today. The native
+proxy exposes bounded observation and semantic head-transformation contracts
+for a later isolated Lua worker. Method, target, status, and header effects are
+already validated consistently for HTTP/1.1 and HTTP/2, while bodies remain
+streaming and unavailable to callbacks. Placing a live closure in
+`runtime.proxy` is rejected so Lua cannot enter the runtime or a
+traffic-forwarding actor accidentally. See
+[`proxy-tls.md`](proxy-tls.md) for the trust, observation, and future middleware
+contracts.

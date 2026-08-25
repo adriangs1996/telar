@@ -32,6 +32,7 @@ pub const max_panes_per_tab = types.max_panes_per_tab;
 pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
 pub const max_history_command_bytes = types.max_history_command_bytes;
+pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;
 
 pub const TerminalSize = types.TerminalSize;
 pub const PaneTarget = types.PaneTarget;
@@ -49,6 +50,11 @@ pub const TabDescriptor = types.TabDescriptor;
 pub const HistoryScope = types.HistoryScope;
 pub const HistoryStatus = types.HistoryStatus;
 pub const HistoryEntry = types.HistoryEntry;
+pub const AgentProvider = types.AgentProvider;
+pub const AgentStatus = types.AgentStatus;
+pub const AgentSource = types.AgentSource;
+pub const AgentAuthority = types.AgentAuthority;
+pub const AgentSnapshotEntry = types.AgentSnapshotEntry;
 
 const Derived = codec.Derived;
 const encodeDerived = codec.encodeDerived;
@@ -91,6 +97,7 @@ pub const ClientTag = enum(u8) {
     request_graphics_snapshot = 0x11,
     graphics_credit = 0x12,
     configure_graphics = 0x13,
+    request_runtime_state = 0x14,
 };
 
 pub const ServerTag = enum(u8) {
@@ -114,6 +121,8 @@ pub const ServerTag = enum(u8) {
     graphics_delete_placement = 0x92,
     resync_required = 0x93,
     graphics_shared_image = 0x94,
+    proxy_status = 0x95,
+    agent_snapshot = 0x96,
 };
 
 pub const LaunchView = struct {
@@ -331,6 +340,7 @@ pub const ClientMessage = union(enum) {
     request_graphics_snapshot: RequestGraphicsSnapshot,
     graphics_credit: GraphicsCredit,
     configure_graphics: ConfigureGraphics,
+    request_runtime_state: void,
 };
 
 pub const PaneOpened = struct {
@@ -448,6 +458,32 @@ pub const HistoryResultsView = struct {
     }
 };
 
+pub const ProxyStatus = struct {
+    active: bool,
+
+    pub fn validateWire(message: ProxyStatus) !void {
+        _ = message;
+    }
+};
+
+pub const AgentSnapshot = struct {
+    revision: u64,
+    entries: []const AgentSnapshotEntry,
+};
+
+pub const AgentSnapshotView = struct {
+    revision: u64,
+    entry_count: u16,
+    encoded_entries: []const u8,
+
+    pub fn entries(snapshot: AgentSnapshotView) AgentSnapshotIterator {
+        return .{
+            .decoder = .init(snapshot.encoded_entries),
+            .remaining = snapshot.entry_count,
+        };
+    }
+};
+
 pub const HistoryEntryIterator = struct {
     decoder: wire.Decoder,
     remaining: u16,
@@ -456,6 +492,17 @@ pub const HistoryEntryIterator = struct {
         if (iterator.remaining == 0) return null;
         iterator.remaining -= 1;
         return try decodeHistoryEntry(&iterator.decoder);
+    }
+};
+
+pub const AgentSnapshotIterator = struct {
+    decoder: wire.Decoder,
+    remaining: u16,
+
+    pub fn next(iterator: *AgentSnapshotIterator) !?AgentSnapshotEntry {
+        if (iterator.remaining == 0) return null;
+        iterator.remaining -= 1;
+        return try decodeAgentSnapshotEntry(&iterator.decoder);
     }
 };
 
@@ -510,6 +557,8 @@ pub const ServerMessage = union(enum) {
     graphics_delete_placement: graphics.DeletePlacement,
     resync_required: ResyncRequired,
     graphics_shared_image: graphics.SharedImage,
+    proxy_status: ProxyStatus,
+    agent_snapshot: AgentSnapshotView,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -563,6 +612,15 @@ pub fn encodeGraphicsCredit(buffer: []u8, message: GraphicsCredit) ![]const u8 {
 
 pub fn encodeConfigureGraphics(buffer: []u8, message: ConfigureGraphics) ![]const u8 {
     return encodeDerived(@intFromEnum(ClientTag.configure_graphics), ConfigureGraphics, buffer, message);
+}
+
+/// Subscribes this client session to runtime-owned UI state, including the
+/// ProxyTLS status and agent activity snapshots. The subscription lasts until
+/// the client disconnects.
+pub fn encodeRequestRuntimeState(buffer: []u8) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.request_runtime_state));
+    return encoder.finish();
 }
 
 pub fn encodeRequestSnapshot(buffer: []u8, message: RequestSnapshot) ![]const u8 {
@@ -729,6 +787,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .configure_graphics => .{
             .configure_graphics = try Derived(ConfigureGraphics).decode(&decoder),
         },
+        .request_runtime_state => .{ .request_runtime_state = {} },
     };
     try decoder.ensureEnd();
     return message;
@@ -811,6 +870,28 @@ pub fn encodeGraphicsDeletePlacement(buffer: []u8, message: graphics.DeletePlace
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.graphics_delete_placement));
     try graphics.encodeDeletePlacement(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeProxyStatus(buffer: []u8, message: ProxyStatus) ![]const u8 {
+    return encodeDerived(@intFromEnum(ServerTag.proxy_status), ProxyStatus, buffer, message);
+}
+
+pub fn encodeAgentSnapshot(buffer: []u8, message: AgentSnapshot) ![]const u8 {
+    if (message.revision == 0) return error.InvalidAgentRevision;
+    if (message.entries.len > max_agent_snapshot_entries) return error.TooManyAgentEntries;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.agent_snapshot));
+    try encoder.writeInt(u64, message.revision);
+    try encoder.writeInt(u16, @intCast(message.entries.len));
+    for (message.entries, 0..) |entry, index| {
+        for (message.entries[0..index]) |previous| {
+            if (previous.pane_id == entry.pane_id and
+                previous.pane_generation == entry.pane_generation)
+                return error.DuplicateAgentEntry;
+        }
+        try encodeAgentSnapshotEntry(&encoder, entry);
+    }
     return encoder.finish();
 }
 
@@ -938,6 +1019,8 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .graphics_delete_placement => .{ .graphics_delete_placement = try graphics.decodeDeletePlacement(&decoder) },
         .resync_required => .{ .resync_required = try Derived(ResyncRequired).decode(&decoder) },
         .graphics_shared_image => .{ .graphics_shared_image = try graphics.decodeSharedImage(&decoder) },
+        .proxy_status => .{ .proxy_status = try Derived(ProxyStatus).decode(&decoder) },
+        .agent_snapshot => .{ .agent_snapshot = try decodeAgentSnapshot(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -1248,6 +1331,74 @@ fn decodeHistoryResults(decoder: *wire.Decoder) !HistoryResultsView {
     for (0..entry_count) |_| try skipHistoryEntry(decoder);
     return .{
         .request_id = request_id,
+        .entry_count = entry_count,
+        .encoded_entries = decoder.consumed(entries_start),
+    };
+}
+
+fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !void {
+    try validatePaneId(entry.pane_id);
+    if (entry.pane_generation == 0 or entry.sequence == 0 or entry.confidence > 100)
+        return error.InvalidAgentEntry;
+    if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
+    try encoder.writeInt(u64, id.raw(entry.pane_id));
+    try encoder.writeInt(u64, entry.pane_generation);
+    try encoder.writeInt(u32, entry.process_id);
+    try encoder.writeBytes(&entry.session_id);
+    try encoder.writeByte(@intFromEnum(entry.provider));
+    try encoder.writeByte(@intFromEnum(entry.status));
+    try encoder.writeByte(@intFromEnum(entry.source));
+    try encoder.writeByte(@intFromEnum(entry.authority));
+    try encoder.writeByte(entry.confidence);
+    try encoder.writeInt(u64, entry.sequence);
+    try encoder.writeInt(i64, entry.observed_at_ms);
+    try encoder.writeInt(i64, entry.expires_at_ms);
+}
+
+fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
+    const entry: AgentSnapshotEntry = .{
+        .pane_id = try id.pane(try decoder.readInt(u64)),
+        .pane_generation = try decoder.readInt(u64),
+        .process_id = try decoder.readInt(u32),
+        .session_id = (try decoder.readBytes(16))[0..16].*,
+        .provider = std.enums.fromInt(AgentProvider, try decoder.readByte()) orelse
+            return error.InvalidAgentProvider,
+        .status = std.enums.fromInt(AgentStatus, try decoder.readByte()) orelse
+            return error.InvalidAgentStatus,
+        .source = std.enums.fromInt(AgentSource, try decoder.readByte()) orelse
+            return error.InvalidAgentSource,
+        .authority = std.enums.fromInt(AgentAuthority, try decoder.readByte()) orelse
+            return error.InvalidAgentAuthority,
+        .confidence = try decoder.readByte(),
+        .sequence = try decoder.readInt(u64),
+        .observed_at_ms = try decoder.readInt(i64),
+        .expires_at_ms = try decoder.readInt(i64),
+    };
+    if (entry.pane_generation == 0 or entry.sequence == 0 or entry.confidence > 100)
+        return error.InvalidAgentEntry;
+    if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
+    return entry;
+}
+
+fn decodeAgentSnapshot(decoder: *wire.Decoder) !AgentSnapshotView {
+    const revision = try decoder.readInt(u64);
+    if (revision == 0) return error.InvalidAgentRevision;
+    const entry_count = try decoder.readInt(u16);
+    if (entry_count > max_agent_snapshot_entries) return error.TooManyAgentEntries;
+    const entries_start = decoder.index;
+    var seen_ids: [max_agent_snapshot_entries]PaneId = undefined;
+    var seen_generations: [max_agent_snapshot_entries]u64 = undefined;
+    for (0..entry_count) |index| {
+        const entry = try decodeAgentSnapshotEntry(decoder);
+        for (seen_ids[0..index], seen_generations[0..index]) |pane_id, generation| {
+            if (pane_id == entry.pane_id and generation == entry.pane_generation)
+                return error.DuplicateAgentEntry;
+        }
+        seen_ids[index] = entry.pane_id;
+        seen_generations[index] = entry.pane_generation;
+    }
+    return .{
+        .revision = revision,
         .entry_count = entry_count,
         .encoded_entries = decoder.consumed(entries_start),
     };

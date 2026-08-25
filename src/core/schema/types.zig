@@ -20,6 +20,7 @@ pub const max_panes_per_tab = 64;
 pub const max_history_query_bytes = 1024;
 pub const max_history_results = 100;
 pub const max_history_command_bytes = 64 * 1024;
+pub const max_agent_snapshot_entries = max_panes_per_tab;
 
 pub const TerminalSize = struct {
     cols: u16,
@@ -130,4 +131,49 @@ pub const HistoryEntry = struct {
     command: []const u8,
     cwd: []const u8,
     workspace_path: []const u8,
+};
+
+/// Agent vocabulary published by the runtime. These values describe evidence,
+/// not authority to act on behalf of an agent.
+pub const AgentProvider = enum(u8) {
+    unknown = 0,
+    claude = 1,
+    codex = 2,
+};
+
+pub const AgentStatus = enum(u8) {
+    unknown = 0,
+    working = 1,
+    blocked = 2,
+    ready = 3,
+    failed = 4,
+};
+
+pub const AgentSource = enum(u8) {
+    proxy_tls = 0,
+    screen = 1,
+};
+
+pub const AgentAuthority = enum(u8) {
+    candidate = 0,
+    active = 1,
+    obscured = 2,
+    resumed = 3,
+    exited = 4,
+    stale = 5,
+};
+
+pub const AgentSnapshotEntry = struct {
+    pane_id: id.PaneId,
+    pane_generation: u64,
+    process_id: u32,
+    session_id: [16]u8,
+    provider: AgentProvider,
+    status: AgentStatus,
+    source: AgentSource,
+    authority: AgentAuthority,
+    confidence: u8,
+    sequence: u64,
+    observed_at_ms: i64,
+    expires_at_ms: i64,
 };

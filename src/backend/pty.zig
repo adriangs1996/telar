@@ -84,6 +84,20 @@ pub const Environment = struct {
         inherited: std.process.Environ,
         term_program: []const u8,
     ) !Environment {
+        return initWithOverrides(gpa, inherited, term_program, &.{});
+    }
+
+    pub const Override = struct {
+        name: []const u8,
+        value: []const u8,
+    };
+
+    pub fn initWithOverrides(
+        gpa: std.mem.Allocator,
+        inherited: std.process.Environ,
+        term_program: []const u8,
+        overrides: []const Override,
+    ) !Environment {
         var map = try inherited.createMap(gpa);
         defer map.deinit();
 
@@ -94,6 +108,7 @@ pub const Environment = struct {
         _ = map.swapRemove("TELAR_SOCKET");
         try map.put("TERM", "xterm-256color");
         try map.put("TERM_PROGRAM", term_program);
+        for (overrides) |entry| try map.put(entry.name, entry.value);
 
         const block = try map.createPosixBlock(gpa, .{});
         return .{
@@ -103,7 +118,12 @@ pub const Environment = struct {
     }
 
     pub fn deinit(environment: *Environment) void {
-        environment.block.deinit(environment.gpa);
+        for (environment.block.slice) |entry| {
+            const bytes = std.mem.span(@constCast(entry.?));
+            std.crypto.secureZero(u8, bytes);
+            environment.gpa.free(bytes);
+        }
+        environment.gpa.free(environment.block.slice);
         environment.* = undefined;
     }
 };
@@ -457,6 +477,33 @@ test "terminal child environment removes inherited Ghostty identity" {
     );
     try std.testing.expect(std.process.Environ.getPosix(child, "TELAR_SOCKET") == null);
     try std.testing.expect(std.process.Environ.getPosix(child, "GHOSTTY_RESOURCES_DIR") == null);
+}
+
+test "terminal child environment applies bounded proxy overrides" {
+    var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
+    defer inherited_map.deinit();
+    try inherited_map.put("HTTPS_PROXY", "http://old.invalid");
+    const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
+    defer inherited_block.deinit(std.testing.allocator);
+    var environment = try Environment.initWithOverrides(
+        std.testing.allocator,
+        .{ .block = inherited_block },
+        "telar",
+        &.{
+            .{ .name = "HTTPS_PROXY", .value = "http://127.0.0.1:45100" },
+            .{ .name = "TELAR_PROXY_TLS", .value = "1" },
+        },
+    );
+    defer environment.deinit();
+    const child: std.process.Environ = .{ .block = environment.block };
+    try std.testing.expectEqualStrings(
+        "http://127.0.0.1:45100",
+        std.process.Environ.getPosix(child, "HTTPS_PROXY").?,
+    );
+    try std.testing.expectEqualStrings(
+        "1",
+        std.process.Environ.getPosix(child, "TELAR_PROXY_TLS").?,
+    );
 }
 
 test "PTY child receives the explicit terminal environment" {

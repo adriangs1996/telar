@@ -21,6 +21,7 @@ const plugin_broker = @import("plugin_broker.zig");
 const term = @import("term.zig");
 const tabs_mod = @import("tabs.zig");
 const theme = @import("theme.zig");
+const widgets = @import("widgets/root.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -101,6 +102,48 @@ const ClientEvent = union(enum) {
     config_reload: anyerror!ConfigReload,
     plugin_result: anyerror!plugin_broker.WorkerResult,
 };
+
+const AgentPresentation = struct {
+    section: widgets.sidebar.Section,
+    action: widgets.sidebar.TaskAction,
+    status: widgets.sidebar.Status,
+};
+
+fn agentPresentation(status: schema.AgentStatus) AgentPresentation {
+    return switch (status) {
+        .unknown => .{ .section = .background, .action = .none, .status = .unknown },
+        .working => .{ .section = .running, .action = .none, .status = .working },
+        .blocked => .{ .section = .needs_you, .action = .decide, .status = .waiting },
+        .ready => .{ .section = .ready, .action = .none, .status = .ready },
+        .failed => .{ .section = .needs_you, .action = .debug, .status = .failed },
+    };
+}
+
+fn providerTitle(provider: schema.AgentProvider) []const u8 {
+    return switch (provider) {
+        .unknown => "Agent",
+        .claude => "Claude Code",
+        .codex => "Codex",
+    };
+}
+
+fn sourceLabel(source: schema.AgentSource) []const u8 {
+    return switch (source) {
+        .proxy_tls => "ProxyTLS",
+        .screen => "terminal",
+    };
+}
+
+fn authorityLabel(authority: schema.AgentAuthority) []const u8 {
+    return switch (authority) {
+        .candidate => "candidate",
+        .active => "active",
+        .obscured => "needs input",
+        .resumed => "resumed",
+        .exited => "exited",
+        .stale => "stale",
+    };
+}
 
 const ConfigReload = union(enum) {
     unchanged: i128,
@@ -265,6 +308,8 @@ const Client = struct {
             },
             .runtime_stopping => return 0,
             .history_results => return error.UnexpectedHistoryResults,
+            .proxy_status => |status| try client.handleProxyStatus(status),
+            .agent_snapshot => |snapshot| try client.handleAgentSnapshot(snapshot),
             .graphics_snapshot,
             .graphics_image,
             .graphics_shared_image,
@@ -275,6 +320,44 @@ const Client = struct {
             => try client.handleGraphics(message),
         }
         return null;
+    }
+
+    fn handleProxyStatus(client: *Client, status: schema.ProxyStatus) !void {
+        client.view.setProxyTlsActive(status.active);
+        try client.requestDraw();
+    }
+
+    fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !void {
+        var tasks: [schema.max_agent_snapshot_entries]widgets.sidebar.TaskInput = undefined;
+        var count: usize = 0;
+        var iterator = snapshot.entries();
+        while (try iterator.next()) |entry| {
+            const presentation = agentPresentation(entry.status);
+            tasks[count] = .{
+                .key = .{
+                    .id = schema.id.raw(entry.pane_id),
+                    .generation = entry.pane_generation,
+                },
+                .pane_id = entry.pane_id,
+                .title = providerTitle(entry.provider),
+                .tool = sourceLabel(entry.source),
+                .status_detail = authorityLabel(entry.authority),
+                .section = presentation.section,
+                .action = presentation.action,
+                .provider = switch (entry.provider) {
+                    .unknown => .unknown,
+                    .claude => .claude,
+                    .codex => .codex,
+                },
+                .status = presentation.status,
+                .inbox = entry.status != .working,
+            };
+            count += 1;
+        }
+        if (try client.view.replaceSidebarSnapshot(.{
+            .revision = snapshot.revision,
+            .tasks = tasks[0..count],
+        })) try client.requestDraw();
     }
 
     fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
@@ -849,6 +932,9 @@ pub fn run(
         .shared = kitty.clientSupportsSharedMemory(),
     });
     try connection.send(io, configure_payload);
+
+    const runtime_state_payload = try schema.encodeRequestRuntimeState(send_buffer);
+    try connection.send(io, runtime_state_payload);
 
     const open_payload = try schema.encodeOpenPane(send_buffer, .{
         .request_id = initial_request_id,

@@ -17,6 +17,7 @@ pub const max_expression_paste_bytes = 4096;
 pub const max_plugins = 32;
 pub const max_plugin_path_bytes = 512;
 pub const max_history_path_bytes = 1024;
+pub const max_proxy_path_bytes = 1024;
 
 pub const ConfiguredBinding = keybind.Binding(action.Action, max_binding_keys);
 
@@ -50,10 +51,18 @@ pub const RuntimeSnapshot = struct {
     graphics_global_bytes: usize = core.graphics.max_image_bytes_global,
     history_path_bytes: [max_history_path_bytes]u8 = undefined,
     history_path_len: u16 = 0,
+    proxy_enabled: bool = false,
+    proxy_ca_dir_bytes: [max_proxy_path_bytes]u8 = undefined,
+    proxy_ca_dir_len: u16 = 0,
 
     pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
         if (snapshot.history_path_len == 0) return null;
         return snapshot.history_path_bytes[0..snapshot.history_path_len];
+    }
+
+    pub fn proxyCaDir(snapshot: *const RuntimeSnapshot) ?[]const u8 {
+        if (snapshot.proxy_ca_dir_len == 0) return null;
+        return snapshot.proxy_ca_dir_bytes[0..snapshot.proxy_ca_dir_len];
     }
 };
 
