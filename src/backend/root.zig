@@ -10,6 +10,7 @@ pub const damage = @import("damage.zig");
 pub const history = @import("history/root.zig");
 pub const proxy = @import("proxy/root.zig");
 pub const media = @import("media.zig");
+pub const system_metrics = @import("system_metrics.zig");
 pub const transport = @import("transport.zig");
 pub const runtime = @import("runtime.zig");
 

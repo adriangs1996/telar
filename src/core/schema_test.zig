@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 44;
+const corpus_len = 46;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -469,6 +469,35 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .entries = &agent_entries,
         }),
     ));
+    helper.add("system_metrics", .server, false, golden.system_metrics, helper.commit(
+        try schema.encodeSystemMetrics(helper.space(), .{
+            .revision = 5,
+            .cpu_percent = 42,
+            .memory_used_decigib = 92,
+            .has_battery = true,
+            .battery_percent = 84,
+        }),
+    ));
+    const workspace_list_entries = [_]schema.WorkspaceListEntry{
+        .{
+            .workspace = @enumFromInt(7),
+            .name = "telar",
+            .path = "/work/telar",
+            .tab_count = 2,
+        },
+        .{
+            .workspace = @enumFromInt(9),
+            .name = "api",
+            .path = "/work/api",
+            .tab_count = 1,
+        },
+    };
+    helper.add("workspace_list", .server, false, golden.workspace_list, helper.commit(
+        try schema.encodeWorkspaceList(helper.space(), .{
+            .revision = 3,
+            .entries = &workspace_list_entries,
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -522,6 +551,8 @@ const golden = struct {
     pub const graphics_delete_placement = "9201000000000000000500000000000000070000000800000000000000010000000000000001000000";
     pub const proxy_status = "9501";
     pub const agent_snapshot = "9609000000000000000100050000000000000007000000000000002a0000000102030405060708090a0b0c0d0e0f10020100015f0b00000000000000e803000000000000d007000000000000";
+    pub const system_metrics = "9705000000000000002a5c000154";
+    pub const workspace_list = "98030000000000000002000700000000000000050074656c61720b002f776f726b2f74656c61720200090000000000000003006170690900" ++ "2f776f726b2f617069" ++ "0100";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {

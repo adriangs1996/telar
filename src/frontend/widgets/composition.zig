@@ -9,6 +9,7 @@ const context_mod = @import("context.zig");
 const layout = @import("layout.zig");
 const sidebar = @import("sidebar.zig");
 const status_bar = @import("status_bar.zig");
+const workspace_model = @import("workspace_model.zig");
 const tab_bar = @import("tab_bar.zig");
 const tab_rename = @import("tab_rename.zig");
 const top_bar = @import("top_bar.zig");
@@ -24,6 +25,9 @@ pub const Input = struct {
     sidebar_state: *sidebar.State,
     sidebar_transparent: bool,
     proxy_tls_active: bool,
+    system_metrics: ?status_bar.Metrics,
+    workspaces: *const workspace_model.Snapshot,
+    workspace_list_collapsed: bool,
 };
 
 pub const Output = struct {
@@ -37,6 +41,9 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .sidebar_visible = !input.regions.sidebar.isEmpty(),
         .location = input.model.location,
         .workspace_name = if (input.tabs) |tabs| tabs.workspaceName() else "",
+        .workspaces = input.workspaces,
+        .collapsed = input.workspace_list_collapsed,
+        .proxy_tls_active = input.proxy_tls_active,
     });
 
     const sidebar_output = sidebar.render(context, .{
@@ -55,7 +62,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
             .tabs = input.tabs,
             .model = input.model,
         });
-        status_bar.render(context, input.regions.status, input.model, input.proxy_tls_active);
+        status_bar.render(context, input.regions.status, input.system_metrics);
         break :block null;
     };
 

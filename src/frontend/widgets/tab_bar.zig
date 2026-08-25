@@ -16,8 +16,8 @@ pub const Input = struct {
 };
 
 pub fn render(context: *widget.Context, input: Input) void {
-    var x = input.area.x;
     if (input.tabs) |collection| {
+        if (collection.count == 0) return;
         var first_visible = collection.active_index;
         var used = displayWidth(
             collection.items[first_visible].?.labelSlice(),
@@ -35,6 +35,15 @@ pub fn render(context: *widget.Context, input: Input) void {
             first_visible = candidate;
             used += width;
         }
+        // The block anchors to the right edge: when the tabs do not fill the
+        // region the gap stays on the left, next to the status.
+        var total: u16 = 0;
+        for (collection.items[first_visible..collection.count], first_visible..) |slot, index| {
+            const width = displayWidth(slot.?.labelSlice(), index, input.area.w);
+            total += @min(width, input.area.w -| total);
+            if (total == input.area.w) break;
+        }
+        var x = input.area.x + input.area.w - total;
         for (collection.items[first_visible..collection.count], first_visible..) |slot, index| {
             const tab = slot.?;
             var tab_buffer: [schema.max_tab_label_bytes + 16]u8 = undefined;
@@ -72,6 +81,7 @@ pub fn render(context: *widget.Context, input: Input) void {
             schema.id.raw(location.tab_id),
         }) catch " tab ";
         const width = @min(ui.measure(label), input.area.w);
+        const x = input.area.x + input.area.w - width;
         const rect: ui.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
         _ = context.buffer.writeTruncated(rect, x, input.area.y, label, width, .{
             .fg = context.palette.surface_dim,

@@ -13,7 +13,8 @@ pub const Action = union(enum) {
     focus_pane: schema.PaneId,
     select_tab: schema.TabId,
     active_workspace,
-    active_worktree,
+    select_workspace: schema.WorkspaceId,
+    toggle_workspace_list,
     sidebar_focus_search,
     sidebar_new_task,
     sidebar_command_palette,
@@ -30,8 +31,9 @@ pub const Cursor = struct {
 };
 
 // Worst case is 64 visible task cards plus a one-row scrollbar target for
-// every flattened row. The fixed table keeps the input path allocation-free.
-pub const Hits = ui.Hits(Action, 576);
+// every flattened row, plus one segment per open workspace in the top bar.
+// The fixed table keeps the input path allocation-free.
+pub const Hits = ui.Hits(Action, 704);
 
 /// Widgets receive no client state and cannot mutate navigation, layout,
 /// transport, or runtime models.

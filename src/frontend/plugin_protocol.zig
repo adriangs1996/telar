@@ -41,6 +41,7 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writer.writeByte(@intFromEnum(value));
         },
         .detach => try writer.writeByte(11),
+        .toggle_workspace_list => try writer.writeByte(14),
         .lua_callback, .lua_expr, .plugin => return error.InvalidWorkerEffect,
     };
     return writer.buffered();
@@ -82,6 +83,7 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             13 => .toggle_pane_fullscreen,
+            14 => .toggle_workspace_list,
             else => return error.UnknownWorkerEffect,
         };
     }

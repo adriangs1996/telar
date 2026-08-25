@@ -21,6 +21,7 @@ pub const max_history_query_bytes = 1024;
 pub const max_history_results = 100;
 pub const max_history_command_bytes = 64 * 1024;
 pub const max_agent_snapshot_entries = max_panes_per_tab;
+pub const max_workspace_list_entries = 64;
 
 pub const TerminalSize = struct {
     cols: u16,

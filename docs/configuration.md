@@ -85,6 +85,12 @@ action again restores the previous geometry. Directional focus still selects
 another pane while fullscreen is active. The default binding is `prefix`, then
 `z`. A tab with one pane ignores the action.
 
+`telar.action.toggle_workspace_list()` collapses the top bar's list of open
+workspaces to the active one plus a `+N` counter, and expands it again.
+Clicking the `❖` marker or the counter does the same; clicking a workspace
+name switches to it. The collapse state is client-only and is lost when the
+client exits. The default binding is `prefix`, then `w`.
+
 A callback receives an immutable snapshot:
 
 ```lua

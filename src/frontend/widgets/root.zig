@@ -5,6 +5,7 @@ const context = @import("context.zig");
 
 pub const layout = @import("layout.zig");
 pub const sidebar_model = @import("sidebar_model.zig");
+pub const workspace_model = @import("workspace_model.zig");
 pub const top_bar = @import("top_bar.zig");
 pub const sidebar = @import("sidebar.zig");
 pub const tab_bar = @import("tab_bar.zig");

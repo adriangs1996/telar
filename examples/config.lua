@@ -39,6 +39,7 @@ return telar.config({
       telar.bind({ "shift+up" }, telar.action.resize_pane({ direction = "up" })),
       telar.bind({ "shift+down" }, telar.action.resize_pane({ direction = "down" })),
       telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
+      telar.bind({ "w" }, telar.action.toggle_workspace_list()),
       telar.bind(
         { "p" },
         telar.action.plugin({ plugin = "dev.telar.sample", action = "toggle" })

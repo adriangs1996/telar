@@ -29,9 +29,11 @@ pub const Regions = struct {
         const actual_width: u16 = if (can_show_sidebar) requested_width else 0;
         const sidebar, const workbench = body.splitLeft(actual_width);
 
-        const status_width = @min(@as(u16, 24), bottom.w / 2);
-        const tabs_width = bottom.w - status_width;
-        const tabs, const status = bottom.splitLeft(tabs_width);
+        // Status sits on the left and the tabs anchor to the right edge. The
+        // width fits the widest metrics line ("⚙ 100%  ▤ 99.9G  ⚡ 100%")
+        // instead of the old 24-column cap that truncated it.
+        const status_width = @min(@as(u16, 26), bottom.w / 2);
+        const status, const tabs = bottom.splitLeft(status_width);
         return .{
             .full = full,
             .top = top,

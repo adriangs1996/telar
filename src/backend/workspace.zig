@@ -117,6 +117,10 @@ pub const WorkspaceStore = struct {
     count: usize = 0,
     next_id: u64 = 1,
     next_tab_id: u64 = 1,
+    /// Covers what `workspace_list` shows: the set of workspaces, their paths,
+    /// and their tab counts. Tab labels are not on the list, so renames do not
+    /// bump it. Starts at 1 and never returns to 0, like the agent store.
+    revision: u64 = 1,
 
     pub fn init(gpa: std.mem.Allocator) WorkspaceStore {
         return .{ .gpa = gpa };
@@ -154,6 +158,7 @@ pub const WorkspaceStore = struct {
                 _ = try workspace.appendTab(.init(tab_id, "main"));
                 slot.* = workspace;
                 store.count += 1;
+                store.bumpRevision();
                 return .{
                     .location = .{
                         .workspace = .{ .workspace = workspace_id },
@@ -210,6 +215,7 @@ pub const WorkspaceStore = struct {
         }
         const position = try workspace.appendTab(.init(tab_id, generated));
         store.next_tab_id += 1;
+        store.bumpRevision();
         return .{
             .location = .{ .workspace = workspace_location, .tab_id = tab_id },
             .position = position,
@@ -219,6 +225,7 @@ pub const WorkspaceStore = struct {
     pub fn removeTab(store: *WorkspaceStore, location: schema.TabLocation) ?bool {
         const workspace = store.find(location.workspace) orelse return null;
         if (!workspace.removeTab(location.tab_id)) return null;
+        store.bumpRevision();
         const workspace_closed = workspace.tab_count == 0;
         if (workspace_closed) {
             const workspace_id = switch (location.workspace) {
@@ -272,12 +279,66 @@ pub const WorkspaceStore = struct {
                 store.gpa.free(workspace.path);
                 slot.* = null;
                 store.count -= 1;
+                store.bumpRevision();
                 return;
             }
         }
         unreachable;
     }
+
+    /// Entries for the `workspace_list` message, in stable slot order. The
+    /// slices borrow the store; encode before the next mutation.
+    pub fn listEntries(
+        store: *const WorkspaceStore,
+        output: *[max_workspaces]schema.WorkspaceListEntry,
+    ) []const schema.WorkspaceListEntry {
+        var count: usize = 0;
+        for (&store.items) |*slot| {
+            const workspace = if (slot.*) |*value| value else continue;
+            output[count] = .{
+                .workspace = workspace.id,
+                .name = workspace.name(),
+                .path = workspace.path,
+                .tab_count = @intCast(workspace.tab_count),
+            };
+            count += 1;
+        }
+        return output[0..count];
+    }
+
+    fn bumpRevision(store: *WorkspaceStore) void {
+        store.revision +%= 1;
+        if (store.revision == 0) store.revision = 1;
+    }
 };
+
+test "the list revision tracks membership and tab counts, not labels" {
+    var store = WorkspaceStore.init(std.testing.allocator);
+    defer store.deinit();
+    const initial = store.revision;
+
+    const ensured = try store.ensure("/work/project");
+    try std.testing.expect(store.revision != initial);
+    const after_ensure = store.revision;
+
+    var label_buffer: [schema.max_tab_label_bytes]u8 = undefined;
+    const logs = try store.createTab(ensured.location.workspace, "logs", &label_buffer);
+    try std.testing.expect(store.revision != after_ensure);
+    const after_create = store.revision;
+
+    store.findTab(logs.location).?.setLabel("server");
+    try std.testing.expectEqual(after_create, store.revision);
+
+    var output: [max_workspaces]schema.WorkspaceListEntry = undefined;
+    const entries = store.listEntries(&output);
+    try std.testing.expectEqual(@as(usize, 1), entries.len);
+    try std.testing.expectEqualStrings("project", entries[0].name);
+    try std.testing.expectEqualStrings("/work/project", entries[0].path);
+    try std.testing.expectEqual(@as(u16, 2), entries[0].tab_count);
+
+    _ = store.removeTab(logs.location).?;
+    try std.testing.expect(store.revision != after_create);
+}
 
 test "workspace and default tab identities are stable per path" {
     var store = WorkspaceStore.init(std.testing.allocator);

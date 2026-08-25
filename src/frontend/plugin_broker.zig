@@ -161,6 +161,7 @@ pub const Registry = struct {
                 .resize_pane,
                 .toggle_pane_fullscreen,
                 .toggle_sidebar,
+                .toggle_workspace_list,
                 .select_tab_offset,
                 .select_tab,
                 => null,

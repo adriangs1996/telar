@@ -170,6 +170,7 @@ pub fn Derived(comptime T: type) type {
                     try encodeSize(encoder, value);
                 },
                 bool => try encoder.writeByte(@intFromBool(value)),
+                u8 => try encoder.writeByte(value),
                 u16, u32, u64, i32, i64 => try encoder.writeInt(F, value),
                 types.ExitKind, types.TabMoveDirection => {
                     try encoder.writeByte(@intFromEnum(value));
@@ -189,6 +190,7 @@ pub fn Derived(comptime T: type) type {
                 types.WorkspaceLocation => try decodeWorkspaceLocation(decoder),
                 types.TerminalSize => try decodeSize(decoder),
                 bool => try decoder.readBool(),
+                u8 => try decoder.readByte(),
                 u16, u32, u64, i32, i64 => try decoder.readInt(F),
                 types.ExitKind => try decodeExitKind(try decoder.readByte()),
                 types.TabMoveDirection => switch (try decoder.readByte()) {

@@ -25,6 +25,7 @@ pub const Interaction = struct {
     redraw: bool = false,
     layout_changed: bool = false,
     select_tab: ?schema.TabId = null,
+    select_workspace: ?schema.WorkspaceId = null,
     sidebar_intent: ?SidebarIntent = null,
 };
 
@@ -61,9 +62,12 @@ pub const State = struct {
     tab_rename: ?TabRename = null,
     sidebar_snapshot: widgets.sidebar.Snapshot = .{},
     sidebar: widgets.sidebar.State = .{},
+    workspace_list: widgets.workspace_model.Snapshot = .{},
+    workspace_list_collapsed: bool = false,
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
     proxy_tls_active: bool = false,
+    system_metrics: ?widgets.status_bar.Metrics = null,
     kitty_sidebar: kitty.KittySidebarRenderer,
     cell_width_px: u16 = 0,
     cell_height_px: u16 = 0,
@@ -137,6 +141,27 @@ pub const State = struct {
     pub fn setProxyTlsActive(state: *State, active: bool) void {
         if (state.proxy_tls_active == active) return;
         state.proxy_tls_active = active;
+        state.dirty = true;
+    }
+
+    pub fn setSystemMetrics(state: *State, metrics: ?widgets.status_bar.Metrics) void {
+        if (std.meta.eql(state.system_metrics, metrics)) return;
+        state.system_metrics = metrics;
+        state.dirty = true;
+    }
+
+    pub fn replaceWorkspaceList(
+        state: *State,
+        input: widgets.workspace_model.SnapshotInput,
+    ) !bool {
+        if (!try state.workspace_list.replace(input)) return false;
+        state.dirty = true;
+        return true;
+    }
+
+    pub fn toggleWorkspaceList(state: *State) void {
+        state.workspace_list_collapsed = !state.workspace_list_collapsed;
+        state.hovered = null;
         state.dirty = true;
     }
 
@@ -318,7 +343,12 @@ pub const State = struct {
                     else => {},
                 }
             },
-            .active_workspace, .active_worktree => {},
+            .active_workspace => {},
+            .select_workspace => |workspace| result.select_workspace = workspace,
+            .toggle_workspace_list => {
+                state.toggleWorkspaceList();
+                result.redraw = true;
+            },
             .sidebar_focus_search => {
                 state.sidebar.search_active = true;
                 state.dirty = true;
@@ -400,6 +430,9 @@ pub const State = struct {
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
             .proxy_tls_active = state.proxy_tls_active,
+            .system_metrics = state.system_metrics,
+            .workspaces = &state.workspace_list,
+            .workspace_list_collapsed = state.workspace_list_collapsed,
         });
         if (hybrid) {
             var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;
@@ -657,9 +690,11 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     _ = try state.render(&screen, null, &model, true);
 
     try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[0].style.bg);
+    // The bottom-left corner is the status region, which stays on the host
+    // terminal's background; the bottom-right corner now holds the active tab.
     try std.testing.expectEqualDeep(
         ui.Color.default,
-        screen.back.cells[@as(usize, 23) * 80 + 79].style.bg,
+        screen.back.cells[@as(usize, 23) * 80].style.bg,
     );
 }
 
@@ -700,12 +735,14 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     _ = try model.render(&screen, state.workbench());
     _ = try state.render(&screen, &tabs, model, true);
 
-    const click = term.Event.Mouse{ .x = 1, .y = 23, .kind = .press };
+    // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
+    // last sixteen columns of the bottom row.
+    const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
     const interaction = state.handleMouse(&tabs, model, click);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
 
     const rename = state.handleMouse(&tabs, model, .{
-        .x = 1,
+        .x = 65,
         .y = 23,
         .kind = .press,
         .button = 2,
@@ -713,6 +750,56 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     try std.testing.expect(rename.redraw);
     try std.testing.expect(rename.select_tab == null);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), state.renamedTab().?);
+}
+
+test "the top bar lists open workspaces and clicking one requests a switch" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 100, 30);
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 27 });
+    const entries = [_]widgets.workspace_model.EntryInput{
+        .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
+    };
+    try std.testing.expect(try state.replaceWorkspaceList(.{
+        .revision = 1,
+        .entries = &entries,
+    }));
+    var screen = try term.Screen.init(gpa, 100, 30);
+    defer screen.deinit();
+    _ = try state.render(&screen, null, &model, true);
+
+    // Locate hits on the top row instead of pinning glyph widths.
+    var workspace_x: ?u16 = null;
+    var marker_x: ?u16 = null;
+    var x: u16 = 0;
+    while (x < 100) : (x += 1) {
+        const action = state.hits.at(x, 0) orelse continue;
+        switch (std.meta.activeTag(action)) {
+            .select_workspace => workspace_x = workspace_x orelse x,
+            .toggle_workspace_list => marker_x = marker_x orelse x,
+            else => {},
+        }
+    }
+
+    const interaction = state.handleMouse(null, &model, .{
+        .x = workspace_x.?,
+        .y = 0,
+        .kind = .press,
+    });
+    try std.testing.expectEqual(
+        @as(schema.WorkspaceId, @enumFromInt(2)),
+        interaction.select_workspace.?,
+    );
+
+    _ = state.handleMouse(null, &model, .{ .x = marker_x.?, .y = 0, .kind = .press });
+    try std.testing.expect(state.workspace_list_collapsed);
 }
 
 test "rename input consumes an unparseable tail instead of spinning" {

@@ -26,6 +26,7 @@ pub const Action = union(enum) {
     resize_pane: Direction,
     toggle_pane_fullscreen,
     toggle_sidebar,
+    toggle_workspace_list,
     close_pane,
     new_tab,
     select_tab_offset: i8,
@@ -63,6 +64,7 @@ pub const Action = union(enum) {
         if (std.mem.eql(u8, name, "toggle-pane-fullscreen"))
             return .toggle_pane_fullscreen;
         if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
+        if (std.mem.eql(u8, name, "toggle-workspace-list")) return .toggle_workspace_list;
         if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
         if (std.mem.eql(u8, name, "new-tab")) return .new_tab;
         if (std.mem.eql(u8, name, "next-tab"))

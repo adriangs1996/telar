@@ -1265,8 +1265,8 @@ const bootstrap =
     \\  return { kind = "plugin", plugin = options.plugin, action = options.action }
     \\end
     \\for _, name in ipairs({
-    \\  "toggle-pane-fullscreen", "toggle-sidebar", "close-pane", "new-tab",
-    \\  "rename-tab", "close-tab", "detach",
+    \\  "toggle-pane-fullscreen", "toggle-sidebar", "toggle-workspace-list",
+    \\  "close-pane", "new-tab", "rename-tab", "close-tab", "detach",
     \\}) do
     \\  local stable_name = name
     \\  telar.action[name:gsub("-", "_")] = function()

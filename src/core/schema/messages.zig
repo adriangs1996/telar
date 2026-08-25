@@ -33,6 +33,7 @@ pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
 pub const max_history_command_bytes = types.max_history_command_bytes;
 pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;
+pub const max_workspace_list_entries = types.max_workspace_list_entries;
 
 pub const TerminalSize = types.TerminalSize;
 pub const PaneTarget = types.PaneTarget;
@@ -123,6 +124,8 @@ pub const ServerTag = enum(u8) {
     graphics_shared_image = 0x94,
     proxy_status = 0x95,
     agent_snapshot = 0x96,
+    system_metrics = 0x97,
+    workspace_list = 0x98,
 };
 
 pub const LaunchView = struct {
@@ -466,6 +469,63 @@ pub const ProxyStatus = struct {
     }
 };
 
+/// Host health sampled by the runtime, so the client reports the machine the
+/// agents actually run on rather than the one showing the UI. Memory is in
+/// tenths of a GiB so neither peer formats floating point. A host without a
+/// battery reports `has_battery = false` and the client hides the segment.
+pub const SystemMetrics = struct {
+    revision: u64,
+    cpu_percent: u8,
+    memory_used_decigib: u16,
+    has_battery: bool,
+    battery_percent: u8,
+
+    pub fn validateWire(message: SystemMetrics) !void {
+        if (message.revision == 0) return error.InvalidMetricsRevision;
+        if (message.cpu_percent > 100) return error.InvalidMetricsValue;
+        if (message.has_battery and message.battery_percent > 100)
+            return error.InvalidMetricsValue;
+        if (!message.has_battery and message.battery_percent != 0)
+            return error.InvalidMetricsValue;
+    }
+};
+
+pub const WorkspaceListEntry = struct {
+    workspace: WorkspaceId,
+    name: []const u8,
+    path: []const u8,
+    tab_count: u16,
+};
+
+pub const WorkspaceList = struct {
+    revision: u64,
+    entries: []const WorkspaceListEntry,
+};
+
+pub const WorkspaceListView = struct {
+    revision: u64,
+    entry_count: u16,
+    encoded_entries: []const u8,
+
+    pub fn entries(list: WorkspaceListView) WorkspaceListIterator {
+        return .{
+            .decoder = .init(list.encoded_entries),
+            .remaining = list.entry_count,
+        };
+    }
+};
+
+pub const WorkspaceListIterator = struct {
+    decoder: wire.Decoder,
+    remaining: u16,
+
+    pub fn next(iterator: *WorkspaceListIterator) !?WorkspaceListEntry {
+        if (iterator.remaining == 0) return null;
+        iterator.remaining -= 1;
+        return try decodeWorkspaceListEntry(&iterator.decoder);
+    }
+};
+
 pub const AgentSnapshot = struct {
     revision: u64,
     entries: []const AgentSnapshotEntry,
@@ -559,6 +619,8 @@ pub const ServerMessage = union(enum) {
     graphics_shared_image: graphics.SharedImage,
     proxy_status: ProxyStatus,
     agent_snapshot: AgentSnapshotView,
+    system_metrics: SystemMetrics,
+    workspace_list: WorkspaceListView,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -895,6 +957,33 @@ pub fn encodeAgentSnapshot(buffer: []u8, message: AgentSnapshot) ![]const u8 {
     return encoder.finish();
 }
 
+pub fn encodeSystemMetrics(buffer: []u8, message: SystemMetrics) ![]const u8 {
+    return encodeDerived(@intFromEnum(ServerTag.system_metrics), SystemMetrics, buffer, message);
+}
+
+pub fn encodeWorkspaceList(buffer: []u8, message: WorkspaceList) ![]const u8 {
+    if (message.revision == 0) return error.InvalidWorkspaceListRevision;
+    if (message.entries.len > max_workspace_list_entries) return error.TooManyWorkspaces;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.workspace_list));
+    try encoder.writeInt(u64, message.revision);
+    try encoder.writeInt(u16, @intCast(message.entries.len));
+    for (message.entries, 0..) |entry, index| {
+        if (entry.workspace == .invalid) return error.InvalidWorkspaceId;
+        try validateBytes(entry.name, max_workspace_name_bytes, false);
+        try validateBytes(entry.path, max_cwd_bytes, false);
+        if (entry.tab_count > max_tabs_per_workspace) return error.TooManyTabs;
+        for (message.entries[0..index]) |previous| {
+            if (previous.workspace == entry.workspace) return error.DuplicateWorkspace;
+        }
+        try encoder.writeInt(u64, id.raw(entry.workspace));
+        try encoder.writeSized16(entry.name);
+        try encoder.writeSized16(entry.path);
+        try encoder.writeInt(u16, entry.tab_count);
+    }
+    return encoder.finish();
+}
+
 pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
     try validateRequestId(message.request_id);
     if (message.panes.len > max_panes_per_tab) return error.TooManyPanes;
@@ -1021,6 +1110,8 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .graphics_shared_image => .{ .graphics_shared_image = try graphics.decodeSharedImage(&decoder) },
         .proxy_status => .{ .proxy_status = try Derived(ProxyStatus).decode(&decoder) },
         .agent_snapshot => .{ .agent_snapshot = try decodeAgentSnapshot(&decoder) },
+        .system_metrics => .{ .system_metrics = try Derived(SystemMetrics).decode(&decoder) },
+        .workspace_list => .{ .workspace_list = try decodeWorkspaceList(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -1378,6 +1469,38 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
         return error.InvalidAgentEntry;
     if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
     return entry;
+}
+
+fn decodeWorkspaceListEntry(decoder: *wire.Decoder) !WorkspaceListEntry {
+    const workspace = try id.workspace(try decoder.readInt(u64));
+    const name = try decoder.readSized16();
+    try validateBytes(name, max_workspace_name_bytes, false);
+    const path = try decoder.readSized16();
+    try validateBytes(path, max_cwd_bytes, false);
+    const tab_count = try decoder.readInt(u16);
+    if (tab_count > max_tabs_per_workspace) return error.TooManyTabs;
+    return .{ .workspace = workspace, .name = name, .path = path, .tab_count = tab_count };
+}
+
+fn decodeWorkspaceList(decoder: *wire.Decoder) !WorkspaceListView {
+    const revision = try decoder.readInt(u64);
+    if (revision == 0) return error.InvalidWorkspaceListRevision;
+    const entry_count = try decoder.readInt(u16);
+    if (entry_count > max_workspace_list_entries) return error.TooManyWorkspaces;
+    const entries_start = decoder.index;
+    var seen: [max_workspace_list_entries]WorkspaceId = undefined;
+    for (0..entry_count) |index| {
+        const entry = try decodeWorkspaceListEntry(decoder);
+        for (seen[0..index]) |previous| {
+            if (previous == entry.workspace) return error.DuplicateWorkspace;
+        }
+        seen[index] = entry.workspace;
+    }
+    return .{
+        .revision = revision,
+        .entry_count = entry_count,
+        .encoded_entries = decoder.consumed(entries_start),
+    };
 }
 
 fn decodeAgentSnapshot(decoder: *wire.Decoder) !AgentSnapshotView {

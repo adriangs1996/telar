@@ -13,6 +13,7 @@ const pty = @import("pty.zig");
 const response_queue = @import("response_queue.zig");
 const proxy_mod = @import("proxy/root.zig");
 const runtime_encoder = @import("runtime_encoder.zig");
+const system_metrics_mod = @import("system_metrics.zig");
 const telemetry_mod = @import("telemetry.zig");
 const transport = @import("transport.zig");
 const workspace_mod = @import("workspace.zig");
@@ -130,6 +131,7 @@ const RuntimeEvent = union(enum) {
     telemetry_written: anyerror!void,
     proxy_event: anyerror!proxy_mod.middleware.Event,
     agent_tick: anyerror!void,
+    metrics_tick: anyerror!void,
     stopped: anyerror!void,
 };
 
@@ -156,6 +158,8 @@ const ClientSession = struct {
     runtime_state_requested: bool = false,
     proxy_status_sent: bool = false,
     agent_revision_sent: u64 = 0,
+    system_metrics_revision_sent: u64 = 0,
+    workspace_list_revision_sent: u64 = 0,
 
     fn create(
         gpa: std.mem.Allocator,
@@ -355,6 +359,7 @@ const Server = struct {
     workspaces: WorkspaceStore,
     panes: PaneStore,
     agents: agent_mod.Store = .{},
+    system_metrics: system_metrics_mod.Sampler = .{},
     metrics: RuntimeMetrics,
 
     fn collect(server: *Server) void {
@@ -444,6 +449,18 @@ const Server = struct {
         for (&server.geometry_leases) |*slot| {
             const lease = slot.* orelse continue;
             if (std.meta.eql(lease.owner, key)) slot.* = null;
+        }
+    }
+
+    fn releaseGeometryFor(
+        server: *Server,
+        key: ClientKey,
+        workspace: schema.WorkspaceLocation,
+    ) void {
+        for (&server.geometry_leases) |*slot| {
+            const lease = slot.* orelse continue;
+            if (std.meta.eql(lease.owner, key) and std.meta.eql(lease.workspace, workspace))
+                slot.* = null;
         }
     }
 
@@ -574,6 +591,39 @@ const Server = struct {
             });
             try startSessionSend(io, select, session, payload);
             session.agent_revision_sent = server.agents.revision;
+            return;
+        }
+
+        if (session.runtime_state_requested and
+            session.system_metrics_revision_sent < server.system_metrics.revision)
+        {
+            if (server.system_metrics.latest) |values| {
+                const payload = try schema.encodeSystemMetrics(buffer, .{
+                    .revision = server.system_metrics.revision,
+                    .cpu_percent = values.cpu_percent,
+                    .memory_used_decigib = values.memory_used_decigib,
+                    .has_battery = values.battery_percent != null,
+                    .battery_percent = values.battery_percent orelse 0,
+                });
+                try startSessionSend(io, select, session, payload);
+                session.system_metrics_revision_sent = server.system_metrics.revision;
+                return;
+            }
+            // Nothing sampled yet: latch so a host without a metrics source
+            // does not keep this branch hot on every pump.
+            session.system_metrics_revision_sent = server.system_metrics.revision;
+        }
+
+        if (session.runtime_state_requested and
+            session.workspace_list_revision_sent < workspaces.revision)
+        {
+            var entry_storage: [workspace_mod.max_workspaces]schema.WorkspaceListEntry = undefined;
+            const payload = try schema.encodeWorkspaceList(buffer, .{
+                .revision = workspaces.revision,
+                .entries = workspaces.listEntries(&entry_storage),
+            });
+            try startSessionSend(io, select, session, payload);
+            session.workspace_list_revision_sent = workspaces.revision;
             return;
         }
 
@@ -880,8 +930,20 @@ const Server = struct {
                 active.snapshot_pending = true;
             },
             .detach_pane => |detach| {
-                if (!attachments.detach(detach.pane_id))
+                const detached_workspace: ?schema.WorkspaceLocation =
+                    if (attachments.find(detach.pane_id)) |active|
+                        active.pane.location.workspace
+                    else
+                        null;
+                if (!attachments.detach(detach.pane_id)) {
                     metrics.stale_client_messages += 1;
+                } else if (detached_workspace) |left| {
+                    // A client that walked away from a workspace gives its
+                    // geometry lease back, so switching workspaces does not
+                    // pin the abandoned one against other clients.
+                    if (!attachments.observes(left))
+                        server.releaseGeometryFor(session.key, left);
+                }
             },
             .request_tab_snapshot => |request| {
                 if (!workspaces.contains(request.location) or panes.countAt(request.location) == 0) {
@@ -1169,7 +1231,7 @@ fn serveInternal(
         history_service.deinit(io);
     };
 
-    var select_storage: [14 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
+    var select_storage: [15 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
@@ -1177,6 +1239,7 @@ fn serveInternal(
     if (proxy_service) |service|
         try select.concurrent(.proxy_event, proxy_mod.service.Service.receive, .{ service, io });
     try select.concurrent(.agent_tick, waitForAgentTick, .{io});
+    try select.concurrent(.metrics_tick, waitForMetricsTick, .{io});
     if (comptime diagnostics.enabled) {
         if (telemetry.available())
             try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
@@ -1434,6 +1497,12 @@ fn serveInternal(
             result catch continue;
             try select.concurrent(.agent_tick, waitForAgentTick, .{io});
             _ = server.agents.expire(Io.Timestamp.now(io, .real).toMilliseconds());
+            server.pumpAll();
+        },
+        .metrics_tick => |result| {
+            result catch continue;
+            try select.concurrent(.metrics_tick, waitForMetricsTick, .{io});
+            server.system_metrics.sample();
             server.pumpAll();
         },
         .pane_input_written => |event| {
@@ -2002,6 +2071,12 @@ fn waitForStop(io: Io, stop: *Io.Queue(u8)) anyerror!void {
 
 fn waitForAgentTick(io: Io) anyerror!void {
     try io.sleep(.fromSeconds(1), .awake);
+}
+
+/// Host metrics change slowly; two seconds keeps the cost noise-level while
+/// the status bar still feels live.
+fn waitForMetricsTick(io: Io) anyerror!void {
+    try io.sleep(.fromSeconds(2), .awake);
 }
 
 fn acceptClient(io: Io, listener: *transport.local.LocalListener) anyerror!core.transport.SocketChannel {

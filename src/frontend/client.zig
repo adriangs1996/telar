@@ -191,6 +191,10 @@ const Client = struct {
     next_config_generation: u64 = 2,
     plugin_pending: bool = false,
     paste_pane: ?schema.PaneId = null,
+    /// Owns the cwd of an in-flight workspace switch while the outbox borrows
+    /// it; valid because only one `.initial_open` request can be pending.
+    switch_path: [schema.max_cwd_bytes]u8 = undefined,
+    switch_path_len: u16 = 0,
 
     input_read_pending: bool = false,
     next_request_id: u64 = 2,
@@ -310,6 +314,8 @@ const Client = struct {
             .history_results => return error.UnexpectedHistoryResults,
             .proxy_status => |status| try client.handleProxyStatus(status),
             .agent_snapshot => |snapshot| try client.handleAgentSnapshot(snapshot),
+            .system_metrics => |metrics| try client.handleSystemMetrics(metrics),
+            .workspace_list => |list| try client.handleWorkspaceList(list),
             .graphics_snapshot,
             .graphics_image,
             .graphics_shared_image,
@@ -358,6 +364,38 @@ const Client = struct {
             .revision = snapshot.revision,
             .tasks = tasks[0..count],
         })) try client.requestDraw();
+    }
+
+    fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
+        client.view.setSystemMetrics(.{
+            .cpu_percent = metrics.cpu_percent,
+            .memory_used_decigib = metrics.memory_used_decigib,
+            .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
+        });
+        try client.requestDraw();
+    }
+
+    fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
+        var entries: [schema.max_workspace_list_entries]widgets.workspace_model.EntryInput = undefined;
+        var count: usize = 0;
+        var iterator = list.entries();
+        while (try iterator.next()) |entry| {
+            entries[count] = .{
+                .workspace = entry.workspace,
+                .name = entry.name,
+                .path = entry.path,
+                .tab_count = entry.tab_count,
+            };
+            count += 1;
+        }
+        // A snapshot the fixed-capacity replica cannot hold is dropped rather
+        // than fatal: the bar keeps showing the previous list, and the next
+        // revision gets another chance.
+        const replaced = client.view.replaceWorkspaceList(.{
+            .revision = list.revision,
+            .entries = entries[0..count],
+        }) catch return;
+        if (replaced) try client.requestDraw();
     }
 
     fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
@@ -1517,6 +1555,48 @@ const InputHandler = struct {
         handler.redraw = true;
     }
 
+    /// Switching reuses the attach-or-create open: walk away from every pane
+    /// so the runtime releases this client's geometry lease, reset the
+    /// disposable tab model, and run the initial open again against the
+    /// target workspace's path. The runtime attaches to that workspace's
+    /// default pane instead of spawning a new one.
+    fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
+        const client = handler.client;
+        if (client.requests.has(.initial_open)) return;
+        const list = &client.view.workspace_list;
+        const index = list.indexOf(workspace) orelse return;
+        if (client.tabs.workspace) |current| switch (current) {
+            .workspace => |id| if (id == workspace) return,
+            .worktree => {},
+        };
+        for (&client.tabs.items) |*slot| {
+            const tab = if (slot.*) |*value| value else continue;
+            try handler.detachTab(tab);
+        }
+        client.tabs.deinit();
+        // The outbox borrows the launch path until the message is encoded, so
+        // it lives in client-owned storage; one switch in flight at a time is
+        // guaranteed by the `.initial_open` guard above.
+        const path = list.pathAt(index);
+        @memcpy(client.switch_path[0..path.len], path);
+        client.switch_path_len = @intCast(path.len);
+        const request_id = try client.nextId();
+        try client.enqueueRequest(
+            request_id,
+            .initial_open,
+            .{ .open_pane = .{
+                .request_id = request_id,
+                .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+                .launch = .{
+                    .cwd = client.switch_path[0..client.switch_path_len],
+                    .arguments = client.options.arguments,
+                },
+            } },
+        );
+        client.view.invalidate();
+        handler.redraw = true;
+    }
+
     pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
         if (bytes.len == 0) return;
         if (handler.client.view.renamedTab() != null) {
@@ -1625,6 +1705,7 @@ const InputHandler = struct {
         const model = handler.activeModel();
         const interaction = handler.client.view.handleMouse(handler.client.tabs, model, cell_event);
         if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
+        if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
         if (interaction.layout_changed) {
             handler.client.graphics_store.invalidatePlacements();
             try handler.client.resizeAttached(
@@ -1805,6 +1886,10 @@ const InputHandler = struct {
                     handler.activeModel(),
                     handler.client.view.workbench(),
                 );
+                handler.redraw = true;
+            },
+            .toggle_workspace_list => {
+                handler.client.view.toggleWorkspaceList();
                 handler.redraw = true;
             },
             .close_pane => try handler.closeFocused(),
