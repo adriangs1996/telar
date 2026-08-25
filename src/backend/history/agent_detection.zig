@@ -14,6 +14,7 @@ pub const Signal = struct {
     provider: schema.AgentProvider = .unknown,
     status: Status,
     confidence: u8,
+    identity_confirmed: bool = false,
 };
 
 /// A sample spans one sealed observation batch, so a prompt which disappeared
@@ -54,8 +55,30 @@ pub const Detector = struct {
             "background shells",
         })) return .{ .provider = inferProvider(text), .status = .working, .confidence = 78 };
 
-        if (std.mem.indexOf(u8, text, "\xe2\x9d\xaf") != null)
-            return .{ .provider = .claude, .status = .ready, .confidence = 72 };
+        if (containsAsciiInsensitive(text, "ask codex to do anything"))
+            return .{
+                .provider = .codex,
+                .status = .ready,
+                .confidence = 94,
+                .identity_confirmed = true,
+            };
+
+        // Claude's branded header and prompt often arrive in different sealed
+        // observation batches. The header establishes identity on its own;
+        // later generic prompts may then refresh the existing agent record.
+        if (containsAsciiInsensitive(text, "claude code"))
+            return .{
+                .provider = .claude,
+                .status = .ready,
+                .confidence = 90,
+                .identity_confirmed = true,
+            };
+
+        if (std.mem.indexOf(u8, text, "\xe2\x9d\xaf") != null) return .{
+            .provider = .claude,
+            .status = .ready,
+            .confidence = 72,
+        };
         return null;
     }
 
@@ -140,6 +163,31 @@ test "recognizes codex work split across output bursts" {
     const detected = detector.signal().?;
     try std.testing.expectEqual(Status.working, detected.status);
     try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+}
+
+test "recognizes an open Codex prompt without proxy evidence" {
+    var detector: Detector = .{};
+    detector.observe("OpenAI Codex  Ask Codex to do anything");
+    const detected = detector.signal().?;
+    try std.testing.expectEqual(Status.ready, detected.status);
+    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+    try std.testing.expect(detected.identity_confirmed);
+}
+
+test "Claude branding and prompt may arrive in separate samples" {
+    var detector: Detector = .{};
+    detector.observe("\x1b[1mClaude Code\x1b[0m v2.1");
+    const branded = detector.signal().?;
+    try std.testing.expectEqual(Status.ready, branded.status);
+    try std.testing.expectEqual(schema.AgentProvider.claude, branded.provider);
+    try std.testing.expect(branded.identity_confirmed);
+
+    detector.resetSample();
+    detector.observe("\xe2\x9d\xaf");
+    const prompt = detector.signal().?;
+    try std.testing.expectEqual(Status.ready, prompt.status);
+    try std.testing.expectEqual(schema.AgentProvider.claude, prompt.provider);
+    try std.testing.expect(!prompt.identity_confirmed);
 }
 
 test "terminal controls may split at every byte" {

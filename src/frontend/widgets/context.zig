@@ -15,13 +15,7 @@ pub const Action = union(enum) {
     active_workspace,
     select_workspace: schema.WorkspaceId,
     toggle_workspace_list,
-    sidebar_focus_search,
-    sidebar_new_task,
-    sidebar_command_palette,
-    sidebar_select_tab: sidebar_model.Tab,
-    sidebar_toggle_scope,
-    sidebar_select_task: sidebar_model.TaskKey,
-    sidebar_run_task_action: sidebar_model.TaskKey,
+    sidebar_select_agent: sidebar_model.AgentKey,
     sidebar_scroll_to: u16,
 };
 
@@ -30,7 +24,7 @@ pub const Cursor = struct {
     cursor_y: u16,
 };
 
-// Worst case is 64 visible task cards plus a one-row scrollbar target for
+// Worst case is 64 visible agent cards plus a one-row scrollbar target for
 // every flattened row, plus one segment per open workspace in the top bar.
 // The fixed table keeps the input path allocation-free.
 pub const Hits = ui.Hits(Action, 704);

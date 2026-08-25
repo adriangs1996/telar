@@ -7,7 +7,6 @@ const layout = @import("layout.zig");
 const multiplexer = @import("multiplexer.zig");
 const capability_mod = @import("terminal_capabilities.zig");
 const term = @import("term.zig");
-const theme = @import("theme.zig");
 
 const Io = std.Io;
 const schema = core.schema;
@@ -1385,227 +1384,110 @@ pub fn writeDeleteImageRange(writer: *Io.Writer, first: u32, last: u32) Io.Write
     return printCounted(writer, "\x1b_Ga=d,d=R,x={d},y={d},q=2\x1b\\", .{ first, last });
 }
 
-pub const SidebarProvider = enum { claude };
+pub const SidebarProvider = enum { claude, codex };
 
 pub const SidebarProviderPlacement = struct {
     area: core.ui.Rect,
     provider: SidebarProvider,
 };
 
-pub const SidebarControlKind = enum { neutral, primary };
-
-pub const SidebarControlPlacement = struct {
-    area: core.ui.Rect,
-    kind: SidebarControlKind,
-};
-
-/// Four reusable asset families for the hybrid sidebar. Cells retain text,
-/// editing, cursor placement, hover, and hit targets. KGP contributes only the
-/// panel, whole-card selection, official provider marks, and control fills.
+/// Provider marks for the hybrid sidebar. Cells own every background, hover,
+/// selection, and hit target so graphics can never cover interactive feedback.
 pub const KittySidebarRenderer = struct {
-    const background_id: u32 = 0x80000001;
-    const selection_id: u32 = 0x80000002;
     const provider_atlas_id: u32 = 0x80000003;
-    const controls_atlas_id: u32 = 0x80000004;
-    const background_placement_id: u32 = 0x80000001;
-    const selection_placement_id: u32 = 0x80000002;
     const first_provider_placement_id: u32 = 0x80000100;
-    const first_control_placement_id: u32 = 0x80000200;
     const max_provider_placements = 64;
-    const max_control_placements = 66;
-    const selection_rows = 3;
-    const control_source_columns = 16;
-    const claude_mark_width = 64;
-    const claude_mark_height = 64;
-    const claude_mark_pixels: []const u8 = @embedFile("assets/claude-mark-64.rgba");
+    const provider_count = 2;
+    const provider_source_size = 64;
+    const provider_source_width = provider_count * provider_source_size;
+    const provider_source_pixels: []const u8 = @embedFile("assets/provider-marks-128x64.rgba");
 
     comptime {
-        std.debug.assert(claude_mark_pixels.len == claude_mark_width * claude_mark_height * 4);
+        std.debug.assert(provider_source_pixels.len == provider_source_width * provider_source_size * 4);
     }
 
     gpa: std.mem.Allocator,
-    background: []u8 = &.{},
-    selection: []u8 = &.{},
-    controls: []u8 = &.{},
-    width: u32 = 0,
-    height: u32 = 0,
-    row_height: u32 = 0,
-    column_width: u32 = 0,
-    selection_width: u32 = 0,
-    selection_height: u32 = 0,
-    controls_width: u32 = 0,
-    controls_height: u32 = 0,
+    provider_atlas: []u8 = &.{},
+    provider_slot_width: u32 = 0,
+    provider_slot_height: u32 = 0,
+    provider_atlas_width: u32 = 0,
+    provider_atlas_height: u32 = 0,
     area: core.ui.Rect = .{},
-    selected_card: ?core.ui.Rect = null,
     provider_marks: [max_provider_placements]SidebarProviderPlacement = undefined,
     provider_mark_count: u8 = 0,
-    controls_placements: [max_control_placements]SidebarControlPlacement = undefined,
-    control_count: u8 = 0,
     emitted_provider_mark_count: u8 = 0,
-    emitted_control_count: u8 = 0,
-    background_dirty: bool = false,
-    selection_dirty: bool = false,
     provider_dirty: bool = false,
-    controls_dirty: bool = false,
     placements_dirty: bool = false,
     visible: bool = false,
     emitted: bool = false,
     provider_emitted: bool = false,
-    controls_emitted: bool = false,
-    palette: ?theme.Palette = null,
 
     pub fn init(gpa: std.mem.Allocator) KittySidebarRenderer {
         return .{ .gpa = gpa };
     }
 
     pub fn deinit(renderer: *KittySidebarRenderer) void {
-        if (renderer.background.len != 0) renderer.gpa.free(renderer.background);
-        if (renderer.selection.len != 0) renderer.gpa.free(renderer.selection);
-        if (renderer.controls.len != 0) renderer.gpa.free(renderer.controls);
+        if (renderer.provider_atlas.len != 0) renderer.gpa.free(renderer.provider_atlas);
     }
 
     pub fn prepare(
         renderer: *KittySidebarRenderer,
         area: core.ui.Rect,
-        palette: *const theme.Palette,
-        selected_card: ?core.ui.Rect,
         provider_marks: []const SidebarProviderPlacement,
-        control_placements: []const SidebarControlPlacement,
         cell_width: u16,
         cell_height: u16,
     ) !void {
-        if (provider_marks.len > max_provider_placements or
-            control_placements.len > max_control_placements)
+        if (provider_marks.len > max_provider_placements)
             return error.TooManySidebarPlacements;
         if (area.isEmpty() or cell_width == 0 or cell_height == 0) {
             renderer.visible = false;
             renderer.placements_dirty = renderer.emitted;
             return;
         }
-        const width = std.math.mul(u32, area.w, cell_width) catch return error.SidebarTooLarge;
-        const height = std.math.mul(u32, area.h, cell_height) catch return error.SidebarTooLarge;
-        const selection_width = std.math.mul(u32, area.w -| 3, cell_width) catch return error.SidebarTooLarge;
-        const selection_height = std.math.mul(u32, selection_rows, cell_height) catch return error.SidebarTooLarge;
-        const controls_width = std.math.mul(u32, control_source_columns, cell_width) catch return error.SidebarTooLarge;
-        const controls_height = std.math.mul(u32, 2, cell_height) catch return error.SidebarTooLarge;
-        const background_len = try rgbaLength(width, height);
-        const selection_len = try rgbaLength(selection_width, selection_height);
-        const controls_len = try rgbaLength(controls_width, controls_height);
-        const resized = renderer.width != width or renderer.height != height or
-            renderer.row_height != cell_height or renderer.column_width != cell_width;
-        const palette_changed = renderer.palette == null or
-            !std.meta.eql(renderer.palette.?, palette.*);
-        if (palette_changed) {
-            renderer.palette = palette.*;
-            renderer.background_dirty = true;
-            renderer.selection_dirty = true;
-            renderer.controls_dirty = true;
-        }
+        const provider_scale = @max(@as(u32, 1), provider_source_size / @as(u32, @min(cell_width, cell_height)));
+        const provider_slot_width = std.math.mul(u32, cell_width, provider_scale) catch return error.SidebarTooLarge;
+        const provider_slot_height = std.math.mul(u32, cell_height, provider_scale) catch return error.SidebarTooLarge;
+        const provider_atlas_width = std.math.mul(u32, provider_count, provider_slot_width) catch return error.SidebarTooLarge;
+        const provider_atlas_height = provider_slot_height;
+        const provider_atlas_len = try rgbaLength(provider_atlas_width, provider_atlas_height);
+        const resized = renderer.provider_slot_width != provider_slot_width or
+            renderer.provider_slot_height != provider_slot_height;
         if (resized) {
-            const next_background = try renderer.gpa.alloc(u8, background_len);
-            errdefer renderer.gpa.free(next_background);
-            const next_selection = try renderer.gpa.alloc(u8, selection_len);
-            errdefer renderer.gpa.free(next_selection);
-            const next_controls = try renderer.gpa.alloc(u8, controls_len);
-            if (renderer.background.len != 0) renderer.gpa.free(renderer.background);
-            if (renderer.selection.len != 0) renderer.gpa.free(renderer.selection);
-            if (renderer.controls.len != 0) renderer.gpa.free(renderer.controls);
-            renderer.background = next_background;
-            renderer.selection = next_selection;
-            renderer.controls = next_controls;
-            renderer.width = width;
-            renderer.height = height;
-            renderer.row_height = cell_height;
-            renderer.column_width = cell_width;
-            renderer.selection_width = selection_width;
-            renderer.selection_height = selection_height;
-            renderer.controls_width = controls_width;
-            renderer.controls_height = controls_height;
-            renderer.background_dirty = true;
-            renderer.selection_dirty = true;
-            renderer.controls_dirty = true;
+            const next_provider_atlas = try renderer.gpa.alloc(u8, provider_atlas_len);
+            if (renderer.provider_atlas.len != 0) renderer.gpa.free(renderer.provider_atlas);
+            renderer.provider_atlas = next_provider_atlas;
+            renderer.provider_slot_width = provider_slot_width;
+            renderer.provider_slot_height = provider_slot_height;
+            renderer.provider_atlas_width = provider_atlas_width;
+            renderer.provider_atlas_height = provider_atlas_height;
+            renderProviderAtlas(
+                renderer.provider_atlas,
+                provider_atlas_width,
+                provider_atlas_height,
+                provider_slot_width,
+                provider_slot_height,
+            );
+            renderer.provider_emitted = false;
+            renderer.provider_dirty = provider_marks.len != 0;
             renderer.placements_dirty = true;
         }
         if (!renderer.visible) {
-            renderer.background_dirty = true;
-            renderer.selection_dirty = true;
-            renderer.controls_dirty = true;
             renderer.provider_dirty = provider_marks.len != 0;
             renderer.placements_dirty = true;
         }
         if (!std.meta.eql(renderer.area, area)) renderer.placements_dirty = true;
-        if (!std.meta.eql(renderer.selected_card, selected_card)) {
-            renderer.selected_card = selected_card;
-            renderer.placements_dirty = true;
-        }
         if (!providerPlacementsEqual(renderer.provider_marks[0..renderer.provider_mark_count], provider_marks)) {
             @memcpy(renderer.provider_marks[0..provider_marks.len], provider_marks);
             renderer.provider_mark_count = @intCast(provider_marks.len);
             renderer.placements_dirty = true;
         }
-        if (!controlPlacementsEqual(renderer.controls_placements[0..renderer.control_count], control_placements)) {
-            @memcpy(renderer.controls_placements[0..control_placements.len], control_placements);
-            renderer.control_count = @intCast(control_placements.len);
-            renderer.placements_dirty = true;
-        }
         if (provider_marks.len != 0 and !renderer.provider_emitted) renderer.provider_dirty = true;
         renderer.area = area;
         renderer.visible = true;
-
-        if (renderer.background_dirty) {
-            clearRgba(renderer.background);
-            const color = rgba(palette.panel_bg, .{ 26, 26, 26, 245 });
-            roundedRect(renderer.background, width, height, 0, 0, width, height, @min(cell_height / 2, 10), color);
-            // A subtle right edge makes the panel boundary independent of the
-            // font's box-drawing glyph metrics.
-            roundedRect(renderer.background, width, height, width -| 2, 0, 2, height, 0, rgba(palette.overlay0, .{ 92, 92, 92, 255 }));
-        }
-        if (renderer.selection_dirty) {
-            clearRgba(renderer.selection);
-            roundedRect(
-                renderer.selection,
-                selection_width,
-                selection_height,
-                0,
-                @max(@as(u32, 1), cell_height / 8),
-                selection_width,
-                selection_height -| @max(@as(u32, 2), cell_height / 4),
-                @min(cell_height / 2, 10),
-                rgba(palette.surface0, .{ 35, 35, 35, 235 }),
-            );
-        }
-        if (renderer.controls_dirty) {
-            clearRgba(renderer.controls);
-            const radius = @min(cell_height / 2, 10);
-            roundedRect(
-                renderer.controls,
-                controls_width,
-                controls_height,
-                0,
-                1,
-                controls_width,
-                cell_height -| 2,
-                radius,
-                rgba(palette.surface0, .{ 35, 35, 35, 245 }),
-            );
-            roundedRect(
-                renderer.controls,
-                controls_width,
-                controls_height,
-                0,
-                cell_height + 1,
-                controls_width,
-                cell_height -| 2,
-                radius,
-                rgba(palette.accent, .{ 255, 199, 153, 255 }),
-            );
-        }
     }
 
     pub fn damaged(renderer: *const KittySidebarRenderer) bool {
-        return renderer.background_dirty or renderer.selection_dirty or
-            renderer.provider_dirty or renderer.controls_dirty or
-            renderer.placements_dirty;
+        return renderer.provider_dirty or renderer.placements_dirty;
     }
 
     /// Emits pending sidebar images and placements. Geometry comes from what
@@ -1616,86 +1498,24 @@ pub const KittySidebarRenderer = struct {
         var written: usize = 0;
         if (!renderer.visible) {
             if (renderer.emitted) {
-                written += try writeDeleteImage(writer, background_id);
-                written += try writeDeleteImage(writer, selection_id);
                 written += try writeDeleteImage(writer, provider_atlas_id);
-                written += try writeDeleteImage(writer, controls_atlas_id);
             }
             renderer.emitted = false;
             renderer.provider_emitted = false;
-            renderer.controls_emitted = false;
             renderer.emitted_provider_mark_count = 0;
-            renderer.emitted_control_count = 0;
-            renderer.background_dirty = false;
-            renderer.selection_dirty = false;
             renderer.provider_dirty = false;
-            renderer.controls_dirty = false;
             renderer.placements_dirty = false;
             return written;
         }
-        if (renderer.background_dirty) written += try writeTransmission(writer, background_id, .{
-            .key = .{ .image_id = background_id, .generation = 1 },
-            .format = .rgba,
-            .width = renderer.width,
-            .height = renderer.height,
-            .byte_len = renderer.background.len,
-        }, renderer.background);
-        if (renderer.selection_dirty) written += try writeTransmission(writer, selection_id, .{
-            .key = .{ .image_id = selection_id, .generation = 1 },
-            .format = .rgba,
-            .width = renderer.selection_width,
-            .height = renderer.selection_height,
-            .byte_len = renderer.selection.len,
-        }, renderer.selection);
         if (renderer.provider_dirty) {
             written += try writeTransmission(writer, provider_atlas_id, .{
                 .key = .{ .image_id = provider_atlas_id, .generation = 1 },
                 .format = .rgba,
-                .width = claude_mark_width,
-                .height = claude_mark_height,
-                .byte_len = claude_mark_pixels.len,
-            }, claude_mark_pixels);
+                .width = renderer.provider_atlas_width,
+                .height = renderer.provider_atlas_height,
+                .byte_len = renderer.provider_atlas.len,
+            }, renderer.provider_atlas);
             renderer.provider_emitted = true;
-        }
-        if (renderer.controls_dirty) {
-            written += try writeTransmission(writer, controls_atlas_id, .{
-                .key = .{ .image_id = controls_atlas_id, .generation = 1 },
-                .format = .rgba,
-                .width = renderer.controls_width,
-                .height = renderer.controls_height,
-                .byte_len = renderer.controls.len,
-            }, renderer.controls);
-            renderer.controls_emitted = true;
-        }
-        if (renderer.background_dirty or renderer.placements_dirty) {
-            written += try writeDeletePlacement(writer, background_id, background_placement_id);
-            written += try writePlacement(writer, background_id, background_placement_id, .{
-                .column = renderer.area.x,
-                .row = renderer.area.y,
-                .offset_x = 0,
-                .offset_y = 0,
-                .source_x = 0,
-                .source_y = 0,
-                .source_width = renderer.width,
-                .source_height = renderer.height,
-                .columns = renderer.area.w,
-                .rows = renderer.area.h,
-            }, -10);
-        }
-        if (renderer.selection_dirty or renderer.placements_dirty) {
-            written += try writeDeletePlacement(writer, selection_id, selection_placement_id);
-            if (renderer.selected_card) |card| written += try writePlacement(writer, selection_id, selection_placement_id, .{
-                .column = card.x,
-                .row = card.y,
-                .offset_x = 0,
-                .offset_y = 0,
-                .source_x = 0,
-                .source_y = 0,
-                .source_width = renderer.selection_width,
-                .source_height = renderer.selection_height,
-                .columns = card.w,
-                .rows = card.h,
-            }, -9);
         }
         if (renderer.placements_dirty) {
             for (0..renderer.emitted_provider_mark_count) |index| written += try writeDeletePlacement(
@@ -1713,51 +1533,22 @@ pub const KittySidebarRenderer = struct {
                         .row = mark.area.y,
                         .offset_x = 0,
                         .offset_y = 0,
-                        .source_x = 0,
+                        .source_x = switch (mark.provider) {
+                            .claude => 0,
+                            .codex => renderer.provider_slot_width,
+                        },
                         .source_y = 0,
-                        .source_width = claude_mark_width,
-                        .source_height = claude_mark_height,
+                        .source_width = renderer.provider_slot_width,
+                        .source_height = renderer.provider_slot_height,
                         .columns = mark.area.w,
                         .rows = mark.area.h,
                     },
                     -8,
                 );
             }
-            for (0..renderer.emitted_control_count) |index| written += try writeDeletePlacement(
-                writer,
-                controls_atlas_id,
-                first_control_placement_id + @as(u32, @intCast(index)),
-            );
-            for (renderer.controls_placements[0..renderer.control_count], 0..) |control, index| {
-                written += try writePlacement(
-                    writer,
-                    controls_atlas_id,
-                    first_control_placement_id + @as(u32, @intCast(index)),
-                    .{
-                        .column = control.area.x,
-                        .row = control.area.y,
-                        .offset_x = 0,
-                        .offset_y = 0,
-                        .source_x = 0,
-                        .source_y = switch (control.kind) {
-                            .neutral => 0,
-                            .primary => renderer.row_height,
-                        },
-                        .source_width = renderer.controls_width,
-                        .source_height = renderer.row_height,
-                        .columns = control.area.w,
-                        .rows = control.area.h,
-                    },
-                    -8,
-                );
-            }
             renderer.emitted_provider_mark_count = renderer.provider_mark_count;
-            renderer.emitted_control_count = renderer.control_count;
         }
-        renderer.background_dirty = false;
-        renderer.selection_dirty = false;
         renderer.provider_dirty = false;
-        renderer.controls_dirty = false;
         renderer.placements_dirty = false;
         renderer.emitted = true;
         return written;
@@ -1765,12 +1556,6 @@ pub const KittySidebarRenderer = struct {
 };
 
 fn providerPlacementsEqual(a: []const SidebarProviderPlacement, b: []const SidebarProviderPlacement) bool {
-    if (a.len != b.len) return false;
-    for (a, b) |left, right| if (!std.meta.eql(left, right)) return false;
-    return true;
-}
-
-fn controlPlacementsEqual(a: []const SidebarControlPlacement, b: []const SidebarControlPlacement) bool {
     if (a.len != b.len) return false;
     for (a, b) |left, right| if (!std.meta.eql(left, right)) return false;
     return true;
@@ -1785,46 +1570,48 @@ fn clearRgba(pixels: []u8) void {
     @memset(pixels, 0);
 }
 
-fn rgba(color: core.ui.Color, fallback: [4]u8) [4]u8 {
-    return switch (color) {
-        .rgb => |value| .{ value[0], value[1], value[2], fallback[3] },
-        else => fallback,
-    };
-}
-
-fn roundedRect(
-    pixels: []u8,
-    stride_width: u32,
-    stride_height: u32,
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-    radius: u32,
-    color: [4]u8,
+fn renderProviderAtlas(
+    destination: []u8,
+    atlas_width: u32,
+    atlas_height: u32,
+    slot_width: u32,
+    slot_height: u32,
 ) void {
-    if (width == 0 or height == 0) return;
-    const right = @min(stride_width, x +| width);
-    const bottom = @min(stride_height, y +| height);
-    var py = y;
-    while (py < bottom) : (py += 1) {
-        var px = x;
-        while (px < right) : (px += 1) {
-            const dx = @min(px - x, right - px - 1);
-            const dy = @min(py - y, bottom - py - 1);
-            if (dx < radius and dy < radius) {
-                const rx = radius - dx;
-                const ry = radius - dy;
-                if (@as(u64, rx) * rx + @as(u64, ry) * ry > @as(u64, radius) * radius) continue;
+    std.debug.assert(atlas_width == providerAtlasSourceCount() * slot_width);
+    std.debug.assert(atlas_height == slot_height);
+    clearRgba(destination);
+    const icon_size = @min(slot_width, slot_height);
+    const offset_x = (slot_width - icon_size) / 2;
+    const offset_y = (slot_height - icon_size) / 2;
+    var provider: u32 = 0;
+    while (provider < providerAtlasSourceCount()) : (provider += 1) {
+        var y: u32 = 0;
+        while (y < icon_size) : (y += 1) {
+            const source_y = @min(
+                KittySidebarRenderer.provider_source_size - 1,
+                y * KittySidebarRenderer.provider_source_size / icon_size,
+            );
+            var x: u32 = 0;
+            while (x < icon_size) : (x += 1) {
+                const source_x = provider * KittySidebarRenderer.provider_source_size + @min(
+                    KittySidebarRenderer.provider_source_size - 1,
+                    x * KittySidebarRenderer.provider_source_size / icon_size,
+                );
+                const source_index = (@as(usize, source_y) * KittySidebarRenderer.provider_source_width + source_x) * 4;
+                const destination_x = provider * slot_width + offset_x + x;
+                const destination_y = offset_y + y;
+                const destination_index = (@as(usize, destination_y) * atlas_width + destination_x) * 4;
+                @memcpy(
+                    destination[destination_index..][0..4],
+                    KittySidebarRenderer.provider_source_pixels[source_index..][0..4],
+                );
             }
-            setPixel(pixels, stride_width, px, py, color);
         }
     }
 }
 
-fn setPixel(pixels: []u8, width: u32, x: u32, y: u32, color: [4]u8) void {
-    const index = (@as(usize, y) * width + x) * 4;
-    pixels[index..][0..4].* = color;
+fn providerAtlasSourceCount() u32 {
+    return KittySidebarRenderer.provider_count;
 }
 
 test "capability query and replies are exact" {
@@ -2685,46 +2472,47 @@ test "graphics revisions ignore stale deltas and validate snapshots" {
     try store.applySnapshot(.{ .pane_id = pane_id, .revision = 10, .phase = .end });
 }
 
-test "sidebar card movement reuses all four asset families" {
+test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     const area: core.ui.Rect = .{ .x = 1, .y = 1, .w = 8, .h = 8 };
-    const first_card: core.ui.Rect = .{ .x = 2, .y = 3, .w = 5, .h = 3 };
-    const moved_card: core.ui.Rect = .{ .x = 2, .y = 4, .w = 5, .h = 3 };
-    const providers = [_]SidebarProviderPlacement{.{
-        .area = .{ .x = 3, .y = 5, .w = 1, .h = 1 },
-        .provider = .claude,
-    }};
-    const controls = [_]SidebarControlPlacement{.{
-        .area = .{ .x = 4, .y = 2, .w = 3, .h = 1 },
-        .kind = .neutral,
-    }};
-    const vesper = theme.builtin(.vesper).palette;
-    const catppuccin = theme.builtin(.catppuccin).palette;
-
-    try renderer.prepare(area, &vesper, first_card, &providers, &controls, 4, 4);
-    var initial_buffer: [65536]u8 = undefined;
+    const providers = [_]SidebarProviderPlacement{
+        .{
+            .area = .{ .x = 3, .y = 5, .w = 2, .h = 2 },
+            .provider = .claude,
+        },
+        .{
+            .area = .{ .x = 3, .y = 7, .w = 2, .h = 2 },
+            .provider = .codex,
+        },
+    };
+    try renderer.prepare(area, &providers, 10, 20);
+    try std.testing.expectEqual(@as(u32, 60), renderer.provider_slot_width);
+    try std.testing.expectEqual(@as(u32, 120), renderer.provider_slot_height);
+    var initial_buffer: [128 * 1024]u8 = undefined;
     var initial = Io.Writer.fixed(&initial_buffer);
     _ = try renderer.write(&initial);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "a=t") != null);
+    try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=60,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(renderer.provider_emitted);
-    try std.testing.expect(renderer.controls_emitted);
 
-    try renderer.prepare(area, &vesper, first_card, &providers, &controls, 4, 4);
+    try renderer.prepare(area, &providers, 10, 20);
     try std.testing.expect(!renderer.damaged());
 
-    try renderer.prepare(area, &vesper, moved_card, &providers, &controls, 4, 4);
-    var moved_buffer: [4096]u8 = undefined;
-    var moved = Io.Writer.fixed(&moved_buffer);
-    _ = try renderer.write(&moved);
-    try std.testing.expect(std.mem.indexOf(u8, moved.buffered(), "a=p") != null);
-    try std.testing.expect(std.mem.indexOf(u8, moved.buffered(), "a=t") == null);
+    // A cell-size change while no agents are visible must still invalidate the
+    // resident atlas before a later provider reuses it.
+    try renderer.prepare(area, &.{}, 9, 18);
+    var cleared_buffer: [4096]u8 = undefined;
+    var cleared = Io.Writer.fixed(&cleared_buffer);
+    _ = try renderer.write(&cleared);
+    try std.testing.expect(!renderer.provider_emitted);
 
-    try renderer.prepare(area, &catppuccin, moved_card, &providers, &controls, 4, 4);
-    var themed_buffer: [65536]u8 = undefined;
-    var themed = Io.Writer.fixed(&themed_buffer);
-    _ = try renderer.write(&themed);
-    try std.testing.expect(std.mem.indexOf(u8, themed.buffered(), "a=t") != null);
+    try renderer.prepare(area, &providers, 9, 18);
+    try std.testing.expect(renderer.provider_dirty);
+    var resized_buffer: [128 * 1024]u8 = undefined;
+    var resized = Io.Writer.fixed(&resized_buffer);
+    _ = try renderer.write(&resized);
+    try std.testing.expect(std.mem.indexOf(u8, resized.buffered(), "x=63,y=0,w=63,h=126,c=2,r=2") != null);
 }
 
 fn testCreateSharedObject(name: [:0]const u8, pixels: []const u8) !void {

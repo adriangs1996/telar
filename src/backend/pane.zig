@@ -7,6 +7,7 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
+const agent_process = @import("agent_process.zig");
 const blit = @import("blit.zig");
 const escape = @import("history/escape.zig");
 const history = @import("history/root.zig");
@@ -414,6 +415,7 @@ pub const Pane = struct {
     exit: ?pty.Exit = null,
     history_service: *history.Service,
     history_observer: history.observer.Observer,
+    agent_process_cache: agent_process.Cache = .{},
     history_session_id: history.SessionId,
     started_at_ms: i64,
     history_sequence: u64 = 0,
@@ -594,6 +596,7 @@ pub const Pane = struct {
             .cursor_keys = modes.get(.cursor_keys),
             .keypad_keys = modes.get(.keypad_keys),
             .bracketed_paste = modes.get(.bracketed_paste),
+            .focus_events = modes.get(.focus_event),
         };
     }
 
@@ -1332,6 +1335,17 @@ test "a child's synchronized-output block holds frames until it closes or expire
     pane.terminal.modes.set(.synchronized_output, false);
     try std.testing.expect(!pane.holdFrames(io));
     try std.testing.expectEqual(@as(?u64, null), pane.sync_hold_started_ns);
+}
+
+test "pane input modes expose child focus reporting" {
+    const gpa = std.testing.allocator;
+    var pane: Pane = undefined;
+    pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 2, .rows = 1 });
+    defer pane.terminal.deinit(gpa);
+
+    try std.testing.expect(!pane.inputModeState().focus_events);
+    pane.terminal.modes.set(.focus_event, true);
+    try std.testing.expect(pane.inputModeState().focus_events);
 }
 
 test "a failed resize cannot split the screen from its damage flags" {

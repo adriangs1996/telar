@@ -10,7 +10,7 @@ pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
-pub const body_header_size = 41;
+pub const body_header_size = 42;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
@@ -43,6 +43,7 @@ pub const InputModes = struct {
     cursor_keys: bool = false,
     keypad_keys: bool = false,
     bracketed_paste: bool = false,
+    focus_events: bool = false,
 };
 
 pub const Span = struct {
@@ -154,6 +155,7 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     try encoder.writeByte(@intFromBool(frame.input_modes.cursor_keys));
     try encoder.writeByte(@intFromBool(frame.input_modes.keypad_keys));
     try encoder.writeByte(@intFromBool(frame.input_modes.bracketed_paste));
+    try encoder.writeByte(@intFromBool(frame.input_modes.focus_events));
     try encoder.writeInt(u16, @intCast(frame.spans.len));
 
     for (frame.spans) |span| {
@@ -200,6 +202,7 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         .cursor_keys = try decoder.readBool(),
         .keypad_keys = try decoder.readBool(),
         .bracketed_paste = try decoder.readBool(),
+        .focus_events = try decoder.readBool(),
     };
     const span_count = try decoder.readInt(u16);
 
@@ -512,13 +515,13 @@ test "a style run pays two bytes per ordinary cell" {
         .spans = &spans,
     });
 
-    // Header and span: 53 bytes. The first cell carries the five-byte default
+    // Header and span: 54 bytes. The first cell carries the five-byte default
     // style and costs seven bytes. Each following space costs only its packed
     // header and text byte.
-    try std.testing.expectEqual(@as(usize, 64), encoder.finish().len);
-    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[53]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[60]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[62]);
+    try std.testing.expectEqual(@as(usize, 65), encoder.finish().len);
+    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[54]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[61]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[63]);
 }
 
 test "cell run size accounts for inherited style" {

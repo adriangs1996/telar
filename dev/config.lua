@@ -12,6 +12,13 @@ end
 return telar.config({
 	api_version = 2,
 
+	runtime = {
+		proxy = {
+			enabled = true,
+			ca_dir = "state/proxy",
+		},
+	},
+
 	client = {
 		prefix = "ctrl+s",
 		pane_gaps = false,

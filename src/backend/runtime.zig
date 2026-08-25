@@ -4,6 +4,7 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const agent_mod = @import("agent.zig");
+const agent_process = @import("agent_process.zig");
 const blit = @import("blit.zig");
 const history = @import("history/root.zig");
 const graphics_sync = @import("graphics_sync.zig");
@@ -92,6 +93,7 @@ const PaneIngestEvent = struct {
 const PaneObservationEvent = struct {
     pane: PaneKey,
     stats: history.observer.Stats,
+    process_probe: agent_process.Probe,
 };
 
 const PaneMediaEvent = struct {
@@ -1930,13 +1932,43 @@ fn serveInternal(
             active.history_observer.finishSealed();
             _ = active.updateObservedCwd();
             if (comptime diagnostics.enabled) {
+                if (event.process_probe.inspected) {
+                    server.metrics.agent_process_inspections +|= 1;
+                    if (event.process_probe.cache.provider == .unknown)
+                        server.metrics.agent_process_misses +|= 1;
+                }
+            }
+            const previous_process = active.agent_process_cache;
+            active.agent_process_cache = event.process_probe.cache;
+            if (event.process_probe.changed) {
+                const observed_at_ms = Io.Timestamp.now(io, .real).toMilliseconds();
+                if (event.process_probe.cache.provider != .unknown) {
+                    _ = server.agents.observeProcess(
+                        agent_mod.Identity.fromPane(active),
+                        event.process_probe.cache.provider,
+                        event.process_probe.cache.process_group_id.?,
+                        observed_at_ms,
+                    );
+                } else if (agent_process.shellForeground(
+                    event.process_probe.cache,
+                    active.session.pid,
+                )) {
+                    _ = server.agents.remove(active.key());
+                } else if (previous_process.provider != .unknown) {
+                    _ = server.agents.clearProcess(active.key());
+                }
+            }
+            if (comptime diagnostics.enabled) {
                 server.metrics.history_candidate_input_bytes +|= event.stats.input_bytes;
                 server.metrics.history_captured +|= event.stats.captured;
                 server.metrics.history_dropped +|= event.stats.dropped;
                 if (event.stats.failed) server.metrics.history_observation_failures +|= 1;
                 if (event.stats.reset) server.metrics.history_observation_resets +|= 1;
             }
-            if (event.stats.agent_signal) |signal| {
+            if (event.stats.agent_signal) |signal| if (!agent_process.shellForeground(
+                active.agent_process_cache,
+                active.session.pid,
+            )) {
                 _ = server.agents.observeScreen(
                     agent_mod.Identity.fromPane(active),
                     .{
@@ -1947,10 +1979,11 @@ fn serveInternal(
                             .ready => .ready,
                         },
                         .confidence = signal.confidence,
+                        .identity_confirmed = signal.identity_confirmed,
                     },
                     Io.Timestamp.now(io, .real).toMilliseconds(),
                 );
-            }
+            };
             try schedulePaneObservation(&select, active);
             server.collect();
             server.pumpAll();
@@ -2315,17 +2348,30 @@ fn schedulePaneObservation(
 ) !void {
     if (!pane.history_observer.seal()) return;
     pane.actorStarted();
-    select.concurrent(.pane_observed, observePane, .{ pane, pane.size }) catch |err| {
+    select.concurrent(.pane_observed, observePane, .{
+        pane,
+        pane.size,
+        pane.agent_process_cache,
+    }) catch |err| {
         pane.actorFinished();
         pane.history_observer.finishSealed();
         return err;
     };
 }
 
-fn observePane(pane: *Pane, current_size: schema.TerminalSize) PaneObservationEvent {
+fn observePane(
+    pane: *Pane,
+    current_size: schema.TerminalSize,
+    process_cache: agent_process.Cache,
+) PaneObservationEvent {
     var stats: history.observer.Stats = .{};
+    const process_probe = agent_process.probe(
+        pane.session.foregroundProcessGroup(),
+        pane.session.pid,
+        process_cache,
+    );
     pane.processHistoryObservation(current_size, &stats);
-    return .{ .pane = pane.key(), .stats = stats };
+    return .{ .pane = pane.key(), .stats = stats, .process_probe = process_probe };
 }
 
 fn schedulePaneMedia(

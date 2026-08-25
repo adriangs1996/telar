@@ -154,6 +154,7 @@ pub const AgentStatus = enum(u8) {
 pub const AgentSource = enum(u8) {
     proxy_tls = 0,
     screen = 1,
+    foreground_process = 2,
 };
 
 pub const AgentAuthority = enum(u8) {

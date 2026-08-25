@@ -9,3 +9,4 @@ zig-pkg/
 references/*
 !references/README.md
 .lavish/*
+state/

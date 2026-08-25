@@ -26,13 +26,6 @@ pub const Interaction = struct {
     layout_changed: bool = false,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
-    sidebar_intent: ?SidebarIntent = null,
-};
-
-pub const SidebarIntent = union(enum) {
-    new_task,
-    command_palette,
-    run_task_action: widgets.sidebar.TaskKey,
 };
 
 pub const RenderStats = struct {
@@ -66,6 +59,7 @@ pub const State = struct {
     name_prompt: ?NamePrompt = null,
     sidebar_snapshot: widgets.sidebar.Snapshot = .{},
     sidebar: widgets.sidebar.State = .{},
+    sidebar_animation_frame: u8 = 0,
     workspace_list: widgets.workspace_model.Snapshot = .{},
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
@@ -103,7 +97,6 @@ pub const State = struct {
         if (state.scratch.w != width or state.scratch.h != height)
             try state.scratch.resize(width, height);
         state.regions = .calculate(width, height, state.sidebar_requested);
-        if (state.regions.sidebar.isEmpty()) state.sidebar.search_active = false;
         state.dirty = true;
     }
 
@@ -128,7 +121,6 @@ pub const State = struct {
             state.scratch.h,
             state.sidebar_requested,
         );
-        state.sidebar.search_active = false;
         state.hovered = null;
         state.dirty = true;
     }
@@ -174,30 +166,25 @@ pub const State = struct {
         input: widgets.sidebar.SnapshotInput,
     ) !bool {
         if (!try state.sidebar_snapshot.replace(input)) return false;
-        if (state.sidebar.selected_task) |key| {
-            if (state.sidebar_snapshot.find(key) == null) state.sidebar.selected_task = null;
+        if (state.sidebar.selected_agent) |key| {
+            if (state.sidebar_snapshot.find(key) == null) state.sidebar.selected_agent = null;
         }
-        if (state.sidebar.selected_task == null) {
-            if (state.sidebar_snapshot.firstInTab(state.sidebar.selected_tab)) |task|
-                state.sidebar.selected_task = task.key;
+        if (state.sidebar.selected_agent == null) {
+            if (state.sidebar_snapshot.first()) |agent|
+                state.sidebar.selected_agent = agent.key;
         }
         state.sidebar.scroll = 0;
         state.dirty = true;
         return true;
     }
 
-    pub fn sidebarCapturesKeyboard(state: *const State) bool {
-        return state.sidebar.capturesKeyboard();
+    pub fn sidebarNeedsAnimation(state: *const State) bool {
+        return state.sidebar_snapshot.hasWorkingAgent();
     }
 
-    pub fn handleSidebarKey(state: *State, key: term.Event.Key) bool {
-        if (!state.sidebar.handleKey(key)) return false;
-        state.dirty = true;
-        return true;
-    }
-
-    pub fn pasteIntoSidebar(state: *State, bytes: []const u8) bool {
-        if (!state.sidebar.paste(bytes)) return false;
+    pub fn advanceSidebarAnimation(state: *State) bool {
+        if (!state.sidebarNeedsAnimation()) return false;
+        state.sidebar_animation_frame +%= 1;
         state.dirty = true;
         return true;
     }
@@ -226,14 +213,12 @@ pub const State = struct {
 
     pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
         state.name_prompt = .{ .target = .{ .tab = tab_id }, .field = .init(label) };
-        state.sidebar.search_active = false;
         state.hovered = null;
         state.dirty = true;
     }
 
     pub fn beginWorkspaceCreate(state: *State) void {
         state.name_prompt = .{ .target = .create_workspace, .field = .init("") };
-        state.sidebar.search_active = false;
         state.hovered = null;
         state.dirty = true;
     }
@@ -248,7 +233,6 @@ pub const State = struct {
             .target = .{ .rename_workspace = workspace },
             .field = .init(editable_name),
         };
-        state.sidebar.search_active = false;
         state.hovered = null;
         state.dirty = true;
     }
@@ -368,11 +352,6 @@ pub const State = struct {
         };
         if (mouse.kind != .press) return result;
         const action = hovered orelse return result;
-        if (std.meta.activeTag(action) != .sidebar_focus_search and state.sidebar.search_active) {
-            state.sidebar.search_active = false;
-            state.dirty = true;
-            result.redraw = true;
-        }
         switch (action) {
             .toggle_sidebar => {
                 state.toggleSidebar();
@@ -405,44 +384,12 @@ pub const State = struct {
                 state.toggleWorkspaceList();
                 result.redraw = true;
             },
-            .sidebar_focus_search => {
-                state.sidebar.search_active = true;
-                state.dirty = true;
-                result.redraw = true;
-            },
-            .sidebar_new_task => result.sidebar_intent = .new_task,
-            .sidebar_command_palette => result.sidebar_intent = .command_palette,
-            .sidebar_select_tab => |tab| {
-                state.sidebar.selected_tab = tab;
-                state.sidebar.selected_task = if (state.sidebar_snapshot.firstInTab(tab)) |task|
-                    task.key
-                else
-                    null;
-                state.sidebar.scroll = 0;
-                state.dirty = true;
-                result.redraw = true;
-            },
-            .sidebar_toggle_scope => {
-                state.sidebar.scope_open = !state.sidebar.scope_open;
-                state.dirty = true;
-                result.redraw = true;
-            },
-            .sidebar_select_task => |key| {
-                state.sidebar.selected_task = key;
-                if (state.sidebar_snapshot.find(key)) |task| {
-                    if (task.pane_id) |pane_id| {
-                        const previous = model.layout.focused();
-                        _ = model.focusPane(pane_id);
-                        result.layout_changed = model.layout.isFullscreen() and
-                            previous != model.layout.focused();
-                    }
-                }
-                state.dirty = true;
-                result.redraw = true;
-            },
-            .sidebar_run_task_action => |key| {
-                state.sidebar.selected_task = key;
-                result.sidebar_intent = .{ .run_task_action = key };
+            .sidebar_select_agent => |key| {
+                state.sidebar.selected_agent = key;
+                const previous = model.layout.focused();
+                _ = model.focusPane(key.pane_id);
+                result.layout_changed = model.layout.isFullscreen() and
+                    previous != model.layout.focused();
                 state.dirty = true;
                 result.redraw = true;
             },
@@ -486,6 +433,7 @@ pub const State = struct {
             .sidebar_snapshot = &state.sidebar_snapshot,
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
+            .sidebar_animation_frame = state.sidebar_animation_frame,
             .proxy_tls_active = state.proxy_tls_active,
             .system_metrics = state.system_metrics,
             .workspaces = &state.workspace_list,
@@ -497,31 +445,19 @@ pub const State = struct {
             for (composed.sidebar.provider_marks[0..composed.sidebar.provider_mark_count]) |mark| {
                 const provider: kitty.SidebarProvider = switch (mark.provider) {
                     .claude => .claude,
+                    .codex => .codex,
                     else => continue,
                 };
                 provider_marks[provider_mark_count] = .{ .area = mark.area, .provider = provider };
                 provider_mark_count += 1;
             }
-            var controls: [widgets.sidebar.max_controls]kitty.SidebarControlPlacement = undefined;
-            for (composed.sidebar.controls[0..composed.sidebar.control_count], 0..) |control, index| {
-                controls[index] = .{
-                    .area = control.area,
-                    .kind = switch (control.kind) {
-                        .neutral => .neutral,
-                        .primary => .primary,
-                    },
-                };
-            }
             try state.kitty_sidebar.prepare(
                 composed.sidebar.area,
-                state.palette(),
-                composed.sidebar.selected_card,
                 provider_marks[0..provider_mark_count],
-                controls[0..composed.sidebar.control_count],
                 state.cell_width_px,
                 state.cell_height_px,
             );
-        } else try state.kitty_sidebar.prepare(.{}, state.palette(), null, &.{}, &.{}, 0, 0);
+        } else try state.kitty_sidebar.prepare(.{}, &.{}, 0, 0);
 
         var stats: RenderStats = .{};
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.top));
@@ -594,21 +530,7 @@ test "sidebar toggle changes only the disposable client layout" {
     try std.testing.expectEqual(@as(u16, 100), state.regions.workbench.w);
 }
 
-test "hiding or suppressing the sidebar releases its search editor" {
-    var state = try State.init(std.testing.allocator, 100, 30);
-    defer state.deinit();
-    state.sidebar.search_active = true;
-    state.toggleSidebar();
-    try std.testing.expect(!state.sidebarCapturesKeyboard());
-
-    state.toggleSidebar();
-    state.sidebar.search_active = true;
-    try state.resize(61, 30);
-    try std.testing.expect(state.regions.sidebar.isEmpty());
-    try std.testing.expect(!state.sidebarCapturesKeyboard());
-}
-
-test "empty production sidebar exposes search and deferred creation intent" {
+test "empty production sidebar has no task controls" {
     var state = try State.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     var model = multiplexer.Model.init(std.testing.allocator);
@@ -622,18 +544,11 @@ test "empty production sidebar exposes search and deferred creation intent" {
     defer screen.deinit();
     _ = try state.render(&screen, null, &model, true);
 
-    const search = state.handleMouse(null, &model, .{ .x = 3, .y = 2, .kind = .press });
-    try std.testing.expect(search.redraw);
-    try std.testing.expect(state.sidebarCapturesKeyboard());
-    try std.testing.expect(state.handleSidebarKey(.{ .code = .{ .char = .init("a") } }));
-    try std.testing.expectEqualStrings("a", state.sidebar.search.text());
-
-    const create = state.handleMouse(null, &model, .{ .x = 58, .y = 2, .kind = .press });
-    try std.testing.expectEqualDeep(SidebarIntent.new_task, create.sidebar_intent.?);
-    try std.testing.expect(!state.sidebarCapturesKeyboard());
+    try std.testing.expect(state.hits.at(3, 2) == null);
+    try std.testing.expect(state.hits.at(58, 2) == null);
 }
 
-test "sidebar task snapshots focus linked panes and stable hover requests no extra frame" {
+test "sidebar agent snapshots focus linked panes and stable hover requests no extra frame" {
     const gpa = std.testing.allocator;
     var state = try State.init(gpa, 100, 30);
     defer state.deinit();
@@ -652,28 +567,27 @@ test "sidebar task snapshots focus linked panes and stable hover requests no ext
         state.workbench(),
     );
     try std.testing.expect(model.toggleFullscreen());
-    const tasks = [_]widgets.sidebar.TaskInput{.{
-        .key = .{ .id = 10, .generation = 1 },
-        .pane_id = @enumFromInt(1),
-        .title = "Fix auth token refresh",
-        .section = .needs_you,
+    const agents = [_]widgets.sidebar.AgentInput{.{
+        .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
+        .provider = .codex,
+        .status = .blocked,
     }};
-    try std.testing.expect(try state.replaceSidebarSnapshot(.{ .revision = 1, .tasks = &tasks }));
+    try std.testing.expect(try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents }));
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
     _ = try state.render(&screen, null, &model, true);
 
-    const first_row = term.Event.Mouse{ .x = 4, .y = 11, .kind = .move };
+    const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
     try std.testing.expect(state.handleMouse(null, &model, first_row).redraw);
     try std.testing.expect(!state.handleMouse(null, &model, first_row).redraw);
-    const click = term.Event.Mouse{ .x = 4, .y = 11, .kind = .press };
+    const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(null, &model, click);
     try std.testing.expect(interaction.layout_changed);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
 }
 
-test "hybrid sidebar preserves task hit testing and cell fallback actions" {
+test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     var state = try State.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     try state.configureSidebar(.kitty_hybrid, .supported, 10, 20);
@@ -684,25 +598,21 @@ test "hybrid sidebar preserves task hit testing and cell fallback actions" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 30, .rows = 20 });
-    const tasks = [_]widgets.sidebar.TaskInput{.{
-        .key = .{ .id = 12, .generation = 4 },
-        .pane_id = @enumFromInt(1),
-        .title = "Review booking copy",
-        .tool = "claude/sonnet",
-        .section = .ready,
+    const agents = [_]widgets.sidebar.AgentInput{.{
+        .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 4 },
         .provider = .claude,
-        .action = .review,
+        .status = .ready,
     }};
-    _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .tasks = &tasks });
-    state.sidebar.selected_task = tasks[0].key;
+    _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
+    state.sidebar.selected_agent = agents[0].key;
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, null, &model, true);
     try std.testing.expectEqualDeep(
-        Action{ .sidebar_select_task = tasks[0].key },
-        state.hits.at(4, 11).?,
+        Action{ .sidebar_select_agent = agents[0].key },
+        state.hits.at(4, 4).?,
     );
-    const interaction = state.handleMouse(null, &model, .{ .x = 4, .y = 11, .kind = .press });
+    const interaction = state.handleMouse(null, &model, .{ .x = 4, .y = 4, .kind = .press });
     try std.testing.expect(interaction.redraw);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());

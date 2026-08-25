@@ -1,8 +1,8 @@
 //! Runtime-owned agent evidence and projection.
 //!
-//! Network and terminal observers publish bounded evidence here. This store is
-//! the only place that turns those observations into sidebar state, so a Lua
-//! observer or another future detector cannot bypass precedence, expiry, or
+//! Process, network, and terminal observers publish bounded evidence here.
+//! This store is the only place that turns those observations into sidebar
+//! state, so another detector cannot bypass precedence, expiry, or
 //! pane-generation checks.
 
 const std = @import("std");
@@ -65,8 +65,10 @@ const Evidence = struct {
 const Record = struct {
     key: PaneKey,
     process_id: u32,
+    agent_process_id: ?u32 = null,
     session_id: [16]u8,
     authority: schema.AgentAuthority = .candidate,
+    process: ?Evidence = null,
     proxy: ?Evidence = null,
     active_proxy: [max_active_proxy_requests]?ProxyRequest = @splat(null),
     active_proxy_count: u16 = 0,
@@ -79,6 +81,49 @@ pub const Store = struct {
     records: [max_records]?Record = @splat(null),
     revision: u64 = 1,
     sequence: u64 = 0,
+
+    pub fn observeProcess(
+        store: *Store,
+        identity: Identity,
+        provider: schema.AgentProvider,
+        process_id: u32,
+        observed_at_ms: i64,
+    ) bool {
+        if (provider == .unknown or process_id == 0) return false;
+        var record = store.ensure(identity) orelse return false;
+        const replaced_process = record.process != null;
+        if (record.process) |evidence| {
+            if (evidence.provider == provider and record.agent_process_id == process_id)
+                return false;
+            record.screen = null;
+            record.proxy = null;
+            clearProxyActive(record);
+        }
+        record.agent_process_id = process_id;
+        record.process = .{
+            .provider = provider,
+            .status = .ready,
+            .source = .foreground_process,
+            .confidence = 100,
+            .observed_at_ms = observed_at_ms,
+            .expires_at_ms = std.math.maxInt(i64),
+        };
+        record.authority = if (replaced_process) .active else switch (record.authority) {
+            .candidate, .stale, .exited => .active,
+            .active, .obscured, .resumed => record.authority,
+        };
+        record.idle_samples = 0;
+        return store.reproject(record, observed_at_ms);
+    }
+
+    /// A foreground process-group change is authoritative session exit. Old
+    /// proxy and screen evidence belongs to that process and must not keep its
+    /// sidebar row alive after the shell regains control.
+    pub fn clearProcess(store: *Store, key: PaneKey) bool {
+        const record = store.find(key) orelse return false;
+        if (record.process == null) return false;
+        return store.remove(key);
+    }
 
     pub fn observeProxy(
         store: *Store,
@@ -158,17 +203,26 @@ pub const Store = struct {
         observed_at_ms: i64,
     ) bool {
         const existing = store.find(identity.key);
-        const known_provider = if (signal.provider != .unknown)
+        const process_provider = if (existing) |record|
+            if (record.process) |evidence| evidence.provider else schema.AgentProvider.unknown
+        else
+            .unknown;
+        if (process_provider != .unknown and signal.provider != .unknown and
+            signal.provider != process_provider) return false;
+        const known_provider = if (process_provider != .unknown)
+            process_provider
+        else if (signal.provider != .unknown)
             signal.provider
         else if (existing) |record|
             recordProvider(record)
         else
             .unknown;
         // `❯` is also a popular shell prompt and generic confirmation text is
-        // not agent identity. Ready needs prior Claude evidence; other generic
-        // screen hints need a provider already established by ProxyTLS.
+        // not agent identity. A ready prompt needs prior provider evidence or
+        // a detector signal tied to explicit provider branding.
         if (signal.status == .ready and
-            (existing == null or recordProvider(existing.?) != .claude)) return false;
+            !signal.identity_confirmed and
+            (existing == null or recordProvider(existing.?) != signal.provider)) return false;
         if (known_provider == .unknown) return false;
         var record = store.ensure(identity) orelse return false;
         if (signal.status == .ready and currentStatus(record) == .working) {
@@ -209,7 +263,7 @@ pub const Store = struct {
             if (record.screen) |evidence| {
                 if (evidence.expires_at_ms <= now_ms) record.screen = null;
             }
-            if (record.proxy == null and record.screen == null) {
+            if (record.process == null and record.proxy == null and record.screen == null) {
                 record.authority = .stale;
                 slot.* = null;
                 store.bumpRevision();
@@ -284,7 +338,9 @@ pub const Store = struct {
 
     fn reproject(store: *Store, record: *Record, now_ms: i64) bool {
         const evidence = chooseEvidence(record, now_ms) orelse return false;
-        const provider = if (evidence.provider != .unknown)
+        const provider = if (record.process) |process|
+            process.provider
+        else if (evidence.provider != .unknown)
             evidence.provider
         else if (record.proxy) |proxy|
             proxy.provider
@@ -298,7 +354,7 @@ pub const Store = struct {
         record.projected = .{
             .pane_id = record.key.id,
             .pane_generation = record.key.generation,
-            .process_id = record.process_id,
+            .process_id = record.agent_process_id orelse record.process_id,
             .session_id = record.session_id,
             .provider = provider,
             .status = evidence.status,
@@ -373,6 +429,7 @@ fn sameProxyRequest(left: ProxyRequest, right: ProxyRequest) bool {
 }
 
 fn chooseEvidence(record: *const Record, now_ms: i64) ?Evidence {
+    const process = record.process;
     const screen = if (record.screen) |value|
         if (value.expires_at_ms > now_ms) value else null
     else
@@ -398,7 +455,8 @@ fn chooseEvidence(record: *const Record, now_ms: i64) ?Evidence {
     };
     if (screen) |value| if (value.status == .ready) return value;
     if (proxy) |value| return value;
-    return screen;
+    if (screen) |value| return value;
+    return process;
 }
 
 fn currentStatus(record: *const Record) schema.AgentStatus {
@@ -406,6 +464,7 @@ fn currentStatus(record: *const Record) schema.AgentStatus {
 }
 
 fn recordProvider(record: *const Record) schema.AgentProvider {
+    if (record.process) |evidence| return evidence.provider;
     if (record.proxy) |evidence| if (evidence.provider != .unknown) return evidence.provider;
     if (record.screen) |evidence| return evidence.provider;
     return .unknown;
@@ -468,6 +527,133 @@ test "confirmed ready screen recovers a dropped proxy completion" {
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+}
+
+test "explicitly identified ready screen opens an agent record" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeScreen(
+        identity,
+        .{
+            .provider = .codex,
+            .status = .ready,
+            .confidence = 94,
+            .identity_confirmed = true,
+        },
+        100,
+    ));
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.len);
+    try std.testing.expectEqual(schema.AgentProvider.codex, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+}
+
+test "foreground process establishes agent identity without screen branding" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    var snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.len);
+    try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.foreground_process, snapshot[0].source);
+    try std.testing.expectEqual(@as(u32, 84), snapshot[0].process_id);
+
+    try std.testing.expect(store.observeScreen(
+        identity,
+        .{ .provider = .unknown, .status = .working, .confidence = 78 },
+        200,
+    ));
+    snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+    try std.testing.expectEqual(@as(u32, 84), snapshot[0].process_id);
+}
+
+test "process identity rejects contradictory screen branding" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
+    try std.testing.expect(!store.observeScreen(
+        identity,
+        .{
+            .provider = .codex,
+            .status = .ready,
+            .confidence = 94,
+            .identity_confirmed = true,
+        },
+        200,
+    ));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentSource.foreground_process, snapshot[0].source);
+}
+
+test "foreground process exit removes all evidence for that session" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
+    try std.testing.expect(store.observeScreen(
+        identity,
+        .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        200,
+    ));
+    try std.testing.expect(store.clearProcess(identity.key));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    try std.testing.expectEqual(@as(usize, 0), store.snapshot(&entries).len);
+}
+
+test "new foreground process replaces prior session evidence" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
+    try std.testing.expect(store.observeScreen(
+        identity,
+        .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
+        200,
+    ));
+    try std.testing.expect(store.observeProcess(identity, .codex, 85, 300));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentProvider.codex, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.foreground_process, snapshot[0].source);
+    try std.testing.expectEqual(schema.AgentAuthority.active, snapshot[0].authority);
+    try std.testing.expectEqual(@as(u32, 85), snapshot[0].process_id);
+}
+
+test "Claude branding establishes identity for a later generic prompt" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeScreen(
+        identity,
+        .{
+            .provider = .claude,
+            .status = .ready,
+            .confidence = 90,
+            .identity_confirmed = true,
+        },
+        100,
+    ));
+    try std.testing.expect(store.observeScreen(
+        identity,
+        .{ .provider = .claude, .status = .ready, .confidence = 72 },
+        200,
+    ));
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.len);
+    try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
 }
 
 test "network work resumes a visibly blocked agent" {

@@ -5,6 +5,7 @@
 
 pub const pty = @import("pty.zig");
 pub const agent = @import("agent.zig");
+pub const agent_process = @import("agent_process.zig");
 pub const blit = @import("blit.zig");
 pub const damage = @import("damage.zig");
 pub const history = @import("history/root.zig");

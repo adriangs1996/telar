@@ -53,6 +53,8 @@ pub const RuntimeMetrics = struct {
     history_query_failures: u64 = 0,
     history_observation_resets: u64 = 0,
     history_observation_failures: u64 = 0,
+    agent_process_inspections: u64 = 0,
+    agent_process_misses: u64 = 0,
     proxy_observations: u64 = 0,
     client_resyncs: u64 = 0,
 };
@@ -269,11 +271,14 @@ pub fn formatRuntimeTelemetry(
         history_auxiliary_completions,
     });
     try output.print(
-        "\"proxy_active\":{d},\"proxy_observations\":{d}," ++
+        "\"agent_process_inspections\":{d},\"agent_process_misses\":{d}," ++
+            "\"proxy_active\":{d},\"proxy_observations\":{d}," ++
             "\"proxy_active_connections\":{d},\"proxy_dropped_events\":{d}," ++
             "\"proxy_rejected_connections\":{d},\"proxy_connection_limit_drops\":{d}," ++
             "\"proxy_h2_decode_failures\":{d},",
         .{
+            metrics.agent_process_inspections,
+            metrics.agent_process_misses,
             @intFromBool(proxy_active),
             metrics.proxy_observations,
             proxy_active_connections,

@@ -232,6 +232,15 @@ pub const Session = struct {
         return foreground == session.pid;
     }
 
+    /// Returns the foreground process group controlling the slave side. The
+    /// observation worker uses this constant-cost signal before inspecting
+    /// any native process metadata.
+    pub fn foregroundProcessGroup(session: *const Session) ?std.c.pid_t {
+        if (session.master < 0) return null;
+        const foreground = tcgetpgrp(session.master);
+        return if (foreground > 0) foreground else null;
+    }
+
     /// Reads the session leader's cwd without asking the shell to publish it.
     pub fn cwd(session: *const Session, buffer: []u8) ?[]const u8 {
         return switch (builtin.os.tag) {

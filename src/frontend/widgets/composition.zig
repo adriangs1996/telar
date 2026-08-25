@@ -25,6 +25,7 @@ pub const Input = struct {
     sidebar_snapshot: *const sidebar.Snapshot,
     sidebar_state: *sidebar.State,
     sidebar_transparent: bool,
+    sidebar_animation_frame: u8,
     proxy_tls_active: bool,
     system_metrics: ?status_bar.Metrics,
     workspaces: *const workspace_model.Snapshot,
@@ -52,6 +53,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .snapshot = input.sidebar_snapshot,
         .state = input.sidebar_state,
         .transparent = input.sidebar_transparent,
+        .animation_frame = input.sidebar_animation_frame,
     });
 
     context.buffer.fill(input.regions.bottom, " ", bottomStyle(context));

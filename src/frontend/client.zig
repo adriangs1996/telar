@@ -98,53 +98,12 @@ const ClientEvent = union(enum) {
     server: anyerror![]u8,
     sent: anyerror!void,
     draw: anyerror!void,
+    sidebar_animation_tick: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!ConfigReload,
     plugin_result: anyerror!plugin_broker.WorkerResult,
 };
-
-const AgentPresentation = struct {
-    section: widgets.sidebar.Section,
-    action: widgets.sidebar.TaskAction,
-    status: widgets.sidebar.Status,
-};
-
-fn agentPresentation(status: schema.AgentStatus) AgentPresentation {
-    return switch (status) {
-        .unknown => .{ .section = .background, .action = .none, .status = .unknown },
-        .working => .{ .section = .running, .action = .none, .status = .working },
-        .blocked => .{ .section = .needs_you, .action = .decide, .status = .waiting },
-        .ready => .{ .section = .ready, .action = .none, .status = .ready },
-        .failed => .{ .section = .needs_you, .action = .debug, .status = .failed },
-    };
-}
-
-fn providerTitle(provider: schema.AgentProvider) []const u8 {
-    return switch (provider) {
-        .unknown => "Agent",
-        .claude => "Claude Code",
-        .codex => "Codex",
-    };
-}
-
-fn sourceLabel(source: schema.AgentSource) []const u8 {
-    return switch (source) {
-        .proxy_tls => "ProxyTLS",
-        .screen => "terminal",
-    };
-}
-
-fn authorityLabel(authority: schema.AgentAuthority) []const u8 {
-    return switch (authority) {
-        .candidate => "candidate",
-        .active => "active",
-        .obscured => "needs input",
-        .resumed => "resumed",
-        .exited => "exited",
-        .stale => "stale",
-    };
-}
 
 const ConfigReload = union(enum) {
     unchanged: i128,
@@ -206,6 +165,9 @@ const Client = struct {
     draw_due_ns: u64 = 0,
     pending_updates: usize = 0,
     last_presented_ns: ?u64 = null,
+    sidebar_animation_pending: bool = false,
+    reported_focus: ?schema.PaneId = null,
+    reported_focus_events: bool = false,
 
     fn nextId(client: *Client) !schema.RequestId {
         return nextRequestId(&client.next_request_id);
@@ -308,6 +270,55 @@ const Client = struct {
         };
     }
 
+    fn scheduleSidebarAnimation(client: *Client) !void {
+        if (client.sidebar_animation_pending or !client.view.sidebarNeedsAnimation()) return;
+        const deadline_ns = monotonic(client.io) + 120 * std.time.ns_per_ms;
+        client.sidebar_animation_pending = true;
+        client.select.concurrent(.sidebar_animation_tick, waitUntil, .{
+            client.io,
+            deadline_ns,
+        }) catch |err| {
+            client.sidebar_animation_pending = false;
+            return err;
+        };
+    }
+
+    fn clearPaneFocus(client: *Client) !void {
+        const previous = client.reported_focus;
+        const reports = client.reported_focus_events;
+        client.forgetPaneFocus();
+        if (!reports) return;
+        const pane_id = previous orelse return;
+        const pane = client.tabs.findPane(pane_id) orelse return;
+        if (pane.attached) try client.enqueueInput(pane_id, "\x1b[O");
+    }
+
+    fn forgetPaneFocus(client: *Client) void {
+        client.reported_focus = null;
+        client.reported_focus_events = false;
+    }
+
+    fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
+        const next_id = model.layout.focused();
+        const next = if (next_id) |pane_id| model.find(pane_id) else null;
+        const next_reports = if (next) |pane|
+            pane.attached and pane.input_modes.focus_events
+        else
+            false;
+
+        if (client.reported_focus == next_id) {
+            if (next_reports and !client.reported_focus_events)
+                try client.enqueueInput(next_id.?, "\x1b[I");
+            client.reported_focus_events = next_reports;
+            return;
+        }
+
+        try client.clearPaneFocus();
+        client.reported_focus = next_id;
+        client.reported_focus_events = next_reports;
+        if (next_reports) try client.enqueueInput(next_id.?, "\x1b[I");
+    }
+
     /// Routes one decoded server message. Returns an exit status when the
     /// message ends the session, null to keep running.
     fn handleServer(client: *Client, message: schema.ServerMessage) !?u8 {
@@ -351,36 +362,25 @@ const Client = struct {
     }
 
     fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !void {
-        var tasks: [schema.max_agent_snapshot_entries]widgets.sidebar.TaskInput = undefined;
+        var agents: [schema.max_agent_snapshot_entries]widgets.sidebar.AgentInput = undefined;
         var count: usize = 0;
         var iterator = snapshot.entries();
         while (try iterator.next()) |entry| {
-            const presentation = agentPresentation(entry.status);
-            tasks[count] = .{
+            agents[count] = .{
                 .key = .{
-                    .id = schema.id.raw(entry.pane_id),
-                    .generation = entry.pane_generation,
+                    .pane_id = entry.pane_id,
+                    .pane_generation = entry.pane_generation,
                 },
-                .pane_id = entry.pane_id,
-                .title = providerTitle(entry.provider),
-                .tool = sourceLabel(entry.source),
-                .status_detail = authorityLabel(entry.authority),
-                .section = presentation.section,
-                .action = presentation.action,
-                .provider = switch (entry.provider) {
-                    .unknown => .unknown,
-                    .claude => .claude,
-                    .codex => .codex,
-                },
-                .status = presentation.status,
-                .inbox = entry.status != .working,
+                .provider = entry.provider,
+                .status = entry.status,
             };
             count += 1;
         }
         if (try client.view.replaceSidebarSnapshot(.{
             .revision = snapshot.revision,
-            .tasks = tasks[0..count],
+            .agents = agents[0..count],
         })) try client.requestDraw();
+        try client.scheduleSidebarAnimation();
     }
 
     fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
@@ -429,6 +429,7 @@ const Client = struct {
             .initial_open => try client.bootstrapWorkspace(opened),
             .create_workspace => {
                 if (!opened.created) return error.UnexpectedRequest;
+                try client.clearPaneFocus();
                 for (&client.tabs.items) |*slot| {
                     const tab = if (slot.*) |*value| value else continue;
                     for (&tab.model.panes) |*pane_slot| {
@@ -453,6 +454,7 @@ const Client = struct {
                 }
                 client.view.invalidate();
                 try client.resizeAttached(model, client.view.workbench());
+                try client.syncPaneFocus(model);
             },
             .attach_pane => |attachment| {
                 if (attachment.pane_id != opened.pane_id or
@@ -474,6 +476,7 @@ const Client = struct {
             opened.location,
             rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
         );
+        try client.syncPaneFocus(&client.tabs.active().?.model);
         client.view.invalidate();
         try client.scheduleInputRead();
         const workspace_request_id = try client.nextId();
@@ -504,6 +507,7 @@ const Client = struct {
             return error.UnexpectedTabSnapshot;
         const tab = try client.tabs.reconcileTab(snapshot, client.view.workbench());
         const model = &tab.model;
+        if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
         client.view.invalidate();
         try client.resizeAttached(model, client.view.workbench());
         for (&model.panes) |*slot| {
@@ -587,12 +591,14 @@ const Client = struct {
             return error.UnexpectedTabCreated;
         if (client.tabs.active()) |current| {
             var handler: InputHandler = .{ .client = client };
+            try client.clearPaneFocus();
             try handler.detachTab(current);
         }
         _ = try client.tabs.addCreated(
             created,
             rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
         );
+        try client.syncPaneFocus(&client.tabs.active().?.model);
         client.view.invalidate();
         try client.requestDraw();
     }
@@ -622,6 +628,7 @@ const Client = struct {
         }
         const was_active = client.tabs.activeConst() != null and
             client.tabs.activeConst().?.location.tab_id == closed.location.tab_id;
+        if (was_active) client.forgetPaneFocus();
         // The runtime sends no per-pane exit for a closed tab, so its
         // graphics would stay resident forever without this.
         if (client.tabs.find(closed.location.tab_id)) |closing|
@@ -633,6 +640,7 @@ const Client = struct {
         if (closed.workspace_closed or client.tabs.count == 0) return 0;
         if (was_active) {
             const active = client.tabs.active().?;
+            try client.syncPaneFocus(&active.model);
             const request_id = try client.nextId();
             try client.enqueueRequest(
                 request_id,
@@ -682,16 +690,19 @@ const Client = struct {
             if (frame.base_frame_id == 0) client.metrics.snapshots += 1;
             client.metrics.apply.observe(diagnostics.elapsed(apply_started, diagnostics.now(client.io)));
         }
+        if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
         try client.requestDraw();
     }
 
     fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
         client.graphics_store.clearPane(exited.pane_id);
         const tab = client.tabs.tabForPane(exited.pane_id);
+        if (client.reported_focus == exited.pane_id) client.forgetPaneFocus();
         if (tab) |value| _ = value.model.removePane(exited.pane_id);
         client.view.invalidate();
         _ = client.requests.completePaneClose(exited.pane_id);
         if (client.tabs.active()) |active| {
+            try client.syncPaneFocus(&active.model);
             if (active.model.pane_count != 0)
                 try client.resizeAttached(&active.model, client.view.workbench());
         }
@@ -1042,7 +1053,7 @@ pub fn run(
     const outbox = try gpa.create(client_outbox.Outbox);
     defer gpa.destroy(outbox);
     outbox.* = .{};
-    var select_storage: [12]ClientEvent = undefined;
+    var select_storage: [13]ClientEvent = undefined;
     var select = Io.Select(ClientEvent).init(io, &select_storage);
     defer select.cancelDiscard();
     try select.concurrent(.resized, waitResize, .{ io, &watcher });
@@ -1220,6 +1231,12 @@ pub fn run(
         .draw => |result| {
             try result;
             try client.presentDue();
+        },
+        .sidebar_animation_tick => |result| {
+            try result;
+            client.sidebar_animation_pending = false;
+            if (view.advanceSidebarAnimation()) try client.requestDraw();
+            try client.scheduleSidebarAnimation();
         },
         .telemetry_tick => |result| {
             result catch {
@@ -1563,8 +1580,7 @@ const InputHandler = struct {
     }
 
     pub fn capturesKeys(handler: *const InputHandler) bool {
-        return handler.client.view.hasNamePrompt() or
-            handler.client.view.sidebarCapturesKeyboard();
+        return handler.client.view.hasNamePrompt();
     }
 
     fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
@@ -1584,6 +1600,7 @@ const InputHandler = struct {
         const current = handler.client.tabs.active() orelse return;
         if (current.location.tab_id == tab_id) return;
         if (handler.client.tabs.indexOf(tab_id) == null) return;
+        try handler.client.clearPaneFocus();
         try handler.detachTab(current);
         std.debug.assert(handler.client.tabs.select(tab_id));
         const active = handler.client.tabs.active().?;
@@ -1592,6 +1609,7 @@ const InputHandler = struct {
             try handler.client.graphics_store.setPaneVisible(pane.id, true);
         }
         active.model.composition_invalidated = true;
+        try handler.client.syncPaneFocus(&active.model);
         const request_id = try handler.client.nextId();
         try handler.client.enqueueRequest(
             request_id,
@@ -1615,6 +1633,7 @@ const InputHandler = struct {
             .workspace => |id| if (id == workspace) return,
             .worktree => {},
         };
+        try client.clearPaneFocus();
         for (&client.tabs.items) |*slot| {
             const tab = if (slot.*) |*value| value else continue;
             try handler.detachTab(tab);
@@ -1660,10 +1679,6 @@ const InputHandler = struct {
             var editing_bytes: [32]u8 = undefined;
             return handler.forward(try input_mod.encodeKey(&editing_bytes, value, .{}));
         }
-        if (handler.client.view.handleSidebarKey(value)) {
-            handler.redraw = true;
-            return;
-        }
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         var encoded: [32]u8 = undefined;
@@ -1686,7 +1701,6 @@ const InputHandler = struct {
     pub fn pasteStart(handler: *InputHandler) !void {
         if (handler.client.view.hasNamePrompt())
             return handler.forward("\x1b[200~");
-        if (handler.client.view.sidebarCapturesKeyboard()) return;
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         handler.client.paste_pane = pane.id;
@@ -1696,10 +1710,6 @@ const InputHandler = struct {
 
     pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
         if (handler.client.view.hasNamePrompt()) return handler.forward(text);
-        if (handler.client.view.pasteIntoSidebar(text)) {
-            handler.redraw = true;
-            return;
-        }
         const pane_id = handler.client.paste_pane orelse return;
         const pane = handler.client.tabs.findPane(pane_id) orelse return;
         if (pane.attached) try handler.sendPaneBytes(pane, text);
@@ -1708,7 +1718,6 @@ const InputHandler = struct {
     pub fn pasteEnd(handler: *InputHandler) !void {
         if (handler.client.view.hasNamePrompt())
             return handler.forward("\x1b[201~");
-        if (handler.client.view.sidebarCapturesKeyboard()) return;
         const pane_id = handler.client.paste_pane orelse return;
         handler.client.paste_pane = null;
         const pane = handler.client.tabs.findPane(pane_id) orelse return;
@@ -1749,6 +1758,8 @@ const InputHandler = struct {
         const interaction = handler.client.view.handleMouse(handler.client.tabs, model, cell_event);
         if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
         if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
+        if (handler.client.tabs.active()) |active|
+            try handler.client.syncPaneFocus(&active.model);
         if (interaction.layout_changed) {
             handler.client.graphics_store.invalidatePlacements();
             try handler.client.resizeAttached(
@@ -1958,6 +1969,7 @@ const InputHandler = struct {
                 .next => .next,
             }),
             .detach => {
+                try handler.client.clearPaneFocus();
                 for (handler.client.tabs.items[0..handler.client.tabs.count]) |*slot| {
                     const tab = if (slot.*) |*item| item else continue;
                     try handler.detachTab(tab);
@@ -2030,6 +2042,7 @@ const InputHandler = struct {
 
     fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) !void {
         if (handler.activeModel().focusDirection(direction, handler.client.view.workbench()) != null) {
+            try handler.client.syncPaneFocus(handler.activeModel());
             if (handler.activeModel().layout.isFullscreen()) {
                 handler.client.graphics_store.invalidatePlacements();
                 try handler.client.resizeAttached(
@@ -2182,6 +2195,7 @@ const InputHandler = struct {
         if (handler.client.requests.has(.tab_operation)) return;
         const tab = handler.client.tabs.active() orelse return;
         const request_id = try handler.client.nextId();
+        try handler.client.clearPaneFocus();
         try handler.detachTab(tab);
         try handler.client.enqueueRequest(
             request_id,
