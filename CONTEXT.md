@@ -63,6 +63,16 @@ its focused pane so the client can restore that focus when the tab becomes
 active.
 _Avoid_: Selected pane, active pane
 
+**Pane display position**:
+The one-based position of a pane in its tab's visible ordering, shown as
+`pane N`. It is not the pane's identity, and changing focus does not alter it.
+_Avoid_: Pane ID, focused position
+
+**Tab layout**:
+The client-owned arrangement of a tab's pane splits, including their direction
+and relative size. Pane focus and pane display position do not define it.
+_Avoid_: Pane order, workspace layout
+
 **Focused agent**:
 The agent associated with the focused pane, if that pane has an agent. A client
 may have no focused agent even when the runtime reports other agents.

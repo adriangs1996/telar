@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const layout_mod = @import("layout.zig");
 const multiplexer = @import("multiplexer.zig");
 const ui = core.ui;
 
@@ -9,12 +10,18 @@ const schema = core.schema;
 
 pub const max_tabs = schema.max_tabs_per_workspace;
 
+const PendingLayoutRestore = struct {
+    location: schema.TabLocation,
+    layout: layout_mod.Layout,
+};
+
 pub const Tab = struct {
     location: schema.TabLocation,
     label: [schema.max_tab_label_bytes]u8 = undefined,
     label_len: u8 = 0,
     model: multiplexer.Model,
     snapshot_loaded: bool = false,
+    restore_display_order: bool = false,
 
     fn init(
         gpa: std.mem.Allocator,
@@ -55,6 +62,7 @@ pub const Model = struct {
     count: usize = 0,
     active_index: usize = 0,
     pane_gaps: bool = true,
+    pending_layout_restore: ?PendingLayoutRestore = null,
 
     pub fn init(gpa: std.mem.Allocator) Model {
         return .{ .gpa = gpa };
@@ -68,6 +76,7 @@ pub const Model = struct {
         model.count = 0;
         model.workspace = null;
         model.workspace_name_len = 0;
+        model.pending_layout_restore = null;
     }
 
     pub fn setPaneGaps(model: *Model, enabled: bool) void {
@@ -87,10 +96,21 @@ pub const Model = struct {
         var tab = Tab.init(model.gpa, location, "main", model.pane_gaps);
         errdefer tab.deinit();
         try tab.model.addRoot(pane_id, location, size);
+        tab.restore_display_order = true;
         model.items[0] = tab;
         model.count = 1;
         model.active_index = 0;
         model.workspace = location.workspace;
+    }
+
+    pub fn restoreLayoutOnNextSnapshot(
+        model: *Model,
+        location: schema.TabLocation,
+        saved: layout_mod.Layout,
+    ) bool {
+        if (model.find(location.tab_id) == null) return false;
+        model.pending_layout_restore = .{ .location = location, .layout = saved };
+        return true;
     }
 
     /// Iterates the open tabs in order without exposing the slot array.
@@ -191,7 +211,24 @@ pub const Model = struct {
             }
         }
         for (removed[0..removed_count]) |pane_id| _ = tab.model.removePane(pane_id);
-        if (focused_before) |pane_id| _ = tab.model.focusPane(pane_id);
+        if (focused_before) |pane_id| {
+            const restored_layout = if (model.pending_layout_restore) |pending|
+                std.meta.eql(pending.location, snapshot.location) and
+                    tab.model.restoreSavedLayout(pending.layout, seen[0..seen_count], pane_id)
+            else
+                false;
+            if (model.pending_layout_restore) |pending| {
+                if (std.meta.eql(pending.location, snapshot.location))
+                    model.pending_layout_restore = null;
+            }
+            if (!restored_layout) {
+                if (tab.restore_display_order)
+                    try tab.model.restoreDisplayOrder(seen[0..seen_count], pane_id)
+                else
+                    _ = tab.model.focusPane(pane_id);
+            }
+        }
+        tab.restore_display_order = false;
         tab.snapshot_loaded = true;
         tab.model.composition_invalidated = true;
         return tab;
@@ -449,5 +486,128 @@ test "tab reconciliation preserves the pane selected for workspace restoration" 
     }))).tab_snapshot;
 
     _ = try model.reconcileTab(snapshot, .{ .w = 60, .h = 12 });
-    try std.testing.expectEqual(restored, model.active().?.model.layout.focused().?);
+    const restored_model = &model.active().?.model;
+    try std.testing.expectEqual(restored, restored_model.layout.focused().?);
+    try std.testing.expectEqual(@as(u16, 1), restored_model.displayIndex(@enumFromInt(10)).?);
+    try std.testing.expectEqual(@as(u16, 2), restored_model.displayIndex(restored).?);
+    try std.testing.expectEqual(@as(u16, 3), restored_model.displayIndex(@enumFromInt(77)).?);
+}
+
+test "tab reconciliation restores a bookmarked nested split tree" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const left: schema.PaneId = @enumFromInt(10);
+    const top_right: schema.PaneId = @enumFromInt(42);
+    const bottom_right: schema.PaneId = @enumFromInt(77);
+    const area: ui.Rect = .{ .w = 60, .h = 20 };
+
+    var saved: layout_mod.Layout = .{};
+    try saved.addRoot(left);
+    try saved.split(left, top_right, .horizontal);
+    try saved.split(top_right, bottom_right, .vertical);
+    try std.testing.expect(saved.focusPane(left));
+    try std.testing.expect(saved.resizeFocused(.right, area));
+    try std.testing.expect(saved.focusPane(top_right));
+    try std.testing.expect(saved.resizeFocused(.down, area));
+    var expected: layout_mod.Snapshot = .{};
+    saved.snapshot(area, &expected);
+
+    try model.bootstrap(top_right, location, .{ .cols = 30, .rows = 8 });
+    try std.testing.expect(model.restoreLayoutOnNextSnapshot(location, saved));
+    var buffer: [512]u8 = undefined;
+    const snapshot = (try schema.decodeServer(try schema.encodeTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .location = location,
+        .panes = &.{
+            .{ .pane_id = left, .lifecycle = .running },
+            .{ .pane_id = top_right, .lifecycle = .running },
+            .{ .pane_id = bottom_right, .lifecycle = .running },
+        },
+    }))).tab_snapshot;
+
+    const restored = try model.reconcileTab(snapshot, area);
+    var actual: layout_mod.Snapshot = .{};
+    restored.model.layout.snapshot(area, &actual);
+    for ([_]schema.PaneId{ left, top_right, bottom_right }) |pane_id|
+        try std.testing.expectEqual(expected.find(pane_id).?.outer, actual.find(pane_id).?.outer);
+    try std.testing.expectEqual(top_right, restored.model.layout.focused().?);
+}
+
+test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const selected: schema.PaneId = @enumFromInt(42);
+    var saved: layout_mod.Layout = .{};
+    try saved.addRoot(@enumFromInt(10));
+    try saved.split(@enumFromInt(10), selected, .horizontal);
+    try saved.split(selected, @enumFromInt(77), .vertical);
+
+    try model.bootstrap(selected, location, .{ .cols = 30, .rows = 8 });
+    try std.testing.expect(model.restoreLayoutOnNextSnapshot(location, saved));
+    var buffer: [512]u8 = undefined;
+    const snapshot = (try schema.decodeServer(try schema.encodeTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .location = location,
+        .panes = &.{
+            .{ .pane_id = @enumFromInt(10), .lifecycle = .running },
+            .{ .pane_id = selected, .lifecycle = .running },
+            .{ .pane_id = @enumFromInt(88), .lifecycle = .running },
+        },
+    }))).tab_snapshot;
+
+    const restored = try model.reconcileTab(snapshot, .{ .w = 60, .h = 20 });
+    try std.testing.expectEqual(selected, restored.model.layout.focused().?);
+    try std.testing.expectEqual(@as(u16, 1), restored.model.displayIndex(@enumFromInt(10)).?);
+    try std.testing.expectEqual(@as(u16, 2), restored.model.displayIndex(selected).?);
+    try std.testing.expectEqual(@as(u16, 3), restored.model.displayIndex(@enumFromInt(88)).?);
+}
+
+test "later tab reconciliation preserves the client layout order" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    try model.bootstrap(@enumFromInt(10), location, .{ .cols = 30, .rows = 8 });
+    var buffer: [512]u8 = undefined;
+    const initial = (try schema.decodeServer(try schema.encodeTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .location = location,
+        .panes = &.{
+            .{ .pane_id = @enumFromInt(10), .lifecycle = .running },
+            .{ .pane_id = @enumFromInt(42), .lifecycle = .running },
+        },
+    }))).tab_snapshot;
+    const tab = try model.reconcileTab(initial, .{ .w = 60, .h = 12 });
+    try tab.model.split(
+        @enumFromInt(10),
+        @enumFromInt(77),
+        location,
+        .vertical,
+        .{ .w = 60, .h = 12 },
+    );
+
+    const refresh = (try schema.decodeServer(try schema.encodeTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(4),
+        .location = location,
+        .panes = &.{
+            .{ .pane_id = @enumFromInt(10), .lifecycle = .running },
+            .{ .pane_id = @enumFromInt(42), .lifecycle = .running },
+            .{ .pane_id = @enumFromInt(77), .lifecycle = .running },
+        },
+    }))).tab_snapshot;
+    _ = try model.reconcileTab(refresh, .{ .w = 60, .h = 12 });
+
+    try std.testing.expectEqual(@as(u16, 1), tab.model.displayIndex(@enumFromInt(10)).?);
+    try std.testing.expectEqual(@as(u16, 2), tab.model.displayIndex(@enumFromInt(77)).?);
+    try std.testing.expectEqual(@as(u16, 3), tab.model.displayIndex(@enumFromInt(42)).?);
 }

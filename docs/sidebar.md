@@ -36,7 +36,12 @@ Clicking an agent is a navigation action, not a second kind of focus. It may
 switch workspace or tab before focusing the agent's pane. The highlight follows
 only after pane focus changes. Pane navigation and workspace or tab changes
 recompute the same projection, so the sidebar never preserves an independent
-agent selection.
+agent selection. A cross-workspace handoff restores the target tab's pane order
+before applying focus, so navigation does not renumber the selected pane. When
+the runtime still reports the same pane set, the client restores its bookmarked
+split tree, including split axes and ratios. If the pane set changed while the
+workspace was hidden, the client falls back to canonical pane order before
+applying focus.
 
 Buttons whose runtime behavior does not exist yet return a typed
 `SidebarIntent` from `client_ui.State.handleMouse`. The current client does not

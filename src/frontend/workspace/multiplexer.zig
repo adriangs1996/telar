@@ -332,6 +332,32 @@ pub const Model = struct {
         model.composition_invalidated = true;
     }
 
+    pub fn restoreDisplayOrder(
+        model: *Model,
+        pane_ids: []const schema.PaneId,
+        focused_pane: schema.PaneId,
+    ) !void {
+        if (pane_ids.len != model.pane_count) return error.UnexpectedPaneCount;
+        for (pane_ids) |pane_id|
+            if (model.find(pane_id) == null) return error.PaneNotFound;
+        try model.layout.restoreDisplayOrder(pane_ids, focused_pane);
+        model.composition_invalidated = true;
+    }
+
+    pub fn restoreSavedLayout(
+        model: *Model,
+        saved: layout_mod.Layout,
+        pane_ids: []const schema.PaneId,
+        focused_pane: schema.PaneId,
+    ) bool {
+        if (pane_ids.len != model.pane_count) return false;
+        for (pane_ids) |pane_id|
+            if (model.find(pane_id) == null) return false;
+        if (!model.layout.restoreSaved(saved, pane_ids, focused_pane)) return false;
+        model.composition_invalidated = true;
+        return true;
+    }
+
     pub fn markAttached(model: *Model, pane_id: schema.PaneId) !void {
         const pane = model.find(pane_id) orelse return error.PaneNotFound;
         pane.attached = true;

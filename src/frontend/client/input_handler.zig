@@ -117,6 +117,7 @@ fn rememberCurrentNavigation(handler: *InputHandler) void {
     handler.client.navigation_history.remember(.{
         .location = tab.location,
         .pane_id = pane.id,
+        .tab_layout = tab.model.layout,
     });
 }
 

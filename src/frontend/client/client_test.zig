@@ -7,6 +7,7 @@ const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const widgets = @import("../widgets/root.zig");
+const workspace_capability = @import("../workspace/root.zig");
 const keybind = input_capability.keybind;
 
 const Io = std.Io;
@@ -180,6 +181,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = restored_pane }, target.?);
     const current = client.navigation_history.find(TestHarness.bootstrap_location.workspace).?;
     try std.testing.expectEqual(TestHarness.bootstrap_pane, current.pane_id);
+    try std.testing.expect(current.tab_layout != null);
 
     var payload: [128]u8 = undefined;
     const failed = try schema.encodeRequestFailed(&payload, .{
@@ -216,6 +218,17 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .provider = .claude,
         .status = .working,
     };
+    const left_pane: schema.PaneId = @enumFromInt(90);
+    const bottom_right_pane: schema.PaneId = @enumFromInt(92);
+    var saved_layout: workspace_capability.layout.Layout = .{};
+    try saved_layout.addRoot(left_pane);
+    try saved_layout.split(left_pane, agent_pane, .horizontal);
+    try saved_layout.split(agent_pane, bottom_right_pane, .vertical);
+    client.navigation_history.remember(.{
+        .location = agent.location,
+        .pane_id = agent_pane,
+        .tab_layout = saved_layout,
+    });
     _ = try client.view.replaceSidebarSnapshot(.{
         .revision = 1,
         .agents = &.{agent},
@@ -260,6 +273,40 @@ test "clicking a sidebar agent hands off directly to its pane" {
     );
     try std.testing.expectEqual(agent.location.tab_id, client.tabs.activeConst().?.location.tab_id);
     try std.testing.expectEqual(agent_pane, client.tabs.activeConst().?.model.layout.focused().?);
+
+    var tab_snapshot_request: schema.RequestId = .none;
+    while (tab_snapshot_request == .none) switch (try harness.nextClientMessage(&buffer)) {
+        .request_workspace_snapshot => {},
+        .request_tab_snapshot => |request| {
+            try std.testing.expectEqualDeep(agent.location, request.location);
+            tab_snapshot_request = request.request_id;
+        },
+        else => return error.UnexpectedClientMessage,
+    };
+    var snapshot_payload: [256]u8 = undefined;
+    const snapshot = try schema.encodeTabSnapshot(&snapshot_payload, .{
+        .request_id = tab_snapshot_request,
+        .location = agent.location,
+        .panes = &.{
+            .{ .pane_id = left_pane, .lifecycle = .running },
+            .{ .pane_id = agent_pane, .lifecycle = .running },
+            .{ .pane_id = bottom_right_pane, .lifecycle = .running },
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+
+    const restored = &client.tabs.activeConst().?.model;
+    try std.testing.expectEqual(agent_pane, restored.layout.focused().?);
+    try std.testing.expectEqual(@as(u16, 2), restored.displayIndex(agent_pane).?);
+    var expected_geometry: workspace_capability.layout.Snapshot = .{};
+    var actual_geometry: workspace_capability.layout.Snapshot = .{};
+    saved_layout.snapshot(client.view.workbench(), &expected_geometry);
+    restored.layout.snapshot(client.view.workbench(), &actual_geometry);
+    for ([_]schema.PaneId{ left_pane, agent_pane, bottom_right_pane }) |pane_id|
+        try std.testing.expectEqual(
+            expected_geometry.find(pane_id).?.outer,
+            actual_geometry.find(pane_id).?.outer,
+        );
 }
 
 test "a tab snapshot attaches every pane the client does not hold" {

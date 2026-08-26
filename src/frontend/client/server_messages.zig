@@ -403,6 +403,12 @@ fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
         opened.location,
         rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
     );
+    if (client.navigation_history.find(opened.location.workspace)) |bookmark| {
+        if (bookmark.tab_layout) |saved| {
+            if (std.meta.eql(bookmark.location, opened.location))
+                std.debug.assert(client.tabs.restoreLayoutOnNextSnapshot(opened.location, saved));
+        }
+    }
     try client.syncPaneFocus(&client.tabs.active().?.model);
     client.view.invalidate();
     try client.scheduleInputRead();

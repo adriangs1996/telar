@@ -2,12 +2,14 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const layout_mod = @import("layout.zig");
 
 const schema = core.schema;
 
 pub const Bookmark = struct {
     location: schema.TabLocation,
     pane_id: schema.PaneId,
+    tab_layout: ?layout_mod.Layout = null,
 };
 
 pub const History = struct {

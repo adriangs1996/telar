@@ -251,6 +251,54 @@ pub const Layout = struct {
         layout.changed();
     }
 
+    /// Rebuilds a disposable layout in the supplied display order and restores
+    /// focus only after every pane has its canonical position.
+    pub fn restoreDisplayOrder(
+        layout: *Layout,
+        pane_ids: []const schema.PaneId,
+        focused_pane: schema.PaneId,
+    ) !void {
+        if (pane_ids.len == 0) return error.LayoutEmpty;
+        var restored: Layout = .{
+            .pane_gaps = layout.pane_gaps,
+            .revision = layout.revision,
+        };
+        try restored.addRoot(pane_ids[0]);
+        var previous = pane_ids[0];
+        for (pane_ids[1..]) |pane_id| {
+            try restored.split(previous, pane_id, .horizontal);
+            previous = pane_id;
+        }
+        if (!restored.focusPane(focused_pane)) return error.PaneNotFound;
+        layout.* = restored;
+    }
+
+    /// Restores an earlier client-owned split tree when it still describes
+    /// exactly the panes reported by the runtime. Focus remains a separate
+    /// navigation choice and the current pane-gap preference wins.
+    pub fn restoreSaved(
+        layout: *Layout,
+        saved: Layout,
+        pane_ids: []const schema.PaneId,
+        focused_pane: schema.PaneId,
+    ) bool {
+        if (pane_ids.len == 0 or pane_ids.len != saved.count()) return false;
+        for (pane_ids, 0..) |pane_id, index| {
+            if (!saved.contains(pane_id)) return false;
+            if (std.mem.findScalar(schema.PaneId, pane_ids[0..index], pane_id) != null)
+                return false;
+        }
+        if (!saved.contains(focused_pane)) return false;
+
+        var restored = saved;
+        restored.pane_gaps = layout.pane_gaps;
+        restored.revision = layout.revision;
+        restored.focused_pane = focused_pane;
+        restored.changed();
+        layout.* = restored;
+        return true;
+    }
+
     pub fn splitFocused(layout: *Layout, pane_id: schema.PaneId, axis: Axis) !void {
         const focused_pane = layout.focused() orelse return error.LayoutEmpty;
         try layout.split(focused_pane, pane_id, axis);
