@@ -147,6 +147,17 @@ pub fn Binding(comptime Action: type, comptime max_keys: usize) type {
             return binding;
         }
 
+        pub fn sameSequence(a: *const Self, b: *const Self) bool {
+            return sequenceOrder(a.slice(), b.slice()) == .eq;
+        }
+
+        /// True when one sequence equals or prefixes the other — the same
+        /// overlap Keymap.init rejects as duplicate or ambiguous.
+        pub fn conflictsWith(a: *const Self, b: *const Self) bool {
+            const shared = commonPrefix(a.slice(), b.slice());
+            return shared == a.len or shared == b.len;
+        }
+
         fn slice(binding: *const Self) []const Key {
             return binding.keys[0..binding.len];
         }

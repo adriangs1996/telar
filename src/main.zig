@@ -564,7 +564,6 @@ fn runClient(
         .endpoint = endpoint,
         .prefix = if (snapshot) |value| value.prefix else frontend.keybind.default_prefix,
         .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
-        .bindings_configured = if (snapshot) |value| value.bindings_configured else false,
         .theme = if (options.theme_set)
             options.theme
         else if (snapshot) |value|
@@ -661,6 +660,13 @@ fn runConfigCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
         generation.pluginSlice(),
     );
     try registry.validateConfiguredActions(generation.snapshot.bindingSlice());
+    frontend.config.validateKeymap(
+        generation.snapshot.prefix,
+        generation.snapshot.bindingSlice(),
+    ) catch |err| {
+        std.debug.print("telar config: keybindings do not compile: {s}\n", .{@errorName(err)});
+        return err;
+    };
     try File.stdout().writeStreamingAll(init.io, "telar config: OK\n");
 }
 
@@ -1045,9 +1051,14 @@ const usage =
     \\Default keybindings (prefix Ctrl-b):
     \\  % / "             Split left/right or top/bottom
     \\  Arrow keys       Focus a pane by direction
+    \\  Shift+arrows     Resize the focused pane
+    \\  z                Toggle pane fullscreen
     \\  s                Toggle the sidebar
+    \\  w                Toggle the workspace list
     \\  N                Create and select a workspace
+    \\  W                Rename the active workspace
     \\  x                Close the focused pane
+    \\  [                Enter copy mode
     \\  c                Create and select a tab
     \\  n / p            Select the next or previous tab
     \\  1..9             Select a tab by position

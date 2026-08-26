@@ -63,8 +63,12 @@ keymap and prefixed bindings inherited by a profile.
 
 Use `telar.bind_global` and `telar.bind_expr_global` for sequences that must not
 use the prefix. A prefixed binding accepts one to four suffix keys. A global
-binding accepts one to five keys. Setting `client.keybindings` replaces the
-default keymap; it does not extend it.
+binding accepts one to five keys. `client.keybindings` extends the default
+keymap. A configured binding replaces every default it conflicts with — the
+same key sequence, or a sequence that is a prefix of the other, since the
+keymap refuses ambiguous prefixes. Defaults free of conflicts remain active.
+`telar config check` compiles the merged keymap and reports conflicts between
+configured bindings.
 
 `telar.bind` and `telar.bind_global` accept a semantic built-in action, a
 constructor such as `split_pane`, `focus_pane`, `select_tab`,

@@ -397,10 +397,9 @@ pub const State = struct {
                 result.layout_changed = true;
             },
             .focus_pane => |pane_id| {
-                const previous = model.layout.focused();
-                if (model.focusPane(pane_id)) {
-                    result.layout_changed = model.layout.isFullscreen() and
-                        previous != model.layout.focused();
+                const shift = model.focusPaneShift(pane_id);
+                if (shift.focused) {
+                    result.layout_changed = shift.layout_changed;
                     state.dirty = true;
                     result.redraw = true;
                 }
@@ -424,10 +423,7 @@ pub const State = struct {
             },
             .sidebar_select_agent => |key| {
                 state.sidebar.selected_agent = key;
-                const previous = model.layout.focused();
-                _ = model.focusPane(key.pane_id);
-                result.layout_changed = model.layout.isFullscreen() and
-                    previous != model.layout.focused();
+                result.layout_changed = model.focusPaneShift(key.pane_id).layout_changed;
                 state.dirty = true;
                 result.redraw = true;
             },

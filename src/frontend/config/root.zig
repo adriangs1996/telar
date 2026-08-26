@@ -37,6 +37,8 @@ pub const default_binding_count = default_bindings.count;
 pub const default_binding_max_keys = default_bindings.max_keys;
 pub const DefaultBinding = default_bindings.Binding;
 pub const loadDefaultBindings = default_bindings.load;
+pub const resolveBindings = default_bindings.resolve;
+pub const validateKeymap = default_bindings.validate;
 
 pub const ConfiguredBinding = config_model.ConfiguredBinding;
 pub const Diagnostic = config_model.Diagnostic;
@@ -927,7 +929,6 @@ pub const Generation = struct {
             diagnostic.set("config.client.keybindings exceeds {d} entries", .{max_bindings});
             return error.InvalidConfig;
         }
-        generation.snapshot.bindings_configured = true;
         generation.snapshot.binding_count = 0;
         for (0..count) |binding_index| {
             _ = lua.lua_geti(state, absolute, @intCast(binding_index + 1));
@@ -2644,4 +2645,10 @@ test "local require rejects a symlink escaping the config directory" {
         ),
     );
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "escapes") != null);
+}
+
+test {
+    // Only referenced through non-pub imports above, so its tests never run
+    // unless the container is referenced here.
+    _ = default_bindings;
 }

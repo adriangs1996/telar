@@ -78,7 +78,6 @@ pub const Snapshot = struct {
     bindings: [max_bindings]ConfiguredBinding = undefined,
     bindings_prefixed: [max_bindings]bool = undefined,
     binding_count: u16 = 0,
-    bindings_configured: bool = false,
     runtime: RuntimeSnapshot = .{},
     plugins: [max_plugins]PluginSpec = undefined,
     plugin_count: u8 = 0,

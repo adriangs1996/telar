@@ -36,17 +36,16 @@ const diagnostics = core.diagnostics;
 const ui = core.ui;
 
 const input_chunk_size = 4096;
-const max_bindings = 256;
+const max_bindings = lua_config.max_bindings;
 const max_binding_keys = lua_config.default_binding_max_keys;
 const held_binding_bytes = 128;
-const default_binding_count = lua_config.default_binding_count;
 
 pub const Action = action_mod.Action;
 pub const Outbox = client_outbox.Outbox;
 pub const View = client_view.State;
 pub const sidebar_width = client_view.sidebar_width;
 
-pub const ConfiguredBinding = keybind.Binding(Action, max_binding_keys);
+pub const ConfiguredBinding = lua_config.ConfiguredBinding;
 const InputRouter = keybind.Router(
     Action,
     max_bindings,
@@ -66,7 +65,6 @@ pub const Options = struct {
     endpoint: []const u8,
     prefix: keybind.Key = keybind.default_prefix,
     bindings: []const ConfiguredBinding = &.{},
-    bindings_configured: bool = false,
     theme: theme.Theme = theme.default_theme,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
@@ -226,7 +224,6 @@ const initial_request_id: schema.RequestId = @enumFromInt(1);
 
 const ConfigReloadState = struct {
     router: *InputRouter,
-    defaults: *[default_binding_count]ConfiguredBinding,
     host_size: *schema.TerminalSize,
     generation_orphan: *?*lua_config.Generation,
     registry_orphan: *?*plugin_broker.Registry,
@@ -802,13 +799,10 @@ const Client = struct {
                     try client.scheduleConfigReload(state);
                     return;
                 };
-                if (!snapshot.bindings_configured)
-                    state.defaults.* = defaultBindings(snapshot.prefix) catch unreachable;
-                const bindings = if (snapshot.bindings_configured)
-                    snapshot.bindingSlice()
-                else
-                    state.defaults[0..];
-                var replacement = InputRouter.init(bindings) catch |err| {
+                var replacement = buildInputRouter(
+                    snapshot.prefix,
+                    snapshot.bindingSlice(),
+                ) catch |err| {
                     client.config_diagnostic.set(
                         "reloaded keymap is invalid: {s}",
                         .{@errorName(err)},
@@ -1853,12 +1847,7 @@ pub fn run(
             try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
     }
 
-    var defaults = try defaultBindings(options.prefix);
-    const configured_bindings = if (options.bindings_configured)
-        options.bindings
-    else
-        defaults[0..];
-    var input_router = try InputRouter.init(configured_bindings);
+    var input_router = try buildInputRouter(options.prefix, options.bindings);
     input_router.escape_timeout_ns = options.input_escape_timeout_ns;
     input_router.sequence_timeout_ns = options.input_sequence_timeout_ns;
     var input_timeout_pending = false;
@@ -1893,7 +1882,6 @@ pub fn run(
     try client.requests.add(initial_request_id, .initial_open);
     const config_reload_state: ConfigReloadState = .{
         .router = &input_router,
-        .defaults = &defaults,
         .host_size = &host_size,
         .generation_orphan = &reload_orphan,
         .registry_orphan = &reload_registry_orphan,
@@ -2082,8 +2070,13 @@ const InputHandler = struct {
     client: *Client,
     redraw: bool = false,
 
-    fn activeModel(handler: *InputHandler) *multiplexer.Model {
-        return &handler.client.tabs.active().?.model;
+    /// The model host input should act on, or null while no tab exists —
+    /// before bootstrap completes, or during a workspace handoff after
+    /// `tabs.deinit()` while the runtime's reply is outstanding. Input
+    /// arriving in that window is dropped, mirroring presentableModel on
+    /// the draw path.
+    fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
+        return presentableModel(handler.client.tabs);
     }
 
     pub fn capturesKeys(handler: *const InputHandler) bool {
@@ -2185,7 +2178,8 @@ const InputHandler = struct {
             return;
         }
         if (handler.client.copy_mode_state != null) return;
-        const pane = handler.activeModel().focusedPane() orelse return;
+        const model = handler.activeModel() orelse return;
+        const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         try handler.sendPaneBytes(pane, bytes);
     }
@@ -2199,7 +2193,8 @@ const InputHandler = struct {
             try handler.copyModeKey(value);
             return;
         }
-        const pane = handler.activeModel().focusedPane() orelse return;
+        const model = handler.activeModel() orelse return;
+        const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         var encoded: [32]u8 = undefined;
         try handler.sendPaneBytes(
@@ -2209,7 +2204,8 @@ const InputHandler = struct {
     }
 
     fn sendPaste(handler: *InputHandler, text: []const u8) !void {
-        const pane = handler.activeModel().focusedPane() orelse return;
+        const model = handler.activeModel() orelse return;
+        const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         var encoded: [lua_config.max_expression_paste_bytes + 16]u8 = undefined;
         try handler.sendPaneBytes(
@@ -2222,7 +2218,8 @@ const InputHandler = struct {
         if (handler.client.view.hasNamePrompt())
             return handler.forward("\x1b[200~");
         if (handler.client.copy_mode_state != null) return;
-        const pane = handler.activeModel().focusedPane() orelse return;
+        const model = handler.activeModel() orelse return;
+        const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         handler.client.paste_pane = pane.id;
         if (pane.input_modes.bracketed_paste)
@@ -2274,7 +2271,7 @@ const InputHandler = struct {
             pane.id,
             pane.scroll.atBottom(pane.buffer.h),
         );
-        handler.activeModel().composition_invalidated = true;
+        if (handler.activeModel()) |model| model.composition_invalidated = true;
         try handler.client.enqueue(.{ .set_pane_viewport = .{
             .pane_id = pane.id,
             .offset = clamped,
@@ -2284,7 +2281,7 @@ const InputHandler = struct {
 
     fn enterCopyMode(handler: *InputHandler) !void {
         if (handler.client.copy_mode_state != null) return;
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse return;
         const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         const cursor: copy_mode.Point = if (pane.cursor.visible)
@@ -2299,7 +2296,10 @@ const InputHandler = struct {
 
     fn leaveCopyMode(handler: *InputHandler, copy: bool) !void {
         const state = handler.client.copy_mode_state orelse return;
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse {
+            handler.client.copy_mode_state = null;
+            return;
+        };
         const pane = model.find(state.pane_id);
         if (copy and state.anchor != null) {
             const anchor = state.anchor.?;
@@ -2323,7 +2323,10 @@ const InputHandler = struct {
 
     fn copyModeKey(handler: *InputHandler, pressed: keybind.Key) !void {
         const state = if (handler.client.copy_mode_state) |*value| value else return;
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse {
+            handler.client.copy_mode_state = null;
+            return;
+        };
         const pane = model.find(state.pane_id) orelse {
             handler.client.copy_mode_state = null;
             return;
@@ -2575,7 +2578,7 @@ const InputHandler = struct {
             cell_event.y = std.math.cast(u16, event.raw_y / cell_size.height) orelse
                 std.math.maxInt(u16);
         }
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse return;
         var interaction = handler.client.view.handleMouse(
             handler.client.tabs,
             model,
@@ -2589,10 +2592,9 @@ const InputHandler = struct {
             .select_tab => |tab_id| try handler.selectTab(tab_id),
             .select_workspace => |workspace| try handler.switchWorkspace(workspace),
             .focus_pane => |pane_id| {
-                const previous = model.layout.focused();
-                if (model.focusPane(pane_id)) {
-                    interaction.layout_changed = model.layout.isFullscreen() and
-                        previous != model.layout.focused();
+                const shift = model.focusPaneShift(pane_id);
+                if (shift.focused) {
+                    interaction.layout_changed = shift.layout_changed;
                     handler.client.view.invalidate();
                 }
             },
@@ -2603,10 +2605,7 @@ const InputHandler = struct {
             try handler.client.syncPaneFocus(&active.model);
         if (interaction.layout_changed) {
             handler.client.graphics_store.invalidatePlacements();
-            try handler.client.resizeAttached(
-                handler.activeModel(),
-                handler.client.view.workbench(),
-            );
+            try handler.client.resizeAttached(model, handler.client.view.workbench());
         }
         handler.redraw = handler.redraw or interaction.redraw;
         if (interaction.select_tab != null or interaction.notification_target != null or
@@ -2820,10 +2819,12 @@ const InputHandler = struct {
             .toggle_sidebar => {
                 handler.client.view.toggleSidebar();
                 handler.client.graphics_store.invalidatePlacements();
-                try handler.client.resizeAttached(
-                    handler.activeModel(),
-                    handler.client.view.workbench(),
-                );
+                if (handler.activeModel()) |model| {
+                    try handler.client.resizeAttached(
+                        model,
+                        handler.client.view.workbench(),
+                    );
+                }
                 handler.redraw = true;
             },
             .toggle_workspace_list => {
@@ -2880,7 +2881,13 @@ const InputHandler = struct {
     }
 
     fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse return .{
+            .sidebar_visible = handler.client.view.sidebar_requested,
+            .tab_count = 0,
+            .active_tab_index = 0,
+            .pane_count = 0,
+            .focused_pane_id = 0,
+        };
         const focused = model.focusedPane();
         return .{
             .sidebar_visible = handler.client.view.sidebar_requested,
@@ -2893,7 +2900,7 @@ const InputHandler = struct {
 
     fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
         if (handler.client.requests.has(.pane_operation)) return;
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse return;
         const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         const location = model.location orelse return;
@@ -2931,7 +2938,8 @@ const InputHandler = struct {
     }
 
     fn restoreFocusedSize(handler: *InputHandler, pane_id: schema.PaneId) !void {
-        const size = handler.activeModel().contentSize(pane_id, handler.client.view.workbench()) orelse return;
+        const model = handler.activeModel() orelse return;
+        const size = model.contentSize(pane_id, handler.client.view.workbench()) orelse return;
         try handler.client.enqueue(.{ .pane_resize = .{
             .pane_id = pane_id,
             .size = size,
@@ -2939,12 +2947,13 @@ const InputHandler = struct {
     }
 
     fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) !void {
-        if (handler.activeModel().focusDirection(direction, handler.client.view.workbench()) != null) {
-            try handler.client.syncPaneFocus(handler.activeModel());
-            if (handler.activeModel().layout.isFullscreen()) {
+        const model = handler.activeModel() orelse return;
+        if (model.focusDirection(direction, handler.client.view.workbench()) != null) {
+            try handler.client.syncPaneFocus(model);
+            if (model.layout.isFullscreen()) {
                 handler.client.graphics_store.invalidatePlacements();
                 try handler.client.resizeAttached(
-                    handler.activeModel(),
+                    model,
                     handler.client.view.workbench(),
                 );
             }
@@ -2954,7 +2963,7 @@ const InputHandler = struct {
     }
 
     fn resizePane(handler: *InputHandler, direction: layout_mod.Direction) !void {
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse return;
         if (!model.resizeFocused(direction, handler.client.view.workbench())) return;
         handler.client.graphics_store.invalidatePlacements();
         try handler.client.resizeAttached(model, handler.client.view.workbench());
@@ -2963,7 +2972,7 @@ const InputHandler = struct {
     }
 
     fn togglePaneFullscreen(handler: *InputHandler) !void {
-        const model = handler.activeModel();
+        const model = handler.activeModel() orelse return;
         if (!model.toggleFullscreen()) return;
         handler.client.graphics_store.invalidatePlacements();
         try handler.client.resizeAttached(model, handler.client.view.workbench());
@@ -2973,9 +2982,10 @@ const InputHandler = struct {
 
     fn closeFocused(handler: *InputHandler) !void {
         if (handler.client.requests.has(.pane_operation)) return;
-        const pane = handler.activeModel().focusedPane() orelse return;
+        const tab = handler.client.tabs.active() orelse return;
+        const pane = tab.model.focusedPane() orelse return;
         if (!pane.attached) return;
-        const location = handler.client.tabs.active().?.location;
+        const location = tab.location;
         const request_id = try handler.client.nextId();
         try handler.client.enqueueRequest(
             request_id,
@@ -3006,7 +3016,8 @@ const InputHandler = struct {
     fn beginWorkspaceCreate(handler: *InputHandler) !void {
         const client = handler.client;
         if (client.requests.count != 0) return;
-        const pane = handler.activeModel().focusedPane() orelse return;
+        const model = handler.activeModel() orelse return;
+        const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         client.view.beginWorkspaceCreate();
         handler.redraw = true;
@@ -3015,7 +3026,8 @@ const InputHandler = struct {
     fn submitWorkspaceCreate(handler: *InputHandler, name: []const u8) !void {
         const client = handler.client;
         if (client.requests.count != 0 or !client.view.creatingWorkspace()) return;
-        const pane = handler.activeModel().focusedPane() orelse return;
+        const model = handler.activeModel() orelse return;
+        const pane = model.focusedPane() orelse return;
         if (!pane.attached) return;
         const cwd = paneLaunchCwd(client, pane);
         @memcpy(client.workspace_create_path[0..cwd.len], cwd);
@@ -3138,6 +3150,11 @@ const InputHandler = struct {
 };
 
 const defaultBindings = lua_config.loadDefaultBindings;
+
+fn buildInputRouter(prefix: keybind.Key, configured: []const ConfiguredBinding) !InputRouter {
+    const resolved = try lua_config.resolveBindings(prefix, configured);
+    return InputRouter.init(resolved.slice());
+}
 
 fn preferredPaneCwd(
     observed: []const u8,
