@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 53;
+const corpus_len = 56;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -265,6 +265,18 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .end_x = 3,
             .end_y = 4,
             .linewise = true,
+        }),
+    ));
+    helper.add("show_notification", .client, false, golden.show_notification, helper.commit(
+        try schema.encodeShowNotification(helper.space(), .{
+            .request_id = @enumFromInt(45),
+            .notification = .{
+                .level = .success,
+                .duration_ms = 2500,
+                .target = .{ .pane = @enumFromInt(5) },
+                .title = "Build complete",
+                .message = "Open the pane",
+            },
         }),
     ));
 
@@ -558,6 +570,21 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .bytes = "abc",
         }),
     ));
+    helper.add("notification", .server, false, golden.notification, helper.commit(
+        try schema.encodeNotification(helper.space(), .{
+            .level = .warning,
+            .duration_ms = 3000,
+            .target = .{ .tab = @enumFromInt(3) },
+            .title = "Agent waiting",
+            .message = "Review its question",
+        }),
+    ));
+    helper.add("notification_shown", .server, false, golden.notification_shown, helper.commit(
+        try schema.encodeNotificationShown(helper.space(), .{
+            .request_id = @enumFromInt(46),
+            .delivered_clients = 2,
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -594,6 +621,7 @@ const golden = struct {
     pub const request_runtime_state = "14";
     pub const set_pane_viewport = "1705000000000000002a000000";
     pub const copy_selection = "18050000000000000001000200000003000400000001";
+    pub const show_notification = "192d0000000000000001c40900000105000000000000000e004275696c6420636f6d706c6574650d004f70656e207468652070616e65";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
     pub const pane_frame = "8204000000000000000100000000000000000000000000000002000100010100000000000000000001000001000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
@@ -620,6 +648,8 @@ const golden = struct {
     pub const workspace_list = "98030000000000000002000700000000000000050074656c61720b002f776f726b2f74656c61720200090000000000000003006170690900" ++ "2f776f726b2f617069" ++ "0100";
     pub const pane_cwd = "9905000000000000000b002f776f726b2f74656c6172";
     pub const pane_clipboard = "9a050000000000000003000000616263";
+    pub const notification = "9b02b80b00000203000000000000000d004167656e742077616974696e67130052657669657720697473207175657374696f6e";
+    pub const notification_shown = "9c2e0000000000000002";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {
@@ -906,6 +936,31 @@ test "default pane open round trips launch data without allocation" {
     try std.testing.expectEqualDeep(environment[0], (try environment_iterator.next()).?);
     try std.testing.expectEqualDeep(environment[1], (try environment_iterator.next()).?);
     try std.testing.expect((try environment_iterator.next()) == null);
+}
+
+test "notifications enforce text and duration bounds before crossing IPC" {
+    var buffer: [512]u8 = undefined;
+    const long_title: [schema.max_notification_title_bytes + 1]u8 = @splat('x');
+    try std.testing.expectError(
+        error.InvalidByteString,
+        schema.encodeShowNotification(&buffer, .{
+            .request_id = @enumFromInt(1),
+            .notification = .{ .title = &long_title },
+        }),
+    );
+    try std.testing.expectError(
+        error.InvalidNotificationDuration,
+        schema.encodeNotification(&buffer, .{
+            .duration_ms = schema.min_notification_duration_ms - 1,
+            .title = "Too brief",
+        }),
+    );
+    try std.testing.expectError(
+        error.InvalidNotificationText,
+        schema.encodeNotification(&buffer, .{
+            .title = "line one\nline two",
+        }),
+    );
 }
 
 test "explicit pane attachment has no launch payload" {

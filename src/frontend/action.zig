@@ -5,6 +5,9 @@
 //! allocation-free and never retains configuration-owned memory.
 
 const std = @import("std");
+const core = @import("telar-core");
+
+const schema = core.schema;
 
 pub const CallbackRef = struct {
     generation: u64,
@@ -19,6 +22,60 @@ pub const PluginAction = struct {
 pub const SplitDirection = enum(u8) { horizontal, vertical };
 pub const Direction = enum(u8) { left, right, up, down };
 pub const TabMove = enum(u8) { previous, next };
+
+pub const Notification = struct {
+    level: schema.NotificationLevel = .info,
+    duration_ms: u32 = schema.default_notification_duration_ms,
+    target: schema.NotificationTarget = .none,
+    title_bytes: [schema.max_notification_title_bytes]u8 = @splat(0),
+    title_len: u8,
+    message_bytes: [schema.max_notification_message_bytes]u8 = @splat(0),
+    message_len: u8,
+
+    pub fn init(
+        level: schema.NotificationLevel,
+        duration_ms: u32,
+        target: schema.NotificationTarget,
+        title_text: []const u8,
+        message_text: []const u8,
+    ) !Notification {
+        // Reuse the wire validator so Lua and plugins cannot construct a value
+        // that the runtime will reject after the effect batch is committed.
+        var validation_buffer: [
+            1 + 8 + 1 + 4 + 1 + 8 + 2 +
+                schema.max_notification_title_bytes + 2 +
+                schema.max_notification_message_bytes
+        ]u8 = undefined;
+        _ = try schema.encodeShowNotification(&validation_buffer, .{
+            .request_id = @enumFromInt(1),
+            .notification = .{
+                .level = level,
+                .duration_ms = duration_ms,
+                .target = target,
+                .title = title_text,
+                .message = message_text,
+            },
+        });
+        var value: Notification = .{
+            .level = level,
+            .duration_ms = duration_ms,
+            .target = target,
+            .title_len = @intCast(title_text.len),
+            .message_len = @intCast(message_text.len),
+        };
+        @memcpy(value.title_bytes[0..title_text.len], title_text);
+        @memcpy(value.message_bytes[0..message_text.len], message_text);
+        return value;
+    }
+
+    pub fn title(value: *const Notification) []const u8 {
+        return value.title_bytes[0..value.title_len];
+    }
+
+    pub fn message(value: *const Notification) []const u8 {
+        return value.message_bytes[0..value.message_len];
+    }
+};
 
 pub const Action = union(enum) {
     split_pane: SplitDirection,
@@ -39,6 +96,7 @@ pub const Action = union(enum) {
     move_tab: TabMove,
     detach,
     enter_copy_mode,
+    notification: Notification,
     lua_callback: CallbackRef,
     lua_expr: CallbackRef,
     plugin: PluginAction,

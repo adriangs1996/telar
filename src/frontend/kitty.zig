@@ -1391,7 +1391,7 @@ pub const KittyGraphicsWriter = struct {
     }
 };
 
-const OutputPlacement = struct {
+pub const OutputPlacement = struct {
     column: u32,
     row: u32,
     offset_x: u32,

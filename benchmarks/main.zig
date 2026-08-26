@@ -145,6 +145,12 @@ const cases = [_]Case{
         .work_unit = "pixels",
         .p99_budget_ns = 10 * std.time.ns_per_ms,
     },
+    .{
+        .name = "frontend.text.rasterize_jetbrains_mono",
+        .work_per_op = 51,
+        .work_unit = "glyphs",
+        .p99_budget_ns = std.time.ns_per_ms,
+    },
 };
 
 const Measurement = struct {
@@ -384,6 +390,7 @@ fn frame(frame_id: u64, spans: []const schema.frame.Span) schema.frame.Frame {
         .base_frame_id = 1,
         .cols = cols,
         .rows = rows,
+        .scroll = .{ .total_rows = rows, .offset = 0 },
         .spans = spans,
     };
 }
@@ -1215,6 +1222,49 @@ fn runKgpIngest(context: *KgpIngestContext, iterations: usize) !u64 {
     return checksum;
 }
 
+const TextRasterContext = struct {
+    const width = 480;
+    const height = 80;
+
+    gpa: std.mem.Allocator,
+    rasterizer: frontend.text_rasterizer.Rasterizer,
+    pixels: []u8,
+
+    fn init(gpa: std.mem.Allocator) !TextRasterContext {
+        var rasterizer = try frontend.text_rasterizer.Rasterizer.init();
+        errdefer rasterizer.deinit();
+        try rasterizer.setPixelHeight(15);
+        const pixels = try gpa.alloc(u8, width * height * 4);
+        @memset(pixels, 32);
+        return .{ .gpa = gpa, .rasterizer = rasterizer, .pixels = pixels };
+    }
+
+    fn deinit(context: *TextRasterContext) void {
+        context.gpa.free(context.pixels);
+        context.rasterizer.deinit();
+    }
+};
+
+fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
+    const surface: frontend.text_rasterizer.Surface = .{
+        .pixels = context.pixels,
+        .width = TextRasterContext.width,
+        .height = TextRasterContext.height,
+    };
+    const color: frontend.text_rasterizer.Color = .{
+        .red = 220,
+        .green = 230,
+        .blue = 240,
+    };
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= try context.rasterizer.drawText(surface, 20, 18, "Build complete", color, 420);
+        checksum +%= try context.rasterizer.drawText(surface, 20, 38, "Open the rendered result", color, 420);
+        checksum +%= try context.rasterizer.drawText(surface, 20, 58, "click to open", color, 420);
+    }
+    return checksum +% context.pixels[context.pixels.len / 2];
+}
+
 fn execute(
     writer: *Io.Writer,
     io: Io,
@@ -1435,6 +1485,20 @@ fn execute(
             );
         }
     }
+
+    const text_raster_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(text_raster_case.name)) {
+        var context = try TextRasterContext.init(gpa);
+        defer context.deinit();
+        try writeResult(
+            writer,
+            config,
+            text_raster_case,
+            try measure(io, config, &context, runTextRaster),
+        );
+    }
+    std.debug.assert(case_index == cases.len);
 }
 
 pub fn main(init: std.process.Init) !void {

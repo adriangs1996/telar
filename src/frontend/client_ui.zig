@@ -8,6 +8,7 @@ const multiplexer = @import("multiplexer.zig");
 const tabs_mod = @import("tabs.zig");
 const term = @import("term.zig");
 const theme_mod = @import("theme.zig");
+const toast_graphics = @import("toast_graphics.zig");
 const ui = @import("ui.zig");
 const widgets = @import("widgets/root.zig");
 
@@ -26,6 +27,7 @@ pub const Interaction = struct {
     layout_changed: bool = false,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
+    notification_target: ?widgets.notification.Target = null,
 };
 
 pub const RenderStats = struct {
@@ -66,7 +68,10 @@ pub const State = struct {
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
     proxy_tls_active: bool = false,
     system_metrics: ?widgets.status_bar.Metrics = null,
+    notifications: widgets.notification.Center = .{},
+    toast_overlay_drawn: bool = false,
     kitty_sidebar: kitty.KittySidebarRenderer,
+    kitty_toasts: toast_graphics.Renderer,
     cell_width_px: u16 = 0,
     cell_height_px: u16 = 0,
 
@@ -85,12 +90,14 @@ pub const State = struct {
             .regions = .calculate(width, height, true),
             .theme = selected_theme,
             .kitty_sidebar = .init(gpa),
+            .kitty_toasts = .init(gpa),
         };
     }
 
     pub fn deinit(state: *State) void {
         state.scratch.deinit();
         state.kitty_sidebar.deinit();
+        state.kitty_toasts.deinit();
     }
 
     pub fn resize(state: *State, width: u16, height: u16) !void {
@@ -146,6 +153,29 @@ pub const State = struct {
         state.dirty = true;
     }
 
+    pub fn notify(
+        state: *State,
+        now_ns: u64,
+        input: widgets.notification.Input,
+    ) widgets.notification.Id {
+        state.dirty = true;
+        return state.notifications.push(now_ns, input);
+    }
+
+    pub fn nextNotificationDeadline(
+        state: *const State,
+        now_ns: u64,
+        frame_interval_ns: u64,
+    ) ?u64 {
+        return state.notifications.nextDeadline(now_ns, frame_interval_ns);
+    }
+
+    pub fn advanceNotifications(state: *State, now_ns: u64) bool {
+        if (!state.notifications.advance(now_ns)) return false;
+        state.dirty = true;
+        return true;
+    }
+
     pub fn replaceWorkspaceList(
         state: *State,
         input: widgets.workspace_model.SnapshotInput,
@@ -197,8 +227,9 @@ pub const State = struct {
         cell_height: u16,
     ) !void {
         const resolved = try requested.resolve(support);
+        const toast_changed = state.kitty_toasts.configure(support, cell_width, cell_height);
         if (state.sidebar_rendering != resolved or state.cell_width_px != cell_width or
-            state.cell_height_px != cell_height)
+            state.cell_height_px != cell_height or toast_changed)
         {
             state.sidebar_rendering = resolved;
             state.cell_width_px = cell_width;
@@ -209,6 +240,10 @@ pub const State = struct {
 
     pub fn kittySidebar(state: *State) *kitty.KittySidebarRenderer {
         return &state.kitty_sidebar;
+    }
+
+    pub fn kittyToasts(state: *State) *toast_graphics.Renderer {
+        return &state.kitty_toasts;
     }
 
     pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
@@ -330,6 +365,7 @@ pub const State = struct {
         tabs: ?*tabs_mod.Model,
         model: *multiplexer.Model,
         mouse: term.Event.Mouse,
+        now_ns: u64,
     ) Interaction {
         var result: Interaction = .{};
         if (state.name_prompt != null) return result;
@@ -398,6 +434,18 @@ pub const State = struct {
                 state.dirty = true;
                 result.redraw = true;
             },
+            .notification_activate => |id| {
+                result.notification_target = state.notifications.activate(id, now_ns);
+                if (result.notification_target != null) {
+                    state.dirty = true;
+                    result.redraw = true;
+                }
+            },
+            .notification_dismiss => |id| if (state.notifications.dismiss(id, now_ns)) {
+                result.notification_target = .none;
+                state.dirty = true;
+                result.redraw = true;
+            },
         }
         return result;
     }
@@ -413,7 +461,9 @@ pub const State = struct {
         model: *multiplexer.Model,
         force: bool,
     ) !RenderStats {
-        if (!force and !state.dirty) return .{};
+        if (!force and !state.dirty and
+            !state.notifications.hasItems() and !state.toast_overlay_drawn)
+            return .{};
         state.hits.clear();
         state.scratch.clear(.{});
         const hybrid = state.sidebar_rendering == .kitty_hybrid or
@@ -439,6 +489,23 @@ pub const State = struct {
             .workspaces = &state.workspace_list,
             .workspace_list_collapsed = state.workspace_list_collapsed,
         });
+        const toast_area = widgets.toast.overlayArea(state.regions.workbench);
+        const has_toasts = state.notifications.hasItems() and !toast_area.isEmpty();
+        state.kitty_toasts.prepare(
+            toast_area,
+            &state.notifications,
+            state.palette(),
+        );
+        const graphical_toasts = state.kitty_toasts.coversAll();
+        if (has_toasts or state.toast_overlay_drawn) {
+            model.copyComposedArea(&state.scratch, toast_area);
+            if (has_toasts) {
+                if (graphical_toasts)
+                    widgets.toast.registerHits(&context, toast_area, &state.notifications)
+                else
+                    widgets.toast.render(&context, toast_area, &state.notifications);
+            }
+        }
         if (hybrid) {
             var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;
             var provider_mark_count: usize = 0;
@@ -463,6 +530,8 @@ pub const State = struct {
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.top));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.sidebar));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.bottom));
+        if (has_toasts or state.toast_overlay_drawn)
+            stats = addStats(stats, try syncRegion(screen, &state.scratch, toast_area));
         if (composed.cursor) |cursor| {
             screen.cursor = .{
                 .x = cursor.cursor_x,
@@ -470,6 +539,7 @@ pub const State = struct {
             };
         }
         state.dirty = false;
+        state.toast_overlay_drawn = has_toasts;
         return stats;
     }
 };
@@ -579,10 +649,10 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     _ = try state.render(&screen, null, &model, true);
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
-    try std.testing.expect(state.handleMouse(null, &model, first_row).redraw);
-    try std.testing.expect(!state.handleMouse(null, &model, first_row).redraw);
+    try std.testing.expect(state.handleMouse(null, &model, first_row, 0).redraw);
+    try std.testing.expect(!state.handleMouse(null, &model, first_row, 0).redraw);
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
-    const interaction = state.handleMouse(null, &model, click);
+    const interaction = state.handleMouse(null, &model, click, 0);
     try std.testing.expect(interaction.layout_changed);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
 }
@@ -612,7 +682,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
         Action{ .sidebar_select_agent = agents[0].key },
         state.hits.at(4, 4).?,
     );
-    const interaction = state.handleMouse(null, &model, .{ .x = 4, .y = 4, .kind = .press });
+    const interaction = state.handleMouse(null, &model, .{ .x = 4, .y = 4, .kind = .press }, 0);
     try std.testing.expect(interaction.redraw);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());
@@ -665,6 +735,57 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     );
 }
 
+test "clickable toast restores pane cells after its exit animation" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 120, 30);
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(7),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 28 });
+    const overlay = widgets.toast.overlayArea(state.workbench());
+    _ = state.notify(100, .{
+        .level = .success,
+        .title = "Ready",
+        .message = "Open tab",
+        .target = .{ .select_tab = location.tab_id },
+    });
+    const first_frame_ns = std.time.ns_per_s / 60;
+    _ = state.advanceNotifications(100 + first_frame_ns);
+    const visible_width = state.notifications.itemAt(0).?.animatedWidth(overlay.w);
+    const click_x = overlay.x + overlay.w - visible_width;
+    const click_y = overlay.y;
+    model.find(@enumFromInt(1)).?.buffer.setCell(
+        click_x - state.workbench().x,
+        click_y - state.workbench().y,
+        "u",
+        1,
+        .{},
+    );
+    var screen = try term.Screen.init(gpa, 120, 30);
+    defer screen.deinit();
+    _ = try model.render(&screen, state.workbench());
+    _ = try state.render(&screen, null, &model, false);
+
+    const interaction = state.handleMouse(null, &model, .{
+        .x = click_x,
+        .y = click_y,
+        .kind = .press,
+    }, 200);
+    try std.testing.expectEqual(location.tab_id, interaction.notification_target.?.select_tab);
+    try std.testing.expect(
+        state.advanceNotifications(200 + widgets.notification.transition_duration_ns),
+    );
+    try std.testing.expect(!state.notifications.hasItems());
+    _ = try state.render(&screen, null, &model, false);
+
+    const restored = screen.back.cells[@as(usize, click_y) * screen.back.w + click_x];
+    try std.testing.expectEqualStrings("u", restored.text());
+}
+
 test "changing themes invalidates client chrome" {
     var state = try State.init(std.testing.allocator, 80, 24);
     defer state.deinit();
@@ -705,7 +826,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
     // last sixteen columns of the bottom row.
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
-    const interaction = state.handleMouse(&tabs, model, click);
+    const interaction = state.handleMouse(&tabs, model, click, 0);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
 
     const rename = state.handleMouse(&tabs, model, .{
@@ -713,7 +834,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .y = 23,
         .kind = .press,
         .button = 2,
-    });
+    }, 0);
     try std.testing.expect(rename.redraw);
     try std.testing.expect(rename.select_tab == null);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), state.renamedTab().?);
@@ -759,13 +880,13 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .x = workspace_x.?,
         .y = 0,
         .kind = .press,
-    });
+    }, 0);
     try std.testing.expectEqual(
         @as(schema.WorkspaceId, @enumFromInt(2)),
         interaction.select_workspace.?,
     );
 
-    _ = state.handleMouse(null, &model, .{ .x = marker_x.?, .y = 0, .kind = .press });
+    _ = state.handleMouse(null, &model, .{ .x = marker_x.?, .y = 0, .kind = .press }, 0);
     try std.testing.expect(state.workspace_list_collapsed);
 }
 

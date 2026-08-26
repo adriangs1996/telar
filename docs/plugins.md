@@ -87,7 +87,11 @@ snapshot, closing the inspection-to-execution mutation window.
 `runtime.control` is currently required for effects that create, rename, move,
 or close runtime-owned panes or tabs, or detach the client. Other declared
 capabilities are reserved until a typed broker API exists; declaring or
-granting one does not expose ambient operating-system authority.
+granting one does not expose ambient operating-system authority. The exception
+is `notifications`, which permits the bounded
+`telar.action.notification({...})` semantic effect. It grants no socket,
+filesystem, process, or network access; the client broker publishes the effect
+on the plugin's behalf after verifying the package digest and grant.
 
 A future API that exposes workspace files, process spawning, native code, or
 network access must state that a same-user plugin with such authority is

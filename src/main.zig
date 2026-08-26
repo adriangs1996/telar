@@ -20,6 +20,7 @@ const Cli = cli_mod.Cli;
 const ConfigCheckOptions = cli_mod.ConfigCheckOptions;
 const HistoryAction = cli_mod.HistoryAction;
 const HistoryOptions = cli_mod.HistoryOptions;
+const NotificationOptions = cli_mod.NotificationOptions;
 const PluginCommand = cli_mod.PluginCommand;
 const PluginOptions = cli_mod.PluginOptions;
 const RunOptions = cli_mod.RunOptions;
@@ -852,6 +853,56 @@ fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
     }
 }
 
+fn runNotification(init: std.process.Init, options: NotificationOptions) !void {
+    const endpoint = try resolveEndpoint(init, options.socket);
+    const raw_connection = frontend.transport.local.connect(init.io, endpoint.path()) catch |err| switch (err) {
+        error.FileNotFound, error.ConnectionRefused => {
+            std.debug.print("telar notification: runtime is not running\n", .{});
+            return error.RuntimeNotRunning;
+        },
+        else => |other| return other,
+    };
+    var connection = try finishHandshake(init.io, raw_connection);
+    defer connection.deinit(init.io);
+
+    var send_buffer: [
+        1 + 8 + 1 + 4 + 1 + 8 + 2 +
+            core.schema.max_notification_title_bytes + 2 +
+            core.schema.max_notification_message_bytes
+    ]u8 = undefined;
+    try connection.send(init.io, try core.schema.encodeShowNotification(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .notification = .{
+            .level = options.level,
+            .duration_ms = options.duration_ms,
+            .target = options.target,
+            .title = std.mem.span(options.title),
+            .message = if (options.body) |body| std.mem.span(body) else "",
+        },
+    }));
+
+    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    defer init.gpa.free(receive_buffer);
+    const response = try core.schema.decodeServer(
+        try connection.receive(init.io, receive_buffer),
+    );
+    switch (response) {
+        .notification_shown => |shown| {
+            if (shown.request_id != @as(core.schema.RequestId, @enumFromInt(1)))
+                return error.UnexpectedRuntimeResponse;
+            if (shown.delivered_clients == 0) {
+                std.debug.print("telar notification: no UI client is connected\n", .{});
+                return error.NoNotificationClients;
+            }
+        },
+        .request_failed => |failure| {
+            std.debug.print("telar notification: {s}\n", .{failure.message});
+            return error.NotificationFailed;
+        },
+        else => return error.UnexpectedRuntimeResponse,
+    }
+}
+
 const schema_history_request_size = core.schema.max_history_query_bytes +
     core.schema.max_cwd_bytes + 64;
 
@@ -944,6 +995,7 @@ const usage =
     \\       telar plugin trust PATH [--capability NAME]...
     \\       telar history list [options]
     \\       telar history search <query> [options]
+    \\       telar notification show <title> [options]
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
     \\With a command, run that command instead of $SHELL.
@@ -954,6 +1006,7 @@ const usage =
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history
     \\  history search   Search command history
+    \\  notification show  Show a toast in every connected UI client
     \\  config check     Compile and validate config.lua, then exit
     \\  plugin inspect   Validate a package and print its immutable identity
     \\  plugin install   Copy a package into the content-addressed local store
@@ -966,6 +1019,15 @@ const usage =
     \\  --failed         Only show commands with a non-zero exit status
     \\  --limit N        Return at most N results (default 20, maximum 100)
     \\  --socket PATH    Query a specific local runtime
+    \\
+    \\Notification options:
+    \\  --body TEXT      Add detail text below the title
+    \\  --level LEVEL    info, success, warning, or failure
+    \\  --duration MS    Keep it visible for 500..60000 ms (default 4000)
+    \\  --pane ID        Make it focus a pane when clicked
+    \\  --tab ID         Make it select a tab when clicked
+    \\  --workspace ID   Make it select a workspace when clicked
+    \\  --socket PATH    Notify clients of a specific local runtime
     \\
     \\Options:
     \\  --config PATH     Load a specific Lua configuration
@@ -1005,6 +1067,7 @@ pub fn main(init: std.process.Init) !void {
         .version => try File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try runServer(init, options),
         .history => |options| try runHistory(init, options),
+        .notification => |options| try runNotification(init, options),
         .config_check => |options| try runConfigCheck(init, options),
         .plugin_worker => |options| try frontend.plugin_worker.run(
             init,
@@ -1203,6 +1266,53 @@ test "CLI parses history search filters" {
     try std.testing.expectEqualStrings("/work/telar", std.mem.span(cli.history.scope_value.?));
     try std.testing.expect(cli.history.failed_only);
     try std.testing.expectEqual(@as(u16, 40), cli.history.limit);
+}
+
+test "CLI parses clickable notification commands" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "notification",
+        "show",
+        "Build complete",
+        "--body",
+        "Open the pane",
+        "--level",
+        "success",
+        "--duration",
+        "2500",
+        "--pane",
+        "42",
+        "--socket",
+        "/tmp/telar.sock",
+    };
+    const parsed = try Cli.parse(&args, .empty);
+    try std.testing.expect(parsed == .notification);
+    try std.testing.expectEqualStrings("Build complete", std.mem.span(parsed.notification.title));
+    try std.testing.expectEqualStrings("Open the pane", std.mem.span(parsed.notification.body.?));
+    try std.testing.expectEqual(core.schema.NotificationLevel.success, parsed.notification.level);
+    try std.testing.expectEqual(@as(u32, 2500), parsed.notification.duration_ms);
+    try std.testing.expectEqual(
+        @as(core.schema.PaneId, @enumFromInt(42)),
+        parsed.notification.target.pane,
+    );
+    try std.testing.expectEqualStrings("/tmp/telar.sock", std.mem.span(parsed.notification.socket.?));
+}
+
+test "CLI rejects conflicting notification click targets" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "notification",
+        "show",
+        "Ready",
+        "--pane",
+        "1",
+        "--tab",
+        "2",
+    };
+    try std.testing.expectError(
+        error.ConflictingNotificationTargets,
+        Cli.parse(&args, .empty),
+    );
 }
 
 test "CLI rejects conflicting history scopes" {

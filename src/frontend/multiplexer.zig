@@ -394,6 +394,24 @@ pub const Model = struct {
         return &model.layout_snapshot;
     }
 
+    /// Restores a client overlay region from the pane composition cache.
+    /// Toasts draw into the terminal screen but never mutate this cache, so
+    /// removing one costs only its bounded rectangle instead of recomposing
+    /// the complete workbench.
+    pub fn copyComposedArea(model: *const Model, destination: *ui.Buffer, area: ui.Rect) void {
+        const source = if (model.composed) |*buffer| buffer else return;
+        if (source.w != destination.w or source.h != destination.h) return;
+        const clipped = area.intersect(source.area());
+        var y = clipped.y;
+        while (y < clipped.y + clipped.h) : (y += 1) {
+            const row_start = @as(usize, y) * source.w + clipped.x;
+            @memcpy(
+                destination.cells[row_start..][0..clipped.w],
+                source.cells[row_start..][0..clipped.w],
+            );
+        }
+    }
+
     pub fn prospectiveSplit(
         model: *Model,
         pane_id: schema.PaneId,

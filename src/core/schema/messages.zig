@@ -34,6 +34,11 @@ pub const max_history_results = types.max_history_results;
 pub const max_history_command_bytes = types.max_history_command_bytes;
 pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;
 pub const max_workspace_list_entries = types.max_workspace_list_entries;
+pub const max_notification_title_bytes = types.max_notification_title_bytes;
+pub const max_notification_message_bytes = types.max_notification_message_bytes;
+pub const min_notification_duration_ms = types.min_notification_duration_ms;
+pub const max_notification_duration_ms = types.max_notification_duration_ms;
+pub const default_notification_duration_ms = types.default_notification_duration_ms;
 pub const max_clipboard_bytes = 64 * 1024;
 
 pub const TerminalSize = types.TerminalSize;
@@ -57,6 +62,8 @@ pub const AgentStatus = types.AgentStatus;
 pub const AgentSource = types.AgentSource;
 pub const AgentAuthority = types.AgentAuthority;
 pub const AgentSnapshotEntry = types.AgentSnapshotEntry;
+pub const NotificationLevel = types.NotificationLevel;
+pub const NotificationTarget = types.NotificationTarget;
 
 const Derived = codec.Derived;
 const encodeDerived = codec.encodeDerived;
@@ -104,6 +111,7 @@ pub const ClientTag = enum(u8) {
     rename_workspace = 0x16,
     set_pane_viewport = 0x17,
     copy_selection = 0x18,
+    show_notification = 0x19,
 };
 
 pub const ServerTag = enum(u8) {
@@ -133,6 +141,8 @@ pub const ServerTag = enum(u8) {
     workspace_list = 0x98,
     pane_cwd = 0x99,
     pane_clipboard = 0x9a,
+    notification = 0x9b,
+    notification_shown = 0x9c,
 };
 
 pub const LaunchView = struct {
@@ -369,6 +379,19 @@ pub const QueryHistory = struct {
     limit: u16 = 20,
 };
 
+pub const Notification = struct {
+    level: NotificationLevel = .info,
+    duration_ms: u32 = default_notification_duration_ms,
+    target: NotificationTarget = .none,
+    title: []const u8,
+    message: []const u8 = "",
+};
+
+pub const ShowNotification = struct {
+    request_id: RequestId,
+    notification: Notification,
+};
+
 pub const ClientMessage = union(enum) {
     open_pane: OpenPaneView,
     pane_input: PaneInput,
@@ -394,6 +417,7 @@ pub const ClientMessage = union(enum) {
     rename_workspace: RenameWorkspace,
     set_pane_viewport: SetPaneViewport,
     copy_selection: CopySelection,
+    show_notification: ShowNotification,
 };
 
 pub const PaneOpened = struct {
@@ -424,6 +448,11 @@ pub const RequestFailed = struct {
     request_id: RequestId,
     code: FailureCode,
     message: []const u8,
+};
+
+pub const NotificationShown = struct {
+    request_id: RequestId,
+    delivered_clients: u8,
 };
 
 pub const WorkspaceSnapshot = struct {
@@ -719,6 +748,8 @@ pub const ServerMessage = union(enum) {
     workspace_list: WorkspaceListView,
     pane_cwd: PaneCwd,
     pane_clipboard: PaneClipboard,
+    notification: Notification,
+    notification_shown: NotificationShown,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -962,6 +993,15 @@ pub fn encodeCopySelection(buffer: []u8, message: CopySelection) ![]const u8 {
     );
 }
 
+pub fn encodeShowNotification(buffer: []u8, message: ShowNotification) ![]const u8 {
+    try validateRequestId(message.request_id);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.show_notification));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encodeNotificationBody(&encoder, message.notification);
+    return encoder.finish();
+}
+
 pub fn decodeClient(payload: []const u8) !ClientMessage {
     var decoder = wire.Decoder.init(payload);
     const tag = try decodeTag(ClientTag, try decoder.readByte());
@@ -1004,6 +1044,10 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .copy_selection => .{
             .copy_selection = try Derived(CopySelection).decode(&decoder),
         },
+        .show_notification => .{ .show_notification = .{
+            .request_id = try id.request(try decoder.readInt(u64)),
+            .notification = try decodeNotificationBody(&decoder),
+        } },
     };
     try decoder.ensureEnd();
     return message;
@@ -1028,6 +1072,22 @@ pub fn encodePaneClipboard(buffer: []u8, message: PaneClipboard) ![]const u8 {
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeSized32(message.bytes);
     return encoder.finish();
+}
+
+pub fn encodeNotification(buffer: []u8, message: Notification) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.notification));
+    try encodeNotificationBody(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodeNotificationShown(buffer: []u8, message: NotificationShown) ![]const u8 {
+    return encodeDerived(
+        @intFromEnum(ServerTag.notification_shown),
+        NotificationShown,
+        buffer,
+        message,
+    );
 }
 
 pub fn encodePaneExited(buffer: []u8, message: PaneExited) ![]const u8 {
@@ -1291,11 +1351,78 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
             .pane_id = try id.pane(try decoder.readInt(u64)),
             .bytes = try decoder.readSized32(),
         } },
+        .notification => .{ .notification = try decodeNotificationBody(&decoder) },
+        .notification_shown => .{
+            .notification_shown = try Derived(NotificationShown).decode(&decoder),
+        },
     };
     if (message == .pane_clipboard and message.pane_clipboard.bytes.len > max_clipboard_bytes)
         return error.ClipboardTooLarge;
     try decoder.ensureEnd();
     return message;
+}
+
+fn encodeNotificationBody(encoder: *wire.Encoder, notification: Notification) !void {
+    try validateNotification(notification);
+    try encoder.writeByte(@intFromEnum(notification.level));
+    try encoder.writeInt(u32, notification.duration_ms);
+    switch (notification.target) {
+        .none => try encoder.writeByte(0),
+        .pane => |pane_id| {
+            try validatePaneId(pane_id);
+            try encoder.writeByte(1);
+            try encoder.writeInt(u64, id.raw(pane_id));
+        },
+        .tab => |tab_id| {
+            if (tab_id == .invalid) return error.InvalidTabId;
+            try encoder.writeByte(2);
+            try encoder.writeInt(u64, id.raw(tab_id));
+        },
+        .workspace => |workspace_id| {
+            if (workspace_id == .invalid) return error.InvalidWorkspaceId;
+            try encoder.writeByte(3);
+            try encoder.writeInt(u64, id.raw(workspace_id));
+        },
+    }
+    try encoder.writeSized16(notification.title);
+    try encoder.writeSized16(notification.message);
+}
+
+fn decodeNotificationBody(decoder: *wire.Decoder) !Notification {
+    const level = std.enums.fromInt(NotificationLevel, try decoder.readByte()) orelse
+        return error.InvalidNotificationLevel;
+    const duration_ms = try decoder.readInt(u32);
+    const target: NotificationTarget = switch (try decoder.readByte()) {
+        0 => .none,
+        1 => .{ .pane = try id.pane(try decoder.readInt(u64)) },
+        2 => .{ .tab = try id.tab(try decoder.readInt(u64)) },
+        3 => .{ .workspace = try id.workspace(try decoder.readInt(u64)) },
+        else => return error.InvalidNotificationTarget,
+    };
+    const notification: Notification = .{
+        .level = level,
+        .duration_ms = duration_ms,
+        .target = target,
+        .title = try decoder.readSized16(),
+        .message = try decoder.readSized16(),
+    };
+    try validateNotification(notification);
+    return notification;
+}
+
+fn validateNotification(notification: Notification) !void {
+    if (notification.duration_ms < min_notification_duration_ms or
+        notification.duration_ms > max_notification_duration_ms)
+        return error.InvalidNotificationDuration;
+    try validateNotificationText(notification.title, max_notification_title_bytes, false);
+    try validateNotificationText(notification.message, max_notification_message_bytes, true);
+}
+
+fn validateNotificationText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
+    try validateBytes(bytes, maximum, empty_allowed);
+    if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8;
+    for (bytes) |byte| if (byte < 0x20 or byte == 0x7f)
+        return error.InvalidNotificationText;
 }
 
 fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {

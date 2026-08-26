@@ -1196,6 +1196,96 @@ pub const Generation = struct {
                 return error.InvalidConfig;
             } };
         }
+        if (std.mem.eql(u8, kind, "notification")) {
+            try ensureOnlyFields(
+                state,
+                absolute,
+                &.{
+                    "kind",
+                    "title",
+                    "body",
+                    "level",
+                    "duration_ms",
+                    "pane_id",
+                    "tab_id",
+                    "workspace_id",
+                },
+                "action",
+                diagnostic,
+            );
+            const title = try requiredStringField(state, absolute, "title", diagnostic);
+            const body = try optionalStringField(state, absolute, "body", "", diagnostic);
+            const level_name = try optionalStringField(state, absolute, "level", "info", diagnostic);
+            const level: core.schema.NotificationLevel = if (std.mem.eql(u8, level_name, "info"))
+                .info
+            else if (std.mem.eql(u8, level_name, "success"))
+                .success
+            else if (std.mem.eql(u8, level_name, "warning"))
+                .warning
+            else if (std.mem.eql(u8, level_name, "failure"))
+                .failure
+            else {
+                diagnostic.set("notification level must be info, success, warning, or failure", .{});
+                return error.InvalidConfig;
+            };
+            const duration = try optionalIntegerField(
+                state,
+                absolute,
+                "duration_ms",
+                core.schema.default_notification_duration_ms,
+                diagnostic,
+            );
+            if (duration < core.schema.min_notification_duration_ms or
+                duration > core.schema.max_notification_duration_ms)
+            {
+                diagnostic.set(
+                    "notification duration_ms must be in {d}..{d}",
+                    .{
+                        core.schema.min_notification_duration_ms,
+                        core.schema.max_notification_duration_ms,
+                    },
+                );
+                return error.InvalidConfig;
+            }
+
+            var target: core.schema.NotificationTarget = .none;
+            var target_count: u8 = 0;
+            if (try optionalPositiveId(state, absolute, "pane_id", diagnostic)) |raw| {
+                target = .{ .pane = core.schema.id.pane(raw) catch {
+                    diagnostic.set("notification pane_id is invalid", .{});
+                    return error.InvalidConfig;
+                } };
+                target_count += 1;
+            }
+            if (try optionalPositiveId(state, absolute, "tab_id", diagnostic)) |raw| {
+                target = .{ .tab = core.schema.id.tab(raw) catch {
+                    diagnostic.set("notification tab_id is invalid", .{});
+                    return error.InvalidConfig;
+                } };
+                target_count += 1;
+            }
+            if (try optionalPositiveId(state, absolute, "workspace_id", diagnostic)) |raw| {
+                target = .{ .workspace = core.schema.id.workspace(raw) catch {
+                    diagnostic.set("notification workspace_id is invalid", .{});
+                    return error.InvalidConfig;
+                } };
+                target_count += 1;
+            }
+            if (target_count > 1) {
+                diagnostic.set("notification accepts only one click target", .{});
+                return error.InvalidConfig;
+            }
+            return .{ .notification = action_mod.Notification.init(
+                level,
+                @intCast(duration),
+                target,
+                title,
+                body,
+            ) catch {
+                diagnostic.set("notification title or body is invalid or too long", .{});
+                return error.InvalidConfig;
+            } };
+        }
         if (std.mem.eql(u8, kind, "plugin")) {
             try ensureOnlyFields(
                 state,
@@ -1303,6 +1393,18 @@ const bootstrap =
     \\end
     \\function telar.action.plugin(options)
     \\  return { kind = "plugin", plugin = options.plugin, action = options.action }
+    \\end
+    \\function telar.action.notification(options)
+    \\  return {
+    \\    kind = "notification",
+    \\    title = options.title,
+    \\    body = options.body,
+    \\    level = options.level,
+    \\    duration_ms = options.duration_ms,
+    \\    pane_id = options.pane_id,
+    \\    tab_id = options.tab_id,
+    \\    workspace_id = options.workspace_id,
+    \\  }
     \\end
     \\for _, name in ipairs({
     \\  "toggle-pane-fullscreen", "toggle-sidebar", "toggle-workspace-list",
@@ -1506,6 +1608,61 @@ fn requiredIntegerField(
     };
     pop(state, 1);
     return value;
+}
+
+fn optionalStringField(
+    state: *lua.lua_State,
+    index: c_int,
+    name: [*:0]const u8,
+    default: []const u8,
+    diagnostic: *Diagnostic,
+) ![]const u8 {
+    const absolute = lua.lua_absindex(state, index);
+    _ = lua.lua_getfield(state, absolute, name);
+    defer pop(state, 1);
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) return default;
+    return string(state, -1) orelse {
+        diagnostic.set("action.{s} must be a string", .{std.mem.span(name)});
+        return error.InvalidConfig;
+    };
+}
+
+fn optionalIntegerField(
+    state: *lua.lua_State,
+    index: c_int,
+    name: [*:0]const u8,
+    default: lua.lua_Integer,
+    diagnostic: *Diagnostic,
+) !lua.lua_Integer {
+    const absolute = lua.lua_absindex(state, index);
+    _ = lua.lua_getfield(state, absolute, name);
+    defer pop(state, 1);
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) return default;
+    return integer(state, -1) orelse {
+        diagnostic.set("action.{s} must be an integer", .{std.mem.span(name)});
+        return error.InvalidConfig;
+    };
+}
+
+fn optionalPositiveId(
+    state: *lua.lua_State,
+    index: c_int,
+    name: [*:0]const u8,
+    diagnostic: *Diagnostic,
+) !?u64 {
+    const absolute = lua.lua_absindex(state, index);
+    _ = lua.lua_getfield(state, absolute, name);
+    defer pop(state, 1);
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) return null;
+    const value = integer(state, -1) orelse {
+        diagnostic.set("action.{s} must be an integer", .{std.mem.span(name)});
+        return error.InvalidConfig;
+    };
+    if (value <= 0) {
+        diagnostic.set("action.{s} must be positive", .{std.mem.span(name)});
+        return error.InvalidConfig;
+    }
+    return @intCast(value);
 }
 
 fn optionalMebibytes(
@@ -2068,6 +2225,57 @@ test "Lua callback receives an immutable snapshot and returns bounded effects" {
     try std.testing.expectEqualDeep(
         action_mod.Action{ .focus_pane = .left },
         batch.items[1],
+    );
+}
+
+test "Lua callbacks produce bounded clickable notifications" {
+    const source =
+        \\local telar = require("telar")
+        \\return {
+        \\  api_version = 2,
+        \\  client = { keybindings = {
+        \\    telar.bind({ "n" }, function(ctx)
+        \\      return telar.action.notification({
+        \\        title = "Agent waiting",
+        \\        body = "Review its question",
+        \\        level = "warning",
+        \\        duration_ms = 3000,
+        \\        pane_id = ctx.focused_pane_id,
+        \\      })
+        \\    end),
+        \\  } },
+        \\}
+    ;
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        source,
+        "@config.lua",
+        12,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    const batch = try generation.invokeCallback(
+        generation.snapshot.bindings[0].action.lua_callback,
+        .{
+            .sidebar_visible = true,
+            .tab_count = 1,
+            .active_tab_index = 0,
+            .pane_count = 1,
+            .focused_pane_id = 42,
+        },
+        &diagnostic,
+    );
+    const notification = &batch.items[0].notification;
+    try std.testing.expectEqual(@as(u8, 1), batch.len);
+    try std.testing.expectEqual(core.schema.NotificationLevel.warning, notification.level);
+    try std.testing.expectEqual(@as(u32, 3000), notification.duration_ms);
+    try std.testing.expectEqualStrings("Agent waiting", notification.title());
+    try std.testing.expectEqualStrings("Review its question", notification.message());
+    try std.testing.expectEqual(
+        @as(core.schema.PaneId, @enumFromInt(42)),
+        notification.target.pane,
     );
 }
 

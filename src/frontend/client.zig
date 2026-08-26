@@ -22,6 +22,7 @@ const plugin_broker = @import("plugin_broker.zig");
 const term = @import("term.zig");
 const tabs_mod = @import("tabs.zig");
 const theme = @import("theme.zig");
+const toast_graphics = @import("toast_graphics.zig");
 const widgets = @import("widgets/root.zig");
 
 const Io = std.Io;
@@ -100,10 +101,26 @@ const ClientEvent = union(enum) {
     sent: anyerror!void,
     draw: anyerror!void,
     sidebar_animation_tick: anyerror!void,
+    notification_tick: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!ConfigReload,
     plugin_result: anyerror!plugin_broker.WorkerResult,
+};
+
+const NotificationTimer = struct {
+    deadline_ns: std.atomic.Value(u64) = .init(std.math.maxInt(u64)),
+    wake: Io.Event = .unset,
+};
+
+const NotificationTimerEvent = union(enum) {
+    deadline: anyerror!void,
+    rescheduled: anyerror!void,
+};
+
+const NotificationTimerResult = enum {
+    deadline,
+    rescheduled,
 };
 
 const ConfigReload = union(enum) {
@@ -132,6 +149,68 @@ fn workspaceClosureAction(
 ) WorkspaceClosureAction {
     if (!workspace_closed) return .stay;
     return if (previous_workspace) |workspace| .{ .switch_to = workspace } else .exit;
+}
+
+fn failureTitle(continuation: client_requests.Continuation) []const u8 {
+    return switch (continuation) {
+        .split => "Could not split pane",
+        .close_pane => "Could not close pane",
+        .attach_pane => "Could not attach pane",
+        .create_workspace => "Could not create workspace",
+        .rename_workspace => "Could not rename workspace",
+        .create_tab => "Could not create tab",
+        .rename_tab => "Could not rename tab",
+        .close_tab => "Could not close tab",
+        .move_tab => "Could not move tab",
+        .notification => "Could not show notification",
+        .initial_open, .workspace_snapshot, .tab_snapshot => "Runtime request failed",
+        .ignored => "Request ignored",
+    };
+}
+
+fn notificationTarget(
+    continuation: client_requests.Continuation,
+) widgets.notification.Target {
+    return switch (continuation) {
+        .split => |split| .{ .focus_pane = split.target_pane },
+        .close_pane, .attach_pane => |operation| .{ .select_tab = operation.location.tab_id },
+        .tab_snapshot, .rename_tab, .close_tab, .move_tab => |location| .{
+            .select_tab = location.tab_id,
+        },
+        .rename_workspace, .workspace_snapshot => |location| workspaceNotificationTarget(location),
+        .create_tab => |location| workspaceNotificationTarget(location),
+        .initial_open, .create_workspace, .notification, .ignored => .none,
+    };
+}
+
+fn workspaceNotificationTarget(location: schema.WorkspaceLocation) widgets.notification.Target {
+    return switch (location) {
+        .workspace => |workspace| .{ .select_workspace = workspace },
+        .worktree => .none,
+    };
+}
+
+fn agentProviderName(provider: schema.AgentProvider) []const u8 {
+    return switch (provider) {
+        .unknown => "Agent",
+        .claude => "Claude",
+        .codex => "Codex",
+    };
+}
+
+fn agentStatusName(status: schema.AgentStatus) []const u8 {
+    return switch (status) {
+        .blocked => "waiting for input",
+        .ready => "ready",
+        .failed => "failed",
+        .unknown, .working => "active",
+    };
+}
+
+fn shouldNotifyAgentStatus(previous: ?schema.AgentStatus, current: schema.AgentStatus) bool {
+    const before = previous orelse return false;
+    if (before == current) return false;
+    return current == .blocked or current == .ready or current == .failed;
 }
 
 /// The request that opens the first pane; everything else is numbered by
@@ -185,6 +264,8 @@ const Client = struct {
     /// first read, so a fresh session starts on the boosted media budget.
     last_input_ns: u64 = 0,
     sidebar_animation_pending: bool = false,
+    notification_tick_pending: bool = false,
+    notification_timer: *NotificationTimer,
     reported_focus: ?schema.PaneId = null,
     reported_focus_events: bool = false,
 
@@ -240,6 +321,16 @@ const Client = struct {
         try client.requests.add(rename.request_id, .{ .rename_workspace = rename.workspace });
         errdefer _ = client.requests.take(rename.request_id);
         try client.enqueueWorkspaceRename(rename);
+    }
+
+    fn enqueueNotificationRequest(
+        client: *Client,
+        request: schema.ShowNotification,
+    ) !void {
+        try client.requests.add(request.request_id, .notification);
+        errdefer _ = client.requests.take(request.request_id);
+        try client.outbox.pushNotification(request);
+        try client.pumpOutbox();
     }
 
     fn pumpOutbox(client: *Client) !void {
@@ -302,6 +393,46 @@ const Client = struct {
         };
     }
 
+    fn notify(client: *Client, input: widgets.notification.Input) !void {
+        _ = client.view.notify(monotonic(client.io), input);
+        try client.requestDraw();
+        try client.scheduleNotificationTick();
+    }
+
+    fn notifyDiagnostic(client: *Client, title: []const u8) !void {
+        try client.notify(.{
+            .level = .failure,
+            .title = title,
+            .message = client.config_diagnostic.message(),
+            .duration_ns = 7 * std.time.ns_per_s,
+        });
+    }
+
+    fn scheduleNotificationTick(client: *Client) !void {
+        const now_ns = monotonic(client.io);
+        const deadline_ns = client.view.nextNotificationDeadline(
+            now_ns,
+            client.pacer.interval,
+        ) orelse return;
+        client.notification_timer.deadline_ns.store(deadline_ns, .release);
+        if (client.notification_tick_pending) {
+            client.notification_timer.wake.set(client.io);
+            return;
+        }
+
+        // The previous timer has returned, so no waiter can observe this reset.
+        // Its deadline is replaced from the authoritative notification state.
+        client.notification_timer.wake.reset();
+        client.notification_tick_pending = true;
+        client.select.concurrent(.notification_tick, waitForNotificationTick, .{
+            client.io,
+            client.notification_timer,
+        }) catch |err| {
+            client.notification_tick_pending = false;
+            return err;
+        };
+    }
+
     fn clearPaneFocus(client: *Client) !void {
         const previous = client.reported_focus;
         const reports = client.reported_focus_events;
@@ -358,6 +489,33 @@ const Client = struct {
             },
             .pane_exited => |exited| try client.handlePaneExited(exited),
             .request_failed => |failure| try client.handleRequestFailed(failure),
+            .notification => |notification| try client.notify(.{
+                .level = switch (notification.level) {
+                    .info => .info,
+                    .success => .success,
+                    .warning => .warning,
+                    .failure => .failure,
+                },
+                .title = notification.title,
+                .message = notification.message,
+                .target = switch (notification.target) {
+                    .none => .none,
+                    .pane => |pane_id| .{ .focus_pane = pane_id },
+                    .tab => |tab_id| .{ .select_tab = tab_id },
+                    .workspace => |workspace_id| .{ .select_workspace = workspace_id },
+                },
+                .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
+            }),
+            .notification_shown => |shown| {
+                const continuation = client.requests.take(shown.request_id) orelse
+                    return error.UnexpectedNotificationReply;
+                if (continuation != .notification) return error.UnexpectedNotificationReply;
+                if (shown.delivered_clients == 0) try client.notify(.{
+                    .level = .failure,
+                    .title = "Notification not delivered",
+                    .message = "No connected client could accept the notification",
+                });
+            },
             .resync_required => |required| {
                 switch (workspaceClosureAction(
                     required.workspace_closed,
@@ -392,12 +550,26 @@ const Client = struct {
     }
 
     fn handleProxyStatus(client: *Client, status: schema.ProxyStatus) !void {
+        if (client.view.proxy_tls_active == status.active) return;
         client.view.setProxyTlsActive(status.active);
-        try client.requestDraw();
+        try client.notify(.{
+            .level = if (status.active) .warning else .info,
+            .title = if (status.active) "TLS interception active" else "TLS interception stopped",
+            .message = if (status.active)
+                "Agent network traffic is being observed"
+            else
+                "Agent network traffic is no longer observed",
+            .duration_ns = if (status.active)
+                7 * std.time.ns_per_s
+            else
+                widgets.notification.default_duration_ns,
+        });
     }
 
     fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !void {
         var agents: [schema.max_agent_snapshot_entries]widgets.sidebar.AgentInput = undefined;
+        var alerts: [widgets.notification.max_items]widgets.sidebar.AgentInput = undefined;
+        var alert_count: usize = 0;
         var count: usize = 0;
         var iterator = snapshot.entries();
         while (try iterator.next()) |entry| {
@@ -409,12 +581,56 @@ const Client = struct {
                 .provider = entry.provider,
                 .status = entry.status,
             };
+            const previous = client.view.sidebar_snapshot.find(agents[count].key);
+            if (shouldNotifyAgentStatus(
+                if (previous) |agent| agent.status else null,
+                entry.status,
+            ) and alert_count < alerts.len) {
+                alerts[alert_count] = agents[count];
+                alert_count += 1;
+            }
             count += 1;
         }
-        if (try client.view.replaceSidebarSnapshot(.{
+        const replaced = try client.view.replaceSidebarSnapshot(.{
             .revision = snapshot.revision,
             .agents = agents[0..count],
-        })) try client.requestDraw();
+        });
+        if (replaced) {
+            if (alert_count == 0) {
+                try client.requestDraw();
+            } else for (alerts[0..alert_count]) |agent| {
+                var message_buffer: [64]u8 = undefined;
+                const message = std.fmt.bufPrint(
+                    &message_buffer,
+                    "{s} in pane {d} is {s}",
+                    .{
+                        agentProviderName(agent.provider),
+                        schema.id.raw(agent.key.pane_id),
+                        agentStatusName(agent.status),
+                    },
+                ) catch "Agent status changed";
+                try client.notify(.{
+                    .level = switch (agent.status) {
+                        .blocked => .warning,
+                        .ready => .success,
+                        .failed => .failure,
+                        else => unreachable,
+                    },
+                    .title = switch (agent.status) {
+                        .blocked => "Agent needs input",
+                        .ready => "Agent ready",
+                        .failed => "Agent failed",
+                        else => unreachable,
+                    },
+                    .message = message,
+                    .target = .{ .focus_pane = agent.key.pane_id },
+                    .duration_ns = if (agent.status == .failed)
+                        7 * std.time.ns_per_s
+                    else
+                        widgets.notification.default_duration_ns,
+                });
+            }
+        }
         try client.scheduleSidebarAnimation();
     }
 
@@ -474,6 +690,11 @@ const Client = struct {
                 }
                 client.tabs.deinit();
                 try client.bootstrapWorkspace(opened);
+                try client.notify(.{
+                    .level = .success,
+                    .title = "Workspace created",
+                    .message = "The new workspace is ready",
+                });
             },
             .split => |split| {
                 if (!std.meta.eql(split.location, opened.location))
@@ -576,6 +797,7 @@ const Client = struct {
             .rename_workspace => |workspace| workspace,
             else => return error.UnexpectedWorkspaceSnapshot,
         };
+        const renamed = continuation == .rename_workspace;
         if (!std.meta.eql(expected_workspace, snapshot.workspace))
             return error.UnexpectedWorkspaceSnapshot;
         var canonical_tabs: [tabs_mod.max_tabs]schema.TabId = undefined;
@@ -615,7 +837,14 @@ const Client = struct {
             }
         }
         client.view.invalidate();
-        try client.requestDraw();
+        if (renamed) {
+            try client.notify(.{
+                .level = .success,
+                .title = "Workspace renamed",
+                .message = "The workspace name was updated",
+                .target = notificationTarget(continuation),
+            });
+        } else try client.requestDraw();
     }
 
     fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
@@ -635,7 +864,12 @@ const Client = struct {
         );
         try client.syncPaneFocus(&client.tabs.active().?.model);
         client.view.invalidate();
-        try client.requestDraw();
+        try client.notify(.{
+            .level = .success,
+            .title = "Tab created",
+            .message = created.label,
+            .target = .{ .select_tab = created.location.tab_id },
+        });
     }
 
     fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
@@ -647,7 +881,12 @@ const Client = struct {
         if (!client.tabs.rename(renamed.location.tab_id, renamed.label))
             return error.UnexpectedTab;
         client.view.invalidate();
-        try client.requestDraw();
+        try client.notify(.{
+            .level = .success,
+            .title = "Tab renamed",
+            .message = renamed.label,
+            .target = .{ .select_tab = renamed.location.tab_id },
+        });
     }
 
     fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
@@ -769,16 +1008,24 @@ const Client = struct {
         }
         client.graphics_store.clearPane(exited.pane_id);
         const tab = client.tabs.tabForPane(exited.pane_id);
+        const tab_id = if (tab) |value| value.location.tab_id else null;
         if (client.reported_focus == exited.pane_id) client.forgetPaneFocus();
         if (tab) |value| _ = value.model.removePane(exited.pane_id);
         client.view.invalidate();
-        _ = client.requests.completePaneClose(exited.pane_id);
+        const requested = client.requests.completePaneClose(exited.pane_id);
         if (client.tabs.active()) |active| {
             try client.syncPaneFocus(&active.model);
             if (active.model.pane_count != 0)
                 try client.resizeAttached(&active.model, client.view.workbench());
         }
-        try client.requestDraw();
+        if (!requested) {
+            try client.notify(.{
+                .level = .warning,
+                .title = "Pane exited",
+                .message = "The process in this pane has stopped",
+                .target = if (tab_id) |id| .{ .select_tab = id } else .none,
+            });
+        } else try client.requestDraw();
     }
 
     fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
@@ -811,13 +1058,23 @@ const Client = struct {
                     } },
                 );
             },
-            .create_workspace => std.debug.print("telar runtime: {s}\n", .{failure.message}),
+            .create_workspace, .notification => {},
             .initial_open, .workspace_snapshot, .tab_snapshot, .create_tab => {
                 std.debug.print("telar runtime: {s}\n", .{failure.message});
                 return error.RuntimeRequestFailed;
             },
         }
-        try client.requestDraw();
+        if (continuation == .ignored) {
+            try client.requestDraw();
+        } else {
+            try client.notify(.{
+                .level = .failure,
+                .title = failureTitle(continuation),
+                .message = failure.message,
+                .target = notificationTarget(continuation),
+                .duration_ns = 7 * std.time.ns_per_s,
+            });
+        }
     }
 
     fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !void {
@@ -917,7 +1174,9 @@ const Client = struct {
         client.pending_updates = 0;
         // The graphics budget may have left work behind; the pacer turns
         // this into the next frame, not a spin.
-        if (client.graphics_store.damage and client.capabilities.kitty_graphics == .supported)
+        if ((client.graphics_store.damage or client.view.kittySidebar().damaged() or
+            client.view.kittyToasts().damaged()) and
+            client.capabilities.kitty_graphics == .supported)
             try client.requestDraw();
     }
 
@@ -930,6 +1189,9 @@ const Client = struct {
     }
 
     fn present(client: *Client, model: *multiplexer.Model) !u64 {
+        const media_idle = monotonic(client.io) -| client.last_input_ns >=
+            kitty.idle_boost_after_ns;
+        client.view.kittyToasts().setMediaIdle(media_idle);
         const compose_started = diagnostics.now(client.io);
         const composed = try model.renderThemed(client.screen, client.view.workbench(), client.view.palette());
         const chrome = try client.view.render(client.screen, client.tabs, model, composed.full);
@@ -969,7 +1231,7 @@ const Client = struct {
         client.graphics_store.host_zlib = client.capabilities.kitty_zlib == .supported;
         // Media rides the interactive writer, so its budget follows the user:
         // baseline while input is live, boosted once the host has been quiet.
-        const media_budget = if (monotonic(client.io) -| client.last_input_ns >= kitty.idle_boost_after_ns)
+        const media_budget = if (media_idle)
             kitty.transmission_budget_per_frame * kitty.idle_transmission_boost
         else
             kitty.transmission_budget_per_frame;
@@ -982,6 +1244,8 @@ const Client = struct {
                 .budget = media_budget,
             },
             .sidebar = client.view.kittySidebar(),
+            .toasts = client.view.kittyToasts(),
+            .allow_toast_transmission = media_idle,
             .metrics = client.metrics,
         };
         if (client.capabilities.kitty_graphics == .supported) client.screen.graphics = .{
@@ -1145,7 +1409,7 @@ pub fn run(
     const outbox = try gpa.create(client_outbox.Outbox);
     defer gpa.destroy(outbox);
     outbox.* = .{};
-    var select_storage: [13]ClientEvent = undefined;
+    var select_storage: [14]ClientEvent = undefined;
     var select = Io.Select(ClientEvent).init(io, &select_storage);
     defer select.cancelDiscard();
     try select.concurrent(.resized, waitResize, .{ io, &watcher });
@@ -1169,6 +1433,7 @@ pub fn run(
     var telemetry_buffer: [4096]u8 = undefined;
     var telemetry_write_pending = false;
     var metrics: ClientMetrics = .{ .started_ns = diagnostics.now(io) };
+    var notification_timer: NotificationTimer = .{};
     var client: Client = .{
         .io = io,
         .gpa = gpa,
@@ -1190,6 +1455,7 @@ pub fn run(
         .trust_store = &trust_store,
         .sidebar_rendering = options.sidebar_rendering,
         .config_mtime_ns = options.config_mtime_ns,
+        .notification_timer = &notification_timer,
     };
     try client.requests.add(initial_request_id, .initial_open);
     if (options.config_path) |path|
@@ -1331,6 +1597,12 @@ pub fn run(
             if (view.advanceSidebarAnimation()) try client.requestDraw();
             try client.scheduleSidebarAnimation();
         },
+        .notification_tick => |result| {
+            try result;
+            client.notification_tick_pending = false;
+            if (view.advanceNotifications(monotonic(io))) try client.requestDraw();
+            try client.scheduleNotificationTick();
+        },
         .telemetry_tick => |result| {
             result catch {
                 telemetry.deinit(io);
@@ -1384,7 +1656,7 @@ pub fn run(
                 .failed => |failure| {
                     client.config_diagnostic = failure.diagnostic;
                     client.config_mtime_ns = failure.mtime_ns;
-                    try client.requestDraw();
+                    try client.notifyDiagnostic("Configuration rejected");
                 },
                 .loaded => |loaded| {
                     const snapshot = &loaded.generation.snapshot;
@@ -1404,7 +1676,7 @@ pub fn run(
                         loaded.generation.deinit();
                         gpa.destroy(loaded.registry);
                         gpa.destroy(loaded.trust_store);
-                        try client.requestDraw();
+                        try client.notifyDiagnostic("Configuration rejected");
                         if (options.config_path) |path|
                             try select.concurrent(.config_reload, waitConfigReload, .{
                                 io,
@@ -1440,7 +1712,7 @@ pub fn run(
                         loaded.generation.deinit();
                         gpa.destroy(loaded.registry);
                         gpa.destroy(loaded.trust_store);
-                        try client.requestDraw();
+                        try client.notifyDiagnostic("Configuration rejected");
                         if (options.config_path) |path|
                             try select.concurrent(.config_reload, waitConfigReload, .{
                                 io,
@@ -1491,7 +1763,11 @@ pub fn run(
                     client.config_mtime_ns = loaded.mtime_ns;
                     client.next_config_generation += 1;
                     client.config_diagnostic.len = 0;
-                    try client.requestDraw();
+                    try client.notify(.{
+                        .level = .success,
+                        .title = "Configuration reloaded",
+                        .message = "The new settings are active",
+                    });
                 },
             }
             if (options.config_path) |path|
@@ -1514,12 +1790,12 @@ pub fn run(
             client.plugin_pending = false;
             const worker_result = result catch |err| {
                 client.config_diagnostic.set("plugin worker failed: {s}", .{@errorName(err)});
-                try client.requestDraw();
+                try client.notifyDiagnostic("Plugin failed");
                 continue;
             };
             const registry = client.plugin_registry.* orelse {
                 client.config_diagnostic.set("plugin registry changed while action was running", .{});
-                try client.requestDraw();
+                try client.notifyDiagnostic("Plugin failed");
                 continue;
             };
             registry.authorizeBatch(
@@ -1529,7 +1805,7 @@ pub fn run(
                 &worker_result.batch,
             ) catch |err| {
                 client.config_diagnostic.set("plugin effect denied: {s}", .{@errorName(err)});
-                try client.requestDraw();
+                try client.notifyDiagnostic("Plugin denied");
                 continue;
             };
             client.config_diagnostic.len = 0;
@@ -2162,9 +2438,29 @@ const InputHandler = struct {
                 std.math.maxInt(u16);
         }
         const model = handler.activeModel();
-        const interaction = handler.client.view.handleMouse(handler.client.tabs, model, cell_event);
+        var interaction = handler.client.view.handleMouse(
+            handler.client.tabs,
+            model,
+            cell_event,
+            monotonic(handler.client.io),
+        );
         if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
         if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
+        if (interaction.notification_target) |target| switch (target) {
+            .none => {},
+            .select_tab => |tab_id| try handler.selectTab(tab_id),
+            .select_workspace => |workspace| try handler.switchWorkspace(workspace),
+            .focus_pane => |pane_id| {
+                const previous = model.layout.focused();
+                if (model.focusPane(pane_id)) {
+                    interaction.layout_changed = model.layout.isFullscreen() and
+                        previous != model.layout.focused();
+                    handler.client.view.invalidate();
+                }
+            },
+        };
+        if (interaction.notification_target != null)
+            try handler.client.scheduleNotificationTick();
         if (handler.client.tabs.active()) |active|
             try handler.client.syncPaneFocus(&active.model);
         if (interaction.layout_changed) {
@@ -2175,7 +2471,8 @@ const InputHandler = struct {
             );
         }
         handler.redraw = handler.redraw or interaction.redraw;
-        if (interaction.select_tab != null or !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
+        if (interaction.select_tab != null or interaction.notification_target != null or
+            !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
         const wheel_delta: ?i32 = switch (cell_event.kind) {
             .scroll_up => -3,
             .scroll_down => 3,
@@ -2426,6 +2723,19 @@ const InputHandler = struct {
                 return .stop;
             },
             .enter_copy_mode => try handler.enterCopyMode(),
+            .notification => |*notification| {
+                const request_id = try handler.client.nextId();
+                try handler.client.enqueueNotificationRequest(.{
+                    .request_id = request_id,
+                    .notification = .{
+                        .level = notification.level,
+                        .duration_ms = notification.duration_ms,
+                        .target = notification.target,
+                        .title = notification.title(),
+                        .message = notification.message(),
+                    },
+                });
+            },
             .lua_callback, .lua_expr, .plugin => unreachable,
         }
         return .continue_routing;
@@ -2715,6 +3025,15 @@ test "workspace closure exits only when no predecessor survives" {
     );
 }
 
+test "agent notifications report only actionable status transitions" {
+    try std.testing.expect(!shouldNotifyAgentStatus(null, .blocked));
+    try std.testing.expect(!shouldNotifyAgentStatus(.working, .working));
+    try std.testing.expect(!shouldNotifyAgentStatus(.ready, .working));
+    try std.testing.expect(shouldNotifyAgentStatus(.working, .blocked));
+    try std.testing.expect(shouldNotifyAgentStatus(.working, .ready));
+    try std.testing.expect(shouldNotifyAgentStatus(.working, .failed));
+}
+
 test "pane launch cwd prefers the focused pane observation" {
     try std.testing.expectEqualStrings(
         "/work/agents",
@@ -2779,6 +3098,43 @@ fn waitUntil(io: Io, deadline_ns: u64) anyerror!void {
     try deadline.wait(io);
 }
 
+fn waitForNotificationTick(io: Io, timer: *NotificationTimer) anyerror!void {
+    while (true) {
+        const deadline_ns = timer.deadline_ns.load(.acquire);
+        if (monotonic(io) >= deadline_ns) return;
+        switch (try waitForNotificationTimerEvent(io, timer, deadline_ns)) {
+            .deadline => return,
+            .rescheduled => timer.wake.reset(),
+        }
+    }
+}
+
+fn waitForNotificationTimerEvent(
+    io: Io,
+    timer: *NotificationTimer,
+    deadline_ns: u64,
+) anyerror!NotificationTimerResult {
+    var storage: [2]NotificationTimerEvent = undefined;
+    var select = Io.Select(NotificationTimerEvent).init(io, &storage);
+    defer select.cancelDiscard();
+    try select.concurrent(.deadline, waitUntil, .{ io, deadline_ns });
+    try select.concurrent(.rescheduled, waitForNotificationReschedule, .{ io, &timer.wake });
+    return switch (try select.await()) {
+        .deadline => |result| blk: {
+            try result;
+            break :blk .deadline;
+        },
+        .rescheduled => |result| blk: {
+            try result;
+            break :blk .rescheduled;
+        },
+    };
+}
+
+fn waitForNotificationReschedule(io: Io, event: *Io.Event) anyerror!void {
+    try event.wait(io);
+}
+
 fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {
     return watcher.wait(io);
 }
@@ -2798,21 +3154,30 @@ fn sendClient(
 const CombinedGraphicsWriter = struct {
     panes: kitty.KittyGraphicsWriter,
     sidebar: *kitty.KittySidebarRenderer,
+    toasts: *toast_graphics.Renderer,
+    allow_toast_transmission: bool,
     metrics: *ClientMetrics,
 
     fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
         const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
         const pane_bytes = try self.panes.write(writer);
-        // An open budget-paced transfer owns the graphics stream; the sidebar
-        // keeps its dirty flags and emits once the transfer closes.
-        var sidebar_bytes: usize = 0;
+        // An open budget-paced transfer owns the graphics stream. Toast
+        // deletions and placements remain cheap, while a new toast texture
+        // waits for an otherwise-idle pane-media pass.
+        var toast_bytes: usize = 0;
         if (self.panes.store.partial == null)
+            toast_bytes = try self.toasts.write(
+                writer,
+                pane_bytes == 0 and self.allow_toast_transmission,
+            );
+        var sidebar_bytes: usize = 0;
+        if (self.panes.store.partial == null and toast_bytes == 0)
             sidebar_bytes = try self.sidebar.write(writer);
         if (comptime diagnostics.enabled) {
             self.metrics.pane_graphics_flushed_bytes += pane_bytes;
             self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
         }
-        return pane_bytes + sidebar_bytes;
+        return pane_bytes + toast_bytes + sidebar_bytes;
     }
 };
 

@@ -189,6 +189,11 @@ pub fn encodeResponse(
         }),
         .tab_closed => |closed| try schema.encodeTabClosed(buffer, closed),
         .tab_moved => |moved| try schema.encodeTabMoved(buffer, moved),
+        .notification => |*notification| try schema.encodeNotification(
+            buffer,
+            notification.view(),
+        ),
+        .notification_shown => |shown| try schema.encodeNotificationShown(buffer, shown),
         .history_result => |result| payload: {
             history_result.* = result;
             break :payload try encodeHistoryResult(buffer, result, &history_storage);

@@ -40,6 +40,30 @@ const OwnedWorkspaceRename = struct {
     }
 };
 
+const OwnedNotification = struct {
+    request_id: schema.RequestId,
+    level: schema.NotificationLevel,
+    duration_ms: u32,
+    target: schema.NotificationTarget,
+    title: [schema.max_notification_title_bytes]u8 = undefined,
+    title_len: u8,
+    message: [schema.max_notification_message_bytes]u8 = undefined,
+    message_len: u8,
+
+    fn view(value: *const OwnedNotification) schema.ShowNotification {
+        return .{
+            .request_id = value.request_id,
+            .notification = .{
+                .level = value.level,
+                .duration_ms = value.duration_ms,
+                .target = value.target,
+                .title = value.title[0..value.title_len],
+                .message = value.message[0..value.message_len],
+            },
+        };
+    }
+};
+
 pub const Message = union(enum) {
     open_pane: schema.OpenPane,
     pane_input: OwnedInput,
@@ -62,6 +86,7 @@ pub const Message = union(enum) {
     rename_workspace: OwnedWorkspaceRename,
     set_pane_viewport: schema.SetPaneViewport,
     copy_selection: schema.CopySelection,
+    show_notification: OwnedNotification,
 };
 
 pub const Stats = struct {
@@ -92,7 +117,7 @@ pub const Outbox = struct {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
             .frame_ack => |ack| return outbox.pushAck(ack),
-            .pane_input, .rename_tab, .rename_workspace => unreachable,
+            .pane_input, .rename_tab, .rename_workspace, .show_notification => unreachable,
             else => {},
         }
         try outbox.append(message);
@@ -146,6 +171,23 @@ pub const Outbox = struct {
         try outbox.append(.{ .rename_workspace = owned });
     }
 
+    pub fn pushNotification(outbox: *Outbox, request: schema.ShowNotification) !void {
+        if (request.notification.title.len > schema.max_notification_title_bytes or
+            request.notification.message.len > schema.max_notification_message_bytes)
+            return error.NotificationTooLarge;
+        var owned: OwnedNotification = .{
+            .request_id = request.request_id,
+            .level = request.notification.level,
+            .duration_ms = request.notification.duration_ms,
+            .target = request.notification.target,
+            .title_len = @intCast(request.notification.title.len),
+            .message_len = @intCast(request.notification.message.len),
+        };
+        @memcpy(owned.title[0..request.notification.title.len], request.notification.title);
+        @memcpy(owned.message[0..request.notification.message.len], request.notification.message);
+        try outbox.append(.{ .show_notification = owned });
+    }
+
     pub fn peek(outbox: *const Outbox) ?*const Message {
         if (outbox.len == 0) return null;
         return &outbox.items[outbox.head];
@@ -194,6 +236,7 @@ pub const Outbox = struct {
             }),
             .set_pane_viewport => |value| schema.encodeSetPaneViewport(buffer, value),
             .copy_selection => |value| schema.encodeCopySelection(buffer, value),
+            .show_notification => |*value| schema.encodeShowNotification(buffer, value.view()),
         };
     }
 

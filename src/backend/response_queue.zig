@@ -48,6 +48,41 @@ pub const PendingTabRenamed = struct {
     }
 };
 
+pub const PendingNotification = struct {
+    level: schema.NotificationLevel,
+    duration_ms: u32,
+    target: schema.NotificationTarget,
+    title_bytes: [schema.max_notification_title_bytes]u8 = undefined,
+    title_len: u8,
+    message_bytes: [schema.max_notification_message_bytes]u8 = undefined,
+    message_len: u8,
+
+    pub fn init(notification: schema.Notification) PendingNotification {
+        std.debug.assert(notification.title.len <= schema.max_notification_title_bytes);
+        std.debug.assert(notification.message.len <= schema.max_notification_message_bytes);
+        var pending: PendingNotification = .{
+            .level = notification.level,
+            .duration_ms = notification.duration_ms,
+            .target = notification.target,
+            .title_len = @intCast(notification.title.len),
+            .message_len = @intCast(notification.message.len),
+        };
+        @memcpy(pending.title_bytes[0..notification.title.len], notification.title);
+        @memcpy(pending.message_bytes[0..notification.message.len], notification.message);
+        return pending;
+    }
+
+    pub fn view(notification: *const PendingNotification) schema.Notification {
+        return .{
+            .level = notification.level,
+            .duration_ms = notification.duration_ms,
+            .target = notification.target,
+            .title = notification.title_bytes[0..notification.title_len],
+            .message = notification.message_bytes[0..notification.message_len],
+        };
+    }
+};
+
 pub const PendingResponse = union(enum) {
     pane_opened: schema.PaneOpened,
     request_failed: PendingFailure,
@@ -57,6 +92,8 @@ pub const PendingResponse = union(enum) {
     tab_renamed: PendingTabRenamed,
     tab_closed: schema.TabClosed,
     tab_moved: schema.TabMoved,
+    notification: PendingNotification,
+    notification_shown: schema.NotificationShown,
     history_result: *history.model.QueryResult,
 };
 
@@ -98,6 +135,32 @@ pub const ResponseQueue = struct {
             }
             queue.dropped += 1;
         };
+    }
+
+    pub fn pushNotification(queue: *ResponseQueue, notification: PendingNotification) bool {
+        queue.push(.{ .notification = notification }) catch {
+            queue.dropped += 1;
+            return false;
+        };
+        return true;
+    }
+
+    pub fn setNotificationDelivery(
+        queue: *ResponseQueue,
+        request_id: schema.RequestId,
+        delivered_clients: u8,
+    ) void {
+        for (0..queue.len) |offset| {
+            const index = (@as(usize, queue.head) + offset) % queue.items.len;
+            switch (queue.items[index]) {
+                .notification_shown => |*shown| if (shown.request_id == request_id) {
+                    shown.delivered_clients = delivered_clients;
+                    return;
+                },
+                else => {},
+            }
+        }
+        unreachable;
     }
 
     pub fn peek(queue: *ResponseQueue) ?*PendingResponse {

@@ -3,8 +3,12 @@
 const std = @import("std");
 const action_mod = @import("action.zig");
 const lua_config = @import("lua_config.zig");
+const core = @import("telar-core");
 
-pub const max_bytes = 1 + lua_config.max_callback_effects * 3;
+const schema = core.schema;
+const notification_max_bytes = 1 + 1 + 4 + 1 + 8 + 1 +
+    schema.max_notification_title_bytes + 1 + schema.max_notification_message_bytes;
+pub const max_bytes = 1 + lua_config.max_callback_effects * notification_max_bytes;
 
 pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
@@ -49,6 +53,28 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writer.writeByte(value);
         },
         .enter_copy_mode => return error.InvalidWorkerEffect,
+        .notification => |*value| {
+            try writer.writeByte(18);
+            try writer.writeByte(@intFromEnum(value.level));
+            try writeU32(&writer, value.duration_ms);
+            switch (value.target) {
+                .none => try writer.writeByte(0),
+                .pane => |pane_id| {
+                    try writer.writeByte(1);
+                    try writeU64(&writer, schema.id.raw(pane_id));
+                },
+                .tab => |tab_id| {
+                    try writer.writeByte(2);
+                    try writeU64(&writer, schema.id.raw(tab_id));
+                },
+                .workspace => |workspace_id| {
+                    try writer.writeByte(3);
+                    try writeU64(&writer, schema.id.raw(workspace_id));
+                },
+            }
+            try writeSized8(&writer, value.title());
+            try writeSized8(&writer, value.message());
+        },
         .lua_callback, .lua_expr, .plugin => return error.InvalidWorkerEffect,
     };
     return writer.buffered();
@@ -94,12 +120,75 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
             15 => .new_workspace,
             16 => .rename_workspace,
             17 => .{ .select_workspace = try byte(bytes, &offset) },
+            18 => notification: {
+                const level = std.enums.fromInt(
+                    schema.NotificationLevel,
+                    try byte(bytes, &offset),
+                ) orelse return error.InvalidWorkerEffect;
+                const duration_ms = try readU32(bytes, &offset);
+                const target: schema.NotificationTarget = switch (try byte(bytes, &offset)) {
+                    0 => .none,
+                    1 => .{ .pane = schema.id.pane(try readU64(bytes, &offset)) catch
+                        return error.InvalidWorkerEffect },
+                    2 => .{ .tab = schema.id.tab(try readU64(bytes, &offset)) catch
+                        return error.InvalidWorkerEffect },
+                    3 => .{ .workspace = schema.id.workspace(try readU64(bytes, &offset)) catch
+                        return error.InvalidWorkerEffect },
+                    else => return error.InvalidWorkerEffect,
+                };
+                const title = try sized8(bytes, &offset);
+                const message = try sized8(bytes, &offset);
+                break :notification .{ .notification = action_mod.Notification.init(
+                    level,
+                    duration_ms,
+                    target,
+                    title,
+                    message,
+                ) catch return error.InvalidWorkerEffect };
+            },
             else => return error.UnknownWorkerEffect,
         };
     }
     if (offset != bytes.len) return error.TrailingWorkerResult;
     batch.len = count;
     return batch;
+}
+
+fn writeU32(writer: *std.Io.Writer, value: u32) !void {
+    var bytes: [4]u8 = undefined;
+    std.mem.writeInt(u32, &bytes, value, .little);
+    try writer.writeAll(&bytes);
+}
+
+fn writeU64(writer: *std.Io.Writer, value: u64) !void {
+    var bytes: [8]u8 = undefined;
+    std.mem.writeInt(u64, &bytes, value, .little);
+    try writer.writeAll(&bytes);
+}
+
+fn writeSized8(writer: *std.Io.Writer, bytes: []const u8) !void {
+    if (bytes.len > std.math.maxInt(u8)) return error.InvalidWorkerEffect;
+    try writer.writeByte(@intCast(bytes.len));
+    try writer.writeAll(bytes);
+}
+
+fn readU32(bytes: []const u8, offset: *usize) !u32 {
+    if (bytes.len -| offset.* < 4) return error.TruncatedWorkerResult;
+    defer offset.* += 4;
+    return std.mem.readInt(u32, bytes[offset.*..][0..4], .little);
+}
+
+fn readU64(bytes: []const u8, offset: *usize) !u64 {
+    if (bytes.len -| offset.* < 8) return error.TruncatedWorkerResult;
+    defer offset.* += 8;
+    return std.mem.readInt(u64, bytes[offset.*..][0..8], .little);
+}
+
+fn sized8(bytes: []const u8, offset: *usize) ![]const u8 {
+    const len = try byte(bytes, offset);
+    if (bytes.len -| offset.* < len) return error.TruncatedWorkerResult;
+    defer offset.* += len;
+    return bytes[offset.*..][0..len];
 }
 
 fn byte(bytes: []const u8, offset: *usize) !u8 {
@@ -117,7 +206,14 @@ test "plugin result protocol round trips semantic effects" {
     batch.items[4] = .toggle_sidebar;
     batch.items[5] = .new_workspace;
     batch.items[6] = .{ .select_workspace = 3 };
-    batch.len = 7;
+    batch.items[7] = .{ .notification = try action_mod.Notification.init(
+        .warning,
+        3000,
+        .{ .workspace = @enumFromInt(9) },
+        "Agent waiting",
+        "Review its question",
+    ) };
+    batch.len = 8;
     var buffer: [max_bytes]u8 = undefined;
     try std.testing.expectEqualDeep(batch, try decode(try encode(&buffer, &batch)));
 }

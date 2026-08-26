@@ -22,6 +22,11 @@ pub const max_history_results = 100;
 pub const max_history_command_bytes = 64 * 1024;
 pub const max_agent_snapshot_entries = max_panes_per_tab;
 pub const max_workspace_list_entries = 64;
+pub const max_notification_title_bytes = 48;
+pub const max_notification_message_bytes = 192;
+pub const min_notification_duration_ms: u32 = 500;
+pub const max_notification_duration_ms: u32 = 60_000;
+pub const default_notification_duration_ms: u32 = 4_000;
 
 pub const TerminalSize = struct {
     cols: u16,
@@ -121,6 +126,22 @@ pub const HistoryScope = enum(u8) {
 pub const HistoryStatus = enum(u8) {
     completed = 0,
     interrupted = 1,
+};
+
+pub const NotificationLevel = enum(u8) {
+    info = 0,
+    success = 1,
+    warning = 2,
+    failure = 3,
+};
+
+/// A notification click resolves to current client state. IDs may become
+/// stale between publication and activation; clients ignore stale targets.
+pub const NotificationTarget = union(enum) {
+    none,
+    pane: id.PaneId,
+    tab: id.TabId,
+    workspace: id.WorkspaceId,
 };
 
 pub const HistoryEntry = struct {

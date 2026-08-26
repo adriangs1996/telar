@@ -34,6 +34,7 @@ pub const Continuation = union(enum) {
     rename_tab: schema.TabLocation,
     close_tab: schema.TabLocation,
     move_tab: schema.TabLocation,
+    notification,
     ignored,
 
     fn group(continuation: Continuation) Group {
@@ -45,6 +46,7 @@ pub const Continuation = union(enum) {
             .split, .close_pane => .pane_operation,
             .attach_pane => .attachment,
             .create_tab, .rename_tab, .close_tab, .move_tab => .tab_operation,
+            .notification => .notification,
             .ignored => .ignored,
         };
     }
@@ -55,7 +57,7 @@ pub const Continuation = union(enum) {
             .split => |split| split.location.tab_id,
             .close_pane, .attach_pane => |operation| operation.location.tab_id,
             .rename_tab, .close_tab, .move_tab => |location| location.tab_id,
-            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .create_tab, .ignored => null,
+            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .create_tab, .notification, .ignored => null,
         };
     }
 };
@@ -68,6 +70,7 @@ pub const Group = enum {
     pane_operation,
     attachment,
     tab_operation,
+    notification,
     ignored,
 };
 

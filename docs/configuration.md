@@ -103,6 +103,27 @@ Clicking the `❖` marker or the counter does the same; clicking a workspace
 name switches to it. The collapse state is client-only and is lost when the
 client exits. The default binding is `prefix`, then `w`.
 
+`telar.action.notification(options)` publishes a toast through the runtime.
+It accepts a required `title`, optional `body`, `level` (`info`, `success`,
+`warning`, or `failure`), and `duration_ms` from 500 to 60000. At most one of
+`pane_id`, `tab_id`, or `workspace_id` may be supplied; it becomes the action
+performed when the toast is clicked.
+
+```lua
+telar.bind({ "n" }, function(ctx)
+  return telar.action.notification({
+    title = "Agent waiting",
+    body = "Review its question",
+    level = "warning",
+    pane_id = ctx.focused_pane_id,
+  })
+end)
+```
+
+The runtime broadcasts the event to every connected UI client. Each client
+owns its bounded toast queue, animation, dismissal, and stale-target checks.
+See [`notifications.md`](notifications.md) for the CLI and plugin interfaces.
+
 A callback receives an immutable snapshot:
 
 ```lua

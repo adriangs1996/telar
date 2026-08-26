@@ -75,8 +75,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    const freetype = addFreeType(b, target, optimize);
     frontend.addImport("telar-core", core);
     frontend.addImport("lua-api", lua_api);
+    frontend.addImport("freetype", freetype);
 
     // One shipped binary contains both the client and runtime entry points.
     const exe = b.addExecutable(.{
@@ -142,8 +144,10 @@ pub fn build(b: *std.Build) void {
         .optimize = bench_optimize,
         .link_libc = true,
     });
+    const bench_freetype = addFreeType(b, target, bench_optimize);
     bench_frontend.addImport("telar-core", bench_core);
     bench_frontend.addImport("lua-api", bench_lua_api);
+    bench_frontend.addImport("freetype", bench_freetype);
 
     const benchmarks = b.addExecutable(.{
         .name = "telar-benchmarks",
@@ -254,6 +258,8 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/term.zig", .libc = true },
         .{ .path = "src/frontend/frame.zig", .libc = true },
         .{ .path = "src/frontend/pace.zig" },
+        .{ .path = "src/frontend/text_rasterizer.zig", .libc = true },
+        .{ .path = "src/frontend/toast_graphics.zig", .libc = true },
         .{ .path = "src/frontend/edit.zig" },
         .{ .path = "src/frontend/keybind.zig" },
         .{ .path = "src/frontend/action.zig" },
@@ -304,6 +310,7 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addImport("telar-frontend", frontend);
         tests.root_module.addImport("lua-api", lua_api);
         tests.root_module.addImport("tls", tls);
+        tests.root_module.addImport("freetype", freetype);
         tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
         tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
         tests.root_module.linkSystemLibrary("nghttp2", .{});
@@ -405,24 +412,40 @@ pub fn build(b: *std.Build) void {
         .{ .os_tag = .windows, .cpu_arch = .x86_64 },
         .{ .os_tag = .linux, .cpu_arch = .x86_64, .abi = .gnu },
     }) |query| {
+        const cross_target = b.resolveTargetQuery(query);
         const check = b.addObject(.{
             .name = b.fmt("platform-{s}", .{@tagName(query.os_tag.?)}),
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/frontend/platform.zig"),
-                .target = b.resolveTargetQuery(query),
+                .target = cross_target,
                 .optimize = .Debug,
             }),
         });
         cross_step.dependOn(&check.step);
+        const raster_check = b.addLibrary(.{
+            .name = b.fmt("text-rasterizer-{s}", .{@tagName(query.os_tag.?)}),
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/frontend/text_rasterizer.zig"),
+                .target = cross_target,
+                .optimize = .Debug,
+                .link_libc = true,
+            }),
+            .linkage = .static,
+        });
+        raster_check.root_module.addImport(
+            "freetype",
+            addFreeType(b, cross_target, .Debug),
+        );
+        cross_step.dependOn(&raster_check.step);
         if (query.os_tag.? == .linux) {
             const cross_unicode = b.createModule(.{
                 .root_source_file = b.path("src/core/unicode_fake.zig"),
-                .target = b.resolveTargetQuery(query),
+                .target = cross_target,
                 .optimize = .Debug,
             });
             const cross_core = b.createModule(.{
                 .root_source_file = b.path("src/core/root.zig"),
-                .target = b.resolveTargetQuery(query),
+                .target = cross_target,
                 .optimize = .Debug,
             });
             cross_core.addImport("unicode", cross_unicode);
@@ -430,7 +453,7 @@ pub fn build(b: *std.Build) void {
                 .name = "local-transport-linux",
                 .root_module = b.createModule(.{
                     .root_source_file = b.path("src/backend/transport/local.zig"),
-                    .target = b.resolveTargetQuery(query),
+                    .target = cross_target,
                     .optimize = .Debug,
                     .link_libc = true,
                 }),
@@ -441,6 +464,131 @@ pub fn build(b: *std.Build) void {
     }
     test_step.dependOn(cross_step);
 }
+
+/// Builds the same static FreeType and HarfBuzz sources Ghostty uses for font
+/// faces and shaping. Telar leaves system zlib disabled, so FreeType's bundled
+/// gzip decoder remains self-contained and the frontend gains no runtime
+/// library dependency.
+fn addFreeType(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Module {
+    const upstream = b.dependency("freetype", .{});
+    const harfbuzz = b.dependency("harfbuzz", .{});
+    const module = b.createModule(.{
+        .root_source_file = b.path("src/frontend/freetype.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+        .link_libcpp = target.result.abi != .msvc,
+    });
+    module.addIncludePath(upstream.path("include"));
+    module.addIncludePath(harfbuzz.path("src"));
+    const flags: []const []const u8 = if (target.result.os.tag == .windows)
+        &.{
+            "-DFT2_BUILD_LIBRARY",
+            "-fno-sanitize=undefined",
+        }
+    else
+        &.{
+            "-DFT2_BUILD_LIBRARY",
+            "-DHAVE_UNISTD_H",
+            "-DHAVE_FCNTL_H",
+            "-fno-sanitize=undefined",
+        };
+    module.addCSourceFiles(.{
+        .root = upstream.path(""),
+        .files = freetype_sources,
+        .flags = flags,
+    });
+    module.addCSourceFile(.{
+        .file = if (target.result.os.tag == .linux)
+            upstream.path("builds/unix/ftsystem.c")
+        else if (target.result.os.tag == .windows)
+            upstream.path("builds/windows/ftsystem.c")
+        else
+            upstream.path("src/base/ftsystem.c"),
+        .flags = flags,
+    });
+    module.addCSourceFile(.{
+        .file = if (target.result.os.tag == .windows)
+            upstream.path("builds/windows/ftdebug.c")
+        else
+            upstream.path("src/base/ftdebug.c"),
+        .flags = flags,
+    });
+    const harfbuzz_flags: []const []const u8 = if (target.result.os.tag == .windows)
+        &.{
+            "-DHAVE_STDBOOL_H",
+            "-DHAVE_FREETYPE=1",
+            "-DHAVE_FT_GET_VAR_BLEND_COORDINATES=1",
+            "-DHAVE_FT_SET_VAR_BLEND_COORDINATES=1",
+            "-DHAVE_FT_DONE_MM_VAR=1",
+            "-DHAVE_FT_GET_TRANSFORM=1",
+            "-fno-sanitize=undefined",
+        }
+    else
+        &.{
+            "-DHAVE_STDBOOL_H",
+            "-DHAVE_UNISTD_H",
+            "-DHAVE_SYS_MMAN_H",
+            "-DHAVE_PTHREAD=1",
+            "-DHAVE_FREETYPE=1",
+            "-DHAVE_FT_GET_VAR_BLEND_COORDINATES=1",
+            "-DHAVE_FT_SET_VAR_BLEND_COORDINATES=1",
+            "-DHAVE_FT_DONE_MM_VAR=1",
+            "-DHAVE_FT_GET_TRANSFORM=1",
+        };
+    module.addCSourceFile(.{
+        .file = harfbuzz.path("src/harfbuzz.cc"),
+        .flags = harfbuzz_flags,
+    });
+    return module;
+}
+
+const freetype_sources: []const []const u8 = &.{
+    "src/autofit/autofit.c",
+    "src/base/ftbase.c",
+    "src/base/ftbbox.c",
+    "src/base/ftbdf.c",
+    "src/base/ftbitmap.c",
+    "src/base/ftcid.c",
+    "src/base/ftfstype.c",
+    "src/base/ftgasp.c",
+    "src/base/ftglyph.c",
+    "src/base/ftgxval.c",
+    "src/base/ftinit.c",
+    "src/base/ftmm.c",
+    "src/base/ftotval.c",
+    "src/base/ftpatent.c",
+    "src/base/ftpfr.c",
+    "src/base/ftstroke.c",
+    "src/base/ftsynth.c",
+    "src/base/fttype1.c",
+    "src/base/ftwinfnt.c",
+    "src/bdf/bdf.c",
+    "src/bzip2/ftbzip2.c",
+    "src/cache/ftcache.c",
+    "src/cff/cff.c",
+    "src/cid/type1cid.c",
+    "src/gzip/ftgzip.c",
+    "src/lzw/ftlzw.c",
+    "src/pcf/pcf.c",
+    "src/pfr/pfr.c",
+    "src/psaux/psaux.c",
+    "src/pshinter/pshinter.c",
+    "src/psnames/psnames.c",
+    "src/raster/raster.c",
+    "src/sdf/sdf.c",
+    "src/sfnt/sfnt.c",
+    "src/smooth/smooth.c",
+    "src/svg/svg.c",
+    "src/truetype/truetype.c",
+    "src/type1/type1.c",
+    "src/type42/type42.c",
+    "src/winfonts/winfnt.c",
+};
 
 fn addLua(
     b: *std.Build,

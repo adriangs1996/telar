@@ -167,6 +167,7 @@ pub const Registry = struct {
                 .select_tab,
                 .enter_copy_mode,
                 => null,
+                .notification => .notifications,
                 .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
             };
             if (capability) |required| try registry.authorize(package_index, required);
@@ -612,6 +613,43 @@ test "privileged plugin effects require a digest-bound capability grant" {
         error.StalePluginWorker,
         registry.authorizeBatch(0, plugin.stableId(manifest.id()), stale_digest, &batch),
     );
+}
+
+test "plugin notification effects require the notifications capability" {
+    const manifest = try plugin.parseManifest(
+        std.testing.allocator,
+        "{\"api_version\":1,\"id\":\"dev.telar.notify\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"notify\"],\"capabilities\":[\"notifications\"]}",
+    );
+    const digest: plugin.Digest = @splat(5);
+    var registry: Registry = .{};
+    registry.packages[0] = .{
+        .manifest = manifest,
+        .digest = digest,
+        .root_len = 0,
+        .entry_len = 0,
+    };
+    registry.count = 1;
+    var batch: lua_config.EffectBatch = .{};
+    batch.items[0] = .{ .notification = try action_mod.Notification.init(
+        .info,
+        2000,
+        .none,
+        "Ready",
+        "",
+    ) };
+    batch.len = 1;
+
+    try std.testing.expectError(
+        error.CapabilityNotGranted,
+        registry.authorizeBatch(0, plugin.stableId(manifest.id()), digest, &batch),
+    );
+    registry.grants[0] = .{
+        .plugin_hash = plugin.stableId(manifest.id()),
+        .digest = digest,
+        .capabilities = plugin.CapabilitySet.initOne(.notifications),
+    };
+    registry.grant_count = 1;
+    try registry.authorizeBatch(0, plugin.stableId(manifest.id()), digest, &batch);
 }
 
 test "configured plugin actions resolve before the keymap becomes active" {

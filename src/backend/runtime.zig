@@ -44,6 +44,7 @@ const max_clients = 8;
 const PendingResponse = response_queue.PendingResponse;
 const PendingTabCreated = response_queue.PendingTabCreated;
 const PendingTabRenamed = response_queue.PendingTabRenamed;
+const PendingNotification = response_queue.PendingNotification;
 const ResponseQueue = response_queue.ResponseQueue;
 const encodeFrame = runtime_encoder.encodeFrame;
 const encodeResponse = runtime_encoder.encodeResponse;
@@ -694,6 +695,20 @@ const Server = struct {
                 session.responses.resync_previous_workspace = previous_workspace;
             }
         }
+    }
+
+    fn publishNotification(
+        server: *Server,
+        notification: schema.Notification,
+    ) u8 {
+        const pending = PendingNotification.init(notification);
+        var delivered: u8 = 0;
+        for (&server.clients.items) |*slot| {
+            const recipient = slot.* orelse continue;
+            if (!recipient.active() or recipient.role != .ui) continue;
+            if (recipient.responses.pushNotification(pending)) delivered += 1;
+        }
+        return delivered;
     }
 
     fn pumpAll(server: *Server) void {
@@ -1541,6 +1556,15 @@ const Server = struct {
                 }
                 if (comptime diagnostics.enabled) metrics.history_queries += 1;
             },
+            .show_notification => |request| {
+                try responses.push(.{ .notification_shown = .{
+                    .request_id = request.request_id,
+                    .delivered_clients = 0,
+                } });
+                const delivered = server.publishNotification(request.notification);
+                responses.setNotificationDelivery(request.request_id, delivered);
+                server.pumpAll();
+            },
             .runtime_stop => {
                 server.requestShutdown(session.key);
             },
@@ -1747,7 +1771,7 @@ fn serveInternal(
                 );
             }
             if (session.role == .undecided) session.role = switch (message) {
-                .runtime_stop, .query_history => .control,
+                .runtime_stop, .query_history, .show_notification => .control,
                 else => .ui,
             };
             server.dispatch(session, message) catch {

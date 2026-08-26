@@ -2283,6 +2283,73 @@ test "a stale attachment command does not disconnect the client" {
     return error.PaneOpenTimedOut;
 }
 
+test "runtime broadcasts a bounded notification and acknowledges delivery" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(
+        &path_buffer,
+        "{s}/notification.sock",
+        .{directory_buffer[0..directory_len]},
+    );
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var ui_client = try connectRuntimeForTest(io, path);
+    defer ui_client.deinit(io);
+    var ui_send: [32]u8 = undefined;
+    try ui_client.send(io, try schema.encodeConfigureGraphics(&ui_send, .{ .shared = false }));
+
+    var command = try connectRuntimeForTest(io, path);
+    defer command.deinit(io);
+    var command_send: [512]u8 = undefined;
+    const request_id: schema.RequestId = @enumFromInt(7);
+    try command.send(io, try schema.encodeShowNotification(&command_send, .{
+        .request_id = request_id,
+        .notification = .{
+            .level = .success,
+            .duration_ms = 2500,
+            .target = .{ .pane = @enumFromInt(42) },
+            .title = "Build complete",
+            .message = "Open the pane",
+        },
+    }));
+
+    var ui_receive: [512]u8 = undefined;
+    const notification = (try schema.decodeServer(
+        try ui_client.receive(io, &ui_receive),
+    )).notification;
+    try std.testing.expectEqual(schema.NotificationLevel.success, notification.level);
+    try std.testing.expectEqualStrings("Build complete", notification.title);
+    try std.testing.expectEqualStrings("Open the pane", notification.message);
+    try std.testing.expectEqual(
+        @as(schema.PaneId, @enumFromInt(42)),
+        notification.target.pane,
+    );
+
+    var command_receive: [64]u8 = undefined;
+    const shown = (try schema.decodeServer(
+        try command.receive(io, &command_receive),
+    )).notification_shown;
+    try std.testing.expectEqual(request_id, shown.request_id);
+    try std.testing.expectEqual(@as(u8, 1), shown.delivered_clients);
+}
+
 fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     for (0..200) |_| {
         var connection = frontend.transport.local.connect(io, path) catch {
