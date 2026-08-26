@@ -1,9 +1,13 @@
-//! Client-owned copy-mode cursor and selection.
+//! Client-owned copy mode: cursor, selection, vim motions and frame
+//! reconciliation. Everything here is pure over a cell buffer and a scroll
+//! position; the client applies the returned effects.
 
 const std = @import("std");
 const core = @import("telar-core");
+const keybind = @import("keybind.zig");
 
 const schema = core.schema;
+const ui = core.ui;
 
 pub const Point = struct {
     x: u16,
@@ -126,6 +130,248 @@ fn less(a: Point, b: Point) bool {
     return a.y < b.y or (a.y == b.y and a.x < b.x);
 }
 
+/// What one handled key asks the client to do. Cursor, selection and
+/// viewport changes already happened inside the state; the client only
+/// projects them and, on exit, copies the selection.
+pub const Effect = struct {
+    handled: bool = true,
+    exit: bool = false,
+    copy: bool = false,
+};
+
+/// Interprets one key over the pane's visible cells. Pure: the only mutation
+/// is the copy-mode state itself.
+pub fn applyKey(
+    state: *State,
+    pressed: keybind.Key,
+    buffer: *const ui.Buffer,
+    scroll: schema.frame.Scroll,
+) Effect {
+    const page: i32 = @intCast(@max(@as(u16, 1), buffer.h -| 1));
+    switch (pressed.code) {
+        .escape => if (!state.clearSelection()) return .{ .exit = true },
+        .enter => return .{ .exit = true, .copy = true },
+        .left => state.horizontal(-1, buffer.w),
+        .right => state.horizontal(1, buffer.w),
+        .up => state.vertical(-1, scroll, buffer.h),
+        .down => state.vertical(1, scroll, buffer.h),
+        .home => state.lineStart(),
+        .end => lastNonBlank(state, buffer, scroll),
+        .page_up => state.vertical(-page, scroll, buffer.h),
+        .page_down => state.vertical(page, scroll, buffer.h),
+        .char => |char| if (pressed.mods.ctrl) {
+            if (char.eql("b"))
+                state.vertical(-page, scroll, buffer.h)
+            else if (char.eql("f"))
+                state.vertical(page, scroll, buffer.h)
+            else if (char.eql("u"))
+                state.vertical(-@divTrunc(page, 2), scroll, buffer.h)
+            else if (char.eql("d"))
+                state.vertical(@divTrunc(page, 2), scroll, buffer.h)
+            else
+                return .{ .handled = false };
+        } else if (char.eql("h")) {
+            state.horizontal(-1, buffer.w);
+        } else if (char.eql("j")) {
+            state.vertical(1, scroll, buffer.h);
+        } else if (char.eql("k")) {
+            state.vertical(-1, scroll, buffer.h);
+        } else if (char.eql("l")) {
+            state.horizontal(1, buffer.w);
+        } else if (char.eql("0")) {
+            state.lineStart();
+        } else if (char.eql("^")) {
+            firstNonBlank(state, buffer, scroll);
+        } else if (char.eql("$")) {
+            lastNonBlank(state, buffer, scroll);
+        } else if (char.eql("w")) {
+            wordForward(state, buffer, scroll, false);
+        } else if (char.eql("e")) {
+            wordForward(state, buffer, scroll, true);
+        } else if (char.eql("b")) {
+            wordBackward(state, buffer, scroll);
+        } else if (char.eql("{")) {
+            paragraph(state, buffer, scroll, -1);
+        } else if (char.eql("}")) {
+            paragraph(state, buffer, scroll, 1);
+        } else if (char.eql("g")) {
+            state.top();
+        } else if (char.eql("G")) {
+            state.bottom(scroll, buffer.h);
+        } else if (char.eql("v") or char.eql(" ")) {
+            state.toggleSelection(false);
+        } else if (char.eql("V")) {
+            state.toggleSelection(true);
+        } else if (char.eql("y")) {
+            return .{ .exit = true, .copy = true };
+        } else if (char.eql("q")) {
+            return .{ .exit = true };
+        } else {
+            return .{ .handled = false };
+        },
+        else => return .{ .handled = false },
+    }
+    return .{};
+}
+
+/// Reconciles the copy cursor with a runtime frame. Pruned scrollback pulls
+/// the cursor and anchor up with it while the viewport sat at the pruned
+/// edge; both are then clamped to the new history length.
+pub fn onFrame(state: *State, previous_offset: u32, scroll: schema.frame.Scroll) void {
+    if (scroll.offset < previous_offset and state.viewport_offset == previous_offset) {
+        const pruned = previous_offset - scroll.offset;
+        state.cursor.y -|= pruned;
+        if (state.anchor) |*anchor| anchor.y -|= pruned;
+    }
+    state.cursor.y = @min(state.cursor.y, scroll.total_rows -| 1);
+    if (state.anchor) |*anchor|
+        anchor.y = @min(anchor.y, scroll.total_rows -| 1);
+    state.viewport_offset = scroll.offset;
+}
+
+const WordClass = enum { space, word, punctuation };
+
+fn rowIndex(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, absolute_y: u32) ?u16 {
+    if (absolute_y < scroll.offset or absolute_y >= scroll.offset + buffer.h)
+        return null;
+    return @intCast(absolute_y - scroll.offset);
+}
+
+fn firstNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+    const row = rowIndex(buffer, scroll, state.cursor.y) orelse return state.lineStart();
+    var x: u16 = 0;
+    while (x < buffer.w) : (x += 1) {
+        const text = buffer.cells[@as(usize, row) * buffer.w + x].text();
+        if (text.len != 0 and !std.ascii.isWhitespace(text[0])) break;
+    }
+    state.cursor.x = @min(x, buffer.w -| 1);
+}
+
+fn lastNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+    const row = rowIndex(buffer, scroll, state.cursor.y) orelse return state.lineEnd(buffer.w);
+    var x = buffer.w;
+    while (x != 0) {
+        x -= 1;
+        const text = buffer.cells[@as(usize, row) * buffer.w + x].text();
+        if (text.len != 0 and !std.ascii.isWhitespace(text[0])) break;
+    }
+    state.cursor.x = x;
+}
+
+fn paragraph(
+    state: *State,
+    buffer: *const ui.Buffer,
+    scroll: schema.frame.Scroll,
+    direction: i32,
+) void {
+    var y = state.cursor.y;
+    while (true) {
+        const next = if (direction < 0) y -| 1 else @min(y +| 1, scroll.total_rows -| 1);
+        if (next == y) break;
+        y = next;
+        const row = rowIndex(buffer, scroll, y) orelse break;
+        var blank = true;
+        for (buffer.cells[@as(usize, row) * buffer.w ..][0..buffer.w]) |cell| {
+            const text = cell.text();
+            if (text.len != 0 and !std.ascii.isWhitespace(text[0])) {
+                blank = false;
+                break;
+            }
+        }
+        if (blank) break;
+    }
+    state.cursor.y = y;
+    state.cursor.x = 0;
+    state.vertical(0, scroll, buffer.h);
+}
+
+fn wordClass(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, point: Point) ?WordClass {
+    const row = rowIndex(buffer, scroll, point.y) orelse return null;
+    const cell = buffer.cells[@as(usize, row) * buffer.w + point.x];
+    const text = cell.text();
+    if (text.len == 0 or std.ascii.isWhitespace(text[0])) return .space;
+    return if (std.ascii.isAlphanumeric(text[0]) or text[0] == '_')
+        .word
+    else
+        .punctuation;
+}
+
+fn nextPoint(point: Point, cols: u16, total_rows: u32) Point {
+    if (point.x + 1 < cols) return .{ .x = point.x + 1, .y = point.y };
+    if (point.y + 1 < total_rows) return .{ .x = 0, .y = point.y + 1 };
+    return point;
+}
+
+fn previousPoint(point: Point, cols: u16) Point {
+    if (point.x != 0) return .{ .x = point.x - 1, .y = point.y };
+    if (point.y != 0) return .{ .x = cols - 1, .y = point.y - 1 };
+    return point;
+}
+
+fn wordForward(
+    state: *State,
+    buffer: *const ui.Buffer,
+    scroll: schema.frame.Scroll,
+    end: bool,
+) void {
+    const initial = wordClass(buffer, scroll, state.cursor) orelse {
+        state.vertical(1, scroll, buffer.h);
+        state.lineStart();
+        return;
+    };
+    var point = state.cursor;
+    if (end and initial != .space) {
+        while (true) {
+            const next = nextPoint(point, buffer.w, scroll.total_rows);
+            if (std.meta.eql(next, point) or wordClass(buffer, scroll, next) != initial) break;
+            point = next;
+        }
+    } else {
+        while (wordClass(buffer, scroll, point)) |class| {
+            if (class != initial) break;
+            const next = nextPoint(point, buffer.w, scroll.total_rows);
+            if (std.meta.eql(next, point)) break;
+            point = next;
+        }
+        while (wordClass(buffer, scroll, point) == .space) {
+            const next = nextPoint(point, buffer.w, scroll.total_rows);
+            if (std.meta.eql(next, point)) break;
+            point = next;
+        }
+        if (end) {
+            const class = wordClass(buffer, scroll, point) orelse .space;
+            while (true) {
+                const next = nextPoint(point, buffer.w, scroll.total_rows);
+                if (std.meta.eql(next, point) or wordClass(buffer, scroll, next) != class) break;
+                point = next;
+            }
+        }
+    }
+    state.cursor = point;
+    state.vertical(0, scroll, buffer.h);
+}
+
+fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+    var point = previousPoint(state.cursor, buffer.w);
+    while (wordClass(buffer, scroll, point) == .space) {
+        const previous = previousPoint(point, buffer.w);
+        if (std.meta.eql(previous, point)) break;
+        point = previous;
+    }
+    const class = wordClass(buffer, scroll, point) orelse {
+        state.vertical(-1, scroll, buffer.h);
+        state.lineStart();
+        return;
+    };
+    while (true) {
+        const previous = previousPoint(point, buffer.w);
+        if (std.meta.eql(previous, point) or wordClass(buffer, scroll, previous) != class) break;
+        point = previous;
+    }
+    state.cursor = point;
+    state.vertical(0, scroll, buffer.h);
+}
+
 test "vertical movement scrolls the viewport only at its edges" {
     const scroll: schema.frame.Scroll = .{ .total_rows = 100, .offset = 90 };
     var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 99 }, 90);
@@ -153,4 +399,69 @@ test "linear and linewise selections are inclusive" {
     };
     try std.testing.expect(linewise.selected(99, 4));
     try std.testing.expect(linewise.selected(99, 5));
+}
+
+fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !ui.Buffer {
+    var width: u16 = 0;
+    for (rows) |row| width = @max(width, @as(u16, @intCast(row.len)));
+    var buffer = try ui.Buffer.init(gpa, width, @intCast(rows.len));
+    buffer.fill(buffer.area(), " ", .{});
+    for (rows, 0..) |row, y| _ = buffer.writeText(buffer.area(), 0, @intCast(y), row, .{});
+    return buffer;
+}
+
+test "word motions travel by class over the visible cells" {
+    const gpa = std.testing.allocator;
+    var buffer = try testScreen(gpa, &.{ "foo bar,baz", "        end" });
+    defer buffer.deinit();
+    const scroll: schema.frame.Scroll = .{ .total_rows = 2, .offset = 0 };
+    var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
+
+    _ = applyKey(&state, try keybind.parseKey("w"), &buffer, scroll);
+    try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
+    _ = applyKey(&state, try keybind.parseKey("w"), &buffer, scroll);
+    try std.testing.expectEqual(@as(u16, 7), state.cursor.x);
+    _ = applyKey(&state, try keybind.parseKey("b"), &buffer, scroll);
+    try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
+    _ = applyKey(&state, try keybind.parseKey("$"), &buffer, scroll);
+    try std.testing.expectEqual(@as(u16, 10), state.cursor.x);
+    _ = applyKey(&state, try keybind.parseKey("0"), &buffer, scroll);
+    try std.testing.expectEqual(@as(u16, 0), state.cursor.x);
+}
+
+test "escape clears the selection before it exits" {
+    const gpa = std.testing.allocator;
+    var buffer = try testScreen(gpa, &.{"abc"});
+    defer buffer.deinit();
+    const scroll: schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 };
+    var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
+
+    _ = applyKey(&state, try keybind.parseKey("v"), &buffer, scroll);
+    try std.testing.expect(state.anchor != null);
+    const cleared = applyKey(&state, try keybind.parseKey("escape"), &buffer, scroll);
+    try std.testing.expect(!cleared.exit);
+    try std.testing.expect(state.anchor == null);
+    const exited = applyKey(&state, try keybind.parseKey("escape"), &buffer, scroll);
+    try std.testing.expect(exited.exit and !exited.copy);
+    const copied = applyKey(&state, try keybind.parseKey("y"), &buffer, scroll);
+    try std.testing.expect(copied.exit and copied.copy);
+    const ignored = applyKey(&state, try keybind.parseKey("z"), &buffer, scroll);
+    try std.testing.expect(!ignored.handled);
+}
+
+test "a pruning frame pulls cursor and anchor up before clamping" {
+    var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 50 }, 40);
+    state.anchor = .{ .x = 0, .y = 45 };
+
+    // Ten rows pruned while the viewport sat at the pruned edge.
+    onFrame(&state, 40, .{ .total_rows = 55, .offset = 30 });
+    try std.testing.expectEqual(@as(u32, 40), state.cursor.y);
+    try std.testing.expectEqual(@as(u32, 35), state.anchor.?.y);
+    try std.testing.expectEqual(@as(u32, 30), state.viewport_offset);
+
+    // A shrunken history clamps both; the viewport did not sit at the
+    // pruned edge this time, so nothing is pulled up first.
+    onFrame(&state, 99, .{ .total_rows = 20, .offset = 0 });
+    try std.testing.expectEqual(@as(u32, 19), state.cursor.y);
+    try std.testing.expectEqual(@as(u32, 19), state.anchor.?.y);
 }

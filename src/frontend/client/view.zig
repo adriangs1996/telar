@@ -29,6 +29,9 @@ pub const Interaction = struct {
     layout_changed: bool = false,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
+    /// Intent only: starting the rename prompt is a mode change, which the
+    /// client owns; the view never enters the prompt on its own.
+    rename_tab: ?schema.TabId = null,
     notification_target: ?widgets.notification.Target = null,
 };
 
@@ -407,11 +410,7 @@ pub const State = struct {
             .select_tab => |tab_id| if (tabs != null and tabs.?.indexOf(tab_id) != null) {
                 switch (mouse.button & 0b11) {
                     0 => result.select_tab = tab_id,
-                    2 => {
-                        const tab = tabs.?.find(tab_id).?;
-                        state.beginTabRename(tab_id, tab.labelSlice());
-                        result.redraw = true;
-                    },
+                    2 => result.rename_tab = tab_id,
                     else => {},
                 }
             },
@@ -827,15 +826,17 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     const interaction = state.handleMouse(&tabs, model, click, 0);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
 
+    // A right click only reports the intent: entering the rename prompt is
+    // a mode change the client owns.
     const rename = state.handleMouse(&tabs, model, .{
         .x = 65,
         .y = 23,
         .kind = .press,
         .button = 2,
     }, 0);
-    try std.testing.expect(rename.redraw);
     try std.testing.expect(rename.select_tab == null);
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), state.renamedTab().?);
+    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), rename.rename_tab.?);
+    try std.testing.expect(state.renamedTab() == null);
 }
 
 test "the top bar lists open workspaces and clicking one requests a switch" {

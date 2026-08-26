@@ -31,6 +31,22 @@ _Avoid_: Raw input, keyboard input
 The decision that classifies host input as a Telar action or pane input.
 _Avoid_: Keybinding resolution
 
+**Input mode**:
+The single owner of host input at any moment: normal (the pane), copy mode
+(the selection), or the name prompt (the editor). Input routing consults it
+once per event; exactly one mode is active.
+_Avoid_: Modal state, capture flag
+
+**Copy mode**:
+The input mode where host input drives a cursor and selection over a pane's
+retained history instead of reaching the child process.
+_Avoid_: Scrollback mode, selection mode
+
+**Name prompt**:
+The input mode where host input edits a name — a tab rename, a workspace
+rename, or a new workspace — until submitted or cancelled.
+_Avoid_: Rename dialog, modal input
+
 **Telar action**:
 A semantic instruction handled by Telar rather than forwarded as input to a
 pane. It may affect client state or request a runtime-owned change.

@@ -223,6 +223,17 @@ pub const initial_request_id: schema.RequestId = @enumFromInt(1);
 
 const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
 
+/// Which consumer host input belongs to, decided once per event at the top
+/// of input dispatch instead of re-checked inside every handler method.
+/// Copy mode owns its state here; the name prompt's text lives in the view
+/// and the mode owns only the routing decision — transitions go through the
+/// prompt helpers so both always move together.
+pub const Mode = union(enum) {
+    normal,
+    copy: copy_mode.State,
+    prompt,
+};
+
 /// The platform resources a client cannot fabricate: everything else it
 /// owns. Substituting these — a pipe for the tty's read handle, a
 /// fixed-buffer writer, a scripted socket peer — is what makes the client
@@ -278,7 +289,7 @@ config_mtime_ns: i128,
 next_config_generation: u64 = 2,
 plugin_pending: bool = false,
 paste_pane: ?schema.PaneId = null,
-copy_mode_state: ?copy_mode.State = null,
+mode: Mode = .normal,
 /// Owns the cwd borrowed by one queued `create_workspace` launch.
 workspace_create_path: [schema.max_cwd_bytes]u8 = undefined,
 workspace_create_path_len: u16 = 0,
@@ -578,6 +589,35 @@ pub fn clearPaneFocus(client: *Client) !void {
 fn forgetPaneFocus(client: *Client) void {
     client.reported_focus = null;
     client.reported_focus_events = false;
+}
+
+// Prompt transitions. The view owns the edited text, the mode owns the
+// routing decision; these helpers are the only writers of both, so the two
+// can never disagree. Cancellation inside the prompt editor is reconciled
+// by the prompt mode's input handler.
+
+pub fn beginTabRenamePrompt(client: *Client, tab_id: schema.TabId, label: []const u8) void {
+    client.view.beginTabRename(tab_id, label);
+    client.mode = .prompt;
+}
+
+pub fn beginWorkspaceRenamePrompt(
+    client: *Client,
+    workspace: schema.WorkspaceLocation,
+    name: []const u8,
+) void {
+    client.view.beginWorkspaceRename(workspace, name);
+    client.mode = .prompt;
+}
+
+pub fn beginWorkspaceCreatePrompt(client: *Client) void {
+    client.view.beginWorkspaceCreate();
+    client.mode = .prompt;
+}
+
+pub fn finishNamePrompt(client: *Client) void {
+    client.view.finishNamePrompt();
+    client.mode = .normal;
 }
 
 pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
@@ -1467,19 +1507,10 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
         std.meta.eql(client.tabs.active().?.location, tab.location);
     if (client.graphics_store.paneVisible(frame.pane_id) != should_show_graphics)
         try client.graphics_store.setPaneVisible(frame.pane_id, should_show_graphics);
-    if (client.copy_mode_state) |*state| {
+    if (client.mode == .copy) {
+        const state = &client.mode.copy;
         if (state.pane_id == frame.pane_id) {
-            if (frame.scroll.offset < previous_scroll_offset and
-                state.viewport_offset == previous_scroll_offset)
-            {
-                const pruned = previous_scroll_offset - frame.scroll.offset;
-                state.cursor.y -|= pruned;
-                if (state.anchor) |*anchor| anchor.y -|= pruned;
-            }
-            state.cursor.y = @min(state.cursor.y, frame.scroll.total_rows -| 1);
-            if (state.anchor) |*anchor|
-                anchor.y = @min(anchor.y, frame.scroll.total_rows -| 1);
-            state.viewport_offset = frame.scroll.offset;
+            copy_mode.onFrame(state, previous_scroll_offset, frame.scroll);
             const updated = tab.model.find(frame.pane_id).?;
             updated.copy_view = state.view();
             tab.model.composition_invalidated = true;
@@ -1497,9 +1528,8 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
 }
 
 fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
-    if (client.copy_mode_state) |state| {
-        if (state.pane_id == exited.pane_id) client.copy_mode_state = null;
-    }
+    if (client.mode == .copy and client.mode.copy.pane_id == exited.pane_id)
+        client.mode = .normal;
     client.graphics_store.clearPane(exited.pane_id);
     const tab = client.tabs.tabForPane(exited.pane_id);
     const tab_id = if (tab) |value| value.location.tab_id else null;
@@ -2720,7 +2750,7 @@ test "an unrequested pane exit removes the pane and its client state" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.copy_mode_state = .init(TestHarness.bootstrap_pane, .{ .x = 0, .y = 0 }, 0);
+    client.mode = .{ .copy = .init(TestHarness.bootstrap_pane, .{ .x = 0, .y = 0 }, 0) };
 
     var payload: [128]u8 = undefined;
     const exited = try schema.encodePaneExited(&payload, .{
@@ -2732,7 +2762,7 @@ test "an unrequested pane exit removes the pane and its client state" {
     try harness.settle();
 
     try std.testing.expect(client.tabs.findPane(TestHarness.bootstrap_pane) == null);
-    try std.testing.expect(client.copy_mode_state == null);
+    try std.testing.expect(client.mode == .normal);
     try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
     try std.testing.expect(client.notification_tick_pending);
 }
@@ -2986,4 +3016,73 @@ test "a capability expiry reconfigures the sidebar without a tab" {
 
     try harness.client.handleCapabilityTimeoutEvent({});
     try harness.settle();
+}
+
+test "copy mode round trip: enter, select, copy, leave" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    var handler: InputHandler = .{ .client = client };
+    try std.testing.expectEqual(keybind.Control.continue_routing, try handler.applyNativeAction(.enter_copy_mode));
+    try std.testing.expect(client.mode == .copy);
+
+    // While in copy mode, keys route to the selection, not the pane.
+    try handler.key(try keybind.parseKey("v"));
+    try handler.key(try keybind.parseKey("l"));
+    try handler.key(try keybind.parseKey("enter"));
+    try std.testing.expect(client.mode == .normal);
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    var copied = false;
+    while (!copied) {
+        switch (try harness.nextClientMessage(&buffer)) {
+            .copy_selection => |selection| {
+                try std.testing.expectEqual(TestHarness.bootstrap_pane, selection.pane_id);
+                try std.testing.expectEqual(@as(u16, 1), selection.end_x);
+                copied = true;
+            },
+            .set_pane_viewport, .pane_input => {},
+            else => return error.UnexpectedClientMessage,
+        }
+    }
+}
+
+test "the name prompt captures keys until submit returns to normal" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
+    var handler: InputHandler = .{ .client = client };
+    try std.testing.expect(handler.capturesKeys());
+
+    try handler.forward("x");
+    try handler.forward("\r");
+    try std.testing.expect(client.mode == .normal);
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .rename_tab);
+    try std.testing.expectEqualStrings("mainx", message.rename_tab.label);
+}
+
+test "escaping the prompt editor returns the mode to normal" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+
+    client.beginWorkspaceCreatePrompt();
+    try std.testing.expect(client.mode == .prompt);
+    var handler: InputHandler = .{ .client = client };
+    try handler.forward("\x1b");
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.view.hasNamePrompt());
 }
