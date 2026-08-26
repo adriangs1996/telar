@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const theme = @import("../theme.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
+const theme = ui.theme;
 const notification = @import("notification.zig");
 const sidebar_model = @import("sidebar_model.zig");
 

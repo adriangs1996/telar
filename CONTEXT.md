@@ -22,3 +22,21 @@ The lifecycle of a pane whose launch has not settled. A pane is `starting`,
 **Launch attempt**:
 A history record for a child process that was spawned but whose pane launch did
 not complete. It is distinct from a normal pane session.
+
+**Host input**:
+User input received from the host terminal before Telar classifies its intent.
+_Avoid_: Raw input, keyboard input
+
+**Input routing**:
+The decision that classifies host input as a Telar action or pane input.
+_Avoid_: Keybinding resolution
+
+**Telar action**:
+A semantic instruction handled by Telar rather than forwarded as input to a
+pane. It may affect client state or request a runtime-owned change.
+_Avoid_: Keybinding
+
+**Pane input**:
+Semantic input destined for the child process owned by a pane after input
+routing has chosen that destination.
+_Avoid_: Raw input, forwarded key

@@ -9,7 +9,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const widget = @import("context.zig");
 const workspace_model = @import("workspace_model.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
 

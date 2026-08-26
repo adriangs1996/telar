@@ -6,11 +6,15 @@ const osc_mod = @import("osc.zig");
 const store_mod = @import("store.zig");
 const terminal_mod = @import("terminal.zig");
 const observer_mod = @import("observer.zig");
+const detection_mod = @import("agent_detection.zig");
+const escape_mod = @import("escape.zig");
 
 pub const model = model_mod;
 pub const osc = osc_mod;
 pub const terminal = terminal_mod;
 pub const observer = observer_mod;
+pub const detection = detection_mod;
+pub const escape = escape_mod;
 pub const Tracker = terminal_mod.Tracker;
 pub const Command = terminal_mod.Command;
 pub const Clock = terminal_mod.Clock;

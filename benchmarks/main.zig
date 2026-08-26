@@ -613,10 +613,10 @@ fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
 }
 
 const OutboxContext = struct {
-    outbox: *frontend.client_outbox.Outbox,
+    outbox: *frontend.client.Outbox,
 
     fn init(gpa: std.mem.Allocator) !OutboxContext {
-        const outbox = try gpa.create(frontend.client_outbox.Outbox);
+        const outbox = try gpa.create(frontend.client.Outbox);
         outbox.* = .{};
         return .{ .outbox = outbox };
     }
@@ -675,13 +675,13 @@ fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
 }
 
 const LuaCallbackContext = struct {
-    generation: *frontend.lua_config.Generation,
+    generation: *frontend.config.Generation,
     reference: frontend.action.CallbackRef,
-    diagnostic: frontend.lua_config.Diagnostic = .{},
+    diagnostic: frontend.config.Diagnostic = .{},
 
     fn init(gpa: std.mem.Allocator, io: Io) !LuaCallbackContext {
-        var diagnostic: frontend.lua_config.Diagnostic = .{};
-        const generation = try frontend.lua_config.Generation.loadSource(
+        var diagnostic: frontend.config.Diagnostic = .{};
+        const generation = try frontend.config.Generation.loadSource(
             gpa,
             io,
             "local t=require('telar'); return { api_version=2, client={ keybindings={ t.bind_global({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
@@ -736,12 +736,12 @@ const CursorContext = struct {
     }
 };
 
-const sidebar_width = frontend.client_ui.sidebar_width;
+const sidebar_width = frontend.client.sidebar_width;
 
 const ClientUiContext = struct {
     tabs: frontend.tabs.Model,
     screen: frontend.term.Screen,
-    view: frontend.client_ui.State,
+    view: frontend.client.View,
 
     fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
         std.debug.assert(tab_count >= 1 and tab_count <= frontend.tabs.max_tabs);
@@ -769,7 +769,7 @@ const ClientUiContext = struct {
         }
         var screen = try frontend.term.Screen.init(gpa, cols, rows);
         errdefer screen.deinit();
-        var view = try frontend.client_ui.State.init(gpa, cols, rows);
+        var view = try frontend.client.View.init(gpa, cols, rows);
         errdefer view.deinit();
         const model = &tabs.active().?.model;
         _ = try model.render(&screen, view.workbench());

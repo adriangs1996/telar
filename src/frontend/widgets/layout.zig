@@ -1,6 +1,6 @@
 //! Geometry contract for the client chrome.
 
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 pub const minimum_sidebar_width: u16 = 42;
 pub const sidebar_width: u16 = 62;

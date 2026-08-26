@@ -2,7 +2,7 @@
 
 const notification = @import("notification.zig");
 const widget = @import("context.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 pub const card_height: u16 = 4;
 pub const card_gap: u16 = 1;
@@ -160,7 +160,7 @@ fn levelColor(context: *const widget.Context, level: notification.Level) ui.Colo
 
 test "toast cards register activation and a separate close target" {
     const std = @import("std");
-    const theme = @import("../theme.zig");
+    const theme = ui.theme;
     var buffer = try ui.Buffer.init(std.testing.allocator, 80, 24);
     defer buffer.deinit();
     var hits: widget.Hits = .{};

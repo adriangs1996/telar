@@ -3,8 +3,9 @@
 //! This is deliberately linear. Reading `render` shows every visible widget,
 //! its region, its order, and the only conditional replacement in the frame.
 
-const multiplexer = @import("../multiplexer.zig");
-const tabs_mod = @import("../tabs.zig");
+const workspace = @import("../workspace/root.zig");
+const multiplexer = workspace.multiplexer;
+const tabs_mod = workspace.tabs;
 const context_mod = @import("context.zig");
 const layout = @import("layout.zig");
 const sidebar = @import("sidebar.zig");
@@ -13,7 +14,7 @@ const workspace_model = @import("workspace_model.zig");
 const tab_bar = @import("tab_bar.zig");
 const tab_rename = @import("tab_rename.zig");
 const top_bar = @import("top_bar.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 const workbench = @import("workbench.zig");
 
 pub const Input = struct {

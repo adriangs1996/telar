@@ -5,34 +5,35 @@
 
 const core = @import("telar-core");
 
-pub const ui = @import("ui.zig");
+pub const ui = @import("ui/root.zig");
 pub const select = core.select;
-pub const term = @import("term.zig");
-pub const diff = @import("diff.zig");
-pub const frame = @import("frame.zig");
-pub const pace = @import("pace.zig");
-pub const edit = @import("edit.zig");
-pub const theme = @import("theme.zig");
-pub const kitty = @import("kitty.zig");
-pub const text_rasterizer = @import("text_rasterizer.zig");
-pub const toast_graphics = @import("toast_graphics.zig");
-pub const keybind = @import("keybind.zig");
-pub const action = @import("action.zig");
-pub const input = @import("input.zig");
-pub const lua_config = @import("lua_config.zig");
-pub const plugin_broker = @import("plugin_broker.zig");
-pub const plugin_protocol = @import("plugin_protocol.zig");
-pub const plugin_worker = @import("plugin_worker.zig");
-pub const layout = @import("layout.zig");
-pub const multiplexer = @import("multiplexer.zig");
-pub const tabs = @import("tabs.zig");
-pub const client_ui = @import("client_ui.zig");
-pub const platform = @import("platform.zig");
-pub const transport = @import("transport.zig");
-pub const client = @import("client.zig");
-pub const client_outbox = @import("client_outbox.zig");
-pub const client_requests = @import("client_requests.zig");
+pub const theme = ui.theme;
+pub const input = @import("input/root.zig");
+pub const presentation = @import("presentation/root.zig");
+pub const workspace = @import("workspace/root.zig");
+pub const graphics = @import("graphics/root.zig");
+pub const config = @import("config/root.zig");
+pub const plugins = @import("plugins/root.zig");
+pub const platform = @import("platform/root.zig");
+pub const transport = @import("transport/root.zig");
+pub const client = @import("client/root.zig");
 pub const widgets = @import("widgets/root.zig");
+
+// Compatibility aliases for callers migrating to the capability namespaces.
+pub const term = presentation.screen;
+pub const diff = presentation.diff;
+pub const frame = presentation.frame;
+pub const pace = presentation.pace;
+pub const edit = input.edit;
+pub const keybind = input.keybind;
+pub const action = input.action;
+pub const host_input = input.host;
+pub const kitty = graphics.kitty;
+pub const text_rasterizer = graphics.rasterizer;
+pub const toast_graphics = graphics.toast;
+pub const layout = workspace.layout;
+pub const multiplexer = workspace.multiplexer;
+pub const tabs = workspace.tabs;
 
 test {
     @import("std").testing.refAllDecls(@This());

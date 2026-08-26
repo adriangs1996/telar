@@ -26,7 +26,7 @@ pub const ConfigCheckOptions = struct {
 pub const PluginWorkerOptions = struct {
     entry: [*:0]const u8,
     action: [*:0]const u8,
-    context: frontend.lua_config.CallbackContext,
+    context: frontend.config.CallbackContext,
 };
 
 pub const PluginCommand = enum { inspect, install, trust };

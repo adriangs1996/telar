@@ -242,47 +242,32 @@ pub fn build(b: *std.Build) void {
         schema: bool = false,
     };
     const suites = [_]Suite{
-        .{ .path = "src/core/ui.zig" },
+        .{ .path = "src/core/ui/root.zig" },
         .{ .path = "src/core/select.zig" },
         // Only referenced through non-pub imports elsewhere, so their tests
         // never run unless they are their own suite roots.
         .{ .path = "src/core/graphics.zig" },
         .{ .path = "src/core/schema/wire.zig", .schema = true },
-        .{ .path = "src/core/transport.zig", .transport = true },
-        .{ .path = "src/core/endpoint.zig", .transport = true },
+        .{ .path = "src/core/transport/root.zig", .transport = true },
         .{ .path = "src/core/diagnostics.zig" },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
-        .{ .path = "src/core/schema_test.zig", .schema = true },
+        .{ .path = "src/core/schema_contract_test.zig", .schema = true },
         .{ .path = "src/core/plugin.zig" },
-        .{ .path = "src/frontend/ui.zig" },
-        .{ .path = "src/frontend/term.zig", .libc = true },
-        .{ .path = "src/frontend/frame.zig", .libc = true },
-        .{ .path = "src/frontend/pace.zig" },
-        .{ .path = "src/frontend/text_rasterizer.zig", .libc = true },
-        .{ .path = "src/frontend/toast_graphics.zig", .libc = true },
-        .{ .path = "src/frontend/edit.zig" },
-        .{ .path = "src/frontend/keybind.zig" },
-        .{ .path = "src/frontend/action.zig" },
-        .{ .path = "src/frontend/input.zig" },
-        .{ .path = "src/frontend/lua_config.zig", .libc = true },
-        .{ .path = "src/frontend/plugin_broker.zig", .libc = true },
-        .{ .path = "src/frontend/plugin_protocol.zig", .libc = true },
-        .{ .path = "src/frontend/plugin_worker.zig", .libc = true },
-        .{ .path = "src/frontend/layout.zig" },
-        .{ .path = "src/frontend/multiplexer.zig", .libc = true },
-        .{ .path = "src/frontend/client.zig", .libc = true },
+        .{ .path = "src/frontend/ui/root.zig" },
+        // Capability roots can import sibling capabilities, so the package
+        // root collects their tests without narrowing Zig's module path.
+        .{ .path = "src/frontend/root.zig", .libc = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/history/agent_detection.zig" },
-        .{ .path = "src/backend/system_metrics.zig" },
+        .{ .path = "src/backend/runtime/system_metrics.zig" },
         .{ .path = "src/frontend/widgets/workspace_model.zig" },
-        .{ .path = "src/backend/agent.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/proxy/root.zig", .libc = true },
-        .{ .path = "src/backend/blit.zig", .vt = true, .libc = true },
-        .{ .path = "src/backend/damage.zig" },
+        .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/pane/damage.zig" },
         .{ .path = "src/backend/history/root.zig", .vt = true, .libc = true },
-        .{ .path = "src/backend/pty.zig", .libc = true },
-        .{ .path = "src/backend/runtime.zig", .vt = true, .libc = true },
+        .{ .path = "src/backend/pty/root.zig", .libc = true },
+        .{ .path = "src/backend/root.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
         .{
             .path = "src/transport_integration_test.zig",
@@ -323,7 +308,7 @@ pub fn build(b: *std.Build) void {
 
     // The same drawing code against a width table that answers nonsense, so
     // the module seam is proven rather than asserted. Only this file's tests
-    // run: the ones inside `ui.zig` assert real widths and cannot pass here.
+    // run: the ones inside `ui/root.zig` assert real widths and cannot pass here.
     const unicode_fake = b.createModule(.{
         .root_source_file = b.path("src/core/unicode_fake.zig"),
         .target = target,
@@ -416,7 +401,7 @@ pub fn build(b: *std.Build) void {
         const check = b.addObject(.{
             .name = b.fmt("platform-{s}", .{@tagName(query.os_tag.?)}),
             .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/platform.zig"),
+                .root_source_file = b.path("src/frontend/platform/root.zig"),
                 .target = cross_target,
                 .optimize = .Debug,
             }),
@@ -425,7 +410,7 @@ pub fn build(b: *std.Build) void {
         const raster_check = b.addLibrary(.{
             .name = b.fmt("text-rasterizer-{s}", .{@tagName(query.os_tag.?)}),
             .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/text_rasterizer.zig"),
+                .root_source_file = b.path("src/frontend/graphics/rasterizer.zig"),
                 .target = cross_target,
                 .optimize = .Debug,
                 .link_libc = true,
@@ -477,7 +462,7 @@ fn addFreeType(
     const upstream = b.dependency("freetype", .{});
     const harfbuzz = b.dependency("harfbuzz", .{});
     const module = b.createModule(.{
-        .root_source_file = b.path("src/frontend/freetype.zig"),
+        .root_source_file = b.path("src/frontend/graphics/freetype.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -646,7 +631,7 @@ fn addLua(
         lua.root_module.linkSystemLibrary("m", .{});
 
     const api = b.createModule(.{
-        .root_source_file = b.path("src/frontend/lua_api.zig"),
+        .root_source_file = b.path("src/frontend/config/lua_api.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,

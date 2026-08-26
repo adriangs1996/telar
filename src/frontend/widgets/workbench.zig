@@ -1,8 +1,8 @@
 //! Hit-test projection for pane content rendered by the multiplexer.
 
-const multiplexer = @import("../multiplexer.zig");
+const multiplexer = @import("../workspace/root.zig").multiplexer;
 const widget = @import("context.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 pub fn register(
     context: *widget.Context,

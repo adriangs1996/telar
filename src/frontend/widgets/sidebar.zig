@@ -8,7 +8,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const widget = @import("context.zig");
 const model = @import("sidebar_model.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
 
@@ -391,7 +391,7 @@ test "empty snapshot renders only the agent inbox chrome" {
     var hits: widget.Hits = .{};
     var state: State = .{};
     const snapshot: Snapshot = .{};
-    const palette = @import("../theme.zig").default_theme.palette;
+    const palette = ui.theme.default_theme.palette;
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -422,7 +422,7 @@ test "agent snapshot renders compact selectable rows and status" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{ .selected_agent = agents[0].key };
-    const palette = @import("../theme.zig").default_theme.palette;
+    const palette = ui.theme.default_theme.palette;
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -455,7 +455,7 @@ test "transparent Codex row publishes an official provider mark" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = @import("../theme.zig").default_theme.palette;
+    const palette = ui.theme.default_theme.palette;
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -485,7 +485,7 @@ test "hover covers the complete three-row agent card" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = @import("../theme.zig").default_theme.palette;
+    const palette = ui.theme.default_theme.palette;
     const action: widget.Action = .{ .sidebar_select_agent = agent.key };
     var context: widget.Context = .{
         .buffer = &buffer,

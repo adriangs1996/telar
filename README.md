@@ -9,6 +9,14 @@ is how they are laid out on screen.
 
 Written in Zig 0.16. Very early.
 
+## Architecture
+
+Telar is split into a long-lived runtime and a disposable client. The source
+tree is organized as capability namespaces with explicit process entrypoints.
+See the [capability map](docs/capabilities.md), the
+[flow index](docs/flows/README.md), and the
+[engineering invariants](docs/engineering-invariants.md).
+
 The runtime links system SQLite and libnghttp2. On macOS with Homebrew:
 
 ```sh

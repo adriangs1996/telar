@@ -6,7 +6,7 @@
 
 const std = @import("std");
 const widget = @import("context.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 /// Presentation values, already reduced by the transport layer. Memory is in
 /// tenths of a GiB so formatting never touches floating point.

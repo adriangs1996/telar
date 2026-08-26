@@ -3,8 +3,8 @@ const builtin = @import("builtin");
 const Io = std.Io;
 const File = Io.File;
 
-const platform = @import("../platform.zig");
-const Size = platform.Size;
+const Size = @import("types.zig").Size;
+const leave_sequence = @import("sequences.zig").leave;
 
 // Unix: termios for the mode, an ioctl for the size, SIGWINCH for the change.
 
@@ -102,7 +102,7 @@ pub fn installCrashRestore(t: *const Tty) void {
     crash_restore = .{
         .fd = t.fd,
         .original = t.original,
-        .leave = platform.leave_sequence,
+        .leave = leave_sequence,
     };
     var action: std.posix.Sigaction = .{
         .handler = .{ .handler = onFatalSignal },
@@ -145,7 +145,7 @@ test "emergency restore is armed, idempotent, and disarmable" {
     crash_restore = .{
         .fd = fds[1],
         .original = std.mem.zeroes(std.posix.termios),
-        .leave = platform.leave_sequence,
+        .leave = leave_sequence,
     };
     // Twice: the crash path cannot be choosy about who already ran it, and
     // the tcsetattr on a pipe failing must stay silent.
@@ -154,11 +154,11 @@ test "emergency restore is armed, idempotent, and disarmable" {
     crash_restore.fd = -1;
     _ = std.c.close(fds[1]);
 
-    var buffer: [4 * platform.leave_sequence.len]u8 = undefined;
+    var buffer: [4 * leave_sequence.len]u8 = undefined;
     const got = std.c.read(fds[0], &buffer, buffer.len);
-    try std.testing.expectEqual(@as(isize, 2 * platform.leave_sequence.len), got);
+    try std.testing.expectEqual(@as(isize, 2 * leave_sequence.len), got);
     try std.testing.expectEqualStrings(
-        platform.leave_sequence ++ platform.leave_sequence,
+        leave_sequence ++ leave_sequence,
         buffer[0..@intCast(got)],
     );
 

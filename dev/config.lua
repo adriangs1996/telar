@@ -37,6 +37,9 @@ return telar.config({
 		},
 
 		keybindings = {
+			-- Scrollback and copy mode.
+			telar.bind({ "[" }, action.copy_mode()),
+
 			-- Workspaces.
 			telar.bind({ "N" }, action.new_workspace()),
 			telar.bind({ "R" }, action.rename_workspace()),

@@ -1,8 +1,8 @@
 //! Pane screen snapshots and patches for Telar's current protocol.
 
 const std = @import("std");
-const ui = @import("../ui.zig");
-const transport = @import("../transport.zig");
+const ui = @import("../ui/root.zig");
+const transport = @import("../transport/root.zig");
 const wire = @import("wire.zig");
 const id = @import("id.zig");
 

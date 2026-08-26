@@ -27,6 +27,7 @@ return telar.config({
     sidebar = { visible = true, renderer = "automatic" },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     keybindings = {
+      telar.bind({ "[" }, telar.action.copy_mode()),
       telar.bind({ "%" }, telar.action.split_pane({ direction = "horizontal" })),
       telar.bind({ "s" }, function(ctx)
         return telar.action.toggle_sidebar()

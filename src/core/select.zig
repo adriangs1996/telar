@@ -20,7 +20,7 @@
 //! No terminal and no buffer ownership: a range is four numbers and a mode.
 
 const std = @import("std");
-const ui = @import("ui.zig");
+const ui = @import("ui/root.zig");
 
 pub const Point = struct {
     x: u16,

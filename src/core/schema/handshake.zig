@@ -11,7 +11,7 @@ pub const SchemaId = [8]u8;
 /// mismatch log can say which side is newer.
 pub const schema_version: *const [2]u8 = "11";
 /// Version prefix plus a fingerprint of the golden corpus in
-/// `schema_test.zig`. The test "the handshake fingerprint derives from the
+/// `schema_contract_test.zig`. The test "the handshake fingerprint derives from the
 /// golden corpus" recomputes the hash, so an encoding change cannot ship
 /// without updating this constant. Do not keep the old decoder until rolling
 /// upgrades become a supported product requirement.

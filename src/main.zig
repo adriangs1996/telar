@@ -500,7 +500,7 @@ fn runClient(
         if (options.config) |value|
             std.mem.span(value)
         else
-            try frontend.lua_config.defaultPath(init.minimal.environ, &config_path_buffer)
+            try frontend.config.defaultPath(init.minimal.environ, &config_path_buffer)
     else
         null;
     var config_mtime_ns = if (config_path) |path|
@@ -508,7 +508,7 @@ fn runClient(
     else
         0;
     const snapshot = if (generation) |value| &value.snapshot else null;
-    var plugin_registry: ?*frontend.plugin_broker.Registry = null;
+    var plugin_registry: ?*frontend.plugins.Registry = null;
     var trust_store: ?*core.plugin.TrustStore = null;
     var trust_path: ?[]const u8 = null;
     if (generation) |value| {
@@ -532,7 +532,7 @@ fn runClient(
             return err;
         };
         trust_store.?.* = loaded_trust;
-        const registry_value = frontend.plugin_broker.Registry.loadWithTrust(
+        const registry_value = frontend.plugins.Registry.loadWithTrust(
             init.gpa,
             init.io,
             value.configDir(),
@@ -548,7 +548,7 @@ fn runClient(
             value.deinit();
             return err;
         };
-        plugin_registry = init.gpa.create(frontend.plugin_broker.Registry) catch |err| {
+        plugin_registry = init.gpa.create(frontend.plugins.Registry) catch |err| {
             init.gpa.destroy(trust_store.?);
             value.deinit();
             return err;
@@ -610,19 +610,19 @@ fn loadConfigGeneration(
     disabled: bool,
     profile: ?[*:0]const u8,
     path_buffer: []u8,
-) !?*frontend.lua_config.Generation {
+) !?*frontend.config.Generation {
     if (disabled) return null;
     const explicit = override != null or profile != null;
     const path = if (override) |value|
         std.mem.span(value)
     else
-        try frontend.lua_config.defaultPath(init.minimal.environ, path_buffer);
+        try frontend.config.defaultPath(init.minimal.environ, path_buffer);
     Io.Dir.cwd().access(init.io, path, .{}) catch |err| switch (err) {
         error.FileNotFound => if (explicit) return err else return null,
         else => |other| return other,
     };
-    var diagnostic: frontend.lua_config.Diagnostic = .{};
-    return frontend.lua_config.Generation.loadFileProfile(
+    var diagnostic: frontend.config.Diagnostic = .{};
+    return frontend.config.Generation.loadFileProfile(
         init.gpa,
         init.io,
         path,
@@ -640,9 +640,9 @@ fn runConfigCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
     const path = if (options.path) |value|
         std.mem.span(value)
     else
-        try frontend.lua_config.defaultPath(init.minimal.environ, &path_buffer);
-    var diagnostic: frontend.lua_config.Diagnostic = .{};
-    const generation = frontend.lua_config.Generation.loadFileProfile(
+        try frontend.config.defaultPath(init.minimal.environ, &path_buffer);
+    var diagnostic: frontend.config.Diagnostic = .{};
+    const generation = frontend.config.Generation.loadFileProfile(
         init.gpa,
         init.io,
         path,
@@ -654,7 +654,7 @@ fn runConfigCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
         return err;
     };
     defer generation.deinit();
-    const registry = try frontend.plugin_broker.Registry.load(
+    const registry = try frontend.plugins.Registry.load(
         init.gpa,
         init.io,
         generation.configDir(),
@@ -665,7 +665,7 @@ fn runConfigCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
 }
 
 fn runPluginCommand(init: std.process.Init, options: PluginOptions) !void {
-    const package = try frontend.plugin_broker.inspectPackage(
+    const package = try frontend.plugins.inspectPackage(
         init.gpa,
         init.io,
         std.mem.span(options.path),
@@ -702,7 +702,7 @@ fn runPluginCommand(init: std.process.Init, options: PluginOptions) !void {
                 "{s}/{s}/{s}",
                 .{ base, package.manifest.id(), &digest_hex },
             );
-            try frontend.plugin_broker.installPackage(
+            try frontend.plugins.installPackage(
                 init.gpa,
                 init.io,
                 &package,
@@ -1069,7 +1069,7 @@ pub fn main(init: std.process.Init) !void {
         .history => |options| try runHistory(init, options),
         .notification => |options| try runNotification(init, options),
         .config_check => |options| try runConfigCheck(init, options),
-        .plugin_worker => |options| try frontend.plugin_worker.run(
+        .plugin_worker => |options| try frontend.plugins.runWorker(
             init,
             std.mem.span(options.entry),
             std.mem.span(options.action),

@@ -1,9 +1,9 @@
 //! Inline tab-name editor occupying the bottom bar.
 
 const core = @import("telar-core");
-const edit = @import("../edit.zig");
+const edit = @import("../input/root.zig").edit;
 const widget = @import("context.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
 

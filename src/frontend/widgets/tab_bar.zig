@@ -2,10 +2,11 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const multiplexer = @import("../multiplexer.zig");
-const tabs_mod = @import("../tabs.zig");
+const workspace = @import("../workspace/root.zig");
+const multiplexer = workspace.multiplexer;
+const tabs_mod = workspace.tabs;
 const widget = @import("context.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
 

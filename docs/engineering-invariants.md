@@ -18,6 +18,29 @@ Before adding a feature, name its:
 
 A design is incomplete while any item is unknown.
 
+## Code organization and tracing
+
+- A capability directory owns one cohesive abstraction or one indivisible set
+  of invariants. Its `root.zig` is the supported public namespace.
+- Files inside a capability directory are implementation details. Code outside
+  the capability imports its `root.zig`, not those files directly.
+- A file owns one primary abstraction and exposes the smallest complete
+  protocol for it. Method count and line count are not design targets.
+- An external event has one explicit entrypoint in the process that receives
+  it. Event loops classify and delegate; they do not contain the flow itself.
+- An entrypoint owns orchestration, ordering, transaction policy and rollback.
+  It calls capability APIs and does not mutate their representations directly.
+- Protocol messages connect entrypoints across processes. Message names remain
+  stable search terms on both sides of the connection.
+- A user-visible flow records its external trigger, process entrypoints,
+  protocol messages, resulting events and integration proof.
+- Unit tests live with the abstraction whose invariants they inspect. Contract
+  and integration tests use public APIs and the language of the flow they
+  prove.
+- An extraction is complete only when callers know fewer implementation
+  details. A forwarding wrapper that preserves the same knowledge is not a new
+  abstraction.
+
 ## Ownership and failure
 
 - The runtime owns PTYs, child processes, terminal state, agent truth, graphics

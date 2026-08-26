@@ -3,8 +3,7 @@ const Io = std.Io;
 const File = Io.File;
 const windows = std.os.windows;
 
-const platform = @import("../platform.zig");
-const Size = platform.Size;
+const Size = @import("types.zig").Size;
 
 // Windows: console modes for the state, the screen buffer info for the size,
 // and - the awkward one - polling for the change.
