@@ -477,15 +477,13 @@ pub fn enqueueNotificationRequest(
 }
 
 fn pumpOutbox(client: *Client) !void {
-    if (client.outbox.send_pending or client.outbox.len == 0) return;
-    const payload = try client.outbox.encodeNext(client.send_buffer);
-    client.outbox.send_pending = true;
+    const payload = try client.outbox.beginSend(client.send_buffer) orelse return;
     client.select.concurrent(.sent, sendClient, .{
         client.io,
         client.connection,
         payload,
     }) catch |err| {
-        client.outbox.send_pending = false;
+        client.outbox.sendFailed();
         return err;
     };
 }
@@ -502,7 +500,7 @@ fn returnGraphicsCredits(client: *Client) !void {
 }
 
 fn scheduleInputRead(client: *Client) !void {
-    if (client.input_read_pending or !client.outbox.canQueueInput()) return;
+    if (client.input_read_pending or !client.outbox.hasCapacity()) return;
     try client.select.concurrent(.input, readInput, .{ client.io, client.input_file });
     client.input_read_pending = true;
 }
@@ -2253,7 +2251,7 @@ const TestHarness = struct {
     /// Drives the real dispatch until the outbox is drained, so a test
     /// observes exactly what the runtime peer would receive.
     fn settle(harness: *TestHarness) !void {
-        while (harness.client.outbox.send_pending or harness.client.outbox.len != 0) {
+        while (harness.client.outbox.inFlight() or harness.client.outbox.len != 0) {
             switch (try harness.client.select.await()) {
                 .sent => |result| try harness.client.handleSentEvent(result),
                 .draw => |result| try harness.client.handleDrawEvent(result),

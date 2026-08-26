@@ -109,10 +109,6 @@ pub const Outbox = struct {
         return outbox.len < capacity;
     }
 
-    pub fn canQueueInput(outbox: *const Outbox) bool {
-        return outbox.hasCapacity();
-    }
-
     pub fn push(outbox: *Outbox, message: Message) !void {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
@@ -193,6 +189,28 @@ pub const Outbox = struct {
         return &outbox.items[outbox.head];
     }
 
+    /// Claims the next queued message: encodes it into `buffer` and marks
+    /// the send in flight. Null while a send is already in flight or the
+    /// queue is empty. The claim ends in exactly one of `popSent` (the
+    /// scheduler delivered it) or `sendFailed` (it never left).
+    pub fn beginSend(outbox: *Outbox, buffer: []u8) !?[]const u8 {
+        if (outbox.send_pending or outbox.len == 0) return null;
+        const payload = try outbox.encodeNext(buffer);
+        outbox.send_pending = true;
+        return payload;
+    }
+
+    /// The scheduler refused the claimed send; the message stays queued.
+    pub fn sendFailed(outbox: *Outbox) void {
+        std.debug.assert(outbox.send_pending);
+        outbox.send_pending = false;
+    }
+
+    /// True while a claimed send has neither completed nor failed.
+    pub fn inFlight(outbox: *const Outbox) bool {
+        return outbox.send_pending;
+    }
+
     pub fn popSent(outbox: *Outbox) void {
         std.debug.assert(outbox.send_pending);
         std.debug.assert(outbox.len != 0);
@@ -201,7 +219,7 @@ pub const Outbox = struct {
         outbox.len -= 1;
     }
 
-    pub fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
+    fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         const message = outbox.peek() orelse return error.OutboxEmpty;
         return switch (message.*) {
             .open_pane => |value| schema.encodeOpenPane(buffer, value),
@@ -314,7 +332,7 @@ test "adjacent input for one pane is folded without allocation" {
     try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_input);
 
     var buffer: [64]u8 = undefined;
-    const decoded = try schema.decodeClient(try outbox.encodeNext(&buffer));
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("abcdef", decoded.pane_input.bytes);
 }
 
@@ -327,15 +345,16 @@ test "input never coalesces into a message already in flight" {
     var outbox: Outbox = .{};
     const pane_id: schema.PaneId = @enumFromInt(1);
     try outbox.pushInput(pane_id, "first");
-    outbox.send_pending = true;
+    var buffer: [64]u8 = undefined;
+    var decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqualStrings("first", decoded.pane_input.bytes);
     try outbox.pushInput(pane_id, "second");
     try std.testing.expectEqual(@as(u8, 2), outbox.len);
 
-    var buffer: [64]u8 = undefined;
-    var decoded = try schema.decodeClient(try outbox.encodeNext(&buffer));
-    try std.testing.expectEqualStrings("first", decoded.pane_input.bytes);
+    // A second claim while one is in flight yields nothing.
+    try std.testing.expectEqual(@as(?[]const u8, null), try outbox.beginSend(&buffer));
     outbox.popSent();
-    decoded = try schema.decodeClient(try outbox.encodeNext(&buffer));
+    decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("second", decoded.pane_input.bytes);
 }
 

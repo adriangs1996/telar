@@ -614,6 +614,7 @@ fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
 
 const OutboxContext = struct {
     outbox: *frontend.client.Outbox,
+    buffer: [4096]u8 = undefined,
 
     fn init(gpa: std.mem.Allocator) !OutboxContext {
         const outbox = try gpa.create(frontend.client.Outbox);
@@ -631,7 +632,7 @@ fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
     for (0..iterations) |_| {
         try context.outbox.pushInput(@enumFromInt(1), "hello world\n");
         checksum +%= context.outbox.len;
-        context.outbox.send_pending = true;
+        checksum +%= (try context.outbox.beginSend(&context.buffer)).?.len;
         context.outbox.popSent();
     }
     return checksum;
