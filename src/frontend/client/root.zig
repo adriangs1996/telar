@@ -32,6 +32,7 @@ test {
     // This file is the client's suite root, so the client-only modules with
     // no suite root of their own get their tests collected here.
     _ = @import("client.zig");
+    _ = @import("client_test.zig");
     _ = @import("input_handler.zig");
     _ = @import("run.zig");
     _ = @import("../presentation/root.zig");
