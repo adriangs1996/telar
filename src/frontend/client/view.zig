@@ -451,13 +451,38 @@ pub const State = struct {
         return state.regions.sidebar.h -| 11;
     }
 
+    /// A rejected configuration paints one red line over the bottom row so
+    /// the message survives until the next successful reload.
+    fn renderDiagnosticBanner(state: *State, screen: *term.Screen, diagnostic: ?[]const u8) void {
+        const message = diagnostic orelse return;
+        if (screen.back.h == 0) return;
+        const colors = state.palette();
+        const banner: ui.Rect = .{
+            .y = screen.back.h - 1,
+            .w = screen.back.w,
+            .h = 1,
+        };
+        const style: ui.Style = .{
+            .fg = colors.text,
+            .bg = colors.red,
+            .flags = .{ .bold = true },
+        };
+        screen.back.fill(banner, " ", style);
+        const prefix_width = screen.back.writeText(banner, 0, banner.y, "TELAR CONFIG  ", style);
+        _ = screen.back.writeText(banner, prefix_width, banner.y, message, style);
+    }
+
     pub fn render(
         state: *State,
         screen: *term.Screen,
         tabs: ?*const tabs_mod.Model,
         model: *multiplexer.Model,
         force: bool,
+        diagnostic: ?[]const u8,
     ) !RenderStats {
+        // The banner must survive every present — pane composition may have
+        // repainted the bottom row — so it lands on both exit paths.
+        defer state.renderDiagnosticBanner(screen, diagnostic);
         if (!force and !state.dirty and
             !state.notifications.hasItems() and !state.toast_overlay_drawn)
             return .{};
@@ -609,7 +634,7 @@ test "empty production sidebar has no task controls" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 27 });
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, null, &model, true);
+    _ = try state.render(&screen, null, &model, true, null);
 
     try std.testing.expect(state.hits.at(3, 2) == null);
     try std.testing.expect(state.hits.at(58, 2) == null);
@@ -643,7 +668,7 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, true);
+    _ = try state.render(&screen, null, &model, true, null);
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
     try std.testing.expect(state.handleMouse(null, &model, first_row, 0).redraw);
@@ -674,7 +699,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     state.sidebar.selected_agent = agents[0].key;
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, null, &model, true);
+    _ = try state.render(&screen, null, &model, true, null);
     try std.testing.expectEqualDeep(
         Action{ .sidebar_select_agent = agents[0].key },
         state.hits.at(4, 4).?,
@@ -699,7 +724,7 @@ test "client chrome uses Vesper by default" {
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, true);
+    _ = try state.render(&screen, null, &model, true, null);
 
     try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[0].style.bg);
     try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[0].style.fg);
@@ -721,7 +746,7 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     _ = try model.renderThemed(&screen, state.workbench(), state.palette());
-    _ = try state.render(&screen, null, &model, true);
+    _ = try state.render(&screen, null, &model, true, null);
 
     try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[0].style.bg);
     // The bottom-left corner is the status region, which stays on the host
@@ -765,7 +790,7 @@ test "clickable toast restores pane cells after its exit animation" {
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, false);
+    _ = try state.render(&screen, null, &model, false, null);
 
     const interaction = state.handleMouse(null, &model, .{
         .x = click_x,
@@ -777,7 +802,7 @@ test "clickable toast restores pane cells after its exit animation" {
         state.advanceNotifications(200 + widgets.notification.transition_duration_ns),
     );
     try std.testing.expect(!state.notifications.hasItems());
-    _ = try state.render(&screen, null, &model, false);
+    _ = try state.render(&screen, null, &model, false, null);
 
     const restored = screen.back.cells[@as(usize, click_y) * screen.back.w + click_x];
     try std.testing.expectEqualStrings("u", restored.text());
@@ -818,7 +843,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     defer screen.deinit();
     const model = &tabs.active().?.model;
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, &tabs, model, true);
+    _ = try state.render(&screen, &tabs, model, true, null);
 
     // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
     // last sixteen columns of the bottom row.
@@ -860,7 +885,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     }));
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, null, &model, true);
+    _ = try state.render(&screen, null, &model, true, null);
 
     // Locate hits on the top row instead of pinning glyph widths.
     var workspace_x: ?u16 = null;

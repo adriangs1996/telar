@@ -774,7 +774,7 @@ const ClientUiContext = struct {
         errdefer view.deinit();
         const model = &tabs.active().?.model;
         _ = try model.render(&screen, view.workbench());
-        _ = try view.render(&screen, &tabs, model, true);
+        _ = try view.render(&screen, &tabs, model, true, null);
         return .{ .tabs = tabs, .screen = screen, .view = view };
     }
 
@@ -795,6 +795,7 @@ fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
             &context.tabs,
             &context.tabs.active().?.model,
             false,
+            null,
         );
         checksum +%= stats.scanned + stats.damaged;
     }

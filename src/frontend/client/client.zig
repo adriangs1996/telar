@@ -1014,55 +1014,12 @@ fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
         .tab_moved => |moved| try client.handleTabMoved(moved),
         .pane_frame => |frame| try client.handlePaneFrame(frame),
         .pane_cwd => |cwd| try client.handlePaneCwd(cwd),
-        .pane_clipboard => |clipboard| {
-            if (clipboard.pane_id == .invalid) return error.UnexpectedPane;
-            try term.writeClipboard(client.writer, clipboard.bytes);
-            try client.writer.flush();
-        },
+        .pane_clipboard => |clipboard| try client.handlePaneClipboard(clipboard),
         .pane_exited => |exited| try client.handlePaneExited(exited),
         .request_failed => |failure| try client.handleRequestFailed(failure),
-        .notification => |notification| try client.notify(.{
-            .level = switch (notification.level) {
-                .info => .info,
-                .success => .success,
-                .warning => .warning,
-                .failure => .failure,
-            },
-            .title = notification.title,
-            .message = notification.message,
-            .target = switch (notification.target) {
-                .none => .none,
-                .pane => |pane_id| .{ .focus_pane = pane_id },
-                .tab => |tab_id| .{ .select_tab = tab_id },
-                .workspace => |workspace_id| .{ .select_workspace = workspace_id },
-            },
-            .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
-        }),
-        .notification_shown => |shown| {
-            const continuation = client.requests.take(shown.request_id) orelse
-                return error.UnexpectedNotificationReply;
-            if (continuation != .notification) return error.UnexpectedNotificationReply;
-            if (shown.delivered_clients == 0) try client.notify(.{
-                .level = .failure,
-                .title = "Notification not delivered",
-                .message = "No connected client could accept the notification",
-            });
-        },
-        .resync_required => |required| {
-            switch (workspaceClosureAction(
-                required.workspace_closed,
-                required.previous_workspace,
-            )) {
-                .stay => try client.handleResyncRequired(required),
-                .exit => return 0,
-                .switch_to => |previous| {
-                    var handler: InputHandler = .{ .client = client };
-                    try handler.switchWorkspaceResolved(previous);
-                    try client.requestDraw();
-                    return null;
-                },
-            }
-        },
+        .notification => |notification| try client.handleRuntimeNotification(notification),
+        .notification_shown => |shown| try client.handleNotificationShown(shown),
+        .resync_required => |required| return client.handleResyncMessage(required),
         .runtime_stopping => return 0,
         .history_results => return error.UnexpectedHistoryResults,
         .proxy_status => |status| try client.handleProxyStatus(status),
@@ -1077,6 +1034,66 @@ fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
         .graphics_delete_image,
         .graphics_delete_placement,
         => try client.handleGraphics(message),
+    }
+    return null;
+}
+
+/// Entrypoint for a clipboard write a pane requested via OSC 52: the bytes
+/// go straight to the host terminal, never through the cell diff.
+fn handlePaneClipboard(client: *Client, clipboard: schema.PaneClipboard) !void {
+    if (clipboard.pane_id == .invalid) return error.UnexpectedPane;
+    try term.writeClipboard(client.writer, clipboard.bytes);
+    try client.writer.flush();
+}
+
+/// Entrypoint for a notification the runtime pushes on its own behalf.
+fn handleRuntimeNotification(client: *Client, notification: schema.Notification) !void {
+    try client.notify(.{
+        .level = switch (notification.level) {
+            .info => .info,
+            .success => .success,
+            .warning => .warning,
+            .failure => .failure,
+        },
+        .title = notification.title,
+        .message = notification.message,
+        .target = switch (notification.target) {
+            .none => .none,
+            .pane => |pane_id| .{ .focus_pane = pane_id },
+            .tab => |tab_id| .{ .select_tab = tab_id },
+            .workspace => |workspace_id| .{ .select_workspace = workspace_id },
+        },
+        .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
+    });
+}
+
+/// Entrypoint for the delivery report of a notification this client asked
+/// the runtime to fan out.
+fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !void {
+    const continuation = client.requests.take(shown.request_id) orelse
+        return error.UnexpectedNotificationReply;
+    if (continuation != .notification) return error.UnexpectedNotificationReply;
+    if (shown.delivered_clients == 0) try client.notify(.{
+        .level = .failure,
+        .title = "Notification not delivered",
+        .message = "No connected client could accept the notification",
+    });
+}
+
+/// Entrypoint for a resync demand: reconcile in place, follow the runtime
+/// to a surviving workspace, or exit when nothing survives.
+fn handleResyncMessage(client: *Client, required: schema.ResyncRequired) !?u8 {
+    switch (workspaceClosureAction(
+        required.workspace_closed,
+        required.previous_workspace,
+    )) {
+        .stay => try client.handleResyncRequired(required),
+        .exit => return 0,
+        .switch_to => |previous| {
+            var handler: InputHandler = .{ .client = client };
+            try handler.switchWorkspaceResolved(previous);
+            try client.requestDraw();
+        },
     }
     return null;
 }
@@ -1716,29 +1733,13 @@ fn present(client: *Client, model: *multiplexer.Model) !u64 {
     client.view.kittyToasts().setMediaIdle(media_idle);
     const compose_started = diagnostics.now(client.io);
     const composed = try model.renderThemed(&client.screen, client.view.workbench(), client.view.palette());
-    const chrome = try client.view.render(&client.screen, &client.tabs, model, composed.full);
-    if (client.config_diagnostic.len != 0 and client.screen.back.h != 0) {
-        const palette = client.view.palette();
-        const banner: core.ui.Rect = .{
-            .y = client.screen.back.h - 1,
-            .w = client.screen.back.w,
-            .h = 1,
-        };
-        const style: core.ui.Style = .{
-            .fg = palette.text,
-            .bg = palette.red,
-            .flags = .{ .bold = true },
-        };
-        client.screen.back.fill(banner, " ", style);
-        const prefix_width = client.screen.back.writeText(banner, 0, banner.y, "TELAR CONFIG  ", style);
-        _ = client.screen.back.writeText(
-            banner,
-            prefix_width,
-            banner.y,
-            client.config_diagnostic.message(),
-            style,
-        );
-    }
+    const chrome = try client.view.render(
+        &client.screen,
+        &client.tabs,
+        model,
+        composed.full,
+        if (client.config_diagnostic.len != 0) client.config_diagnostic.message() else null,
+    );
     if (comptime diagnostics.enabled) {
         client.metrics.composed_panes += composed.panes;
         client.metrics.composed_cells += composed.cells;
