@@ -94,6 +94,7 @@ pub const InputChunk = struct {
     }
 };
 const InputHandler = @import("input_handler.zig");
+const config_reload = @import("config_reload.zig");
 
 pub const ClientEvent = union(enum) {
     input: anyerror!InputChunk,
@@ -108,7 +109,7 @@ pub const ClientEvent = union(enum) {
     notification_tick: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    config_reload: anyerror!ConfigReload,
+    config_reload: anyerror!config_reload.ConfigReload,
     plugin_result: anyerror!plugin_broker.WorkerResult,
 };
 
@@ -125,20 +126,6 @@ const NotificationTimerEvent = union(enum) {
 const NotificationTimerResult = enum {
     deadline,
     rescheduled,
-};
-
-const ConfigReload = union(enum) {
-    unchanged: i128,
-    loaded: struct {
-        generation: *lua_config.Generation,
-        registry: *plugin_broker.Registry,
-        trust_store: *core.plugin.TrustStore,
-        mtime_ns: i128,
-    },
-    failed: struct {
-        diagnostic: lua_config.Diagnostic,
-        mtime_ns: i128,
-    },
 };
 
 const WorkspaceClosureAction = union(enum) {
@@ -278,15 +265,8 @@ lua_generation: ?*lua_config.Generation,
 config_diagnostic: lua_config.Diagnostic = .{},
 plugin_registry: ?*plugin_broker.Registry,
 trust_store: ?*core.plugin.TrustStore,
-/// Race-window handoff slots for the async config-reload task: it publishes
-/// freshly loaded objects here so a cancelled reload can still be freed by
-/// `deinit`; the reload entrypoint clears them when it adopts the objects.
-reload_generation_orphan: ?*lua_config.Generation = null,
-reload_registry_orphan: ?*plugin_broker.Registry = null,
-reload_trust_orphan: ?*core.plugin.TrustStore = null,
+reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
-config_mtime_ns: i128,
-next_config_generation: u64 = 2,
 plugin_pending: bool = false,
 paste_pane: ?schema.PaneId = null,
 mode: Mode = .normal,
@@ -358,7 +338,7 @@ pub fn init(params: Params) !*Client {
     errdefer gpa.free(receive_buffer);
     const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
     errdefer gpa.free(send_buffer);
-    var input_router = try buildInputRouter(params.options.prefix, params.options.bindings);
+    var input_router = try config_reload.buildInputRouter(params.options.prefix, params.options.bindings);
     input_router.escape_timeout_ns = params.options.input_escape_timeout_ns;
     input_router.sequence_timeout_ns = params.options.input_sequence_timeout_ns;
     client.* = .{
@@ -383,7 +363,7 @@ pub fn init(params: Params) !*Client {
         .plugin_registry = params.options.plugin_registry,
         .trust_store = params.options.trust_store,
         .sidebar_rendering = params.options.sidebar_rendering,
-        .config_mtime_ns = params.options.config_mtime_ns,
+        .reload = .{ .mtime_ns = params.options.config_mtime_ns },
     };
     // The select's storage lives inside the heap-stable client, so the
     // select can only be built once the client's address exists.
@@ -397,9 +377,7 @@ pub fn init(params: Params) !*Client {
 pub fn deinit(client: *Client) void {
     const gpa = client.gpa;
     client.select.cancelDiscard();
-    if (client.reload_generation_orphan) |generation| generation.deinit();
-    if (client.reload_registry_orphan) |registry| gpa.destroy(registry);
-    if (client.reload_trust_orphan) |store| gpa.destroy(store);
+    client.reload.deinit(gpa);
     if (client.lua_generation) |generation| generation.deinit();
     if (client.plugin_registry) |registry| gpa.destroy(registry);
     if (client.trust_store) |store| gpa.destroy(store);
@@ -857,116 +835,73 @@ pub fn handleTelemetryWrittenEvent(
 
 pub fn scheduleConfigReload(client: *Client) !void {
     const path = client.options.config_path orelse return;
-    try client.select.concurrent(.config_reload, waitConfigReload, .{
-        client.io,
-        client.gpa,
-        path,
-        client.config_mtime_ns,
-        client.next_config_generation,
-        client.options.profile,
-        client.lua_generation.?,
-        client.plugin_registry.?,
-        client.options.trust_path.?,
-        &client.reload_generation_orphan,
-        &client.reload_registry_orphan,
-        &client.reload_trust_orphan,
+    try config_reload.schedule(&client.reload, client.io, client.gpa, &client.select, .{
+        .path = path,
+        .profile = client.options.profile,
+        .trust_path = client.options.trust_path.?,
+        .current_generation = client.lua_generation.?,
+        .current_registry = client.plugin_registry.?,
     });
 }
 
-pub fn handleConfigReloadEvent(client: *Client, result: anyerror!ConfigReload) !void {
+/// Entrypoint for one finished reload attempt: adopt the new
+/// configuration, surface the rejection, or note nothing changed — then
+/// keep watching.
+pub fn handleConfigReloadEvent(client: *Client, result: anyerror!config_reload.ConfigReload) !void {
     const reload = try result;
-    switch (reload) {
-        .unchanged => |mtime_ns| client.config_mtime_ns = mtime_ns,
-        .failed => |failure| {
-            client.config_diagnostic = failure.diagnostic;
-            client.config_mtime_ns = failure.mtime_ns;
+    switch (config_reload.resolve(&client.reload, client.gpa, reload, .{
+        .kitty_support = client.capabilities.kitty_graphics,
+        .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
+        .current_sidebar = client.sidebar_rendering,
+    })) {
+        .unchanged => {},
+        .rejected => |diagnostic| {
+            client.config_diagnostic = diagnostic;
             try client.notifyDiagnostic("Configuration rejected");
         },
-        .loaded => |loaded| {
-            const snapshot = &loaded.generation.snapshot;
-            const requested_sidebar = if (client.options.sidebar_renderer_locked)
-                client.sidebar_rendering
-            else
-                snapshot.sidebar_rendering;
-            _ = requested_sidebar.resolve(client.capabilities.kitty_graphics) catch |err| {
-                client.config_diagnostic.set(
-                    "reloaded sidebar renderer is unavailable: {s}",
-                    .{@errorName(err)},
-                );
-                client.config_mtime_ns = loaded.mtime_ns;
-                client.reload_generation_orphan = null;
-                client.reload_registry_orphan = null;
-                client.reload_trust_orphan = null;
-                loaded.generation.deinit();
-                client.gpa.destroy(loaded.registry);
-                client.gpa.destroy(loaded.trust_store);
-                try client.notifyDiagnostic("Configuration rejected");
-                try client.scheduleConfigReload();
-                return;
-            };
-            var replacement = buildInputRouter(
-                snapshot.prefix,
-                snapshot.bindingSlice(),
-            ) catch |err| {
-                client.config_diagnostic.set(
-                    "reloaded keymap is invalid: {s}",
-                    .{@errorName(err)},
-                );
-                client.config_mtime_ns = loaded.mtime_ns;
-                client.reload_generation_orphan = null;
-                client.reload_registry_orphan = null;
-                client.reload_trust_orphan = null;
-                loaded.generation.deinit();
-                client.gpa.destroy(loaded.registry);
-                client.gpa.destroy(loaded.trust_store);
-                try client.notifyDiagnostic("Configuration rejected");
-                try client.scheduleConfigReload();
-                return;
-            };
-            replacement.escape_timeout_ns = snapshot.input_escape_timeout_ns;
-            replacement.sequence_timeout_ns = snapshot.input_sequence_timeout_ns;
-
-            client.input_router = replacement;
-            if (!client.options.theme_locked) client.view.setTheme(snapshot.theme);
-            client.sidebar_rendering = requested_sidebar;
-            client.view.setSidebarVisible(snapshot.sidebar_visible);
-            client.tabs.setPaneGaps(snapshot.pane_gaps);
-            const cell_size = client.capabilities.cellSize(
-                client.host_size.cols,
-                client.host_size.rows,
-            );
-            try client.view.configureSidebar(
-                client.sidebar_rendering,
-                client.capabilities.kitty_graphics,
-                cell_size.width,
-                cell_size.height,
-            );
-            if (client.tabs.active()) |active|
-                try client.resizeAttached(&active.model, client.view.workbench());
-
-            const previous = client.lua_generation;
-            client.lua_generation = loaded.generation;
-            client.reload_generation_orphan = null;
-            const previous_registry = client.plugin_registry;
-            client.plugin_registry = loaded.registry;
-            client.reload_registry_orphan = null;
-            const previous_trust = client.trust_store;
-            client.trust_store = loaded.trust_store;
-            client.reload_trust_orphan = null;
-            if (previous) |old| old.deinit();
-            if (previous_registry) |old| client.gpa.destroy(old);
-            if (previous_trust) |old| client.gpa.destroy(old);
-            client.config_mtime_ns = loaded.mtime_ns;
-            client.next_config_generation += 1;
-            client.config_diagnostic.len = 0;
-            try client.notify(.{
-                .level = .success,
-                .title = "Configuration reloaded",
-                .message = "The new settings are active",
-            });
-        },
+        .adopted => |adoption| try client.applyConfig(adoption),
     }
     try client.scheduleConfigReload();
+}
+
+/// Applies an adopted configuration: the compiled router, the view-facing
+/// settings, and the ownership swap of the generation, registry and trust
+/// store. Everything loadable was already validated by the reload module.
+fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
+    const snapshot = &adoption.generation.snapshot;
+    client.input_router = adoption.router;
+    if (!client.options.theme_locked) client.view.setTheme(snapshot.theme);
+    client.sidebar_rendering = adoption.sidebar_rendering;
+    client.view.setSidebarVisible(snapshot.sidebar_visible);
+    client.tabs.setPaneGaps(snapshot.pane_gaps);
+    const cell_size = client.capabilities.cellSize(
+        client.host_size.cols,
+        client.host_size.rows,
+    );
+    try client.view.configureSidebar(
+        client.sidebar_rendering,
+        client.capabilities.kitty_graphics,
+        cell_size.width,
+        cell_size.height,
+    );
+    if (client.tabs.active()) |active|
+        try client.resizeAttached(&active.model, client.view.workbench());
+
+    const previous = client.lua_generation;
+    client.lua_generation = adoption.generation;
+    const previous_registry = client.plugin_registry;
+    client.plugin_registry = adoption.registry;
+    const previous_trust = client.trust_store;
+    client.trust_store = adoption.trust_store;
+    if (previous) |old| old.deinit();
+    if (previous_registry) |old| client.gpa.destroy(old);
+    if (previous_trust) |old| client.gpa.destroy(old);
+    client.config_diagnostic.len = 0;
+    try client.notify(.{
+        .level = .success,
+        .title = "Configuration reloaded",
+        .message = "The new settings are active",
+    });
 }
 
 pub fn handlePluginResultEvent(
@@ -1812,134 +1747,12 @@ pub fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect)
     }
 }
 
-fn waitConfigReload(
-    io: Io,
-    gpa: std.mem.Allocator,
-    path: []const u8,
-    known_mtime_ns: i128,
-    generation_number: u64,
-    profile: ?[]const u8,
-    current_generation: *const lua_config.Generation,
-    current_registry: *const plugin_broker.Registry,
-    trust_path: []const u8,
-    orphan: *?*lua_config.Generation,
-    registry_orphan: *?*plugin_broker.Registry,
-    trust_orphan: *?*core.plugin.TrustStore,
-) anyerror!ConfigReload {
-    try io.sleep(.fromSeconds(1), .awake);
-    const mtime_ns = current_generation.watchFingerprint(io, path) ^
-        @as(i128, current_registry.watchFingerprint(gpa, io)) ^
-        @as(i128, trustWatchFingerprint(io, trust_path));
-    if (mtime_ns == known_mtime_ns) return .{ .unchanged = mtime_ns };
-    var diagnostic: lua_config.Diagnostic = .{};
-    const generation = lua_config.Generation.loadFileProfile(
-        gpa,
-        io,
-        path,
-        generation_number,
-        profile,
-        &diagnostic,
-    ) catch return .{ .failed = .{
-        .diagnostic = diagnostic,
-        .mtime_ns = mtime_ns,
-    } };
-    orphan.* = generation;
-    const trust = loadReloadTrustStore(gpa, io, trust_path) catch |err| {
-        orphan.* = null;
-        generation.deinit();
-        diagnostic.set("cannot load plugin trust store: {s}", .{@errorName(err)});
-        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
-    };
-    trust_orphan.* = trust;
-    const registry = gpa.create(plugin_broker.Registry) catch {
-        orphan.* = null;
-        trust_orphan.* = null;
-        generation.deinit();
-        gpa.destroy(trust);
-        diagnostic.set("cannot allocate reloaded plugin registry", .{});
-        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
-    };
-    registry.* = plugin_broker.Registry.loadWithTrust(
-        gpa,
-        io,
-        generation.configDir(),
-        generation.pluginSlice(),
-        trust,
-    ) catch |err| {
-        gpa.destroy(registry);
-        orphan.* = null;
-        trust_orphan.* = null;
-        generation.deinit();
-        gpa.destroy(trust);
-        diagnostic.set("cannot load plugins: {s}", .{@errorName(err)});
-        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
-    };
-    registry.validateConfiguredActions(generation.snapshot.bindingSlice()) catch |err| {
-        gpa.destroy(registry);
-        orphan.* = null;
-        trust_orphan.* = null;
-        generation.deinit();
-        gpa.destroy(trust);
-        diagnostic.set("invalid configured plugin action: {s}", .{@errorName(err)});
-        return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
-    };
-    registry_orphan.* = registry;
-    return .{ .loaded = .{
-        .generation = generation,
-        .registry = registry,
-        .trust_store = trust,
-        .mtime_ns = generation.watchFingerprint(io, path) ^
-            @as(i128, registry.watchFingerprint(gpa, io)) ^
-            @as(i128, trustWatchFingerprint(io, trust_path)),
-    } };
-}
-
-pub fn trustWatchFingerprint(io: Io, path: []const u8) u64 {
-    var hasher = std.hash.Wyhash.init(0x74656c61722d7472);
-    hasher.update(path);
-    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch {
-        hasher.update("\x00missing");
-        return hasher.final();
-    };
-    hasher.update(std.mem.asBytes(&stat.kind));
-    hasher.update(std.mem.asBytes(&stat.size));
-    hasher.update(std.mem.asBytes(&stat.mtime.nanoseconds));
-    return hasher.final();
-}
-
-fn loadReloadTrustStore(
-    gpa: std.mem.Allocator,
-    io: Io,
-    path: []const u8,
-) !*core.plugin.TrustStore {
-    const store = try gpa.create(core.plugin.TrustStore);
-    errdefer gpa.destroy(store);
-    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
-        error.FileNotFound => {
-            store.* = .{};
-            return store;
-        },
-        else => return err,
-    };
-    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0)
-        return error.InsecureTrustStore;
-    const source = try Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
-    defer gpa.free(source);
-    store.* = try core.plugin.TrustStore.parse(gpa, source);
-    return store;
-}
-
 fn readInput(io: Io, input: File) anyerror!InputChunk {
     var chunk: InputChunk = .{};
     chunk.len = @intCast(try input.readStreaming(io, &.{&chunk.bytes}));
     return chunk;
 }
 
-
-pub fn buildInputRouter(prefix: keybind.Key, configured: []const ConfiguredBinding) !InputRouter {
-    const resolved = try lua_config.resolveBindings(prefix, configured);
-    return InputRouter.init(resolved.slice());
-}
 
 /// Drops every image, placement, and revision the store holds for the panes
 /// of a tab that no longer exists.

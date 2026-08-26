@@ -21,7 +21,7 @@ pub const Outbox = client_outbox.Outbox;
 pub const View = client_view.State;
 pub const sidebar_width = client_view.sidebar_width;
 pub const ConfiguredBinding = lua_config.ConfiguredBinding;
-pub const trustWatchFingerprint = Client.trustWatchFingerprint;
+pub const trustWatchFingerprint = @import("config_reload.zig").trustWatchFingerprint;
 
 const InputRouter = Client.InputRouter;
 const defaultBindings = lua_config.loadDefaultBindings;
@@ -33,6 +33,7 @@ test {
     // no suite root of their own get their tests collected here.
     _ = @import("client.zig");
     _ = @import("client_test.zig");
+    _ = @import("config_reload.zig");
     _ = @import("input_handler.zig");
     _ = @import("run.zig");
     _ = @import("../presentation/root.zig");
