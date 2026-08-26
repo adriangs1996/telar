@@ -41,7 +41,9 @@ before applying focus, so navigation does not renumber the selected pane. When
 the runtime still reports the same pane set, the client restores its bookmarked
 split tree, including split axes and ratios. If the pane set changed while the
 workspace was hidden, the client falls back to canonical pane order before
-applying focus.
+applying focus. Every successful transition, including workspace creation,
+bookmarks the workspace being left before destroying its client-side tab
+models.
 
 Buttons whose runtime behavior does not exist yet return a typed
 `SidebarIntent` from `client_ui.State.handleMouse`. The current client does not

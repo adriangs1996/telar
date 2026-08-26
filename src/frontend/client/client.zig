@@ -326,6 +326,18 @@ pub fn nextId(client: *Client) !schema.RequestId {
     return nextRequestId(&client.next_request_id);
 }
 
+/// Bookmarks the active tab before a workspace transition destroys its
+/// disposable client model.
+pub fn rememberCurrentNavigation(client: *Client) void {
+    const tab = client.tabs.activeConst() orelse return;
+    const pane = tab.model.focusedPaneConst() orelse return;
+    client.navigation_history.remember(.{
+        .location = tab.location,
+        .pane_id = pane.id,
+        .tab_layout = tab.model.layout,
+    });
+}
+
 pub fn enqueue(client: *Client, message: client_outbox.Message) !void {
     try client.outbox.push(message);
     try client.pumpOutbox();

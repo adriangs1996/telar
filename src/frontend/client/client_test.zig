@@ -504,12 +504,23 @@ test "an attach reply marks the discovered pane attached" {
     try std.testing.expect(client.tabs.findPane(discovered).?.attached);
 }
 
-test "a created workspace replaces the tabs wholesale" {
+test "a created workspace bookmarks and replaces the prior layout" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+
+    const prior_location = TestHarness.bootstrap_location;
+    const left = TestHarness.bootstrap_pane;
+    const top_right: schema.PaneId = @enumFromInt(11);
+    const bottom_right: schema.PaneId = @enumFromInt(12);
+    const workbench = client.view.workbench();
+    const prior_model = &client.tabs.active().?.model;
+    try prior_model.split(left, top_right, prior_location, .horizontal, workbench);
+    try prior_model.split(top_right, bottom_right, prior_location, .vertical, workbench);
+    var expected_geometry: workspace_capability.layout.Snapshot = .{};
+    prior_model.layout.snapshot(workbench, &expected_geometry);
 
     const new_location: schema.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
@@ -532,6 +543,74 @@ test "a created workspace replaces the tabs wholesale" {
     );
     try std.testing.expect(client.tabs.findPane(@enumFromInt(30)) != null);
     try std.testing.expect(client.tabs.findPane(TestHarness.bootstrap_pane) == null);
+
+    const bookmark = client.navigation_history.find(prior_location.workspace).?;
+    try std.testing.expectEqual(prior_location, bookmark.location);
+    try std.testing.expectEqual(bottom_right, bookmark.pane_id);
+    const saved_layout = bookmark.tab_layout.?;
+    var saved_geometry: workspace_capability.layout.Snapshot = .{};
+    saved_layout.snapshot(workbench, &saved_geometry);
+    for ([_]schema.PaneId{ left, top_right, bottom_right }) |pane_id|
+        try std.testing.expectEqual(
+            expected_geometry.find(pane_id).?.outer,
+            saved_geometry.find(pane_id).?.outer,
+        );
+
+    // Return through the same runtime handoff used by workspace selection.
+    // The requests emitted while bootstrapping the created workspace are not
+    // relevant to this transition, but their encoded messages still precede
+    // the detach and open below.
+    client.requests = .{};
+    var handler: InputHandler = .{ .client = client };
+    try handler.switchWorkspaceResolved(prior_location.workspace.workspace);
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    var open_request: schema.RequestId = .none;
+    while (open_request == .none) switch (try harness.nextClientMessage(&message_buffer)) {
+        .request_workspace_snapshot, .request_tab_snapshot, .detach_pane => {},
+        .open_pane => |open| {
+            try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = bottom_right }, open.target);
+            open_request = open.request_id;
+        },
+        else => return error.UnexpectedClientMessage,
+    };
+
+    const reopened = try schema.encodePaneOpened(&payload, .{
+        .request_id = open_request,
+        .pane_id = bottom_right,
+        .location = prior_location,
+        .created = false,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(reopened));
+    try harness.settle();
+    var snapshot_request: schema.RequestId = .none;
+    while (snapshot_request == .none) switch (try harness.nextClientMessage(&message_buffer)) {
+        .request_workspace_snapshot => {},
+        .request_tab_snapshot => |request| {
+            try std.testing.expectEqual(prior_location, request.location);
+            snapshot_request = request.request_id;
+        },
+        else => return error.UnexpectedClientMessage,
+    };
+    var snapshot_payload: [256]u8 = undefined;
+    const snapshot = try schema.encodeTabSnapshot(&snapshot_payload, .{
+        .request_id = snapshot_request,
+        .location = prior_location,
+        .panes = &.{
+            .{ .pane_id = left, .lifecycle = .running },
+            .{ .pane_id = top_right, .lifecycle = .running },
+            .{ .pane_id = bottom_right, .lifecycle = .running },
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+
+    var restored_geometry: workspace_capability.layout.Snapshot = .{};
+    client.tabs.activeConst().?.model.layout.snapshot(workbench, &restored_geometry);
+    for ([_]schema.PaneId{ left, top_right, bottom_right }) |pane_id|
+        try std.testing.expectEqual(
+            expected_geometry.find(pane_id).?.outer,
+            restored_geometry.find(pane_id).?.outer,
+        );
 }
 
 test "tab lifecycle: created, renamed, moved, closed" {

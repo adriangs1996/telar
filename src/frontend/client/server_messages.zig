@@ -350,6 +350,7 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
         .initial_open => try bootstrapWorkspace(client, opened),
         .create_workspace => {
             if (!opened.created) return error.UnexpectedRequest;
+            client.rememberCurrentNavigation();
             try client.clearPaneFocus();
             var tabs = client.tabs.tabIterator();
             while (tabs.next()) |tab| {

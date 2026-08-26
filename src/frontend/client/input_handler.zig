@@ -111,23 +111,13 @@ pub fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.Workspa
     try handler.beginWorkspaceHandoff(target, workspace);
 }
 
-fn rememberCurrentNavigation(handler: *InputHandler) void {
-    const tab = handler.client.tabs.activeConst() orelse return;
-    const pane = tab.model.focusedPaneConst() orelse return;
-    handler.client.navigation_history.remember(.{
-        .location = tab.location,
-        .pane_id = pane.id,
-        .tab_layout = tab.model.layout,
-    });
-}
-
 fn beginWorkspaceHandoff(
     handler: *InputHandler,
     target: schema.PaneTarget,
     fallback_workspace: ?schema.WorkspaceId,
 ) !void {
     const client = handler.client;
-    handler.rememberCurrentNavigation();
+    client.rememberCurrentNavigation();
     var tabs = client.tabs.tabIterator();
     while (tabs.next()) |tab| try handler.detachTab(tab);
     client.tabs.deinit();
