@@ -21,6 +21,9 @@ pub const max_history_query_bytes = 1024;
 pub const max_history_results = 100;
 pub const max_history_command_bytes = 64 * 1024;
 pub const max_agent_snapshot_entries = max_panes_per_tab;
+pub const max_agent_workspace_label_bytes = 48;
+pub const max_agent_session_title_bytes = 96;
+pub const max_agent_cwd_label_bytes = 48;
 pub const max_foreground_name_bytes = 48;
 pub const max_workspace_list_entries = 64;
 pub const max_notification_title_bytes = 48;
@@ -188,6 +191,19 @@ pub const AgentAuthority = enum(u8) {
     stale = 5,
 };
 
+pub const AgentTitleSource = enum(u8) {
+    telar = 0,
+    generated = 1,
+    manual = 2,
+};
+
+pub const AgentTitleState = enum(u8) {
+    placeholder = 0,
+    pending = 1,
+    ready = 2,
+    failed = 3,
+};
+
 pub const AgentSnapshotEntry = struct {
     pane_id: id.PaneId,
     pane_generation: u64,
@@ -199,6 +215,12 @@ pub const AgentSnapshotEntry = struct {
     pane_index: u16 = 0,
     process_id: u32,
     session_id: [16]u8,
+    workspace_label: []const u8 = "",
+    tab_label: []const u8 = "",
+    session_title: []const u8 = "",
+    title_source: AgentTitleSource = .telar,
+    title_state: AgentTitleState = .placeholder,
+    cwd_label: []const u8 = "",
     provider: AgentProvider,
     status: AgentStatus,
     source: AgentSource,

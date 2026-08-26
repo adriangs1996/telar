@@ -519,6 +519,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .pane_index = 3,
         .process_id = 42,
         .session_id = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 },
+        .workspace_label = "telar",
+        .tab_label = "test-2",
+        .session_title = "Improve agent context",
+        .title_source = .generated,
+        .title_state = .ready,
+        .cwd_label = "~/sandbox/telar",
         .provider = .codex,
         .status = .working,
         .source = .foreground_process,
@@ -654,7 +660,7 @@ const golden = struct {
     pub const graphics_delete_image = "9101000000000000000400000000000000070000000800000000000000";
     pub const graphics_delete_placement = "9201000000000000000500000000000000070000000800000000000000010000000000000001000000";
     pub const proxy_status = "9501";
-    pub const agent_snapshot = "960900000000000000010005000000000000000700000000000000000200000000000000040000000000000003002a0000000102030405060708090a0b0c0d0e0f10020102015f0b00000000000000e803000000000000d007000000000000";
+    pub const agent_snapshot = "960900000000000000010005000000000000000700000000000000000200000000000000040000000000000003002a0000000102030405060708090a0b0c0d0e0f10050074656c61720600746573742d321500496d70726f7665206167656e7420636f6e7465787401020f007e2f73616e64626f782f74656c6172020102015f0b00000000000000e803000000000000d007000000000000";
     pub const system_metrics = "9705000000000000002a5c000154";
     pub const workspace_list = "98030000000000000002000700000000000000050074656c61720b002f776f726b2f74656c61720200090000000000000003006170690900" ++ "2f776f726b2f617069" ++ "0100";
     pub const pane_cwd = "9905000000000000000b002f776f726b2f74656c6172";
@@ -1389,6 +1395,10 @@ test "malformed application messages are rejected" {
         .pane_index = 1,
         .process_id = 5,
         .session_id = .{0x5a} ** 16,
+        .workspace_label = "telar",
+        .tab_label = "main",
+        .session_title = "New Codex session",
+        .cwd_label = "~/sandbox/telar",
         .provider = .codex,
         .status = .working,
         .source = .proxy_tls,
@@ -1399,7 +1409,7 @@ test "malformed application messages are rejected" {
         .expires_at_ms = 8,
     };
     const duplicate_entries = [_]schema.AgentSnapshotEntry{ agent_entry, agent_entry };
-    var agent_buffer: [256]u8 = undefined;
+    var agent_buffer: [1024]u8 = undefined;
     try std.testing.expectError(error.DuplicateAgentEntry, schema.encodeAgentSnapshot(
         &agent_buffer,
         .{ .revision = 1, .entries = &duplicate_entries },
@@ -1417,6 +1427,96 @@ test "malformed application messages are rejected" {
         error.DuplicateAgentEntry,
         schema.decodeServer(agent_buffer[0 .. single.len + entry_len]),
     );
+}
+
+test "agent snapshot display fields are bounded and validated before allocation" {
+    const workspace = [_]u8{'w'} ** schema.max_agent_workspace_label_bytes;
+    const tab = [_]u8{'t'} ** schema.max_tab_label_bytes;
+    const title = [_]u8{'s'} ** schema.max_agent_session_title_bytes;
+    const cwd = [_]u8{'c'} ** schema.max_agent_cwd_label_bytes;
+    var entry: schema.AgentSnapshotEntry = .{
+        .pane_id = @enumFromInt(3),
+        .pane_generation = 4,
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 1,
+        .process_id = 5,
+        .session_id = .{0x5a} ** 16,
+        .workspace_label = &workspace,
+        .tab_label = &tab,
+        .session_title = &title,
+        .title_source = .generated,
+        .title_state = .ready,
+        .cwd_label = &cwd,
+        .provider = .codex,
+        .status = .ready,
+        .source = .screen,
+        .authority = .active,
+        .confidence = 95,
+        .sequence = 6,
+        .observed_at_ms = 7,
+        .expires_at_ms = 8,
+    };
+    var buffer: [1024]u8 = undefined;
+    const encoded = try schema.encodeAgentSnapshot(&buffer, .{
+        .revision = 1,
+        .entries = &.{entry},
+    });
+    var iterator = (try schema.decodeServer(encoded)).agent_snapshot.entries();
+    const decoded = (try iterator.next()).?;
+    try std.testing.expectEqualSlices(u8, &workspace, decoded.workspace_label);
+    try std.testing.expectEqualSlices(u8, &tab, decoded.tab_label);
+    try std.testing.expectEqualSlices(u8, &title, decoded.session_title);
+    try std.testing.expectEqualSlices(u8, &cwd, decoded.cwd_label);
+    try std.testing.expect((try iterator.next()) == null);
+
+    const workspace_too_long = [_]u8{'x'} ** (schema.max_agent_workspace_label_bytes + 1);
+    entry.workspace_label = &workspace_too_long;
+    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 2, .entries = &.{entry} },
+    ));
+    entry.workspace_label = &workspace;
+    const tab_too_long = [_]u8{'x'} ** (schema.max_tab_label_bytes + 1);
+    entry.tab_label = &tab_too_long;
+    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 3, .entries = &.{entry} },
+    ));
+    entry.tab_label = &tab;
+    const title_too_long = [_]u8{'x'} ** (schema.max_agent_session_title_bytes + 1);
+    entry.session_title = &title_too_long;
+    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 4, .entries = &.{entry} },
+    ));
+    entry.session_title = &title;
+    const cwd_too_long = [_]u8{'x'} ** (schema.max_agent_cwd_label_bytes + 1);
+    entry.cwd_label = &cwd_too_long;
+    try std.testing.expectError(error.InvalidByteString, schema.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 5, .entries = &.{entry} },
+    ));
+    entry.cwd_label = &cwd;
+    entry.workspace_label = "bad\nlabel";
+    try std.testing.expectError(error.InvalidAgentDisplayText, schema.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 6, .entries = &.{entry} },
+    ));
+    entry.workspace_label = "\xff";
+    try std.testing.expectError(error.InvalidUtf8, schema.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 7, .entries = &.{entry} },
+    ));
+    entry.workspace_label = &workspace;
+    entry.title_source = .generated;
+    entry.title_state = .pending;
+    try std.testing.expectError(error.InvalidAgentTitle, schema.encodeAgentSnapshot(
+        &buffer,
+        .{ .revision = 8, .entries = &.{entry} },
+    ));
 }
 
 test "truncated client and server messages are rejected" {

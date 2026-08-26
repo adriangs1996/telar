@@ -33,6 +33,9 @@ pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
 pub const max_history_command_bytes = types.max_history_command_bytes;
 pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;
+pub const max_agent_workspace_label_bytes = types.max_agent_workspace_label_bytes;
+pub const max_agent_session_title_bytes = types.max_agent_session_title_bytes;
+pub const max_agent_cwd_label_bytes = types.max_agent_cwd_label_bytes;
 pub const max_foreground_name_bytes = types.max_foreground_name_bytes;
 pub const max_workspace_list_entries = types.max_workspace_list_entries;
 pub const max_notification_title_bytes = types.max_notification_title_bytes;
@@ -62,6 +65,8 @@ pub const AgentProvider = types.AgentProvider;
 pub const AgentStatus = types.AgentStatus;
 pub const AgentSource = types.AgentSource;
 pub const AgentAuthority = types.AgentAuthority;
+pub const AgentTitleSource = types.AgentTitleSource;
+pub const AgentTitleState = types.AgentTitleState;
 pub const AgentSnapshotEntry = types.AgentSnapshotEntry;
 pub const NotificationLevel = types.NotificationLevel;
 pub const NotificationTarget = types.NotificationTarget;
@@ -1799,12 +1804,23 @@ fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !
         entry.sequence == 0 or entry.confidence > 100)
         return error.InvalidAgentEntry;
     if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
+    try validateAgentDisplayText(entry.workspace_label, max_agent_workspace_label_bytes, true);
+    try validateAgentDisplayText(entry.tab_label, max_tab_label_bytes, true);
+    try validateAgentDisplayText(entry.session_title, max_agent_session_title_bytes, true);
+    try validateAgentDisplayText(entry.cwd_label, max_agent_cwd_label_bytes, true);
+    try validateAgentTitle(entry);
     try encoder.writeInt(u64, id.raw(entry.pane_id));
     try encoder.writeInt(u64, entry.pane_generation);
     try encodeTabLocation(encoder, entry.location);
     try encoder.writeInt(u16, entry.pane_index);
     try encoder.writeInt(u32, entry.process_id);
     try encoder.writeBytes(&entry.session_id);
+    try encoder.writeSized16(entry.workspace_label);
+    try encoder.writeSized16(entry.tab_label);
+    try encoder.writeSized16(entry.session_title);
+    try encoder.writeByte(@intFromEnum(entry.title_source));
+    try encoder.writeByte(@intFromEnum(entry.title_state));
+    try encoder.writeSized16(entry.cwd_label);
     try encoder.writeByte(@intFromEnum(entry.provider));
     try encoder.writeByte(@intFromEnum(entry.status));
     try encoder.writeByte(@intFromEnum(entry.source));
@@ -1823,6 +1839,14 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
         .pane_index = try decoder.readInt(u16),
         .process_id = try decoder.readInt(u32),
         .session_id = (try decoder.readBytes(16))[0..16].*,
+        .workspace_label = try decoder.readSized16(),
+        .tab_label = try decoder.readSized16(),
+        .session_title = try decoder.readSized16(),
+        .title_source = std.enums.fromInt(AgentTitleSource, try decoder.readByte()) orelse
+            return error.InvalidAgentTitleSource,
+        .title_state = std.enums.fromInt(AgentTitleState, try decoder.readByte()) orelse
+            return error.InvalidAgentTitleState,
+        .cwd_label = try decoder.readSized16(),
         .provider = std.enums.fromInt(AgentProvider, try decoder.readByte()) orelse
             return error.InvalidAgentProvider,
         .status = std.enums.fromInt(AgentStatus, try decoder.readByte()) orelse
@@ -1840,7 +1864,27 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
         entry.sequence == 0 or entry.confidence > 100)
         return error.InvalidAgentEntry;
     if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
+    try validateAgentDisplayText(entry.workspace_label, max_agent_workspace_label_bytes, true);
+    try validateAgentDisplayText(entry.tab_label, max_tab_label_bytes, true);
+    try validateAgentDisplayText(entry.session_title, max_agent_session_title_bytes, true);
+    try validateAgentDisplayText(entry.cwd_label, max_agent_cwd_label_bytes, true);
+    try validateAgentTitle(entry);
     return entry;
+}
+
+fn validateAgentDisplayText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
+    try validateBytes(bytes, maximum, empty_allowed);
+    if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8;
+    for (bytes) |byte| if (byte < 0x20 or byte == 0x7f)
+        return error.InvalidAgentDisplayText;
+}
+
+fn validateAgentTitle(entry: AgentSnapshotEntry) !void {
+    switch (entry.title_source) {
+        .telar => if (entry.title_state == .ready) return error.InvalidAgentTitle,
+        .generated, .manual => if (entry.title_state != .ready or entry.session_title.len == 0)
+            return error.InvalidAgentTitle,
+    }
 }
 
 fn decodeWorkspaceListEntry(decoder: *wire.Decoder) !WorkspaceListEntry {
