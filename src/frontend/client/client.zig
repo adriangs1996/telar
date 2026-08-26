@@ -2167,3 +2167,270 @@ test "closing a tab releases the graphics its panes held" {
     try std.testing.expectEqual(@as(usize, 0), store.total_bytes);
 }
 
+
+// ---------------------------------------------------------------------------
+// Test harness: a real Client over substituted platform dependencies — a
+// socketpair instead of the runtime socket, a pipe instead of the tty's read
+// handle, and a discarding writer instead of the host terminal.
+
+const TestHarness = struct {
+    connection: core.transport.SocketChannel,
+    peer: core.transport.SocketChannel,
+    input_read: File,
+    input_write: File,
+    sink: Io.Writer.Discarding,
+    client: *Client,
+
+    fn init(harness: *TestHarness) !void {
+        var sockets: [2]std.c.fd_t = undefined;
+        if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0)
+            return error.SocketPairFailed;
+        harness.connection = .init(.{ .socket = .{
+            .handle = sockets[0],
+            .address = .{ .ip4 = .loopback(0) },
+        } });
+        harness.peer = .init(.{ .socket = .{
+            .handle = sockets[1],
+            .address = .{ .ip4 = .loopback(0) },
+        } });
+        var pipe_fds: [2]std.c.fd_t = undefined;
+        if (std.c.pipe(&pipe_fds) != 0) return error.PipeFailed;
+        harness.input_read = .{ .handle = pipe_fds[0], .flags = .{ .nonblocking = false } };
+        harness.input_write = .{ .handle = pipe_fds[1], .flags = .{ .nonblocking = false } };
+        harness.sink = .init(&.{});
+        harness.client = try Client.init(.{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .connection = &harness.connection,
+            .input_file = harness.input_read,
+            .writer = &harness.sink.writer,
+            .host_size = .{ .cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0 },
+            .options = .{ .arguments = &.{}, .cwd = "/", .endpoint = "" },
+        });
+    }
+
+    fn deinit(harness: *TestHarness) void {
+        const io = std.testing.io;
+        // EOF unblocks a pending input read so task cancellation never has
+        // to wait on the pipe.
+        harness.input_write.close(io);
+        harness.client.deinit();
+        harness.peer.deinit(io);
+        harness.connection.deinit(io);
+        harness.input_read.close(io);
+    }
+
+    /// Drives the real dispatch until the outbox is drained, so a test
+    /// observes exactly what the runtime peer would receive.
+    fn settle(harness: *TestHarness) !void {
+        while (harness.client.outbox.send_pending or harness.client.outbox.len != 0) {
+            switch (try harness.client.select.await()) {
+                .sent => |result| try harness.client.handleSentEvent(result),
+                .draw => |result| try harness.client.handleDrawEvent(result),
+                .sidebar_animation_tick => |result| try harness.client.handleSidebarAnimationEvent(result),
+                .notification_tick => |result| try harness.client.handleNotificationTickEvent(result),
+                else => return error.UnexpectedEvent,
+            }
+        }
+    }
+
+    /// Receives the next message the client sent to the runtime.
+    fn nextClientMessage(harness: *TestHarness, buffer: []u8) !schema.ClientMessage {
+        const payload = try harness.peer.receive(std.testing.io, buffer);
+        return schema.decodeClient(payload);
+    }
+
+    const bootstrap_location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const bootstrap_pane: schema.PaneId = @enumFromInt(10);
+
+    /// Answers the initial open request through the real entrypoint, leaving
+    /// the client with one attached pane and its two snapshot requests (ids
+    /// 2 and 3) delivered to the peer.
+    fn bootstrap(harness: *TestHarness) !void {
+        try harness.client.requests.add(initial_request_id, .initial_open);
+        var payload: [128]u8 = undefined;
+        const opened = try schema.encodePaneOpened(&payload, .{
+            .request_id = initial_request_id,
+            .pane_id = bootstrap_pane,
+            .location = bootstrap_location,
+            .created = true,
+        });
+        try std.testing.expectEqual(
+            @as(?u8, null),
+            try harness.client.handleServerMessage(try schema.decodeServer(opened)),
+        );
+        try harness.settle();
+        var buffer: [256]u8 = undefined;
+        const first = try harness.nextClientMessage(&buffer);
+        try std.testing.expect(first == .request_workspace_snapshot);
+        const second = try harness.nextClientMessage(&buffer);
+        try std.testing.expect(second == .request_tab_snapshot);
+    }
+};
+
+test "host input arriving while no tab exists is dropped, not a crash" {
+    // The workspace-handoff window: `tabs.deinit()` has run and the new
+    // pane has not been confirmed. A keystroke here used to null-unwrap.
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+
+    var chunk: InputChunk = .{};
+    chunk.bytes[0] = 'x';
+    chunk.len = 1;
+    try std.testing.expect(!try harness.client.handleHostInput(chunk));
+    try std.testing.expectEqual(@as(usize, 0), harness.client.outbox.len);
+}
+
+test "bootstrap answers the initial open with both snapshot requests" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    try std.testing.expectEqual(@as(usize, 1), harness.client.tabs.count);
+    const pane = harness.client.tabs.findPane(TestHarness.bootstrap_pane).?;
+    try std.testing.expect(pane.attached);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, harness.client.reported_focus);
+}
+
+test "a tab snapshot attaches every pane the client does not hold" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    const discovered: schema.PaneId = @enumFromInt(11);
+    var payload: [256]u8 = undefined;
+    const snapshot = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(3),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{
+            .{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running },
+            .{ .pane_id = discovered, .lifecycle = .running },
+        },
+    });
+    try std.testing.expectEqual(
+        @as(?u8, null),
+        try harness.client.handleServerMessage(try schema.decodeServer(snapshot)),
+    );
+    try harness.settle();
+
+    const pane = harness.client.tabs.findPane(discovered).?;
+    try std.testing.expect(!pane.attached);
+    var buffer: [256]u8 = undefined;
+    var attach_requested = false;
+    while (!attach_requested) {
+        switch (try harness.nextClientMessage(&buffer)) {
+            .open_pane => |open| {
+                try std.testing.expectEqualDeep(
+                    schema.PaneTarget{ .pane = discovered },
+                    open.target,
+                );
+                attach_requested = true;
+            },
+            .pane_resize => {},
+            else => return error.UnexpectedClientMessage,
+        }
+    }
+}
+
+test "an unexpected tab snapshot is rejected instead of adopted" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    var payload: [256]u8 = undefined;
+    const snapshot = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(99),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{},
+    });
+    try std.testing.expectError(
+        error.UnexpectedTabSnapshot,
+        harness.client.handleServerMessage(try schema.decodeServer(snapshot)),
+    );
+}
+
+test "a workspace snapshot reconciles the tab list" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    var payload: [512]u8 = undefined;
+    const snapshot = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = @enumFromInt(2),
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .name = "main",
+        .tabs = &.{
+            .{ .tab_id = @enumFromInt(1), .position = 0, .pane_count = 1, .label = "main" },
+            .{ .tab_id = @enumFromInt(2), .position = 1, .pane_count = 1, .label = "second" },
+        },
+    });
+    try std.testing.expectEqual(
+        @as(?u8, null),
+        try harness.client.handleServerMessage(try schema.decodeServer(snapshot)),
+    );
+    try harness.settle();
+
+    try std.testing.expectEqual(@as(usize, 2), harness.client.tabs.count);
+    try std.testing.expect(harness.client.tabs.find(@enumFromInt(2)) != null);
+    // The active tab keeps its identity through reconciliation.
+    try std.testing.expectEqual(
+        TestHarness.bootstrap_location.tab_id,
+        harness.client.tabs.active().?.location.tab_id,
+    );
+}
+
+test "resync required requests one workspace snapshot and coalesces repeats" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.tabs.workspace = TestHarness.bootstrap_location.workspace;
+
+    try client.handleResyncRequired(.{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .workspace_closed = false,
+    });
+    try client.handleResyncRequired(.{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .workspace_closed = false,
+    });
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    const first = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(first == .request_workspace_snapshot);
+    try std.testing.expect(client.requests.has(.workspace_snapshot));
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "focus reporting emits focus-in only after the pane opts in" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    // Bootstrap synced focus while the pane had focus events off: the focus
+    // is remembered, no byte was sent.
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.reported_focus);
+    try std.testing.expect(!client.reported_focus_events);
+
+    const model = &client.tabs.active().?.model;
+    model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    try client.syncPaneFocus(model);
+    try harness.settle();
+
+    try std.testing.expect(client.reported_focus_events);
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[I", message.pane_input.bytes);
+}
