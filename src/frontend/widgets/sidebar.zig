@@ -19,6 +19,7 @@ pub const AgentKey = model.AgentKey;
 
 pub const max_provider_marks = model.max_agents;
 const rows_per_agent = 3;
+const minions_icon = "\u{2687}";
 
 pub const State = struct {
     scroll: u16 = 0,
@@ -78,20 +79,15 @@ fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void
     const background = cellBackground(context, input.transparent);
     context.buffer.fill(area, " ", .{ .fg = context.palette.text, .bg = background });
     drawRightSeparator(context, area, background);
-    if (area.w > 10) _ = context.buffer.writeText(area, area.x + 2, area.y, "agents", .{
-        .fg = context.palette.subtext0,
-        .bg = background,
-        .flags = .{ .bold = true },
-    });
-    if (area.w < 24 or area.h < 6) return;
+    if (area.w > 10) drawHeader(context, area, background);
+    if (area.w < 24 or area.h < 5) return;
 
     const inside: ui.Rect = .{
         .x = area.x + 1,
-        .y = area.y + 1,
+        .y = area.y,
         .w = area.w - 2,
-        .h = area.h - 2,
+        .h = area.h - 1,
     };
-    drawHeader(context, input.snapshot, inside, background);
     _ = drawRule(context, area, inside.y + 1, background);
     semantic.list_area = .{
         .x = inside.x,
@@ -104,22 +100,19 @@ fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void
 
 fn drawHeader(
     context: *widget.Context,
-    snapshot: *const Snapshot,
     area: ui.Rect,
     background: ui.Color,
 ) void {
-    const row: ui.Rect = .{ .x = area.x, .y = area.y, .w = area.w, .h = 1 };
+    const row: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
     context.buffer.fill(row, " ", .{ .bg = background });
-    _ = context.buffer.writeText(row, row.x + 1, row.y, "inbox", .{
+    _ = context.buffer.writeText(row, row.x, row.y, minions_icon, .{
+        .fg = context.palette.accent,
+        .bg = background,
+    });
+    _ = context.buffer.writeText(row, row.x + 2, row.y, "minions", .{
         .fg = context.palette.text,
         .bg = background,
         .flags = .{ .bold = true },
-    });
-    var count_buffer: [16]u8 = undefined;
-    const count = std.fmt.bufPrint(&count_buffer, "{d} open", .{snapshot.count}) catch "";
-    _ = context.buffer.writeRight(.{ .x = row.x, .y = row.y, .w = row.w -| 1, .h = 1 }, row.y, count, .{
-        .fg = context.palette.overlay0,
-        .bg = background,
     });
 }
 
@@ -398,7 +391,7 @@ fn cellBackground(context: *const widget.Context, transparent: bool) ui.Color {
     return if (transparent) .default else context.palette.panel_bg;
 }
 
-test "empty snapshot renders only the agent inbox chrome" {
+test "empty snapshot renders the minions header" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -418,9 +411,10 @@ test "empty snapshot renders only the agent inbox chrome" {
         .transparent = false,
     });
     try std.testing.expect(output.cursor == null);
-    try std.testing.expectEqualStrings("g", buffer.at(3, 0).?.text());
-    try std.testing.expectEqualStrings("i", buffer.at(2, 1).?.text());
-    try std.testing.expect(hits.at(3, 1) == null);
+    try std.testing.expectEqualStrings(minions_icon, buffer.at(2, 0).?.text());
+    try std.testing.expectEqualStrings("m", buffer.at(4, 0).?.text());
+    try std.testing.expectEqualStrings("─", buffer.at(2, 1).?.text());
+    try std.testing.expect(hits.at(4, 0) == null);
 }
 
 test "agent snapshot renders compact selectable rows and status" {
@@ -530,7 +524,7 @@ test "transparent Codex row publishes an official provider mark" {
     });
     try std.testing.expectEqual(@as(u8, 1), output.provider_mark_count);
     try std.testing.expectEqual(schema.AgentProvider.codex, output.provider_marks[0].provider);
-    try std.testing.expectEqual(ui.Rect{ .x = 3, .y = 3, .w = 2, .h = 2 }, output.provider_marks[0].area);
+    try std.testing.expectEqual(ui.Rect{ .x = 3, .y = 2, .w = 2, .h = 2 }, output.provider_marks[0].area);
 }
 
 test "graphical focus exposes only the four rounded card corners" {
@@ -609,9 +603,13 @@ test "hover covers the complete three-row agent card" {
         .transparent = true,
     });
 
-    try std.testing.expectEqualDeep(palette.surface1, buffer.at(10, 3).?.style.bg);
-    try std.testing.expectEqualDeep(palette.surface1, buffer.at(10, 5).?.style.bg);
-    try std.testing.expectEqualDeep(action, hits.at(10, 5).?);
+    try std.testing.expectEqualDeep(palette.surface1, buffer.at(10, 2).?.style.bg);
+    try std.testing.expectEqualDeep(palette.surface1, buffer.at(10, 4).?.style.bg);
+    try std.testing.expectEqualDeep(action, hits.at(10, 4).?);
+}
+
+test "minions icon occupies one cell" {
+    try std.testing.expectEqual(@as(u16, 1), ui.measure(minions_icon));
 }
 
 test "working status uses an animated glyph" {
