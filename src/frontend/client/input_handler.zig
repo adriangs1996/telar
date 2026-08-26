@@ -43,7 +43,7 @@ redraw: bool = false,
 /// arriving in that window is dropped, mirroring presentableModel on
 /// the draw path.
 fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
-    return presentableModel(handler.client.tabs);
+    return presentableModel(&handler.client.tabs);
 }
 
 pub fn capturesKeys(handler: *const InputHandler) bool {
@@ -547,7 +547,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     }
     const model = handler.activeModel() orelse return;
     var interaction = handler.client.view.handleMouse(
-        handler.client.tabs,
+        &handler.client.tabs,
         model,
         cell_event,
         monotonic(handler.client.io),
@@ -673,7 +673,7 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
     if (handler.client.view.hasNamePrompt()) return .continue_routing;
     switch (value) {
         .lua_callback => |reference| {
-            const generation = handler.client.lua_generation.* orelse
+            const generation = handler.client.lua_generation orelse
                 return .continue_routing;
             const batch = generation.invokeCallback(
                 reference,
@@ -685,7 +685,7 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
             };
             for (batch.slice()) |effect| switch (effect) {
                 .plugin => |requested| {
-                    const registry = handler.client.plugin_registry.* orelse {
+                    const registry = handler.client.plugin_registry orelse {
                         handler.client.config_diagnostic.set(
                             "Lua callback referenced a plugin but no registry is active",
                             .{},
@@ -710,7 +710,7 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
             return .continue_routing;
         },
         .lua_expr => |reference| {
-            const generation = handler.client.lua_generation.* orelse
+            const generation = handler.client.lua_generation orelse
                 return .continue_routing;
             const decision = generation.invokeExpression(
                 reference,
@@ -733,7 +733,7 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
         },
         .plugin => |requested| {
             if (handler.client.plugin_pending) return .continue_routing;
-            const registry = handler.client.plugin_registry.* orelse
+            const registry = handler.client.plugin_registry orelse
                 return .continue_routing;
             const invocation = registry.resolve(requested) catch |err| {
                 handler.client.config_diagnostic.set(

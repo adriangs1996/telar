@@ -42,12 +42,8 @@ const max_bindings = lua_config.max_bindings;
 const max_binding_keys = lua_config.default_binding_max_keys;
 const held_binding_bytes = 128;
 
-pub const Action = action_mod.Action;
-pub const Outbox = client_outbox.Outbox;
-pub const View = client_view.State;
-pub const sidebar_width = client_view.sidebar_width;
-
-pub const ConfiguredBinding = lua_config.ConfiguredBinding;
+const Action = action_mod.Action;
+const ConfiguredBinding = lua_config.ConfiguredBinding;
 pub const InputRouter = keybind.Router(
     Action,
     max_bindings,
@@ -225,33 +221,58 @@ fn shouldNotifyAgentStatus(previous: ?schema.AgentStatus, current: schema.AgentS
 /// `Client.nextId`.
 pub const initial_request_id: schema.RequestId = @enumFromInt(1);
 
-pub const ConfigReloadState = struct {
-    router: *InputRouter,
-    host_size: *schema.TerminalSize,
-    generation_orphan: *?*lua_config.Generation,
-    registry_orphan: *?*plugin_broker.Registry,
-    trust_orphan: *?*core.plugin.TrustStore,
+const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
+
+/// The platform resources a client cannot fabricate: everything else it
+/// owns. Substituting these — a pipe for the tty's read handle, a
+/// fixed-buffer writer, a scripted socket peer — is what makes the client
+/// constructible in a test.
+pub const Params = struct {
+    gpa: std.mem.Allocator,
+    io: Io,
+    connection: *core.transport.SocketChannel,
+    input_file: File,
+    writer: *Io.Writer,
+    /// Host terminal geometry measured by the platform adapter.
+    host_size: schema.TerminalSize,
+    window_width_px: u32 = 0,
+    window_height_px: u32 = 0,
+    options: Options,
 };
 
 io: Io,
 gpa: std.mem.Allocator,
 connection: *core.transport.SocketChannel,
 send_buffer: []u8,
-outbox: *client_outbox.Outbox,
+receive_buffer: []u8,
+outbox: client_outbox.Outbox = .{},
 writer: *Io.Writer,
-select: *Io.Select(ClientEvent),
-options: *const Options,
-metrics: *ClientMetrics,
-screen: *term.Screen,
-view: *client_view.State,
-tabs: *tabs_mod.Model,
-graphics_store: *kitty.Store,
-capabilities: *kitty.TerminalCapabilities,
+select: Io.Select(ClientEvent),
+select_storage: [client_event_count]ClientEvent = undefined,
+options: Options,
+metrics: ClientMetrics,
+screen: term.Screen,
+view: client_view.State,
+tabs: tabs_mod.Model,
+graphics_store: kitty.Store,
+capabilities: kitty.TerminalCapabilities,
+host_size: schema.TerminalSize,
 input_file: File,
-lua_generation: *?*lua_config.Generation,
+input_router: InputRouter,
+input_timeout_pending: bool = false,
+binding_timeout_pending: bool = false,
+telemetry_buffer: [4096]u8 = undefined,
+telemetry_write_pending: bool = false,
+lua_generation: ?*lua_config.Generation,
 config_diagnostic: lua_config.Diagnostic = .{},
-plugin_registry: *?*plugin_broker.Registry,
-trust_store: *?*core.plugin.TrustStore,
+plugin_registry: ?*plugin_broker.Registry,
+trust_store: ?*core.plugin.TrustStore,
+/// Race-window handoff slots for the async config-reload task: it publishes
+/// freshly loaded objects here so a cancelled reload can still be freed by
+/// `deinit`; the reload entrypoint clears them when it adopts the objects.
+reload_generation_orphan: ?*lua_config.Generation = null,
+reload_registry_orphan: ?*plugin_broker.Registry = null,
+reload_trust_orphan: ?*core.plugin.TrustStore = null,
 sidebar_rendering: kitty.SidebarRendering,
 config_mtime_ns: i128,
 next_config_generation: u64 = 2,
@@ -277,11 +298,108 @@ last_presented_ns: ?u64 = null,
 last_input_ns: u64 = 0,
 sidebar_animation_pending: bool = false,
 notification_tick_pending: bool = false,
-notification_timer: *NotificationTimer,
+notification_timer: NotificationTimer = .{},
 reported_focus: ?schema.PaneId = null,
 reported_focus_events: bool = false,
 
 const Client = @This();
+
+/// Creates a heap-owned client (the tab models alone are megabytes) and
+/// takes ownership of the configuration generation, plugin registry and
+/// trust store carried inside `params.options`; `deinit` releases them.
+pub fn init(params: Params) !*Client {
+    const gpa = params.gpa;
+    const client = try gpa.create(Client);
+    errdefer gpa.destroy(client);
+    var capabilities: kitty.TerminalCapabilities = .{
+        .window_width_px = params.window_width_px,
+        .window_height_px = params.window_height_px,
+    };
+    var host_size = params.host_size;
+    const cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
+    host_size.cell_width_px = cell_size.width;
+    host_size.cell_height_px = cell_size.height;
+    var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
+    errdefer screen.deinit();
+    var view = try client_view.State.initWithTheme(
+        gpa,
+        host_size.cols,
+        host_size.rows,
+        params.options.theme,
+    );
+    errdefer view.deinit();
+    if (!params.options.sidebar_visible) view.toggleSidebar();
+    try view.configureSidebar(
+        params.options.sidebar_rendering,
+        capabilities.kitty_graphics,
+        cell_size.width,
+        cell_size.height,
+    );
+    var tabs = tabs_mod.Model.init(gpa);
+    errdefer tabs.deinit();
+    tabs.setPaneGaps(params.options.pane_gaps);
+    var graphics_store = if (params.options.host_shared_memory)
+        kitty.Store.initSharedMemory(gpa)
+    else
+        kitty.Store.init(gpa);
+    errdefer graphics_store.deinit();
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    errdefer gpa.free(receive_buffer);
+    const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    errdefer gpa.free(send_buffer);
+    var input_router = try buildInputRouter(params.options.prefix, params.options.bindings);
+    input_router.escape_timeout_ns = params.options.input_escape_timeout_ns;
+    input_router.sequence_timeout_ns = params.options.input_sequence_timeout_ns;
+    client.* = .{
+        .io = params.io,
+        .gpa = gpa,
+        .connection = params.connection,
+        .send_buffer = send_buffer,
+        .receive_buffer = receive_buffer,
+        .writer = params.writer,
+        .select = undefined,
+        .options = params.options,
+        .metrics = .{ .started_ns = diagnostics.now(params.io) },
+        .screen = screen,
+        .view = view,
+        .tabs = tabs,
+        .graphics_store = graphics_store,
+        .capabilities = capabilities,
+        .host_size = host_size,
+        .input_file = params.input_file,
+        .input_router = input_router,
+        .lua_generation = params.options.lua_generation,
+        .plugin_registry = params.options.plugin_registry,
+        .trust_store = params.options.trust_store,
+        .sidebar_rendering = params.options.sidebar_rendering,
+        .config_mtime_ns = params.options.config_mtime_ns,
+    };
+    // The select's storage lives inside the heap-stable client, so the
+    // select can only be built once the client's address exists.
+    client.select = Io.Select(ClientEvent).init(params.io, &client.select_storage);
+    return client;
+}
+
+/// Cancels every in-flight select task first — the reload task publishes
+/// into the orphan slots — then releases the orphans, the owned
+/// configuration objects, and every buffer.
+pub fn deinit(client: *Client) void {
+    const gpa = client.gpa;
+    client.select.cancelDiscard();
+    if (client.reload_generation_orphan) |generation| generation.deinit();
+    if (client.reload_registry_orphan) |registry| gpa.destroy(registry);
+    if (client.reload_trust_orphan) |store| gpa.destroy(store);
+    if (client.lua_generation) |generation| generation.deinit();
+    if (client.plugin_registry) |registry| gpa.destroy(registry);
+    if (client.trust_store) |store| gpa.destroy(store);
+    client.graphics_store.deinit();
+    client.tabs.deinit();
+    client.view.deinit();
+    client.screen.deinit();
+    gpa.free(client.send_buffer);
+    gpa.free(client.receive_buffer);
+    gpa.destroy(client);
+}
 
 pub fn nextId(client: *Client) !schema.RequestId {
     return nextRequestId(&client.next_request_id);
@@ -440,7 +558,7 @@ pub fn scheduleNotificationTick(client: *Client) !void {
     client.notification_tick_pending = true;
     client.select.concurrent(.notification_tick, waitForNotificationTick, .{
         client.io,
-        client.notification_timer,
+        &client.notification_timer,
     }) catch |err| {
         client.notification_tick_pending = false;
         return err;
@@ -485,39 +603,23 @@ pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
 
 /// Entrypoint for bytes read from the host terminal. It owns the complete
 /// routing decision: consume a Telar action or enqueue pane input.
-pub fn handleHostInput(
-    client: *Client,
-    router: *InputRouter,
-    result: anyerror!InputChunk,
-    input_timeout_pending: *bool,
-    binding_timeout_pending: *bool,
-) !bool {
+pub fn handleHostInput(client: *Client, result: anyerror!InputChunk) !bool {
     client.input_read_pending = false;
     const chunk = try result;
     if (chunk.len == 0) return true;
     client.last_input_ns = monotonic(client.io);
     var handler: InputHandler = .{ .client = client };
-    if (try router.feed(chunk.slice(), monotonic(client.io), &handler) == .stop)
+    if (try client.input_router.feed(chunk.slice(), monotonic(client.io), &handler) == .stop)
         return true;
     if (handler.redraw) try client.requestDraw();
-    try scheduleInputTimers(
-        client.io,
-        client.select,
-        router,
-        input_timeout_pending,
-        binding_timeout_pending,
-    );
+    try client.scheduleInputTimers();
     try client.scheduleInputRead();
     return false;
 }
 
 /// Entrypoint for one completed runtime socket read. It owns decode,
 /// message dispatch, flow-control credit and receive rescheduling.
-pub fn handleServerEvent(
-    client: *Client,
-    result: anyerror![]u8,
-    receive_buffer: []u8,
-) !?u8 {
+pub fn handleServerEvent(client: *Client, result: anyerror![]u8) !?u8 {
     const payload = try result;
     const decode_started = diagnostics.now(client.io);
     const message = try schema.decodeServer(payload);
@@ -547,63 +649,35 @@ pub fn handleServerEvent(
     try client.select.concurrent(.server, receive, .{
         client.io,
         client.connection,
-        receive_buffer,
+        client.receive_buffer,
     });
     return null;
 }
 
-pub fn handleInputTimeoutEvent(
-    client: *Client,
-    result: anyerror!void,
-    router: *InputRouter,
-    input_timeout_pending: *bool,
-    binding_timeout_pending: *bool,
-) !bool {
+pub fn handleInputTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     try result;
-    input_timeout_pending.* = false;
+    client.input_timeout_pending = false;
     var handler: InputHandler = .{ .client = client };
-    if (try router.expireInput(monotonic(client.io), &handler) == .stop) return true;
+    if (try client.input_router.expireInput(monotonic(client.io), &handler) == .stop) return true;
     if (handler.redraw) try client.requestDraw();
-    try scheduleInputTimers(
-        client.io,
-        client.select,
-        router,
-        input_timeout_pending,
-        binding_timeout_pending,
-    );
+    try client.scheduleInputTimers();
     return false;
 }
 
-pub fn handleBindingTimeoutEvent(
-    client: *Client,
-    result: anyerror!void,
-    router: *InputRouter,
-    input_timeout_pending: *bool,
-    binding_timeout_pending: *bool,
-) !bool {
+pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     try result;
-    binding_timeout_pending.* = false;
+    client.binding_timeout_pending = false;
     var handler: InputHandler = .{ .client = client };
-    if (try router.expireBinding(monotonic(client.io), &handler) == .stop) return true;
+    if (try client.input_router.expireBinding(monotonic(client.io), &handler) == .stop) return true;
     if (handler.redraw) try client.requestDraw();
-    try scheduleInputTimers(
-        client.io,
-        client.select,
-        router,
-        input_timeout_pending,
-        binding_timeout_pending,
-    );
+    try client.scheduleInputTimers();
     return false;
 }
 
-pub fn handleCapabilityTimeoutEvent(
-    client: *Client,
-    result: anyerror!void,
-    host_size: schema.TerminalSize,
-) !void {
+pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !void {
     try result;
     if (!client.capabilities.expire()) return;
-    const cell_size = client.capabilities.cellSize(host_size.cols, host_size.rows);
+    const cell_size = client.capabilities.cellSize(client.host_size.cols, client.host_size.rows);
     try client.view.configureSidebar(
         client.sidebar_rendering,
         client.capabilities.kitty_graphics,
@@ -629,26 +703,25 @@ pub fn handleResizeEvent(
     result: anyerror!void,
     tty: *const platform.Tty,
     watcher: *platform.ResizeWatcher,
-    host_size: *schema.TerminalSize,
 ) !void {
     try result;
-    host_size.* = terminalSize(tty);
+    client.host_size = terminalSize(tty);
     const platform_size = tty.size();
     if (platform_size.width_px != 0)
         client.capabilities.window_width_px = platform_size.width_px;
     if (platform_size.height_px != 0)
         client.capabilities.window_height_px = platform_size.height_px;
-    const cell_size = client.capabilities.cellSize(host_size.cols, host_size.rows);
-    host_size.cell_width_px = cell_size.width;
-    host_size.cell_height_px = cell_size.height;
+    const cell_size = client.capabilities.cellSize(client.host_size.cols, client.host_size.rows);
+    client.host_size.cell_width_px = cell_size.width;
+    client.host_size.cell_height_px = cell_size.height;
     try client.view.configureSidebar(
         client.sidebar_rendering,
         client.capabilities.kitty_graphics,
         cell_size.width,
         cell_size.height,
     );
-    try client.screen.resize(host_size.cols, host_size.rows);
-    try client.view.resize(host_size.cols, host_size.rows);
+    try client.screen.resize(client.host_size.cols, client.host_size.rows);
+    try client.view.resize(client.host_size.cols, client.host_size.rows);
     if (client.tabs.active()) |active| {
         active.model.setCellSize(cell_size.width, cell_size.height);
         client.graphics_store.invalidatePlacements();
@@ -692,8 +765,6 @@ pub fn handleTelemetryTickEvent(
     client: *Client,
     result: anyerror!void,
     telemetry: *diagnostics.Sink,
-    buffer: *[4096]u8,
-    write_pending: *bool,
 ) void {
     result catch {
         telemetry.deinit(client.io);
@@ -704,14 +775,14 @@ pub fn handleTelemetryTickEvent(
         telemetry.deinit(client.io);
         return;
     };
-    if (write_pending.*) return;
+    if (client.telemetry_write_pending) return;
     // Ticks can fire before the first tab exists; report nothing.
     const active = client.tabs.active() orelse return;
     const focused = active.model.layout.focused() orelse .invalid;
     const line = client_telemetry.format(
-        buffer,
+        &client.telemetry_buffer,
         client.io,
-        client.metrics,
+        &client.metrics,
         &client.pacer,
         .{
             .theme_name = client.view.theme.base.canonicalName(),
@@ -721,18 +792,18 @@ pub fn handleTelemetryTickEvent(
             .pane_count = active.model.pane_count,
             .pending_updates = client.pending_updates,
             .draw_pending = client.draw_pending,
-            .outbox = client.outbox,
-            .capabilities = client.capabilities,
+            .outbox = &client.outbox,
+            .capabilities = &client.capabilities,
             .sidebar_rendering = client.view.sidebar_rendering,
         },
     ) catch return;
-    write_pending.* = true;
+    client.telemetry_write_pending = true;
     client.select.concurrent(.telemetry_written, writeDiagnostics, .{
         client.io,
         telemetry,
         line,
     }) catch {
-        write_pending.* = false;
+        client.telemetry_write_pending = false;
         telemetry.deinit(client.io);
     };
 }
@@ -741,13 +812,12 @@ pub fn handleTelemetryWrittenEvent(
     client: *Client,
     result: anyerror!void,
     telemetry: *diagnostics.Sink,
-    write_pending: *bool,
 ) void {
-    write_pending.* = false;
+    client.telemetry_write_pending = false;
     result catch telemetry.deinit(client.io);
 }
 
-pub fn scheduleConfigReload(client: *Client, state: ConfigReloadState) !void {
+pub fn scheduleConfigReload(client: *Client) !void {
     const path = client.options.config_path orelse return;
     try client.select.concurrent(.config_reload, waitConfigReload, .{
         client.io,
@@ -756,20 +826,16 @@ pub fn scheduleConfigReload(client: *Client, state: ConfigReloadState) !void {
         client.config_mtime_ns,
         client.next_config_generation,
         client.options.profile,
-        client.lua_generation.*.?,
-        client.plugin_registry.*.?,
+        client.lua_generation.?,
+        client.plugin_registry.?,
         client.options.trust_path.?,
-        state.generation_orphan,
-        state.registry_orphan,
-        state.trust_orphan,
+        &client.reload_generation_orphan,
+        &client.reload_registry_orphan,
+        &client.reload_trust_orphan,
     });
 }
 
-pub fn handleConfigReloadEvent(
-    client: *Client,
-    result: anyerror!ConfigReload,
-    state: ConfigReloadState,
-) !void {
+pub fn handleConfigReloadEvent(client: *Client, result: anyerror!ConfigReload) !void {
     const reload = try result;
     switch (reload) {
         .unchanged => |mtime_ns| client.config_mtime_ns = mtime_ns,
@@ -790,14 +856,14 @@ pub fn handleConfigReloadEvent(
                     .{@errorName(err)},
                 );
                 client.config_mtime_ns = loaded.mtime_ns;
-                state.generation_orphan.* = null;
-                state.registry_orphan.* = null;
-                state.trust_orphan.* = null;
+                client.reload_generation_orphan = null;
+                client.reload_registry_orphan = null;
+                client.reload_trust_orphan = null;
                 loaded.generation.deinit();
                 client.gpa.destroy(loaded.registry);
                 client.gpa.destroy(loaded.trust_store);
                 try client.notifyDiagnostic("Configuration rejected");
-                try client.scheduleConfigReload(state);
+                try client.scheduleConfigReload();
                 return;
             };
             var replacement = buildInputRouter(
@@ -809,27 +875,27 @@ pub fn handleConfigReloadEvent(
                     .{@errorName(err)},
                 );
                 client.config_mtime_ns = loaded.mtime_ns;
-                state.generation_orphan.* = null;
-                state.registry_orphan.* = null;
-                state.trust_orphan.* = null;
+                client.reload_generation_orphan = null;
+                client.reload_registry_orphan = null;
+                client.reload_trust_orphan = null;
                 loaded.generation.deinit();
                 client.gpa.destroy(loaded.registry);
                 client.gpa.destroy(loaded.trust_store);
                 try client.notifyDiagnostic("Configuration rejected");
-                try client.scheduleConfigReload(state);
+                try client.scheduleConfigReload();
                 return;
             };
             replacement.escape_timeout_ns = snapshot.input_escape_timeout_ns;
             replacement.sequence_timeout_ns = snapshot.input_sequence_timeout_ns;
 
-            state.router.* = replacement;
+            client.input_router = replacement;
             if (!client.options.theme_locked) client.view.setTheme(snapshot.theme);
             client.sidebar_rendering = requested_sidebar;
             client.view.setSidebarVisible(snapshot.sidebar_visible);
             client.tabs.setPaneGaps(snapshot.pane_gaps);
             const cell_size = client.capabilities.cellSize(
-                state.host_size.cols,
-                state.host_size.rows,
+                client.host_size.cols,
+                client.host_size.rows,
             );
             try client.view.configureSidebar(
                 client.sidebar_rendering,
@@ -840,15 +906,15 @@ pub fn handleConfigReloadEvent(
             if (client.tabs.active()) |active|
                 try client.resizeAttached(&active.model, client.view.workbench());
 
-            const previous = client.lua_generation.*;
-            client.lua_generation.* = loaded.generation;
-            state.generation_orphan.* = null;
-            const previous_registry = client.plugin_registry.*;
-            client.plugin_registry.* = loaded.registry;
-            state.registry_orphan.* = null;
-            const previous_trust = client.trust_store.*;
-            client.trust_store.* = loaded.trust_store;
-            state.trust_orphan.* = null;
+            const previous = client.lua_generation;
+            client.lua_generation = loaded.generation;
+            client.reload_generation_orphan = null;
+            const previous_registry = client.plugin_registry;
+            client.plugin_registry = loaded.registry;
+            client.reload_registry_orphan = null;
+            const previous_trust = client.trust_store;
+            client.trust_store = loaded.trust_store;
+            client.reload_trust_orphan = null;
             if (previous) |old| old.deinit();
             if (previous_registry) |old| client.gpa.destroy(old);
             if (previous_trust) |old| client.gpa.destroy(old);
@@ -862,7 +928,7 @@ pub fn handleConfigReloadEvent(
             });
         },
     }
-    try client.scheduleConfigReload(state);
+    try client.scheduleConfigReload();
 }
 
 pub fn handlePluginResultEvent(
@@ -875,7 +941,7 @@ pub fn handlePluginResultEvent(
         try client.notifyDiagnostic("Plugin failed");
         return false;
     };
-    const registry = client.plugin_registry.* orelse {
+    const registry = client.plugin_registry orelse {
         client.config_diagnostic.set("plugin registry changed while action was running", .{});
         try client.notifyDiagnostic("Plugin failed");
         return false;
@@ -1241,7 +1307,7 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
             schema.TabId,
             canonical_tabs[0..canonical_count],
             tab.location.tab_id,
-        ) == null) releaseTabGraphics(client.graphics_store, tab);
+        ) == null) releaseTabGraphics(&client.graphics_store, tab);
     }
     try client.tabs.reconcileWorkspace(snapshot);
     if (!client.requests.has(.tab_snapshot)) {
@@ -1334,7 +1400,7 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
     // The runtime sends no per-pane exit for a closed tab, so its
     // graphics would stay resident forever without this.
     if (client.tabs.find(closed.location.tab_id)) |closing|
-        releaseTabGraphics(client.graphics_store, closing);
+        releaseTabGraphics(&client.graphics_store, closing);
     if (!client.tabs.remove(closed.location.tab_id)) {
         if (lifecycle_event) return null;
         return error.UnexpectedTab;
@@ -1595,7 +1661,7 @@ fn presentDue(client: *Client) !void {
     // A draw can be scheduled before the first `pane_opened` bootstraps a
     // tab - a resize or the capability timeout does exactly that. The
     // updates stay queued for the draw that follows the bootstrap.
-    const model = presentableModel(client.tabs) orelse return;
+    const model = presentableModel(&client.tabs) orelse return;
     const presented_ns = try client.present(model);
     client.observePresentation(presented_ns);
     client.pacer.record(presented_ns, client.draw_due_ns, client.pending_updates);
@@ -1621,8 +1687,8 @@ fn present(client: *Client, model: *multiplexer.Model) !u64 {
         kitty.idle_boost_after_ns;
     client.view.kittyToasts().setMediaIdle(media_idle);
     const compose_started = diagnostics.now(client.io);
-    const composed = try model.renderThemed(client.screen, client.view.workbench(), client.view.palette());
-    const chrome = try client.view.render(client.screen, client.tabs, model, composed.full);
+    const composed = try model.renderThemed(&client.screen, client.view.workbench(), client.view.palette());
+    const chrome = try client.view.render(&client.screen, &client.tabs, model, composed.full);
     if (client.config_diagnostic.len != 0 and client.screen.back.h != 0) {
         const palette = client.view.palette();
         const banner: core.ui.Rect = .{
@@ -1665,7 +1731,7 @@ fn present(client: *Client, model: *multiplexer.Model) !u64 {
         kitty.transmission_budget_per_frame;
     var graphics_writer: CombinedGraphicsWriter = .{
         .panes = .{
-            .store = client.graphics_store,
+            .store = &client.graphics_store,
             .layout_snapshot = layout_snapshot,
             .cell_width = cell_size.width,
             .cell_height = cell_size.height,
@@ -1674,13 +1740,13 @@ fn present(client: *Client, model: *multiplexer.Model) !u64 {
         .sidebar = client.view.kittySidebar(),
         .toasts = client.view.kittyToasts(),
         .allow_toast_transmission = media_idle,
-        .metrics = client.metrics,
+        .metrics = &client.metrics,
     };
     if (client.capabilities.kitty_graphics == .supported) client.screen.graphics = .{
         .context = &graphics_writer,
         .write = CombinedGraphicsWriter.writeOpaque,
     };
-    try flushScreen(client.io, client.screen, client.writer, client.metrics);
+    try flushScreen(client.io, &client.screen, client.writer, &client.metrics);
     if (comptime diagnostics.enabled) {
         const graphics_stats = graphics_writer.panes.stats;
         client.metrics.pane_shared_images += graphics_stats.shared_images;
@@ -1864,27 +1930,21 @@ pub fn presentableModel(tabs: *tabs_mod.Model) ?*multiplexer.Model {
     return &active.model;
 }
 
-fn scheduleInputTimers(
-    io: Io,
-    select: *Io.Select(ClientEvent),
-    router: *const InputRouter,
-    input_pending: *bool,
-    binding_pending: *bool,
-) !void {
-    if (!input_pending.*) {
-        if (router.inputDeadline()) |deadline| {
-            input_pending.* = true;
-            select.concurrent(.input_timeout, waitUntil, .{ io, deadline }) catch |err| {
-                input_pending.* = false;
+fn scheduleInputTimers(client: *Client) !void {
+    if (!client.input_timeout_pending) {
+        if (client.input_router.inputDeadline()) |deadline| {
+            client.input_timeout_pending = true;
+            client.select.concurrent(.input_timeout, waitUntil, .{ client.io, deadline }) catch |err| {
+                client.input_timeout_pending = false;
                 return err;
             };
         }
     }
-    if (!binding_pending.*) {
-        if (router.bindingDeadline()) |deadline| {
-            binding_pending.* = true;
-            select.concurrent(.binding_timeout, waitUntil, .{ io, deadline }) catch |err| {
-                binding_pending.* = false;
+    if (!client.binding_timeout_pending) {
+        if (client.input_router.bindingDeadline()) |deadline| {
+            client.binding_timeout_pending = true;
+            client.select.concurrent(.binding_timeout, waitUntil, .{ client.io, deadline }) catch |err| {
+                client.binding_timeout_pending = false;
                 return err;
             };
         }
