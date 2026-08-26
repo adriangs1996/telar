@@ -49,6 +49,36 @@ pub const SessionFinished = struct {
     finished_at_ms: i64,
 };
 
+pub const SessionTitle = struct {
+    id: SessionId,
+    title: [schema.max_agent_session_title_bytes]u8 = undefined,
+    title_len: u8 = 0,
+    source: schema.AgentTitleSource,
+    state: schema.AgentTitleState,
+
+    pub fn init(
+        id: SessionId,
+        title_value: []const u8,
+        source: schema.AgentTitleSource,
+        state: schema.AgentTitleState,
+    ) !SessionTitle {
+        if (title_value.len > schema.max_agent_session_title_bytes)
+            return error.AgentTitleTooLong;
+        var value: SessionTitle = .{
+            .id = id,
+            .title_len = @intCast(title_value.len),
+            .source = source,
+            .state = state,
+        };
+        @memcpy(value.title[0..title_value.len], title_value);
+        return value;
+    }
+
+    pub fn titleSlice(value: *const SessionTitle) []const u8 {
+        return value.title[0..value.title_len];
+    }
+};
+
 pub const LaunchAttempt = struct {
     pane_id: schema.PaneId,
     pane_generation: u64,
@@ -155,6 +185,7 @@ pub const Request = union(enum) {
     launch_attempt: *LaunchAttempt,
     session_started: *SessionStarted,
     session_finished: SessionFinished,
+    session_title: SessionTitle,
     command_finished: *CommandFinished,
     query: Query,
 };
@@ -206,7 +237,7 @@ pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
         .launch_attempt => |value| value.deinit(gpa),
         .session_started => |value| value.deinit(gpa),
         .command_finished => |value| value.deinit(gpa),
-        .session_finished, .query => {},
+        .session_finished, .session_title, .query => {},
     }
 }
 

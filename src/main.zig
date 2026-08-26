@@ -349,19 +349,22 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     var configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var proxy_enabled = false;
     var configured_proxy_directory: ?[]u8 = null;
+    var description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined;
+    var agent_description_options: ?backend.runtime.AgentDescriptionOptions = null;
     defer if (configured_proxy_directory) |directory| init.gpa.free(directory);
     const endpoint = try resolveEndpoint(init, options.socket);
     if (options.action == .stop) return stopRuntime(init, &endpoint);
 
     var config_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    if (try loadConfigGeneration(
+    const config_generation = try loadConfigGeneration(
         init,
         options.config,
         options.no_config,
         options.profile,
         &config_path_buffer,
-    )) |generation| {
-        defer generation.deinit();
+    );
+    defer if (config_generation) |generation| generation.deinit();
+    if (config_generation) |generation| {
         if (!resolved_options.graphics_pane_set)
             resolved_options.graphics.pane_bytes = generation.snapshot.runtime.graphics_pane_bytes;
         if (!resolved_options.graphics_global_set)
@@ -384,6 +387,11 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
                 try init.gpa.dupe(u8, ca_dir)
             else
                 try std.fs.path.resolve(init.gpa, &.{ generation.configDir(), ca_dir });
+        };
+        const description_command = &generation.snapshot.runtime.agent_descriptions;
+        if (description_command.enabled()) agent_description_options = .{
+            .arguments = description_command.arguments(&description_arguments),
+            .timeout_ms = description_command.timeout_ms,
         };
     }
     try resolved_options.graphics.validate();
@@ -434,6 +442,7 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
             .environment = init.minimal.environ,
             .history_path = history_path.path,
             .proxy = proxy_options,
+            .agent_descriptions = agent_description_options,
         },
     );
 }

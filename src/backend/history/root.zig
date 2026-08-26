@@ -209,6 +209,23 @@ pub const Service = struct {
         } });
     }
 
+    pub fn setSessionTitle(
+        service: *Service,
+        io: std.Io,
+        session_id: SessionId,
+        title: []const u8,
+        source: model_mod.schema.AgentTitleSource,
+        state: model_mod.schema.AgentTitleState,
+    ) bool {
+        const value = model_mod.SessionTitle.init(
+            session_id,
+            title,
+            source,
+            state,
+        ) catch return false;
+        return service.submit(io, .{ .session_title = value });
+    }
+
     pub const CommandContext = struct {
         session_id: SessionId,
         pane_id: model_mod.schema.PaneId,
@@ -347,6 +364,14 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
                 const started = std.Io.Timestamp.now(io, .awake);
                 const result = if (service.store) |*store|
                     store.finishSession(value)
+                else
+                    error.HistoryUnavailable;
+                observeWrite(service, elapsedSince(io, started), result);
+            },
+            .session_title => |value| {
+                const started = std.Io.Timestamp.now(io, .awake);
+                const result = if (service.store) |*store|
+                    store.setSessionTitle(&value)
                 else
                     error.HistoryUnavailable;
                 observeWrite(service, elapsedSince(io, started), result);

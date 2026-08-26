@@ -9,6 +9,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const detection = @import("../history/root.zig").detection;
 const pane_mod = @import("../pane/root.zig");
+pub const description = @import("description.zig");
 
 const schema = core.schema;
 const Pane = pane_mod.Pane;
@@ -74,7 +75,35 @@ const Record = struct {
     active_proxy_count: u16 = 0,
     screen: ?Evidence = null,
     idle_samples: u8 = 0,
+    title: Title = .{},
     projected: schema.AgentSnapshotEntry,
+};
+
+const TitlePhase = enum {
+    waiting_query,
+    waiting_work,
+    queued,
+    running,
+    finished,
+    failed,
+};
+
+const Title = struct {
+    bytes: [schema.max_agent_session_title_bytes]u8 = undefined,
+    len: u8 = 0,
+    source: schema.AgentTitleSource = .telar,
+    state: schema.AgentTitleState = .placeholder,
+    phase: TitlePhase = .waiting_query,
+    saw_working: bool = false,
+    capture: description.Capture = .{},
+
+    fn slice(title: *const Title) []const u8 {
+        return title.bytes[0..title.len];
+    }
+
+    fn clearSensitive(title: *Title) void {
+        title.capture.clear();
+    }
 };
 
 pub const Store = struct {
@@ -275,6 +304,7 @@ pub const Store = struct {
             }
             if (record.process == null and record.proxy == null and record.screen == null) {
                 record.authority = .stale;
+                record.title.clearSensitive();
                 slot.* = null;
                 store.bumpRevision();
                 changed = true;
@@ -287,8 +317,9 @@ pub const Store = struct {
 
     pub fn remove(store: *Store, key: PaneKey) bool {
         for (&store.records) |*slot| {
-            const record = slot.* orelse continue;
+            var record = if (slot.*) |*value| value else continue;
             if (!sameKey(record.key, key)) continue;
+            record.title.clearSensitive();
             slot.* = null;
             store.bumpRevision();
             return true;
@@ -301,12 +332,101 @@ pub const Store = struct {
         entries: *[max_records]schema.AgentSnapshotEntry,
     ) []const schema.AgentSnapshotEntry {
         var count: usize = 0;
-        for (store.records) |slot| {
-            const record = slot orelse continue;
+        for (&store.records) |*slot| {
+            const record = if (slot.*) |*value| value else continue;
             entries[count] = record.projected;
+            entries[count].session_title = record.title.slice();
+            entries[count].title_source = record.title.source;
+            entries[count].title_state = record.title.state;
             count += 1;
         }
         return entries[0..count];
+    }
+
+    /// Captures only the first submitted request for an already identified
+    /// agent. Callers gate this method on explicit description configuration.
+    pub fn observeInput(store: *Store, key: PaneKey, bytes: []const u8) bool {
+        const record = store.find(key) orelse return false;
+        if (record.title.phase != .waiting_query) return false;
+        if (!record.title.capture.feed(bytes)) return false;
+        record.title.phase = .waiting_work;
+        return true;
+    }
+
+    /// Starts one bounded job at a time. Invalid captured input deterministically
+    /// becomes a failed placeholder and is never retried.
+    pub fn nextDescriptionJob(store: *Store) ?description.Job {
+        for (&store.records) |*slot| {
+            const record = if (slot.*) |*value| value else continue;
+            if (record.title.phase == .running) return null;
+        }
+        for (&store.records) |*slot| {
+            var record = if (slot.*) |*value| value else continue;
+            if (record.title.phase != .queued) continue;
+            var normalized: [description.max_query_bytes]u8 = undefined;
+            const query = description.normalizeQuery(record.title.capture.raw(), &normalized) catch {
+                record.title.phase = .failed;
+                record.title.state = .failed;
+                record.title.clearSensitive();
+                store.bumpRevision();
+                continue;
+            };
+            var job: description.Job = .{
+                .pane = record.key,
+                .session_id = record.session_id,
+                .provider = recordProvider(record),
+                .query_len = @intCast(query.len),
+            };
+            @memcpy(job.query[0..query.len], query);
+            std.crypto.secureZero(u8, &normalized);
+            record.title.clearSensitive();
+            record.title.phase = .running;
+            return job;
+        }
+        return null;
+    }
+
+    /// A completion applies only to the exact session which launched it. A
+    /// manual title changes the phase, so a concurrent generated result is
+    /// stale by construction.
+    pub fn finishDescription(store: *Store, result: *const description.Result) bool {
+        const record = store.find(result.pane) orelse return false;
+        if (record.title.phase != .running or
+            !std.mem.eql(u8, &record.session_id, &result.session_id)) return false;
+        if (result.status == .success) {
+            const title = result.titleSlice();
+            if (title.len == 0 or title.len > record.title.bytes.len or
+                !validTitle(title))
+            {
+                record.title.phase = .failed;
+                record.title.state = .failed;
+            } else {
+                @memcpy(record.title.bytes[0..title.len], title);
+                record.title.len = @intCast(title.len);
+                record.title.source = .generated;
+                record.title.state = .ready;
+                record.title.phase = .finished;
+            }
+        } else {
+            record.title.phase = .failed;
+            record.title.state = .failed;
+        }
+        store.bumpRevision();
+        return true;
+    }
+
+    pub fn setManualTitle(store: *Store, key: PaneKey, value: []const u8) !bool {
+        const record = store.find(key) orelse return false;
+        if (!validTitle(value) or value.len > record.title.bytes.len)
+            return error.InvalidAgentTitle;
+        record.title.clearSensitive();
+        @memcpy(record.title.bytes[0..value.len], value);
+        record.title.len = @intCast(value.len);
+        record.title.source = .manual;
+        record.title.state = .ready;
+        record.title.phase = .finished;
+        store.bumpRevision();
+        return true;
     }
 
     /// Publishes pane-topology changes that alter the display position of
@@ -365,6 +485,7 @@ pub const Store = struct {
         else
             .unknown;
         const previous = record.projected;
+        ensurePlaceholder(record, provider);
         store.sequence +%= 1;
         if (store.sequence == 0) store.sequence = 1;
         record.projected = .{
@@ -381,12 +502,46 @@ pub const Store = struct {
             .observed_at_ms = evidence.observed_at_ms,
             .expires_at_ms = evidence.expires_at_ms,
         };
+        const title_changed = store.advanceTitle(record, evidence.status);
         if (sameProjection(previous, record.projected)) {
             record.projected.sequence = previous.sequence;
-            return false;
+            if (title_changed) store.bumpRevision();
+            return title_changed;
         }
         store.bumpRevision();
         return true;
+    }
+
+    fn advanceTitle(
+        store: *const Store,
+        record: *Record,
+        status: schema.AgentStatus,
+    ) bool {
+        if (record.title.phase != .waiting_work) return false;
+        if (status == .working) {
+            record.title.saw_working = true;
+            return false;
+        }
+        if (!record.title.saw_working or (status != .ready and status != .failed)) return false;
+        if (store.pendingDescriptionCount() >= description.max_pending_jobs) {
+            record.title.phase = .failed;
+            record.title.state = .failed;
+            record.title.clearSensitive();
+        } else {
+            record.title.phase = .queued;
+            record.title.state = .pending;
+        }
+        return true;
+    }
+
+    fn pendingDescriptionCount(store: *const Store) usize {
+        var count: usize = 0;
+        for (&store.records) |*slot| {
+            const record = if (slot.*) |*value| value else continue;
+            if (record.title.phase == .queued or record.title.phase == .running)
+                count += 1;
+        }
+        return count;
     }
 
     fn bumpRevision(store: *Store) void {
@@ -490,6 +645,25 @@ fn recordProvider(record: *const Record) schema.AgentProvider {
     if (record.proxy) |evidence| if (evidence.provider != .unknown) return evidence.provider;
     if (record.screen) |evidence| return evidence.provider;
     return .unknown;
+}
+
+fn ensurePlaceholder(record: *Record, provider: schema.AgentProvider) void {
+    if (record.title.source != .telar) return;
+    const placeholder = switch (provider) {
+        .codex => "New Codex session",
+        .claude => "New Claude Code session",
+        .unknown => "New agent session",
+    };
+    if (std.mem.eql(u8, record.title.slice(), placeholder)) return;
+    @memcpy(record.title.bytes[0..placeholder.len], placeholder);
+    record.title.len = @intCast(placeholder.len);
+}
+
+fn validTitle(value: []const u8) bool {
+    if (value.len == 0 or value.len > schema.max_agent_session_title_bytes or
+        !std.unicode.utf8ValidateSlice(value)) return false;
+    for (value) |byte| if (byte < 0x20 or byte == 0x7f) return false;
+    return true;
 }
 
 fn sameKey(a: PaneKey, b: PaneKey) bool {
@@ -637,6 +811,91 @@ test "foreground process establishes agent identity without screen branding" {
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
     try std.testing.expectEqual(@as(u32, 84), snapshot[0].process_id);
+}
+
+test "first completed request becomes one generated session title" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeProcess(identity, .codex, 84, 100));
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    var snapshot = store.snapshot(&entries);
+    try std.testing.expectEqualStrings("New Codex session", snapshot[0].session_title);
+    try std.testing.expectEqual(schema.AgentTitleState.placeholder, snapshot[0].title_state);
+
+    try std.testing.expect(store.observeInput(identity.key, "improve the sidebar\r"));
+    try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 200));
+    try std.testing.expect(observeTestProxy(&store, identity, .codex, .response_finished, 300));
+    snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentTitleState.pending, snapshot[0].title_state);
+
+    var job = store.nextDescriptionJob().?;
+    defer std.crypto.secureZero(u8, &job.query);
+    try std.testing.expectEqualStrings("improve the sidebar", job.querySlice());
+    var result: description.Result = .{
+        .pane = job.pane,
+        .session_id = job.session_id,
+        .status = .success,
+        .title_len = "Improve agent sidebar".len,
+    };
+    @memcpy(result.title[0..result.title_len], "Improve agent sidebar");
+    try std.testing.expect(store.finishDescription(&result));
+    snapshot = store.snapshot(&entries);
+    try std.testing.expectEqualStrings("Improve agent sidebar", snapshot[0].session_title);
+    try std.testing.expectEqual(schema.AgentTitleSource.generated, snapshot[0].title_source);
+    try std.testing.expectEqual(schema.AgentTitleState.ready, snapshot[0].title_state);
+    try std.testing.expect(store.nextDescriptionJob() == null);
+}
+
+test "manual title wins over a late generated result" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
+    try std.testing.expect(store.observeInput(identity.key, "fix tests\r"));
+    try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 200));
+    try std.testing.expect(observeTestProxy(&store, identity, .claude, .response_finished, 300));
+    var job = store.nextDescriptionJob().?;
+    defer std.crypto.secureZero(u8, &job.query);
+    try std.testing.expect(try store.setManualTitle(identity.key, "Release audit"));
+
+    var result: description.Result = .{
+        .pane = job.pane,
+        .session_id = job.session_id,
+        .status = .success,
+        .title_len = "Generated title".len,
+    };
+    @memcpy(result.title[0..result.title_len], "Generated title");
+    try std.testing.expect(!store.finishDescription(&result));
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    try std.testing.expectEqualStrings("Release audit", snapshot[0].session_title);
+    try std.testing.expectEqual(schema.AgentTitleSource.manual, snapshot[0].title_source);
+}
+
+test "description backpressure fails the ninth queued request without retry" {
+    var store: Store = .{};
+    for (0..description.max_pending_jobs + 1) |index| {
+        const raw: u64 = @intCast(index + 1);
+        const identity: Identity = .{
+            .key = .{ .id = try schema.id.pane(raw), .generation = raw },
+            .process_id = @intCast(raw),
+            .session_id = @splat(@intCast(raw)),
+        };
+        try std.testing.expect(store.observeProcess(identity, .codex, @intCast(raw), 100));
+        try std.testing.expect(store.observeInput(identity.key, "do work\r"));
+        try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 200));
+        try std.testing.expect(observeTestProxy(&store, identity, .codex, .response_finished, 300));
+    }
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    var pending: usize = 0;
+    var failed: usize = 0;
+    for (snapshot) |entry| switch (entry.title_state) {
+        .pending => pending += 1,
+        .failed => failed += 1,
+        else => {},
+    };
+    try std.testing.expectEqual(description.max_pending_jobs, pending);
+    try std.testing.expectEqual(@as(usize, 1), failed);
 }
 
 test "process identity rejects contradictory screen branding" {

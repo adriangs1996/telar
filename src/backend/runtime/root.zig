@@ -50,18 +50,29 @@ const ResponseQueue = response_queue.ResponseQueue;
 const encodeFrame = runtime_encoder.encodeFrame;
 const encodeResponse = runtime_encoder.encodeResponse;
 
+const AgentDisplayStorage = struct {
+    workspace: [schema.max_agent_workspace_label_bytes]u8 = undefined,
+    cwd: [schema.max_agent_cwd_label_bytes]u8 = undefined,
+};
+
 pub const ServeOptions = struct {
     graphics: GraphicsLimits = .{},
     environment: std.process.Environ,
     /// SQLite database for durable history; the default keeps it in memory.
     history_path: [:0]const u8 = ":memory:",
     proxy: ?ProxyOptions = null,
+    agent_descriptions: ?AgentDescriptionOptions = null,
     /// Test seam: stops the otherwise long-lived runtime without signals.
     stop: ?*Io.Queue(u8) = null,
     /// Test seam: holds a pane's ingest actor open. See `IngestTestGate`.
     ingest_gate: ?*IngestTestGate = null,
     /// Test seam: fails one pane launch at a selected post-spawn phase.
     launch_fault: ?*LaunchTestFault = null,
+};
+
+pub const AgentDescriptionOptions = struct {
+    arguments: []const []const u8,
+    timeout_ms: u32,
 };
 
 pub const ProxyOptions = struct {
@@ -137,6 +148,7 @@ const RuntimeEvent = union(enum) {
     telemetry_written: anyerror!void,
     proxy_event: anyerror!proxy_mod.middleware.Event,
     agent_tick: anyerror!void,
+    agent_description: agent_mod.description.Result,
     metrics_tick: anyerror!void,
     stopped: anyerror!void,
 };
@@ -375,6 +387,8 @@ const Server = struct {
     child_environment: *const pty.Environment,
     inherited_environment: std.process.Environ,
     proxy_service: ?*proxy_mod.service.Service,
+    agent_description_options: ?AgentDescriptionOptions,
+    agent_description_pending: bool = false,
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     handshake_slot: ?core.transport.SocketChannel = null,
@@ -714,6 +728,61 @@ const Server = struct {
         return delivered;
     }
 
+    fn scheduleAgentDescription(server: *Server) void {
+        const options = server.agent_description_options orelse return;
+        if (server.agent_description_pending) return;
+        var job = server.agents.nextDescriptionJob() orelse return;
+        defer std.crypto.secureZero(u8, &job.query);
+        server.select.concurrent(
+            .agent_description,
+            agent_mod.description.generate,
+            .{
+                server.io,
+                server.gpa,
+                agent_mod.description.Command{
+                    .arguments = options.arguments,
+                    .timeout_ms = options.timeout_ms,
+                },
+                job,
+            },
+        ) catch {
+            const failed: agent_mod.description.Result = .{
+                .pane = job.pane,
+                .session_id = job.session_id,
+                .status = .failed,
+            };
+            if (server.agents.finishDescription(&failed))
+                _ = server.history_service.setSessionTitle(
+                    server.io,
+                    failed.session_id,
+                    "",
+                    .telar,
+                    .failed,
+                );
+            server.pumpAll();
+            return;
+        };
+        server.agent_description_pending = true;
+    }
+
+    fn handleAgentDescriptionEvent(
+        server: *Server,
+        result: agent_mod.description.Result,
+    ) void {
+        server.agent_description_pending = false;
+        if (server.agents.finishDescription(&result)) {
+            _ = server.history_service.setSessionTitle(
+                server.io,
+                result.session_id,
+                if (result.status == .success) result.titleSlice() else "",
+                if (result.status == .success) .generated else .telar,
+                if (result.status == .success) .ready else .failed,
+            );
+        }
+        server.scheduleAgentDescription();
+        server.pumpAll();
+    }
+
     fn pumpAll(server: *Server) void {
         for (&server.clients.items) |*slot| {
             const session = slot.* orelse continue;
@@ -834,6 +903,7 @@ const Server = struct {
             session.agent_revision_sent < server.agents.revision)
         {
             var entry_storage: [agent_mod.max_records]schema.AgentSnapshotEntry = undefined;
+            var display_storage: [agent_mod.max_records]AgentDisplayStorage = undefined;
             const entries = server.agents.snapshot(&entry_storage);
             var enriched_count: usize = 0;
             for (entries) |entry| {
@@ -845,6 +915,19 @@ const Server = struct {
                 entry_storage[enriched_count] = entry;
                 entry_storage[enriched_count].location = pane.location;
                 entry_storage[enriched_count].pane_index = pane_index;
+                if (workspaces.find(pane.location.workspace)) |workspace| {
+                    entry_storage[enriched_count].workspace_label = copyDisplayPrefix(
+                        &display_storage[enriched_count].workspace,
+                        workspace.name(),
+                    );
+                }
+                if (workspaces.findTab(pane.location)) |tab|
+                    entry_storage[enriched_count].tab_label = tab.labelSlice();
+                entry_storage[enriched_count].cwd_label = shortenCwd(
+                    &display_storage[enriched_count].cwd,
+                    pane.cwd.slice(),
+                    server.inherited_environment.getPosix("HOME"),
+                );
                 enriched_count += 1;
             }
             const payload = try schema.encodeAgentSnapshot(buffer, .{
@@ -1352,6 +1435,7 @@ const Server = struct {
             event.stream_id,
             event.observed_at_ms,
         );
+        server.scheduleAgentDescription();
         server.pumpAll();
     }
 
@@ -1414,7 +1498,7 @@ const Server = struct {
         };
         active.actorFinished();
         active.history_observer.finishSealed();
-        _ = active.updateObservedCwd();
+        if (active.updateObservedCwd()) server.agents.touch();
         if (comptime diagnostics.enabled) {
             if (event.process_probe.inspected) {
                 server.metrics.agent_process_inspections +|= 1;
@@ -1477,6 +1561,7 @@ const Server = struct {
                 Io.Timestamp.now(server.io, .real).toMilliseconds(),
             );
         };
+        server.scheduleAgentDescription();
         try schedulePaneObservation(server.select, active);
         server.collect();
         server.pumpAll();
@@ -1840,6 +1925,7 @@ const Server = struct {
                     }
                     return;
                 };
+                server.agents.touch();
                 try responses.push(.{ .workspace_snapshot = .{
                     .request_id = rename.request_id,
                     .workspace = rename.workspace,
@@ -1859,6 +1945,8 @@ const Server = struct {
                     metrics.input_events += 1;
                     metrics.input_bytes += input.bytes.len;
                 }
+                if (server.agent_description_options != null)
+                    _ = server.agents.observeInput(active.pane.key(), input.bytes);
                 active.pane.queueHistoryInput(
                     input.bytes,
                     active.pane.session.shellForeground() orelse false,
@@ -2140,6 +2228,7 @@ const Server = struct {
                     return;
                 };
                 tab.setLabel(rename.label);
+                server.agents.touch();
                 var pending: PendingTabRenamed = .{
                     .request_id = rename.request_id,
                     .location = rename.location,
@@ -2235,6 +2324,60 @@ const Server = struct {
     }
 };
 
+fn copyDisplayPrefix(output: []u8, source: []const u8) []const u8 {
+    if (!validDisplayText(source)) return output[0..0];
+    if (source.len <= output.len) {
+        @memcpy(output[0..source.len], source);
+        return output[0..source.len];
+    }
+    const ellipsis = "…";
+    if (output.len < ellipsis.len) return output[0..0];
+    var end = output.len - ellipsis.len;
+    while (end != 0 and isUtf8Continuation(source[end])) end -= 1;
+    @memcpy(output[0..end], source[0..end]);
+    @memcpy(output[end..][0..ellipsis.len], ellipsis);
+    return output[0 .. end + ellipsis.len];
+}
+
+fn shortenCwd(output: []u8, path: []const u8, home: ?[]const u8) []const u8 {
+    if (!validDisplayText(path)) return output[0..0];
+    var prefix: []const u8 = "";
+    var suffix = path;
+    if (home) |home_path| {
+        if (home_path.len != 0 and std.mem.startsWith(u8, path, home_path) and
+            (path.len == home_path.len or path[home_path.len] == '/'))
+        {
+            prefix = "~";
+            suffix = path[home_path.len..];
+        }
+    }
+    if (prefix.len + suffix.len <= output.len) {
+        @memcpy(output[0..prefix.len], prefix);
+        @memcpy(output[prefix.len..][0..suffix.len], suffix);
+        return output[0 .. prefix.len + suffix.len];
+    }
+
+    const ellipsis = "…";
+    if (output.len < ellipsis.len) return output[0..0];
+    const available = output.len - ellipsis.len;
+    var start = suffix.len -| available;
+    while (start < suffix.len and isUtf8Continuation(suffix[start])) start += 1;
+    const tail = suffix[start..];
+    @memcpy(output[0..ellipsis.len], ellipsis);
+    @memcpy(output[ellipsis.len..][0..tail.len], tail);
+    return output[0 .. ellipsis.len + tail.len];
+}
+
+fn validDisplayText(bytes: []const u8) bool {
+    if (bytes.len == 0 or !std.unicode.utf8ValidateSlice(bytes)) return false;
+    for (bytes) |byte| if (byte < 0x20 or byte == 0x7f) return false;
+    return true;
+}
+
+fn isUtf8Continuation(byte: u8) bool {
+    return byte & 0xc0 == 0x80;
+}
+
 fn serveInternal(
     io: Io,
     backing_gpa: std.mem.Allocator,
@@ -2294,7 +2437,7 @@ fn serveInternal(
         history_service.deinit(io);
     };
 
-    var select_storage: [15 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
+    var select_storage: [16 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
@@ -2317,6 +2460,7 @@ fn serveInternal(
         .child_environment = &child_environment,
         .inherited_environment = options.environment,
         .proxy_service = proxy_service,
+        .agent_description_options = options.agent_descriptions,
         .launch_fault = options.launch_fault,
         .clients = clients,
         .workspaces = WorkspaceStore.init(gpa),
@@ -2371,6 +2515,7 @@ fn serveInternal(
             .history_response => |result| try server.handleHistoryResponseEvent(result),
             .proxy_event => |result| try server.handleProxyEvent(result),
             .agent_tick => |result| try server.handleAgentTickEvent(result),
+            .agent_description => |result| server.handleAgentDescriptionEvent(result),
             .metrics_tick => |result| try server.handleMetricsTickEvent(result),
             .pane_input_written => |event_value| try server.handlePaneInputWrittenEvent(event_value),
             .pane_response_written => |event_value| try server.handlePaneResponseWrittenEvent(event_value),
@@ -2408,6 +2553,7 @@ fn runtimeEventPath(event: RuntimeEvent) diagnostics.Path {
         .history_response,
         .proxy_event,
         .agent_tick,
+        .agent_description,
         .metrics_tick,
         .telemetry_tick,
         .telemetry_written,
@@ -2889,6 +3035,33 @@ test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
         Capture.bytes[0..Capture.len],
         "EINVAL: unsupported medium",
     ) != null);
+}
+
+test "agent display labels are bounded, valid UTF-8, and cwd-aware" {
+    var workspace: [schema.max_agent_workspace_label_bytes]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "telar",
+        copyDisplayPrefix(&workspace, "telar"),
+    );
+    try std.testing.expectEqual(@as(usize, 0), copyDisplayPrefix(&workspace, "bad\nname").len);
+
+    const long_workspace = "abcdefghijklmnopqrstuvwxabcdefghijklmnopqrstuvé-more";
+    const shortened_workspace = copyDisplayPrefix(&workspace, long_workspace);
+    try std.testing.expect(shortened_workspace.len <= workspace.len);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(shortened_workspace));
+    try std.testing.expect(std.mem.endsWith(u8, shortened_workspace, "…"));
+
+    var cwd: [schema.max_agent_cwd_label_bytes]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "~/sandbox/telar",
+        shortenCwd(&cwd, "/Users/adrian/sandbox/telar", "/Users/adrian"),
+    );
+    const long_cwd = "/Users/adrian/projects/abcdefghijklmnopqrstuvwx/abcdefghijklmnopqrstuvwx/agents/telar";
+    const shortened_cwd = shortenCwd(&cwd, long_cwd, "/Users/adrian");
+    try std.testing.expect(shortened_cwd.len <= cwd.len);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(shortened_cwd));
+    try std.testing.expect(std.mem.startsWith(u8, shortened_cwd, "…"));
+    try std.testing.expect(std.mem.endsWith(u8, shortened_cwd, "/agents/telar"));
 }
 
 test {

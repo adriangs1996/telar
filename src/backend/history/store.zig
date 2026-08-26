@@ -17,7 +17,7 @@ const database_schema =
     \\);
     \\INSERT INTO history_schema(version)
     \\SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM history_schema);
-    \\UPDATE history_schema SET version = 2 WHERE version < 2;
+    \\UPDATE history_schema SET version = 3 WHERE version < 3;
     \\CREATE TABLE IF NOT EXISTS launch_attempt (
     \\  id              INTEGER PRIMARY KEY,
     \\  pane_id         INTEGER NOT NULL,
@@ -42,7 +42,10 @@ const database_schema =
     \\  workspace_path TEXT NOT NULL,
     \\  shell          TEXT NOT NULL,
     \\  started_at_ms  INTEGER NOT NULL,
-    \\  finished_at_ms INTEGER
+    \\  finished_at_ms INTEGER,
+    \\  title          TEXT,
+    \\  title_source   INTEGER,
+    \\  title_state    INTEGER
     \\);
     \\CREATE TABLE IF NOT EXISTS command (
     \\  id                INTEGER PRIMARY KEY,
@@ -94,6 +97,12 @@ const finish_session_sql =
     \\UPDATE session SET finished_at_ms = ?2 WHERE id = ?1 AND finished_at_ms IS NULL;
 ;
 
+const set_session_title_sql =
+    \\UPDATE session
+    \\SET title = ?2, title_source = ?3, title_state = ?4
+    \\WHERE id = ?1;
+;
+
 const insert_command_sql =
     \\INSERT INTO command
     \\  (session_id, pane_id, location_kind, location_id, tab_id, sequence, command,
@@ -107,6 +116,7 @@ pub const Store = struct {
     insert_launch_attempt: *c.sqlite3_stmt,
     insert_session: *c.sqlite3_stmt,
     finish_session: *c.sqlite3_stmt,
+    set_session_title: *c.sqlite3_stmt,
     insert_command: *c.sqlite3_stmt,
     fts_available: bool,
 
@@ -125,8 +135,11 @@ pub const Store = struct {
         _ = c.sqlite3_extended_result_codes(opened, 1);
         if (c.sqlite3_exec(opened, database_schema, null, null, null) != c.SQLITE_OK)
             return error.HistorySchemaFailed;
-        try ensureTabColumn(opened, "session", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
-        try ensureTabColumn(opened, "command", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
+        try ensureColumn(opened, "session", "tab_id", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
+        try ensureColumn(opened, "command", "tab_id", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
+        try ensureColumn(opened, "session", "title", "ALTER TABLE session ADD COLUMN title TEXT;");
+        try ensureColumn(opened, "session", "title_source", "ALTER TABLE session ADD COLUMN title_source INTEGER;");
+        try ensureColumn(opened, "session", "title_state", "ALTER TABLE session ADD COLUMN title_state INTEGER;");
         const fts_available = enableCommandSearchIndex(opened);
 
         const insert_launch_attempt = try prepare(opened, insert_launch_attempt_sql);
@@ -135,6 +148,8 @@ pub const Store = struct {
         errdefer _ = c.sqlite3_finalize(insert_session);
         const finish_session = try prepare(opened, finish_session_sql);
         errdefer _ = c.sqlite3_finalize(finish_session);
+        const set_session_title = try prepare(opened, set_session_title_sql);
+        errdefer _ = c.sqlite3_finalize(set_session_title);
         const insert_command = try prepare(opened, insert_command_sql);
         errdefer _ = c.sqlite3_finalize(insert_command);
         return .{
@@ -142,6 +157,7 @@ pub const Store = struct {
             .insert_launch_attempt = insert_launch_attempt,
             .insert_session = insert_session,
             .finish_session = finish_session,
+            .set_session_title = set_session_title,
             .insert_command = insert_command,
             .fts_available = fts_available,
         };
@@ -149,6 +165,7 @@ pub const Store = struct {
 
     pub fn close(store: *Store) void {
         _ = c.sqlite3_finalize(store.insert_command);
+        _ = c.sqlite3_finalize(store.set_session_title);
         _ = c.sqlite3_finalize(store.finish_session);
         _ = c.sqlite3_finalize(store.insert_session);
         _ = c.sqlite3_finalize(store.insert_launch_attempt);
@@ -194,6 +211,17 @@ pub const Store = struct {
         bindBlob(stmt, 1, &value.id);
         _ = c.sqlite3_bind_int64(stmt, 2, value.finished_at_ms);
         try stepDone(stmt);
+    }
+
+    pub fn setSessionTitle(store: *Store, value: *const model.SessionTitle) !void {
+        const stmt = store.set_session_title;
+        defer reset(stmt);
+        bindBlob(stmt, 1, &value.id);
+        bindText(stmt, 2, value.titleSlice());
+        _ = c.sqlite3_bind_int(stmt, 3, @intFromEnum(value.source));
+        _ = c.sqlite3_bind_int(stmt, 4, @intFromEnum(value.state));
+        try stepDone(stmt);
+        if (c.sqlite3_changes(store.db) != 1) return error.HistorySessionNotFound;
     }
 
     pub fn insertCommand(store: *Store, value: *const model.CommandFinished) !void {
@@ -388,7 +416,12 @@ fn queryCharacters(text: []const u8) usize {
     return std.unicode.utf8CountCodepoints(text) catch text.len;
 }
 
-fn ensureTabColumn(db: *c.sqlite3, table: []const u8, alter_sql: [:0]const u8) !void {
+fn ensureColumn(
+    db: *c.sqlite3,
+    table: []const u8,
+    column: []const u8,
+    alter_sql: [:0]const u8,
+) !void {
     var pragma_buffer: [64]u8 = undefined;
     const pragma = try std.fmt.bufPrint(&pragma_buffer, "PRAGMA table_info({s});", .{table});
     const stmt = try prepare(db, pragma);
@@ -397,7 +430,7 @@ fn ensureTabColumn(db: *c.sqlite3, table: []const u8, alter_sql: [:0]const u8) !
         c.SQLITE_ROW => {
             const len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
             const pointer = c.sqlite3_column_text(stmt, 1) orelse continue;
-            if (std.mem.eql(u8, pointer[0..len], "tab_id")) return;
+            if (std.mem.eql(u8, pointer[0..len], column)) return;
         },
         c.SQLITE_DONE => break,
         else => return error.HistorySchemaFailed,
@@ -549,6 +582,31 @@ test "persists sessions and filters command history" {
         .shell = @constCast("/bin/zsh"),
     };
     try store.startSession(&session);
+    const session_title = try model.SessionTitle.init(
+        session_id,
+        "Improve agent sidebar",
+        .generated,
+        .ready,
+    );
+    try store.setSessionTitle(&session_title);
+    const title_stmt = try prepare(
+        store.db,
+        "SELECT title, title_source, title_state FROM session WHERE id = ?1;",
+    );
+    defer _ = c.sqlite3_finalize(title_stmt);
+    bindBlob(title_stmt, 1, &session_id);
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(title_stmt));
+    const title_len: usize = @intCast(c.sqlite3_column_bytes(title_stmt, 0));
+    const title = c.sqlite3_column_text(title_stmt, 0)[0..title_len];
+    try std.testing.expectEqualStrings("Improve agent sidebar", title);
+    try std.testing.expectEqual(
+        @as(c_int, @intFromEnum(model.schema.AgentTitleSource.generated)),
+        c.sqlite3_column_int(title_stmt, 1),
+    );
+    try std.testing.expectEqual(
+        @as(c_int, @intFromEnum(model.schema.AgentTitleState.ready)),
+        c.sqlite3_column_int(title_stmt, 2),
+    );
 
     const successful: model.CommandFinished = .{
         .session_id = session_id,
