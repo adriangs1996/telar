@@ -154,7 +154,7 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
     }
     const cell_size = client.capabilities.cellSize(presenter.screen.back.w, presenter.screen.back.h);
     const layout_snapshot = model.layoutSnapshot(client.view.workbench());
-    client.graphics_store.host_zlib = client.capabilities.kitty_zlib == .supported;
+    client.graphics_store.setHostZlib(client.capabilities.kitty_zlib == .supported);
     // Media rides the interactive writer, so its budget follows the user:
     // baseline while input is live, boosted once the host has been quiet.
     const media_budget = if (media_idle)
@@ -188,8 +188,8 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
         presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
     }
     var acks: Acks = .{};
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = model.paneIterator();
+    while (panes.next()) |pane| {
         if (!pane.attached) continue;
         const frame_id = pane.takePendingFrame();
         if (frame_id == 0) continue;

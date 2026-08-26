@@ -200,6 +200,7 @@ fn handleResyncMessage(client: *Client, required: schema.ResyncRequired) !?u8 {
     return null;
 }
 
+/// The proxy interception indicator, announced once per flip.
 fn handleProxyStatus(client: *Client, status: schema.ProxyStatus) !void {
     if (client.view.proxy_tls_active == status.active) return;
     client.view.setProxyTlsActive(status.active);
@@ -217,6 +218,7 @@ fn handleProxyStatus(client: *Client, status: schema.ProxyStatus) !void {
     });
 }
 
+/// Replaces the sidebar agent replica and raises actionable status alerts.
 fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !void {
     var agents: [schema.max_agent_snapshot_entries]widgets.sidebar.AgentInput = undefined;
     var alerts: [widgets.notification.max_items]widgets.sidebar.AgentInput = undefined;
@@ -285,6 +287,7 @@ fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !voi
     try client.scheduleSidebarAnimation();
 }
 
+/// Host health for the status bar.
 fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
     client.view.setSystemMetrics(.{
         .cpu_percent = metrics.cpu_percent,
@@ -294,6 +297,7 @@ fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
     try client.presenter.requestDraw();
 }
 
+/// A pane's observed working directory changed.
 fn handlePaneCwd(client: *Client, message: schema.PaneCwd) !void {
     const pane = client.tabs.findPane(message.pane_id) orelse return;
     if (!try pane.setCwd(message.cwd)) return;
@@ -301,6 +305,7 @@ fn handlePaneCwd(client: *Client, message: schema.PaneCwd) !void {
     try client.presenter.requestDraw();
 }
 
+/// Replaces the workspace-list replica at the runtime's revision.
 fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
     var entries: [schema.max_workspace_list_entries]widgets.workspace_model.EntryInput = undefined;
     var count: usize = 0;
@@ -324,6 +329,7 @@ fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
     if (replaced) try client.presenter.requestDraw();
 }
 
+/// A pane launch commit: routed by the continuation that asked for it.
 fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
     const continuation = client.requests.take(opened.request_id) orelse
         return error.UnexpectedRequest;
@@ -332,10 +338,10 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
         .create_workspace => {
             if (!opened.created) return error.UnexpectedRequest;
             try client.clearPaneFocus();
-            for (&client.tabs.items) |*slot| {
-                const tab = if (slot.*) |*value| value else continue;
-                for (&tab.model.panes) |*pane_slot| {
-                    const pane = if (pane_slot.*) |*value| value else continue;
+            var tabs = client.tabs.tabIterator();
+            while (tabs.next()) |tab| {
+                var panes = tab.model.paneIterator();
+                while (panes.next()) |pane| {
                     try client.graphics_store.setPaneVisible(pane.id, false);
                 }
             }
@@ -367,15 +373,16 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
             if (attachment.pane_id != opened.pane_id or
                 !std.meta.eql(attachment.location, opened.location))
                 return error.UnexpectedPane;
-            const pane = client.tabs.findPane(opened.pane_id) orelse
+            const tab = client.tabs.tabForPane(opened.pane_id) orelse
                 return error.UnexpectedPane;
-            pane.attached = true;
+            try tab.model.markAttached(opened.pane_id);
         },
         else => return error.UnexpectedRequest,
     }
     try client.presenter.requestDraw();
 }
 
+/// First pane of a workspace: builds the tab model and asks for both snapshots.
 fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
     if (client.tabs.count != 0) return error.UnexpectedRequest;
     try client.tabs.bootstrap(
@@ -386,26 +393,11 @@ fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
     try client.syncPaneFocus(&client.tabs.active().?.model);
     client.view.invalidate();
     try client.scheduleInputRead();
-    const workspace_request_id = try client.nextId();
-    try client.enqueueRequest(
-        workspace_request_id,
-        .{ .workspace_snapshot = opened.location.workspace },
-        .{ .request_workspace_snapshot = .{
-            .request_id = workspace_request_id,
-            .workspace = opened.location.workspace,
-        } },
-    );
-    const tab_request_id = try client.nextId();
-    try client.enqueueRequest(
-        tab_request_id,
-        .{ .tab_snapshot = opened.location },
-        .{ .request_tab_snapshot = .{
-            .request_id = tab_request_id,
-            .location = opened.location,
-        } },
-    );
+    try client.requestWorkspaceSnapshot(opened.location.workspace);
+    try client.requestTabSnapshot(opened.location);
 }
 
+/// Reconciles one tab against the runtime and attaches every pane it lacks.
 fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
     const continuation = client.requests.take(snapshot.request_id) orelse
         return error.UnexpectedTabSnapshot;
@@ -417,8 +409,8 @@ fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
     if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
     client.view.invalidate();
     try client.resizeAttached(model, client.view.workbench());
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = model.paneIterator();
+    while (panes.next()) |pane| {
         if (pane.attached) continue;
         const size = model.contentSize(pane.id, client.view.workbench()) orelse
             return error.PaneTooSmall;
@@ -440,6 +432,7 @@ fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
     try client.presenter.requestDraw();
 }
 
+/// Reconciles the tab list against the runtime's canonical order.
 fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
     const continuation = client.requests.take(snapshot.request_id) orelse
         return error.UnexpectedWorkspaceSnapshot;
@@ -458,8 +451,8 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
         canonical_tabs[canonical_count] = descriptor.tab_id;
         canonical_count += 1;
     }
-    for (client.tabs.items[0..client.tabs.count]) |*slot| {
-        const tab = if (slot.*) |*value| value else continue;
+    var tabs = client.tabs.tabIterator();
+    while (tabs.next()) |tab| {
         if (std.mem.findScalar(
             schema.TabId,
             canonical_tabs[0..canonical_count],
@@ -470,15 +463,7 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
     if (!client.requests.has(.tab_snapshot)) {
         if (client.tabs.active()) |active| {
             if (!active.snapshot_loaded) {
-                const request_id = try client.nextId();
-                try client.enqueueRequest(
-                    request_id,
-                    .{ .tab_snapshot = active.location },
-                    .{ .request_tab_snapshot = .{
-                        .request_id = request_id,
-                        .location = active.location,
-                    } },
-                );
+                try client.requestTabSnapshot(active.location);
             } else {
                 // A resync can mean the geometry lease was released.
                 // Re-offer this client's sizes; the runtime adopts them
@@ -498,6 +483,7 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
     } else try client.presenter.requestDraw();
 }
 
+/// A created tab becomes active; the previous one detaches.
 fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
     const continuation = client.requests.take(created.request_id) orelse
         return error.UnexpectedTabCreated;
@@ -522,6 +508,7 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
     });
 }
 
+/// A confirmed tab rename.
 fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
     const continuation = client.requests.take(renamed.request_id) orelse
         return error.UnexpectedTabRenamed;
@@ -539,6 +526,7 @@ fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
     });
 }
 
+/// A closed tab: lifecycle event or reply, possibly ending the workspace.
 fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
     const lifecycle_event = closed.request_id == .none;
     if (lifecycle_event) {
@@ -575,21 +563,14 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
     if (was_active) {
         const active = client.tabs.active().?;
         try client.syncPaneFocus(&active.model);
-        const request_id = try client.nextId();
-        try client.enqueueRequest(
-            request_id,
-            .{ .tab_snapshot = active.location },
-            .{ .request_tab_snapshot = .{
-                .request_id = request_id,
-                .location = active.location,
-            } },
-        );
+        try client.requestTabSnapshot(active.location);
     }
     client.view.invalidate();
     try client.presenter.requestDraw();
     return null;
 }
 
+/// A confirmed tab reorder.
 fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
     const continuation = client.requests.take(moved.request_id) orelse
         return error.UnexpectedTabMoved;
@@ -601,6 +582,7 @@ fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
     try client.presenter.requestDraw();
 }
 
+/// One pane frame: apply the patch or ask for a snapshot on a broken base.
 fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
     const pane = client.tabs.findPane(frame.pane_id) orelse return error.UnexpectedPane;
     if (!pane.attached) return;
@@ -627,9 +609,7 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
         const state = &client.mode.copy;
         if (state.pane_id == frame.pane_id) {
             copy_mode.onFrame(state, previous_scroll_offset, frame.scroll);
-            const updated = tab.model.find(frame.pane_id).?;
-            updated.copy_view = state.view();
-            tab.model.composition_invalidated = true;
+            tab.model.setPaneCopyView(frame.pane_id, state.view());
         }
     }
     if (comptime diagnostics.enabled) {
@@ -643,6 +623,7 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
     try client.presenter.requestDraw();
 }
 
+/// A pane's child ended: drop the pane and every piece of client state on it.
 fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
     if (client.mode == .copy and client.mode.copy.pane_id == exited.pane_id)
         client.mode = .normal;
@@ -668,6 +649,7 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
     } else try client.presenter.requestDraw();
 }
 
+/// A failed request: roll back what the continuation had staged and tell the user.
 fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
     const continuation = client.requests.take(failure.request_id) orelse {
         std.debug.print("telar runtime: {s}\n", .{failure.message});
@@ -688,15 +670,7 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
         },
         .close_tab => {
             const active = client.tabs.active().?;
-            const request_id = try client.nextId();
-            try client.enqueueRequest(
-                request_id,
-                .{ .tab_snapshot = active.location },
-                .{ .request_tab_snapshot = .{
-                    .request_id = request_id,
-                    .location = active.location,
-                } },
-            );
+            try client.requestTabSnapshot(active.location);
         },
         .create_workspace, .notification => {},
         .initial_open, .workspace_snapshot, .tab_snapshot, .create_tab => {
@@ -721,17 +695,10 @@ pub fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !v
     const workspace = client.tabs.workspace orelse return error.UnexpectedResync;
     if (!std.meta.eql(workspace, required.workspace)) return error.UnexpectedResync;
     if (client.requests.has(.workspace_snapshot)) return;
-    const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .workspace_snapshot = workspace },
-        .{ .request_workspace_snapshot = .{
-            .request_id = request_id,
-            .workspace = workspace,
-        } },
-    );
+    try client.requestWorkspaceSnapshot(workspace);
 }
 
+/// One graphics message; a revision break asks for a graphics snapshot.
 fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
     if (comptime diagnostics.enabled) switch (message) {
         .graphics_image, .graphics_shared_image => client.metrics.graphics_images += 1,
@@ -801,10 +768,8 @@ fn requestGraphicsSnapshot(client: *Client, pane_id: schema.PaneId) !void {
 /// Drops every image, placement, and revision the store holds for the panes
 /// of a tab that no longer exists.
 fn releaseTabGraphics(store: *kitty.Store, tab: *tabs_mod.Tab) void {
-    for (&tab.model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
-        store.clearPane(pane.id);
-    }
+    var panes = tab.model.paneIterator();
+    while (panes.next()) |pane| store.clearPane(pane.id);
 }
 
 

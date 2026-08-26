@@ -93,6 +93,25 @@ pub const Model = struct {
         model.workspace = location.workspace;
     }
 
+    /// Iterates the open tabs in order without exposing the slot array.
+    pub const TabIterator = struct {
+        items: []?Tab,
+        index: usize = 0,
+
+        pub fn next(iterator: *TabIterator) ?*Tab {
+            while (iterator.index < iterator.items.len) {
+                const slot = &iterator.items[iterator.index];
+                iterator.index += 1;
+                if (slot.*) |*tab| return tab;
+            }
+            return null;
+        }
+    };
+
+    pub fn tabIterator(model: *Model) TabIterator {
+        return .{ .items = model.items[0..model.count] };
+    }
+
     pub fn active(model: *Model) ?*Tab {
         if (model.count == 0) return null;
         return &model.items[model.active_index].?;

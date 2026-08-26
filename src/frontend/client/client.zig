@@ -115,7 +115,7 @@ pub const ClientEvent = union(enum) {
     plugin_result: anyerror!plugin_broker.WorkerResult,
 };
 
-pub const NotificationTimer = struct {
+const NotificationTimer = struct {
     deadline_ns: std.atomic.Value(u64) = .init(std.math.maxInt(u64)),
     wake: Io.Event = .unset,
 };
@@ -141,7 +141,7 @@ const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
 /// Copy mode owns its state here; the name prompt's text lives in the view
 /// and the mode owns only the routing decision — transitions go through the
 /// prompt helpers so both always move together.
-pub const Mode = union(enum) {
+const Mode = union(enum) {
     normal,
     copy: copy_mode.State,
     prompt,
@@ -151,7 +151,7 @@ pub const Mode = union(enum) {
 /// owns. Substituting these — a pipe for the tty's read handle, a
 /// fixed-buffer writer, a scripted socket peer — is what makes the client
 /// constructible in a test.
-pub const Params = struct {
+const Params = struct {
     gpa: std.mem.Allocator,
     io: Io,
     connection: *core.transport.SocketChannel,
@@ -580,6 +580,7 @@ pub fn handleServerEvent(client: *Client, result: anyerror![]u8) !?u8 {
     return null;
 }
 
+/// Entrypoint for the escape-sequence input timeout: flush what the router held.
 pub fn handleInputTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     try result;
     client.input_timeout_pending = false;
@@ -590,6 +591,7 @@ pub fn handleInputTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     return false;
 }
 
+/// Entrypoint for the binding-sequence timeout: replay an unfinished chord.
 pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     try result;
     client.binding_timeout_pending = false;
@@ -600,6 +602,7 @@ pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     return false;
 }
 
+/// Entrypoint for the capability-probe deadline: settle what the host never answered.
 pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !void {
     try result;
     if (!client.capabilities.expire()) return;
@@ -610,10 +613,10 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
         cell_size.width,
         cell_size.height,
     );
-    for (client.tabs.items[0..client.tabs.count]) |*slot| {
-        const tab = if (slot.*) |*value| value else continue;
-        for (&tab.model.panes) |*pane_slot| {
-            const pane = if (pane_slot.*) |*value| value else continue;
+    var tabs = client.tabs.tabIterator();
+    while (tabs.next()) |tab| {
+        var panes = tab.model.paneIterator();
+        while (panes.next()) |pane| {
             tab.model.setGraphicsPlaceholder(
                 pane.id,
                 client.graphics_store.hasPaneGraphics(pane.id),
@@ -624,6 +627,7 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
     try client.presenter.requestDraw();
 }
 
+/// Entrypoint for a host terminal resize: remeasure, reflow, and re-offer sizes.
 pub fn handleResizeEvent(
     client: *Client,
     result: anyerror!void,
@@ -661,6 +665,7 @@ pub fn handleResizeEvent(
     try client.select.concurrent(.resized, waitResize, .{ client.io, watcher });
 }
 
+/// Entrypoint for one completed socket send: pop it and pump the next.
 pub fn handleSentEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.outbox.popSent();
@@ -668,11 +673,13 @@ pub fn handleSentEvent(client: *Client, result: anyerror!void) !void {
     try client.scheduleInputRead();
 }
 
+/// Entrypoint for the paced draw deadline.
 pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
     try result;
     try client.presenter.presentDue(client);
 }
 
+/// Entrypoint for the sidebar animation tick.
 pub fn handleSidebarAnimationEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.sidebar_animation_pending = false;
@@ -680,6 +687,7 @@ pub fn handleSidebarAnimationEvent(client: *Client, result: anyerror!void) !void
     try client.scheduleSidebarAnimation();
 }
 
+/// Entrypoint for the notification timer: advance and rearm.
 pub fn handleNotificationTickEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.notification_tick_pending = false;
@@ -741,6 +749,44 @@ pub fn handleTelemetryWrittenEvent(
 ) void {
     client.telemetry_write_pending = false;
     result catch telemetry.deinit(client.io);
+}
+
+/// Asks the runtime for a fresh snapshot of one tab, tracking the reply.
+pub fn requestTabSnapshot(client: *Client, location: schema.TabLocation) !void {
+    const request_id = try client.nextId();
+    try client.enqueueRequest(
+        request_id,
+        .{ .tab_snapshot = location },
+        .{ .request_tab_snapshot = .{
+            .request_id = request_id,
+            .location = location,
+        } },
+    );
+}
+
+/// Asks the runtime for a fresh snapshot of one workspace, tracking the
+/// reply.
+pub fn requestWorkspaceSnapshot(client: *Client, workspace: schema.WorkspaceLocation) !void {
+    const request_id = try client.nextId();
+    try client.enqueueRequest(
+        request_id,
+        .{ .workspace_snapshot = workspace },
+        .{ .request_workspace_snapshot = .{
+            .request_id = request_id,
+            .workspace = workspace,
+        } },
+    );
+}
+
+/// Schedules one plugin action on the worker; its result re-enters the
+/// loop as a `.plugin_result` event. The only place a plugin task starts.
+pub fn schedulePluginAction(client: *Client, request: plugin_broker.WorkerRequest) !void {
+    try client.select.concurrent(
+        .plugin_result,
+        plugin_broker.executeWorker,
+        .{ client.io, client.gpa, request },
+    );
+    client.plugin_pending = true;
 }
 
 pub fn scheduleConfigReload(client: *Client) !void {
@@ -814,6 +860,7 @@ pub fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
     });
 }
 
+/// Entrypoint for one finished plugin action: authorize and apply its effects.
 pub fn handlePluginResultEvent(
     client: *Client,
     result: anyerror!plugin_broker.WorkerResult,
@@ -847,9 +894,11 @@ pub fn handlePluginResultEvent(
     return false;
 }
 
+/// Re-offers this client's pane sizes to the runtime for every attached
+/// pane of one model.
 pub fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
+    var panes = model.paneIterator();
+    while (panes.next()) |pane| {
         if (!pane.attached) continue;
         const size = model.contentSize(pane.id, area) orelse continue;
         try client.enqueue(.{ .pane_resize = .{

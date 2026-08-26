@@ -698,6 +698,11 @@ pub const Store = struct {
         store.damage = true;
     }
 
+    /// Whether the host terminal accepts zlib-compressed transmissions.
+    pub fn setHostZlib(store: *Store, supported: bool) void {
+        store.host_zlib = supported;
+    }
+
     pub fn clearPane(store: *Store, pane_id: schema.PaneId) void {
         store.clearPaneData(pane_id, false);
         store.removeRevision(pane_id);

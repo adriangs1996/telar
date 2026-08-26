@@ -29,8 +29,7 @@ const encodeSgrMouse = mouse_protocol.encodeSgr;
 const mouseTracked = mouse_protocol.tracked;
 
 test {
-    // This file is the client's suite root, so the client-only modules with
-    // no suite root of their own get their tests collected here.
+    // The client capability's own files, collected for the suite.
     _ = @import("client.zig");
     _ = @import("client_test.zig");
     _ = @import("config_reload.zig");
@@ -39,13 +38,8 @@ test {
     _ = @import("input_handler.zig");
     _ = @import("run.zig");
     _ = @import("telemetry.zig");
-    _ = @import("../presentation/root.zig");
-    _ = @import("../graphics/root.zig");
     _ = @import("view.zig");
     _ = @import("requests.zig");
-    _ = @import("../workspace/root.zig");
-    _ = @import("../ui/root.zig");
-    _ = @import("../platform/root.zig");
 }
 
 test "configured action names cover multiplexer operations" {

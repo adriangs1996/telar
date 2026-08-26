@@ -55,8 +55,8 @@ pub fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
     // byte must leave before the pane detaches — owning the pairing here
     // deletes the ordering rule every caller used to maintain by hand.
     try handler.client.clearPaneFocus();
-    for (&tab.model.panes) |*slot| {
-        const pane = if (slot.*) |*item| item else continue;
+    var panes = tab.model.paneIterator();
+    while (panes.next()) |pane| {
         if (!pane.attached) continue;
         try handler.client.enqueue(.{ .detach_pane = .{
             .pane_id = pane.id,
@@ -74,21 +74,12 @@ fn selectTab(handler: *InputHandler, tab_id: schema.TabId) !void {
     try handler.detachTab(current);
     std.debug.assert(handler.client.tabs.select(tab_id));
     const active = handler.client.tabs.active().?;
-    for (&active.model.panes) |*slot| {
-        const pane = if (slot.*) |*item| item else continue;
+    var visible = active.model.paneIterator();
+    while (visible.next()) |pane|
         try handler.client.graphics_store.setPaneVisible(pane.id, true);
-    }
     active.model.composition_invalidated = true;
     try handler.client.syncPaneFocus(&active.model);
-    const request_id = try handler.client.nextId();
-    try handler.client.enqueueRequest(
-        request_id,
-        .{ .tab_snapshot = active.location },
-        .{ .request_tab_snapshot = .{
-            .request_id = request_id,
-            .location = active.location,
-        } },
-    );
+    try handler.client.requestTabSnapshot(active.location);
     handler.client.view.invalidate();
     handler.redraw = true;
 }
@@ -111,10 +102,8 @@ fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void 
 pub fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
     const client = handler.client;
     if (client.requests.count != 0) return error.WorkspaceSwitchWhileRequestPending;
-    for (&client.tabs.items) |*slot| {
-        const tab = if (slot.*) |*value| value else continue;
-        try handler.detachTab(tab);
-    }
+    var tabs = client.tabs.tabIterator();
+    while (tabs.next()) |tab| try handler.detachTab(tab);
     client.tabs.deinit();
     const request_id = try client.nextId();
     try client.enqueueRequest(
@@ -278,8 +267,7 @@ fn enterCopyMode(handler: *InputHandler) !void {
     else
         .{ .x = 0, .y = pane.scroll.offset + pane.buffer.h -| 1 };
     handler.client.mode = .{ .copy = .init(pane.id, cursor, pane.scroll.offset) };
-    pane.copy_view = handler.client.mode.copy.view();
-    model.composition_invalidated = true;
+    model.setPaneCopyView(pane.id, handler.client.mode.copy.view());
     handler.redraw = true;
 }
 
@@ -305,7 +293,7 @@ fn leaveCopyMode(handler: *InputHandler, copy: bool) !void {
         } });
     }
     if (pane) |value| {
-        value.copy_view = null;
+        model.setPaneCopyView(value.id, null);
         try handler.setViewport(value, state.entry_offset);
     }
     handler.client.mode = .normal;
@@ -326,8 +314,7 @@ fn copyModeKey(handler: *InputHandler, pressed: keybind.Key) !void {
     const effect = copy_mode.applyKey(state, pressed, &pane.buffer, pane.scroll);
     if (effect.exit) return handler.leaveCopyMode(effect.copy);
     if (!effect.handled) return;
-    pane.copy_view = state.view();
-    model.composition_invalidated = true;
+    model.setPaneCopyView(pane.id, state.view());
     try handler.setViewport(pane, state.viewport_offset);
     handler.redraw = true;
 }
@@ -407,8 +394,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
             const state = &handler.client.mode.copy;
             if (state.pane_id == pane.id) {
                 state.vertical(delta, pane.scroll, pane.buffer.h);
-                pane.copy_view = state.view();
-                model.composition_invalidated = true;
+                model.setPaneCopyView(pane.id, state.view());
                 try handler.setViewport(pane, state.viewport_offset);
                 handler.redraw = true;
                 return;
@@ -458,11 +444,11 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
         handler.client.view.scratch.w,
         handler.client.view.scratch.h,
     );
-    for (handler.client.tabs.items[0..handler.client.tabs.count]) |*slot| {
-        const tab = if (slot.*) |*value| value else continue;
+    var tabs = handler.client.tabs.tabIterator();
+    while (tabs.next()) |tab| {
         tab.model.setCellSize(cell_size.width, cell_size.height);
-        for (&tab.model.panes) |*pane_slot| {
-            const pane = if (pane_slot.*) |*value| value else continue;
+        var panes = tab.model.paneIterator();
+        while (panes.next()) |pane| {
             tab.model.setGraphicsPlaceholder(pane.id, handler.client.capabilities.kitty_graphics != .supported and
                 handler.client.graphics_store.hasPaneGraphics(pane.id));
         }
@@ -558,12 +544,7 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
                 invocation,
                 handler.callbackContext(),
             );
-            try handler.client.select.concurrent(
-                .plugin_result,
-                plugin_broker.executeWorker,
-                .{ handler.client.io, handler.client.gpa, request },
-            );
-            handler.client.plugin_pending = true;
+            try handler.client.schedulePluginAction(request);
             return .continue_routing;
         },
         else => return handler.applyNativeAction(value),
@@ -632,10 +613,8 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
             .next => .next,
         }),
         .detach => {
-            for (handler.client.tabs.items[0..handler.client.tabs.count]) |*slot| {
-                const tab = if (slot.*) |*item| item else continue;
-                try handler.detachTab(tab);
-            }
+            var tabs = handler.client.tabs.tabIterator();
+            while (tabs.next()) |tab| try handler.detachTab(tab);
             return .stop;
         },
         .enter_copy_mode => try handler.enterCopyMode(),

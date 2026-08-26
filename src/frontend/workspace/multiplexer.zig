@@ -205,6 +205,33 @@ pub const Model = struct {
         model.composition_invalidated = true;
     }
 
+    /// Iterates the live panes without exposing the slot array.
+    pub const PaneIterator = struct {
+        panes: *[max_panes]?Pane,
+        index: usize = 0,
+
+        pub fn next(iterator: *PaneIterator) ?*Pane {
+            while (iterator.index < max_panes) {
+                const slot = &iterator.panes[iterator.index];
+                iterator.index += 1;
+                if (slot.*) |*pane| return pane;
+            }
+            return null;
+        }
+    };
+
+    pub fn paneIterator(model: *Model) PaneIterator {
+        return .{ .panes = &model.panes };
+    }
+
+    /// Projects the copy-mode selection onto a pane and invalidates the
+    /// composition; clearing passes null.
+    pub fn setPaneCopyView(model: *Model, pane_id: schema.PaneId, view: ?copy_mode.View) void {
+        const pane = model.find(pane_id) orelse return;
+        pane.copy_view = view;
+        model.composition_invalidated = true;
+    }
+
     pub fn focusedPane(model: *Model) ?*Pane {
         const pane_id = model.layout.focused() orelse return null;
         return model.find(pane_id);

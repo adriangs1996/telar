@@ -37,4 +37,11 @@ pub const tabs = workspace.tabs;
 
 test {
     @import("std").testing.refAllDecls(@This());
+    // Capability suites with no test root of their own are collected here,
+    // in the package root, rather than under an unrelated capability.
+    _ = @import("presentation/root.zig");
+    _ = @import("graphics/root.zig");
+    _ = @import("workspace/root.zig");
+    _ = @import("ui/root.zig");
+    _ = @import("platform/root.zig");
 }
