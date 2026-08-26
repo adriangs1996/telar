@@ -1476,6 +1476,43 @@ pub fn writeTransmissionChunks(
     return .{ .written = written, .offset = offset };
 }
 
+/// Emits an already encoded PNG using Kitty's direct-data transport. PNG is
+/// the one encoded format the protocol standardizes (`f=100`), so local
+/// clipboard previews can stay compressed in client memory and on the wire.
+pub fn writePngTransmissionChunks(
+    writer: *Io.Writer,
+    external_id: u32,
+    png: []const u8,
+    start_offset: usize,
+    budget: usize,
+) Io.Writer.Error!ChunkProgress {
+    const Encoder = std.base64.standard.Encoder;
+    const raw_chunk_size = 3072;
+    var encoded: [4096]u8 = undefined;
+    var offset = start_offset;
+    var written: usize = 0;
+    while (offset < png.len) {
+        if (written != 0 and written >= budget) break;
+        const take = @min(raw_chunk_size, png.len - offset);
+        const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], png[offset..][0..take]);
+        const more = offset + take < png.len;
+        if (offset == 0) {
+            written += try printCounted(
+                writer,
+                "\x1b_Ga=t,f=100,t=d,i={d},q=2,m={d};",
+                .{ external_id, @intFromBool(more) },
+            );
+        } else {
+            written += try printCounted(writer, "\x1b_Gm={d};", .{@intFromBool(more)});
+        }
+        try writer.writeAll(payload);
+        try writer.writeAll("\x1b\\");
+        written += payload.len + 2;
+        offset += take;
+    }
+    return .{ .written = written, .offset = offset };
+}
+
 pub fn writeTransmission(
     writer: *Io.Writer,
     external_id: u32,
@@ -1529,8 +1566,36 @@ pub fn writePlacement(
     value: OutputPlacement,
     child_z: i32,
 ) Io.Writer.Error!usize {
+    return writePlacementAtZ(
+        writer,
+        image_id,
+        placement_id,
+        value,
+        std.math.clamp(child_z, -1000, 1000),
+    );
+}
+
+/// Places client chrome above the z-index range available to child
+/// applications. Callers must use a fixed client-owned z value.
+pub fn writeUiPlacement(
+    writer: *Io.Writer,
+    image_id: u32,
+    placement_id: u32,
+    value: OutputPlacement,
+    z: i32,
+) Io.Writer.Error!usize {
+    std.debug.assert(z > 1000);
+    return writePlacementAtZ(writer, image_id, placement_id, value, z);
+}
+
+fn writePlacementAtZ(
+    writer: *Io.Writer,
+    image_id: u32,
+    placement_id: u32,
+    value: OutputPlacement,
+    z: i32,
+) Io.Writer.Error!usize {
     var written = try printCounted(writer, "\x1b[{d};{d}H", .{ value.row + 1, value.column + 1 });
-    const z = std.math.clamp(child_z, -1000, 1000);
     written += try printCounted(
         writer,
         "\x1b_Ga=p,i={d},p={d},x={d},y={d},w={d},h={d},c={d},r={d},X={d},Y={d},z={d},C=1,q=2\x1b\\",
@@ -1549,6 +1614,23 @@ pub fn writeDeletePlacement(writer: *Io.Writer, image_id: u32, placement_id: u32
 
 pub fn writeDeleteImageRange(writer: *Io.Writer, first: u32, last: u32) Io.Writer.Error!usize {
     return printCounted(writer, "\x1b_Ga=d,d=R,x={d},y={d},q=2\x1b\\", .{ first, last });
+}
+
+test "PNG transmissions use encoded format without raw pixel dimensions" {
+    var output: [8192]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    const progress = try writePngTransmissionChunks(
+        &writer,
+        0x90000001,
+        "encoded png bytes",
+        0,
+        transmission_budget_per_frame,
+    );
+    try std.testing.expectEqual(@as(usize, 17), progress.offset);
+    const bytes = writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "a=t,f=100,t=d") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, ",s=") == null);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, ",v=") == null);
 }
 
 pub const SidebarProvider = enum { claude, codex };

@@ -8,6 +8,7 @@ const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const graphics = @import("../graphics/root.zig");
+const attachments = @import("../attachments/root.zig");
 const action_mod = input_capability.action;
 const client_outbox = @import("outbox.zig");
 const client_requests = @import("requests.zig");
@@ -117,6 +118,7 @@ pub const ClientEvent = union(enum) {
     telemetry_written: anyerror!void,
     config_reload: anyerror!config_reload.ConfigReload,
     plugin_result: anyerror!plugin_broker.WorkerResult,
+    clipboard_image: anyerror!*attachments.Capture,
 };
 
 const NotificationTimer = struct {
@@ -199,6 +201,7 @@ trust_store: ?*core.plugin.TrustStore,
 reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
 plugin_pending: bool = false,
+attachment_capture: attachments.CaptureState = .{},
 paste_pane: ?schema.PaneId = null,
 mode: Mode = .normal,
 /// Owns the cwd borrowed by one queued `create_workspace` launch.
@@ -310,6 +313,7 @@ pub fn deinit(client: *Client) void {
     const gpa = client.gpa;
     client.select.cancelDiscard();
     client.reload.deinit(gpa);
+    client.attachment_capture.deinit(gpa);
     if (client.lua_generation) |generation| generation.deinit();
     if (client.plugin_registry) |registry| gpa.destroy(registry);
     if (client.trust_store) |store| gpa.destroy(store);
@@ -525,6 +529,8 @@ pub fn finishNamePrompt(client: *Client) void {
 }
 
 pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
+    if (client.view.syncAttachmentTarget(model))
+        try client.resizeAttached(model, client.view.workbench());
     const next_id = model.layout.focused();
     const next = if (next_id) |pane_id| model.find(pane_id) else null;
     const next_reports = if (next) |pane|
@@ -543,6 +549,66 @@ pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
     client.reported_focus = next_id;
     client.reported_focus_events = next_reports;
     if (next_reports) try client.enqueueInput(next_id.?, "\x1b[I");
+}
+
+pub fn scheduleAttachmentCapture(client: *Client, target: attachments.Target) !void {
+    if (!attachments.platformSupported()) return;
+    const request = (try client.attachment_capture.begin(target)) orelse return;
+    client.select.concurrent(.clipboard_image, attachments.captureClipboard, .{
+        client.gpa,
+        request,
+        &client.attachment_capture.orphan,
+    }) catch |err| {
+        client.attachment_capture.scheduleFailed();
+        return err;
+    };
+}
+
+pub fn handleClipboardImageEvent(
+    client: *Client,
+    result: anyerror!*attachments.Capture,
+) !void {
+    const completed = result catch |err| {
+        client.attachment_capture.failed();
+        switch (err) {
+            error.NoImageOnClipboard => {},
+            error.ClipboardImageTooLarge => try client.notify(.{
+                .level = .failure,
+                .title = "Image preview skipped",
+                .message = "The clipboard image exceeds Telar's local preview limit",
+            }),
+            else => try client.notify(.{
+                .level = .failure,
+                .title = "Image preview failed",
+                .message = @errorName(err),
+            }),
+        }
+        return;
+    };
+    const capture = client.attachment_capture.take(completed);
+    const active = client.tabs.active() orelse {
+        capture.deinit(client.gpa);
+        return;
+    };
+    const target = client.view.focusedAttachmentTarget(&active.model) orelse {
+        capture.deinit(client.gpa);
+        return;
+    };
+    if (!std.meta.eql(target, capture.request.target)) {
+        capture.deinit(client.gpa);
+        return;
+    }
+    const layout_changed = client.view.adoptAttachment(capture) catch |err| {
+        capture.deinit(client.gpa);
+        try client.notify(.{
+            .level = .failure,
+            .title = "Image preview failed",
+            .message = @errorName(err),
+        });
+        return;
+    };
+    if (layout_changed) try client.resizeAttached(&active.model, client.view.workbench());
+    try client.presenter.requestDraw();
 }
 
 /// Entrypoint for bytes read from the host terminal. It owns the complete
@@ -768,6 +834,7 @@ pub fn handleTelemetryTickEvent(
             .toast_cache_bytes = client.view.kittyToasts().retainedBytes(),
             .sidebar_cache_bytes = client.view.kittySidebar().retainedBytes(),
             .icon_cache_bytes = client.view.kittyIcons().retainedBytes(),
+            .attachment_cache_bytes = client.view.kittyAttachments().retainedBytes(),
             .screen_bytes = (client.presenter.screen.front.cells.len +
                 client.presenter.screen.back.cells.len) *
                 @sizeOf(core.ui.Cell),

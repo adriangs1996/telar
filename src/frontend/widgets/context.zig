@@ -7,6 +7,7 @@ const theme = ui.theme;
 const icons = ui.icons;
 const notification = @import("notification.zig");
 const sidebar_model = @import("sidebar_model.zig");
+const attachments = @import("../attachments/root.zig");
 
 const schema = core.schema;
 
@@ -21,6 +22,10 @@ pub const Action = union(enum) {
     sidebar_scroll_to: u16,
     notification_activate: notification.Id,
     notification_dismiss: notification.Id,
+    attachment_open: attachments.Id,
+    attachment_dismiss: attachments.Id,
+    attachment_modal_close,
+    attachment_modal_hold,
 };
 
 pub const Cursor = struct {

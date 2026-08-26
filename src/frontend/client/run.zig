@@ -141,6 +141,7 @@ pub fn run(
             .telemetry_written => |result| client.handleTelemetryWrittenEvent(result, &telemetry),
             .config_reload => |result| try client.handleConfigReloadEvent(result),
             .plugin_result => |result| if (try client.handlePluginResultEvent(result)) return 0,
+            .clipboard_image => |result| try client.handleClipboardImageEvent(result),
         }
     }
 }
@@ -157,7 +158,7 @@ fn clientEventPath(event: Client.ClientEvent) diagnostics.Path {
         .draw,
         .sidebar_animation_tick,
         => .interactive,
-        .media_tick => .media,
+        .media_tick, .clipboard_image => .media,
         .notification_tick,
         .telemetry_tick,
         .telemetry_written,

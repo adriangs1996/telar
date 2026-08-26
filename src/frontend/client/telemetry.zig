@@ -48,6 +48,7 @@ pub const Metrics = struct {
     toast_graphics_flushed_bytes: u64 = 0,
     sidebar_graphics_flushed_bytes: u64 = 0,
     icon_graphics_flushed_bytes: u64 = 0,
+    attachment_graphics_flushed_bytes: u64 = 0,
     media_flushes: u64 = 0,
     max_pending_updates: u64 = 0,
     mouse_events: u64 = 0,
@@ -83,6 +84,7 @@ pub const Snapshot = struct {
     toast_cache_bytes: usize,
     sidebar_cache_bytes: usize,
     icon_cache_bytes: usize,
+    attachment_cache_bytes: usize,
     screen_bytes: usize,
     heap: diagnostics.Heap.Snapshot,
 };
@@ -182,7 +184,8 @@ pub fn format(
     try writer.print(",\"pane_graphics_flushed_bytes\":{d}," ++
         "\"toast_graphics_flushed_bytes\":{d}," ++
         "\"sidebar_graphics_flushed_bytes\":{d}," ++
-        "\"icon_graphics_flushed_bytes\":{d},\"media_flushes\":{d}," ++
+        "\"icon_graphics_flushed_bytes\":{d}," ++
+        "\"attachment_graphics_flushed_bytes\":{d},\"media_flushes\":{d}," ++
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
         "\"compose_avg_us\":{d},\"compose_max_us\":{d}," ++
@@ -192,22 +195,23 @@ pub fn format(
         "\"media_flush_avg_us\":{d},\"media_flush_max_us\":{d}," ++
         "\"draw_late_avg_us\":{d},\"draw_late_max_us\":{d}," ++
         "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}", .{
-        metrics.pane_graphics_flushed_bytes,                metrics.toast_graphics_flushed_bytes,
-        metrics.sidebar_graphics_flushed_bytes,             metrics.icon_graphics_flushed_bytes,
-        metrics.media_flushes,                              metrics.decode.average() / std.time.ns_per_us,
-        metrics.decode.max_ns / std.time.ns_per_us,         metrics.apply.average() / std.time.ns_per_us,
-        metrics.apply.max_ns / std.time.ns_per_us,          metrics.compose.average() / std.time.ns_per_us,
-        metrics.compose.max_ns / std.time.ns_per_us,        metrics.ack_enqueue.average() / std.time.ns_per_us,
-        metrics.ack_enqueue.max_ns / std.time.ns_per_us,    metrics.input_enqueue.average() / std.time.ns_per_us,
-        metrics.input_enqueue.max_ns / std.time.ns_per_us,  metrics.flush.average() / std.time.ns_per_us,
-        metrics.flush.max_ns / std.time.ns_per_us,          metrics.media_flush.average() / std.time.ns_per_us,
-        metrics.media_flush.max_ns / std.time.ns_per_us,    metrics.draw_lateness.average() / std.time.ns_per_us,
-        metrics.draw_lateness.max_ns / std.time.ns_per_us,  metrics.paced_interval.average() / std.time.ns_per_us,
-        metrics.paced_interval.max_ns / std.time.ns_per_us,
+        metrics.pane_graphics_flushed_bytes,                   metrics.toast_graphics_flushed_bytes,
+        metrics.sidebar_graphics_flushed_bytes,                metrics.icon_graphics_flushed_bytes,
+        metrics.attachment_graphics_flushed_bytes,             metrics.media_flushes,
+        metrics.decode.average() / std.time.ns_per_us,         metrics.decode.max_ns / std.time.ns_per_us,
+        metrics.apply.average() / std.time.ns_per_us,          metrics.apply.max_ns / std.time.ns_per_us,
+        metrics.compose.average() / std.time.ns_per_us,        metrics.compose.max_ns / std.time.ns_per_us,
+        metrics.ack_enqueue.average() / std.time.ns_per_us,    metrics.ack_enqueue.max_ns / std.time.ns_per_us,
+        metrics.input_enqueue.average() / std.time.ns_per_us,  metrics.input_enqueue.max_ns / std.time.ns_per_us,
+        metrics.flush.average() / std.time.ns_per_us,          metrics.flush.max_ns / std.time.ns_per_us,
+        metrics.media_flush.average() / std.time.ns_per_us,    metrics.media_flush.max_ns / std.time.ns_per_us,
+        metrics.draw_lateness.average() / std.time.ns_per_us,  metrics.draw_lateness.max_ns / std.time.ns_per_us,
+        metrics.paced_interval.average() / std.time.ns_per_us, metrics.paced_interval.max_ns / std.time.ns_per_us,
     });
     try writer.print(",\"rss_bytes\":{d},\"lua_used\":{d},\"lua_limit\":{d}," ++
         "\"kitty_store_bytes\":{d},\"toast_cache_bytes\":{d}," ++
         "\"sidebar_cache_bytes\":{d},\"icon_cache_bytes\":{d}," ++
+        "\"attachment_cache_bytes\":{d}," ++
         "\"screen_bytes\":{d}," ++
         "\"heap_live_bytes\":{d},\"heap_live_allocs\":{d}," ++
         "\"heap_allocs\":{d},\"heap_alloc_bytes\":{d}," ++
@@ -222,6 +226,7 @@ pub fn format(
         state.toast_cache_bytes,
         state.sidebar_cache_bytes,
         state.icon_cache_bytes,
+        state.attachment_cache_bytes,
         state.screen_bytes,
         state.heap.live_bytes,
         state.heap.live_allocs,
@@ -265,6 +270,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
         .toast_cache_bytes = 8,
         .sidebar_cache_bytes = 12,
         .icon_cache_bytes = 16,
+        .attachment_cache_bytes = 20,
         .screen_bytes = 80 * 24 * 32,
         .heap = .{
             .live_bytes = 48,
@@ -279,6 +285,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"toast_cache_bytes\":8") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"sidebar_cache_bytes\":12") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"icon_cache_bytes\":16") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"attachment_cache_bytes\":20") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"icons\":\"nerd-font\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"media_pending\":1") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"heap_live_bytes\":48") != null);

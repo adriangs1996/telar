@@ -259,6 +259,7 @@ fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !voi
         .agents = agents[0..count],
     });
     if (replaced) {
+        if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
         if (alert_count == 0) {
             try client.presenter.requestDraw();
         } else for (alerts[0..alert_count]) |agent| {

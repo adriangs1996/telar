@@ -79,6 +79,15 @@ pub fn build(b: *std.Build) void {
     frontend.addImport("telar-core", core);
     frontend.addImport("lua-api", lua_api);
     frontend.addImport("freetype", freetype);
+    if (target.result.os.tag == .macos) {
+        frontend.addCSourceFile(.{
+            .file = b.path("src/frontend/attachments/darwin.m"),
+            .flags = &.{"-fobjc-arc"},
+        });
+        frontend.linkFramework("AppKit", .{});
+        frontend.linkFramework("ImageIO", .{});
+        frontend.linkFramework("CoreGraphics", .{});
+    }
 
     // One shipped binary contains both the client and runtime entry points.
     const exe = b.addExecutable(.{

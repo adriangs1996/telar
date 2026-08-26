@@ -5,6 +5,8 @@ const ui = @import("../ui/root.zig");
 pub const minimum_sidebar_width: u16 = 42;
 pub const sidebar_width: u16 = 62;
 pub const minimum_workbench_width: u16 = 20;
+pub const attachment_shelf_height: u16 = 6;
+const minimum_workbench_height_with_attachments: u16 = 3;
 
 pub const Regions = struct {
     full: ui.Rect,
@@ -12,6 +14,7 @@ pub const Regions = struct {
     body: ui.Rect,
     sidebar: ui.Rect,
     workbench: ui.Rect,
+    attachments: ui.Rect,
     bottom: ui.Rect,
     tabs: ui.Rect,
     status: ui.Rect,
@@ -40,10 +43,23 @@ pub const Regions = struct {
             .body = body,
             .sidebar = sidebar,
             .workbench = workbench,
+            .attachments = .{ .x = workbench.x, .y = workbench.y + workbench.h },
             .bottom = bottom,
             .tabs = tabs,
             .status = status,
         };
+    }
+
+    pub fn reserveAttachments(regions: *Regions, visible: bool) void {
+        regions.attachments = .{
+            .x = regions.workbench.x,
+            .y = regions.workbench.y + regions.workbench.h,
+        };
+        if (!visible) return;
+        const available = regions.workbench.h -| minimum_workbench_height_with_attachments;
+        const height = @min(attachment_shelf_height, available);
+        if (height < 3) return;
+        regions.workbench, regions.attachments = regions.workbench.splitBottom(height);
     }
 };
 
@@ -65,4 +81,17 @@ test "sidebar grows from forty two to sixty two columns" {
     try @import("std").testing.expectEqual(@as(u16, 42), Regions.calculate(62, 20, true).sidebar.w);
     try @import("std").testing.expectEqual(@as(u16, 52), Regions.calculate(72, 20, true).sidebar.w);
     try @import("std").testing.expectEqual(@as(u16, 62), Regions.calculate(120, 20, true).sidebar.w);
+}
+
+test "attachment shelf reserves pane rows without crossing chrome" {
+    var regions = Regions.calculate(120, 40, true);
+    regions.reserveAttachments(true);
+    try @import("std").testing.expectEqual(@as(u16, 32), regions.workbench.h);
+    try @import("std").testing.expectEqual(ui.Rect{
+        .x = 62,
+        .y = 33,
+        .w = 58,
+        .h = 6,
+    }, regions.attachments);
+    try @import("std").testing.expectEqual(regions.bottom.y, regions.attachments.y + regions.attachments.h);
 }

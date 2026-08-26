@@ -48,7 +48,7 @@ fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
 }
 
 pub fn capturesKeys(handler: *const InputHandler) bool {
-    return handler.client.mode == .prompt;
+    return handler.client.mode == .prompt or handler.client.view.hasAttachmentModal();
 }
 
 pub fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
@@ -197,6 +197,11 @@ fn promptInput(handler: *InputHandler, bytes: []const u8) !void {
 }
 
 pub fn key(handler: *InputHandler, value: keybind.Key) !void {
+    if (handler.client.view.hasAttachmentModal()) {
+        if (value.code == .escape) _ = handler.client.view.closeAttachmentModal();
+        handler.redraw = true;
+        return;
+    }
     switch (handler.client.mode) {
         .prompt => {
             var editing_bytes: [32]u8 = undefined;
@@ -212,8 +217,16 @@ pub fn key(handler: *InputHandler, value: keybind.Key) !void {
                 pane,
                 try input_mod.encodeKey(&encoded, value, pane.input_modes),
             );
+            if (isClipboardImagePasteKey(value)) {
+                if (handler.client.view.focusedAttachmentTarget(model)) |target|
+                    handler.client.scheduleAttachmentCapture(target) catch {};
+            }
         },
     }
+}
+
+fn isClipboardImagePasteKey(value: keybind.Key) bool {
+    return value.isCtrl('v') and !value.mods.alt and !value.mods.shift;
 }
 
 fn sendPaste(handler: *InputHandler, text: []const u8) !void {
@@ -228,6 +241,7 @@ fn sendPaste(handler: *InputHandler, text: []const u8) !void {
 }
 
 pub fn pasteStart(handler: *InputHandler) !void {
+    if (handler.client.view.hasAttachmentModal()) return;
     switch (handler.client.mode) {
         .prompt => try handler.promptInput("\x1b[200~"),
         .copy => {},
@@ -243,6 +257,7 @@ pub fn pasteStart(handler: *InputHandler) !void {
 }
 
 pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
+    if (handler.client.view.hasAttachmentModal()) return;
     switch (handler.client.mode) {
         .prompt => try handler.promptInput(text),
         .copy => {},
@@ -255,6 +270,7 @@ pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
 }
 
 pub fn pasteEnd(handler: *InputHandler) !void {
+    if (handler.client.view.hasAttachmentModal()) return;
     switch (handler.client.mode) {
         .prompt => try handler.promptInput("\x1b[201~"),
         .copy => {},
@@ -429,7 +445,8 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         try handler.client.resizeAttached(model, handler.client.view.workbench());
     }
     handler.redraw = handler.redraw or interaction.redraw;
-    if (agent_handoff or interaction.select_tab != null or interaction.focus_agent != null or
+    if (interaction.consumed or agent_handoff or interaction.select_tab != null or
+        interaction.focus_agent != null or
         interaction.notification_target != null or
         !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
     const wheel_delta: ?i32 = switch (cell_event.kind) {
@@ -983,4 +1000,15 @@ test "pane launch cwd prefers the focused pane observation" {
         "/initial",
         preferredPaneCwd("", null, "/initial"),
     );
+}
+
+test "only an unmodified control-v triggers local image inspection" {
+    const control_v = try keybind.parseKey("ctrl+v");
+    try std.testing.expect(isClipboardImagePasteKey(control_v));
+    var shifted = control_v;
+    shifted.mods.shift = true;
+    try std.testing.expect(!isClipboardImagePasteKey(shifted));
+    try std.testing.expect(!isClipboardImagePasteKey(try keybind.parseKey("ctrl+shift+left")));
+    try std.testing.expect(!isClipboardImagePasteKey(try keybind.parseKey("alt+v")));
+    try std.testing.expect(!isClipboardImagePasteKey(try keybind.parseKey("v")));
 }

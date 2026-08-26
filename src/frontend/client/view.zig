@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const attachments = @import("../attachments/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const diff = presentation.diff;
@@ -28,6 +29,7 @@ const Hits = widgets.Hits;
 pub const Interaction = struct {
     redraw: bool = false,
     layout_changed: bool = false,
+    consumed: bool = false,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
     focus_agent: ?widgets.sidebar.AgentKey = null,
@@ -49,6 +51,7 @@ const GraphicsPlan = struct {
     provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined,
     provider_mark_count: u8 = 0,
     icons: ui.icons.Plan = .{},
+    attachments: attachments.Plan = .{},
 };
 
 pub const NameInput = union(enum) {
@@ -93,10 +96,12 @@ pub const State = struct {
     kitty_sidebar: kitty.KittySidebarRenderer,
     kitty_icons: icon_graphics.Renderer,
     kitty_toasts: toast_graphics.Renderer,
+    attachment_store: attachments.Store,
     graphics_plan: GraphicsPlan = .{},
     graphics_plan_dirty: bool = false,
     cell_width_px: u16 = 0,
     cell_height_px: u16 = 0,
+    modal_overlay_area: ui.Rect = .{},
 
     pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
         return initWithTheme(gpa, width, height, theme_mod.default_theme);
@@ -126,6 +131,7 @@ pub const State = struct {
             .kitty_sidebar = .init(gpa),
             .kitty_icons = .init(gpa),
             .kitty_toasts = .init(gpa),
+            .attachment_store = .init(gpa),
         };
     }
 
@@ -134,17 +140,24 @@ pub const State = struct {
         state.kitty_sidebar.deinit();
         state.kitty_icons.deinit();
         state.kitty_toasts.deinit();
+        state.attachment_store.deinit();
     }
 
     pub fn resize(state: *State, width: u16, height: u16) !void {
         if (state.scratch.w != width or state.scratch.h != height)
             try state.scratch.resize(width, height);
-        state.regions = .calculate(width, height, state.sidebar_requested);
+        state.recalculateRegions(width, height);
+        state.modal_overlay_area = .{};
         state.dirty = true;
     }
 
     pub fn workbench(state: *const State) ui.Rect {
         return state.regions.workbench;
+    }
+
+    fn recalculateRegions(state: *State, width: u16, height: u16) void {
+        state.regions = .calculate(width, height, state.sidebar_requested);
+        state.regions.reserveAttachments(state.attachment_store.hasVisibleItems());
     }
 
     pub fn palette(state: *const State) *const theme_mod.Palette {
@@ -165,11 +178,7 @@ pub const State = struct {
 
     pub fn toggleSidebar(state: *State) void {
         state.sidebar_requested = !state.sidebar_requested;
-        state.regions = .calculate(
-            state.scratch.w,
-            state.scratch.h,
-            state.sidebar_requested,
-        );
+        state.recalculateRegions(state.scratch.w, state.scratch.h);
         state.hovered = null;
         state.dirty = true;
     }
@@ -264,8 +273,14 @@ pub const State = struct {
         const resolved = try requested.resolve(support);
         const toast_changed = state.kitty_toasts.configure(support, cell_width, cell_height);
         const icons_changed = state.kitty_icons.configure(support, cell_width, cell_height);
+        const attachments_changed = state.attachment_store.configure(
+            support,
+            cell_width,
+            cell_height,
+        );
         if (state.sidebar_rendering != resolved or state.cell_width_px != cell_width or
-            state.cell_height_px != cell_height or toast_changed or icons_changed)
+            state.cell_height_px != cell_height or toast_changed or icons_changed or
+            attachments_changed)
         {
             state.sidebar_rendering = resolved;
             state.cell_width_px = cell_width;
@@ -286,6 +301,62 @@ pub const State = struct {
         return &state.kitty_icons;
     }
 
+    pub fn kittyAttachments(state: *State) *attachments.Store {
+        return &state.attachment_store;
+    }
+
+    pub fn focusedAttachmentTarget(
+        state: *const State,
+        model: *const multiplexer.Model,
+    ) ?attachments.Target {
+        const location = model.location orelse return null;
+        const pane_id = model.layout.focused() orelse return null;
+        const key = state.sidebar_snapshot.keyForPane(location, pane_id) orelse return null;
+        const agent = state.sidebar_snapshot.find(key) orelse return null;
+        switch (agent.provider) {
+            .claude, .codex => {},
+            .unknown => return null,
+        }
+        return .{
+            .pane_id = key.pane_id,
+            .pane_generation = key.pane_generation,
+        };
+    }
+
+    pub fn syncAttachmentTarget(
+        state: *State,
+        model: *const multiplexer.Model,
+    ) bool {
+        const change = state.attachment_store.setTarget(state.focusedAttachmentTarget(model));
+        if (!change.changed) return false;
+        if (change.layout_changed)
+            state.recalculateRegions(state.scratch.w, state.scratch.h);
+        state.hovered = null;
+        state.dirty = true;
+        return change.layout_changed;
+    }
+
+    pub fn adoptAttachment(state: *State, capture: *attachments.Capture) !bool {
+        const had_items = state.attachment_store.hasVisibleItems();
+        try state.attachment_store.adopt(capture);
+        const has_items = state.attachment_store.hasVisibleItems();
+        const layout_changed = had_items != has_items;
+        if (layout_changed) state.recalculateRegions(state.scratch.w, state.scratch.h);
+        state.dirty = true;
+        return layout_changed;
+    }
+
+    pub fn hasAttachmentModal(state: *const State) bool {
+        return state.attachment_store.hasModal();
+    }
+
+    pub fn closeAttachmentModal(state: *State) bool {
+        if (!state.attachment_store.closeModal()) return false;
+        state.hovered = null;
+        state.dirty = true;
+        return true;
+    }
+
     /// Applies the latest allocation-free render plan after the cell frame is
     /// already visible. A newer render simply replaces this fixed-size plan,
     /// so media work never builds a visual replay behind interactive work.
@@ -299,6 +370,7 @@ pub const State = struct {
             state.palette(),
             state.icon_theme,
         );
+        state.attachment_store.prepare(state.graphics_plan.attachments);
         try state.kitty_sidebar.prepare(
             state.graphics_plan.sidebar_area,
             state.graphics_plan.focused_card,
@@ -447,6 +519,7 @@ pub const State = struct {
     ) Interaction {
         var result: Interaction = .{};
         if (state.name_prompt != null) return result;
+        if (state.attachment_store.hasModal()) result.consumed = true;
         const hovered = state.hits.at(mouse.x, mouse.y);
         if (!optionalActionEql(state.hovered, hovered)) {
             state.hovered = hovered;
@@ -511,6 +584,32 @@ pub const State = struct {
                 state.dirty = true;
                 result.redraw = true;
             },
+            .attachment_open => |id| {
+                result.consumed = true;
+                if (state.attachment_store.openModal(id)) {
+                    state.hovered = null;
+                    state.dirty = true;
+                    result.redraw = true;
+                }
+            },
+            .attachment_dismiss => |id| {
+                result.consumed = true;
+                const had_items = state.attachment_store.hasVisibleItems();
+                if (state.attachment_store.remove(id)) {
+                    const has_items = state.attachment_store.hasVisibleItems();
+                    result.layout_changed = had_items != has_items;
+                    if (result.layout_changed)
+                        state.recalculateRegions(state.scratch.w, state.scratch.h);
+                    state.hovered = null;
+                    state.dirty = true;
+                    result.redraw = true;
+                }
+            },
+            .attachment_modal_close => {
+                result.consumed = true;
+                if (state.closeAttachmentModal()) result.redraw = true;
+            },
+            .attachment_modal_hold => result.consumed = true,
         }
         return result;
     }
@@ -581,7 +680,7 @@ pub const State = struct {
         // The banner must survive every present — pane composition may have
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, diagnostic);
-        if (!force and !state.dirty and
+        if (!force and !state.dirty and !state.attachment_store.hasModal() and
             !state.notifications.hasItems() and !state.toast_overlay_drawn)
             return .{};
         state.hits.clear();
@@ -621,6 +720,21 @@ pub const State = struct {
             .workspaces = &state.workspace_list,
             .workspace_list_collapsed = state.workspace_list_collapsed,
         });
+        const attachment_snapshot = state.attachment_store.snapshot();
+        var attachment_plan = widgets.attachment_preview.renderShelf(
+            &context,
+            state.regions.attachments,
+            &attachment_snapshot,
+        );
+        const current_modal_area = if (attachment_snapshot.modal != null)
+            widgets.attachment_preview.modalArea(state.regions.workbench)
+        else
+            ui.Rect{};
+        if (!state.modal_overlay_area.isEmpty())
+            model.copyComposedArea(&state.scratch, state.modal_overlay_area);
+        if (!current_modal_area.isEmpty() and
+            !std.meta.eql(current_modal_area, state.modal_overlay_area))
+            model.copyComposedArea(&state.scratch, current_modal_area);
         const toast_area = widgets.toast.overlayArea(state.regions.workbench);
         const has_toasts = state.notifications.hasItems() and !toast_area.isEmpty();
         const graphical_toasts = state.kitty_toasts.covers(&state.notifications);
@@ -633,6 +747,12 @@ pub const State = struct {
                     widgets.toast.render(&context, toast_area, &state.notifications);
             }
         }
+        const drawn_modal_area = widgets.attachment_preview.renderModal(
+            &context,
+            state.regions.workbench,
+            &attachment_snapshot,
+            &attachment_plan,
+        );
         if (hybrid) {
             var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;
             var provider_mark_count: usize = 0;
@@ -661,14 +781,21 @@ pub const State = struct {
             state.graphics_plan.provider_mark_count = 0;
         }
         state.graphics_plan.toast_area = toast_area;
+        state.graphics_plan.attachments = attachment_plan;
         state.graphics_plan_dirty = true;
 
         var stats: RenderStats = .{};
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.top));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.sidebar));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.bottom));
+        stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.attachments));
         if (has_toasts or state.toast_overlay_drawn)
             stats = addStats(stats, try syncRegion(screen, &state.scratch, toast_area));
+        if (!state.modal_overlay_area.isEmpty())
+            stats = addStats(stats, try syncRegion(screen, &state.scratch, state.modal_overlay_area));
+        if (!drawn_modal_area.isEmpty() and
+            !std.meta.eql(drawn_modal_area, state.modal_overlay_area))
+            stats = addStats(stats, try syncRegion(screen, &state.scratch, drawn_modal_area));
         if (composed.cursor) |cursor| {
             screen.cursor = .{
                 .x = cursor.cursor_x,
@@ -677,6 +804,7 @@ pub const State = struct {
         }
         state.dirty = false;
         state.toast_overlay_drawn = has_toasts;
+        state.modal_overlay_area = drawn_modal_area;
         return stats;
     }
 };
@@ -794,6 +922,68 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     const interaction = state.handleMouse(null, &model, click, 0);
     try std.testing.expectEqualDeep(agents[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
+}
+
+test "focused agent image preview reserves a shelf and opens a modal layer" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 100, 30);
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.addRoot(pane_id, location, .{ .cols = 38, .rows = 27 });
+    const agents = [_]widgets.sidebar.AgentInput{.{
+        .key = .{ .pane_id = pane_id, .pane_generation = 4 },
+        .location = location,
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .ready,
+    }};
+    _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
+    try std.testing.expect(!state.syncAttachmentTarget(&model));
+    const target = state.focusedAttachmentTarget(&model).?;
+    const capture = try gpa.create(attachments.Capture);
+    capture.* = .{
+        .request = .{ .target = target, .sequence = 1 },
+        .png = try gpa.dupe(u8, "png"),
+        .width = 1,
+        .height = 1,
+    };
+    try std.testing.expect(try state.adoptAttachment(capture));
+    try std.testing.expectEqual(widgets.layout.attachment_shelf_height, state.regions.attachments.h);
+
+    var screen = try term.Screen.init(gpa, 100, 30);
+    defer screen.deinit();
+    _ = try model.render(&screen, state.workbench());
+    _ = try state.render(&screen, null, &model, true, null);
+    var open_point: ?struct { x: u16, y: u16 } = null;
+    for (state.hits.registered()) |entry| switch (entry.action) {
+        .attachment_open => {
+            open_point = .{ .x = entry.rect.x + 1, .y = entry.rect.y + 1 };
+            break;
+        },
+        else => {},
+    };
+    const point = open_point orelse return error.MissingAttachmentHit;
+    const opened = state.handleMouse(null, &model, .{
+        .x = point.x,
+        .y = point.y,
+        .kind = .press,
+    }, 0);
+    try std.testing.expect(opened.consumed);
+    try std.testing.expect(state.hasAttachmentModal());
+
+    _ = try state.render(&screen, null, &model, false, null);
+    const modal_scroll = state.handleMouse(null, &model, .{
+        .x = state.regions.workbench.x,
+        .y = state.regions.workbench.y,
+        .kind = .scroll_down,
+    }, 0);
+    try std.testing.expect(modal_scroll.consumed);
 }
 
 test "sidebar highlight follows pane focus and the rendered workspace" {
