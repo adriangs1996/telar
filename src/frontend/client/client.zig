@@ -95,6 +95,7 @@ pub const InputChunk = struct {
 };
 const InputHandler = @import("input_handler.zig");
 const config_reload = @import("config_reload.zig");
+const presenter_mod = @import("presenter.zig");
 
 pub const ClientEvent = union(enum) {
     input: anyerror!InputChunk,
@@ -249,7 +250,7 @@ select: Io.Select(ClientEvent),
 select_storage: [client_event_count]ClientEvent = undefined,
 options: Options,
 metrics: ClientMetrics,
-screen: term.Screen,
+presenter: presenter_mod,
 view: client_view.State,
 tabs: tabs_mod.Model,
 graphics_store: kitty.Store,
@@ -259,7 +260,7 @@ input_file: File,
 input_router: InputRouter,
 input_timeout_pending: bool = false,
 binding_timeout_pending: bool = false,
-telemetry_buffer: [4096]u8 = undefined,
+telemetry_buffer: [8192]u8 = undefined,
 telemetry_write_pending: bool = false,
 lua_generation: ?*lua_config.Generation,
 config_diagnostic: lua_config.Diagnostic = .{},
@@ -279,14 +280,6 @@ workspace_create_name_len: u8 = 0,
 input_read_pending: bool = false,
 next_request_id: u64 = 2,
 requests: client_requests.Tracker = .{},
-pacer: pace.Pacer = .{},
-draw_pending: bool = false,
-draw_due_ns: u64 = 0,
-pending_updates: usize = 0,
-last_presented_ns: ?u64 = null,
-/// When the host terminal last delivered input bytes. Zero until the
-/// first read, so a fresh session starts on the boosted media budget.
-last_input_ns: u64 = 0,
 sidebar_animation_pending: bool = false,
 notification_tick_pending: bool = false,
 notification_timer: NotificationTimer = .{},
@@ -351,7 +344,7 @@ pub fn init(params: Params) !*Client {
         .select = undefined,
         .options = params.options,
         .metrics = .{ .started_ns = diagnostics.now(params.io) },
-        .screen = screen,
+        .presenter = undefined,
         .view = view,
         .tabs = tabs,
         .graphics_store = graphics_store,
@@ -368,6 +361,14 @@ pub fn init(params: Params) !*Client {
     // The select's storage lives inside the heap-stable client, so the
     // select can only be built once the client's address exists.
     client.select = Io.Select(ClientEvent).init(params.io, &client.select_storage);
+    // The presenter borrows the select and metrics, whose heap addresses
+    // only exist once the client does.
+    client.presenter = .{
+        .io = params.io,
+        .select = &client.select,
+        .metrics = &client.metrics,
+        .screen = screen,
+    };
     return client;
 }
 
@@ -384,7 +385,7 @@ pub fn deinit(client: *Client) void {
     client.graphics_store.deinit();
     client.tabs.deinit();
     client.view.deinit();
-    client.screen.deinit();
+    client.presenter.deinit();
     gpa.free(client.send_buffer);
     gpa.free(client.receive_buffer);
     gpa.destroy(client);
@@ -466,7 +467,7 @@ fn pumpOutbox(client: *Client) !void {
     };
 }
 
-fn returnGraphicsCredits(client: *Client) !void {
+pub fn returnGraphicsCredits(client: *Client) !void {
     while (client.graphics_store.peekCredit()) |credit| {
         client.outbox.push(.{ .graphics_credit = .{
             .pane_id = credit.pane_id,
@@ -481,22 +482,6 @@ fn scheduleInputRead(client: *Client) !void {
     if (client.input_read_pending or !client.outbox.hasCapacity()) return;
     try client.select.concurrent(.input, readInput, .{ client.io, client.input_file });
     client.input_read_pending = true;
-}
-
-fn requestDraw(client: *Client) !void {
-    client.pending_updates += 1;
-    if (comptime diagnostics.enabled)
-        client.metrics.max_pending_updates = @max(client.metrics.max_pending_updates, client.pending_updates);
-    if (client.draw_pending) return;
-    const now_ns = monotonic(client.io);
-    const deadline_ns = client.pacer.waitUntil(now_ns) orelse now_ns;
-    if (deadline_ns != now_ns) client.pacer.noteThrottled();
-    client.draw_pending = true;
-    client.draw_due_ns = deadline_ns;
-    client.select.concurrent(.draw, waitToDraw, .{ client.io, deadline_ns }) catch |err| {
-        client.draw_pending = false;
-        return err;
-    };
 }
 
 fn scheduleSidebarAnimation(client: *Client) !void {
@@ -514,7 +499,7 @@ fn scheduleSidebarAnimation(client: *Client) !void {
 
 fn notify(client: *Client, input: widgets.notification.Input) !void {
     _ = client.view.notify(monotonic(client.io), input);
-    try client.requestDraw();
+    try client.presenter.requestDraw();
     try client.scheduleNotificationTick();
 }
 
@@ -531,7 +516,7 @@ pub fn scheduleNotificationTick(client: *Client) !void {
     const now_ns = monotonic(client.io);
     const deadline_ns = client.view.nextNotificationDeadline(
         now_ns,
-        client.pacer.interval,
+        client.presenter.pacer.interval,
     ) orelse return;
     client.notification_timer.deadline_ns.store(deadline_ns, .release);
     if (client.notification_tick_pending) {
@@ -623,11 +608,11 @@ pub fn handleHostInput(client: *Client, result: anyerror!InputChunk) !bool {
     client.input_read_pending = false;
     const chunk = try result;
     if (chunk.len == 0) return true;
-    client.last_input_ns = monotonic(client.io);
+    client.presenter.noteInput(monotonic(client.io));
     var handler: InputHandler = .{ .client = client };
     if (try client.input_router.feed(chunk.slice(), monotonic(client.io), &handler) == .stop)
         return true;
-    if (handler.redraw) try client.requestDraw();
+    if (handler.redraw) try client.presenter.requestDraw();
     try client.scheduleInputTimers();
     try client.scheduleInputRead();
     return false;
@@ -675,7 +660,7 @@ pub fn handleInputTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     client.input_timeout_pending = false;
     var handler: InputHandler = .{ .client = client };
     if (try client.input_router.expireInput(monotonic(client.io), &handler) == .stop) return true;
-    if (handler.redraw) try client.requestDraw();
+    if (handler.redraw) try client.presenter.requestDraw();
     try client.scheduleInputTimers();
     return false;
 }
@@ -685,7 +670,7 @@ pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     client.binding_timeout_pending = false;
     var handler: InputHandler = .{ .client = client };
     if (try client.input_router.expireBinding(monotonic(client.io), &handler) == .stop) return true;
-    if (handler.redraw) try client.requestDraw();
+    if (handler.redraw) try client.presenter.requestDraw();
     try client.scheduleInputTimers();
     return false;
 }
@@ -711,7 +696,7 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
         }
     }
     client.view.invalidate();
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 pub fn handleResizeEvent(
@@ -736,7 +721,7 @@ pub fn handleResizeEvent(
         cell_size.width,
         cell_size.height,
     );
-    try client.screen.resize(client.host_size.cols, client.host_size.rows);
+    try client.presenter.resize(client.host_size.cols, client.host_size.rows);
     try client.view.resize(client.host_size.cols, client.host_size.rows);
     if (client.tabs.active()) |active| {
         active.model.setCellSize(cell_size.width, cell_size.height);
@@ -747,7 +732,7 @@ pub fn handleResizeEvent(
     // scale changes. Refresh both values without blocking the resize path.
     try client.writer.writeAll("\x1b[14t\x1b[16t");
     try client.writer.flush();
-    try client.requestDraw();
+    try client.presenter.requestDraw();
     try client.select.concurrent(.resized, waitResize, .{ client.io, watcher });
 }
 
@@ -760,20 +745,20 @@ pub fn handleSentEvent(client: *Client, result: anyerror!void) !void {
 
 pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
     try result;
-    try client.presentDue();
+    try client.presenter.presentDue(client);
 }
 
 pub fn handleSidebarAnimationEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.sidebar_animation_pending = false;
-    if (client.view.advanceSidebarAnimation()) try client.requestDraw();
+    if (client.view.advanceSidebarAnimation()) try client.presenter.requestDraw();
     try client.scheduleSidebarAnimation();
 }
 
 pub fn handleNotificationTickEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.notification_tick_pending = false;
-    if (client.view.advanceNotifications(monotonic(client.io))) try client.requestDraw();
+    if (client.view.advanceNotifications(monotonic(client.io))) try client.presenter.requestDraw();
     try client.scheduleNotificationTick();
 }
 
@@ -799,15 +784,15 @@ pub fn handleTelemetryTickEvent(
         &client.telemetry_buffer,
         client.io,
         &client.metrics,
-        &client.pacer,
+        &client.presenter.pacer,
         .{
             .theme_name = client.view.theme.base.canonicalName(),
             .active_tab = active.location.tab_id,
             .tab_count = client.tabs.count,
             .focused_pane = focused,
             .pane_count = active.model.pane_count,
-            .pending_updates = client.pending_updates,
-            .draw_pending = client.draw_pending,
+            .pending_updates = client.presenter.pending_updates,
+            .draw_pending = client.presenter.draw_pending,
             .outbox = &client.outbox,
             .capabilities = &client.capabilities,
             .sidebar_rendering = client.view.sidebar_rendering,
@@ -933,7 +918,7 @@ pub fn handlePluginResultEvent(
     var handler: InputHandler = .{ .client = client };
     for (worker_result.batch.slice()) |effect|
         if (try handler.applyNativeAction(effect) == .stop) return true;
-    if (handler.redraw) try client.requestDraw();
+    if (handler.redraw) try client.presenter.requestDraw();
     return false;
 }
 
@@ -1027,7 +1012,7 @@ fn handleResyncMessage(client: *Client, required: schema.ResyncRequired) !?u8 {
         .switch_to => |previous| {
             var handler: InputHandler = .{ .client = client };
             try handler.switchWorkspaceResolved(previous);
-            try client.requestDraw();
+            try client.presenter.requestDraw();
         },
     }
     return null;
@@ -1081,7 +1066,7 @@ fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !voi
     });
     if (replaced) {
         if (alert_count == 0) {
-            try client.requestDraw();
+            try client.presenter.requestDraw();
         } else for (alerts[0..alert_count]) |agent| {
             var message_buffer: [64]u8 = undefined;
             const message = std.fmt.bufPrint(
@@ -1124,14 +1109,14 @@ fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
         .memory_used_decigib = metrics.memory_used_decigib,
         .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
     });
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 fn handlePaneCwd(client: *Client, message: schema.PaneCwd) !void {
     const pane = client.tabs.findPane(message.pane_id) orelse return;
     if (!try pane.setCwd(message.cwd)) return;
     client.view.invalidate();
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
@@ -1154,7 +1139,7 @@ fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
         .revision = list.revision,
         .entries = entries[0..count],
     }) catch return;
-    if (replaced) try client.requestDraw();
+    if (replaced) try client.presenter.requestDraw();
 }
 
 fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
@@ -1206,7 +1191,7 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
         },
         else => return error.UnexpectedRequest,
     }
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
@@ -1270,7 +1255,7 @@ fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
             } },
         );
     }
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
@@ -1328,7 +1313,7 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
             .message = "The workspace name was updated",
             .target = notificationTarget(continuation),
         });
-    } else try client.requestDraw();
+    } else try client.presenter.requestDraw();
 }
 
 fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
@@ -1400,7 +1385,7 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
         .switch_to => |previous| {
             var handler: InputHandler = .{ .client = client };
             try handler.switchWorkspaceResolved(previous);
-            try client.requestDraw();
+            try client.presenter.requestDraw();
             return null;
         },
     }
@@ -1419,7 +1404,7 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
         );
     }
     client.view.invalidate();
-    try client.requestDraw();
+    try client.presenter.requestDraw();
     return null;
 }
 
@@ -1431,7 +1416,7 @@ fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
         return error.UnexpectedTabMoved;
     _ = client.tabs.move(moved.location.tab_id, moved.position);
     client.view.invalidate();
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
@@ -1473,7 +1458,7 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
         client.metrics.apply.observe(diagnostics.elapsed(apply_started, diagnostics.now(client.io)));
     }
     if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
@@ -1498,7 +1483,7 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
             .message = "The process in this pane has stopped",
             .target = if (tab_id) |id| .{ .select_tab = id } else .none,
         });
-    } else try client.requestDraw();
+    } else try client.presenter.requestDraw();
 }
 
 fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
@@ -1538,7 +1523,7 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
         },
     }
     if (continuation == .ignored) {
-        try client.requestDraw();
+        try client.presenter.requestDraw();
     } else {
         try client.notify(.{
             .level = .failure,
@@ -1622,117 +1607,13 @@ fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
         },
         else => unreachable,
     }
-    try client.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 fn requestGraphicsSnapshot(client: *Client, pane_id: schema.PaneId) !void {
     try client.enqueue(.{ .request_graphics_snapshot = .{
         .pane_id = pane_id,
     } });
-}
-
-/// The `.draw` event: present if there is anything to show yet.
-fn presentDue(client: *Client) !void {
-    client.draw_pending = false;
-    if (comptime diagnostics.enabled)
-        client.metrics.draw_lateness.observe(monotonic(client.io) -| client.draw_due_ns);
-    if (client.pending_updates == 0) return;
-    // A draw can be scheduled before the first `pane_opened` bootstraps a
-    // tab - a resize or the capability timeout does exactly that. The
-    // updates stay queued for the draw that follows the bootstrap.
-    const model = presentableModel(&client.tabs) orelse return;
-    const presented_ns = try client.present(model);
-    client.observePresentation(presented_ns);
-    client.pacer.record(presented_ns, client.draw_due_ns, client.pending_updates);
-    client.pending_updates = 0;
-    // The graphics budget may have left work behind; the pacer turns
-    // this into the next frame, not a spin.
-    if ((client.graphics_store.damage or client.view.kittySidebar().damaged() or
-        client.view.kittyToasts().damaged()) and
-        client.capabilities.kitty_graphics == .supported)
-        try client.requestDraw();
-}
-
-fn observePresentation(client: *Client, presented_ns: u64) void {
-    if (comptime diagnostics.enabled) {
-        if (client.last_presented_ns) |previous|
-            client.metrics.paced_interval.observe(presented_ns -| previous);
-    }
-    client.last_presented_ns = presented_ns;
-}
-
-fn present(client: *Client, model: *multiplexer.Model) !u64 {
-    const media_idle = monotonic(client.io) -| client.last_input_ns >=
-        kitty.idle_boost_after_ns;
-    client.view.kittyToasts().setMediaIdle(media_idle);
-    const compose_started = diagnostics.now(client.io);
-    const composed = try model.renderThemed(&client.screen, client.view.workbench(), client.view.palette());
-    const chrome = try client.view.render(
-        &client.screen,
-        &client.tabs,
-        model,
-        composed.full,
-        if (client.config_diagnostic.len != 0) client.config_diagnostic.message() else null,
-    );
-    if (comptime diagnostics.enabled) {
-        client.metrics.composed_panes += composed.panes;
-        client.metrics.composed_cells += composed.cells;
-        client.metrics.composed_damage_cells += composed.damaged_cells;
-        client.metrics.chrome_scanned_cells += chrome.scanned;
-        client.metrics.chrome_damaged_cells += chrome.damaged;
-        client.metrics.full_compositions += @intFromBool(composed.full);
-        client.metrics.compose.observe(diagnostics.elapsed(compose_started, diagnostics.now(client.io)));
-    }
-    const cell_size = client.capabilities.cellSize(client.screen.back.w, client.screen.back.h);
-    const layout_snapshot = model.layoutSnapshot(client.view.workbench());
-    client.graphics_store.host_zlib = client.capabilities.kitty_zlib == .supported;
-    // Media rides the interactive writer, so its budget follows the user:
-    // baseline while input is live, boosted once the host has been quiet.
-    const media_budget = if (media_idle)
-        kitty.transmission_budget_per_frame * kitty.idle_transmission_boost
-    else
-        kitty.transmission_budget_per_frame;
-    var graphics_writer: CombinedGraphicsWriter = .{
-        .panes = .{
-            .store = &client.graphics_store,
-            .layout_snapshot = layout_snapshot,
-            .cell_width = cell_size.width,
-            .cell_height = cell_size.height,
-            .budget = media_budget,
-        },
-        .sidebar = client.view.kittySidebar(),
-        .toasts = client.view.kittyToasts(),
-        .allow_toast_transmission = media_idle,
-        .metrics = &client.metrics,
-    };
-    if (client.capabilities.kitty_graphics == .supported) client.screen.graphics = .{
-        .context = &graphics_writer,
-        .write = CombinedGraphicsWriter.writeOpaque,
-    };
-    try flushScreen(client.io, &client.screen, client.writer, &client.metrics);
-    if (comptime diagnostics.enabled) {
-        const graphics_stats = graphics_writer.panes.stats;
-        client.metrics.pane_shared_images += graphics_stats.shared_images;
-        client.metrics.pane_inline_images += graphics_stats.inline_images;
-        client.metrics.pane_compressed_images += graphics_stats.compressed_images;
-        client.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
-        client.metrics.pane_compress_passes += graphics_stats.compress_passes;
-    }
-    try client.returnGraphicsCredits();
-    const presented_ns = monotonic(client.io);
-    for (&model.panes) |*slot| {
-        const pane = if (slot.*) |*value| value else continue;
-        if (!pane.attached or pane.pending_frame_id == 0) continue;
-        const ack_started = diagnostics.now(client.io);
-        try client.enqueue(.{ .frame_ack = .{
-            .pane_id = pane.id,
-            .frame_id = pane.pending_frame_id,
-        } });
-        pane.pending_frame_id = 0;
-        if (comptime diagnostics.enabled)
-            client.metrics.ack_enqueue.observe(diagnostics.elapsed(ack_started, diagnostics.now(client.io)));
-    }
-    return presented_ns;
 }
 
 pub fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
@@ -1850,61 +1731,8 @@ fn sendClient(
     return connection.send(io, payload);
 }
 
-const CombinedGraphicsWriter = struct {
-    panes: kitty.KittyGraphicsWriter,
-    sidebar: *kitty.KittySidebarRenderer,
-    toasts: *toast_graphics.Renderer,
-    allow_toast_transmission: bool,
-    metrics: *ClientMetrics,
-
-    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
-        const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
-        const pane_bytes = try self.panes.write(writer);
-        // An open budget-paced transfer owns the graphics stream. Toast
-        // deletions and placements remain cheap, while a new toast texture
-        // waits for an otherwise-idle pane-media pass.
-        var toast_bytes: usize = 0;
-        if (self.panes.store.partial == null)
-            toast_bytes = try self.toasts.write(
-                writer,
-                pane_bytes == 0 and self.allow_toast_transmission,
-            );
-        var sidebar_bytes: usize = 0;
-        if (self.panes.store.partial == null and toast_bytes == 0)
-            sidebar_bytes = try self.sidebar.write(writer);
-        if (comptime diagnostics.enabled) {
-            self.metrics.pane_graphics_flushed_bytes += pane_bytes;
-            self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
-        }
-        return pane_bytes + toast_bytes + sidebar_bytes;
-    }
-};
-
-fn flushScreen(
-    io: Io,
-    screen: *term.Screen,
-    writer: *Io.Writer,
-    metrics: *ClientMetrics,
-) !void {
-    const started = diagnostics.now(io);
-    const stats = try screen.flush(writer);
-    if (comptime diagnostics.enabled) {
-        metrics.flushes += 1;
-        metrics.scanned_cells += stats.scanned;
-        metrics.flushed_cells += stats.cells;
-        metrics.flushed_bytes += stats.bytes;
-        metrics.graphics_flushed_bytes += stats.graphics_bytes;
-        metrics.flush.observe(diagnostics.elapsed(started, diagnostics.now(io)));
-    }
-}
-
 fn writeDiagnostics(io: Io, sink: *diagnostics.Sink, bytes: []const u8) anyerror!void {
     try sink.write(io, bytes);
-}
-
-fn waitToDraw(io: Io, deadline_ns: u64) anyerror!void {
-    const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
-    try deadline.wait(io);
 }
 
 pub fn waitCapabilityTimeout(io: Io) anyerror!void {

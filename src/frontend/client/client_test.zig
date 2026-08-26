@@ -674,7 +674,7 @@ test "system metrics schedule a redraw" {
         .battery_percent = 0,
     });
     _ = try harness.client.handleServerMessage(try schema.decodeServer(metrics));
-    try std.testing.expect(harness.client.draw_pending);
+    try std.testing.expect(harness.client.presenter.draw_pending);
     try harness.settle();
 }
 

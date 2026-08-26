@@ -1,0 +1,253 @@
+//! Frame pacing and presentation: the draw-request → deadline → compose →
+//! flush cycle, the 60Hz pacer, and the media budget that follows host
+//! input. Owns the host-terminal back/front buffers. Frame acks come back
+//! to the caller as values; the client enqueues them.
+
+const std = @import("std");
+const core = @import("telar-core");
+const graphics = @import("../graphics/root.zig");
+const presentation = @import("../presentation/root.zig");
+const workspace_capability = @import("../workspace/root.zig");
+const client_telemetry = @import("telemetry.zig");
+const kitty = graphics.kitty;
+const toast_graphics = graphics.toast;
+const multiplexer = workspace_capability.multiplexer;
+const pace = presentation.pace;
+const term = presentation.screen;
+
+const Io = std.Io;
+const schema = core.schema;
+const diagnostics = core.diagnostics;
+
+const client_mod = @import("client.zig");
+const Client = client_mod;
+const ClientEvent = client_mod.ClientEvent;
+const ClientMetrics = client_telemetry.Metrics;
+const monotonic = client_mod.monotonic;
+const presentableModel = client_mod.presentableModel;
+
+const Presenter = @This();
+
+io: Io,
+/// Borrowed from the client, whose heap address is stable.
+select: *Io.Select(ClientEvent),
+metrics: *ClientMetrics,
+screen: term.Screen,
+pacer: pace.Pacer = .{},
+draw_pending: bool = false,
+draw_due_ns: u64 = 0,
+pending_updates: usize = 0,
+last_presented_ns: ?u64 = null,
+/// When the host terminal last delivered input bytes. Zero until the
+/// first read, so a fresh session starts on the boosted media budget.
+last_input_ns: u64 = 0,
+
+pub fn deinit(presenter: *Presenter) void {
+    presenter.screen.deinit();
+}
+
+pub fn resize(presenter: *Presenter, cols: u16, rows: u16) !void {
+    try presenter.screen.resize(cols, rows);
+}
+
+pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
+    presenter.last_input_ns = now_ns;
+}
+
+/// Registers one pending update and arms the paced draw timer if none is
+/// armed. What does not fit the frame budget folds into the next frame.
+pub fn requestDraw(presenter: *Presenter) !void {
+    presenter.pending_updates += 1;
+    if (comptime diagnostics.enabled)
+        presenter.metrics.max_pending_updates = @max(
+            presenter.metrics.max_pending_updates,
+            presenter.pending_updates,
+        );
+    if (presenter.draw_pending) return;
+    const now_ns = monotonic(presenter.io);
+    const deadline_ns = presenter.pacer.waitUntil(now_ns) orelse now_ns;
+    if (deadline_ns != now_ns) presenter.pacer.noteThrottled();
+    presenter.draw_pending = true;
+    presenter.draw_due_ns = deadline_ns;
+    presenter.select.concurrent(.draw, waitToDraw, .{ presenter.io, deadline_ns }) catch |err| {
+        presenter.draw_pending = false;
+        return err;
+    };
+}
+
+/// The `.draw` event: present if there is anything to show yet.
+pub fn presentDue(presenter: *Presenter, client: *Client) !void {
+    presenter.draw_pending = false;
+    if (comptime diagnostics.enabled)
+        presenter.metrics.draw_lateness.observe(monotonic(presenter.io) -| presenter.draw_due_ns);
+    if (presenter.pending_updates == 0) return;
+    // A draw can be scheduled before the first `pane_opened` bootstraps a
+    // tab - a resize or the capability timeout does exactly that. The
+    // updates stay queued for the draw that follows the bootstrap.
+    const model = presentableModel(&client.tabs) orelse return;
+    const presented = try presenter.present(client, model);
+    presenter.observePresentation(presented.presented_ns);
+    presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
+    presenter.pending_updates = 0;
+    try client.returnGraphicsCredits();
+    for (presented.acks.items[0..presented.acks.len]) |ack| {
+        const ack_started = diagnostics.now(presenter.io);
+        try client.enqueue(.{ .frame_ack = ack });
+        if (comptime diagnostics.enabled)
+            presenter.metrics.ack_enqueue.observe(
+                diagnostics.elapsed(ack_started, diagnostics.now(presenter.io)),
+            );
+    }
+    // The graphics budget may have left work behind; the pacer turns
+    // this into the next frame, not a spin.
+    if ((client.graphics_store.damage or client.view.kittySidebar().damaged() or
+        client.view.kittyToasts().damaged()) and
+        client.capabilities.kitty_graphics == .supported)
+        try presenter.requestDraw();
+}
+
+fn observePresentation(presenter: *Presenter, presented_ns: u64) void {
+    if (comptime diagnostics.enabled) {
+        if (presenter.last_presented_ns) |previous|
+            presenter.metrics.paced_interval.observe(presented_ns -| previous);
+    }
+    presenter.last_presented_ns = presented_ns;
+}
+
+const Acks = struct {
+    items: [multiplexer.max_panes]schema.FrameAck = undefined,
+    len: usize = 0,
+};
+
+const Presented = struct {
+    presented_ns: u64,
+    acks: Acks,
+};
+
+fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !Presented {
+    const media_idle = monotonic(presenter.io) -| presenter.last_input_ns >=
+        kitty.idle_boost_after_ns;
+    client.view.kittyToasts().setMediaIdle(media_idle);
+    const compose_started = diagnostics.now(presenter.io);
+    const composed = try model.renderThemed(
+        &presenter.screen,
+        client.view.workbench(),
+        client.view.palette(),
+    );
+    const chrome = try client.view.render(
+        &presenter.screen,
+        &client.tabs,
+        model,
+        composed.full,
+        if (client.config_diagnostic.len != 0) client.config_diagnostic.message() else null,
+    );
+    if (comptime diagnostics.enabled) {
+        presenter.metrics.composed_panes += composed.panes;
+        presenter.metrics.composed_cells += composed.cells;
+        presenter.metrics.composed_damage_cells += composed.damaged_cells;
+        presenter.metrics.chrome_scanned_cells += chrome.scanned;
+        presenter.metrics.chrome_damaged_cells += chrome.damaged;
+        presenter.metrics.full_compositions += @intFromBool(composed.full);
+        presenter.metrics.compose.observe(
+            diagnostics.elapsed(compose_started, diagnostics.now(presenter.io)),
+        );
+    }
+    const cell_size = client.capabilities.cellSize(presenter.screen.back.w, presenter.screen.back.h);
+    const layout_snapshot = model.layoutSnapshot(client.view.workbench());
+    client.graphics_store.host_zlib = client.capabilities.kitty_zlib == .supported;
+    // Media rides the interactive writer, so its budget follows the user:
+    // baseline while input is live, boosted once the host has been quiet.
+    const media_budget = if (media_idle)
+        kitty.transmission_budget_per_frame * kitty.idle_transmission_boost
+    else
+        kitty.transmission_budget_per_frame;
+    var graphics_writer: CombinedGraphicsWriter = .{
+        .panes = .{
+            .store = &client.graphics_store,
+            .layout_snapshot = layout_snapshot,
+            .cell_width = cell_size.width,
+            .cell_height = cell_size.height,
+            .budget = media_budget,
+        },
+        .sidebar = client.view.kittySidebar(),
+        .toasts = client.view.kittyToasts(),
+        .allow_toast_transmission = media_idle,
+        .metrics = presenter.metrics,
+    };
+    if (client.capabilities.kitty_graphics == .supported) presenter.screen.graphics = .{
+        .context = &graphics_writer,
+        .write = CombinedGraphicsWriter.writeOpaque,
+    };
+    try flushScreen(presenter.io, &presenter.screen, client.writer, presenter.metrics);
+    if (comptime diagnostics.enabled) {
+        const graphics_stats = graphics_writer.panes.stats;
+        presenter.metrics.pane_shared_images += graphics_stats.shared_images;
+        presenter.metrics.pane_inline_images += graphics_stats.inline_images;
+        presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
+        presenter.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
+        presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
+    }
+    var acks: Acks = .{};
+    for (&model.panes) |*slot| {
+        const pane = if (slot.*) |*value| value else continue;
+        if (!pane.attached) continue;
+        const frame_id = pane.takePendingFrame();
+        if (frame_id == 0) continue;
+        acks.items[acks.len] = .{ .pane_id = pane.id, .frame_id = frame_id };
+        acks.len += 1;
+    }
+    return .{ .presented_ns = monotonic(presenter.io), .acks = acks };
+}
+
+const CombinedGraphicsWriter = struct {
+    panes: kitty.KittyGraphicsWriter,
+    sidebar: *kitty.KittySidebarRenderer,
+    toasts: *toast_graphics.Renderer,
+    allow_toast_transmission: bool,
+    metrics: *ClientMetrics,
+
+    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
+        const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
+        const pane_bytes = try self.panes.write(writer);
+        // An open budget-paced transfer owns the graphics stream. Toast
+        // deletions and placements remain cheap, while a new toast texture
+        // waits for an otherwise-idle pane-media pass.
+        var toast_bytes: usize = 0;
+        if (self.panes.store.partial == null)
+            toast_bytes = try self.toasts.write(
+                writer,
+                pane_bytes == 0 and self.allow_toast_transmission,
+            );
+        var sidebar_bytes: usize = 0;
+        if (self.panes.store.partial == null and toast_bytes == 0)
+            sidebar_bytes = try self.sidebar.write(writer);
+        if (comptime diagnostics.enabled) {
+            self.metrics.pane_graphics_flushed_bytes += pane_bytes;
+            self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
+        }
+        return pane_bytes + toast_bytes + sidebar_bytes;
+    }
+};
+
+fn flushScreen(
+    io: Io,
+    screen: *term.Screen,
+    writer: *Io.Writer,
+    metrics: *ClientMetrics,
+) !void {
+    const started = diagnostics.now(io);
+    const stats = try screen.flush(writer);
+    if (comptime diagnostics.enabled) {
+        metrics.flushes += 1;
+        metrics.scanned_cells += stats.scanned;
+        metrics.flushed_cells += stats.cells;
+        metrics.flushed_bytes += stats.bytes;
+        metrics.graphics_flushed_bytes += stats.graphics_bytes;
+        metrics.flush.observe(diagnostics.elapsed(started, diagnostics.now(io)));
+    }
+}
+
+fn waitToDraw(io: Io, deadline_ns: u64) anyerror!void {
+    const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
+    try deadline.wait(io);
+}

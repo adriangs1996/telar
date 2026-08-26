@@ -93,6 +93,14 @@ pub const Pane = struct {
         return displayCwdName(pane.cwd);
     }
 
+    /// Returns the frame id awaiting acknowledgement and clears it; zero
+    /// when nothing is pending.
+    pub fn takePendingFrame(pane: *Pane) u64 {
+        const frame_id = pane.pending_frame_id;
+        pane.pending_frame_id = 0;
+        return frame_id;
+    }
+
     pub fn cwdSlice(pane: *const Pane) []const u8 {
         return pane.cwd;
     }

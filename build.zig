@@ -224,6 +224,7 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run the tests");
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
+    const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");
     const release_step = b.step(
         "verify-release",
         "Run correctness, portability, and p99 performance gates",
@@ -240,6 +241,7 @@ pub fn build(b: *std.Build) void {
         libc: bool = false,
         transport: bool = false,
         schema: bool = false,
+        frontend: bool = false,
     };
     const suites = [_]Suite{
         .{ .path = "src/core/ui/root.zig" },
@@ -256,7 +258,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/ui/root.zig" },
         // Capability roots can import sibling capabilities, so the package
         // root collects their tests without narrowing Zig's module path.
-        .{ .path = "src/frontend/root.zig", .libc = true },
+        .{ .path = "src/frontend/root.zig", .libc = true, .frontend = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/history/agent_detection.zig" },
@@ -304,6 +306,7 @@ pub fn build(b: *std.Build) void {
         test_step.dependOn(&run_tests.step);
         if (suite.transport) transport_test_step.dependOn(&run_tests.step);
         if (suite.schema) schema_test_step.dependOn(&run_tests.step);
+        if (suite.frontend) frontend_test_step.dependOn(&run_tests.step);
     }
 
     // The same drawing code against a width table that answers nonsense, so
