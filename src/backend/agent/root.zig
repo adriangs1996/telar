@@ -704,6 +704,13 @@ fn observeTestProxy(
     );
 }
 
+test "display context changes advance the public snapshot revision" {
+    var store: Store = .{};
+    const before = store.revision;
+    store.touch();
+    try std.testing.expectEqual(before + 1, store.revision);
+}
+
 test "repeated ready screen recovers a dropped proxy completion" {
     var store: Store = .{};
     const identity = try testIdentity();

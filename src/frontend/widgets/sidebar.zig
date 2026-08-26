@@ -683,6 +683,67 @@ test "hover covers the complete three-row agent card" {
     try std.testing.expectEqualDeep(action, hits.at(10, 4).?);
 }
 
+test "partial card scroll preserves visible rows and hit targets" {
+    const agents = [_]AgentInput{
+        .{
+            .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
+            .location = .{
+                .workspace = .{ .workspace = @enumFromInt(1) },
+                .tab_id = @enumFromInt(2),
+            },
+            .pane_index = 2,
+            .workspace_label = "telar",
+            .tab_label = "main",
+            .cwd_label = "~/sandbox/telar",
+            .provider = .codex,
+            .status = .ready,
+        },
+        .{
+            .key = .{ .pane_id = @enumFromInt(42), .pane_generation = 1 },
+            .location = .{
+                .workspace = .{ .workspace = @enumFromInt(1) },
+                .tab_id = @enumFromInt(2),
+            },
+            .pane_index = 3,
+            .provider = .claude,
+            .status = .working,
+        },
+    };
+    var snapshot: Snapshot = .{};
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agents });
+    var buffer = try ui.Buffer.init(std.testing.allocator, 48, 7);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var state: State = .{ .scroll = 1 };
+    const palette = ui.theme.default_theme.palette;
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &palette,
+        .hovered = null,
+    };
+    const output = render(&context, .{
+        .area = buffer.area(),
+        .snapshot = &snapshot,
+        .state = &state,
+        .focused_agent = agents[0].key,
+        .transparent = false,
+        .rounded_focus = true,
+    });
+
+    try std.testing.expect(output.focused_card == null);
+    try std.testing.expectEqualStrings("t", buffer.at(6, 2).?.text());
+    try std.testing.expectEqualStrings("C", buffer.at(6, 3).?.text());
+    try std.testing.expectEqualDeep(
+        widget.Action{ .sidebar_focus_agent = agents[0].key },
+        hits.at(10, 2).?,
+    );
+    try std.testing.expectEqualDeep(
+        widget.Action{ .sidebar_focus_agent = agents[1].key },
+        hits.at(10, 4).?,
+    );
+}
+
 test "minions icon occupies one cell" {
     try std.testing.expectEqual(@as(u16, 1), ui.measure(minions_icon));
 }

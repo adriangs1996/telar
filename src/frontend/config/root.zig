@@ -765,6 +765,13 @@ pub const Generation = struct {
             );
             return error.InvalidConfig;
         }
+        try ensureArrayOnly(
+            state,
+            command_table,
+            count,
+            "config.runtime.agent_descriptions.command",
+            diagnostic,
+        );
 
         var command: AgentDescriptionCommand = .{};
         for (0..count) |argument_index| {
@@ -1864,6 +1871,32 @@ fn ensureOnlyFields(
     }
 }
 
+fn ensureArrayOnly(
+    state: *lua.lua_State,
+    index: c_int,
+    count: usize,
+    path: []const u8,
+    diagnostic: *Diagnostic,
+) !void {
+    const absolute = lua.lua_absindex(state, index);
+    lua.lua_pushnil(state);
+    while (lua.lua_next(state, absolute) != 0) {
+        if (lua.lua_type(state, -2) != lua.LUA_TNUMBER or lua.lua_isinteger(state, -2) == 0) {
+            pop(state, 2);
+            diagnostic.set("{s} must be an array", .{path});
+            return error.InvalidConfig;
+        }
+        const key = integer(state, -2).?;
+        const valid = key >= 1 and key <= count;
+        pop(state, 1);
+        if (!valid) {
+            pop(state, 1);
+            diagnostic.set("{s} must be an array", .{path});
+            return error.InvalidConfig;
+        }
+    }
+}
+
 fn parseTheme(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !theme_mod.Theme {
     const absolute = lua.lua_absindex(state, index);
     if (string(state, absolute)) |name| return theme_mod.fromName(name) orelse {
@@ -2612,6 +2645,10 @@ test "runtime description command rejects unbounded values" {
         .{
             .source = "return { api_version = 2, runtime = { agent_descriptions = { command = { 'codex' }, timeout_ms = 999 } } }",
             .message = "timeout_ms must be in 1000..60000",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { agent_descriptions = { command = { 'codex', extra = true } } } }",
+            .message = "command must be an array",
         },
     };
     for (cases) |case| {

@@ -64,6 +64,14 @@ pub const SessionTitle = struct {
     ) !SessionTitle {
         if (title_value.len > schema.max_agent_session_title_bytes)
             return error.AgentTitleTooLong;
+        if (!std.unicode.utf8ValidateSlice(title_value)) return error.InvalidAgentTitle;
+        for (title_value) |byte| if (byte < 0x20 or byte == 0x7f)
+            return error.InvalidAgentTitle;
+        switch (source) {
+            .telar => if (state == .ready) return error.InvalidAgentTitle,
+            .generated, .manual => if (state != .ready or title_value.len == 0)
+                return error.InvalidAgentTitle,
+        }
         var value: SessionTitle = .{
             .id = id,
             .title_len = @intCast(title_value.len),
@@ -78,6 +86,24 @@ pub const SessionTitle = struct {
         return value.title[0..value.title_len];
     }
 };
+
+test "session titles validate text and source authority before persistence" {
+    const session_id = [_]u8{1} ** 16;
+    _ = try SessionTitle.init(session_id, "Improve sidebar", .generated, .ready);
+    _ = try SessionTitle.init(session_id, "", .telar, .failed);
+    try std.testing.expectError(
+        error.InvalidAgentTitle,
+        SessionTitle.init(session_id, "bad\ntitle", .generated, .ready),
+    );
+    try std.testing.expectError(
+        error.InvalidAgentTitle,
+        SessionTitle.init(session_id, "", .generated, .ready),
+    );
+    try std.testing.expectError(
+        error.InvalidAgentTitle,
+        SessionTitle.init(session_id, "manual", .manual, .pending),
+    );
+}
 
 pub const LaunchAttempt = struct {
     pane_id: schema.PaneId,
