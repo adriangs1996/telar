@@ -235,6 +235,12 @@ fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !voi
             },
             .location = entry.location,
             .pane_index = entry.pane_index,
+            .workspace_label = entry.workspace_label,
+            .tab_label = entry.tab_label,
+            .session_title = entry.session_title,
+            .title_source = entry.title_source,
+            .title_state = entry.title_state,
+            .cwd_label = entry.cwd_label,
             .provider = entry.provider,
             .status = entry.status,
         };

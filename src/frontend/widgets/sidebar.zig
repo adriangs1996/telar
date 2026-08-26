@@ -204,7 +204,9 @@ fn drawAgentLine(
     if (line == 0) {
         drawAgentTitle(context, input, semantic, body, agent, row_bg);
     } else if (line == 1) {
-        drawAgentPane(context, body, agent, row_bg);
+        drawAgentLocation(context, body, agent, row_bg);
+    } else {
+        drawAgentMeta(context, body, agent, row_bg);
     }
     context.hits.add(row, action);
 }
@@ -232,25 +234,82 @@ fn drawAgentTitle(
         area,
         area.x + 3,
         area.y,
-        providerLabel(agent.provider),
+        if (agent.sessionTitle().len != 0)
+            agent.sessionTitle()
+        else
+            fallbackTitle(agent.provider),
         area.w -| status_width -| 3,
         .{ .fg = context.palette.text, .bg = background, .flags = .{ .bold = true } },
     );
     drawStatus(context, area, agent.status, input.animation_frame, background);
 }
 
-fn drawAgentPane(
+fn drawAgentLocation(
     context: *widget.Context,
     area: ui.Rect,
     agent: *const model.Agent,
     background: ui.Color,
 ) void {
-    var pane_buffer: [32]u8 = undefined;
-    const pane = std.fmt.bufPrint(&pane_buffer, "pane {d}", .{agent.pane_index}) catch "";
-    _ = context.buffer.writeTruncated(area, area.x + 3, area.y, pane, area.w -| 3, .{
+    var location_buffer: [256]u8 = undefined;
+    const workspace = agent.workspaceLabel();
+    const tab = agent.tabLabel();
+    const location = if (workspace.len != 0 and tab.len != 0)
+        std.fmt.bufPrint(
+            &location_buffer,
+            "{s} › {s} › pane {d}",
+            .{ workspace, tab, agent.pane_index },
+        ) catch ""
+    else if (workspace.len != 0)
+        std.fmt.bufPrint(
+            &location_buffer,
+            "{s} › pane {d}",
+            .{ workspace, agent.pane_index },
+        ) catch ""
+    else if (tab.len != 0)
+        std.fmt.bufPrint(
+            &location_buffer,
+            "{s} › pane {d}",
+            .{ tab, agent.pane_index },
+        ) catch ""
+    else
+        std.fmt.bufPrint(&location_buffer, "pane {d}", .{agent.pane_index}) catch "";
+    _ = context.buffer.writeTruncated(area, area.x + 3, area.y, location, area.w -| 3, .{
         .fg = context.palette.overlay0,
         .bg = background,
     });
+}
+
+fn drawAgentMeta(
+    context: *widget.Context,
+    area: ui.Rect,
+    agent: *const model.Agent,
+    background: ui.Color,
+) void {
+    if (area.w <= 3) return;
+    const style: ui.Style = .{ .fg = context.palette.overlay0, .bg = background };
+    const provider = providerLabel(agent.provider);
+    var x = area.x + 3;
+    var remaining = area.w - 3;
+    const provider_width = ui.measure(provider);
+    if (provider_width > remaining or agent.cwdLabel().len == 0) {
+        _ = context.buffer.writeTruncated(area, x, area.y, provider, remaining, style);
+        return;
+    }
+    x += context.buffer.writeText(area, x, area.y, provider, style);
+    remaining -|= provider_width;
+    const separator = " · ";
+    const separator_width = ui.measure(separator);
+    if (remaining <= separator_width + 1) return;
+    x += context.buffer.writeText(area, x, area.y, separator, style);
+    remaining -= separator_width;
+    _ = context.buffer.writeLeftTruncated(
+        area,
+        x,
+        area.y,
+        agent.cwdLabel(),
+        remaining,
+        style,
+    );
 }
 
 fn drawStatus(
@@ -294,6 +353,14 @@ fn providerLabel(provider: schema.AgentProvider) []const u8 {
         .unknown => "Agent",
         .claude => "Claude Code",
         .codex => "Codex",
+    };
+}
+
+fn fallbackTitle(provider: schema.AgentProvider) []const u8 {
+    return switch (provider) {
+        .unknown => "New agent session",
+        .claude => "New Claude Code session",
+        .codex => "New Codex session",
     };
 }
 
@@ -426,6 +493,12 @@ test "agent snapshot renders compact selectable rows and status" {
             .tab_id = @enumFromInt(2),
         },
         .pane_index = 2,
+        .workspace_label = "telar",
+        .tab_label = "test-2",
+        .session_title = "Improve agent sidebar",
+        .title_source = .generated,
+        .title_state = .ready,
+        .cwd_label = "~/sandbox/telar",
         .provider = .codex,
         .status = .blocked,
     }};
@@ -453,7 +526,9 @@ test "agent snapshot renders compact selectable rows and status" {
         widget.Action{ .sidebar_focus_agent = agents[0].key },
         hits.at(4, output.focused_card.?.y).?,
     );
-    try std.testing.expectEqualStrings("p", buffer.at(6, output.focused_card.?.y + 1).?.text());
+    try std.testing.expectEqualStrings("I", buffer.at(6, output.focused_card.?.y).?.text());
+    try std.testing.expectEqualStrings("t", buffer.at(6, output.focused_card.?.y + 1).?.text());
+    try std.testing.expectEqualStrings("C", buffer.at(6, output.focused_card.?.y + 2).?.text());
 }
 
 test "agent without pane focus remains unhighlighted" {
@@ -616,4 +691,55 @@ test "working status uses an animated glyph" {
     try std.testing.expect(statusIcon(.working, 0) != statusIcon(.working, 1));
     try std.testing.expectEqualStrings("✓", statusIcon(.ready, 0).unicodeGlyph());
     try std.testing.expectEqualStrings("!", statusIcon(.blocked, 0).unicodeGlyph());
+}
+
+test "42 and 62 column cards reserve status before truncating context" {
+    const long_title = "Investigate and improve the agent sidebar context without losing status";
+    const agent: AgentInput = .{
+        .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 12,
+        .workspace_label = "telar",
+        .tab_label = "agent-sidebar-information",
+        .session_title = long_title,
+        .title_source = .generated,
+        .title_state = .ready,
+        .cwd_label = "…/abcdefghijklmnopqrstuvwx/agents/telar",
+        .provider = .claude,
+        .status = .blocked,
+    };
+    var snapshot: Snapshot = .{};
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
+    const widths = [_]u16{ 42, 62 };
+    for (widths) |width| {
+        var buffer = try ui.Buffer.init(std.testing.allocator, width, 12);
+        defer buffer.deinit();
+        var hits: widget.Hits = .{};
+        var state: State = .{};
+        const palette = ui.theme.default_theme.palette;
+        var context: widget.Context = .{
+            .buffer = &buffer,
+            .hits = &hits,
+            .palette = &palette,
+            .hovered = null,
+        };
+        _ = render(&context, .{
+            .area = buffer.area(),
+            .snapshot = &snapshot,
+            .state = &state,
+            .transparent = false,
+        });
+        // The longest status remains intact against the right separator.
+        const status_start = width - 14;
+        try std.testing.expectEqualStrings("n", buffer.at(status_start, 2).?.text());
+        try std.testing.expectEqualStrings("t", buffer.at(width - 4, 2).?.text());
+        try std.testing.expectEqualStrings("│", buffer.at(width - 1, 2).?.text());
+        // Breadcrumb and environment retain their semantic priority.
+        try std.testing.expectEqualStrings("t", buffer.at(6, 3).?.text());
+        try std.testing.expectEqualStrings("C", buffer.at(6, 4).?.text());
+        try std.testing.expectEqualStrings("r", buffer.at(width - 4, 4).?.text());
+    }
 }

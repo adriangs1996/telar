@@ -19,11 +19,69 @@ pub const AgentInput = struct {
     key: AgentKey,
     location: schema.TabLocation,
     pane_index: u16,
+    workspace_label: []const u8 = "",
+    tab_label: []const u8 = "",
+    session_title: []const u8 = "",
+    title_source: schema.AgentTitleSource = .telar,
+    title_state: schema.AgentTitleState = .placeholder,
+    cwd_label: []const u8 = "",
     provider: schema.AgentProvider,
     status: schema.AgentStatus,
 };
 
-pub const Agent = AgentInput;
+pub const Agent = struct {
+    key: AgentKey,
+    location: schema.TabLocation,
+    pane_index: u16,
+    workspace_label: [schema.max_agent_workspace_label_bytes]u8 = undefined,
+    workspace_label_len: u8 = 0,
+    tab_label: [schema.max_tab_label_bytes]u8 = undefined,
+    tab_label_len: u8 = 0,
+    session_title: [schema.max_agent_session_title_bytes]u8 = undefined,
+    session_title_len: u8 = 0,
+    title_source: schema.AgentTitleSource,
+    title_state: schema.AgentTitleState,
+    cwd_label: [schema.max_agent_cwd_label_bytes]u8 = undefined,
+    cwd_label_len: u8 = 0,
+    provider: schema.AgentProvider,
+    status: schema.AgentStatus,
+
+    fn init(input: AgentInput) !Agent {
+        var agent: Agent = .{
+            .key = input.key,
+            .location = input.location,
+            .pane_index = input.pane_index,
+            .title_source = input.title_source,
+            .title_state = input.title_state,
+            .provider = input.provider,
+            .status = input.status,
+        };
+        agent.workspace_label_len = try copyLabel(
+            &agent.workspace_label,
+            input.workspace_label,
+        );
+        agent.tab_label_len = try copyLabel(&agent.tab_label, input.tab_label);
+        agent.session_title_len = try copyLabel(&agent.session_title, input.session_title);
+        agent.cwd_label_len = try copyLabel(&agent.cwd_label, input.cwd_label);
+        return agent;
+    }
+
+    pub fn workspaceLabel(agent: *const Agent) []const u8 {
+        return agent.workspace_label[0..agent.workspace_label_len];
+    }
+
+    pub fn tabLabel(agent: *const Agent) []const u8 {
+        return agent.tab_label[0..agent.tab_label_len];
+    }
+
+    pub fn sessionTitle(agent: *const Agent) []const u8 {
+        return agent.session_title[0..agent.session_title_len];
+    }
+
+    pub fn cwdLabel(agent: *const Agent) []const u8 {
+        return agent.cwd_label[0..agent.cwd_label_len];
+    }
+};
 
 pub const SnapshotInput = struct {
     revision: u64,
@@ -50,7 +108,7 @@ pub const Snapshot = struct {
                 if (std.meta.eql(previous.key, agent.key))
                     return error.DuplicateSidebarAgent;
             }
-            replacement.items[index] = agent;
+            replacement.items[index] = try .init(agent);
         }
         snapshot.* = replacement;
         return true;
@@ -91,6 +149,15 @@ pub const Snapshot = struct {
     }
 };
 
+fn copyLabel(destination: []u8, source: []const u8) !u8 {
+    if (source.len > destination.len) return error.SidebarLabelTooLong;
+    if (!std.unicode.utf8ValidateSlice(source)) return error.InvalidSidebarLabel;
+    for (source) |byte| if (byte < 0x20 or byte == 0x7f)
+        return error.InvalidSidebarLabel;
+    @memcpy(destination[0..source.len], source);
+    return @intCast(source.len);
+}
+
 test "snapshots own current agents and ignore stale replacement" {
     var snapshot: Snapshot = .{};
     const agents = [_]AgentInput{.{
@@ -100,13 +167,42 @@ test "snapshots own current agents and ignore stale replacement" {
             .tab_id = @enumFromInt(1),
         },
         .pane_index = 1,
+        .workspace_label = "telar",
+        .tab_label = "main",
+        .session_title = "Improve sidebar",
+        .title_source = .generated,
+        .title_state = .ready,
+        .cwd_label = "~/sandbox/telar",
         .provider = .codex,
         .status = .working,
     }};
     try std.testing.expect(try snapshot.replace(.{ .revision = 4, .agents = &agents }));
     try std.testing.expectEqual(schema.AgentProvider.codex, snapshot.slice()[0].provider);
+    try std.testing.expectEqualStrings("Improve sidebar", snapshot.slice()[0].sessionTitle());
     try std.testing.expect(!try snapshot.replace(.{ .revision = 3, .agents = &.{} }));
     try std.testing.expectEqual(@as(u8, 1), snapshot.count);
+}
+
+test "snapshot owns every display label" {
+    var snapshot: Snapshot = .{};
+    var title = [_]u8{ 'f', 'i', 'r', 's', 't' };
+    const input: AgentInput = .{
+        .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
+        .workspace_label = "telar",
+        .tab_label = "main",
+        .session_title = &title,
+        .cwd_label = "~/sandbox/telar",
+        .provider = .codex,
+        .status = .ready,
+    };
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &.{input} });
+    title[0] = 'x';
+    try std.testing.expectEqualStrings("first", snapshot.slice()[0].sessionTitle());
 }
 
 test "duplicate agent generations are rejected" {

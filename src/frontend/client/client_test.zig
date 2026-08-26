@@ -976,6 +976,12 @@ test "an agent snapshot replaces the sidebar replica" {
             .pane_index = 1,
             .process_id = 42,
             .session_id = @splat(0),
+            .workspace_label = "telar",
+            .tab_label = "test-2",
+            .session_title = "Improve agent sidebar",
+            .title_source = .generated,
+            .title_state = .ready,
+            .cwd_label = "~/sandbox/telar",
             .provider = .claude,
             .status = .working,
             .source = .screen,
@@ -987,10 +993,14 @@ test "an agent snapshot replaces the sidebar replica" {
         }},
     });
     _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
-    try std.testing.expect(harness.client.view.sidebar_snapshot.find(.{
+    const agent = harness.client.view.sidebar_snapshot.find(.{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
-    }) != null);
+    }).?;
+    try std.testing.expectEqualStrings("telar", agent.workspaceLabel());
+    try std.testing.expectEqualStrings("test-2", agent.tabLabel());
+    try std.testing.expectEqualStrings("Improve agent sidebar", agent.sessionTitle());
+    try std.testing.expectEqualStrings("~/sandbox/telar", agent.cwdLabel());
     try harness.settle();
 }
 

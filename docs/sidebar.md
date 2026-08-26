@@ -1,8 +1,9 @@
 # Sidebar integration contract
 
-The runtime publishes bounded agent snapshots assembled from ProxyTLS activity
-and terminal-screen hints. Detection replaces the client snapshot; it does not
-own layout, focus, search, scrolling, hit targets, or physical KGP placements.
+The runtime publishes bounded, self-contained agent snapshots assembled from
+ProxyTLS activity, terminal-screen hints, and canonical workspace state.
+Detection replaces the client snapshot; it does not own layout, focus,
+scrolling, hit targets, or physical KGP placements.
 
 ## Ownership
 
@@ -12,8 +13,14 @@ and all visible interaction state in `widgets.sidebar.State`. Killing the
 client loses the selected tab, pane focus, search text, scope expansion, and
 scroll offset. It does not alter any runtime task or agent.
 
+Each entry carries workspace and tab labels, one-based pane position, a reduced
+cwd label, and a session title in addition to provider and status. The runtime
+resolves all of them against the same `(pane_id, generation)` immediately
+before encoding. Workspace rename, tab rename, cwd changes, and pane topology
+advance the agent revision.
+
 `Snapshot.replace` is the client adapter boundary. An observation or IPC
-handler supplies a revision and `TaskInput` values. Replacement:
+handler supplies a revision and `AgentInput` values. Replacement:
 
 - rejects revisions older than or equal to the current revision;
 - rejects duplicate `(id, generation)` task keys;
@@ -24,6 +31,27 @@ handler supplies a revision and `TaskInput` values. Replacement:
 Task keys carry a generation so a delayed action cannot target a new task that
 reused an old numeric ID. A task may carry a `pane_id`; selecting it then uses
 the existing semantic pane-focus operation.
+
+## Session titles
+
+Every detected agent starts with a local placeholder such as `New Codex
+session`. Title generation is disabled unless `runtime.agent_descriptions` is
+configured in Lua. When enabled, Telar captures at most 4096 bytes from the
+first submitted user request, waits for that turn to move from working to a
+settled state, then runs one configured argv command outside the interactive
+path. The request is written to stdin and never appears in process arguments or
+history storage.
+
+The queue admits eight pending jobs and one active child. Output is capped at
+512 bytes, must normalize to one control-free UTF-8 line of at most 96 bytes,
+and is guarded by a deadline. Missing executables, queue pressure, timeout,
+invalid output, stale pane generations, and stale session IDs retain the
+placeholder with a deterministic failure state. There are no automatic
+retries. A manual title has higher authority than a generated completion.
+
+Only the validated title, source, and state are persisted by `session_id` in
+the history database. Prompt bytes are cleared when the job starts or is
+discarded.
 
 ## Focus projection
 
@@ -57,6 +85,12 @@ Cells own every string, the editable search field, terminal cursor, hover,
 focus marker, tabs, section headers, status, footer, and hit target. The
 cell renderer is complete by itself.
 
+Each agent card stays three rows high:
+
+1. session title, with status width reserved on the right;
+2. `workspace › tab › pane N`;
+3. provider and abbreviated cwd, truncated from the left.
+
 KGP owns two reusable assets: one three-row focused-agent card and an official
 provider-mark atlas. The card is an antialiased rounded rectangle below the
 cell layer. Cells keep the same solid fill except at its four corner cells,
@@ -80,7 +114,7 @@ resize restores it without changing user intent.
 The frontend message handler:
 
 1. validates the runtime message and its revision;
-2. maps runtime agent records to bounded `TaskInput` values;
+2. maps runtime agent records to bounded `AgentInput` values;
 3. calls `client_ui.State.replaceSidebarSnapshot`;
 4. requests one client redraw when replacement succeeds.
 

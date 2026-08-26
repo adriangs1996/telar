@@ -214,6 +214,44 @@ pub const Buffer = struct {
         return written + b.writeText(r, @intCast(ellipsis_x), y, ellipsis, style);
     }
 
+    /// Draws the end of `text`, prepending an ellipsis when it does not fit.
+    /// Paths use this form because their basename carries more information
+    /// than a repeated home-directory prefix.
+    pub fn writeLeftTruncated(
+        b: *Buffer,
+        r: Rect,
+        x: u16,
+        y: u16,
+        text: []const u8,
+        max_width: u16,
+        style: Style,
+    ) u16 {
+        if (max_width == 0) return 0;
+        const total = measure(text);
+        if (total <= max_width) return b.writeText(r, x, y, text, style);
+
+        const ellipsis = "\u{2026}";
+        const marker = measure(ellipsis);
+        if (marker >= max_width) return 0;
+        const budget = max_width - marker;
+        var it: GraphemeIterator = .{ .bytes = text };
+        var prefix_width: u32 = 0;
+        var cut: usize = text.len;
+        while (true) {
+            const cluster_start = it.index;
+            const cluster = it.next() orelse break;
+            if (total - prefix_width <= budget) {
+                cut = cluster_start;
+                break;
+            }
+            prefix_width += cluster.width;
+        }
+        const written = b.writeText(r, x, y, ellipsis, style);
+        const text_x = @as(u32, x) + written;
+        if (text_x > std.math.maxInt(u16)) return written;
+        return written + b.writeText(r, @intCast(text_x), y, text[cut..], style);
+    }
+
     /// Draws `text` so that it ends at the right edge of `r`.
     pub fn writeRight(b: *Buffer, r: Rect, y: u16, text: []const u8, style: Style) u16 {
         const width = measure(text);
@@ -346,6 +384,18 @@ test "truncation never splits a wide glyph" {
     const written = buf.writeTruncated(buf.area(), 0, 0, "漢字漢字", 4, .{});
     try testing.expect(written <= 4);
     try testing.expectEqual(@as(u8, 2), buf.at(0, 0).?.width);
+}
+
+test "left truncation preserves the path suffix on a grapheme boundary" {
+    const gpa = testing.allocator;
+    var buf = try Buffer.init(gpa, 20, 1);
+    defer buf.deinit();
+
+    const written = buf.writeLeftTruncated(buf.area(), 0, 0, "~/projects/café/telar", 8, .{});
+    try testing.expectEqual(@as(u16, 8), written);
+    try testing.expectEqualStrings("\u{2026}", buf.at(0, 0).?.text());
+    try testing.expectEqualStrings("t", buf.at(3, 0).?.text());
+    try testing.expectEqualStrings("r", buf.at(7, 0).?.text());
 }
 
 test "text that fits is not truncated" {
