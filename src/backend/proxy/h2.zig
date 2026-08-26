@@ -46,6 +46,12 @@ const HeaderKind = enum { none, headers, push_promise };
 const Decoded = struct {
     status_code: u16 = 0,
     request: bool = false,
+    inference_method: bool = false,
+    inference_path: bool = false,
+
+    fn isInference(decoded: Decoded) bool {
+        return decoded.request and decoded.inference_method and decoded.inference_path;
+    }
 };
 
 const StreamStatus = struct {
@@ -221,9 +227,16 @@ pub const Observer = struct {
                 const decoded = if (observer.failed) Decoded{} else observer.decodeBlock();
                 if (observer.block_kind == .headers) switch (direction) {
                     .request => {
-                        if ((decoded.request or observer.failed) and
-                            observer.markStarted(observer.block_stream))
-                            emit(context, .request_started, observer.block_stream, 0);
+                        if (decoded.request and observer.markStarted(observer.block_stream))
+                            emit(
+                                context,
+                                if (decoded.isInference())
+                                    .request_started
+                                else
+                                    .auxiliary_request_started,
+                                observer.block_stream,
+                                0,
+                            );
                         if (observer.block_end_stream)
                             observer.removeStarted(observer.block_stream);
                     },
@@ -322,7 +335,12 @@ pub const Observer = struct {
                 const value = field.value[0..field.valuelen];
                 if (std.mem.eql(u8, name, ":status"))
                     decoded.status_code = std.fmt.parseInt(u16, value, 10) catch 0;
-                if (std.mem.eql(u8, name, ":method")) decoded.request = true;
+                if (std.mem.eql(u8, name, ":method")) {
+                    decoded.request = true;
+                    decoded.inference_method = std.ascii.eqlIgnoreCase(value, "POST");
+                }
+                if (std.mem.eql(u8, name, ":path"))
+                    decoded.inference_path = middleware.isInferenceRequest("POST", value);
             }
             if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
                 if (c.nghttp2_hd_inflate_end_headers(inflater) != 0) observer.fail();
@@ -791,7 +809,18 @@ pub const Transcoder = struct {
         switch (direction) {
             .request => if (context.kind == .request and
                 transcoder.markStarted(transcoder.block_stream))
-                emit(event_context, .request_started, transcoder.block_stream, 0),
+                emit(
+                    event_context,
+                    if (middleware.isInferenceRequest(
+                        original.find(":method") orelse "",
+                        original.find(":path") orelse "",
+                    ))
+                        .request_started
+                    else
+                        .auxiliary_request_started,
+                    transcoder.block_stream,
+                    0,
+                ),
             .response => {
                 if (status_code >= 200)
                     transcoder.setStatus(transcoder.block_stream, status_code);
@@ -1367,27 +1396,81 @@ test "request trailers do not emit a second request start" {
     var collector: Collector = .{};
     var observer = Observer.init();
     defer observer.deinit();
-    for ([_]struct { name: []const u8, value: []const u8 }{
-        .{ .name = ":method", .value = "POST" },
-        .{ .name = "grpc-status", .value = "0" },
-    }) |field| {
-        var fields = [_]c.nghttp2_nv{.{
-            .name = @constCast(field.name.ptr),
-            .value = @constCast(field.value.ptr),
-            .namelen = field.name.len,
-            .valuelen = field.value.len,
-            .flags = 0,
-        }};
-        var block: [256]u8 = undefined;
-        const block_len = c.nghttp2_hd_deflate_hd(deflater, &block, block.len, &fields, fields.len);
-        try std.testing.expect(block_len > 0);
-        var header: [frame_header_len]u8 = undefined;
-        writeFrameHeader(&header, @intCast(block_len), frame_headers, flag_end_headers, 1);
-        observer.observe(&header, .request, &collector, Collector.emit);
-        observer.observe(block[0..@intCast(block_len)], .request, &collector, Collector.emit);
-    }
+    var request_fields = [_]c.nghttp2_nv{
+        .{ .name = @constCast(":method"), .value = @constCast("POST"), .namelen = 7, .valuelen = 4, .flags = 0 },
+        .{ .name = @constCast(":path"), .value = @constCast("/v1/messages?beta=true"), .namelen = 5, .valuelen = 22, .flags = 0 },
+    };
+    var request_block: [256]u8 = undefined;
+    const request_len = c.nghttp2_hd_deflate_hd(
+        deflater,
+        &request_block,
+        request_block.len,
+        &request_fields,
+        request_fields.len,
+    );
+    try std.testing.expect(request_len > 0);
+    var request_header: [frame_header_len]u8 = undefined;
+    writeFrameHeader(&request_header, @intCast(request_len), frame_headers, flag_end_headers, 1);
+    observer.observe(&request_header, .request, &collector, Collector.emit);
+    observer.observe(request_block[0..@intCast(request_len)], .request, &collector, Collector.emit);
+
+    var trailer_fields = [_]c.nghttp2_nv{.{
+        .name = @constCast("grpc-status"),
+        .value = @constCast("0"),
+        .namelen = 11,
+        .valuelen = 1,
+        .flags = 0,
+    }};
+    var trailer_block: [256]u8 = undefined;
+    const trailer_len = c.nghttp2_hd_deflate_hd(
+        deflater,
+        &trailer_block,
+        trailer_block.len,
+        &trailer_fields,
+        trailer_fields.len,
+    );
+    try std.testing.expect(trailer_len > 0);
+    var trailer_header: [frame_header_len]u8 = undefined;
+    writeFrameHeader(&trailer_header, @intCast(trailer_len), frame_headers, flag_end_headers, 1);
+    observer.observe(&trailer_header, .request, &collector, Collector.emit);
+    observer.observe(trailer_block[0..@intCast(trailer_len)], .request, &collector, Collector.emit);
+
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqual(@as(usize, 1), collector.starts);
+}
+
+test "auxiliary HTTP2 requests are classified separately" {
+    var deflater: ?*c.nghttp2_hd_deflater = null;
+    try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_deflate_new(&deflater, 4096));
+    defer c.nghttp2_hd_deflate_del(deflater);
+
+    var fields = [_]c.nghttp2_nv{
+        .{ .name = @constCast(":method"), .value = @constCast("POST"), .namelen = 7, .valuelen = 4, .flags = 0 },
+        .{ .name = @constCast(":path"), .value = @constCast("/v1/messages/count_tokens?beta=true"), .namelen = 5, .valuelen = 35, .flags = 0 },
+    };
+    var block: [256]u8 = undefined;
+    const block_len = c.nghttp2_hd_deflate_hd(deflater, &block, block.len, &fields, fields.len);
+    try std.testing.expect(block_len > 0);
+    var header: [frame_header_len]u8 = undefined;
+    writeFrameHeader(&header, @intCast(block_len), frame_headers, flag_end_headers, 1);
+
+    const Collector = struct {
+        starts: usize = 0,
+        auxiliary_starts: usize = 0,
+        fn emit(self: *@This(), phase: middleware.Phase, _: u32, _: u16) void {
+            if (phase == .request_started) self.starts += 1;
+            if (phase == .auxiliary_request_started) self.auxiliary_starts += 1;
+        }
+    };
+    var collector: Collector = .{};
+    var observer = Observer.init();
+    defer observer.deinit();
+    observer.observe(&header, .request, &collector, Collector.emit);
+    observer.observe(block[0..@intCast(block_len)], .request, &collector, Collector.emit);
+
+    try std.testing.expect(!observer.failed);
+    try std.testing.expectEqual(@as(usize, 0), collector.starts);
+    try std.testing.expectEqual(@as(usize, 1), collector.auxiliary_starts);
 }
 
 test "HPACK dynamic table survives padded response blocks" {
@@ -1526,8 +1609,10 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     try pipeline.add(.{ .context = &ignored, .transform = AddHeader.transform });
     const Collector = struct {
         starts: usize = 0,
+        auxiliary_starts: usize = 0,
         fn emit(self: *@This(), phase: middleware.Phase, _: u32, _: u16) void {
             if (phase == .request_started) self.starts += 1;
+            if (phase == .auxiliary_request_started) self.auxiliary_starts += 1;
         }
     };
     var collector: Collector = .{};
@@ -1575,6 +1660,50 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
         @as(usize, 8192),
         c.nghttp2_hd_inflate_get_max_dynamic_table_size(transcoder.inflater.?),
     );
+
+    var auxiliary_fields = [_]c.nghttp2_nv{
+        .{ .name = @constCast(":method"), .value = @constCast("POST"), .namelen = 7, .valuelen = 4, .flags = 0 },
+        .{ .name = @constCast(":scheme"), .value = @constCast("https"), .namelen = 7, .valuelen = 5, .flags = 0 },
+        .{ .name = @constCast(":path"), .value = @constCast("/api/event_logging/v2/batch"), .namelen = 5, .valuelen = 27, .flags = 0 },
+        .{ .name = @constCast(":authority"), .value = @constCast("api.example"), .namelen = 10, .valuelen = 11, .flags = 0 },
+    };
+    var auxiliary_compressed: [512]u8 = undefined;
+    const auxiliary_len = c.nghttp2_hd_deflate_hd2(
+        input_deflater,
+        &auxiliary_compressed,
+        auxiliary_compressed.len,
+        &auxiliary_fields,
+        auxiliary_fields.len,
+    );
+    try std.testing.expect(auxiliary_len > 0);
+    var auxiliary_frame: [frame_header_len + auxiliary_compressed.len]u8 = undefined;
+    writeFrameHeader(
+        auxiliary_frame[0..frame_header_len],
+        @intCast(auxiliary_len),
+        frame_headers,
+        flag_end_headers | flag_end_stream,
+        3,
+    );
+    @memcpy(
+        auxiliary_frame[frame_header_len..][0..@intCast(auxiliary_len)],
+        auxiliary_compressed[0..@intCast(auxiliary_len)],
+    );
+    for (auxiliary_frame[0 .. frame_header_len + @as(usize, @intCast(auxiliary_len))]) |byte|
+        try std.testing.expect(transcoder.process(
+            &.{byte},
+            .request,
+            &session,
+            .origin,
+            &source_settings,
+            &target_settings,
+            &pipeline,
+            std.testing.io,
+            undefined,
+            &collector,
+            Collector.emit,
+        ));
+    try std.testing.expectEqual(@as(usize, 1), collector.starts);
+    try std.testing.expectEqual(@as(usize, 1), collector.auxiliary_starts);
 }
 
 test "HTTP2 transcoder preserves continuation padding priority and HPACK state" {

@@ -45,7 +45,10 @@ pub const Metrics = struct {
     flushed_bytes: u64 = 0,
     graphics_flushed_bytes: u64 = 0,
     pane_graphics_flushed_bytes: u64 = 0,
+    toast_graphics_flushed_bytes: u64 = 0,
     sidebar_graphics_flushed_bytes: u64 = 0,
+    icon_graphics_flushed_bytes: u64 = 0,
+    media_flushes: u64 = 0,
     max_pending_updates: u64 = 0,
     mouse_events: u64 = 0,
     chrome_scanned_cells: u64 = 0,
@@ -56,21 +59,32 @@ pub const Metrics = struct {
     ack_enqueue: diagnostics.Timing = .{},
     input_enqueue: diagnostics.Timing = .{},
     flush: diagnostics.Timing = .{},
+    media_flush: diagnostics.Timing = .{},
     draw_lateness: diagnostics.Timing = .{},
     paced_interval: diagnostics.Timing = .{},
 };
 
 pub const Snapshot = struct {
     theme_name: []const u8,
+    icon_theme_name: []const u8,
     active_tab: schema.TabId,
     tab_count: usize,
     focused_pane: schema.PaneId,
     pane_count: usize,
     pending_updates: usize,
     draw_pending: bool,
+    media_pending: bool,
     outbox: *const client_outbox.Outbox,
     capabilities: *const kitty.TerminalCapabilities,
     sidebar_rendering: kitty.ResolvedSidebarRendering,
+    lua_used: usize,
+    lua_limit: usize,
+    kitty_store_bytes: usize,
+    toast_cache_bytes: usize,
+    sidebar_cache_bytes: usize,
+    icon_cache_bytes: usize,
+    screen_bytes: usize,
+    heap: diagnostics.Heap.Snapshot,
 };
 
 pub fn format(
@@ -83,10 +97,10 @@ pub fn format(
     const now_ns = diagnostics.now(io);
     var writer = Io.Writer.fixed(buffer);
     try writer.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"client\"," ++
-        "\"theme\":\"{s}\"," ++
+        "\"theme\":\"{s}\",\"icons\":\"{s}\"," ++
         "\"active_tab\":{d},\"tab_count\":{d}," ++
         "\"focused_pane\":{d},\"pane_count\":{d},\"pending_updates\":{d}," ++
-        "\"draw_pending\":{d},\"outbox_depth\":{d}," ++
+        "\"draw_pending\":{d},\"media_pending\":{d},\"outbox_depth\":{d}," ++
         "\"outbox_high_water\":{d},\"outbox_saturated\":{d}," ++
         "\"outbox_coalesced_input\":{d},\"outbox_coalesced_resize\":{d}," ++
         "\"outbox_coalesced_ack\":{d},\"kitty_graphics\":\"{s}\"," ++
@@ -98,12 +112,14 @@ pub fn format(
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
         state.theme_name,
+        state.icon_theme_name,
         schema.id.raw(state.active_tab),
         state.tab_count,
         schema.id.raw(state.focused_pane),
         state.pane_count,
         state.pending_updates,
         @intFromBool(state.draw_pending),
+        @intFromBool(state.media_pending),
         state.outbox.len,
         state.outbox.stats.high_water,
         state.outbox.stats.saturated,
@@ -164,24 +180,109 @@ pub fn format(
         pacer.stats.absorbed,
     });
     try writer.print(",\"pane_graphics_flushed_bytes\":{d}," ++
+        "\"toast_graphics_flushed_bytes\":{d}," ++
         "\"sidebar_graphics_flushed_bytes\":{d}," ++
+        "\"icon_graphics_flushed_bytes\":{d},\"media_flushes\":{d}," ++
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
         "\"compose_avg_us\":{d},\"compose_max_us\":{d}," ++
         "\"ack_enqueue_avg_us\":{d},\"ack_enqueue_max_us\":{d}," ++
         "\"input_enqueue_avg_us\":{d},\"input_enqueue_max_us\":{d}," ++
         "\"flush_avg_us\":{d},\"flush_max_us\":{d}," ++
+        "\"media_flush_avg_us\":{d},\"media_flush_max_us\":{d}," ++
         "\"draw_late_avg_us\":{d},\"draw_late_max_us\":{d}," ++
-        "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}}}\n", .{
-        metrics.pane_graphics_flushed_bytes,                   metrics.sidebar_graphics_flushed_bytes,
-        metrics.decode.average() / std.time.ns_per_us,         metrics.decode.max_ns / std.time.ns_per_us,
-        metrics.apply.average() / std.time.ns_per_us,          metrics.apply.max_ns / std.time.ns_per_us,
-        metrics.compose.average() / std.time.ns_per_us,        metrics.compose.max_ns / std.time.ns_per_us,
-        metrics.ack_enqueue.average() / std.time.ns_per_us,    metrics.ack_enqueue.max_ns / std.time.ns_per_us,
-        metrics.input_enqueue.average() / std.time.ns_per_us,  metrics.input_enqueue.max_ns / std.time.ns_per_us,
-        metrics.flush.average() / std.time.ns_per_us,          metrics.flush.max_ns / std.time.ns_per_us,
-        metrics.draw_lateness.average() / std.time.ns_per_us,  metrics.draw_lateness.max_ns / std.time.ns_per_us,
-        metrics.paced_interval.average() / std.time.ns_per_us, metrics.paced_interval.max_ns / std.time.ns_per_us,
+        "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}", .{
+        metrics.pane_graphics_flushed_bytes,                metrics.toast_graphics_flushed_bytes,
+        metrics.sidebar_graphics_flushed_bytes,             metrics.icon_graphics_flushed_bytes,
+        metrics.media_flushes,                              metrics.decode.average() / std.time.ns_per_us,
+        metrics.decode.max_ns / std.time.ns_per_us,         metrics.apply.average() / std.time.ns_per_us,
+        metrics.apply.max_ns / std.time.ns_per_us,          metrics.compose.average() / std.time.ns_per_us,
+        metrics.compose.max_ns / std.time.ns_per_us,        metrics.ack_enqueue.average() / std.time.ns_per_us,
+        metrics.ack_enqueue.max_ns / std.time.ns_per_us,    metrics.input_enqueue.average() / std.time.ns_per_us,
+        metrics.input_enqueue.max_ns / std.time.ns_per_us,  metrics.flush.average() / std.time.ns_per_us,
+        metrics.flush.max_ns / std.time.ns_per_us,          metrics.media_flush.average() / std.time.ns_per_us,
+        metrics.media_flush.max_ns / std.time.ns_per_us,    metrics.draw_lateness.average() / std.time.ns_per_us,
+        metrics.draw_lateness.max_ns / std.time.ns_per_us,  metrics.paced_interval.average() / std.time.ns_per_us,
+        metrics.paced_interval.max_ns / std.time.ns_per_us,
+    });
+    try writer.print(",\"rss_bytes\":{d},\"lua_used\":{d},\"lua_limit\":{d}," ++
+        "\"kitty_store_bytes\":{d},\"toast_cache_bytes\":{d}," ++
+        "\"sidebar_cache_bytes\":{d},\"icon_cache_bytes\":{d}," ++
+        "\"screen_bytes\":{d}," ++
+        "\"heap_live_bytes\":{d},\"heap_live_allocs\":{d}," ++
+        "\"heap_allocs\":{d},\"heap_alloc_bytes\":{d}," ++
+        "\"interactive_allocs\":{d},\"interactive_alloc_bytes\":{d}," ++
+        "\"media_allocs\":{d},\"media_alloc_bytes\":{d}," ++
+        "\"observation_allocs\":{d},\"observation_alloc_bytes\":{d}," ++
+        "\"other_allocs\":{d},\"other_alloc_bytes\":{d}}}\n", .{
+        diagnostics.rssBytes(),
+        state.lua_used,
+        state.lua_limit,
+        state.kitty_store_bytes,
+        state.toast_cache_bytes,
+        state.sidebar_cache_bytes,
+        state.icon_cache_bytes,
+        state.screen_bytes,
+        state.heap.live_bytes,
+        state.heap.live_allocs,
+        state.heap.allocs,
+        state.heap.alloc_bytes,
+        state.heap.interactive_allocs,
+        state.heap.interactive_alloc_bytes,
+        state.heap.media_allocs,
+        state.heap.media_alloc_bytes,
+        state.heap.observation_allocs,
+        state.heap.observation_alloc_bytes,
+        state.heap.other_allocs,
+        state.heap.other_alloc_bytes,
     });
     return buffer[0..writer.end];
+}
+
+test "client telemetry reports lua kitty and heap retained bytes" {
+    const io = std.testing.io;
+    var outbox: client_outbox.Outbox = .{};
+    const capabilities: kitty.TerminalCapabilities = .{};
+    const pacer: pace.Pacer = .{};
+    const metrics: Metrics = .{ .started_ns = 0 };
+    var buffer: [8192]u8 = undefined;
+    const line = try format(&buffer, io, &metrics, &pacer, .{
+        .theme_name = "vesper",
+        .icon_theme_name = "nerd-font",
+        .active_tab = @enumFromInt(1),
+        .tab_count = 1,
+        .focused_pane = @enumFromInt(2),
+        .pane_count = 1,
+        .pending_updates = 0,
+        .draw_pending = false,
+        .media_pending = true,
+        .outbox = &outbox,
+        .capabilities = &capabilities,
+        .sidebar_rendering = .cells,
+        .lua_used = 123,
+        .lua_limit = 1024,
+        .kitty_store_bytes = 4,
+        .toast_cache_bytes = 8,
+        .sidebar_cache_bytes = 12,
+        .icon_cache_bytes = 16,
+        .screen_bytes = 80 * 24 * 32,
+        .heap = .{
+            .live_bytes = 48,
+            .allocs = 3,
+            .interactive_allocs = 0,
+            .observation_allocs = 3,
+        },
+    });
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"lua_used\":123") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"lua_limit\":1024") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"kitty_store_bytes\":4") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"toast_cache_bytes\":8") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"sidebar_cache_bytes\":12") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"icon_cache_bytes\":16") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"icons\":\"nerd-font\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"media_pending\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"heap_live_bytes\":48") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":3") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
 }

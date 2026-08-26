@@ -14,21 +14,58 @@ contains the complete FreeType License and GPLv2 alternative.
 Text shaping links HarfBuzz 11.0.0 from the source archive pinned in
 `build.zig.zon`. Its complete Old MIT notice is in `HarfBuzz-COPYING.txt`.
 
-`provider-marks-128x64.rgba` is the KGP provider atlas. Each mark occupies a
-64 x 64 RGBA slot:
+`TelarNerdIcons-Regular.ttf` is a 6,124-byte subset of
+`SymbolsNerdFontMono-Regular.ttf` from Nerd Fonts v3.5.1. It contains only the
+22 icon glyphs used by the embedded `nerd-font` icon theme. The source release
+archive SHA-256 is
+`01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996`;
+the source TTF SHA-256 is
+`fe471e538392f51910faab985fa8e192a39dd3426125edd15b71b3680df0e749`;
+and the subset SHA-256 is
+`4757fc5e0574a135354a91b7c81fc8f58b68c37efcd978f404b714d561650539`.
+`NerdFonts-LICENSE.txt` and `NerdFonts-README.md` record the license and
+upstream attribution shipped in the release archive.
 
-- Columns 0-63 contain the Claude icon from Anthropic's newsroom press kit.
-- Columns 64-127 contain `icon-codex-dark-color.png` from the official ChatGPT
-  macOS application, resized from 1024 x 1024.
+The subset is reproducible with fonttools:
 
-At runtime Telar resamples these square sources into a transparent atlas whose
-slots follow the host terminal's cell aspect ratio. Kitty can then place each
-slot across two rows and two columns without stretching the provider mark.
+```sh
+SOURCE_DATE_EPOCH=1787335283 pyftsubset SymbolsNerdFontMono-Regular.ttf \
+  --output-file=TelarNerdIcons-Regular.ttf \
+  --unicodes=U+EA76,U+EACD,U+EB53,U+F4BC,U+EFC5,U+F240-F244,U+EC20,U+EA85,U+EB32,U+EE06-EE09,U+EA6C,U+EBB3,U+EA87,U+EAB5-EAB6 \
+  --layout-features='*' --name-IDs='*' --name-legacy \
+  --name-languages='*' --notdef-glyph --recommended-glyphs
+```
 
-`claude-mark-64.rgba` remains as the lossless source used to rebuild the first
-atlas slot.
+`provider-marks-512x256.rgba` is the reproducible KGP provider atlas. Its two
+256 x 256 RGBA slots contain official PNG assets in Claude, Codex order. The
+atlas SHA-256 is
+`a5525d88a91a85c3d9361736eb1a5c932c31d5c68717c5e003fdcc64e430b824`.
+`tools/build_provider_atlas.py` rebuilds it with Pillow 12.2.0 and Lanczos
+resampling.
 
-Sources:
+`Claude.png` was downloaded on 2026-08-26 from the Apple touch icon linked by
+Anthropic's official Claude download page. It is a 256 x 256 RGBA PNG with
+SHA-256
+`1bec5f7b12a4a46fea879633464ebf1d32144ef731a0f054539b2d7251871cb6`.
 
-- <https://www.anthropic.com/news>
-- <https://openai.com/codex/>
+`Codex.png` is `Contents/Resources/icon-chatgpt.png` from the official Codex
+macOS disk image downloaded on 2026-08-26. The application identifies itself
+as `com.openai.codex`, version `26.820.60940` build `7119`, and is signed by
+`Developer ID Application: OpenAI OpCo, LLC (2DC432GLL2)`. The source DMG
+SHA-256 is
+`6545f82798df8e6ceaba1dad1d2aed3bb71b97545b342a5916b70d7732931c5c`;
+the extracted 2048 x 2048 RGBA PNG SHA-256 is
+`3453947a9ce2709b7ec51c0559c7eb976e4ac53b232b607d1d81b0d1d1048b61`.
+
+At runtime Telar downsamples the atlas's checked-in 256 px source slots with
+premultiplied-alpha bilinear filtering. It centers the square artwork inside
+slots that match the terminal cell aspect ratio, so a two-column by two-row
+placement never stretches either logo.
+
+Official sources and usage terms:
+
+- <https://claude.ai/download>
+- <https://cdn.prod.website-files.com/6889473510b50328dbb70ae6/68c33859cc6cd903686c66a2_apple-touch-icon.png>
+- <https://openai.com/codex/for-work/>
+- <https://persistent.oaistatic.com/codex-app-prod/Codex.dmg>
+- <https://openai.com/brand/>

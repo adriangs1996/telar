@@ -369,6 +369,7 @@ pub const LaunchTestFault = struct {
 const Server = struct {
     io: Io,
     gpa: std.mem.Allocator,
+    heap: *diagnostics.Heap,
     select: *Io.Select(RuntimeEvent),
     history_service: *history.Service,
     child_environment: *const pty.Environment,
@@ -556,6 +557,7 @@ const Server = struct {
         };
 
         fresh.commitLaunch(shell);
+        server.agents.touch();
         return fresh;
     }
 
@@ -577,7 +579,7 @@ const Server = struct {
                 store.exited_count -= 1;
                 slot.* = null;
                 store.count -= 1;
-                _ = server.agents.remove(pane.key());
+                if (!server.agents.remove(pane.key())) server.agents.touch();
                 server.revokePaneCredential(pane);
                 pane.destroy();
                 if (store.hasAt(location) or server.workspaces.findTab(location) == null) continue;
@@ -832,9 +834,22 @@ const Server = struct {
             session.agent_revision_sent < server.agents.revision)
         {
             var entry_storage: [agent_mod.max_records]schema.AgentSnapshotEntry = undefined;
+            const entries = server.agents.snapshot(&entry_storage);
+            var enriched_count: usize = 0;
+            for (entries) |entry| {
+                const pane = panes.resolve(.{
+                    .id = entry.pane_id,
+                    .generation = entry.pane_generation,
+                }) orelse continue;
+                const pane_index = panes.positionAt(pane) orelse continue;
+                entry_storage[enriched_count] = entry;
+                entry_storage[enriched_count].location = pane.location;
+                entry_storage[enriched_count].pane_index = pane_index;
+                enriched_count += 1;
+            }
             const payload = try schema.encodeAgentSnapshot(buffer, .{
                 .revision = server.agents.revision,
-                .entries = server.agents.snapshot(&entry_storage),
+                .entries = entry_storage[0..enriched_count],
             });
             try startSessionSend(io, select, session, payload);
             session.agent_revision_sent = server.agents.revision;
@@ -885,6 +900,22 @@ const Server = struct {
                 .cwd = pane.cwd.slice(),
             });
             active.observed_cwd_revision = pane.cwd.revision;
+            try startSessionSend(io, select, session, payload);
+            attachments.next_send = (index + 1) % attachments.items.len;
+            return;
+        }
+
+        checked = 0;
+        while (checked < attachments.items.len) : (checked += 1) {
+            const index = (attachments.next_send + checked) % attachments.items.len;
+            const active = if (attachments.items[index]) |*value| value else continue;
+            const pane = active.pane;
+            if (active.observed_foreground_revision == pane.foreground_revision) continue;
+            const payload = try schema.encodePaneForeground(buffer, .{
+                .pane_id = pane.id,
+                .name = pane.agent_process_cache.name(),
+            });
+            active.observed_foreground_revision = pane.foreground_revision;
             try startSessionSend(io, select, session, payload);
             attachments.next_send = (index + 1) % attachments.items.len;
             return;
@@ -1307,6 +1338,7 @@ const Server = struct {
             event.provider,
             switch (event.phase) {
                 .request_started => .request_started,
+                .auxiliary_request_started => return,
                 .response_activity => .response_activity,
                 .response_finished => .response_finished,
                 .request_failed => .request_failed,
@@ -1392,6 +1424,14 @@ const Server = struct {
         }
         const previous_process = active.agent_process_cache;
         active.agent_process_cache = event.process_probe.cache;
+        if (!std.mem.eql(
+            u8,
+            previous_process.name(),
+            active.agent_process_cache.name(),
+        )) {
+            active.foreground_revision +%= 1;
+            if (active.foreground_revision == 0) active.foreground_revision = 1;
+        }
         if (event.process_probe.changed) {
             const observed_at_ms = Io.Timestamp.now(server.io, .real).toMilliseconds();
             if (event.process_probe.cache.provider != .unknown) {
@@ -1432,6 +1472,7 @@ const Server = struct {
                     },
                     .confidence = signal.confidence,
                     .identity_confirmed = signal.identity_confirmed,
+                    .ready_confirmed = signal.ready_confirmed,
                 },
                 Io.Timestamp.now(server.io, .real).toMilliseconds(),
             );
@@ -1524,7 +1565,7 @@ const Server = struct {
         server: *Server,
         result: anyerror!void,
         telemetry: *diagnostics.Sink,
-        buffer: *[8192]u8,
+        buffer: *[12288]u8,
         write_pending: *bool,
     ) void {
         result catch {
@@ -1576,6 +1617,14 @@ const Server = struct {
             else
                 0,
             if (server.proxy_service) |service|
+                service.invalid_authorization_rejections.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
+                service.unknown_credential_rejections.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
                 service.connection_limit_drops.load(.monotonic)
             else
                 0,
@@ -1583,6 +1632,7 @@ const Server = struct {
                 service.h2_decode_failures.load(.monotonic)
             else
                 0,
+            server.heap,
         ) catch return;
         write_pending.* = true;
         server.select.concurrent(.telemetry_written, writeDiagnostics, .{
@@ -2187,10 +2237,12 @@ const Server = struct {
 
 fn serveInternal(
     io: Io,
-    gpa: std.mem.Allocator,
+    backing_gpa: std.mem.Allocator,
     endpoint: []const u8,
     options: ServeOptions,
 ) !void {
+    var heap = diagnostics.Heap.init(backing_gpa);
+    const gpa = heap.allocator();
     try options.graphics.validate();
     graphics_sync.initSharedFreezeNonce(io);
     const history_path = options.history_path;
@@ -2259,6 +2311,7 @@ fn serveInternal(
     var server: Server = .{
         .io = io,
         .gpa = gpa,
+        .heap = &heap,
         .select = &select,
         .history_service = &history_service,
         .child_environment = &child_environment,
@@ -2273,7 +2326,7 @@ fn serveInternal(
         },
         .metrics = .{ .started_ns = diagnostics.now(io) },
     };
-    var telemetry_buffer: [8192]u8 = undefined;
+    var telemetry_buffer: [12288]u8 = undefined;
     var telemetry_write_pending = false;
     defer {
         listener.shutdown();
@@ -2305,34 +2358,65 @@ fn serveInternal(
         history_owned = false;
     }
 
-    while (true) switch (try select.await()) {
-        .stopped => |result| return result,
-        .accepted => |result| try server.handleAcceptedEvent(result, &listener),
-        .handshaken => |result| server.handleHandshakenEvent(result),
-        .client_message => |event| if (try server.handleClientMessageEvent(event)) return,
-        .client_sent => |event| if (server.handleClientSentEvent(event)) return,
-        .history_response => |result| try server.handleHistoryResponseEvent(result),
-        .proxy_event => |result| try server.handleProxyEvent(result),
-        .agent_tick => |result| try server.handleAgentTickEvent(result),
-        .metrics_tick => |result| try server.handleMetricsTickEvent(result),
-        .pane_input_written => |event| try server.handlePaneInputWrittenEvent(event),
-        .pane_response_written => |event| try server.handlePaneResponseWrittenEvent(event),
-        .pane_output => |event| try server.handlePaneOutputEvent(event, ingest_gate),
-        .pane_ingested => |event| try server.handlePaneIngestedEvent(event),
-        .pane_observed => |event| try server.handlePaneObservedEvent(event),
-        .pane_media => |event| try server.handlePaneMediaEvent(event),
-        .pane_exit => |event| try server.handlePaneExitEvent(event),
-        .telemetry_tick => |result| server.handleTelemetryTickEvent(
-            result,
-            &telemetry,
-            &telemetry_buffer,
-            &telemetry_write_pending,
-        ),
-        .telemetry_written => |result| server.handleTelemetryWrittenEvent(
-            result,
-            &telemetry,
-            &telemetry_write_pending,
-        ),
+    while (true) {
+        const event = try select.await();
+        const path = diagnostics.enter(runtimeEventPath(event));
+        defer path.restore();
+        switch (event) {
+            .stopped => |result| return result,
+            .accepted => |result| try server.handleAcceptedEvent(result, &listener),
+            .handshaken => |result| server.handleHandshakenEvent(result),
+            .client_message => |event_value| if (try server.handleClientMessageEvent(event_value)) return,
+            .client_sent => |event_value| if (server.handleClientSentEvent(event_value)) return,
+            .history_response => |result| try server.handleHistoryResponseEvent(result),
+            .proxy_event => |result| try server.handleProxyEvent(result),
+            .agent_tick => |result| try server.handleAgentTickEvent(result),
+            .metrics_tick => |result| try server.handleMetricsTickEvent(result),
+            .pane_input_written => |event_value| try server.handlePaneInputWrittenEvent(event_value),
+            .pane_response_written => |event_value| try server.handlePaneResponseWrittenEvent(event_value),
+            .pane_output => |event_value| try server.handlePaneOutputEvent(event_value, ingest_gate),
+            .pane_ingested => |event_value| try server.handlePaneIngestedEvent(event_value),
+            .pane_observed => |event_value| try server.handlePaneObservedEvent(event_value),
+            .pane_media => |event_value| try server.handlePaneMediaEvent(event_value),
+            .pane_exit => |event_value| try server.handlePaneExitEvent(event_value),
+            .telemetry_tick => |result| server.handleTelemetryTickEvent(
+                result,
+                &telemetry,
+                &telemetry_buffer,
+                &telemetry_write_pending,
+            ),
+            .telemetry_written => |result| server.handleTelemetryWrittenEvent(
+                result,
+                &telemetry,
+                &telemetry_write_pending,
+            ),
+        }
+    }
+}
+
+fn runtimeEventPath(event: RuntimeEvent) diagnostics.Path {
+    return switch (event) {
+        .pane_output,
+        .pane_ingested,
+        .pane_input_written,
+        .pane_response_written,
+        .client_message,
+        .client_sent,
+        => .interactive,
+        .pane_media => .media,
+        .pane_observed,
+        .history_response,
+        .proxy_event,
+        .agent_tick,
+        .metrics_tick,
+        .telemetry_tick,
+        .telemetry_written,
+        => .observation,
+        .accepted,
+        .handshaken,
+        .pane_exit,
+        .stopped,
+        => .other,
     };
 }
 
@@ -2430,6 +2514,8 @@ fn writeDiagnostics(
 }
 
 fn writePaneInput(io: Io, pane: *Pane, bytes: []const u8, started_ns: u64) PaneInputEvent {
+    const path = diagnostics.enter(.interactive);
+    defer path.restore();
     pane.pty_write_mutex.lockUncancelable(io);
     defer pane.pty_write_mutex.unlock(io);
     return .{
@@ -2555,6 +2641,8 @@ fn ingestPane(
     output_len: u16,
     ingest_gate: ?*IngestTestGate,
 ) PaneIngestEvent {
+    const path = diagnostics.enter(.interactive);
+    defer path.restore();
     if (ingest_gate) |gate| gate.wait(io) catch |err|
         return .{ .pane = pane.key(), .result = err };
     var stats: PaneIngestStats = .{};
@@ -2585,6 +2673,8 @@ fn observePane(
     current_size: schema.TerminalSize,
     process_cache: agent_process.Cache,
 ) PaneObservationEvent {
+    const path = diagnostics.enter(.observation);
+    defer path.restore();
     var stats: history.observer.Stats = .{};
     const process_probe = agent_process.probe(
         pane.session.foregroundProcessGroup(),
@@ -2609,6 +2699,8 @@ fn schedulePaneMedia(
 }
 
 fn processPaneMedia(pane: *Pane, current_size: schema.TerminalSize) PaneMediaEvent {
+    const path = diagnostics.enter(.media);
+    defer path.restore();
     var stats: media_mod.Stats = .{};
     pane.processMedia(current_size, &stats);
     return .{ .pane = pane.key(), .stats = stats };

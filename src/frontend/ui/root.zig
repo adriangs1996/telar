@@ -8,6 +8,7 @@ const hits = @import("hits.zig");
 const focus = @import("focus.zig");
 
 pub const theme = @import("theme.zig");
+pub const icons = @import("icons.zig");
 
 pub const Rect = shared.Rect;
 

@@ -570,6 +570,7 @@ fn runClient(
             value.theme
         else
             options.theme,
+        .icon_theme = if (snapshot) |value| value.icon_theme else .unicode,
         .sidebar_rendering = if (options.sidebar_renderer_set)
             options.sidebar_rendering
         else if (snapshot) |value|

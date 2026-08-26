@@ -14,12 +14,23 @@ const schema = core.schema;
 
 pub const Phase = enum {
     request_started,
+    auxiliary_request_started,
     response_activity,
     response_finished,
     request_failed,
 };
 
 pub const Protocol = enum { http11, h2, upgraded };
+
+/// Only model-generation requests drive agent lifecycle. Provider domains
+/// also carry bootstrap, quota, registry, feature-flag, and telemetry calls.
+pub fn isInferenceRequest(method: []const u8, target: []const u8) bool {
+    if (!std.ascii.eqlIgnoreCase(method, "POST")) return false;
+    const path = target[0 .. std.mem.indexOfScalar(u8, target, '?') orelse target.len];
+    return std.mem.eql(u8, path, "/v1/messages") or
+        std.mem.eql(u8, path, "/v1/responses") or
+        std.mem.eql(u8, path, "/backend-api/codex/responses");
+}
 
 pub const Event = struct {
     credential: identity.Credential,
@@ -31,6 +42,15 @@ pub const Event = struct {
     status_code: u16 = 0,
     observed_at_ms: i64,
 };
+
+test "only model generation routes count as inference" {
+    try std.testing.expect(isInferenceRequest("POST", "/v1/messages?beta=true"));
+    try std.testing.expect(isInferenceRequest("POST", "/v1/responses"));
+    try std.testing.expect(isInferenceRequest("POST", "/backend-api/codex/responses"));
+    try std.testing.expect(!isInferenceRequest("GET", "/v1/messages?beta=true"));
+    try std.testing.expect(!isInferenceRequest("POST", "/v1/messages/count_tokens?beta=true"));
+    try std.testing.expect(!isInferenceRequest("POST", "/api/event_logging/v2/batch"));
+}
 
 pub const Observer = struct {
     context: *anyopaque,

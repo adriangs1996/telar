@@ -26,9 +26,11 @@ pub const Input = struct {
     sidebar_snapshot: *const sidebar.Snapshot,
     sidebar_state: *sidebar.State,
     sidebar_transparent: bool,
+    sidebar_rounded_focus: bool,
     sidebar_animation_frame: u8,
     proxy_tls_active: bool,
     system_metrics: ?status_bar.Metrics,
+    status_mode: status_bar.Mode,
     workspaces: *const workspace_model.Snapshot,
     workspace_list_collapsed: bool,
 };
@@ -49,25 +51,38 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .proxy_tls_active = input.proxy_tls_active,
     });
 
+    const focused_agent = block: {
+        const location = input.model.location orelse break :block null;
+        const pane_id = input.model.layout.focused() orelse break :block null;
+        break :block input.sidebar_snapshot.keyForPane(location, pane_id);
+    };
     const sidebar_output = sidebar.render(context, .{
         .area = input.regions.sidebar,
         .snapshot = input.sidebar_snapshot,
         .state = input.sidebar_state,
+        .focused_agent = focused_agent,
         .transparent = input.sidebar_transparent,
+        .rounded_focus = input.sidebar_rounded_focus,
         .animation_frame = input.sidebar_animation_frame,
     });
 
     context.buffer.fill(input.regions.bottom, " ", bottomStyle(context));
-    const cursor = if (input.rename_field) |field|
+    const cursor: ?context_mod.Cursor = if (input.rename_field) |field|
         tab_rename.render(context, input.regions.bottom, field, input.rename_kind)
-    else block: {
-        tab_bar.render(context, .{
-            .area = input.regions.tabs,
-            .tabs = input.tabs,
-            .model = input.model,
-        });
-        status_bar.render(context, input.regions.status, input.system_metrics);
-        break :block null;
+    else switch (input.status_mode) {
+        .normal => block: {
+            tab_bar.render(context, .{
+                .area = input.regions.tabs,
+                .tabs = input.tabs,
+                .model = input.model,
+            });
+            status_bar.render(context, input.regions.status, input.system_metrics);
+            break :block null;
+        },
+        .prefix, .copy => block: {
+            status_bar.renderMode(context, input.regions.bottom, input.status_mode);
+            break :block null;
+        },
     };
 
     workbench.register(context, input.regions.workbench, input.model);

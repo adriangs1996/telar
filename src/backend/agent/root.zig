@@ -136,20 +136,24 @@ pub const Store = struct {
         observed_at_ms: i64,
     ) bool {
         if (provider == .unknown) return false;
-        var record = store.ensure(identity) orelse return false;
+        var record = switch (phase) {
+            .request_started => store.ensure(identity) orelse return false,
+            .response_activity, .response_finished, .request_failed => store.find(identity.key) orelse return false,
+        };
         const request: ProxyRequest = .{
             .protocol = protocol,
             .connection_id = connection_id,
             .stream_id = stream_id,
         };
         const tracked = switch (phase) {
-            .request_started, .response_activity => markProxyActive(record, request),
+            .request_started => markProxyActive(record, request),
+            .response_activity => hasProxyActive(record, request),
             .response_finished, .request_failed => settleProxy(record, request),
         };
-        // Stream 0 is the HTTP/2 connection-level failure sentinel. Ignore a
-        // graceful close when every observed request has already settled.
-        if (phase == .request_failed and protocol == .h2 and stream_id == 0 and !tracked)
-            return false;
+        // Starts are filtered to model-inference routes by the proxy. Ignore
+        // response events without a matching start so auxiliary provider
+        // traffic cannot create or settle agent work on its own.
+        if (phase != .request_started and !tracked) return false;
         if (phase == .response_activity) if (record.proxy) |*evidence| {
             if (evidence.provider == provider and evidence.status == .working) {
                 if (observed_at_ms - evidence.observed_at_ms < activity_refresh_ms)
@@ -225,7 +229,13 @@ pub const Store = struct {
             (existing == null or recordProvider(existing.?) != signal.provider)) return false;
         if (known_provider == .unknown) return false;
         var record = store.ensure(identity) orelse return false;
-        if (signal.status == .ready and currentStatus(record) == .working) {
+        // Codex's explicit input prompt is conclusive. Generic prompts need
+        // repetition so a shell glyph or stale screen fragment cannot settle
+        // live network work.
+        if (signal.status == .ready and
+            currentStatus(record) == .working and
+            !signal.ready_confirmed)
+        {
             record.idle_samples +|= 1;
             if (record.idle_samples < idle_confirmations) return false;
         } else {
@@ -297,6 +307,12 @@ pub const Store = struct {
             count += 1;
         }
         return entries[0..count];
+    }
+
+    /// Publishes pane-topology changes that alter the display position of
+    /// otherwise unchanged agent records.
+    pub fn touch(store: *Store) void {
+        store.bumpRevision();
     }
 
     fn ensure(store: *Store, identity: Identity) ?*Record {
@@ -392,6 +408,12 @@ fn markProxyActive(record: *Record, request: ProxyRequest) bool {
     destination.* = request;
     record.active_proxy_count += 1;
     return true;
+}
+
+fn hasProxyActive(record: *const Record, request: ProxyRequest) bool {
+    for (record.active_proxy) |active|
+        if (active != null and sameProxyRequest(active.?, request)) return true;
+    return false;
 }
 
 fn settleProxy(record: *Record, request: ProxyRequest) bool {
@@ -508,7 +530,7 @@ fn observeTestProxy(
     );
 }
 
-test "confirmed ready screen recovers a dropped proxy completion" {
+test "repeated ready screen recovers a dropped proxy completion" {
     var store: Store = .{};
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 100));
@@ -527,6 +549,49 @@ test "confirmed ready screen recovers a dropped proxy completion" {
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+}
+
+test "explicit Codex prompt settles working without repetition" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 100));
+    try std.testing.expect(store.observeScreen(
+        identity,
+        .{
+            .provider = .codex,
+            .status = .ready,
+            .confidence = 94,
+            .identity_confirmed = true,
+            .ready_confirmed = true,
+        },
+        200,
+    ));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+}
+
+test "agent branding alone does not settle working" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 100));
+    try std.testing.expect(!store.observeScreen(
+        identity,
+        .{
+            .provider = .claude,
+            .status = .ready,
+            .confidence = 90,
+            .identity_confirmed = true,
+        },
+        200,
+    ));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
 }
 
 test "explicitly identified ready screen opens an agent record" {
@@ -674,6 +739,7 @@ test "network work resumes a visibly blocked agent" {
 test "new network work supersedes an older ready prompt" {
     var store: Store = .{};
     const identity = try testIdentity();
+    try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 50));
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .response_finished, 100));
     try std.testing.expect(store.observeScreen(
         identity,
@@ -687,9 +753,36 @@ test "new network work supersedes an older ready prompt" {
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
 }
 
+test "unmatched proxy responses cannot create agent state" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(!store.observeProxy(
+        identity,
+        .claude,
+        .response_activity,
+        .h2,
+        9,
+        3,
+        100,
+    ));
+    try std.testing.expect(!store.observeProxy(
+        identity,
+        .claude,
+        .request_failed,
+        .h2,
+        9,
+        3,
+        200,
+    ));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    try std.testing.expectEqual(@as(usize, 0), store.snapshot(&entries).len);
+}
+
 test "expired agent evidence is removed" {
     var store: Store = .{};
     const identity = try testIdentity();
+    try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 50));
     try std.testing.expect(observeTestProxy(&store, identity, .codex, .response_finished, 100));
     try std.testing.expect(store.expire(100 + settled_expiry_ms));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;

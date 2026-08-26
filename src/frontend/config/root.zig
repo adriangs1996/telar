@@ -9,6 +9,7 @@ const config_model = @import("model.zig");
 const default_bindings = @import("default_bindings.zig");
 const keybind = input.keybind;
 const kitty = @import("../graphics/root.zig").kitty;
+const icons = @import("../ui/root.zig").icons;
 const theme_mod = @import("../ui/root.zig").theme;
 
 const Io = std.Io;
@@ -60,7 +61,7 @@ pub const InputPaste = config_model.InputPaste;
 pub const InputDecision = config_model.InputDecision;
 pub const Limits = config_model.Limits;
 
-const Meter = struct {
+pub const Meter = struct {
     used: usize = 0,
     limit: usize = default_memory_limit,
 };
@@ -784,7 +785,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "sidebar", "pane_gaps", "input", "keybindings" },
+            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "input", "keybindings" },
             "config.client",
             diagnostic,
         );
@@ -797,6 +798,21 @@ pub const Generation = struct {
         _ = lua.lua_getfield(state, absolute, "theme");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             generation.snapshot.theme = try parseTheme(state, -1, diagnostic);
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "icons");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            const value = string(state, -1) orelse {
+                pop(state, 1);
+                diagnostic.set("config.client.icons must be a string", .{});
+                return error.InvalidConfig;
+            };
+            generation.snapshot.icon_theme = icons.Theme.parse(value) catch {
+                diagnostic.set("unknown config.client.icons: {s}", .{value});
+                pop(state, 1);
+                return error.InvalidConfig;
+            };
+        }
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "sidebar");
@@ -2027,6 +2043,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\local config = telar.config({ api_version = 2 })
         \\config.client = {
         \\  prefix = "ctrl+s",
+        \\  icons = "nerd-font",
         \\  theme = telar.theme({
         \\    base = "vesper",
         \\    colors = { accent = "#010203" },
@@ -2060,6 +2077,7 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expectEqual(@as(u16, 1), generation.callback_count);
     try std.testing.expect(!generation.snapshot.sidebar_visible);
     try std.testing.expect(!generation.snapshot.pane_gaps);
+    try std.testing.expectEqual(icons.Theme.nerd_font, generation.snapshot.icon_theme);
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
@@ -2129,6 +2147,25 @@ test "client config rejects non-boolean pane gaps" {
     );
     try std.testing.expectEqualStrings(
         "config.client.pane_gaps must be a boolean",
+        diagnostic.message(),
+    );
+}
+
+test "client config rejects an unknown icon theme" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(
+        error.InvalidConfig,
+        Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            "return { api_version = 2, client = { icons = 'emoji' } }",
+            "@config.lua",
+            1,
+            &diagnostic,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "unknown config.client.icons: emoji",
         diagnostic.message(),
     );
 }

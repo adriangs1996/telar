@@ -31,20 +31,9 @@ pub const TerminalCapabilities = capability_mod.TerminalCapabilities;
 pub const SidebarRendering = capability_mod.SidebarRendering;
 pub const ResolvedSidebarRendering = capability_mod.ResolvedSidebarRendering;
 
-/// Encoded image bytes one frame may put on the direct-data fallback wire.
-/// Media shares the interactive writer with cell output, so a 64MB child image
-/// must never sit between a keystroke and its echo. Local Ghostty sessions use
-/// a compact shared-memory command instead.
+/// Encoded image bytes one media pass may put on the direct-data fallback
+/// wire. Local Ghostty sessions use a compact shared-memory command instead.
 pub const transmission_budget_per_frame: usize = 256 * 1024;
-
-/// Budget multiplier once host input has been quiet for `idle_boost_after_ns`.
-/// The cost model is the first keystroke after an idle stretch: at most one
-/// boosted frame of graphics sits ahead of its echo in the host parser, and
-/// nothing was typed while those bytes went out. While input is live the
-/// baseline budget keeps media out of the keystroke's way.
-pub const idle_transmission_boost: usize = 8;
-/// Host input younger than this keeps the baseline transmission budget.
-pub const idle_boost_after_ns: u64 = 250 * std.time.ns_per_ms;
 
 /// Raw pixel bytes one frame may push through the zlib deflater before an
 /// inline transmission. Bounds the writer's compression work per pass to
@@ -1527,7 +1516,7 @@ pub fn writeSharedTransmission(
 
 /// Closes an interrupted chunked transfer with an empty final chunk. The
 /// terminal discards the short payload; q=2 on the header keeps it silent.
-fn writeTransmissionAbort(writer: *Io.Writer) Io.Writer.Error!usize {
+pub fn writeTransmissionAbort(writer: *Io.Writer) Io.Writer.Error!usize {
     const closing = "\x1b_Gm=0;\x1b\\";
     try writer.writeAll(closing);
     return closing.len;
@@ -1569,22 +1558,43 @@ pub const SidebarProviderPlacement = struct {
     provider: SidebarProvider,
 };
 
-/// Provider marks for the hybrid sidebar. Cells own every background, hover,
-/// selection, and hit target so graphics can never cover interactive feedback.
+pub const SidebarFocus = struct {
+    area: core.ui.Rect,
+    color: [3]u8,
+};
+
+/// Media assets for the hybrid sidebar. Cells retain the complete fallback,
+/// hover, text, and hit targets; graphics add only the rounded focus edge and
+/// official provider artwork.
 pub const KittySidebarRenderer = struct {
+    const focused_card_id: u32 = 0x80000001;
+    const focused_card_placement_id: u32 = 0x80000010;
     const provider_atlas_id: u32 = 0x80000003;
     const first_provider_placement_id: u32 = 0x80000100;
     const max_provider_placements = 64;
     const provider_count = 2;
-    const provider_source_size = 64;
+    const provider_source_size = 256;
     const provider_source_width = provider_count * provider_source_size;
-    const provider_source_pixels: []const u8 = @embedFile("../assets/provider-marks-128x64.rgba");
+    const provider_raster_size = 64;
+    const provider_source_pixels: []const u8 = @embedFile("../assets/provider-marks-512x256.rgba");
+    // A flat rounded card needs little source resolution. This keeps its RGBA
+    // payload plus the provider atlas comfortably inside one media pass even
+    // after base64 expansion.
+    const max_focused_card_pixels = 16 * 1024;
 
     comptime {
         std.debug.assert(provider_source_pixels.len == provider_source_width * provider_source_size * 4);
     }
 
     gpa: std.mem.Allocator,
+    focused_card_pixels: []u8 = &.{},
+    focused_card_width: u32 = 0,
+    focused_card_height: u32 = 0,
+    focused_card_color: [3]u8 = @splat(0),
+    focused_card: ?core.ui.Rect = null,
+    emitted_focused_card: ?core.ui.Rect = null,
+    focused_card_dirty: bool = false,
+    focused_card_emitted: bool = false,
     provider_atlas: []u8 = &.{},
     provider_slot_width: u32 = 0,
     provider_slot_height: u32 = 0,
@@ -1605,12 +1615,18 @@ pub const KittySidebarRenderer = struct {
     }
 
     pub fn deinit(renderer: *KittySidebarRenderer) void {
+        if (renderer.focused_card_pixels.len != 0) renderer.gpa.free(renderer.focused_card_pixels);
         if (renderer.provider_atlas.len != 0) renderer.gpa.free(renderer.provider_atlas);
+    }
+
+    pub fn retainedBytes(renderer: *const KittySidebarRenderer) usize {
+        return renderer.focused_card_pixels.len + renderer.provider_atlas.len;
     }
 
     pub fn prepare(
         renderer: *KittySidebarRenderer,
         area: core.ui.Rect,
+        focused_card: ?SidebarFocus,
         provider_marks: []const SidebarProviderPlacement,
         cell_width: u16,
         cell_height: u16,
@@ -1622,7 +1638,8 @@ pub const KittySidebarRenderer = struct {
             renderer.placements_dirty = renderer.emitted;
             return;
         }
-        const provider_scale = @max(@as(u32, 1), provider_source_size / @as(u32, @min(cell_width, cell_height)));
+        try renderer.prepareFocusedCard(focused_card, cell_width, cell_height);
+        const provider_scale = @max(@as(u32, 1), provider_raster_size / @as(u32, @min(cell_width, cell_height)));
         const provider_slot_width = std.math.mul(u32, cell_width, provider_scale) catch return error.SidebarTooLarge;
         const provider_slot_height = std.math.mul(u32, cell_height, provider_scale) catch return error.SidebarTooLarge;
         const provider_atlas_width = std.math.mul(u32, provider_count, provider_slot_width) catch return error.SidebarTooLarge;
@@ -1664,8 +1681,61 @@ pub const KittySidebarRenderer = struct {
         renderer.visible = true;
     }
 
+    fn prepareFocusedCard(
+        renderer: *KittySidebarRenderer,
+        focused: ?SidebarFocus,
+        cell_width: u16,
+        cell_height: u16,
+    ) !void {
+        const next_card = if (focused) |value| value.area else null;
+        if (!std.meta.eql(renderer.focused_card, next_card)) renderer.placements_dirty = true;
+        renderer.focused_card = next_card;
+        const value = focused orelse {
+            renderer.focused_card_dirty = false;
+            return;
+        };
+        const target_width = std.math.mul(u32, value.area.w, cell_width) catch
+            return error.SidebarTooLarge;
+        const target_height = std.math.mul(u32, value.area.h, cell_height) catch
+            return error.SidebarTooLarge;
+        const raster_size = fitWithinPixels(
+            target_width,
+            target_height,
+            max_focused_card_pixels,
+        );
+        const changed = renderer.focused_card_width != raster_size.width or
+            renderer.focused_card_height != raster_size.height or
+            !std.mem.eql(u8, &renderer.focused_card_color, &value.color);
+        if (!changed) {
+            if (!renderer.focused_card_emitted) renderer.focused_card_dirty = true;
+            return;
+        }
+        const byte_len = try rgbaLength(raster_size.width, raster_size.height);
+        const next_pixels = try renderer.gpa.alloc(u8, byte_len);
+        errdefer renderer.gpa.free(next_pixels);
+        const target_radius = @max(@as(u32, 2), @min(@as(u32, 12), cell_height / 3));
+        const raster_radius = @max(
+            @as(u32, 1),
+            (@as(u64, target_radius) * raster_size.width + target_width / 2) / target_width,
+        );
+        renderRoundedRectangle(
+            next_pixels,
+            raster_size.width,
+            raster_size.height,
+            @intCast(raster_radius),
+            value.color,
+        );
+        if (renderer.focused_card_pixels.len != 0) renderer.gpa.free(renderer.focused_card_pixels);
+        renderer.focused_card_pixels = next_pixels;
+        renderer.focused_card_width = raster_size.width;
+        renderer.focused_card_height = raster_size.height;
+        renderer.focused_card_color = value.color;
+        renderer.focused_card_dirty = true;
+        renderer.placements_dirty = true;
+    }
+
     pub fn damaged(renderer: *const KittySidebarRenderer) bool {
-        return renderer.provider_dirty or renderer.placements_dirty;
+        return renderer.focused_card_dirty or renderer.provider_dirty or renderer.placements_dirty;
     }
 
     /// Emits pending sidebar images and placements. Geometry comes from what
@@ -1675,15 +1745,27 @@ pub const KittySidebarRenderer = struct {
         if (!renderer.damaged()) return 0;
         var written: usize = 0;
         if (!renderer.visible) {
-            if (renderer.emitted) {
-                written += try writeDeleteImage(writer, provider_atlas_id);
-            }
+            if (renderer.focused_card_emitted) written += try writeDeleteImage(writer, focused_card_id);
+            if (renderer.provider_emitted) written += try writeDeleteImage(writer, provider_atlas_id);
             renderer.emitted = false;
+            renderer.focused_card_emitted = false;
+            renderer.emitted_focused_card = null;
+            renderer.focused_card_dirty = false;
             renderer.provider_emitted = false;
             renderer.emitted_provider_mark_count = 0;
             renderer.provider_dirty = false;
             renderer.placements_dirty = false;
             return written;
+        }
+        if (renderer.focused_card_dirty) {
+            written += try writeTransmission(writer, focused_card_id, .{
+                .key = .{ .image_id = focused_card_id, .generation = 1 },
+                .format = .rgba,
+                .width = renderer.focused_card_width,
+                .height = renderer.focused_card_height,
+                .byte_len = renderer.focused_card_pixels.len,
+            }, renderer.focused_card_pixels);
+            renderer.focused_card_emitted = true;
         }
         if (renderer.provider_dirty) {
             written += try writeTransmission(writer, provider_atlas_id, .{
@@ -1696,6 +1778,34 @@ pub const KittySidebarRenderer = struct {
             renderer.provider_emitted = true;
         }
         if (renderer.placements_dirty) {
+            if (renderer.emitted_focused_card != null) written += try writeDeletePlacement(
+                writer,
+                focused_card_id,
+                focused_card_placement_id,
+            );
+            if (renderer.focused_card) |card| {
+                if (renderer.focused_card_emitted) {
+                    written += try writePlacement(
+                        writer,
+                        focused_card_id,
+                        focused_card_placement_id,
+                        .{
+                            .column = card.x,
+                            .row = card.y,
+                            .offset_x = 0,
+                            .offset_y = 0,
+                            .source_x = 0,
+                            .source_y = 0,
+                            .source_width = renderer.focused_card_width,
+                            .source_height = renderer.focused_card_height,
+                            .columns = card.w,
+                            .rows = card.h,
+                        },
+                        -9,
+                    );
+                }
+            }
+            renderer.emitted_focused_card = renderer.focused_card;
             for (0..renderer.emitted_provider_mark_count) |index| written += try writeDeletePlacement(
                 writer,
                 provider_atlas_id,
@@ -1726,6 +1836,7 @@ pub const KittySidebarRenderer = struct {
             }
             renderer.emitted_provider_mark_count = renderer.provider_mark_count;
         }
+        renderer.focused_card_dirty = false;
         renderer.provider_dirty = false;
         renderer.placements_dirty = false;
         renderer.emitted = true;
@@ -1742,6 +1853,96 @@ fn providerPlacementsEqual(a: []const SidebarProviderPlacement, b: []const Sideb
 fn rgbaLength(width: u32, height: u32) !usize {
     const pixels = std.math.mul(usize, width, height) catch return error.SidebarTooLarge;
     return std.math.mul(usize, pixels, 4) catch return error.SidebarTooLarge;
+}
+
+const PixelSize = struct {
+    width: u32,
+    height: u32,
+};
+
+fn fitWithinPixels(width: u32, height: u32, max_pixels: usize) PixelSize {
+    if (@as(u64, width) * height <= max_pixels) return .{ .width = width, .height = height };
+    const longest = @max(width, height);
+    var lower: u32 = 1;
+    var upper = longest;
+    while (lower < upper) {
+        const candidate = lower + (upper - lower + 1) / 2;
+        const candidate_width = scaledPixelDimension(width, candidate, longest);
+        const candidate_height = scaledPixelDimension(height, candidate, longest);
+        if (@as(u64, candidate_width) * candidate_height <= max_pixels)
+            lower = candidate
+        else
+            upper = candidate - 1;
+    }
+    return .{
+        .width = scaledPixelDimension(width, lower, longest),
+        .height = scaledPixelDimension(height, lower, longest),
+    };
+}
+
+fn scaledPixelDimension(value: u32, fitted_longest: u32, original_longest: u32) u32 {
+    return @max(1, @as(u32, @intCast(
+        (@as(u64, value) * fitted_longest + original_longest / 2) / original_longest,
+    )));
+}
+
+fn renderRoundedRectangle(
+    pixels: []u8,
+    width: u32,
+    height: u32,
+    requested_radius: u32,
+    color: [3]u8,
+) void {
+    const radius = @min(requested_radius, @min(width, height) / 2);
+    var y: u32 = 0;
+    while (y < height) : (y += 1) {
+        var x: u32 = 0;
+        while (x < width) : (x += 1) {
+            const index = (@as(usize, y) * width + x) * 4;
+            pixels[index] = color[0];
+            pixels[index + 1] = color[1];
+            pixels[index + 2] = color[2];
+            pixels[index + 3] = roundedCoverage(x, y, width, height, radius);
+        }
+    }
+}
+
+fn roundedCoverage(x: u32, y: u32, width: u32, height: u32, radius: u32) u8 {
+    if (radius == 0) return 255;
+    const supersample: u32 = 4;
+    const units_per_pixel: u32 = supersample * 2;
+    var inside: u32 = 0;
+    for (0..supersample) |sample_y| {
+        for (0..supersample) |sample_x| {
+            const point_x = x * units_per_pixel + @as(u32, @intCast(sample_x * 2 + 1));
+            const point_y = y * units_per_pixel + @as(u32, @intCast(sample_y * 2 + 1));
+            inside += @intFromBool(insideRoundedRectangle(
+                point_x,
+                point_y,
+                width * units_per_pixel,
+                height * units_per_pixel,
+                radius * units_per_pixel,
+            ));
+        }
+    }
+    return @intCast((inside * 255 + supersample * supersample / 2) /
+        (supersample * supersample));
+}
+
+fn insideRoundedRectangle(
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    radius: u32,
+) bool {
+    if ((x >= radius and x <= width - radius) or
+        (y >= radius and y <= height - radius)) return true;
+    const center_x = if (x < radius) radius else width - radius;
+    const center_y = if (y < radius) radius else height - radius;
+    const delta_x = @as(i64, x) - center_x;
+    const delta_y = @as(i64, y) - center_y;
+    return delta_x * delta_x + delta_y * delta_y <= @as(i64, radius) * radius;
 }
 
 fn clearRgba(pixels: []u8) void {
@@ -1765,27 +1966,91 @@ fn renderProviderAtlas(
     while (provider < providerAtlasSourceCount()) : (provider += 1) {
         var y: u32 = 0;
         while (y < icon_size) : (y += 1) {
-            const source_y = @min(
-                KittySidebarRenderer.provider_source_size - 1,
-                y * KittySidebarRenderer.provider_source_size / icon_size,
-            );
             var x: u32 = 0;
             while (x < icon_size) : (x += 1) {
-                const source_x = provider * KittySidebarRenderer.provider_source_size + @min(
-                    KittySidebarRenderer.provider_source_size - 1,
-                    x * KittySidebarRenderer.provider_source_size / icon_size,
-                );
-                const source_index = (@as(usize, source_y) * KittySidebarRenderer.provider_source_width + source_x) * 4;
                 const destination_x = provider * slot_width + offset_x + x;
                 const destination_y = offset_y + y;
                 const destination_index = (@as(usize, destination_y) * atlas_width + destination_x) * 4;
-                @memcpy(
+                sampleProviderPixel(
                     destination[destination_index..][0..4],
-                    KittySidebarRenderer.provider_source_pixels[source_index..][0..4],
+                    provider,
+                    x,
+                    y,
+                    icon_size,
                 );
             }
         }
     }
+}
+
+fn sampleProviderPixel(
+    destination: *[4]u8,
+    provider: u32,
+    destination_x: u32,
+    destination_y: u32,
+    destination_size: u32,
+) void {
+    const source_x = sampleAxis(destination_x, destination_size);
+    const source_y = sampleAxis(destination_y, destination_size);
+    const one: u64 = 1 << 16;
+    const weights = [4]u64{
+        (one - source_x.fraction) * (one - source_y.fraction),
+        source_x.fraction * (one - source_y.fraction),
+        (one - source_x.fraction) * source_y.fraction,
+        source_x.fraction * source_y.fraction,
+    };
+    const pixels = [4][4]u8{
+        providerSourcePixel(provider, source_x.index, source_y.index),
+        providerSourcePixel(provider, source_x.next, source_y.index),
+        providerSourcePixel(provider, source_x.index, source_y.next),
+        providerSourcePixel(provider, source_x.next, source_y.next),
+    };
+    const total_weight: u64 = one * one;
+    var alpha_sum: u64 = 0;
+    var premultiplied: [3]u64 = @splat(0);
+    for (pixels, weights) |pixel, weight| {
+        alpha_sum += @as(u64, pixel[3]) * weight;
+        inline for (0..3) |channel|
+            premultiplied[channel] += @as(u64, pixel[channel]) * pixel[3] * weight;
+    }
+    destination[3] = @intCast((alpha_sum + total_weight / 2) / total_weight);
+    if (alpha_sum == 0) {
+        destination[0] = 0;
+        destination[1] = 0;
+        destination[2] = 0;
+        return;
+    }
+    inline for (0..3) |channel|
+        destination[channel] = @intCast((premultiplied[channel] + alpha_sum / 2) / alpha_sum);
+}
+
+const SampleAxis = struct {
+    index: u32,
+    next: u32,
+    fraction: u64,
+};
+
+fn sampleAxis(destination: u32, destination_size: u32) SampleAxis {
+    const source_last = KittySidebarRenderer.provider_source_size - 1;
+    if (destination_size <= 1) return .{
+        .index = source_last / 2,
+        .next = source_last / 2,
+        .fraction = 0,
+    };
+    const fixed = @as(u64, destination) * source_last * (1 << 16) /
+        (destination_size - 1);
+    const index: u32 = @intCast(fixed >> 16);
+    return .{
+        .index = index,
+        .next = @min(source_last, index + 1),
+        .fraction = fixed & 0xffff,
+    };
+}
+
+fn providerSourcePixel(provider: u32, x: u32, y: u32) [4]u8 {
+    const source_x = provider * KittySidebarRenderer.provider_source_size + x;
+    const index = (@as(usize, y) * KittySidebarRenderer.provider_source_width + source_x) * 4;
+    return KittySidebarRenderer.provider_source_pixels[index..][0..4].*;
 }
 
 fn providerAtlasSourceCount() u32 {
@@ -2112,24 +2377,21 @@ fn inflateExact(gpa: std.mem.Allocator, compressed: []const u8, expected_len: us
     return inflated;
 }
 
-test "an idle input budget transmits and places a large frame in one pass" {
+test "a large explicit budget transmits and places a frame in one pass" {
     const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
     defer std.testing.allocator.free(pixels);
     @memset(pixels, 0xab);
     var fixture = try TransmissionFixture.init(pixels);
     defer fixture.deinit();
 
-    var graphics_writer = fixture.writer(
-        transmission_budget_per_frame * idle_transmission_boost,
-    );
+    var graphics_writer = fixture.writer(transmission_budget_per_frame * 8);
     const frame_buffer = try std.testing.allocator.alloc(u8, 2 * 1024 * 1024);
     defer std.testing.allocator.free(frame_buffer);
     var writer = Io.Writer.fixed(frame_buffer);
     _ = try graphics_writer.write(&writer);
 
-    // The whole image and its placement went out; nothing is pending, so a
-    // 60Hz pace delivers one of these frames per tick instead of one per
-    // four ticks under the baseline budget.
+    // The whole image and its placement went out because this test explicitly
+    // supplied enough budget for one pass.
     try std.testing.expect(fixture.store.partial == null);
     try std.testing.expect(!fixture.store.damage);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=p") != null);
@@ -2196,7 +2458,7 @@ test "incompressible pixels fall back to a raw transmission" {
     defer fixture.deinit();
     fixture.store.host_zlib = true;
 
-    var graphics_writer = fixture.writer(transmission_budget_per_frame * idle_transmission_boost);
+    var graphics_writer = fixture.writer(transmission_budget_per_frame * 8);
     const frame_buffer = try std.testing.allocator.alloc(u8, 4 * 1024 * 1024);
     defer std.testing.allocator.free(frame_buffer);
     var collected: Io.Writer.Allocating = .init(std.testing.allocator);
@@ -2919,7 +3181,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
             .provider = .codex,
         },
     };
-    try renderer.prepare(area, &providers, 10, 20);
+    try renderer.prepare(area, null, &providers, 10, 20);
     try std.testing.expectEqual(@as(u32, 60), renderer.provider_slot_width);
     try std.testing.expectEqual(@as(u32, 120), renderer.provider_slot_height);
     var initial_buffer: [128 * 1024]u8 = undefined;
@@ -2929,23 +3191,64 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=60,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(renderer.provider_emitted);
 
-    try renderer.prepare(area, &providers, 10, 20);
+    try renderer.prepare(area, null, &providers, 10, 20);
     try std.testing.expect(!renderer.damaged());
 
     // A cell-size change while no agents are visible must still invalidate the
     // resident atlas before a later provider reuses it.
-    try renderer.prepare(area, &.{}, 9, 18);
+    try renderer.prepare(area, null, &.{}, 9, 18);
     var cleared_buffer: [4096]u8 = undefined;
     var cleared = Io.Writer.fixed(&cleared_buffer);
     _ = try renderer.write(&cleared);
     try std.testing.expect(!renderer.provider_emitted);
 
-    try renderer.prepare(area, &providers, 9, 18);
+    try renderer.prepare(area, null, &providers, 9, 18);
     try std.testing.expect(renderer.provider_dirty);
     var resized_buffer: [128 * 1024]u8 = undefined;
     var resized = Io.Writer.fixed(&resized_buffer);
     _ = try renderer.write(&resized);
     try std.testing.expect(std.mem.indexOf(u8, resized.buffered(), "x=63,y=0,w=63,h=126,c=2,r=2") != null);
+}
+
+test "sidebar focused card is rounded bounded and moves without retransmission" {
+    var renderer = KittySidebarRenderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    const area: core.ui.Rect = .{ .x = 1, .y = 1, .w = 60, .h = 20 };
+    const color = [3]u8{ 35, 35, 35 };
+    const first: SidebarFocus = .{
+        .area = .{ .x = 2, .y = 4, .w = 57, .h = 3 },
+        .color = color,
+    };
+    try renderer.prepare(area, first, &.{}, 10, 20);
+    try std.testing.expect(
+        renderer.focused_card_pixels.len <= KittySidebarRenderer.max_focused_card_pixels * 4,
+    );
+    try std.testing.expect(renderer.focused_card_pixels[3] < 255);
+    const center = ((@as(usize, renderer.focused_card_height) / 2 * renderer.focused_card_width +
+        renderer.focused_card_width / 2) * 4);
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 35, 35, 35, 255 },
+        renderer.focused_card_pixels[center..][0..4],
+    );
+
+    var initial_buffer: [512 * 1024]u8 = undefined;
+    var initial = Io.Writer.fixed(&initial_buffer);
+    _ = try renderer.write(&initial);
+    try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "a=t") != null);
+    try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "a=p") != null);
+    try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "z=-9") != null);
+
+    const moved: SidebarFocus = .{
+        .area = .{ .x = 2, .y = 8, .w = 57, .h = 3 },
+        .color = color,
+    };
+    try renderer.prepare(area, moved, &.{}, 10, 20);
+    var moved_buffer: [4096]u8 = undefined;
+    var moved_writer = Io.Writer.fixed(&moved_buffer);
+    _ = try renderer.write(&moved_writer);
+    try std.testing.expect(std.mem.indexOf(u8, moved_writer.buffered(), "a=p") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_writer.buffered(), "a=t") == null);
 }
 
 fn testCreateSharedObject(name: [:0]const u8, pixels: []const u8) !void {

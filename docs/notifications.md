@@ -75,16 +75,21 @@ ignored.
 
 When the client has confirmed Kitty Graphics support and knows the host cell
 size, it shapes UTF-8 with HarfBuzz and rasterizes the resulting glyphs into
-RGBA with FreeType and the embedded JetBrains Mono face. Rasterization and image
-transfer wait until the media path is idle. A texture is regenerated only when
-its content, theme, or pixel geometry changes; the 200 ms transition updates
-only a native-size KGP source crop and placement, so the smoothstep curve keeps
-pixel precision instead of snapping to columns.
+RGBA with FreeType and the embedded JetBrains Mono face. Cell composition first
+records a fixed-size media plan and flushes the cell fallback. Rasterization is
+deferred to a lower-priority media pass after host input has been quiet for 250
+ms. A texture is regenerated only when its content, theme, or pixel geometry
+changes; the 200 ms transition updates only a native-size KGP source crop and
+placement, so the smoothstep curve keeps pixel precision instead of snapping to
+columns.
 
-The renderer owns at most four 1.5 MiB images and transfers at most one during
-an idle graphics pass. Until every visible image has reached the host, the
-whole stack remains cell-rendered. Unsupported KGP, terminal-derived colors,
-missing glyphs, oversized geometry, allocation failure, resize, and renderer
-initialization failure all take the same path: remove graphical placements and
-keep the clickable cell renderer. The hit targets remain cell-owned even while
-KGP supplies the pixels.
+The renderer owns at most four 1.5 MiB images. It transmits one texture at a
+time and emits at most 256 KiB of encoded KGP data per media pass, so a texture
+larger than that budget is continued over several passes. Until every visible
+image has reached the host, the whole stack remains cell-rendered. Unsupported
+KGP, terminal-derived colors, missing glyphs, oversized geometry, allocation
+failure, resize, and renderer initialization failure all take the same path:
+remove graphical placements and keep the clickable cell renderer. The hit
+targets remain cell-owned even while KGP supplies the pixels. Debug telemetry
+reports the cache as `toast_cache_bytes` and attributes its wire traffic to
+`toast_graphics_flushed_bytes` and `media_flush_*` rather than cell `flush_*`.

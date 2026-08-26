@@ -1,7 +1,7 @@
 //! Frame pacing and presentation: the draw-request → deadline → compose →
-//! flush cycle, the 60Hz pacer, and the media budget that follows host
-//! input. Owns the host-terminal back/front buffers. Frame acks come back
-//! to the caller as values; the client enqueues them.
+//! cell-flush cycle, plus a lower-priority media pass. Owns the host-terminal
+//! back/front buffers. Frame acks come back to the caller as values; the
+//! client enqueues them.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -18,6 +18,7 @@ const term = presentation.screen;
 const Io = std.Io;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
+const icon_graphics = graphics.icons;
 
 const client_mod = @import("client.zig");
 const Client = client_mod;
@@ -36,6 +37,7 @@ screen: term.Screen,
 pacer: pace.Pacer = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
+media_tick_pending: bool = false,
 pending_updates: usize = 0,
 last_presented_ns: ?u64 = null,
 /// When the host terminal last delivered input bytes. Zero until the
@@ -75,6 +77,21 @@ pub fn requestDraw(presenter: *Presenter) !void {
     };
 }
 
+/// Arms one independently paced media pass. Cell work always wins before a
+/// pass starts, and each pass emits at most the baseline KGP byte budget.
+pub fn requestMedia(presenter: *Presenter) !void {
+    try presenter.requestMediaAt(monotonic(presenter.io) +| pace.default_interval);
+}
+
+fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
+    if (presenter.media_tick_pending) return;
+    presenter.media_tick_pending = true;
+    presenter.select.concurrent(.media_tick, waitToDraw, .{ presenter.io, deadline_ns }) catch |err| {
+        presenter.media_tick_pending = false;
+        return err;
+    };
+}
+
 /// The `.draw` event: present if there is anything to show yet.
 pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     presenter.draw_pending = false;
@@ -98,12 +115,91 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
                 diagnostics.elapsed(ack_started, diagnostics.now(presenter.io)),
             );
     }
-    // The graphics budget may have left work behind; the pacer turns
-    // this into the next frame, not a spin.
-    if ((client.graphics_store.damage or client.view.kittySidebar().damaged() or
-        client.view.kittyToasts().damaged()) and
-        client.capabilities.kitty_graphics == .supported)
+    if (presenter.mediaWorkPending(client)) try presenter.requestMedia();
+}
+
+/// The media event never composes cells. A pending or scheduled cell frame
+/// defers it, which gives interactive output priority without concurrent
+/// writes corrupting the terminal protocol stream.
+pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
+    presenter.media_tick_pending = false;
+    if (presenter.pending_updates != 0 or presenter.draw_pending) {
+        try presenter.requestMedia();
+        return;
+    }
+    const model = presentableModel(&client.tabs) orelse return;
+    const media_idle = monotonic(presenter.io) -| presenter.last_input_ns >=
+        toast_graphics.idle_after_ns;
+    const covered_before = client.view.graphicalToastsCover();
+    const icon_fallback_changed = try client.view.prepareGraphics(media_idle);
+    if (icon_fallback_changed) try presenter.requestDraw();
+    if (!presenter.mediaWorkPending(client)) return;
+    if (presenter.onlyWaitingForMediaIdle(client, media_idle)) {
+        try presenter.requestMediaAt(presenter.last_input_ns +| toast_graphics.idle_after_ns);
+        return;
+    }
+
+    const cell_size = client.capabilities.cellSize(presenter.screen.back.w, presenter.screen.back.h);
+    const layout_snapshot = model.layoutSnapshot(client.view.workbench());
+    client.graphics_store.setHostZlib(client.capabilities.kitty_zlib == .supported);
+    var graphics_writer: CombinedGraphicsWriter = .{
+        .panes = .{
+            .store = &client.graphics_store,
+            .layout_snapshot = layout_snapshot,
+            .cell_width = cell_size.width,
+            .cell_height = cell_size.height,
+            .budget = kitty.transmission_budget_per_frame,
+        },
+        .sidebar = client.view.kittySidebar(),
+        .icons = client.view.kittyIcons(),
+        .toasts = client.view.kittyToasts(),
+        .allow_toast_transmission = media_idle,
+        .metrics = presenter.metrics,
+    };
+    presenter.screen.graphics = .{
+        .context = &graphics_writer,
+        .write = CombinedGraphicsWriter.writeOpaque,
+    };
+    try flushMedia(presenter.io, &presenter.screen, client.writer, presenter.metrics);
+    if (comptime diagnostics.enabled) {
+        const graphics_stats = graphics_writer.panes.stats;
+        presenter.metrics.pane_shared_images += graphics_stats.shared_images;
+        presenter.metrics.pane_inline_images += graphics_stats.inline_images;
+        presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
+        presenter.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
+        presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
+    }
+
+    if (covered_before != client.view.graphicalToastsCover()) {
+        client.view.invalidate();
         try presenter.requestDraw();
+    }
+    if (presenter.mediaWorkPending(client)) {
+        if (presenter.onlyWaitingForMediaIdle(client, media_idle))
+            try presenter.requestMediaAt(presenter.last_input_ns +| toast_graphics.idle_after_ns)
+        else
+            try presenter.requestMedia();
+    }
+}
+
+fn mediaWorkPending(presenter: *const Presenter, client: *Client) bool {
+    _ = presenter;
+    return client.capabilities.kitty_graphics == .supported and
+        (client.view.graphicsPreparationPending() or client.graphics_store.damage or
+            client.view.kittySidebar().damaged() or client.view.kittyIcons().damaged() or
+            client.view.kittyToasts().damaged());
+}
+
+fn onlyWaitingForMediaIdle(
+    presenter: *const Presenter,
+    client: *Client,
+    media_idle: bool,
+) bool {
+    _ = presenter;
+    return !media_idle and !client.view.graphicsPreparationPending() and
+        !client.graphics_store.damage and !client.view.kittySidebar().damaged() and
+        !client.view.kittyIcons().damaged() and
+        client.view.kittyToasts().waitingForMediaIdle();
 }
 
 fn observePresentation(presenter: *Presenter, presented_ns: u64) void {
@@ -125,19 +221,17 @@ const Presented = struct {
 };
 
 fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !Presented {
-    const media_idle = monotonic(presenter.io) -| presenter.last_input_ns >=
-        kitty.idle_boost_after_ns;
-    client.view.kittyToasts().setMediaIdle(media_idle);
     const compose_started = diagnostics.now(presenter.io);
     const composed = try model.renderThemed(
         &presenter.screen,
         client.view.workbench(),
         client.view.palette(),
     );
-    const chrome = try client.view.render(
+    const chrome = try client.view.renderWithStatus(
         &presenter.screen,
         &client.tabs,
         model,
+        client.statusMode(),
         composed.full,
         if (client.config_diagnostic.len != 0) client.config_diagnostic.message() else null,
     );
@@ -152,41 +246,10 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
             diagnostics.elapsed(compose_started, diagnostics.now(presenter.io)),
         );
     }
-    const cell_size = client.capabilities.cellSize(presenter.screen.back.w, presenter.screen.back.h);
-    const layout_snapshot = model.layoutSnapshot(client.view.workbench());
-    client.graphics_store.setHostZlib(client.capabilities.kitty_zlib == .supported);
-    // Media rides the interactive writer, so its budget follows the user:
-    // baseline while input is live, boosted once the host has been quiet.
-    const media_budget = if (media_idle)
-        kitty.transmission_budget_per_frame * kitty.idle_transmission_boost
-    else
-        kitty.transmission_budget_per_frame;
-    var graphics_writer: CombinedGraphicsWriter = .{
-        .panes = .{
-            .store = &client.graphics_store,
-            .layout_snapshot = layout_snapshot,
-            .cell_width = cell_size.width,
-            .cell_height = cell_size.height,
-            .budget = media_budget,
-        },
-        .sidebar = client.view.kittySidebar(),
-        .toasts = client.view.kittyToasts(),
-        .allow_toast_transmission = media_idle,
-        .metrics = presenter.metrics,
-    };
-    if (client.capabilities.kitty_graphics == .supported) presenter.screen.graphics = .{
-        .context = &graphics_writer,
-        .write = CombinedGraphicsWriter.writeOpaque,
-    };
+    // Graphics never enter this flush. The media event applies the fixed plan
+    // produced above only after these cells have reached the host terminal.
+    presenter.screen.graphics = null;
     try flushScreen(presenter.io, &presenter.screen, client.writer, presenter.metrics);
-    if (comptime diagnostics.enabled) {
-        const graphics_stats = graphics_writer.panes.stats;
-        presenter.metrics.pane_shared_images += graphics_stats.shared_images;
-        presenter.metrics.pane_inline_images += graphics_stats.inline_images;
-        presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
-        presenter.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
-        presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
-    }
     var acks: Acks = .{};
     var panes = model.paneIterator();
     while (panes.next()) |pane| {
@@ -202,30 +265,46 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
 const CombinedGraphicsWriter = struct {
     panes: kitty.KittyGraphicsWriter,
     sidebar: *kitty.KittySidebarRenderer,
+    icons: *icon_graphics.Renderer,
     toasts: *toast_graphics.Renderer,
     allow_toast_transmission: bool,
     metrics: *ClientMetrics,
 
     fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
         const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
-        const pane_bytes = try self.panes.write(writer);
-        // An open budget-paced transfer owns the graphics stream. Toast
-        // deletions and placements remain cheap, while a new toast texture
-        // waits for an otherwise-idle pane-media pass.
+        var pane_bytes: usize = 0;
         var toast_bytes: usize = 0;
-        if (self.panes.store.partial == null)
+        var sidebar_bytes: usize = 0;
+        var icon_bytes: usize = 0;
+
+        // KGP continuation chunks do not identify their image. Whichever
+        // renderer opened a transfer owns the graphics stream until it closes;
+        // a pane, toast, or icon atlas can never interleave another transfer.
+        if (self.toasts.transferInProgress()) {
             toast_bytes = try self.toasts.write(
                 writer,
-                pane_bytes == 0 and self.allow_toast_transmission,
+                true,
             );
-        var sidebar_bytes: usize = 0;
-        if (self.panes.store.partial == null and toast_bytes == 0)
-            sidebar_bytes = try self.sidebar.write(writer);
+        } else if (self.icons.transferInProgress()) {
+            icon_bytes = try self.icons.write(writer);
+        } else {
+            pane_bytes = try self.panes.write(writer);
+            if (pane_bytes == 0 and self.panes.store.partial == null) {
+                toast_bytes = try self.toasts.write(writer, self.allow_toast_transmission);
+                if (toast_bytes == 0) {
+                    sidebar_bytes = try self.sidebar.write(writer);
+                    if (sidebar_bytes == 0)
+                        icon_bytes = try self.icons.write(writer);
+                }
+            }
+        }
         if (comptime diagnostics.enabled) {
             self.metrics.pane_graphics_flushed_bytes += pane_bytes;
+            self.metrics.toast_graphics_flushed_bytes += toast_bytes;
             self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
+            self.metrics.icon_graphics_flushed_bytes += icon_bytes;
         }
-        return pane_bytes + toast_bytes + sidebar_bytes;
+        return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes;
     }
 };
 
@@ -244,6 +323,21 @@ fn flushScreen(
         metrics.flushed_bytes += stats.bytes;
         metrics.graphics_flushed_bytes += stats.graphics_bytes;
         metrics.flush.observe(diagnostics.elapsed(started, diagnostics.now(io)));
+    }
+}
+
+fn flushMedia(
+    io: Io,
+    screen: *term.Screen,
+    writer: *Io.Writer,
+    metrics: *ClientMetrics,
+) !void {
+    const started = diagnostics.now(io);
+    const stats = try screen.flush(writer);
+    if (comptime diagnostics.enabled) {
+        metrics.media_flushes += 1;
+        metrics.graphics_flushed_bytes += stats.graphics_bytes;
+        metrics.media_flush.observe(diagnostics.elapsed(started, diagnostics.now(io)));
     }
 }
 

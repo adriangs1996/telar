@@ -21,6 +21,7 @@ pub const max_history_query_bytes = 1024;
 pub const max_history_results = 100;
 pub const max_history_command_bytes = 64 * 1024;
 pub const max_agent_snapshot_entries = max_panes_per_tab;
+pub const max_foreground_name_bytes = 48;
 pub const max_workspace_list_entries = 64;
 pub const max_notification_title_bytes = 48;
 pub const max_notification_message_bytes = 192;
@@ -190,6 +191,12 @@ pub const AgentAuthority = enum(u8) {
 pub const AgentSnapshotEntry = struct {
     pane_id: id.PaneId,
     pane_generation: u64,
+    location: TabLocation = .{
+        .workspace = .{ .workspace = .invalid },
+        .tab_id = .invalid,
+    },
+    /// One-based position among the currently open panes in this tab.
+    pane_index: u16 = 0,
     process_id: u32,
     session_id: [16]u8,
     provider: AgentProvider,

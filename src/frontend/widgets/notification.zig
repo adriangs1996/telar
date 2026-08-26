@@ -155,13 +155,8 @@ pub const Center = struct {
     next_id: u64 = 1,
 
     pub fn push(center: *Center, now_ns: u64, input: Input) Id {
-        const id = center.takeId();
-        if (center.count == max_items) center.count -= 1;
-        var index: usize = center.count;
-        while (index > 0) : (index -= 1) center.items[index] = center.items[index - 1];
-
         var item: Item = .{
-            .id = id,
+            .id = .invalid,
             .level = input.level,
             .target = input.target,
             .title_len = 0,
@@ -171,6 +166,23 @@ pub const Center = struct {
         };
         item.title_len = @intCast(copyValidUtf8(&item.title_buffer, input.title));
         item.message_len = @intCast(copyValidUtf8(&item.message_buffer, input.message));
+
+        for (center.items[0..center.count]) |*slot| {
+            const existing = if (slot.*) |*value| value else continue;
+            if (existing.phase == .exiting or !sameNotification(existing, &item)) continue;
+            existing.expires_at_ns = switch (existing.phase) {
+                .entering => now_ns +| transition_duration_ns +| input.duration_ns,
+                .visible => now_ns +| input.duration_ns,
+                .exiting => unreachable,
+            };
+            return existing.id;
+        }
+
+        const id = center.takeId();
+        item.id = id;
+        if (center.count == max_items) center.count -= 1;
+        var index: usize = center.count;
+        while (index > 0) : (index -= 1) center.items[index] = center.items[index - 1];
         center.items[0] = item;
         center.count += 1;
         return id;
@@ -278,6 +290,13 @@ pub const Center = struct {
     }
 };
 
+fn sameNotification(left: *const Item, right: *const Item) bool {
+    return left.level == right.level and
+        std.meta.eql(left.target, right.target) and
+        std.mem.eql(u8, left.title(), right.title()) and
+        std.mem.eql(u8, left.message(), right.message());
+}
+
 fn copyValidUtf8(destination: []u8, source: []const u8) usize {
     const valid = if (std.unicode.utf8ValidateSlice(source)) source else "invalid notification text";
     var len = @min(destination.len, valid.len);
@@ -300,6 +319,38 @@ test "new notifications replace the oldest at the fixed bound" {
     try std.testing.expectEqual(@as(u8, max_items), center.count);
     try std.testing.expectEqual(ids[max_items], center.itemAt(0).?.id);
     try std.testing.expect(center.find(ids[0]) == null);
+}
+
+test "an active duplicate notification is refreshed instead of stacked" {
+    var center: Center = .{};
+    const input: Input = .{
+        .level = .success,
+        .title = "Agent ready",
+        .message = "Claude in pane 1 is ready",
+        .target = .{ .focus_pane = @enumFromInt(1) },
+        .duration_ns = std.time.ns_per_s,
+    };
+    const first = center.push(0, input);
+    _ = center.advance(transition_duration_ns);
+    const second = center.push(2 * transition_duration_ns, input);
+
+    try std.testing.expectEqual(first, second);
+    try std.testing.expectEqual(@as(u8, 1), center.count);
+    try std.testing.expectEqual(
+        2 * transition_duration_ns + std.time.ns_per_s,
+        center.itemAt(0).?.expires_at_ns,
+    );
+}
+
+test "a duplicate may be shown again after dismissal begins" {
+    var center: Center = .{};
+    const input: Input = .{ .title = "Ready", .message = "Open result" };
+    const first = center.push(0, input);
+    try std.testing.expect(center.dismiss(first, 1));
+    const second = center.push(2, input);
+
+    try std.testing.expect(first != second);
+    try std.testing.expectEqual(@as(u8, 2), center.count);
 }
 
 test "activation returns a semantic target and starts exit animation" {

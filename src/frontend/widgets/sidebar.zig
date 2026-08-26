@@ -21,7 +21,6 @@ pub const max_provider_marks = model.max_agents;
 const rows_per_agent = 3;
 
 pub const State = struct {
-    selected_agent: ?AgentKey = null,
     scroll: u16 = 0,
     total_rows: u16 = 0,
 
@@ -39,7 +38,7 @@ pub const State = struct {
 
 pub const Semantic = struct {
     area: ui.Rect,
-    selected_card: ?ui.Rect = null,
+    focused_card: ?ui.Rect = null,
     provider_marks: [max_provider_marks]ProviderMark = undefined,
     provider_mark_count: u8 = 0,
     list_area: ui.Rect = .{},
@@ -61,7 +60,9 @@ pub const Input = struct {
     area: ui.Rect,
     snapshot: *const Snapshot,
     state: *State,
+    focused_agent: ?AgentKey = null,
     transparent: bool,
+    rounded_focus: bool = false,
     animation_frame: u8 = 0,
 };
 
@@ -163,10 +164,10 @@ fn drawAgentLine(
     line: u2,
     background: ui.Color,
 ) void {
-    const action: widget.Action = .{ .sidebar_select_agent = agent.key };
-    const selected = if (input.state.selected_agent) |key| std.meta.eql(key, agent.key) else false;
+    const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
+    const focused = if (input.focused_agent) |key| std.meta.eql(key, agent.key) else false;
     const hovered = context.isHovered(action);
-    const row_bg = if (selected)
+    const row_bg = if (focused)
         context.palette.surface0
     else if (hovered)
         context.palette.surface1
@@ -178,19 +179,32 @@ fn drawAgentLine(
         .w = semantic.list_area.w -| 1,
         .h = 1,
     };
+    if (focused and line == 0 and y + 1 < semantic.list_area.y + semantic.list_area.h)
+        semantic.focused_card = .{
+            .x = row.x,
+            .y = y,
+            .w = row.w,
+            .h = @min(rows_per_agent, semantic.list_area.y + semantic.list_area.h - y),
+        };
     context.buffer.fill(row, " ", .{ .bg = row_bg });
-    if (selected) {
+    if (focused) {
+        const corner_row = if (semantic.focused_card) |card|
+            input.rounded_focus and (y == card.y or y + 1 == card.y + card.h)
+        else
+            false;
+        if (corner_row and row.w != 0) {
+            context.buffer.fill(.{ .x = row.x, .y = y, .w = 1, .h = 1 }, " ", .{});
+            if (row.w > 1) context.buffer.fill(.{
+                .x = row.x + row.w - 1,
+                .y = y,
+                .w = 1,
+                .h = 1,
+            }, " ", .{});
+        }
         _ = context.buffer.writeText(row, row.x, y, "┃", .{
             .fg = context.palette.accent,
-            .bg = row_bg,
+            .bg = if (corner_row) .default else row_bg,
         });
-        if (line == 0 and y + 1 < semantic.list_area.y + semantic.list_area.h)
-            semantic.selected_card = .{
-                .x = row.x,
-                .y = y,
-                .w = row.w,
-                .h = @min(rows_per_agent, semantic.list_area.y + semantic.list_area.h - y),
-            };
     }
 
     const body: ui.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
@@ -215,7 +229,7 @@ fn drawAgentTitle(
     if (input.transparent and (agent.provider == .claude or agent.provider == .codex)) {
         semantic.addProviderMark(.{ .area = mark_area, .provider = agent.provider });
     } else {
-        _ = context.buffer.writeText(area, area.x, area.y, providerGlyph(agent.provider), .{
+        _ = context.drawIcon(area, area.x, area.y, providerIcon(agent.provider), .{
             .fg = context.palette.accent,
             .bg = background,
         });
@@ -239,7 +253,7 @@ fn drawAgentPane(
     background: ui.Color,
 ) void {
     var pane_buffer: [32]u8 = undefined;
-    const pane = std.fmt.bufPrint(&pane_buffer, "pane {d}", .{schema.id.raw(agent.key.pane_id)}) catch "";
+    const pane = std.fmt.bufPrint(&pane_buffer, "pane {d}", .{agent.pane_index}) catch "";
     _ = context.buffer.writeTruncated(area, area.x + 3, area.y, pane, area.w -| 3, .{
         .fg = context.palette.overlay0,
         .bg = background,
@@ -256,7 +270,7 @@ fn drawStatus(
     const width = statusWidth(status);
     if (width > area.w) return;
     var x = area.x + area.w - width;
-    x += context.buffer.writeText(area, x, area.y, statusGlyph(status, animation_frame), .{
+    x += context.drawIcon(area, x, area.y, statusIcon(status, animation_frame), .{
         .fg = statusColor(context, status),
         .bg = background,
     });
@@ -272,14 +286,13 @@ fn statusWidth(status: schema.AgentStatus) u16 {
     return ui.measure(statusLabel(status)) + 2;
 }
 
-fn statusGlyph(status: schema.AgentStatus, animation_frame: u8) []const u8 {
-    const working = [_][]const u8{ "◐", "◓", "◑", "◒" };
+fn statusIcon(status: schema.AgentStatus, animation_frame: u8) ui.icons.Icon {
     return switch (status) {
-        .unknown => "?",
-        .working => working[animation_frame % working.len],
-        .blocked => "!",
-        .ready => "✓",
-        .failed => "×",
+        .unknown => .agent_unknown,
+        .working => ui.icons.working(animation_frame),
+        .blocked => .agent_blocked,
+        .ready => .agent_ready,
+        .failed => .agent_failed,
     };
 }
 
@@ -291,11 +304,11 @@ fn providerLabel(provider: schema.AgentProvider) []const u8 {
     };
 }
 
-fn providerGlyph(provider: schema.AgentProvider) []const u8 {
+fn providerIcon(provider: schema.AgentProvider) ui.icons.Icon {
     return switch (provider) {
-        .unknown => "?",
-        .claude => "✳",
-        .codex => "◆",
+        .unknown => .provider_unknown,
+        .claude => .provider_claude,
+        .codex => .provider_codex,
     };
 }
 
@@ -414,6 +427,11 @@ test "agent snapshot renders compact selectable rows and status" {
     var snapshot: Snapshot = .{};
     const agents = [_]AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 2,
         .provider = .codex,
         .status = .blocked,
     }};
@@ -421,7 +439,46 @@ test "agent snapshot renders compact selectable rows and status" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var state: State = .{ .selected_agent = agents[0].key };
+    var state: State = .{};
+    const palette = ui.theme.default_theme.palette;
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &palette,
+        .hovered = null,
+    };
+    const output = render(&context, .{
+        .area = buffer.area(),
+        .snapshot = &snapshot,
+        .state = &state,
+        .focused_agent = agents[0].key,
+        .transparent = false,
+    });
+    try std.testing.expectEqual(@as(u16, 3), output.focused_card.?.h);
+    try std.testing.expectEqualDeep(
+        widget.Action{ .sidebar_focus_agent = agents[0].key },
+        hits.at(4, output.focused_card.?.y).?,
+    );
+    try std.testing.expectEqualStrings("p", buffer.at(6, output.focused_card.?.y + 1).?.text());
+}
+
+test "agent without pane focus remains unhighlighted" {
+    var snapshot: Snapshot = .{};
+    const agent: AgentInput = .{
+        .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 2,
+        .provider = .codex,
+        .status = .ready,
+    };
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
+    var buffer = try ui.Buffer.init(std.testing.allocator, 48, 20);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var state: State = .{};
     const palette = ui.theme.default_theme.palette;
     var context: widget.Context = .{
         .buffer = &buffer,
@@ -435,18 +492,21 @@ test "agent snapshot renders compact selectable rows and status" {
         .state = &state,
         .transparent = false,
     });
-    try std.testing.expectEqual(@as(u16, 3), output.selected_card.?.h);
-    try std.testing.expectEqualDeep(
-        widget.Action{ .sidebar_select_agent = agents[0].key },
-        hits.at(4, output.selected_card.?.y).?,
-    );
-    try std.testing.expectEqualStrings("p", buffer.at(6, output.selected_card.?.y + 1).?.text());
+
+    try std.testing.expect(output.focused_card == null);
+    try std.testing.expectEqualStrings(" ", buffer.at(1, 3).?.text());
+    try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(10, 3).?.style.bg);
 }
 
 test "transparent Codex row publishes an official provider mark" {
     var snapshot: Snapshot = .{};
     const agents = [_]AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 2,
         .provider = .codex,
         .status = .ready,
     }};
@@ -473,10 +533,59 @@ test "transparent Codex row publishes an official provider mark" {
     try std.testing.expectEqual(ui.Rect{ .x = 3, .y = 3, .w = 2, .h = 2 }, output.provider_marks[0].area);
 }
 
+test "graphical focus exposes only the four rounded card corners" {
+    var snapshot: Snapshot = .{};
+    const agents = [_]AgentInput{.{
+        .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 2,
+        .provider = .codex,
+        .status = .ready,
+    }};
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agents });
+    var buffer = try ui.Buffer.init(std.testing.allocator, 48, 20);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var state: State = .{};
+    const palette = ui.theme.default_theme.palette;
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &palette,
+        .hovered = null,
+    };
+    const output = render(&context, .{
+        .area = buffer.area(),
+        .snapshot = &snapshot,
+        .state = &state,
+        .focused_agent = agents[0].key,
+        .transparent = true,
+        .rounded_focus = true,
+    });
+    const card = output.focused_card.?;
+    try std.testing.expectEqual(ui.Color.default, buffer.at(card.x, card.y).?.style.bg);
+    try std.testing.expectEqual(ui.Color.default, buffer.at(card.x + card.w - 1, card.y).?.style.bg);
+    try std.testing.expectEqualDeep(palette.surface0, buffer.at(card.x + 1, card.y).?.style.bg);
+    try std.testing.expectEqualDeep(palette.surface0, buffer.at(card.x, card.y + 1).?.style.bg);
+    try std.testing.expectEqual(ui.Color.default, buffer.at(card.x, card.y + card.h - 1).?.style.bg);
+    try std.testing.expectEqual(
+        ui.Color.default,
+        buffer.at(card.x + card.w - 1, card.y + card.h - 1).?.style.bg,
+    );
+}
+
 test "hover covers the complete three-row agent card" {
     var snapshot: Snapshot = .{};
     const agent: AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 2,
         .provider = .codex,
         .status = .working,
     };
@@ -486,7 +595,7 @@ test "hover covers the complete three-row agent card" {
     var hits: widget.Hits = .{};
     var state: State = .{};
     const palette = ui.theme.default_theme.palette;
-    const action: widget.Action = .{ .sidebar_select_agent = agent.key };
+    const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -506,11 +615,7 @@ test "hover covers the complete three-row agent card" {
 }
 
 test "working status uses an animated glyph" {
-    try std.testing.expect(!std.mem.eql(
-        u8,
-        statusGlyph(.working, 0),
-        statusGlyph(.working, 1),
-    ));
-    try std.testing.expectEqualStrings("✓", statusGlyph(.ready, 0));
-    try std.testing.expectEqualStrings("!", statusGlyph(.blocked, 0));
+    try std.testing.expect(statusIcon(.working, 0) != statusIcon(.working, 1));
+    try std.testing.expectEqualStrings("✓", statusIcon(.ready, 0).unicodeGlyph());
+    try std.testing.expectEqualStrings("!", statusIcon(.blocked, 0).unicodeGlyph());
 }

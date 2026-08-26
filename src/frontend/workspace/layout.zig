@@ -213,6 +213,33 @@ pub const Layout = struct {
         return layout.findLeaf(pane_id) != null;
     }
 
+    /// One-based depth-first position used as the pane's disposable display
+    /// index. Stable runtime ids never leak into the UI.
+    pub fn displayIndex(layout: *const Layout, pane_id: schema.PaneId) ?u16 {
+        const root = layout.root orelse return null;
+        var stack: [max_nodes]NodeIndex = undefined;
+        var stack_len: usize = 1;
+        var index: u16 = 0;
+        stack[0] = root;
+        while (stack_len != 0) {
+            stack_len -= 1;
+            switch (layout.nodes[stack[stack_len]].node) {
+                .empty => unreachable,
+                .leaf => |candidate| {
+                    index += 1;
+                    if (candidate == pane_id) return index;
+                },
+                .split => |branch| {
+                    stack[stack_len] = branch.second;
+                    stack_len += 1;
+                    stack[stack_len] = branch.first;
+                    stack_len += 1;
+                },
+            }
+        }
+        return null;
+    }
+
     pub fn addRoot(layout: *Layout, pane_id: schema.PaneId) !void {
         if (pane_id == .invalid) return error.InvalidPaneId;
         if (layout.root != null) return error.LayoutNotEmpty;

@@ -510,7 +510,7 @@ test "runtime destroys a pane after its shell exits" {
                 saw_tab_closed = true;
             },
             .history_results => return error.UnexpectedHistoryResults,
-            .pane_cwd => {},
+            .pane_cwd, .pane_foreground => {},
             else => return error.UnexpectedTabMessage,
         }
         if (saw_exit and saw_tab_closed and rejected_reattach and rejected_snapshot) return;
@@ -929,7 +929,7 @@ test "pane keeps running while its client is disconnected" {
             .runtime_stopping => return error.UnexpectedRuntimeShutdown,
             .tab_snapshot => return error.UnexpectedTabSnapshot,
             .history_results => return error.UnexpectedHistoryResults,
-            .pane_cwd => {},
+            .pane_cwd, .pane_foreground => {},
             else => return error.UnexpectedTabMessage,
         }
     }

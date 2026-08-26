@@ -21,8 +21,14 @@ pub const PaneOperation = struct {
     location: schema.TabLocation,
 };
 
+pub const InitialOpen = struct {
+    /// Retried when a remembered pane disappeared while its workspace was
+    /// inactive. Null for process bootstrap and non-workspace targets.
+    fallback_workspace: ?schema.WorkspaceId = null,
+};
+
 pub const Continuation = union(enum) {
-    initial_open,
+    initial_open: InitialOpen,
     create_workspace,
     rename_workspace: schema.WorkspaceLocation,
     workspace_snapshot: schema.WorkspaceLocation,

@@ -42,6 +42,8 @@ pub const Pane = struct {
     pending_frame_id: u64 = 0,
     graphics_placeholder: bool = false,
     cwd: []u8 = &.{},
+    foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
+    foreground_name_len: u8 = 0,
 
     fn init(
         gpa: std.mem.Allocator,
@@ -103,6 +105,18 @@ pub const Pane = struct {
 
     pub fn cwdSlice(pane: *const Pane) []const u8 {
         return pane.cwd;
+    }
+
+    pub fn setForegroundName(pane: *Pane, name: []const u8) bool {
+        std.debug.assert(name.len != 0 and name.len <= pane.foreground_name.len);
+        if (std.mem.eql(u8, pane.foregroundName(), name)) return false;
+        @memcpy(pane.foreground_name[0..name.len], name);
+        pane.foreground_name_len = @intCast(name.len);
+        return true;
+    }
+
+    pub fn foregroundName(pane: *const Pane) []const u8 {
+        return pane.foreground_name[0..pane.foreground_name_len];
     }
 };
 
@@ -224,12 +238,13 @@ pub const Model = struct {
         return .{ .panes = &model.panes };
     }
 
-    /// Projects the copy-mode selection onto a pane and invalidates the
-    /// composition; clearing passes null.
+    /// Projects the copy-mode selection onto a pane. Selection changes mark
+    /// only the affected visible ranges; clearing passes null.
     pub fn setPaneCopyView(model: *Model, pane_id: schema.PaneId, view: ?copy_mode.View) void {
         const pane = model.find(pane_id) orelse return;
+        if (std.meta.eql(pane.copy_view, view)) return;
+        markCopyViewDamage(pane, pane.copy_view, view);
         pane.copy_view = view;
-        model.composition_invalidated = true;
     }
 
     pub fn focusedPane(model: *Model) ?*Pane {
@@ -240,6 +255,10 @@ pub const Model = struct {
     pub fn focusedPaneConst(model: *const Model) ?*const Pane {
         const pane_id = model.layout.focused() orelse return null;
         return model.findConst(pane_id);
+    }
+
+    pub fn displayIndex(model: *const Model, pane_id: schema.PaneId) ?u16 {
+        return model.layout.displayIndex(pane_id);
     }
 
     pub fn find(model: *Model, pane_id: schema.PaneId) ?*Pane {
@@ -487,13 +506,6 @@ pub const Model = struct {
             .focused = palette.accent,
             .unfocused = palette.overlay0,
         };
-        for (&model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
-            if (pane.copy_view != null) {
-                model.composition_invalidated = true;
-                break;
-            }
-        }
         if (model.border_theme == null or !std.meta.eql(model.border_theme.?, border_theme)) {
             model.border_theme = border_theme;
             model.composition_invalidated = true;
@@ -519,11 +531,11 @@ pub const Model = struct {
         screen.cursor = null;
         var stats: RenderStats = .{ .full = true };
         const snapshot = model.layoutSnapshot(area);
-        for (snapshot.views()) |view| {
+        for (snapshot.views(), 0..) |view, index| {
             const pane = model.find(view.pane_id) orelse continue;
             stats.panes += 1;
             if (model.layout.count() > 1 and !model.layout.isFullscreen())
-                drawBorder(target, view, palette);
+                drawBorder(target, view, pane.foregroundName(), index + 1, palette);
             target.pushClip(view.content);
             defer target.popClip();
             const rows = @min(view.content.h, pane.buffer.h);
@@ -550,26 +562,7 @@ pub const Model = struct {
                     stats.cells += 1;
                 }
             }
-            if (view.focused) {
-                if (pane.copy_view) |copy| {
-                    if (copy.cursor.y >= pane.scroll.offset and
-                        copy.cursor.y < pane.scroll.offset + pane.buffer.h and
-                        copy.cursor.x < view.content.w)
-                    {
-                        screen.cursor = .{
-                            .x = view.content.x + copy.cursor.x,
-                            .y = view.content.y + @as(u16, @intCast(copy.cursor.y - pane.scroll.offset)),
-                        };
-                    }
-                } else if (pane.cursor.visible and
-                    pane.cursor.x < view.content.w and pane.cursor.y < view.content.h)
-                {
-                    screen.cursor = .{
-                        .x = view.content.x + pane.cursor.x,
-                        .y = view.content.y + pane.cursor.y,
-                    };
-                }
-            }
+            if (view.focused) setPaneCursor(screen, pane, view.content);
             if (pane.graphics_placeholder) drawGraphicsPlaceholder(target, view.content, palette);
         }
         stats.damaged_cells = try syncComposed(screen, target);
@@ -620,14 +613,7 @@ pub const Model = struct {
                     end,
                 );
             }
-            if (view.focused and pane.cursor.visible and
-                pane.cursor.x < view.content.w and pane.cursor.y < view.content.h)
-            {
-                screen.cursor = .{
-                    .x = view.content.x + pane.cursor.x,
-                    .y = view.content.y + pane.cursor.y,
-                };
-            }
+            if (view.focused) setPaneCursor(screen, pane, view.content);
         }
         return stats;
     }
@@ -707,11 +693,113 @@ fn syncPaneRange(
     std.debug.assert(start < end);
     const source_row = pane.buffer.cells[@as(usize, source_y) * pane.buffer.w ..];
     const destination_base = @as(usize, destination_y) * composed.w + destination_x;
+    if (pane.copy_view) |copy| {
+        const composed_row = composed.cells[destination_base..];
+        const absolute_y = pane.scroll.offset + source_y;
+        var copied: usize = 0;
+        var x = start;
+        while (x < end) {
+            var projected = source_row[x];
+            if (copy.selected(x, absolute_y))
+                projected.style.flags.inverse = !projected.style.flags.inverse;
+            if (projected.eqlPublic(&composed_row[x])) {
+                x += 1;
+                continue;
+            }
+            const run_start = x;
+            while (x < end) : (x += 1) {
+                projected = source_row[x];
+                if (copy.selected(x, absolute_y))
+                    projected.style.flags.inverse = !projected.style.flags.inverse;
+                if (projected.eqlPublic(&composed_row[x])) break;
+                composed_row[x] = projected;
+            }
+            const count: u16 = x - run_start;
+            const destination = try screen.patchCells(
+                @intCast(destination_base + run_start),
+                count,
+            );
+            @memcpy(destination, composed_row[run_start..][0..count]);
+            copied += count;
+        }
+        return copied;
+    }
     var sink: ComposeSink = .{
         .patch = .{ .screen = screen, .source_row = source_row, .base = destination_base },
         .composed_row = composed.cells[destination_base..],
     };
     return diff.syncRow(source_row, sink.composed_row, start, end, &sink);
+}
+
+const CopySelectionRange = struct {
+    start: u16,
+    end: u16,
+};
+
+fn copySelectionRange(view: ?copy_mode.View, y: u32, cols: u16) ?CopySelectionRange {
+    if (cols == 0) return null;
+    const copy = view orelse return null;
+    const anchor = copy.anchor orelse return null;
+    if (copy.linewise) {
+        const first_y = @min(anchor.y, copy.cursor.y);
+        const last_y = @max(anchor.y, copy.cursor.y);
+        return if (y >= first_y and y <= last_y)
+            .{ .start = 0, .end = cols }
+        else
+            null;
+    }
+    const anchor_first = anchor.y < copy.cursor.y or
+        (anchor.y == copy.cursor.y and anchor.x <= copy.cursor.x);
+    const first = if (anchor_first) anchor else copy.cursor;
+    const last = if (anchor_first) copy.cursor else anchor;
+    if (y < first.y or y > last.y) return null;
+    const start: u16 = if (y == first.y) @min(first.x, cols) else 0;
+    const end: u16 = if (y == last.y)
+        @min(last.x +| 1, cols)
+    else
+        cols;
+    return if (start < end) .{ .start = start, .end = end } else null;
+}
+
+fn markCopyViewDamage(
+    pane: *Pane,
+    previous: ?copy_mode.View,
+    next: ?copy_mode.View,
+) void {
+    var source_y: u16 = 0;
+    while (source_y < pane.buffer.h) : (source_y += 1) {
+        const absolute_y = pane.scroll.offset + source_y;
+        const before = copySelectionRange(previous, absolute_y, pane.buffer.w);
+        const after = copySelectionRange(next, absolute_y, pane.buffer.w);
+        if (std.meta.eql(before, after)) continue;
+        const start = @min(
+            if (before) |range| range.start else pane.buffer.w,
+            if (after) |range| range.start else pane.buffer.w,
+        );
+        const end = @max(
+            if (before) |range| range.end else 0,
+            if (after) |range| range.end else 0,
+        );
+        if (start < end) pane.damage_rows[source_y].mark(start, end);
+    }
+}
+
+fn setPaneCursor(screen: *term.Screen, pane: *const Pane, content: ui.Rect) void {
+    if (pane.copy_view) |copy| {
+        if (copy.cursor.y < pane.scroll.offset or copy.cursor.x >= content.w) return;
+        const visible_y = copy.cursor.y - pane.scroll.offset;
+        if (visible_y >= content.h) return;
+        screen.cursor = .{
+            .x = content.x + copy.cursor.x,
+            .y = content.y + @as(u16, @intCast(visible_y)),
+        };
+        return;
+    }
+    if (!pane.cursor.visible or pane.cursor.x >= content.w or pane.cursor.y >= content.h) return;
+    screen.cursor = .{
+        .x = content.x + pane.cursor.x,
+        .y = content.y + pane.cursor.y,
+    };
 }
 
 fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
@@ -742,16 +830,22 @@ pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
     return .{ .cols = rect.w, .rows = rect.h };
 }
 
-fn drawBorder(buffer: *ui.Buffer, view: layout_mod.View, palette: *const theme.Palette) void {
+fn drawBorder(
+    buffer: *ui.Buffer,
+    view: layout_mod.View,
+    foreground_name: []const u8,
+    pane_index: usize,
+    palette: *const theme.Palette,
+) void {
     const style: ui.Style = if (view.focused)
         .{ .fg = palette.accent, .flags = .{ .bold = true } }
     else
         .{ .fg = palette.overlay0 };
-    var title_buffer: [32]u8 = undefined;
+    var title_buffer: [schema.max_foreground_name_bytes + 32]u8 = undefined;
     const text = std.fmt.bufPrint(
         &title_buffer,
-        " pane {d} ",
-        .{schema.id.raw(view.pane_id)},
+        " {d} {s} ",
+        .{ pane_index, if (foreground_name.len == 0) "shell" else foreground_name },
     ) catch " pane ";
     buffer.box(view.outer, style, text);
 }
@@ -833,6 +927,55 @@ test "copy mode highlights an absolute scrollback selection" {
     try std.testing.expectEqual(term.Screen.Position{ .x = 2, .y = 1 }, screen.cursor.?);
 }
 
+test "copy mode updates selection and cursor without full composition" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(pane_id, location, .{ .cols = 4, .rows = 2 });
+    var screen = try term.Screen.init(gpa, 4, 2);
+    defer screen.deinit();
+    try std.testing.expect((try model.render(&screen, screen.back.area())).full);
+
+    model.setPaneCopyView(pane_id, .{
+        .anchor = null,
+        .cursor = .{ .x = 2, .y = 1 },
+        .linewise = false,
+    });
+    const cursor_only = try model.render(&screen, screen.back.area());
+    try std.testing.expect(!cursor_only.full);
+    try std.testing.expectEqual(@as(usize, 0), cursor_only.cells);
+    try std.testing.expectEqual(term.Screen.Position{ .x = 2, .y = 1 }, screen.cursor.?);
+
+    model.setPaneCopyView(pane_id, .{
+        .anchor = .{ .x = 1, .y = 0 },
+        .cursor = .{ .x = 2, .y = 0 },
+        .linewise = false,
+    });
+    const selected = try model.render(&screen, screen.back.area());
+    try std.testing.expect(!selected.full);
+    try std.testing.expectEqual(@as(usize, 2), selected.cells);
+    try std.testing.expect(screen.back.cells[1].style.flags.inverse);
+    try std.testing.expect(screen.back.cells[2].style.flags.inverse);
+
+    const pane = model.find(pane_id).?;
+    pane.buffer.setCell(1, 0, "x", 1, .{});
+    pane.markSpan(1, 1);
+    const patched = try model.render(&screen, screen.back.area());
+    try std.testing.expect(!patched.full);
+    try std.testing.expectEqual(@as(usize, 1), patched.cells);
+    try std.testing.expectEqualStrings("x", screen.back.cells[1].text());
+    try std.testing.expect(screen.back.cells[1].style.flags.inverse);
+
+    const idle = try model.render(&screen, screen.back.area());
+    try std.testing.expect(!idle.full);
+    try std.testing.expectEqual(@as(usize, 0), idle.cells);
+}
+
 test "fullscreen composes only the focused pane across the whole tab" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
@@ -872,15 +1015,19 @@ test "pane borders use the selected theme without coloring pane contents" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 10, .rows = 3 });
+    try model.addRoot(@enumFromInt(10), location, .{ .cols = 10, .rows = 3 });
     try model.split(
-        @enumFromInt(1),
-        @enumFromInt(2),
+        @enumFromInt(10),
+        @enumFromInt(41),
         location,
         .horizontal,
         .{ .w = 20, .h = 4 },
     );
-    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "x", 1, .{});
+    const first = model.find(@enumFromInt(10)).?;
+    const second = model.find(@enumFromInt(41)).?;
+    try std.testing.expect(first.setForegroundName("zsh"));
+    try std.testing.expect(second.setForegroundName("Claude Code"));
+    first.buffer.setCell(0, 0, "x", 1, .{});
     const selected = theme.builtin(.tokyo_night);
     var screen = try term.Screen.init(gpa, 20, 4);
     defer screen.deinit();
@@ -888,6 +1035,10 @@ test "pane borders use the selected theme without coloring pane contents" {
 
     try std.testing.expectEqualDeep(selected.palette.accent, screen.back.cells[10].style.fg);
     try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[21].style.bg);
+    try std.testing.expectEqualStrings("1", screen.back.at(3, 0).?.text());
+    try std.testing.expectEqualStrings("z", screen.back.at(5, 0).?.text());
+    try std.testing.expectEqualStrings("2", screen.back.at(13, 0).?.text());
+    try std.testing.expectEqualStrings("C", screen.back.at(15, 0).?.text());
 
     const replacement = theme.builtin(.catppuccin);
     const replaced = try model.renderThemed(&screen, screen.back.area(), &replacement.palette);

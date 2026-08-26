@@ -89,8 +89,11 @@ pub fn formatRuntimeTelemetry(
     proxy_active_connections: u32,
     proxy_dropped_events: u64,
     proxy_rejected_connections: u64,
+    proxy_invalid_authorization_rejections: u64,
+    proxy_unknown_credential_rejections: u64,
     proxy_connection_limit_drops: u64,
     proxy_h2_decode_failures: u64,
+    heap: *const diagnostics.Heap,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
     var outstanding_frames: usize = 0;
@@ -122,6 +125,9 @@ pub fn formatRuntimeTelemetry(
     var pane_input_queue_depth: usize = 0;
     var pane_input_dropped_bytes: u64 = 0;
     var history_input_dropped: u64 = 0;
+    var pane_media_used: usize = 0;
+    var vt_scrollback_bytes: usize = 0;
+    var vt_screen_bytes: usize = 0;
     for (panes.items) |slot| {
         const pane = slot orelse continue;
         if (pane.ingest_pending) continue;
@@ -132,6 +138,9 @@ pub fn formatRuntimeTelemetry(
         history_input_dropped +|= pane.history_observer.dropped_events;
         media_dropped_events +|= pane.media.dropped_events;
         media_dropped_bytes +|= pane.media.dropped_bytes;
+        pane_media_used += pane.media_allocator.used;
+        vt_scrollback_bytes += pane.vtScrollbackBytes();
+        vt_screen_bytes += pane.vtScreenBytes();
         for (&pane.media.batches) |*batch| {
             media_queue_events += batch.event_count;
             media_queue_bytes += batch.len;
@@ -296,7 +305,10 @@ pub fn formatRuntimeTelemetry(
         "\"agent_process_inspections\":{d},\"agent_process_misses\":{d}," ++
             "\"proxy_active\":{d},\"proxy_observations\":{d}," ++
             "\"proxy_active_connections\":{d},\"proxy_dropped_events\":{d}," ++
-            "\"proxy_rejected_connections\":{d},\"proxy_connection_limit_drops\":{d}," ++
+            "\"proxy_rejected_connections\":{d}," ++
+            "\"proxy_invalid_authorization_rejections\":{d}," ++
+            "\"proxy_unknown_credential_rejections\":{d}," ++
+            "\"proxy_connection_limit_drops\":{d}," ++
             "\"proxy_h2_decode_failures\":{d},",
         .{
             metrics.agent_process_inspections,
@@ -306,6 +318,8 @@ pub fn formatRuntimeTelemetry(
             proxy_active_connections,
             proxy_dropped_events,
             proxy_rejected_connections,
+            proxy_invalid_authorization_rejections,
+            proxy_unknown_credential_rejections,
             proxy_connection_limit_drops,
             proxy_h2_decode_failures,
         },
@@ -324,7 +338,7 @@ pub fn formatRuntimeTelemetry(
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"ingest_avg_us\":{d},\"ingest_max_us\":{d}," ++
         "\"encode_avg_us\":{d},\"encode_max_us\":{d}," ++
-        "\"ack_avg_us\":{d},\"ack_max_us\":{d}}}\n", .{
+        "\"ack_avg_us\":{d},\"ack_max_us\":{d},", .{
         @intFromBool(history_stats.available),
         history_stats.sqlite_open_failures,
         metrics.history_queries,
@@ -354,9 +368,101 @@ pub fn formatRuntimeTelemetry(
         metrics.ack.average() / std.time.ns_per_us,
         metrics.ack.max_ns / std.time.ns_per_us,
     });
+    const heap_snap = heap.snapshot();
+    try output.print(
+        "\"rss_bytes\":{d},\"graphics_budget_used\":{d},\"pane_media_used\":{d}," ++
+            "\"vt_scrollback_bytes\":{d},\"vt_screen_bytes\":{d}," ++
+            "\"history_sqlite_bytes\":{d}," ++
+            "\"heap_live_bytes\":{d},\"heap_live_allocs\":{d}," ++
+            "\"heap_allocs\":{d},\"heap_alloc_bytes\":{d}," ++
+            "\"interactive_allocs\":{d},\"interactive_alloc_bytes\":{d}," ++
+            "\"interactive_vt_allocs\":{d},\"interactive_vt_alloc_bytes\":{d}," ++
+            "\"interactive_telar_allocs\":{d},\"interactive_telar_alloc_bytes\":{d}," ++
+            "\"media_allocs\":{d},\"media_alloc_bytes\":{d}," ++
+            "\"observation_allocs\":{d},\"observation_alloc_bytes\":{d}," ++
+            "\"other_allocs\":{d},\"other_alloc_bytes\":{d}}}\n",
+        .{
+            diagnostics.rssBytes(),
+            panes.graphics_budget.used,
+            pane_media_used,
+            vt_scrollback_bytes,
+            vt_screen_bytes,
+            history_service.sqliteBytes(io),
+            heap_snap.live_bytes,
+            heap_snap.live_allocs,
+            heap_snap.allocs,
+            heap_snap.alloc_bytes,
+            heap_snap.interactive_allocs,
+            heap_snap.interactive_alloc_bytes,
+            heap_snap.interactive_vt_allocs,
+            heap_snap.interactive_vt_alloc_bytes,
+            heap_snap.interactive_allocs -| heap_snap.interactive_vt_allocs,
+            heap_snap.interactive_alloc_bytes -| heap_snap.interactive_vt_alloc_bytes,
+            heap_snap.media_allocs,
+            heap_snap.media_alloc_bytes,
+            heap_snap.observation_allocs,
+            heap_snap.observation_alloc_bytes,
+            heap_snap.other_allocs,
+            heap_snap.other_alloc_bytes,
+        },
+    );
     return output.buffered();
 }
 
 pub fn averageNs(total: u64, count: u64) u64 {
     return if (count == 0) 0 else total / count;
+}
+
+test "runtime telemetry reports retained memory domains" {
+    const io = std.testing.io;
+    var service = try history.Service.init(std.testing.allocator, ":memory:");
+    defer service.deinit(io);
+    var heap = diagnostics.Heap.init(std.testing.allocator);
+    {
+        const path = diagnostics.enter(.observation);
+        defer path.restore();
+        const scratch = try heap.allocator().alloc(u8, 16);
+        defer heap.allocator().free(scratch);
+        var panes: PaneStore = .{};
+        panes.graphics_budget.used = 99;
+        var buffer: [16384]u8 = undefined;
+        const metrics: RuntimeMetrics = .{ .started_ns = 0 };
+        const line = try formatRuntimeTelemetry(
+            &buffer,
+            io,
+            &metrics,
+            &.{},
+            0,
+            0,
+            0,
+            &panes,
+            &service,
+            0,
+            0,
+            false,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            &heap,
+        );
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_budget_used\":99") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"pane_media_used\":0") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"vt_scrollback_bytes\":0") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"history_sqlite_bytes\":0") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"heap_live_bytes\":16") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":1") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_vt_allocs\":0") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_telar_allocs\":0") != null);
+        try std.testing.expect(std.mem.indexOf(
+            u8,
+            line,
+            "\"proxy_invalid_authorization_rejections\":0",
+        ) != null);
+    }
 }

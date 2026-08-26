@@ -103,7 +103,6 @@ fn shouldNotifyAgentStatus(previous: ?schema.AgentStatus, current: schema.AgentS
     return current == .blocked or current == .ready or current == .failed;
 }
 
-
 /// Routes one decoded message from the runtime.
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
     switch (message) {
@@ -116,6 +115,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .tab_moved => |moved| try handleTabMoved(client, moved),
         .pane_frame => |frame| try handlePaneFrame(client, frame),
         .pane_cwd => |cwd| try handlePaneCwd(client, cwd),
+        .pane_foreground => |foreground| try handlePaneForeground(client, foreground),
         .pane_clipboard => |clipboard| try handlePaneClipboard(client, clipboard),
         .pane_exited => |exited| try handlePaneExited(client, exited),
         .request_failed => |failure| try handleRequestFailed(client, failure),
@@ -185,6 +185,8 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
 /// Entrypoint for a resync demand: reconcile in place, follow the runtime
 /// to a surviving workspace, or exit when nothing survives.
 fn handleResyncMessage(client: *Client, required: schema.ResyncRequired) !?u8 {
+    if (required.workspace_closed)
+        client.navigation_history.forget(required.workspace);
     switch (workspaceClosureAction(
         required.workspace_closed,
         required.previous_workspace,
@@ -231,6 +233,8 @@ fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !voi
                 .pane_id = entry.pane_id,
                 .pane_generation = entry.pane_generation,
             },
+            .location = entry.location,
+            .pane_index = entry.pane_index,
             .provider = entry.provider,
             .status = entry.status,
         };
@@ -258,7 +262,7 @@ fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !voi
                 "{s} in pane {d} is {s}",
                 .{
                     agentProviderName(agent.provider),
-                    schema.id.raw(agent.key.pane_id),
+                    agent.pane_index,
                     agentStatusName(agent.status),
                 },
             ) catch "Agent status changed";
@@ -301,6 +305,15 @@ fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
 fn handlePaneCwd(client: *Client, message: schema.PaneCwd) !void {
     const pane = client.tabs.findPane(message.pane_id) orelse return;
     if (!try pane.setCwd(message.cwd)) return;
+    client.view.invalidate();
+    try client.presenter.requestDraw();
+}
+
+fn handlePaneForeground(client: *Client, message: schema.PaneForeground) !void {
+    const pane = client.tabs.findPane(message.pane_id) orelse return;
+    if (!pane.setForegroundName(message.name)) return;
+    if (client.tabs.tabForPane(message.pane_id)) |tab|
+        tab.model.composition_invalidated = true;
     client.view.invalidate();
     try client.presenter.requestDraw();
 }
@@ -549,6 +562,8 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
         if (lifecycle_event) return null;
         return error.UnexpectedTab;
     }
+    if (closed.workspace_closed)
+        client.navigation_history.forget(closed.location.workspace);
     switch (workspaceClosureAction(closed.workspace_closed, closed.previous_workspace)) {
         .stay => {},
         .exit => return 0,
@@ -673,7 +688,33 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
             try client.requestTabSnapshot(active.location);
         },
         .create_workspace, .notification => {},
-        .initial_open, .workspace_snapshot, .tab_snapshot, .create_tab => {
+        .initial_open => |open| {
+            const workspace = open.fallback_workspace orelse {
+                std.debug.print("telar runtime: {s}\n", .{failure.message});
+                return error.RuntimeRequestFailed;
+            };
+            if (failure.code != .pane_not_found) {
+                std.debug.print("telar runtime: {s}\n", .{failure.message});
+                return error.RuntimeRequestFailed;
+            }
+            client.navigation_history.forget(.{ .workspace = workspace });
+            const request_id = try client.nextId();
+            try client.enqueueRequest(
+                request_id,
+                .{ .initial_open = .{} },
+                .{ .open_pane = .{
+                    .request_id = request_id,
+                    .target = .{ .workspace = workspace },
+                    .size = rectSize(client.view.workbench()) orelse
+                        return error.TerminalTooSmall,
+                    .launch = null,
+                } },
+            );
+            client.view.invalidate();
+            try client.presenter.requestDraw();
+            return;
+        },
+        .workspace_snapshot, .tab_snapshot, .create_tab => {
             std.debug.print("telar runtime: {s}\n", .{failure.message});
             return error.RuntimeRequestFailed;
         },
@@ -771,7 +812,6 @@ fn releaseTabGraphics(store: *kitty.Store, tab: *tabs_mod.Tab) void {
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| store.clearPane(pane.id);
 }
-
 
 test "workspace closure exits only when no predecessor survives" {
     try std.testing.expectEqualDeep(

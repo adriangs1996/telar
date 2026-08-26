@@ -25,6 +25,43 @@ pub const Cache = struct {
     process_group_id: ?u32 = null,
     provider: schema.AgentProvider = .unknown,
     attempts: u8 = 0,
+    foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
+    foreground_name_len: u8 = 0,
+
+    pub fn init(executable: []const u8) Cache {
+        var cache: Cache = .{};
+        cache.setName(applicationName(.unknown, executable));
+        return cache;
+    }
+
+    pub fn name(cache: *const Cache) []const u8 {
+        return cache.foreground_name[0..cache.foreground_name_len];
+    }
+
+    fn setName(cache: *Cache, value: []const u8) void {
+        const source = if (value.len == 0) "process" else value;
+        const len = @min(source.len, cache.foreground_name.len);
+        @memcpy(cache.foreground_name[0..len], source[0..len]);
+        cache.foreground_name_len = @intCast(len);
+    }
+};
+
+const Identification = struct {
+    provider: schema.AgentProvider = .unknown,
+    name: [schema.max_foreground_name_bytes]u8 = @splat(0),
+    name_len: u8 = 0,
+
+    fn init(provider: schema.AgentProvider, command: []const u8) Identification {
+        var result: Identification = .{ .provider = provider };
+        const value = applicationName(provider, command);
+        @memcpy(result.name[0..value.len], value);
+        result.name_len = @intCast(value.len);
+        return result;
+    }
+
+    fn slice(result: *const Identification) []const u8 {
+        return result.name[0..result.name_len];
+    }
 };
 
 pub const Probe = struct {
@@ -48,25 +85,29 @@ fn probeWith(
     process_group_id: ?std.c.pid_t,
     shell_pid: std.c.pid_t,
     previous: Cache,
-    comptime identify: fn (u32) schema.AgentProvider,
+    comptime identify: fn (u32) Identification,
 ) Probe {
     const native_pgid = process_group_id orelse return .{ .cache = previous };
     const pgid = std.math.cast(u32, native_pgid) orelse return .{ .cache = previous };
     const shell = std.math.cast(u32, shell_pid) orelse 0;
 
     if (pgid == shell) {
-        const next: Cache = .{ .process_group_id = pgid };
+        if (previous.process_group_id == pgid and previous.foreground_name_len != 0)
+            return .{ .cache = previous };
+        const identification = identify(pgid);
+        var next: Cache = .{ .process_group_id = pgid };
+        next.setName(identification.slice());
         return .{ .cache = next, .changed = !sameCache(previous, next) };
     }
     if (previous.process_group_id == pgid and
         (previous.provider != .unknown or previous.attempts >= max_acquisition_attempts))
         return .{ .cache = previous };
 
-    const provider = identify(pgid);
-    const next: Cache = .{
+    const identification = identify(pgid);
+    var next: Cache = .{
         .process_group_id = pgid,
-        .provider = provider,
-        .attempts = if (provider == .unknown)
+        .provider = identification.provider,
+        .attempts = if (identification.provider == .unknown)
             if (previous.process_group_id == pgid)
                 previous.attempts +| 1
             else
@@ -74,6 +115,7 @@ fn probeWith(
         else
             0,
     };
+    next.setName(identification.slice());
     return .{
         .cache = next,
         .changed = !sameCache(previous, next),
@@ -89,20 +131,21 @@ pub fn shellForeground(cache: Cache, shell_pid: std.c.pid_t) bool {
 fn sameCache(left: Cache, right: Cache) bool {
     return left.process_group_id == right.process_group_id and
         left.provider == right.provider and
-        left.attempts == right.attempts;
+        left.attempts == right.attempts and
+        std.mem.eql(u8, left.name(), right.name());
 }
 
-fn identifyProcessGroup(process_group_id: u32) schema.AgentProvider {
+fn identifyProcessGroup(process_group_id: u32) Identification {
     return switch (builtin.os.tag) {
         .macos => identifyMacosProcessGroup(process_group_id),
         .linux => identifyLinuxProcessGroup(process_group_id),
-        else => .unknown,
+        else => .{},
     };
 }
 
-fn identifyMacosProcessGroup(process_group_id: u32) schema.AgentProvider {
-    if (comptime builtin.os.tag != .macos) return .unknown;
-    if (process_group_id > std.math.maxInt(c_int)) return .unknown;
+fn identifyMacosProcessGroup(process_group_id: u32) Identification {
+    if (comptime builtin.os.tag != .macos) return .{};
+    if (process_group_id > std.math.maxInt(c_int)) return .{};
 
     var pids: [max_group_processes]std.c.pid_t = @splat(0);
     const byte_count = Native.c.proc_listpids(
@@ -120,19 +163,21 @@ fn identifyMacosProcessGroup(process_group_id: u32) schema.AgentProvider {
     // The group leader is the most useful candidate and avoids depending on
     // libproc's enumeration order.
     const leader = identifyMacosProcess(process_group_id);
-    if (leader != .unknown) return leader;
+    if (leader.provider != .unknown) return leader;
+    var fallback = leader;
     for (pids[0..count]) |pid| {
         const candidate = std.math.cast(u32, pid) orelse continue;
         if (candidate == process_group_id) continue;
-        const provider = identifyMacosProcess(candidate);
-        if (provider != .unknown) return provider;
+        const identified = identifyMacosProcess(candidate);
+        if (identified.provider != .unknown) return identified;
+        if (fallback.name_len == 0 and identified.name_len != 0) fallback = identified;
     }
-    return .unknown;
+    return fallback;
 }
 
-fn identifyMacosProcess(pid: u32) schema.AgentProvider {
-    if (comptime builtin.os.tag != .macos) return .unknown;
-    if (pid > std.math.maxInt(c_int)) return .unknown;
+fn identifyMacosProcess(pid: u32) Identification {
+    if (comptime builtin.os.tag != .macos) return .{};
+    if (pid > std.math.maxInt(c_int)) return .{};
 
     var info: Native.c.proc_bsdinfo = std.mem.zeroes(Native.c.proc_bsdinfo);
     const expected: c_int = @intCast(@sizeOf(Native.c.proc_bsdinfo));
@@ -142,13 +187,14 @@ fn identifyMacosProcess(pid: u32) schema.AgentProvider {
         0,
         &info,
         expected,
-    ) != expected) return .unknown;
+    ) != expected) return .{};
 
     const comm_bytes = std.mem.sliceAsBytes(info.pbi_comm[0..]);
     const comm_end = std.mem.indexOfScalar(u8, comm_bytes, 0) orelse comm_bytes.len;
     var args_buffer: [max_process_args_bytes]u8 = undefined;
     const argv = readMacosArgv(pid, &args_buffer) orelse &.{};
-    return identifyCommand(comm_bytes[0..comm_end], argv);
+    const command = comm_bytes[0..comm_end];
+    return .init(identifyCommand(command, argv), command);
 }
 
 fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
@@ -169,33 +215,36 @@ fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
     return rest[offset..];
 }
 
-fn identifyLinuxProcessGroup(process_group_id: u32) schema.AgentProvider {
-    if (comptime builtin.os.tag != .linux) return .unknown;
+fn identifyLinuxProcessGroup(process_group_id: u32) Identification {
+    if (comptime builtin.os.tag != .linux) return .{};
     var pending: [max_group_processes]u32 = @splat(0);
     var count: usize = 1;
     var index: usize = 0;
     pending[0] = process_group_id;
 
+    var fallback: Identification = .{};
     while (index < count) : (index += 1) {
         const pid = pending[index];
         if (linuxProcessGroup(pid) != process_group_id) continue;
-        const provider = identifyLinuxProcess(pid);
-        if (provider != .unknown) return provider;
+        const identified = identifyLinuxProcess(pid);
+        if (identified.provider != .unknown) return identified;
+        if (fallback.name_len == 0 and identified.name_len != 0) fallback = identified;
         appendLinuxChildren(pid, &pending, &count);
     }
-    return .unknown;
+    return fallback;
 }
 
-fn identifyLinuxProcess(pid: u32) schema.AgentProvider {
-    if (comptime builtin.os.tag != .linux) return .unknown;
+fn identifyLinuxProcess(pid: u32) Identification {
+    if (comptime builtin.os.tag != .linux) return .{};
     var path_buffer: [64]u8 = undefined;
     var comm_buffer: [256]u8 = undefined;
     var args_buffer: [max_process_args_bytes]u8 = undefined;
-    const comm_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/comm", .{pid}) catch return .unknown;
-    const comm = readSmallFile(comm_path, &comm_buffer) orelse return .unknown;
-    const args_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/cmdline", .{pid}) catch return .unknown;
+    const comm_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/comm", .{pid}) catch return .{};
+    const comm = readSmallFile(comm_path, &comm_buffer) orelse return .{};
+    const args_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/cmdline", .{pid}) catch return .{};
     const argv = readSmallFile(args_path, &args_buffer) orelse &.{};
-    return identifyCommand(std.mem.trim(u8, comm, " \r\n\t"), argv);
+    const command = std.mem.trim(u8, comm, " \r\n\t");
+    return .init(identifyCommand(command, argv), command);
 }
 
 fn linuxProcessGroup(pid: u32) ?u32 {
@@ -259,6 +308,23 @@ fn identifyCommand(comm: []const u8, argv: []const u8) schema.AgentProvider {
         return .unknown;
     }
     return .unknown;
+}
+
+fn applicationName(provider: schema.AgentProvider, command: []const u8) []const u8 {
+    return switch (provider) {
+        .claude => "Claude Code",
+        .codex => "Codex",
+        .unknown => boundedCommandName(command),
+    };
+}
+
+fn boundedCommandName(command: []const u8) []const u8 {
+    const basename = pathBasename(command);
+    const len = @min(basename.len, schema.max_foreground_name_bytes);
+    const candidate = basename[0..len];
+    if (candidate.len == 0 or !std.unicode.utf8ValidateSlice(candidate)) return "";
+    for (candidate) |byte| if (byte < 0x20 or byte == 0x7f) return "";
+    return candidate;
 }
 
 fn providerFromToken(token: []const u8) ?schema.AgentProvider {
@@ -333,16 +399,21 @@ test "does not infer an agent from arbitrary runtime arguments" {
 
 test "process acquisition is bounded and cached" {
     const Fake = struct {
-        fn claude(_: u32) schema.AgentProvider {
-            return .claude;
+        fn claude(_: u32) Identification {
+            return .init(.claude, "claude");
         }
 
-        fn unknown(_: u32) schema.AgentProvider {
-            return .unknown;
+        fn unknown(_: u32) Identification {
+            return .init(.unknown, "node");
         }
     };
     const shell: std.c.pid_t = 10;
-    const shell_probe = probe(10, shell, .{ .process_group_id = 20, .provider = .claude });
+    const shell_probe = probeWith(
+        10,
+        shell,
+        .{ .process_group_id = 20, .provider = .claude },
+        Fake.unknown,
+    );
     try std.testing.expect(shell_probe.changed);
     try std.testing.expect(shellForeground(shell_probe.cache, shell));
     try std.testing.expectEqual(schema.AgentProvider.unknown, shell_probe.cache.provider);
@@ -351,6 +422,7 @@ test "process acquisition is bounded and cached" {
     try std.testing.expect(identified.changed);
     try std.testing.expect(identified.inspected);
     try std.testing.expectEqual(schema.AgentProvider.claude, identified.cache.provider);
+    try std.testing.expectEqualStrings("Claude Code", identified.cache.name());
     const cached = probeWith(20, shell, identified.cache, Fake.unknown);
     try std.testing.expect(!cached.changed);
     try std.testing.expect(!cached.inspected);
@@ -364,4 +436,10 @@ test "process acquisition is bounded and cached" {
     const stable = probeWith(30, shell, acquiring, Fake.claude);
     try std.testing.expect(!stable.changed);
     try std.testing.expect(!stable.inspected);
+}
+
+test "foreground names are bounded application labels" {
+    try std.testing.expectEqualStrings("Claude Code", applicationName(.claude, "claude"));
+    try std.testing.expectEqualStrings("zsh", applicationName(.unknown, "/bin/zsh"));
+    try std.testing.expectEqualStrings("", applicationName(.unknown, "bad\x1bname"));
 }

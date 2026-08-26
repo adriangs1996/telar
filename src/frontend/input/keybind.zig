@@ -283,6 +283,14 @@ fn keyOrder(a: Key, b: Key) std.math.Order {
     return std.mem.order(u8, a_char.slice(), b_char.slice());
 }
 
+fn isPlainEscape(key: Key) bool {
+    if (key.mods.ctrl or key.mods.alt or key.mods.shift) return false;
+    return switch (key.code) {
+        .escape => true,
+        else => false,
+    };
+}
+
 pub fn Router(
     comptime Action: type,
     comptime max_bindings: usize,
@@ -297,8 +305,10 @@ pub fn Router(
     const BindingType = Binding(Action, max_keys);
     return struct {
         map: Map,
+        prefix: ?Key = null,
         candidates: Map.Range = .{ .start = 0, .end = 0 },
         depth: u8 = 0,
+        prefix_pending: bool = false,
         held: [held_capacity]u8 = undefined,
         held_len: usize = 0,
         held_keys: [max_keys]Key = undefined,
@@ -317,11 +327,33 @@ pub fn Router(
         const Self = @This();
 
         pub fn init(configured: []const BindingType) !Self {
+            return initWithPrefix(configured, null);
+        }
+
+        pub fn initWithPrefix(configured: []const BindingType, prefix: ?Key) !Self {
             const map = try Map.init(configured);
             return .{
                 .map = map,
+                .prefix = prefix,
                 .candidates = .{ .start = 0, .end = map.len },
             };
+        }
+
+        pub fn prefixPending(router: *const Self) bool {
+            return router.prefix_pending;
+        }
+
+        /// Returns the configured one-key suffix for a prefixed action. The
+        /// client uses this to render help from the effective keymap instead
+        /// of repeating default binding labels in the UI.
+        pub fn prefixedKeyForAction(router: *const Self, action: Action) ?Key {
+            const prefix = router.prefix orelse return null;
+            for (router.map.bindings[0..router.map.len]) |*binding| {
+                if (binding.len != 2 or keyOrder(binding.keys[0], prefix) != .eq)
+                    continue;
+                if (std.meta.eql(binding.action, action)) return binding.keys[1];
+            }
+            return null;
         }
 
         /// Feeds host-terminal bytes through the compiled keymap.
@@ -353,6 +385,7 @@ pub fn Router(
         }
 
         pub fn bindingDeadline(router: *const Self) ?u64 {
+            if (router.prefix_pending) return null;
             const since = router.binding_since_ns orelse return null;
             return since +| router.sequence_timeout_ns;
         }
@@ -442,7 +475,11 @@ pub fn Router(
                                 }
                             },
                             .pending => {
-                                if (!was_pending) router.binding_since_ns = now_ns;
+                                if (!was_pending and !router.prefix_pending)
+                                    router.binding_since_ns = now_ns;
+                            },
+                            .discard => {
+                                router.binding_since_ns = null;
                             },
                             .action => |action| {
                                 router.binding_since_ns = null;
@@ -472,8 +509,13 @@ pub fn Router(
                         }
                     },
                     .terminal_response => |response| {
-                        router.resetMatch();
-                        router.binding_since_ns = null;
+                        // Capability replies are asynchronous host protocol,
+                        // not user input. They cannot kick the user out of a
+                        // persistent prefix mode that is waiting for a key.
+                        if (!router.prefix_pending) {
+                            router.resetMatch();
+                            router.binding_since_ns = null;
+                        }
                         try router.flushOutput(handler);
                         if (comptime @hasDecl(@TypeOf(handler.*), "terminalResponse"))
                             try handler.terminalResponse(response);
@@ -522,17 +564,26 @@ pub fn Router(
                 current_key: Key,
                 current_raw: []const u8,
             },
+            discard,
             pending,
             action: Action,
         };
 
         fn routeKey(router: *Self, key: Key, raw: []const u8) Routed {
+            if (router.prefix_pending and isPlainEscape(key)) {
+                router.resetMatch();
+                return .discard;
+            }
             const range = if (router.depth == 0)
                 Map.Range{ .start = 0, .end = router.map.len }
             else
                 router.candidates;
             const matched = router.map.matchingRange(range, router.depth, key) orelse {
                 if (router.depth == 0) return .{ .forward = .{ .key = key, .raw = raw } };
+                if (router.prefix_pending) {
+                    router.resetMatch();
+                    return .discard;
+                }
                 const held_key_len = router.held_key_len;
                 const held_raw_len = router.held_len;
                 var held_keys: [max_keys]Key = undefined;
@@ -581,11 +632,20 @@ pub fn Router(
             router.held_key_len += 1;
             router.candidates = matched;
             router.depth = @intCast(next_depth);
+            if (next_depth == 1) {
+                if (router.prefix) |prefix|
+                    router.prefix_pending = keyOrder(key, prefix) == .eq;
+            }
             return .pending;
         }
 
         fn replayBinding(router: *Self, handler: anytype) !void {
             if (router.depth == 0) return;
+            if (router.prefix_pending) {
+                router.resetMatch();
+                router.binding_since_ns = null;
+                return;
+            }
             if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
                 try router.flushOutput(handler);
                 for (router.held_keys[0..router.held_key_len]) |held_key|
@@ -600,6 +660,7 @@ pub fn Router(
         fn resetMatch(router: *Self) void {
             router.candidates = .{ .start = 0, .end = router.map.len };
             router.depth = 0;
+            router.prefix_pending = false;
             router.held_len = 0;
             router.held_key_len = 0;
         }
@@ -728,13 +789,15 @@ const MouseCapture = struct {
 const TerminalResponseCapture = struct {
     forwarded: usize = 0,
     responses: usize = 0,
+    actions: usize = 0,
     supported: bool = false,
 
     fn forward(capture: *TerminalResponseCapture, bytes: []const u8) !void {
         capture.forwarded += bytes.len;
     }
 
-    fn action(_: *TerminalResponseCapture, _: TestAction) !Control {
+    fn action(capture: *TerminalResponseCapture, _: TestAction) !Control {
+        capture.actions += 1;
         return .continue_routing;
     }
 
@@ -904,6 +967,21 @@ test "a fragmented KGP capability reply is consumed at every split" {
     }
 }
 
+test "an asynchronous terminal response does not cancel prefix mode" {
+    const prefix = try parseKey("ctrl+b");
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
+    var router = try TestRouter.initWithPrefix(&bindings, prefix);
+    var capture: TerminalResponseCapture = .{};
+
+    _ = try router.feed("\x02\x1b_Gi=31;OK\x1b\\", 100, &capture);
+    try testing.expect(router.prefixPending());
+    try testing.expectEqual(@as(usize, 1), capture.responses);
+    _ = try router.feed("d", 101, &capture);
+    try testing.expect(!router.prefixPending());
+    try testing.expectEqual(@as(usize, 1), capture.actions);
+    try testing.expectEqual(@as(usize, 0), capture.forwarded);
+}
+
 test "a failed sequence replays its bytes in order" {
     const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
     var router = try TestRouter.init(&bindings);
@@ -912,6 +990,81 @@ test "a failed sequence replays its bytes in order" {
     _ = try router.feed("\x02x", 100, &capture);
     try testing.expectEqualStrings("\x02x", capture.slice());
     try testing.expectEqual(@as(usize, 0), capture.action_len);
+}
+
+test "a configured prefix waits without a binding deadline" {
+    const prefix = try parseKey("ctrl+b");
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
+    var router = try TestRouter.initWithPrefix(&bindings, prefix);
+    var capture: Capture = .{};
+
+    _ = try router.feed("\x02", 20, &capture);
+    try testing.expect(router.prefixPending());
+    try testing.expectEqual(@as(?u64, null), router.bindingDeadline());
+    _ = try router.expireBinding(20 + 100 * default_sequence_timeout_ns, &capture);
+    try testing.expect(router.prefixPending());
+    try testing.expectEqualStrings("", capture.slice());
+
+    _ = try router.feed("d", 21, &capture);
+    try testing.expect(!router.prefixPending());
+    try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
+}
+
+test "an invalid prefix suffix is consumed" {
+    const prefix = try parseKey("ctrl+b");
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
+    var router = try TestRouter.initWithPrefix(&bindings, prefix);
+    var capture: Capture = .{};
+
+    _ = try router.feed("\x02x", 100, &capture);
+    try testing.expect(!router.prefixPending());
+    try testing.expectEqualStrings("", capture.slice());
+    try testing.expectEqual(@as(usize, 0), capture.action_len);
+
+    _ = try router.feed("a", 101, &capture);
+    try testing.expectEqualStrings("a", capture.slice());
+}
+
+test "escape cancels a pending prefix" {
+    const prefix = try parseKey("ctrl+b");
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "d" }, .detach)};
+    var router = try TestRouter.initWithPrefix(&bindings, prefix);
+    var capture: Capture = .{};
+
+    _ = try router.feed("\x02\x1b", 100, &capture);
+    try testing.expect(router.prefixPending());
+    _ = try router.expireInput(100 + default_escape_timeout_ns, &capture);
+    try testing.expect(!router.prefixPending());
+    try testing.expectEqualStrings("", capture.slice());
+    try testing.expectEqual(@as(usize, 0), capture.action_len);
+}
+
+test "a global partial binding keeps its timeout beside a persistent prefix" {
+    const prefix = try parseKey("ctrl+b");
+    const bindings = [_]TestBinding{
+        try .parse(&.{ "ctrl+b", "d" }, .detach),
+        try .parse(&.{ "ctrl+x", "n" }, .next),
+    };
+    var router = try TestRouter.initWithPrefix(&bindings, prefix);
+    var capture: Capture = .{};
+
+    _ = try router.feed("\x18", 40, &capture);
+    try testing.expect(!router.prefixPending());
+    try testing.expectEqual(@as(?u64, 40 + default_sequence_timeout_ns), router.bindingDeadline());
+    _ = try router.expireBinding(40 + default_sequence_timeout_ns, &capture);
+    try testing.expectEqualStrings("\x18", capture.slice());
+}
+
+test "the router exposes effective prefixed action keys" {
+    const prefix = try parseKey("ctrl+s");
+    const bindings = [_]TestBinding{
+        try .parse(&.{ "ctrl+s", "x" }, .detach),
+        try .parse(&.{"ctrl+d"}, .palette),
+    };
+    var router = try TestRouter.initWithPrefix(&bindings, prefix);
+
+    try testing.expectEqualDeep(try parseKey("x"), router.prefixedKeyForAction(.detach).?);
+    try testing.expect(router.prefixedKeyForAction(.palette) == null);
 }
 
 test "a split terminal sequence waits and still matches" {

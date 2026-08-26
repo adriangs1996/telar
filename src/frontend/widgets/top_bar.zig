@@ -39,31 +39,39 @@ pub fn render(context: *widget.Context, input: Input) void {
         }
     else
         .{ .fg = context.palette.accent, .bg = context.palette.panel_bg, .flags = .{ .bold = true } };
-    _ = context.buffer.writeText(
+    context.buffer.fill(toggle, " ", toggle_style);
+    if (toggle.w != 0) _ = context.drawIcon(
         toggle,
-        toggle.x,
+        toggle.x + (toggle.w - 1) / 2,
         toggle.y,
-        if (input.sidebar_visible) "[<]" else "[>]",
+        if (input.sidebar_visible) .sidebar_collapse else .sidebar_expand,
         toggle_style,
     );
 
     // The badge is reserved first so a long workspace list cannot push the
     // interception signal off screen.
-    const badge_width: u16 = if (input.proxy_tls_active) ui.measure(" \u{26e8} ") else 0;
+    const badge_width: u16 = if (input.proxy_tls_active) @min(area.w, 3) else 0;
     const row_end = area.x + area.w - badge_width;
 
     var x: u16 = toggle.x + toggle.w + 1;
-    const marker = " \u{2756} ";
-    const marker_width = @min(ui.measure(marker), row_end -| x);
+    const marker_width = @min(@as(u16, 3), row_end -| x);
     const marker_rect: ui.Rect = .{ .x = x, .y = area.y, .w = marker_width, .h = 1 };
     context.hits.add(marker_rect, .toggle_workspace_list);
-    _ = context.buffer.writeTruncated(marker_rect, x, area.y, marker, marker_width, .{
+    const marker_style: ui.Style = .{
         .fg = if (context.isHovered(.toggle_workspace_list))
             context.palette.subtext0
         else
             context.palette.overlay0,
         .bg = context.palette.panel_bg,
-    });
+    };
+    context.buffer.fill(marker_rect, " ", marker_style);
+    if (marker_width >= 2) _ = context.drawIcon(
+        marker_rect,
+        x + 1,
+        area.y,
+        .workspace_menu,
+        marker_style,
+    );
     x += marker_width;
 
     const active_id = activeWorkspaceId(input.location);
@@ -74,11 +82,25 @@ pub fn render(context: *widget.Context, input: Input) void {
     }
 
     if (input.proxy_tls_active) {
-        _ = context.buffer.writeRight(area, area.y, " \u{26e8} ", .{
+        const badge: ui.Rect = .{
+            .x = area.x + area.w - badge_width,
+            .y = area.y,
+            .w = badge_width,
+            .h = 1,
+        };
+        const badge_style: ui.Style = .{
             .fg = context.palette.peach,
             .bg = context.palette.panel_bg,
             .flags = .{ .bold = true },
-        });
+        };
+        context.buffer.fill(badge, " ", badge_style);
+        if (badge_width >= 2) _ = context.drawIcon(
+            badge,
+            badge.x + 1,
+            badge.y,
+            .proxy_active,
+            badge_style,
+        );
     }
 }
 
@@ -316,4 +338,40 @@ test "the active name replaces only the active workspace snapshot name" {
     // " agents " + " api " = 13 columns.
     try std.testing.expect(listFits(&snapshot, 0, "agents", 13));
     try std.testing.expect(!listFits(&snapshot, 0, "agents", 12));
+}
+
+test "sidebar toggle publishes the matching Nerd Font action icon" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var plan: ui.icons.Plan = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+        .icon_theme = .nerd_font,
+        .icon_plan = &plan,
+    };
+    const workspaces: workspace_model.Snapshot = .{};
+    const input: Input = .{
+        .area = buffer.area(),
+        .sidebar_visible = true,
+        .location = null,
+        .workspace_name = "telar",
+        .workspaces = &workspaces,
+        .collapsed = false,
+        .proxy_tls_active = false,
+    };
+
+    render(&context, input);
+    try std.testing.expect(plan.len >= 1);
+    try std.testing.expectEqual(ui.icons.Icon.sidebar_collapse, plan.slice()[0].icon);
+
+    plan.reset();
+    var hidden = input;
+    hidden.sidebar_visible = false;
+    render(&context, hidden);
+    try std.testing.expect(plan.len >= 1);
+    try std.testing.expectEqual(ui.icons.Icon.sidebar_expand, plan.slice()[0].icon);
 }

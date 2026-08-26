@@ -15,6 +15,9 @@ pub const Signal = struct {
     status: Status,
     confidence: u8,
     identity_confirmed: bool = false,
+    /// The sample contains an input prompt which proves the agent is waiting.
+    /// Provider branding alone confirms identity, not readiness.
+    ready_confirmed: bool = false,
 };
 
 /// A sample spans one sealed observation batch, so a prompt which disappeared
@@ -61,6 +64,7 @@ pub const Detector = struct {
                 .status = .ready,
                 .confidence = 94,
                 .identity_confirmed = true,
+                .ready_confirmed = true,
             };
 
         // Claude's branded header and prompt often arrive in different sealed
@@ -172,6 +176,7 @@ test "recognizes an open Codex prompt without proxy evidence" {
     try std.testing.expectEqual(Status.ready, detected.status);
     try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
     try std.testing.expect(detected.identity_confirmed);
+    try std.testing.expect(detected.ready_confirmed);
 }
 
 test "Claude branding and prompt may arrive in separate samples" {
@@ -181,6 +186,7 @@ test "Claude branding and prompt may arrive in separate samples" {
     try std.testing.expectEqual(Status.ready, branded.status);
     try std.testing.expectEqual(schema.AgentProvider.claude, branded.provider);
     try std.testing.expect(branded.identity_confirmed);
+    try std.testing.expect(!branded.ready_confirmed);
 
     detector.resetSample();
     detector.observe("\xe2\x9d\xaf");
@@ -188,6 +194,7 @@ test "Claude branding and prompt may arrive in separate samples" {
     try std.testing.expectEqual(Status.ready, prompt.status);
     try std.testing.expectEqual(schema.AgentProvider.claude, prompt.provider);
     try std.testing.expect(!prompt.identity_confirmed);
+    try std.testing.expect(!prompt.ready_confirmed);
 }
 
 test "terminal controls may split at every byte" {

@@ -33,6 +33,7 @@ pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
 pub const max_history_command_bytes = types.max_history_command_bytes;
 pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;
+pub const max_foreground_name_bytes = types.max_foreground_name_bytes;
 pub const max_workspace_list_entries = types.max_workspace_list_entries;
 pub const max_notification_title_bytes = types.max_notification_title_bytes;
 pub const max_notification_message_bytes = types.max_notification_message_bytes;
@@ -143,6 +144,7 @@ pub const ServerTag = enum(u8) {
     pane_clipboard = 0x9a,
     notification = 0x9b,
     notification_shown = 0x9c,
+    pane_foreground = 0x9d,
 };
 
 pub const LaunchView = struct {
@@ -436,6 +438,11 @@ pub const PaneExited = struct {
 pub const PaneCwd = struct {
     pane_id: PaneId,
     cwd: []const u8,
+};
+
+pub const PaneForeground = struct {
+    pane_id: PaneId,
+    name: []const u8,
 };
 
 pub const PaneClipboard = struct {
@@ -747,6 +754,7 @@ pub const ServerMessage = union(enum) {
     system_metrics: SystemMetrics,
     workspace_list: WorkspaceListView,
     pane_cwd: PaneCwd,
+    pane_foreground: PaneForeground,
     pane_clipboard: PaneClipboard,
     notification: Notification,
     notification_shown: NotificationShown,
@@ -1104,6 +1112,16 @@ pub fn encodePaneCwd(buffer: []u8, message: PaneCwd) ![]const u8 {
     return encoder.finish();
 }
 
+pub fn encodePaneForeground(buffer: []u8, message: PaneForeground) ![]const u8 {
+    try validatePaneId(message.pane_id);
+    try validateBytes(message.name, max_foreground_name_bytes, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.pane_foreground));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeSized16(message.name);
+    return encoder.finish();
+}
+
 pub fn encodeRequestFailed(buffer: []u8, message: RequestFailed) ![]const u8 {
     try validateErrorMessage(message.message);
     var encoder = wire.Encoder.init(buffer);
@@ -1347,6 +1365,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .system_metrics => .{ .system_metrics = try Derived(SystemMetrics).decode(&decoder) },
         .workspace_list => .{ .workspace_list = try decodeWorkspaceList(&decoder) },
         .pane_cwd => .{ .pane_cwd = try decodePaneCwd(&decoder) },
+        .pane_foreground => .{ .pane_foreground = try decodePaneForeground(&decoder) },
         .pane_clipboard => .{ .pane_clipboard = .{
             .pane_id = try id.pane(try decoder.readInt(u64)),
             .bytes = try decoder.readSized32(),
@@ -1546,6 +1565,13 @@ fn decodePaneCwd(decoder: *wire.Decoder) !PaneCwd {
     const cwd = try decoder.readSized16();
     try validateBytes(cwd, max_cwd_bytes, false);
     return .{ .pane_id = pane_id, .cwd = cwd };
+}
+
+fn decodePaneForeground(decoder: *wire.Decoder) !PaneForeground {
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const name = try decoder.readSized16();
+    try validateBytes(name, max_foreground_name_bytes, false);
+    return .{ .pane_id = pane_id, .name = name };
 }
 
 fn decodeCreatePane(decoder: *wire.Decoder) !CreatePaneView {
@@ -1769,11 +1795,14 @@ fn decodeHistoryResults(decoder: *wire.Decoder) !HistoryResultsView {
 
 fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !void {
     try validatePaneId(entry.pane_id);
-    if (entry.pane_generation == 0 or entry.sequence == 0 or entry.confidence > 100)
+    if (entry.pane_generation == 0 or entry.pane_index == 0 or
+        entry.sequence == 0 or entry.confidence > 100)
         return error.InvalidAgentEntry;
     if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
     try encoder.writeInt(u64, id.raw(entry.pane_id));
     try encoder.writeInt(u64, entry.pane_generation);
+    try encodeTabLocation(encoder, entry.location);
+    try encoder.writeInt(u16, entry.pane_index);
     try encoder.writeInt(u32, entry.process_id);
     try encoder.writeBytes(&entry.session_id);
     try encoder.writeByte(@intFromEnum(entry.provider));
@@ -1790,6 +1819,8 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
     const entry: AgentSnapshotEntry = .{
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .pane_generation = try decoder.readInt(u64),
+        .location = try decodeTabLocation(decoder),
+        .pane_index = try decoder.readInt(u16),
         .process_id = try decoder.readInt(u32),
         .session_id = (try decoder.readBytes(16))[0..16].*,
         .provider = std.enums.fromInt(AgentProvider, try decoder.readByte()) orelse
@@ -1805,7 +1836,8 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
         .observed_at_ms = try decoder.readInt(i64),
         .expires_at_ms = try decoder.readInt(i64),
     };
-    if (entry.pane_generation == 0 or entry.sequence == 0 or entry.confidence > 100)
+    if (entry.pane_generation == 0 or entry.pane_index == 0 or
+        entry.sequence == 0 or entry.confidence > 100)
         return error.InvalidAgentEntry;
     if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
     return entry;

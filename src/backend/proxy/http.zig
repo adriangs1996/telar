@@ -37,6 +37,7 @@ pub const Framing = union(enum) {
 pub const Head = struct {
     message: Message,
     framing: Framing,
+    inference_request: bool,
 };
 
 pub fn relay(
@@ -114,7 +115,7 @@ pub fn relayHeadTransformed(
         if (!session.writeAll(to, original[0..original_len])) return null;
         return original_head;
     };
-    const transformed = analyzeHead(
+    var transformed = analyzeHead(
         encoded[0..encoded_len],
         is_response,
         response_to_head,
@@ -126,6 +127,7 @@ pub fn relayHeadTransformed(
         if (!session.writeAll(to, original[0..original_len])) return null;
         return original_head;
     }
+    transformed.inference_request = original_head.inference_request;
     if (!session.writeAll(to, encoded[0..encoded_len])) return null;
     return transformed;
 }
@@ -155,7 +157,18 @@ fn analyzeHead(
             },
         },
         .framing = framing,
+        .inference_request = !is_response and inferenceRequest(start_line),
     };
+}
+
+fn inferenceRequest(start_line: []const u8) bool {
+    const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return false;
+    const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return false;
+    if (method_end == version_start) return false;
+    return middleware.isInferenceRequest(
+        start_line[0..method_end],
+        start_line[method_end + 1 .. version_start],
+    );
 }
 
 fn compatible(original: Head, transformed: Head) bool {
@@ -475,6 +488,24 @@ test "HTTP framing rejects ambiguous lengths and recognizes HEAD" {
     try std.testing.expect(isHeadRequest("HEAD /v1/messages HTTP/1.1"));
 }
 
+test "HTTP1 inference classification ignores auxiliary provider routes" {
+    try std.testing.expect(analyzeHead(
+        "POST /v1/messages?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
+        false,
+        false,
+    ).?.inference_request);
+    try std.testing.expect(!analyzeHead(
+        "POST /v1/messages/count_tokens?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
+        false,
+        false,
+    ).?.inference_request);
+    try std.testing.expect(!analyzeHead(
+        "POST /api/event_logging/v2/batch HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
+        false,
+        false,
+    ).?.inference_request);
+}
+
 test "body framing exposes whether a concurrent relay is required" {
     try std.testing.expect(!Framing.hasBody(.none));
     try std.testing.expect(!(Framing{ .length = 0 }).hasBody());
@@ -658,7 +689,7 @@ test "HTTP1 request pseudo-headers transform method and target" {
     try pipeline.add(.{ .context = &ignored, .transform = RewriteTarget.transform });
     const request = "POST /v1/messages HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n";
     var fake: FakeSession = .{ .child_input = request };
-    _ = relayHeadTransformed(
+    const head = relayHeadTransformed(
         &fake,
         .child,
         .origin,
@@ -668,6 +699,7 @@ test "HTTP1 request pseudo-headers transform method and target" {
         std.testing.io,
         undefined,
     ).?;
+    try std.testing.expect(head.inference_request);
     try std.testing.expect(std.mem.startsWith(
         u8,
         fake.origin_output[0..fake.origin_output_len],

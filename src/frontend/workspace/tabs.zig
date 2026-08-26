@@ -171,6 +171,7 @@ pub const Model = struct {
     ) !*Tab {
         const tab = model.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
         if (!std.meta.eql(tab.location, snapshot.location)) return error.UnexpectedTab;
+        const focused_before = tab.model.layout.focused();
         var seen: [multiplexer.max_panes]schema.PaneId = undefined;
         var seen_count: usize = 0;
         var iterator = snapshot.panes();
@@ -190,6 +191,7 @@ pub const Model = struct {
             }
         }
         for (removed[0..removed_count]) |pane_id| _ = tab.model.removePane(pane_id);
+        if (focused_before) |pane_id| _ = tab.model.focusPane(pane_id);
         tab.snapshot_loaded = true;
         tab.model.composition_invalidated = true;
         return tab;
@@ -424,4 +426,28 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.items[0].?.location.tab_id);
     try std.testing.expectEqualStrings("logs", model.items[0].?.labelSlice());
     try std.testing.expect(model.find(@enumFromInt(1)).?.model.find(@enumFromInt(7)) != null);
+}
+
+test "tab reconciliation preserves the pane selected for workspace restoration" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const restored: schema.PaneId = @enumFromInt(42);
+    try model.bootstrap(restored, location, .{ .cols = 30, .rows = 8 });
+    var buffer: [512]u8 = undefined;
+    const snapshot = (try schema.decodeServer(try schema.encodeTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .location = location,
+        .panes = &.{
+            .{ .pane_id = @enumFromInt(10), .lifecycle = .running },
+            .{ .pane_id = restored, .lifecycle = .running },
+            .{ .pane_id = @enumFromInt(77), .lifecycle = .running },
+        },
+    }))).tab_snapshot;
+
+    _ = try model.reconcileTab(snapshot, .{ .w = 60, .h = 12 });
+    try std.testing.expectEqual(restored, model.active().?.model.layout.focused().?);
 }

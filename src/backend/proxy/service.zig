@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const diagnostics = core.diagnostics;
 const ca = @import("ca.zig");
 const h2 = @import("h2.zig");
 const http = @import("http.zig");
@@ -43,6 +44,8 @@ pub const Service = struct {
     events: Io.Queue(middleware.Event),
     dropped_events: std.atomic.Value(u64) = .init(0),
     rejected_connections: std.atomic.Value(u64) = .init(0),
+    invalid_authorization_rejections: std.atomic.Value(u64) = .init(0),
+    unknown_credential_rejections: std.atomic.Value(u64) = .init(0),
     connection_limit_drops: std.atomic.Value(u64) = .init(0),
     h2_decode_failures: std.atomic.Value(u64) = .init(0),
     active_connections: std.atomic.Value(u32) = .init(0),
@@ -92,6 +95,8 @@ pub const Service = struct {
     }
 
     pub fn run(service: *Service) anyerror!void {
+        const path = diagnostics.enter(.observation);
+        defer path.restore();
         service.configuration_mutex.lockUncancelable(service.io);
         if (service.started) {
             service.configuration_mutex.unlock(service.io);
@@ -277,6 +282,8 @@ const TunnelContext = struct {
 };
 
 fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
+    const path = diagnostics.enter(.observation);
+    defer path.restore();
     defer {
         stream.close(service.io);
         _ = service.active_connections.fetchSub(1, .acq_rel);
@@ -285,13 +292,13 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     const head_len = readConnectHead(service.io, stream, &head) orelse return;
     defer std.crypto.secureZero(u8, head[0..head_len]);
     var credential = identity.parseProxyAuthorization(head[0..head_len]) orelse {
-        _ = service.rejected_connections.fetchAdd(1, .monotonic);
+        recordRejection(service, .invalid_authorization);
         reply(service.io, stream, "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"telar\"\r\nContent-Length: 0\r\n\r\n");
         return;
     };
     defer std.crypto.secureZero(u8, &credential.token);
     if (!service.credentials.contains(service.io, credential)) {
-        _ = service.rejected_connections.fetchAdd(1, .monotonic);
+        recordRejection(service, .unknown_credential);
         reply(service.io, stream, "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"telar\"\r\nContent-Length: 0\r\n\r\n");
         return;
     }
@@ -395,7 +402,13 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
             service.io,
             context.transformContext(.request, .request, 0),
         ) orelse return;
-        context.publish(.request_started, 0);
+        context.publish(
+            if (request.inference_request)
+                .request_started
+            else
+                .auxiliary_request_started,
+            0,
+        );
         const response = if (request.framing.hasBody()) response: {
             var event_storage: [2]HttpExchangeEvent = undefined;
             var exchange = Io.Select(HttpExchangeEvent).init(service.io, &event_storage);
@@ -460,6 +473,19 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
             return;
         }
         if (response.closes) return;
+    }
+}
+
+const Rejection = enum {
+    invalid_authorization,
+    unknown_credential,
+};
+
+fn recordRejection(service: *Service, rejection: Rejection) void {
+    _ = service.rejected_connections.fetchAdd(1, .monotonic);
+    switch (rejection) {
+        .invalid_authorization => _ = service.invalid_authorization_rejections.fetchAdd(1, .monotonic),
+        .unknown_credential => _ = service.unknown_credential_rejections.fetchAdd(1, .monotonic),
     }
 }
 
@@ -704,4 +730,45 @@ test "loopback service rejects a CONNECT without a live pane capability" {
         response[0..response_len],
         "HTTP/1.1 407 Proxy Authentication Required\r\n",
     ));
+    try std.testing.expectEqual(
+        @as(u64, 1),
+        service.invalid_authorization_rejections.load(.monotonic),
+    );
+    try std.testing.expectEqual(
+        @as(u64, 0),
+        service.unknown_credential_rejections.load(.monotonic),
+    );
+
+    const unknown_client = try address.connect(io, .{ .mode = .stream });
+    defer unknown_client.close(io);
+    var unknown_write_buffer: [512]u8 = undefined;
+    var unknown_writer = unknown_client.writer(io, &unknown_write_buffer);
+    const raw = "telar:7.12.00112233445566778899aabbccddeeff";
+    var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
+    const basic = std.base64.standard.Encoder.encode(&encoded, raw);
+    var request_buffer: [256]u8 = undefined;
+    const request = try std.fmt.bufPrint(
+        &request_buffer,
+        "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n",
+        .{basic},
+    );
+    try unknown_writer.interface.writeAll(request);
+    try unknown_writer.interface.flush();
+    var unknown_read_buffer: [512]u8 = undefined;
+    var unknown_reader = unknown_client.reader(io, &unknown_read_buffer);
+    var unknown_response: [512]u8 = undefined;
+    const unknown_response_len = try unknown_reader.interface.readSliceShort(&unknown_response);
+    try std.testing.expect(std.mem.startsWith(
+        u8,
+        unknown_response[0..unknown_response_len],
+        "HTTP/1.1 407 Proxy Authentication Required\r\n",
+    ));
+    try std.testing.expectEqual(
+        @as(u64, 1),
+        service.unknown_credential_rejections.load(.monotonic),
+    );
+    try std.testing.expectEqual(
+        @as(u64, 2),
+        service.rejected_connections.load(.monotonic),
+    );
 }

@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const diff = presentation.diff;
+const icon_graphics = @import("../graphics/root.zig").icons;
 const kitty = @import("../graphics/root.zig").kitty;
 const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
@@ -29,6 +30,7 @@ pub const Interaction = struct {
     layout_changed: bool = false,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
+    focus_agent: ?widgets.sidebar.AgentKey = null,
     /// Intent only: starting the rename prompt is a mode change, which the
     /// client owns; the view never enters the prompt on its own.
     rename_tab: ?schema.TabId = null,
@@ -38,6 +40,15 @@ pub const Interaction = struct {
 pub const RenderStats = struct {
     scanned: usize = 0,
     damaged: usize = 0,
+};
+
+const GraphicsPlan = struct {
+    toast_area: ui.Rect = .{},
+    sidebar_area: ui.Rect = .{},
+    focused_card: ?kitty.SidebarFocus = null,
+    provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined,
+    provider_mark_count: u8 = 0,
+    icons: ui.icons.Plan = .{},
 };
 
 pub const NameInput = union(enum) {
@@ -60,6 +71,7 @@ pub const State = struct {
     scratch: ui.Buffer,
     regions: Regions,
     theme: theme_mod.Theme,
+    icon_theme: ui.icons.Theme,
     hits: Hits = .{},
     sidebar_requested: bool = true,
     hovered: ?Action = null,
@@ -67,6 +79,9 @@ pub const State = struct {
     sidebar_snapshot: widgets.sidebar.Snapshot = .{},
     sidebar: widgets.sidebar.State = .{},
     sidebar_animation_frame: u8 = 0,
+    sidebar_index_location: ?schema.TabLocation = null,
+    sidebar_index_layout_revision: u64 = 0,
+    sidebar_index_agent_revision: u64 = 0,
     workspace_list: widgets.workspace_model.Snapshot = .{},
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
@@ -76,7 +91,10 @@ pub const State = struct {
     notifications: widgets.notification.Center = .{},
     toast_overlay_drawn: bool = false,
     kitty_sidebar: kitty.KittySidebarRenderer,
+    kitty_icons: icon_graphics.Renderer,
     kitty_toasts: toast_graphics.Renderer,
+    graphics_plan: GraphicsPlan = .{},
+    graphics_plan_dirty: bool = false,
     cell_width_px: u16 = 0,
     cell_height_px: u16 = 0,
 
@@ -90,11 +108,23 @@ pub const State = struct {
         height: u16,
         selected_theme: theme_mod.Theme,
     ) !State {
+        return initWithAppearance(gpa, width, height, selected_theme, .unicode);
+    }
+
+    pub fn initWithAppearance(
+        gpa: std.mem.Allocator,
+        width: u16,
+        height: u16,
+        selected_theme: theme_mod.Theme,
+        selected_icons: ui.icons.Theme,
+    ) !State {
         return .{
             .scratch = try .init(gpa, width, height),
             .regions = .calculate(width, height, true),
             .theme = selected_theme,
+            .icon_theme = selected_icons,
             .kitty_sidebar = .init(gpa),
+            .kitty_icons = .init(gpa),
             .kitty_toasts = .init(gpa),
         };
     }
@@ -102,6 +132,7 @@ pub const State = struct {
     pub fn deinit(state: *State) void {
         state.scratch.deinit();
         state.kitty_sidebar.deinit();
+        state.kitty_icons.deinit();
         state.kitty_toasts.deinit();
     }
 
@@ -123,6 +154,12 @@ pub const State = struct {
     pub fn setTheme(state: *State, selected_theme: theme_mod.Theme) void {
         state.theme = selected_theme;
         state.hovered = null;
+        state.dirty = true;
+    }
+
+    pub fn setIconTheme(state: *State, selected_theme: ui.icons.Theme) void {
+        if (state.icon_theme == selected_theme) return;
+        state.icon_theme = selected_theme;
         state.dirty = true;
     }
 
@@ -201,13 +238,6 @@ pub const State = struct {
         input: widgets.sidebar.SnapshotInput,
     ) !bool {
         if (!try state.sidebar_snapshot.replace(input)) return false;
-        if (state.sidebar.selected_agent) |key| {
-            if (state.sidebar_snapshot.find(key) == null) state.sidebar.selected_agent = null;
-        }
-        if (state.sidebar.selected_agent == null) {
-            if (state.sidebar_snapshot.first()) |agent|
-                state.sidebar.selected_agent = agent.key;
-        }
         state.sidebar.scroll = 0;
         state.dirty = true;
         return true;
@@ -233,8 +263,9 @@ pub const State = struct {
     ) !void {
         const resolved = try requested.resolve(support);
         const toast_changed = state.kitty_toasts.configure(support, cell_width, cell_height);
+        const icons_changed = state.kitty_icons.configure(support, cell_width, cell_height);
         if (state.sidebar_rendering != resolved or state.cell_width_px != cell_width or
-            state.cell_height_px != cell_height or toast_changed)
+            state.cell_height_px != cell_height or toast_changed or icons_changed)
         {
             state.sidebar_rendering = resolved;
             state.cell_width_px = cell_width;
@@ -249,6 +280,48 @@ pub const State = struct {
 
     pub fn kittyToasts(state: *State) *toast_graphics.Renderer {
         return &state.kitty_toasts;
+    }
+
+    pub fn kittyIcons(state: *State) *icon_graphics.Renderer {
+        return &state.kitty_icons;
+    }
+
+    /// Applies the latest allocation-free render plan after the cell frame is
+    /// already visible. A newer render simply replaces this fixed-size plan,
+    /// so media work never builds a visual replay behind interactive work.
+    pub fn prepareGraphics(state: *State, media_idle: bool) !bool {
+        if (!state.graphics_plan_dirty and
+            !(media_idle and state.kitty_toasts.preparationDeferred())) return false;
+        state.kitty_toasts.setMediaIdle(media_idle);
+        state.kitty_toasts.prepareThemed(
+            state.graphics_plan.toast_area,
+            &state.notifications,
+            state.palette(),
+            state.icon_theme,
+        );
+        try state.kitty_sidebar.prepare(
+            state.graphics_plan.sidebar_area,
+            state.graphics_plan.focused_card,
+            state.graphics_plan.provider_marks[0..state.graphics_plan.provider_mark_count],
+            state.cell_width_px,
+            state.cell_height_px,
+        );
+        var icon_fallback_changed = false;
+        state.kitty_icons.prepare(state.graphics_plan.icons.slice()) catch {
+            state.kitty_icons.disable();
+            state.dirty = true;
+            icon_fallback_changed = true;
+        };
+        state.graphics_plan_dirty = false;
+        return icon_fallback_changed;
+    }
+
+    pub fn graphicsPreparationPending(state: *const State) bool {
+        return state.graphics_plan_dirty;
+    }
+
+    pub fn graphicalToastsCover(state: *const State) bool {
+        return state.kitty_toasts.covers(&state.notifications);
     }
 
     pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
@@ -420,12 +493,7 @@ pub const State = struct {
                 state.toggleWorkspaceList();
                 result.redraw = true;
             },
-            .sidebar_select_agent => |key| {
-                state.sidebar.selected_agent = key;
-                result.layout_changed = model.focusPaneShift(key.pane_id).layout_changed;
-                state.dirty = true;
-                result.redraw = true;
-            },
+            .sidebar_focus_agent => |key| result.focus_agent = key,
             .sidebar_scroll_to => |row| {
                 state.sidebar.scroll = row;
                 state.dirty = true;
@@ -480,6 +548,36 @@ pub const State = struct {
         force: bool,
         diagnostic: ?[]const u8,
     ) !RenderStats {
+        return state.renderWithStatus(
+            screen,
+            tabs,
+            model,
+            .normal,
+            force,
+            diagnostic,
+        );
+    }
+
+    pub fn renderWithStatus(
+        state: *State,
+        screen: *term.Screen,
+        tabs: ?*const tabs_mod.Model,
+        model: *multiplexer.Model,
+        status_mode: widgets.status_bar.Mode,
+        force: bool,
+        diagnostic: ?[]const u8,
+    ) !RenderStats {
+        if (!std.meta.eql(state.sidebar_index_location, model.location) or
+            state.sidebar_index_layout_revision != model.layout.currentRevision() or
+            state.sidebar_index_agent_revision != state.sidebar_snapshot.revision)
+        {
+            var panes = model.paneIterator();
+            while (panes.next()) |pane| if (model.displayIndex(pane.id)) |pane_index|
+                state.sidebar_snapshot.setPaneIndex(pane.id, pane_index);
+            state.sidebar_index_location = model.location;
+            state.sidebar_index_layout_revision = model.layout.currentRevision();
+            state.sidebar_index_agent_revision = state.sidebar_snapshot.revision;
+        }
         // The banner must survive every present — pane composition may have
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, diagnostic);
@@ -488,13 +586,23 @@ pub const State = struct {
             return .{};
         state.hits.clear();
         state.scratch.clear(.{});
+        state.graphics_plan.icons.reset();
         const hybrid = state.sidebar_rendering == .kitty_hybrid or
             state.sidebar_rendering == .kitty_full;
+        const focused_card_color: ?[3]u8 = if (hybrid) switch (state.palette().surface0) {
+            .rgb => |value| value,
+            .default, .indexed => null,
+        } else null;
         var context: widgets.Context = .{
             .buffer = &state.scratch,
             .hits = &state.hits,
             .palette = state.palette(),
             .hovered = state.hovered,
+            .icon_theme = state.icon_theme,
+            .icon_plan = if (diagnostic == null and state.kitty_icons.available())
+                &state.graphics_plan.icons
+            else
+                null,
         };
         const composed = widgets.composition.render(&context, .{
             .regions = state.regions,
@@ -505,20 +613,17 @@ pub const State = struct {
             .sidebar_snapshot = &state.sidebar_snapshot,
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
+            .sidebar_rounded_focus = focused_card_color != null,
             .sidebar_animation_frame = state.sidebar_animation_frame,
             .proxy_tls_active = state.proxy_tls_active,
             .system_metrics = state.system_metrics,
+            .status_mode = status_mode,
             .workspaces = &state.workspace_list,
             .workspace_list_collapsed = state.workspace_list_collapsed,
         });
         const toast_area = widgets.toast.overlayArea(state.regions.workbench);
         const has_toasts = state.notifications.hasItems() and !toast_area.isEmpty();
-        state.kitty_toasts.prepare(
-            toast_area,
-            &state.notifications,
-            state.palette(),
-        );
-        const graphical_toasts = state.kitty_toasts.coversAll();
+        const graphical_toasts = state.kitty_toasts.covers(&state.notifications);
         if (has_toasts or state.toast_overlay_drawn) {
             model.copyComposedArea(&state.scratch, toast_area);
             if (has_toasts) {
@@ -540,13 +645,23 @@ pub const State = struct {
                 provider_marks[provider_mark_count] = .{ .area = mark.area, .provider = provider };
                 provider_mark_count += 1;
             }
-            try state.kitty_sidebar.prepare(
-                composed.sidebar.area,
+            state.graphics_plan.sidebar_area = composed.sidebar.area;
+            state.graphics_plan.focused_card = if (composed.sidebar.focused_card) |area|
+                if (focused_card_color) |color| .{ .area = area, .color = color } else null
+            else
+                null;
+            @memcpy(
+                state.graphics_plan.provider_marks[0..provider_mark_count],
                 provider_marks[0..provider_mark_count],
-                state.cell_width_px,
-                state.cell_height_px,
             );
-        } else try state.kitty_sidebar.prepare(.{}, &.{}, 0, 0);
+            state.graphics_plan.provider_mark_count = @intCast(provider_mark_count);
+        } else {
+            state.graphics_plan.sidebar_area = .{};
+            state.graphics_plan.focused_card = null;
+            state.graphics_plan.provider_mark_count = 0;
+        }
+        state.graphics_plan.toast_area = toast_area;
+        state.graphics_plan_dirty = true;
 
         var stats: RenderStats = .{};
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.top));
@@ -661,6 +776,8 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     try std.testing.expect(model.toggleFullscreen());
     const agents = [_]widgets.sidebar.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
+        .location = location,
+        .pane_index = 1,
         .provider = .codex,
         .status = .blocked,
     }};
@@ -675,8 +792,99 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     try std.testing.expect(!state.handleMouse(null, &model, first_row, 0).redraw);
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(null, &model, click, 0);
-    try std.testing.expect(interaction.layout_changed);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
+    try std.testing.expectEqualDeep(agents[0].key, interaction.focus_agent.?);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
+}
+
+test "sidebar highlight follows pane focus and the rendered workspace" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 100, 30);
+    defer state.deinit();
+    const first_location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const second_location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first_pane: schema.PaneId = @enumFromInt(1);
+    const second_pane: schema.PaneId = @enumFromInt(2);
+    const shell_pane: schema.PaneId = @enumFromInt(3);
+    const workspace_pane: schema.PaneId = @enumFromInt(4);
+
+    var first_model = multiplexer.Model.init(gpa);
+    defer first_model.deinit();
+    try first_model.addRoot(first_pane, first_location, .{ .cols = 34, .rows = 27 });
+    try first_model.split(
+        first_pane,
+        second_pane,
+        first_location,
+        .horizontal,
+        state.workbench(),
+    );
+    try first_model.split(
+        second_pane,
+        shell_pane,
+        first_location,
+        .vertical,
+        state.workbench(),
+    );
+    try std.testing.expect(first_model.focusPane(first_pane));
+
+    var second_model = multiplexer.Model.init(gpa);
+    defer second_model.deinit();
+    try second_model.addRoot(workspace_pane, second_location, .{ .cols = 38, .rows = 27 });
+
+    const agents = [_]widgets.sidebar.AgentInput{
+        .{
+            .key = .{ .pane_id = first_pane, .pane_generation = 1 },
+            .location = first_location,
+            .pane_index = 1,
+            .provider = .codex,
+            .status = .ready,
+        },
+        .{
+            .key = .{ .pane_id = second_pane, .pane_generation = 1 },
+            .location = first_location,
+            .pane_index = 2,
+            .provider = .claude,
+            .status = .ready,
+        },
+        .{
+            .key = .{ .pane_id = workspace_pane, .pane_generation = 1 },
+            .location = second_location,
+            .pane_index = 1,
+            .provider = .codex,
+            .status = .ready,
+        },
+    };
+    _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
+    var screen = try term.Screen.init(gpa, 100, 30);
+    defer screen.deinit();
+    const palette = state.palette();
+
+    _ = try state.render(&screen, null, &first_model, true, null);
+    try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 4).?.style.bg);
+    try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
+
+    try std.testing.expect(first_model.focusPane(second_pane));
+    state.invalidate();
+    _ = try state.render(&screen, null, &first_model, false, null);
+    try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
+    try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 7).?.style.bg);
+
+    try std.testing.expect(first_model.focusPane(shell_pane));
+    state.invalidate();
+    _ = try state.render(&screen, null, &first_model, false, null);
+    try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
+    try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
+
+    state.invalidate();
+    _ = try state.render(&screen, null, &second_model, false, null);
+    try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
+    try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
+    try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 10).?.style.bg);
 }
 
 test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
@@ -692,22 +900,111 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 30, .rows = 20 });
     const agents = [_]widgets.sidebar.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 4 },
+        .location = location,
+        .pane_index = 1,
         .provider = .claude,
         .status = .ready,
     }};
     _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
-    state.sidebar.selected_agent = agents[0].key;
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.prepareGraphics(true);
+    try std.testing.expect(state.kittySidebar().focused_card != null);
     try std.testing.expectEqualDeep(
-        Action{ .sidebar_select_agent = agents[0].key },
+        Action{ .sidebar_focus_agent = agents[0].key },
         state.hits.at(4, 4).?,
     );
     const interaction = state.handleMouse(null, &model, .{ .x = 4, .y = 4, .kind = .press }, 0);
     try std.testing.expect(interaction.redraw);
+    try std.testing.expectEqualDeep(agents[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());
+}
+
+test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
+    var state = try State.initWithAppearance(
+        std.testing.allocator,
+        100,
+        30,
+        theme_mod.default_theme,
+        .nerd_font,
+    );
+    defer state.deinit();
+    try state.configureSidebar(.automatic, .supported, 10, 20);
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 28 });
+    var screen = try term.Screen.init(std.testing.allocator, 100, 30);
+    defer screen.deinit();
+
+    _ = try state.render(&screen, null, &model, true, null);
+    try std.testing.expectEqualStrings("W", screen.back.at(6, 0).?.text());
+    try std.testing.expect(state.graphics_plan.icons.len != 0);
+    _ = try state.prepareGraphics(true);
+    try std.testing.expect(state.kittyIcons().retainedBytes() != 0);
+    try std.testing.expect(state.kittyIcons().damaged());
+}
+
+test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
+    var state = try State.initWithAppearance(
+        std.testing.allocator,
+        100,
+        30,
+        theme_mod.default_theme,
+        .nerd_font,
+    );
+    defer state.deinit();
+    try state.configureSidebar(.automatic, .unsupported, 10, 20);
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 28 });
+    var screen = try term.Screen.init(std.testing.allocator, 100, 30);
+    defer screen.deinit();
+
+    _ = try state.render(&screen, null, &model, true, null);
+    try std.testing.expectEqualStrings("\u{2756}", screen.back.at(6, 0).?.text());
+    try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.icons.len);
+}
+
+test "cell rendering leaves toast rasterization to the media pass" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 120, 30);
+    defer state.deinit();
+    try state.configureSidebar(.cells, .supported, 22, 58);
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 28 });
+    _ = state.notify(0, .{ .title = "Ready", .message = "Open result" });
+    var screen = try term.Screen.init(gpa, 120, 30);
+    defer screen.deinit();
+    _ = try model.render(&screen, state.workbench());
+    _ = try state.render(&screen, null, &model, true, null);
+
+    try std.testing.expectEqual(@as(usize, 0), state.kittyToasts().retainedBytes());
+    _ = try state.prepareGraphics(false);
+    try std.testing.expectEqual(@as(usize, 0), state.kittyToasts().retainedBytes());
+    try std.testing.expect(state.kittyToasts().preparationDeferred());
+
+    // The same fixed plan is retried after the idle boundary; it does not need
+    // another cell composition to make progress.
+    _ = try state.prepareGraphics(true);
+    try std.testing.expect(
+        state.kittyToasts().retainedBytes() > kitty.transmission_budget_per_frame,
+    );
+    try std.testing.expect(state.kittyToasts().transmissionPending());
 }
 
 test "client chrome uses Vesper by default" {

@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 56;
+const corpus_len = 57;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -512,6 +512,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     const agent_entries = [_]schema.AgentSnapshotEntry{.{
         .pane_id = @enumFromInt(5),
         .pane_generation = 7,
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(2) },
+            .tab_id = @enumFromInt(4),
+        },
+        .pane_index = 3,
         .process_id = 42,
         .session_id = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 },
         .provider = .codex,
@@ -562,6 +567,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try schema.encodePaneCwd(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .cwd = "/work/telar",
+        }),
+    ));
+    helper.add("pane_foreground", .server, false, golden.pane_foreground, helper.commit(
+        try schema.encodePaneForeground(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .name = "zsh",
         }),
     ));
     helper.add("pane_clipboard", .server, false, golden.pane_clipboard, helper.commit(
@@ -643,10 +654,11 @@ const golden = struct {
     pub const graphics_delete_image = "9101000000000000000400000000000000070000000800000000000000";
     pub const graphics_delete_placement = "9201000000000000000500000000000000070000000800000000000000010000000000000001000000";
     pub const proxy_status = "9501";
-    pub const agent_snapshot = "9609000000000000000100050000000000000007000000000000002a0000000102030405060708090a0b0c0d0e0f10020102015f0b00000000000000e803000000000000d007000000000000";
+    pub const agent_snapshot = "960900000000000000010005000000000000000700000000000000000200000000000000040000000000000003002a0000000102030405060708090a0b0c0d0e0f10020102015f0b00000000000000e803000000000000d007000000000000";
     pub const system_metrics = "9705000000000000002a5c000154";
     pub const workspace_list = "98030000000000000002000700000000000000050074656c61720b002f776f726b2f74656c61720200090000000000000003006170690900" ++ "2f776f726b2f617069" ++ "0100";
     pub const pane_cwd = "9905000000000000000b002f776f726b2f74656c6172";
+    pub const pane_foreground = "9d050000000000000003007a7368";
     pub const pane_clipboard = "9a050000000000000003000000616263";
     pub const notification = "9b02b80b00000203000000000000000d004167656e742077616974696e67130052657669657720697473207175657374696f6e";
     pub const notification_shown = "9c2e0000000000000002";
@@ -1370,6 +1382,11 @@ test "malformed application messages are rejected" {
     const agent_entry: schema.AgentSnapshotEntry = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 4,
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(2),
+        },
+        .pane_index = 1,
         .process_id = 5,
         .session_id = .{0x5a} ** 16,
         .provider = .codex,

@@ -56,3 +56,28 @@ _Avoid_: Keybinding
 Semantic input destined for the child process owned by a pane after input
 routing has chosen that destination.
 _Avoid_: Raw input, forwarded key
+
+**Focused pane**:
+The pane in the client's active tab that receives pane input. Each tab remembers
+its focused pane so the client can restore that focus when the tab becomes
+active.
+_Avoid_: Selected pane, active pane
+
+**Focused agent**:
+The agent associated with the focused pane, if that pane has an agent. A client
+may have no focused agent even when the runtime reports other agents.
+_Avoid_: Selected agent, active agent
+
+**Open agent**:
+An agent session whose process still belongs to a pane. Being open says nothing
+about whether the agent is working or waiting for input.
+_Avoid_: Active agent
+
+**Working agent**:
+An open agent with current model or tool work in progress. An agent showing its
+input prompt is not working.
+_Avoid_: Running agent, busy process
+
+**Ready agent**:
+An open agent waiting for user input with no current work in progress.
+_Avoid_: Idle process

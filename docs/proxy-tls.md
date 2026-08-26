@@ -128,9 +128,10 @@ and herdr behavior. Permission and confirmation prompts produce `blocked` and
 override proxy activity. Working text overrides an early response completion.
 Claude's ready prompt is accepted only after Claude identity is already known
 and requires three consecutive samples before it overrides a lost proxy
-completion. Generic prompts without established agent identity are discarded.
-Evidence expires, and pane generation plus process and history-session identity
-prevent a late event from attaching to a reused pane.
+completion. Codex's explicit branded input prompt confirms `ready` in one
+sample. Generic prompts without established agent identity are discarded.
+Evidence expires, and pane generation plus process and history-session
+identity prevent a late event from attaching to a reused pane.
 
 These are sidebar hints, not agent authority. A heuristic never approves a
 command, resumes a session, kills a process, or generates terminal input.

@@ -24,6 +24,7 @@ return telar.config({
   api_version = 2,
   client = {
     prefix = "ctrl+s",
+    icons = "nerd-font",
     theme = telar.theme({
       base = "vesper",
       colors = { accent = "#ffc799" },
@@ -54,12 +55,22 @@ return telar.config({
 })
 ```
 
+`client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd
+Font theme uses a glyph subset embedded in Telar and does not require a Nerd
+Font in the host terminal. It needs Kitty Graphics support and RGB theme
+colors. Telar keeps the Unicode cell icons as the fallback when either is
+unavailable.
+
 ## Bindings
 
 `client.prefix` is one key chord and defaults to `"ctrl+b"`. `telar.bind` and
 `telar.bind_expr` prepend it to their `keys`, so `{ "s" }` matches
 `prefix`, then `s`. Changing the prefix also changes the compiled default
-keymap and prefixed bindings inherited by a profile.
+keymap and prefixed bindings inherited by a profile. Pressing the prefix enters
+a persistent client mode: it waits without a deadline for the next key. A valid
+suffix runs its action, an invalid suffix is consumed, and Escape cancels the
+mode. The bottom bar shows a bounded set of useful bindings from the effective
+keymap while the mode is active.
 
 Use `telar.bind_global` and `telar.bind_expr_global` for sequences that must not
 use the prefix. A prefixed binding accepts one to four suffix keys. A global
@@ -68,7 +79,8 @@ keymap. A configured binding replaces every default it conflicts with — the
 same key sequence, or a sequence that is a prefix of the other, since the
 keymap refuses ambiguous prefixes. Defaults free of conflicts remain active.
 `telar config check` compiles the merged keymap and reports conflicts between
-configured bindings.
+configured bindings. `client.input.sequence_timeout_ms` applies only to partial
+global sequences; prefixed sequences do not expire.
 
 `telar.bind` and `telar.bind_global` accept a semantic built-in action, a
 constructor such as `split_pane`, `focus_pane`, `select_tab`,
@@ -94,6 +106,9 @@ Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 Press `v` or Space for a character selection, `V` for a line selection, then
 `y` or Enter to copy through OSC 52. Escape first clears an active selection;
 a second Escape, or `q`, leaves copy mode and restores the entry viewport.
+The bottom bar replaces metrics and tabs with these movement, selection, copy,
+and exit hints until copy mode ends. Pressing the configured prefix temporarily
+replaces them with the prefix-mode hints.
 
 `telar.action.toggle_pane_fullscreen()` makes the focused pane occupy the whole
 tab. The client retains the tiled layout and its split ratios, so invoking the

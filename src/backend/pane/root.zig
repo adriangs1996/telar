@@ -421,6 +421,7 @@ pub const Pane = struct {
     history_service: *history.Service,
     history_observer: history.observer.Observer,
     agent_process_cache: agent_process.Cache = .{},
+    foreground_revision: u64 = 1,
     history_session_id: history.SessionId,
     started_at_ms: i64,
     history_sequence: u64 = 0,
@@ -480,6 +481,7 @@ pub const Pane = struct {
             .stream = undefined,
             .media = undefined,
             .history_observer = undefined,
+            .agent_process_cache = .init(std.mem.span(command.file)),
             .screen = undefined,
             .damaged_rows = undefined,
         };
@@ -586,6 +588,21 @@ pub const Pane = struct {
         return .{ .id = pane.id, .generation = pane.generation };
     }
 
+    /// Ghostty's page allocator size: the same counter `max_scrollback_bytes`
+    /// prunes against, covering the active grid plus retained history.
+    pub fn vtScrollbackBytes(pane: *const Pane) usize {
+        var total: usize = 0;
+        for (std.enums.values(vt.ScreenSet.Key)) |screen_key| {
+            const screen = pane.terminal.screens.get(screen_key) orelse continue;
+            total += screen.pages.page_size;
+        }
+        return total;
+    }
+
+    pub fn vtScreenBytes(pane: *const Pane) usize {
+        return pane.screen.cells.len * @sizeOf(core.ui.Cell);
+    }
+
     pub fn actorStarted(pane: *Pane) void {
         std.debug.assert(pane.actor_count < 8);
         pane.actor_count += 1;
@@ -627,7 +644,11 @@ pub const Pane = struct {
 
     pub fn ingest(pane: *Pane, io: Io, bytes: []const u8) !u64 {
         const started = diagnostics.now(io);
-        pane.stream.nextSlice(bytes);
+        {
+            const terminal_allocations = diagnostics.enterTerminalAllocations();
+            defer terminal_allocations.restore();
+            pane.stream.nextSlice(bytes);
+        }
         const foreground = pane.terminal.colors.foreground.override;
         const background = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
@@ -867,14 +888,18 @@ pub const Pane = struct {
 
     pub fn applyPendingResize(pane: *Pane) !void {
         const size = pane.pending_size orelse return;
-        try pane.stream.handler.resize(.{
-            .cols = size.cols,
-            .rows = size.rows,
-            .cell_size_px = if (size.cell_width_px != 0 and size.cell_height_px != 0) .{
-                .width = size.cell_width_px,
-                .height = size.cell_height_px,
-            } else null,
-        });
+        {
+            const terminal_allocations = diagnostics.enterTerminalAllocations();
+            defer terminal_allocations.restore();
+            try pane.stream.handler.resize(.{
+                .cols = size.cols,
+                .rows = size.rows,
+                .cell_size_px = if (size.cell_width_px != 0 and size.cell_height_px != 0) .{
+                    .width = size.cell_width_px,
+                    .height = size.cell_height_px,
+                } else null,
+            });
+        }
         pane.observeGraphicsDamage();
         try resizeScreenStorage(pane.gpa, &pane.screen, &pane.damaged_rows, size.cols, size.rows);
         // Committed only after every fallible step: a failure above leaves the
@@ -907,7 +932,11 @@ pub const Pane = struct {
     }
 
     pub fn render(pane: *Pane, force: bool) !void {
-        try pane.render_state.update(pane.gpa, &pane.terminal);
+        {
+            const terminal_allocations = diagnostics.enterTerminalAllocations();
+            defer terminal_allocations.restore();
+            try pane.render_state.update(pane.gpa, &pane.terminal);
+        }
         const force_all = force or pane.semantic_colors_dirty;
         _ = blit.blit(
             &pane.screen,
@@ -1019,6 +1048,18 @@ pub const PaneStore = struct {
             len += 1;
         }
         return output[0..len];
+    }
+
+    pub fn positionAt(store: *const PaneStore, wanted: *const Pane) ?u16 {
+        var position: u16 = 0;
+        for (store.items) |slot| {
+            const pane = slot orelse continue;
+            if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null or
+                !std.meta.eql(pane.location, wanted.location)) continue;
+            position += 1;
+            if (pane == wanted) return position;
+        }
+        return null;
     }
 
     pub fn countAt(store: *const PaneStore, location: schema.TabLocation) u16 {

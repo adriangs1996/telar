@@ -6,6 +6,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
+const widgets = @import("../widgets/root.zig");
 const keybind = input_capability.keybind;
 
 const Io = std.Io;
@@ -100,7 +101,7 @@ const TestHarness = struct {
     /// the client with one attached pane and its two snapshot requests (ids
     /// 2 and 3) delivered to the peer.
     fn bootstrap(harness: *TestHarness) !void {
-        try harness.client.requests.add(initial_request_id, .initial_open);
+        try harness.client.requests.add(initial_request_id, .{ .initial_open = .{} });
         var payload: [128]u8 = undefined;
         const opened = try schema.encodePaneOpened(&payload, .{
             .request_id = initial_request_id,
@@ -145,6 +146,120 @@ test "bootstrap answers the initial open with both snapshot requests" {
     const pane = harness.client.tabs.findPane(TestHarness.bootstrap_pane).?;
     try std.testing.expect(pane.attached);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, harness.client.reported_focus);
+}
+
+test "workspace handoff opens the pane remembered for that workspace" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+
+    const destination: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(2) };
+    const restored_pane: schema.PaneId = @enumFromInt(77);
+    client.navigation_history.remember(.{
+        .location = .{ .workspace = destination, .tab_id = @enumFromInt(8) },
+        .pane_id = restored_pane,
+    });
+    var handler: InputHandler = .{ .client = client };
+    try handler.switchWorkspaceResolved(@enumFromInt(2));
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    var target: ?schema.PaneTarget = null;
+    var request_id: schema.RequestId = .none;
+    while (target == null) switch (try harness.nextClientMessage(&buffer)) {
+        .detach_pane => {},
+        .open_pane => |open| {
+            request_id = open.request_id;
+            target = open.target;
+        },
+        else => return error.UnexpectedClientMessage,
+    };
+    try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = restored_pane }, target.?);
+    const current = client.navigation_history.find(TestHarness.bootstrap_location.workspace).?;
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, current.pane_id);
+
+    var payload: [128]u8 = undefined;
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = request_id,
+        .code = .pane_not_found,
+        .message = "remembered pane closed",
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    try harness.settle();
+    const fallback = (try harness.nextClientMessage(&buffer)).open_pane;
+    try std.testing.expectEqualDeep(
+        schema.PaneTarget{ .workspace = @enumFromInt(2) },
+        fallback.target,
+    );
+    try std.testing.expect(client.navigation_history.find(destination) == null);
+}
+
+test "clicking a sidebar agent hands off directly to its pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+
+    const agent_pane: schema.PaneId = @enumFromInt(91);
+    const agent = widgets.sidebar.AgentInput{
+        .key = .{ .pane_id = agent_pane, .pane_generation = 2 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(3) },
+            .tab_id = @enumFromInt(6),
+        },
+        .pane_index = 2,
+        .provider = .claude,
+        .status = .working,
+    };
+    _ = try client.view.replaceSidebarSnapshot(.{
+        .revision = 1,
+        .agents = &.{agent},
+    });
+    const model = &client.tabs.active().?.model;
+    _ = try client.view.render(
+        &client.presenter.screen,
+        &client.tabs,
+        model,
+        true,
+        null,
+    );
+    var handler: InputHandler = .{ .client = client };
+    try handler.mouse(.{ .x = 4, .y = 4, .kind = .press });
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    var target: ?schema.PaneTarget = null;
+    var request_id: schema.RequestId = .none;
+    while (target == null) switch (try harness.nextClientMessage(&buffer)) {
+        .detach_pane => {},
+        .open_pane => |open| {
+            request_id = open.request_id;
+            target = open.target;
+        },
+        else => return error.UnexpectedClientMessage,
+    };
+    try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = agent_pane }, target.?);
+
+    var payload: [128]u8 = undefined;
+    const opened = try schema.encodePaneOpened(&payload, .{
+        .request_id = request_id,
+        .pane_id = agent_pane,
+        .location = agent.location,
+        .created = false,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+    try harness.settle();
+    try std.testing.expectEqualDeep(
+        @as(?schema.WorkspaceLocation, agent.location.workspace),
+        client.tabs.workspace,
+    );
+    try std.testing.expectEqual(agent.location.tab_id, client.tabs.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(agent_pane, client.tabs.activeConst().?.model.layout.focused().?);
 }
 
 test "a tab snapshot attaches every pane the client does not hold" {
@@ -564,6 +679,28 @@ test "a pane cwd report lands on the pane" {
     );
 }
 
+test "a foreground report renames the pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    var payload: [128]u8 = undefined;
+    const foreground = try schema.encodePaneForeground(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .name = "Claude Code",
+    });
+    _ = try server_messages.handleServerMessage(
+        harness.client,
+        try schema.decodeServer(foreground),
+    );
+    try harness.settle();
+    try std.testing.expectEqualStrings(
+        "Claude Code",
+        harness.client.tabs.findPane(TestHarness.bootstrap_pane).?.foregroundName(),
+    );
+}
+
 test "an unrequested pane exit removes the pane and its client state" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -709,6 +846,8 @@ test "an agent snapshot replaces the sidebar replica" {
         .entries = &.{.{
             .pane_id = TestHarness.bootstrap_pane,
             .pane_generation = 1,
+            .location = TestHarness.bootstrap_location,
+            .pane_index = 1,
             .process_id = 42,
             .session_id = @splat(0),
             .provider = .claude,

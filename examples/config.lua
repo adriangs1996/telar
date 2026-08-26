@@ -20,6 +20,7 @@ return telar.config({
 
   client = {
     prefix = "ctrl+s",
+    icons = "nerd-font",
     theme = telar.theme({
       base = "vesper",
       colors = { accent = "#ffc799" },

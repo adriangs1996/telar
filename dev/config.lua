@@ -20,6 +20,7 @@ return telar.config({
 	},
 
 	client = {
+		icons = "nerd-font",
 		prefix = "ctrl+s",
 		pane_gaps = false,
 

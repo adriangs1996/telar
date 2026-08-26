@@ -192,7 +192,7 @@ fn reject(
 
 pub fn buildInputRouter(prefix: keybind.Key, configured: []const ConfiguredBinding) !InputRouter {
     const resolved = try lua_config.resolveBindings(prefix, configured);
-    return InputRouter.init(resolved.slice());
+    return InputRouter.initWithPrefix(resolved.slice(), prefix);
 }
 
 /// The pieces the async task has built so far, so every failure unwinds

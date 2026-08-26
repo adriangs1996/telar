@@ -122,7 +122,9 @@ Only when Ghostty unlinks a consumed name, or the deadline reclaims it, does
 the client retire the image and return the exact byte credit to the runtime.
 Hosts without Kitty graphics shared-memory support and remote sessions retain
 the bounded direct-data fallback, which base64-encodes at most 256 KiB per
-client frame.
+media pass. Cell composition and its terminal flush complete first; a pending
+cell frame defers the separately paced media pass, and terminal writes remain
+serialized so KGP chunks cannot interleave with cell escape sequences.
 
 Debug telemetry exposes `input_write_*` and `ingest_*` timings. The benchmark
 `backend.kitty.ingest_zlib_rgba_1920x1080` covers the actual APC → base64 →
@@ -132,9 +134,11 @@ a deterministic gate and proves input reaches the child before it is released.
 ## Sidebar renderers
 
 The cell widget draws the complete semantic sidebar into `ui.Buffer`.
-`KittySidebarRenderer` owns four reusable RGBA asset families: the rounded
-panel, one whole-task selection card, the provider-mark atlas, and the control
-atlas. Text, editable fields, cursor, selection marker, hover, and hit targets
+`KittySidebarRenderer` owns two reusable RGBA assets: one rounded selection
+card and the provider-mark atlas. The card raster is capped at 64 KiB, while
+the checked-in atlas's 256 px source slots are downsampled with
+premultiplied-alpha bilinear filtering into slots that preserve the terminal
+cell aspect ratio. Text, cursor, selection marker, hover, and hit targets
 remain cells. Hover does not enter the KGP preparation contract and therefore
 cannot dirty graphical pixels or placements. Both renderers consume the same
 semantic frame, so hit testing does not depend on KGP.
@@ -145,6 +149,16 @@ exists. The adapter and ownership rules for later data are recorded in
 
 `kitty-full` is an experimental alias of the hybrid backend. It intentionally
 does not rasterize text yet.
+
+The optional `nerd-font` icon theme is separate from the sidebar renderer.
+Widgets keep a one-cell fallback and publish a bounded icon plan. During the
+media pass, the client rasterizes the required glyph/color tuples from the
+embedded Nerd Fonts subset into one opaque atlas whose slots preserve the host
+cell aspect ratio. Glyph size is constrained by the shorter side, so circular
+icons remain circular in tall terminal cells. Working-status frames share one
+atlas, so animation changes placements without retransmitting pixels. Missing
+KGP support or non-RGB colors use the Unicode theme directly. Allocation or
+rasterization failure triggers the same fallback on the next cell frame.
 
 ## Verification
 

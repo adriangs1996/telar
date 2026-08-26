@@ -49,6 +49,12 @@ pub const Rasterizer = struct {
     pixel_height: u16 = 0,
 
     pub fn init() !Rasterizer {
+        return initFont(embedded_font);
+    }
+
+    /// `font` must outlive the rasterizer because FreeType keeps a borrowed
+    /// pointer to memory-backed faces.
+    pub fn initFont(font: []const u8) !Rasterizer {
         var library: ft.FT_Library = undefined;
         if (ft.FT_Init_FreeType(&library) != 0) return error.FreeTypeInitFailed;
         errdefer _ = ft.FT_Done_FreeType(library);
@@ -56,8 +62,8 @@ pub const Rasterizer = struct {
         var face: ft.FT_Face = undefined;
         if (ft.FT_New_Memory_Face(
             library,
-            @ptrCast(embedded_font.ptr),
-            @intCast(embedded_font.len),
+            @ptrCast(font.ptr),
+            @intCast(font.len),
             0,
             &face,
         ) != 0) return error.FontInitFailed;

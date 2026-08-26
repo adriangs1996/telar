@@ -1,15 +1,17 @@
 //! Client-owned KGP rendering for notifications.
 //!
 //! Ownership: disposable client presentation state. Authority: the bounded
-//! notification center. Budget: at most four 1.5 MiB RGBA images, one image
-//! transmission per idle graphics pass, and placement-only updates while
+//! notification center. Budget: at most four 1.5 MiB RGBA images, at most 256
+//! KiB of encoded image data per media pass, and placement-only updates while
 //! animating. Any media failure removes every placement and leaves the cell
 //! renderer fully functional.
 
 const std = @import("std");
 const core = @import("telar-core");
+const icon_graphics = @import("icons.zig");
 const kitty = @import("kitty.zig");
 const raster = @import("rasterizer.zig");
+const ui_icons = @import("../ui/root.zig").icons;
 const theme = @import("../ui/root.zig").theme;
 const widgets = @import("../widgets/root.zig");
 const notification = widgets.notification;
@@ -17,8 +19,8 @@ const toast = widgets.toast;
 
 const ui = core.ui;
 
-pub const max_image_bytes = kitty.transmission_budget_per_frame *
-    kitty.idle_transmission_boost * 3 / 4;
+pub const max_image_bytes: usize = 1536 * 1024;
+pub const idle_after_ns: u64 = 250 * std.time.ns_per_ms;
 const first_image_id: u32 = 0x80001000;
 const first_placement_id: u32 = 0x80001100;
 const toast_z_index: i32 = 1000;
@@ -29,6 +31,7 @@ const RenderKey = struct {
     cell_width: u16,
     cell_height: u16,
     card_columns: u16,
+    icon_theme: ui_icons.Theme,
     background: [3]u8,
     accent: [3]u8,
     text: [3]u8,
@@ -47,11 +50,14 @@ const Slot = struct {
     visible: bool = false,
     image_dirty: bool = false,
     image_emitted: bool = false,
+    transfer_offset: usize = 0,
+    transfer_key: ?RenderKey = null,
 };
 
 pub const Renderer = struct {
     gpa: std.mem.Allocator,
     text: ?raster.Rasterizer,
+    icons: ?raster.Rasterizer,
     supported: bool = false,
     media_idle: bool = false,
     cell_width: u16 = 0,
@@ -65,6 +71,7 @@ pub const Renderer = struct {
         return .{
             .gpa = gpa,
             .text = raster.Rasterizer.init() catch null,
+            .icons = raster.Rasterizer.initFont(icon_graphics.embedded_font) catch null,
         };
     }
 
@@ -72,6 +79,13 @@ pub const Renderer = struct {
         for (&renderer.slots) |*slot| if (slot.pixels.len != 0)
             renderer.gpa.free(slot.pixels);
         if (renderer.text) |*text| text.deinit();
+        if (renderer.icons) |*icons| icons.deinit();
+    }
+
+    pub fn retainedBytes(renderer: *const Renderer) usize {
+        var total: usize = 0;
+        for (renderer.slots) |slot| total += slot.pixels.len;
+        return total;
     }
 
     pub fn configure(
@@ -103,10 +117,21 @@ pub const Renderer = struct {
         center: *const notification.Center,
         palette: *const theme.Palette,
     ) void {
+        renderer.prepareThemed(area, center, palette, .unicode);
+    }
+
+    pub fn prepareThemed(
+        renderer: *Renderer,
+        area: ui.Rect,
+        center: *const notification.Center,
+        palette: *const theme.Palette,
+        icon_theme: ui_icons.Theme,
+    ) void {
         for (&renderer.slots) |*slot| slot.visible = false;
         renderer.visible_count = 0;
         renderer.render_deferred = false;
         renderer.frame_usable = renderer.supported and renderer.text != null and
+            (icon_theme != .nerd_font or renderer.icons != null) and
             renderer.cell_width != 0 and renderer.cell_height != 0 and
             !area.isEmpty();
         const colors = resolveColors(palette) orelse {
@@ -157,6 +182,7 @@ pub const Renderer = struct {
                 .cell_width = renderer.cell_width,
                 .cell_height = renderer.cell_height,
                 .card_columns = area.w,
+                .icon_theme = icon_theme,
                 .background = colors.surface0,
                 .accent = colors.level(item.level),
                 .text = colors.text,
@@ -215,11 +241,26 @@ pub const Renderer = struct {
         return count == renderer.visible_count;
     }
 
+    /// The notification center may change before the lower-priority media
+    /// pass catches up. Never hide the cell fallback for a stale texture set.
+    pub fn covers(renderer: *const Renderer, center: *const notification.Center) bool {
+        if (!renderer.coversAll() or renderer.visible_count != center.count) return false;
+        for (0..center.count) |index| {
+            const id = center.itemAt(index).?.id;
+            for (renderer.slots) |slot| {
+                if (slot.id == id and slot.visible and slot.image_emitted and
+                    !slot.image_dirty) break;
+            } else return false;
+        }
+        return true;
+    }
+
     pub fn damaged(renderer: *const Renderer) bool {
         if (renderer.render_deferred) return true;
         if (renderer.transmissionPending()) return true;
         const placements_enabled = renderer.allImagesReady();
         for (&renderer.slots) |*slot| {
+            if (slot.transfer_offset != 0) return true;
             if (!renderer.frame_usable and slot.image_emitted) return true;
             const desired = if (placements_enabled and slot.visible) slot.placement else null;
             if (!optionalPlacementEql(desired, slot.emitted_placement)) return true;
@@ -234,6 +275,30 @@ pub const Renderer = struct {
         return false;
     }
 
+    pub fn preparationDeferred(renderer: *const Renderer) bool {
+        return renderer.render_deferred;
+    }
+
+    pub fn transferInProgress(renderer: *const Renderer) bool {
+        for (renderer.slots) |slot| if (slot.transfer_offset != 0) return true;
+        return false;
+    }
+
+    /// True when the remaining toast work cannot emit anything until the
+    /// client has been idle long enough to rasterize a replacement texture.
+    pub fn waitingForMediaIdle(renderer: *const Renderer) bool {
+        if (!renderer.render_deferred) return false;
+        const placements_enabled = renderer.allImagesReady();
+        for (renderer.slots) |slot| {
+            if (slot.transfer_offset != 0) return false;
+            if ((!slot.visible or slot.image_dirty or !renderer.frame_usable) and
+                slot.image_emitted) return false;
+            const desired = if (placements_enabled and slot.visible) slot.placement else null;
+            if (!optionalPlacementEql(desired, slot.emitted_placement)) return false;
+        }
+        return true;
+    }
+
     /// Deletions and placements are always cheap enough to emit. A new image
     /// is sent only when the pane-media writer used no budget in this pass.
     pub fn write(
@@ -243,6 +308,15 @@ pub const Renderer = struct {
     ) std.Io.Writer.Error!usize {
         var written: usize = 0;
         for (&renderer.slots, 0..) |*slot, index| {
+            const transfer_stale = slot.transfer_offset != 0 and
+                (!slot.visible or !renderer.frame_usable or slot.key == null or
+                    slot.transfer_key == null or
+                    !std.meta.eql(slot.transfer_key.?, slot.key.?));
+            if (transfer_stale) {
+                written += try kitty.writeTransmissionAbort(writer);
+                slot.transfer_offset = 0;
+                slot.transfer_key = null;
+            }
             if ((!slot.visible or slot.image_dirty or !renderer.frame_usable) and
                 slot.image_emitted)
             {
@@ -254,18 +328,27 @@ pub const Renderer = struct {
             }
         }
 
-        if (allow_transmission and renderer.frame_usable) transmit: {
+        if ((allow_transmission or renderer.transferInProgress()) and
+            renderer.frame_usable)
+        transmit: {
             for (&renderer.slots, 0..) |*slot, index| {
                 if (!slot.visible or !slot.image_dirty or slot.key == null) continue;
-                written += try kitty.writeTransmission(writer, imageId(index), .{
+                if (slot.transfer_offset == 0) slot.transfer_key = slot.key;
+                const progress = try kitty.writeTransmissionChunks(writer, imageId(index), .{
                     .key = .{ .image_id = imageId(index), .generation = 1 },
                     .format = .rgba,
                     .width = slot.width,
                     .height = slot.height,
                     .byte_len = slot.pixels.len,
-                }, slot.pixels);
-                slot.image_dirty = false;
-                slot.image_emitted = true;
+                }, slot.pixels, slot.transfer_offset, kitty.transmission_budget_per_frame, false);
+                written += progress.written;
+                slot.transfer_offset = progress.offset;
+                if (progress.offset == slot.pixels.len) {
+                    slot.transfer_offset = 0;
+                    slot.transfer_key = null;
+                    slot.image_dirty = false;
+                    slot.image_emitted = true;
+                }
                 break :transmit;
             }
         }
@@ -399,14 +482,28 @@ pub const Renderer = struct {
             rasterColor(key.subtext),
             width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
         );
-        _ = try text.drawText(
-            surface,
-            @intCast(width -| @as(u32, renderer.cell_width) * 3),
-            baseline(metrics, 0, renderer.cell_height),
-            "×",
-            accent,
-            @as(u32, renderer.cell_width) * 2,
-        );
+        const close_x: i32 = @intCast(width -| @as(u32, renderer.cell_width) * 3);
+        if (key.icon_theme == .nerd_font) {
+            const icons = &renderer.icons.?;
+            try icons.setPixelHeight(font_height);
+            _ = try icons.drawText(
+                surface,
+                close_x,
+                baseline(icons.metrics(), 0, renderer.cell_height),
+                ui_icons.Icon.close.nerdGlyph(),
+                accent,
+                @as(u32, renderer.cell_width) * 2,
+            );
+        } else {
+            _ = try text.drawText(
+                surface,
+                close_x,
+                baseline(metrics, 0, renderer.cell_height),
+                ui_icons.Icon.close.unicodeGlyph(),
+                accent,
+                @as(u32, renderer.cell_width) * 2,
+            );
+        }
         slot.key = key;
         slot.failed_key = null;
         slot.image_dirty = true;
@@ -522,16 +619,36 @@ test "terminal-derived palettes keep the cell fallback" {
     try std.testing.expect(!renderer.coversAll());
 }
 
-test "toast images are bounded by one transmission budget" {
-    try std.testing.expect(max_image_bytes * 4 / 3 <=
-        kitty.transmission_budget_per_frame * kitty.idle_transmission_boost);
+test "Nerd Font theme rasterizes the close icon into graphical toasts" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    try std.testing.expect(renderer.icons != null);
+    _ = renderer.configure(.supported, 10, 20);
+    renderer.setMediaIdle(true);
+    var center: notification.Center = .{};
+    _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
+    _ = center.advance(notification.transition_duration_ns);
+    renderer.prepareThemed(
+        .{ .w = 48, .h = 4 },
+        &center,
+        &theme.default_theme.palette,
+        .nerd_font,
+    );
+    try std.testing.expect(renderer.frame_usable);
+    try std.testing.expectEqual(ui_icons.Theme.nerd_font, renderer.slots[0].key.?.icon_theme);
 }
 
-test "idle KGP path transmits once then animates with placements only" {
+test "toast pixel cache is bounded independently of wire pacing" {
+    try std.testing.expectEqual(@as(usize, 1536 * 1024), max_image_bytes);
+}
+
+test "large toast transmission is chunked across bounded media passes" {
     const Io = std.Io;
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    // These are the cell dimensions from the instrumented Ghostty session:
+    // one 48x4-cell toast is 1,056x232 pixels, or 979,968 retained RGBA bytes.
+    _ = renderer.configure(.supported, 22, 58);
     renderer.setMediaIdle(true);
     var center: notification.Center = .{};
     const id = center.push(0, .{
@@ -550,9 +667,23 @@ test "idle KGP path transmits once then animates with placements only" {
     defer first.deinit();
     _ = try renderer.write(&first.writer, true);
     try std.testing.expect(std.mem.indexOf(u8, first.written(), "a=t") != null);
-    try std.testing.expect(std.mem.indexOf(u8, first.written(), "a=p") != null);
-    try std.testing.expect(std.mem.indexOf(u8, first.written(), "c=0,r=0") != null);
+    try std.testing.expect(first.written().len <= kitty.transmission_budget_per_frame + 8192);
+    try std.testing.expect(renderer.transmissionPending());
+    var placed = std.mem.indexOf(u8, first.written(), "a=p") != null;
+    var passes: usize = 1;
+    while (renderer.transmissionPending()) {
+        passes += 1;
+        var chunk: Io.Writer.Allocating = .init(std.testing.allocator);
+        defer chunk.deinit();
+        // Once the first m=1 chunk is on the wire, the transfer must close
+        // even if fresh host input disables starting another texture.
+        _ = try renderer.write(&chunk.writer, false);
+        try std.testing.expect(chunk.written().len <= kitty.transmission_budget_per_frame + 8192);
+        placed = placed or std.mem.indexOf(u8, chunk.written(), "a=p") != null;
+    }
+    try std.testing.expect(passes > 1);
     try std.testing.expect(renderer.coversAll());
+    try std.testing.expect(placed);
 
     _ = center.dismiss(id, notification.transition_duration_ns);
     _ = center.advance(notification.transition_duration_ns + notification.transition_duration_ns / 2);

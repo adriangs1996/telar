@@ -24,7 +24,8 @@ pub fn run(
     options: Options,
 ) !u8 {
     const io = init.io;
-    const gpa = init.gpa;
+    var heap = diagnostics.Heap.init(init.gpa);
+    const gpa = heap.allocator();
 
     // `Client.init` adopts the configuration generation, plugin registry and
     // trust store carried by `options`; until it succeeds they are still this
@@ -109,7 +110,7 @@ pub fn run(
         },
     });
     try connection.send(io, open_payload);
-    try client.requests.add(Client.initial_request_id, .initial_open);
+    try client.requests.add(Client.initial_request_id, .{ .initial_open = .{} });
 
     try client.select.concurrent(.resized, Client.waitResize, .{ io, &watcher });
     try client.select.concurrent(.server, Client.receive, .{ io, connection, client.receive_buffer });
@@ -120,20 +121,48 @@ pub fn run(
     }
     try client.scheduleConfigReload();
 
-    while (true) switch (try client.select.await()) {
-        .input => |result| if (try client.handleHostInput(result)) return 0,
-        .input_timeout => |result| if (try client.handleInputTimeoutEvent(result)) return 0,
-        .binding_timeout => |result| if (try client.handleBindingTimeoutEvent(result)) return 0,
-        .capability_timeout => |result| try client.handleCapabilityTimeoutEvent(result),
-        .resized => |result| try client.handleResizeEvent(result, &tty, &watcher),
-        .server => |result| if (try client.handleServerEvent(result)) |status| return status,
-        .sent => |result| try client.handleSentEvent(result),
-        .draw => |result| try client.handleDrawEvent(result),
-        .sidebar_animation_tick => |result| try client.handleSidebarAnimationEvent(result),
-        .notification_tick => |result| try client.handleNotificationTickEvent(result),
-        .telemetry_tick => |result| client.handleTelemetryTickEvent(result, &telemetry),
-        .telemetry_written => |result| client.handleTelemetryWrittenEvent(result, &telemetry),
-        .config_reload => |result| try client.handleConfigReloadEvent(result),
-        .plugin_result => |result| if (try client.handlePluginResultEvent(result)) return 0,
+    while (true) {
+        const event = try client.select.await();
+        const path = diagnostics.enter(clientEventPath(event));
+        defer path.restore();
+        switch (event) {
+            .input => |result| if (try client.handleHostInput(result)) return 0,
+            .input_timeout => |result| if (try client.handleInputTimeoutEvent(result)) return 0,
+            .binding_timeout => |result| if (try client.handleBindingTimeoutEvent(result)) return 0,
+            .capability_timeout => |result| try client.handleCapabilityTimeoutEvent(result),
+            .resized => |result| try client.handleResizeEvent(result, &tty, &watcher),
+            .server => |result| if (try client.handleServerEvent(result)) |status| return status,
+            .sent => |result| try client.handleSentEvent(result),
+            .draw => |result| try client.handleDrawEvent(result),
+            .media_tick => |result| try client.handleMediaTickEvent(result),
+            .sidebar_animation_tick => |result| try client.handleSidebarAnimationEvent(result),
+            .notification_tick => |result| try client.handleNotificationTickEvent(result),
+            .telemetry_tick => |result| client.handleTelemetryTickEvent(result, &telemetry, heap.snapshot()),
+            .telemetry_written => |result| client.handleTelemetryWrittenEvent(result, &telemetry),
+            .config_reload => |result| try client.handleConfigReloadEvent(result),
+            .plugin_result => |result| if (try client.handlePluginResultEvent(result)) return 0,
+        }
+    }
+}
+
+fn clientEventPath(event: Client.ClientEvent) diagnostics.Path {
+    return switch (event) {
+        .input,
+        .input_timeout,
+        .binding_timeout,
+        .capability_timeout,
+        .resized,
+        .server,
+        .sent,
+        .draw,
+        .sidebar_animation_tick,
+        => .interactive,
+        .media_tick => .media,
+        .notification_tick,
+        .telemetry_tick,
+        .telemetry_written,
+        .config_reload,
+        .plugin_result,
+        => .observation,
     };
 }

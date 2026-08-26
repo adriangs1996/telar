@@ -96,10 +96,18 @@ PTY contents. Logs live beside the local runtime socket:
 
 Runtime samples cover PTY throughput, folded updates, frame size, damaged rows,
 diff scans, no-op frames, VT ingestion, frame encoding, and acknowledgement
-latency. Client samples cover input and server throughput, applied, scanned and
-painted cells, frame pacing, protocol work, and terminal flush latency. File
-writes run outside the interactive loop. Release builds neither create these
-files nor schedule the telemetry actors.
+latency. Client samples separate cell `flush_*` from `media_flush_*`, attribute
+KGP wire bytes to panes, toasts, and the sidebar, and report retained bytes for
+the Kitty store, toast textures, sidebar atlas, screen buffers, Lua VM, and
+instrumented heap. File writes run outside the interactive loop. Release builds
+neither create these files nor schedule the telemetry actors.
+
+Runtime heap samples keep the aggregate `interactive_alloc*` counters and split
+them into `interactive_vt_alloc*` for terminal-emulator state growth and
+`interactive_telar_alloc*` for allocations owned by Telar's event path. Proxy
+rejections likewise distinguish missing or malformed authorization from an
+otherwise valid credential that is no longer registered, without logging
+either value.
 
 ## Performance benchmarks
 

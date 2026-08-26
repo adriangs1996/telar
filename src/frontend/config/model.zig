@@ -6,6 +6,7 @@ const input = @import("../input/root.zig");
 const action = input.action;
 const keybind = input.keybind;
 const kitty = @import("../graphics/root.zig").kitty;
+const icons = @import("../ui/root.zig").icons;
 const theme = @import("../ui/root.zig").theme;
 
 pub const default_memory_limit: usize = 16 * 1024 * 1024;
@@ -69,6 +70,7 @@ pub const RuntimeSnapshot = struct {
 
 pub const Snapshot = struct {
     theme: theme.Theme = theme.default_theme,
+    icon_theme: icons.Theme = .unicode,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
     pane_gaps: bool = true,

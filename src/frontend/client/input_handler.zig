@@ -9,6 +9,7 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
+const widgets = @import("../widgets/root.zig");
 const action_mod = input_capability.action;
 const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
@@ -102,22 +103,75 @@ fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void 
 pub fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
     const client = handler.client;
     if (client.requests.count != 0) return error.WorkspaceSwitchWhileRequestPending;
+    const destination: schema.WorkspaceLocation = .{ .workspace = workspace };
+    const target: schema.PaneTarget = if (client.navigation_history.find(destination)) |bookmark|
+        .{ .pane = bookmark.pane_id }
+    else
+        .{ .workspace = workspace };
+    try handler.beginWorkspaceHandoff(target, workspace);
+}
+
+fn rememberCurrentNavigation(handler: *InputHandler) void {
+    const tab = handler.client.tabs.activeConst() orelse return;
+    const pane = tab.model.focusedPaneConst() orelse return;
+    handler.client.navigation_history.remember(.{
+        .location = tab.location,
+        .pane_id = pane.id,
+    });
+}
+
+fn beginWorkspaceHandoff(
+    handler: *InputHandler,
+    target: schema.PaneTarget,
+    fallback_workspace: ?schema.WorkspaceId,
+) !void {
+    const client = handler.client;
+    handler.rememberCurrentNavigation();
     var tabs = client.tabs.tabIterator();
     while (tabs.next()) |tab| try handler.detachTab(tab);
     client.tabs.deinit();
     const request_id = try client.nextId();
     try client.enqueueRequest(
         request_id,
-        .initial_open,
+        .{ .initial_open = .{ .fallback_workspace = fallback_workspace } },
         .{ .open_pane = .{
             .request_id = request_id,
-            .target = .{ .workspace = workspace },
+            .target = target,
             .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
             .launch = null,
         } },
     );
     client.view.invalidate();
     handler.redraw = true;
+}
+
+fn focusSidebarAgent(
+    handler: *InputHandler,
+    agent_key: widgets.sidebar.AgentKey,
+) !bool {
+    const agent = handler.client.view.sidebar_snapshot.find(agent_key) orelse return false;
+    if (handler.client.tabs.tabForPane(agent_key.pane_id)) |tab| {
+        if (handler.client.tabs.activeConst().?.location.tab_id != tab.location.tab_id)
+            try handler.selectTab(tab.location.tab_id);
+        const active = handler.client.tabs.active() orelse return false;
+        const shift = active.model.focusPaneShift(agent_key.pane_id);
+        if (!shift.focused) return false;
+        if (shift.layout_changed) {
+            handler.client.graphics_store.invalidatePlacements();
+            try handler.client.resizeAttached(&active.model, handler.client.view.workbench());
+        }
+        try handler.client.syncPaneFocus(&active.model);
+        handler.client.view.invalidate();
+        handler.redraw = true;
+        return false;
+    }
+    if (handler.client.requests.count != 0) return false;
+    const fallback = switch (agent.location.workspace) {
+        .workspace => |workspace| workspace,
+        .worktree => null,
+    };
+    try handler.beginWorkspaceHandoff(.{ .pane = agent_key.pane_id }, fallback);
+    return true;
 }
 
 pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
@@ -268,6 +322,7 @@ fn enterCopyMode(handler: *InputHandler) !void {
         .{ .x = 0, .y = pane.scroll.offset + pane.buffer.h -| 1 };
     handler.client.mode = .{ .copy = .init(pane.id, cursor, pane.scroll.offset) };
     model.setPaneCopyView(pane.id, handler.client.mode.copy.view());
+    handler.client.view.invalidate();
     handler.redraw = true;
 }
 
@@ -278,6 +333,8 @@ fn leaveCopyMode(handler: *InputHandler, copy: bool) !void {
     };
     const model = handler.activeModel() orelse {
         handler.client.mode = .normal;
+        handler.client.view.invalidate();
+        handler.redraw = true;
         return;
     };
     const pane = model.find(state.pane_id);
@@ -298,6 +355,7 @@ fn leaveCopyMode(handler: *InputHandler, copy: bool) !void {
     }
     handler.client.mode = .normal;
     model.composition_invalidated = true;
+    handler.client.view.invalidate();
     handler.redraw = true;
 }
 
@@ -305,10 +363,14 @@ fn copyModeKey(handler: *InputHandler, pressed: keybind.Key) !void {
     const state = &handler.client.mode.copy;
     const model = handler.activeModel() orelse {
         handler.client.mode = .normal;
+        handler.client.view.invalidate();
+        handler.redraw = true;
         return;
     };
     const pane = model.find(state.pane_id) orelse {
         handler.client.mode = .normal;
+        handler.client.view.invalidate();
+        handler.redraw = true;
         return;
     };
     const effect = copy_mode.applyKey(state, pressed, &pane.buffer, pane.scroll);
@@ -341,6 +403,10 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         cell_event,
         monotonic(handler.client.io),
     );
+    const agent_handoff = if (interaction.focus_agent) |agent_key|
+        try handler.focusSidebarAgent(agent_key)
+    else
+        false;
     if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
     if (interaction.rename_tab) |tab_id| {
         if (handler.client.mode == .normal) {
@@ -372,7 +438,8 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         try handler.client.resizeAttached(model, handler.client.view.workbench());
     }
     handler.redraw = handler.redraw or interaction.redraw;
-    if (interaction.select_tab != null or interaction.notification_target != null or
+    if (agent_handoff or interaction.select_tab != null or interaction.focus_agent != null or
+        interaction.notification_target != null or
         !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
     const wheel_delta: ?i32 = switch (cell_event.kind) {
         .scroll_up => -3,

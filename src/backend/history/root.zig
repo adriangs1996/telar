@@ -1,6 +1,7 @@
 //! Command history capture and persistence.
 
 const std = @import("std");
+const diagnostics = @import("telar-core").diagnostics;
 const model_mod = @import("model.zig");
 const osc_mod = @import("osc.zig");
 const store_mod = @import("store.zig");
@@ -29,6 +30,7 @@ const response_capacity = 4;
 
 pub const Service = struct {
     gpa: std.mem.Allocator,
+    database_path: [:0]const u8,
     requests: std.Io.Queue(model_mod.Request),
     responses: std.Io.Queue(model_mod.Response),
     request_storage: []model_mod.Request,
@@ -80,6 +82,7 @@ pub const Service = struct {
         };
         var service: Service = .{
             .gpa = gpa,
+            .database_path = database_path,
             .requests = .init(request_storage),
             .responses = .init(response_storage),
             .request_storage = request_storage,
@@ -283,6 +286,17 @@ pub const Service = struct {
         };
     }
 
+    pub fn sqliteBytes(service: *const Service, io: std.Io) u64 {
+        if (std.mem.eql(u8, service.database_path, ":memory:")) return 0;
+        const stat = std.Io.Dir.cwd().statFile(
+            io,
+            service.database_path,
+            .{ .follow_symlinks = false },
+        ) catch return 0;
+        if (stat.size < 0) return 0;
+        return @intCast(stat.size);
+    }
+
     pub fn openError(service: *const Service) ?anyerror {
         return service.open_error;
     }
@@ -307,6 +321,8 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
             error.Closed => return,
             else => |other| return other,
         };
+        const path = diagnostics.enter(.observation);
+        defer path.restore();
         _ = service.stats.queued.fetchSub(1, .monotonic);
         switch (request) {
             .launch_attempt => |value| {
@@ -421,6 +437,31 @@ test "database open degradation is explicit" {
     try std.testing.expect(!stats.available);
     try std.testing.expectEqual(@as(u64, 1), stats.sqlite_open_failures);
     try std.testing.expect(service.openError() != null);
+}
+
+test "sqliteBytes is zero for an in-memory database" {
+    const io = std.testing.io;
+    var service = try Service.init(std.testing.allocator, ":memory:");
+    defer service.deinit(io);
+    try std.testing.expectEqual(@as(u64, 0), service.sqliteBytes(io));
+}
+
+test "sqliteBytes reports the on-disk history file" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(
+        &path_buffer,
+        "{s}/history.db",
+        .{directory_buffer[0..directory_len]},
+    );
+    var service = try Service.init(std.testing.allocator, path);
+    defer service.deinit(io);
+    try std.testing.expect(service.statsSnapshot().available);
+    try std.testing.expect(service.sqliteBytes(io) > 0);
 }
 
 test "launch attempt recording releases every partial allocation" {

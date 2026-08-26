@@ -16,6 +16,7 @@ const pty = @import("../pty/root.zig");
 
 const Io = std.Io;
 const schema = core.schema;
+const diagnostics = core.diagnostics;
 const GraphicsBudget = pane_mod.GraphicsBudget;
 const Pane = pane_mod.Pane;
 const SlotIndex = pane_mod.SlotIndex;
@@ -121,6 +122,7 @@ pub const Attachment = struct {
     viewport_screen: vt.ScreenSet.Key,
     observed_cell_revision: u64 = 0,
     observed_cwd_revision: u64 = 0,
+    observed_foreground_revision: u64 = 0,
     next_frame_id: u64 = 1,
     acknowledged_frame_id: u64 = 0,
     outstanding_frame_id: u64 = 0,
@@ -224,6 +226,8 @@ pub const Attachment = struct {
     /// Moves only this attachment. The terminal's canonical viewport is
     /// restored before returning, so another client never observes the move.
     pub fn setViewport(attachment: *Attachment, requested: u32) !void {
+        const terminal_allocations = diagnostics.enterTerminalAllocations();
+        defer terminal_allocations.restore();
         attachment.syncViewportScreen();
         const screen = attachment.pane.terminal.screens.active;
         if (attachment.viewport_pin) |pin| screen.scroll(.{ .pin = pin.* }) else screen.scroll(.{ .active = {} });
@@ -259,7 +263,11 @@ pub const Attachment = struct {
             if (pin.garbage) pin.garbage = false;
             screen.scroll(.{ .pin = pin.* });
             defer screen.scroll(.{ .active = {} });
-            try attachment.projected_state.update(attachment.gpa, &pane.terminal);
+            {
+                const terminal_allocations = diagnostics.enterTerminalAllocations();
+                defer terminal_allocations.restore();
+                try attachment.projected_state.update(attachment.gpa, &pane.terminal);
+            }
             _ = blit.blit(
                 &attachment.projected,
                 attachment.projected.area(),

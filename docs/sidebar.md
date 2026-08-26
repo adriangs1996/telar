@@ -9,7 +9,7 @@ own layout, focus, search, scrolling, hit targets, or physical KGP placements.
 The runtime owns agent truth and publishes stable `(pane_id, generation)` task
 identity. The client keeps one disposable `widgets.sidebar.Snapshot` replica
 and all visible interaction state in `widgets.sidebar.State`. Killing the
-client loses the selected tab, selected task, search text, scope expansion, and
+client loses the selected tab, pane focus, search text, scope expansion, and
 scroll offset. It does not alter any runtime task or agent.
 
 `Snapshot.replace` is the client adapter boundary. An observation or IPC
@@ -25,6 +25,19 @@ Task keys carry a generation so a delayed action cannot target a new task that
 reused an old numeric ID. A task may carry a `pane_id`; selecting it then uses
 the existing semantic pane-focus operation.
 
+## Focus projection
+
+The focused pane is the sole source of truth for the agent highlight. The
+client projects the active tab's focused pane through the current agent
+snapshot and highlights the matching agent. It highlights no agent when the
+focused pane has no matching agent.
+
+Clicking an agent is a navigation action, not a second kind of focus. It may
+switch workspace or tab before focusing the agent's pane. The highlight follows
+only after pane focus changes. Pane navigation and workspace or tab changes
+recompute the same projection, so the sidebar never preserves an independent
+agent selection.
+
 Buttons whose runtime behavior does not exist yet return a typed
 `SidebarIntent` from `client_ui.State.handleMouse`. The current client does not
 turn those intents into runtime messages. Adding detection must not smuggle in
@@ -34,20 +47,19 @@ runtime command and authority check.
 ## Rendering boundary
 
 Cells own every string, the editable search field, terminal cursor, hover,
-selection marker, tabs, section headers, status, footer, and hit target. The
+focus marker, tabs, section headers, status, footer, and hit target. The
 cell renderer is complete by itself.
 
-KGP owns four reusable asset families:
+KGP owns two reusable assets: one three-row focused-agent card and an official
+provider-mark atlas. The card is an antialiased rounded rectangle below the
+cell layer. Cells keep the same solid fill except at its four corner cells,
+where the KGP alpha edge remains visible. Themes whose focus color is not RGB
+retain the square cell-only fallback.
 
-1. the panel background;
-2. one three-row selected-task card;
-3. an official provider-mark atlas;
-4. an atlas for neutral and primary control fills.
-
-Changing hover never changes KGP input. Moving a selected task or a provider
-mark changes placements only. Pixel transmission happens after a theme,
-cell-size, or panel-size change, or when an atlas first becomes necessary.
-Media failure leaves the cell actions intact.
+Changing hover never changes KGP input. Moving the focused agent or a provider
+mark changes placements only. Pixel transmission happens after a theme or
+cell-size change, or when an asset first becomes necessary. The focused-card
+raster is capped at 64 KiB. Media failure leaves the cell actions intact.
 
 ## Geometry
 
@@ -78,6 +90,7 @@ connection-level failure settles every remaining stream for that connection.
 A visible permission prompt is stronger than network activity. Terminal
 working hints also override an early network completion. A ready prompt
 requires established Claude identity and three samples before it can recover a
-missing proxy completion. Every record carries its source, confidence, process
-and session identity, sequence, timestamps, and expiry. None of these
-presentation hints authorizes approval or input.
+missing proxy completion. Codex's explicit branded input prompt confirms
+`ready` in one sample. Every record carries its source, confidence, process and
+session identity, sequence, timestamps, and expiry. None of these presentation
+hints authorizes approval or input.

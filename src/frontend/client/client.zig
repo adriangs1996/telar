@@ -22,12 +22,14 @@ const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
+const navigation = workspace_capability.navigation;
 const tabs_mod = workspace_capability.tabs;
 const pace = presentation.pace;
 const term = presentation.screen;
 const platform = @import("../platform/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const ui_capability = @import("../ui/root.zig");
+const icons = ui_capability.icons;
 const theme = ui_capability.theme;
 const widgets = @import("../widgets/root.zig");
 
@@ -64,6 +66,7 @@ pub const Options = struct {
     prefix: keybind.Key = keybind.default_prefix,
     bindings: []const ConfiguredBinding = &.{},
     theme: theme.Theme = theme.default_theme,
+    icon_theme: icons.Theme = .unicode,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
     pane_gaps: bool = true,
@@ -107,6 +110,7 @@ pub const ClientEvent = union(enum) {
     server: anyerror![]u8,
     sent: anyerror!void,
     draw: anyerror!void,
+    media_tick: anyerror!void,
     sidebar_animation_tick: anyerror!void,
     notification_tick: anyerror!void,
     telemetry_tick: anyerror!void,
@@ -178,6 +182,7 @@ metrics: ClientMetrics,
 presenter: presenter_mod,
 view: client_view.State,
 tabs: tabs_mod.Model,
+navigation_history: navigation.History = .{},
 graphics_store: kitty.Store,
 capabilities: kitty.TerminalCapabilities,
 host_size: schema.TerminalSize,
@@ -230,11 +235,12 @@ pub fn init(params: Params) !*Client {
     host_size.cell_height_px = cell_size.height;
     var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
     errdefer screen.deinit();
-    var view = try client_view.State.initWithTheme(
+    var view = try client_view.State.initWithAppearance(
         gpa,
         host_size.cols,
         host_size.rows,
         params.options.theme,
+        params.options.icon_theme,
     );
     errdefer view.deinit();
     if (!params.options.sidebar_visible) view.toggleSidebar();
@@ -535,8 +541,10 @@ pub fn handleHostInput(client: *Client, result: anyerror!InputChunk) !bool {
     if (chunk.len == 0) return true;
     client.presenter.noteInput(monotonic(client.io));
     var handler: InputHandler = .{ .client = client };
+    const prefix_was_pending = client.input_router.prefixPending();
     if (try client.input_router.feed(chunk.slice(), monotonic(client.io), &handler) == .stop)
         return true;
+    client.syncPrefixStatus(prefix_was_pending, &handler);
     if (handler.redraw) try client.presenter.requestDraw();
     try client.scheduleInputTimers();
     try client.scheduleInputRead();
@@ -585,7 +593,9 @@ pub fn handleInputTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     try result;
     client.input_timeout_pending = false;
     var handler: InputHandler = .{ .client = client };
+    const prefix_was_pending = client.input_router.prefixPending();
     if (try client.input_router.expireInput(monotonic(client.io), &handler) == .stop) return true;
+    client.syncPrefixStatus(prefix_was_pending, &handler);
     if (handler.redraw) try client.presenter.requestDraw();
     try client.scheduleInputTimers();
     return false;
@@ -596,7 +606,9 @@ pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
     try result;
     client.binding_timeout_pending = false;
     var handler: InputHandler = .{ .client = client };
+    const prefix_was_pending = client.input_router.prefixPending();
     if (try client.input_router.expireBinding(monotonic(client.io), &handler) == .stop) return true;
+    client.syncPrefixStatus(prefix_was_pending, &handler);
     if (handler.redraw) try client.presenter.requestDraw();
     try client.scheduleInputTimers();
     return false;
@@ -679,6 +691,12 @@ pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
     try client.presenter.presentDue(client);
 }
 
+/// Entrypoint for the lower-priority, byte-bounded host graphics pass.
+pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
+    try result;
+    try client.presenter.presentMedia(client);
+}
+
 /// Entrypoint for the sidebar animation tick.
 pub fn handleSidebarAnimationEvent(client: *Client, result: anyerror!void) !void {
     try result;
@@ -699,6 +717,7 @@ pub fn handleTelemetryTickEvent(
     client: *Client,
     result: anyerror!void,
     telemetry: *diagnostics.Sink,
+    heap: diagnostics.Heap.Snapshot,
 ) void {
     result catch {
         telemetry.deinit(client.io);
@@ -720,15 +739,27 @@ pub fn handleTelemetryTickEvent(
         &client.presenter.pacer,
         .{
             .theme_name = client.view.theme.base.canonicalName(),
+            .icon_theme_name = client.view.icon_theme.canonicalName(),
             .active_tab = active.location.tab_id,
             .tab_count = client.tabs.count,
             .focused_pane = focused,
             .pane_count = active.model.pane_count,
             .pending_updates = client.presenter.pending_updates,
             .draw_pending = client.presenter.draw_pending,
+            .media_pending = client.presenter.media_tick_pending,
             .outbox = &client.outbox,
             .capabilities = &client.capabilities,
             .sidebar_rendering = client.view.sidebar_rendering,
+            .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
+            .lua_limit = if (client.lua_generation) |generation| generation.vm.meter.limit else 0,
+            .kitty_store_bytes = client.graphics_store.total_bytes,
+            .toast_cache_bytes = client.view.kittyToasts().retainedBytes(),
+            .sidebar_cache_bytes = client.view.kittySidebar().retainedBytes(),
+            .icon_cache_bytes = client.view.kittyIcons().retainedBytes(),
+            .screen_bytes = (client.presenter.screen.front.cells.len +
+                client.presenter.screen.back.cells.len) *
+                @sizeOf(core.ui.Cell),
+            .heap = heap,
         },
     ) catch return;
     client.telemetry_write_pending = true;
@@ -827,6 +858,7 @@ pub fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
     const snapshot = &adoption.generation.snapshot;
     client.input_router = adoption.router;
     if (!client.options.theme_locked) client.view.setTheme(snapshot.theme);
+    client.view.setIconTheme(snapshot.icon_theme);
     client.sidebar_rendering = adoption.sidebar_rendering;
     client.view.setSidebarVisible(snapshot.sidebar_visible);
     client.tabs.setPaneGaps(snapshot.pane_gaps);
@@ -914,13 +946,52 @@ fn readInput(io: Io, input: File) anyerror!InputChunk {
     return chunk;
 }
 
-
 /// The model a due draw should present, or null while the client is not
 /// presentable yet. Unwrapping the active tab here used to panic when a
 /// resize arrived before the runtime answered the initial open request.
 pub fn presentableModel(tabs: *tabs_mod.Model) ?*multiplexer.Model {
     const active = tabs.active() orelse return null;
     return &active.model;
+}
+
+pub fn statusMode(client: *const Client) widgets.status_bar.Mode {
+    if (client.input_router.prefixPending()) {
+        const DescribedAction = struct {
+            action: Action,
+            label: []const u8,
+        };
+        const useful = [_]DescribedAction{
+            .{ .action = .{ .split_pane = .horizontal }, .label = "split right" },
+            .{ .action = .{ .split_pane = .vertical }, .label = "split down" },
+            .{ .action = .new_tab, .label = "new tab" },
+            .{ .action = .new_workspace, .label = "new workspace" },
+            .{ .action = .rename_tab, .label = "rename tab" },
+            .{ .action = .rename_workspace, .label = "rename workspace" },
+            .{ .action = .close_pane, .label = "close pane" },
+            .{ .action = .enter_copy_mode, .label = "copy mode" },
+        };
+        var hints: widgets.status_bar.Hints = .{};
+        for (useful) |described| {
+            const key = client.input_router.prefixedKeyForAction(described.action) orelse
+                continue;
+            hints.append(.{ .key = key, .label = described.label });
+        }
+        return .{ .prefix = hints };
+    }
+    return switch (client.mode) {
+        .copy => .copy,
+        .normal, .prompt => .normal,
+    };
+}
+
+fn syncPrefixStatus(
+    client: *Client,
+    prefix_was_pending: bool,
+    handler: *InputHandler,
+) void {
+    if (prefix_was_pending == client.input_router.prefixPending()) return;
+    client.view.invalidate();
+    handler.redraw = true;
 }
 
 fn scheduleInputTimers(client: *Client) !void {
@@ -1054,6 +1125,3 @@ test "a draw scheduled before the first tab bootstraps is dropped" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(presentableModel(&tabs) != null);
 }
-
-
-

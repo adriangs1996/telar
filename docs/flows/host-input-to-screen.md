@@ -67,7 +67,10 @@ that completion to `Client.handleHostInput`.
 
 The router is in `src/frontend/input/keybind.zig`. `Router.feed` buffers split
 terminal sequences, `term.parse` produces semantic events, and `routeKey`
-classifies a key against the compiled keymap.
+classifies a key against the compiled keymap. The configured prefix enters a
+persistent router state and therefore schedules no binding deadline. Escape
+cancels that state; an unmatched suffix clears it without forwarding either
+key. Partial global sequences retain the configured binding timeout.
 
 ## 2A. Telar action branch
 
@@ -188,6 +191,9 @@ The `.draw` event calls `Client.handleDrawEvent`, then `Client.presentDue` and
 
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
+- The persistent-prefix, invalid-suffix, Escape-cancellation, and global-timeout
+  tests in the same file prove that prefix mode has no timing window without
+  changing global multi-key sequence recovery.
 - `unbound input is byte-for-byte transparent` and the terminal-sequence split
   tests in the same file prove parser and routing boundaries.
 - `cursor keys follow the focused child's mode` in

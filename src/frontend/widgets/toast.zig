@@ -141,7 +141,7 @@ fn drawCard(
             .w = 2,
             .h = 1,
         };
-        _ = context.buffer.writeText(close, close.x, close.y, "×", .{
+        _ = context.drawIcon(close, close.x, close.y, .close, .{
             .fg = if (context.isHovered(dismiss)) context.palette.text else accent,
             .bg = background,
             .flags = .{ .bold = true },

@@ -17,6 +17,8 @@ pub const AgentKey = struct {
 
 pub const AgentInput = struct {
     key: AgentKey,
+    location: schema.TabLocation,
+    pane_index: u16,
     provider: schema.AgentProvider,
     status: schema.AgentStatus,
 };
@@ -65,8 +67,22 @@ pub const Snapshot = struct {
         return null;
     }
 
-    pub fn first(snapshot: *const Snapshot) ?*const Agent {
-        return if (snapshot.count == 0) null else &snapshot.items[0];
+    pub fn setPaneIndex(snapshot: *Snapshot, pane_id: schema.PaneId, pane_index: u16) void {
+        for (snapshot.items[0..snapshot.count]) |*agent| {
+            if (agent.key.pane_id == pane_id) agent.pane_index = pane_index;
+        }
+    }
+
+    pub fn keyForPane(
+        snapshot: *const Snapshot,
+        location: schema.TabLocation,
+        pane_id: schema.PaneId,
+    ) ?AgentKey {
+        for (snapshot.slice()) |agent| {
+            if (agent.key.pane_id == pane_id and std.meta.eql(agent.location, location))
+                return agent.key;
+        }
+        return null;
     }
 
     pub fn hasWorkingAgent(snapshot: *const Snapshot) bool {
@@ -79,6 +95,11 @@ test "snapshots own current agents and ignore stale replacement" {
     var snapshot: Snapshot = .{};
     const agents = [_]AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
         .provider = .codex,
         .status = .working,
     }};
@@ -92,6 +113,11 @@ test "duplicate agent generations are rejected" {
     var snapshot: Snapshot = .{};
     const agent: AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
         .provider = .codex,
         .status = .ready,
     };
@@ -99,4 +125,30 @@ test "duplicate agent generations are rejected" {
         error.DuplicateSidebarAgent,
         snapshot.replace(.{ .revision = 1, .agents = &.{ agent, agent } }),
     );
+}
+
+test "pane projection is scoped to its tab" {
+    var snapshot: Snapshot = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const agent: AgentInput = .{
+        .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
+        .location = location,
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .ready,
+    };
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
+
+    try std.testing.expectEqualDeep(
+        agent.key,
+        snapshot.keyForPane(location, agent.key.pane_id).?,
+    );
+    try std.testing.expect(snapshot.keyForPane(.{
+        .workspace = location.workspace,
+        .tab_id = @enumFromInt(3),
+    }, agent.key.pane_id) == null);
+    try std.testing.expect(snapshot.keyForPane(location, @enumFromInt(8)) == null);
 }
