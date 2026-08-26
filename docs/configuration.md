@@ -42,6 +42,14 @@ return telar.config({
     history = { path = "state/history.db" },
     graphics = { pane_mib = 64, global_mib = 256 },
     proxy = { enabled = false, ca_dir = "state/proxy" },
+    agent_descriptions = {
+      command = {
+        "codex", "exec", "--ephemeral", "--ignore-rules",
+        "--skip-git-repo-check", "--model", "gpt-5.6-luna",
+        "-c", 'model_reasoning_effort="low"', "-",
+      },
+      timeout_ms = 15000,
+    },
   },
   plugins = {
     telar.plugin({ path = "plugins/sample", enabled = true }),
@@ -53,6 +61,28 @@ return telar.config({
     },
   },
 })
+```
+
+`runtime.agent_descriptions` is an explicit privacy opt-in. After the first
+user request completes, Telar sends that request through standard input to the
+configured command and accepts one short line as the session title. The
+command is executed directly, without a shell. It may contain 1 to 32
+arguments and 4096 bytes in total; `timeout_ms` must be between 1000 and 60000.
+Telar retains its local placeholder if the command is missing, busy, times out,
+or returns invalid output.
+
+The example above uses the installed Codex subscription with Luna at low
+reasoning effort. A Claude Code subscription can be selected without changing
+Telar:
+
+```lua
+agent_descriptions = {
+  command = {
+    "claude", "--print", "--model", "haiku", "--effort", "low",
+    "--tools", "", "--no-session-persistence",
+  },
+  timeout_ms = 15000,
+}
 ```
 
 `client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd

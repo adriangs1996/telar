@@ -34,6 +34,10 @@ pub const max_plugin_path_bytes = config_model.max_plugin_path_bytes;
 pub const max_profile_name_bytes = 64;
 pub const max_history_path_bytes = config_model.max_history_path_bytes;
 pub const max_proxy_path_bytes = config_model.max_proxy_path_bytes;
+pub const max_agent_description_command_args = config_model.max_agent_description_command_args;
+pub const max_agent_description_command_bytes = config_model.max_agent_description_command_bytes;
+pub const min_agent_description_timeout_ms = config_model.min_agent_description_timeout_ms;
+pub const max_agent_description_timeout_ms = config_model.max_agent_description_timeout_ms;
 pub const default_binding_count = default_bindings.count;
 pub const default_binding_max_keys = default_bindings.max_keys;
 pub const DefaultBinding = default_bindings.Binding;
@@ -46,6 +50,7 @@ pub const Diagnostic = config_model.Diagnostic;
 pub const Snapshot = config_model.Snapshot;
 pub const PluginSpec = config_model.PluginSpec;
 pub const RuntimeSnapshot = config_model.RuntimeSnapshot;
+pub const AgentDescriptionCommand = config_model.AgentDescriptionCommand;
 
 const Callback = struct {
     registry_ref: c_int,
@@ -667,7 +672,13 @@ pub const Generation = struct {
             diagnostic.set("config.runtime must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(state, absolute, &.{ "graphics", "history", "proxy" }, "config.runtime", diagnostic);
+        try ensureOnlyFields(
+            state,
+            absolute,
+            &.{ "graphics", "history", "proxy", "agent_descriptions" },
+            "config.runtime",
+            diagnostic,
+        );
         _ = lua.lua_getfield(state, absolute, "history");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseHistory(-1, diagnostic);
@@ -675,6 +686,10 @@ pub const Generation = struct {
         _ = lua.lua_getfield(state, absolute, "proxy");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseProxy(-1, diagnostic);
+        pop(state, 1);
+        _ = lua.lua_getfield(state, absolute, "agent_descriptions");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseAgentDescriptions(-1, diagnostic);
         pop(state, 1);
         _ = lua.lua_getfield(state, absolute, "graphics");
         defer pop(state, 1);
@@ -714,6 +729,91 @@ pub const Generation = struct {
             diagnostic.set("runtime graphics limits are outside Telar's safe bounds", .{});
             return error.InvalidConfig;
         }
+    }
+
+    fn parseAgentDescriptions(
+        generation: *Generation,
+        index: c_int,
+        diagnostic: *Diagnostic,
+    ) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.agent_descriptions must be a table", .{});
+            return error.InvalidConfig;
+        }
+        try ensureOnlyFields(
+            state,
+            absolute,
+            &.{ "command", "timeout_ms" },
+            "config.runtime.agent_descriptions",
+            diagnostic,
+        );
+
+        _ = lua.lua_getfield(state, absolute, "command");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.agent_descriptions.command must be an array", .{});
+            return error.InvalidConfig;
+        }
+        const command_table = lua.lua_absindex(state, -1);
+        const count = lua.lua_rawlen(state, command_table);
+        if (count == 0 or count > max_agent_description_command_args) {
+            diagnostic.set(
+                "config.runtime.agent_descriptions.command must contain 1..{d} arguments",
+                .{max_agent_description_command_args},
+            );
+            return error.InvalidConfig;
+        }
+
+        var command: AgentDescriptionCommand = .{};
+        for (0..count) |argument_index| {
+            _ = lua.lua_geti(state, command_table, @intCast(argument_index + 1));
+            defer pop(state, 1);
+            const argument = string(state, -1) orelse {
+                diagnostic.set(
+                    "config.runtime.agent_descriptions.command[{d}] must be a string",
+                    .{argument_index + 1},
+                );
+                return error.InvalidConfig;
+            };
+            if ((argument_index == 0 and argument.len == 0) or
+                argument.len > std.math.maxInt(u16) or
+                argument.len > max_agent_description_command_bytes - command.byte_len or
+                std.mem.indexOfScalar(u8, argument, 0) != null)
+            {
+                diagnostic.set(
+                    "config.runtime.agent_descriptions.command exceeds its {d}-byte limit",
+                    .{max_agent_description_command_bytes},
+                );
+                return error.InvalidConfig;
+            }
+            command.offsets[argument_index] = command.byte_len;
+            command.lengths[argument_index] = @intCast(argument.len);
+            @memcpy(command.bytes[command.byte_len..][0..argument.len], argument);
+            command.byte_len += @intCast(argument.len);
+        }
+        command.argument_count = @intCast(count);
+
+        _ = lua.lua_getfield(state, absolute, "timeout_ms");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            const timeout_ms = integer(state, -1) orelse {
+                diagnostic.set("config.runtime.agent_descriptions.timeout_ms must be an integer", .{});
+                return error.InvalidConfig;
+            };
+            if (timeout_ms < min_agent_description_timeout_ms or
+                timeout_ms > max_agent_description_timeout_ms)
+            {
+                diagnostic.set(
+                    "config.runtime.agent_descriptions.timeout_ms must be in {d}..{d}",
+                    .{ min_agent_description_timeout_ms, max_agent_description_timeout_ms },
+                );
+                return error.InvalidConfig;
+            }
+            command.timeout_ms = @intCast(timeout_ms);
+        }
+        generation.snapshot.runtime.agent_descriptions = command;
     }
 
     fn parseProxy(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -2447,12 +2547,26 @@ test "configuration environment excludes ambient authority" {
     try std.testing.expect(generation.snapshot.sidebar_visible);
 }
 
-test "runtime config compiles bounded graphics and ProxyTLS values" {
+test "runtime config compiles bounded graphics, proxy, and description values" {
     var diagnostic: Diagnostic = .{};
+    const source =
+        \\return {
+        \\  api_version = 2,
+        \\  runtime = {
+        \\    history = { path = "state/history.db" },
+        \\    graphics = { pane_mib = 32, global_mib = 128 },
+        \\    proxy = { enabled = true, ca_dir = "state/proxy" },
+        \\    agent_descriptions = {
+        \\      command = { "claude", "--print", "--tools", "" },
+        \\      timeout_ms = 12000,
+        \\    },
+        \\  },
+        \\}
+    ;
     const generation = try Generation.loadSource(
         std.testing.allocator,
         std.testing.io,
-        "return { api_version = 2, runtime = { history = { path = 'state/history.db' }, graphics = { pane_mib = 32, global_mib = 128 }, proxy = { enabled = true, ca_dir = 'state/proxy' } } }",
+        source,
         "@config.lua",
         1,
         &diagnostic,
@@ -2475,6 +2589,43 @@ test "runtime config compiles bounded graphics and ProxyTLS values" {
         "state/proxy",
         generation.snapshot.runtime.proxyCaDir().?,
     );
+    var arguments: [max_agent_description_command_args][]const u8 = undefined;
+    const description_command = &generation.snapshot.runtime.agent_descriptions;
+    try std.testing.expect(description_command.enabled());
+    try std.testing.expectEqual(@as(u32, 12_000), description_command.timeout_ms);
+    const argv = description_command.arguments(&arguments);
+    try std.testing.expectEqual(@as(usize, 4), argv.len);
+    try std.testing.expectEqualStrings("claude", argv[0]);
+    try std.testing.expectEqualStrings("", argv[3]);
+}
+
+test "runtime description command rejects unbounded values" {
+    const cases = [_]struct { source: []const u8, message: []const u8 }{
+        .{
+            .source = "local c = {}; for i = 1, 33 do c[i] = 'x' end; return { api_version = 2, runtime = { agent_descriptions = { command = c } } }",
+            .message = "must contain 1..32 arguments",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { agent_descriptions = { command = { 'codex', string.rep('x', 4096) } } } }",
+            .message = "exceeds its 4096-byte limit",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { agent_descriptions = { command = { 'codex' }, timeout_ms = 999 } } }",
+            .message = "timeout_ms must be in 1000..60000",
+        },
+    };
+    for (cases) |case| {
+        var diagnostic: Diagnostic = .{};
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            case.source,
+            "@config.lua",
+            1,
+            &diagnostic,
+        ));
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), case.message) != null);
+    }
 }
 
 test "runtime ProxyTLS config rejects live Lua middleware closures" {

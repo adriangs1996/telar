@@ -12,6 +12,16 @@ return telar.config({
       enabled = false,
       ca_dir = "state/proxy",
     },
+    -- Explicit opt-in: the first user request is sent through stdin to this
+    -- command so it never appears in the process arguments.
+    agent_descriptions = {
+      command = {
+        "codex", "exec", "--ephemeral", "--ignore-rules",
+        "--skip-git-repo-check", "--model", "gpt-5.6-luna",
+        "-c", 'model_reasoning_effort="low"', "-",
+      },
+      timeout_ms = 15000,
+    },
   },
 
   plugins = {

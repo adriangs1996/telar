@@ -20,6 +20,11 @@ pub const max_plugins = 32;
 pub const max_plugin_path_bytes = 512;
 pub const max_history_path_bytes = 1024;
 pub const max_proxy_path_bytes = 1024;
+pub const max_agent_description_command_args = 32;
+pub const max_agent_description_command_bytes = 4096;
+pub const default_agent_description_timeout_ms: u32 = 15_000;
+pub const min_agent_description_timeout_ms: u32 = 1_000;
+pub const max_agent_description_timeout_ms: u32 = 60_000;
 
 pub const ConfiguredBinding = keybind.Binding(action.Action, max_binding_keys);
 
@@ -48,6 +53,33 @@ pub const PluginSpec = struct {
     }
 };
 
+pub const AgentDescriptionCommand = struct {
+    bytes: [max_agent_description_command_bytes]u8 = undefined,
+    byte_len: u16 = 0,
+    offsets: [max_agent_description_command_args]u16 = @splat(0),
+    lengths: [max_agent_description_command_args]u16 = @splat(0),
+    argument_count: u8 = 0,
+    timeout_ms: u32 = default_agent_description_timeout_ms,
+
+    pub fn enabled(command: *const AgentDescriptionCommand) bool {
+        return command.argument_count != 0;
+    }
+
+    pub fn argument(command: *const AgentDescriptionCommand, index: usize) ?[]const u8 {
+        if (index >= command.argument_count) return null;
+        const start = command.offsets[index];
+        return command.bytes[start .. start + command.lengths[index]];
+    }
+
+    pub fn arguments(
+        command: *const AgentDescriptionCommand,
+        storage: *[max_agent_description_command_args][]const u8,
+    ) []const []const u8 {
+        for (0..command.argument_count) |index| storage[index] = command.argument(index).?;
+        return storage[0..command.argument_count];
+    }
+};
+
 pub const RuntimeSnapshot = struct {
     graphics_pane_bytes: usize = core.graphics.max_image_bytes_per_pane,
     graphics_global_bytes: usize = core.graphics.max_image_bytes_global,
@@ -56,6 +88,7 @@ pub const RuntimeSnapshot = struct {
     proxy_enabled: bool = false,
     proxy_ca_dir_bytes: [max_proxy_path_bytes]u8 = undefined,
     proxy_ca_dir_len: u16 = 0,
+    agent_descriptions: AgentDescriptionCommand = .{},
 
     pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
         if (snapshot.history_path_len == 0) return null;
