@@ -14,6 +14,7 @@ const schema = core.schema;
 
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
+const server_messages = @import("server_messages.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = Client.initial_request_id;
 
@@ -109,7 +110,7 @@ const TestHarness = struct {
         });
         try std.testing.expectEqual(
             @as(?u8, null),
-            try harness.client.handleServerMessage(try schema.decodeServer(opened)),
+            try server_messages.handleServerMessage(harness.client, try schema.decodeServer(opened)),
         );
         try harness.settle();
         var buffer: [256]u8 = undefined;
@@ -164,7 +165,7 @@ test "a tab snapshot attaches every pane the client does not hold" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try harness.client.handleServerMessage(try schema.decodeServer(snapshot)),
+        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot)),
     );
     try harness.settle();
 
@@ -201,7 +202,7 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
     });
     try std.testing.expectError(
         error.UnexpectedTabSnapshot,
-        harness.client.handleServerMessage(try schema.decodeServer(snapshot)),
+        server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot)),
     );
 }
 
@@ -223,7 +224,7 @@ test "a workspace snapshot reconciles the tab list" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try harness.client.handleServerMessage(try schema.decodeServer(snapshot)),
+        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot)),
     );
     try harness.settle();
 
@@ -243,11 +244,11 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     const client = harness.client;
     client.tabs.workspace = TestHarness.bootstrap_location.workspace;
 
-    try client.handleResyncRequired(.{
+    try server_messages.handleResyncRequired(client, .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .workspace_closed = false,
     });
-    try client.handleResyncRequired(.{
+    try server_messages.handleResyncRequired(client, .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .workspace_closed = false,
     });
@@ -304,7 +305,7 @@ test "a split reply lands in the tab that asked for it" {
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
     try harness.settle();
     try std.testing.expect(client.tabs.findPane(split_pane) != null);
 }
@@ -326,7 +327,7 @@ test "an attach reply marks the discovered pane attached" {
             .{ .pane_id = discovered, .lifecycle = .running },
         },
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(snapshot));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
     try std.testing.expect(!client.tabs.findPane(discovered).?.attached);
 
     // The attach request enqueued by the snapshot got id 4.
@@ -336,7 +337,7 @@ test "an attach reply marks the discovered pane attached" {
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
     try harness.settle();
     try std.testing.expect(client.tabs.findPane(discovered).?.attached);
 }
@@ -360,7 +361,7 @@ test "a created workspace replaces the tabs wholesale" {
         .location = new_location,
         .created = true,
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(opened));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
     try harness.settle();
 
     try std.testing.expectEqualDeep(
@@ -393,7 +394,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .label = "second",
         .root_pane_id = @enumFromInt(20),
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(created));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(created));
     try harness.settle();
     try std.testing.expectEqual(@as(usize, 2), client.tabs.count);
     try std.testing.expectEqual(second_location.tab_id, client.tabs.active().?.location.tab_id);
@@ -409,7 +410,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .location = second_location,
         .label = "renamed",
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(renamed));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(renamed));
     try std.testing.expectEqualStrings(
         "renamed",
         client.tabs.find(second_location.tab_id).?.labelSlice(),
@@ -422,7 +423,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .location = second_location,
         .position = 0,
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(moved));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(moved));
     try std.testing.expectEqual(@as(?usize, 0), client.tabs.indexOf(second_location.tab_id));
 
     // Requested close of the active tab: the survivor becomes active and a
@@ -435,7 +436,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try client.handleServerMessage(try schema.decodeServer(closed)),
+        try server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
     );
     try harness.settle();
     try std.testing.expectEqual(@as(usize, 1), client.tabs.count);
@@ -452,7 +453,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     });
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        client.handleServerMessage(try schema.decodeServer(unexpected)),
+        server_messages.handleServerMessage(client, try schema.decodeServer(unexpected)),
     );
 }
 
@@ -470,7 +471,7 @@ test "closing the last workspace exits the client" {
     });
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try harness.client.handleServerMessage(try schema.decodeServer(closed)),
+        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(closed)),
     );
 }
 
@@ -487,7 +488,7 @@ test "a closed workspace with a survivor starts a handoff to it" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try harness.client.handleServerMessage(try schema.decodeServer(resync)),
+        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(resync)),
     );
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -516,7 +517,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .scroll = .{ .total_rows = 10, .offset = 0 },
         .spans = &.{},
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(patch));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(patch));
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -536,7 +537,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(snapshot));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
     try std.testing.expectEqual(
         @as(u64, 5),
         client.tabs.findPane(TestHarness.bootstrap_pane).?.applied_frame_id,
@@ -555,7 +556,7 @@ test "a pane cwd report lands on the pane" {
         .pane_id = TestHarness.bootstrap_pane,
         .cwd = "/work/telar",
     });
-    _ = try harness.client.handleServerMessage(try schema.decodeServer(cwd));
+    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(cwd));
     try harness.settle();
     try std.testing.expectEqualStrings(
         "/work/telar",
@@ -577,7 +578,7 @@ test "an unrequested pane exit removes the pane and its client state" {
         .kind = .exited,
         .value = 0,
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(exited));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
     try harness.settle();
 
     try std.testing.expect(client.tabs.findPane(TestHarness.bootstrap_pane) == null);
@@ -603,7 +604,7 @@ test "a failed request surfaces as a notification" {
         .code = .pane_not_found,
         .message = "no such pane",
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(failed));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
     try harness.settle();
     try std.testing.expect(client.notification_tick_pending);
 
@@ -614,7 +615,7 @@ test "a failed request surfaces as a notification" {
     });
     try std.testing.expectError(
         error.UnexpectedRequestFailure,
-        client.handleServerMessage(try schema.decodeServer(unknown)),
+        server_messages.handleServerMessage(client, try schema.decodeServer(unknown)),
     );
 }
 
@@ -626,7 +627,7 @@ test "runtime notifications and delivery failures reach the toasts" {
 
     var payload: [256]u8 = undefined;
     const notification = try schema.encodeNotification(&payload, .{ .title = "hello" });
-    _ = try client.handleServerMessage(try schema.decodeServer(notification));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(notification));
     try std.testing.expect(client.notification_tick_pending);
 
     try client.requests.add(@enumFromInt(2), .notification);
@@ -634,7 +635,7 @@ test "runtime notifications and delivery failures reach the toasts" {
         .request_id = @enumFromInt(2),
         .delivered_clients = 0,
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(shown));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(shown));
 
     const unexpected = try schema.encodeNotificationShown(&payload, .{
         .request_id = @enumFromInt(9),
@@ -642,7 +643,7 @@ test "runtime notifications and delivery failures reach the toasts" {
     });
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        client.handleServerMessage(try schema.decodeServer(unexpected)),
+        server_messages.handleServerMessage(client, try schema.decodeServer(unexpected)),
     );
     try harness.settle();
 }
@@ -655,7 +656,7 @@ test "proxy status flips the interception indicator once" {
 
     var payload: [64]u8 = undefined;
     const status = try schema.encodeProxyStatus(&payload, .{ .active = true });
-    _ = try client.handleServerMessage(try schema.decodeServer(status));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(status));
     try std.testing.expect(client.view.proxy_tls_active);
     try harness.settle();
 }
@@ -673,7 +674,7 @@ test "system metrics schedule a redraw" {
         .has_battery = false,
         .battery_percent = 0,
     });
-    _ = try harness.client.handleServerMessage(try schema.decodeServer(metrics));
+    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(metrics));
     try std.testing.expect(harness.client.presenter.draw_pending);
     try harness.settle();
 }
@@ -690,7 +691,7 @@ test "the workspace list replica follows the runtime revision" {
             .{ .workspace = @enumFromInt(1), .name = "main", .path = "/w", .tab_count = 1 },
         },
     });
-    _ = try harness.client.handleServerMessage(try schema.decodeServer(list));
+    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(list));
     try std.testing.expect(
         harness.client.view.workspace_list.indexOf(@enumFromInt(1)) != null,
     );
@@ -720,7 +721,7 @@ test "an agent snapshot replaces the sidebar replica" {
             .expires_at_ms = 2,
         }},
     });
-    _ = try harness.client.handleServerMessage(try schema.decodeServer(snapshot));
+    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
     try std.testing.expect(harness.client.view.sidebar_snapshot.find(.{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
@@ -740,7 +741,7 @@ test "a graphics revision break requests a graphics snapshot" {
         .revision = 8,
         .phase = .begin,
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(begin));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(begin));
     const image = try schema.encodeGraphicsImage(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 9,
@@ -752,7 +753,7 @@ test "a graphics revision break requests a graphics snapshot" {
             .byte_len = 3,
         },
     });
-    _ = try client.handleServerMessage(try schema.decodeServer(image));
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(image));
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -768,7 +769,7 @@ test "runtime stopping and stray history results" {
     const stopping = try schema.encodeRuntimeStopping(&payload);
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try harness.client.handleServerMessage(try schema.decodeServer(stopping)),
+        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(stopping)),
     );
 
     const history = try schema.encodeHistoryResults(&payload, .{
@@ -777,7 +778,7 @@ test "runtime stopping and stray history results" {
     });
     try std.testing.expectError(
         error.UnexpectedHistoryResults,
-        harness.client.handleServerMessage(try schema.decodeServer(history)),
+        server_messages.handleServerMessage(harness.client, try schema.decodeServer(history)),
     );
 }
 
@@ -792,7 +793,7 @@ test "a pane clipboard write reaches the host terminal" {
         .pane_id = TestHarness.bootstrap_pane,
         .bytes = "copied",
     });
-    _ = try harness.client.handleServerMessage(try schema.decodeServer(clipboard));
+    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(clipboard));
     try std.testing.expect(harness.sink.fullCount() > before);
 }
 

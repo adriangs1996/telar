@@ -35,8 +35,10 @@ test {
     _ = @import("client_test.zig");
     _ = @import("config_reload.zig");
     _ = @import("presenter.zig");
+    _ = @import("server_messages.zig");
     _ = @import("input_handler.zig");
     _ = @import("run.zig");
+    _ = @import("telemetry.zig");
     _ = @import("../presentation/root.zig");
     _ = @import("../graphics/root.zig");
     _ = @import("view.zig");
