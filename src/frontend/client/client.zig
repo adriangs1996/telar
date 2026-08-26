@@ -1404,7 +1404,6 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
         return error.UnexpectedTabCreated;
     if (client.tabs.active()) |current| {
         var handler: InputHandler = .{ .client = client };
-        try client.clearPaneFocus();
         try handler.detachTab(current);
     }
     _ = try client.tabs.addCreated(

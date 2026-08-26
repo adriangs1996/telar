@@ -51,6 +51,10 @@ pub fn capturesKeys(handler: *const InputHandler) bool {
 }
 
 pub fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
+    // Detaching always invalidates the reported focus, and the focus-out
+    // byte must leave before the pane detaches — owning the pairing here
+    // deletes the ordering rule every caller used to maintain by hand.
+    try handler.client.clearPaneFocus();
     for (&tab.model.panes) |*slot| {
         const pane = if (slot.*) |*item| item else continue;
         if (!pane.attached) continue;
@@ -67,7 +71,6 @@ fn selectTab(handler: *InputHandler, tab_id: schema.TabId) !void {
     const current = handler.client.tabs.active() orelse return;
     if (current.location.tab_id == tab_id) return;
     if (handler.client.tabs.indexOf(tab_id) == null) return;
-    try handler.client.clearPaneFocus();
     try handler.detachTab(current);
     std.debug.assert(handler.client.tabs.select(tab_id));
     const active = handler.client.tabs.active().?;
@@ -108,7 +111,6 @@ fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void 
 pub fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
     const client = handler.client;
     if (client.requests.count != 0) return error.WorkspaceSwitchWhileRequestPending;
-    try client.clearPaneFocus();
     for (&client.tabs.items) |*slot| {
         const tab = if (slot.*) |*value| value else continue;
         try handler.detachTab(tab);
@@ -630,7 +632,6 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
             .next => .next,
         }),
         .detach => {
-            try handler.client.clearPaneFocus();
             for (handler.client.tabs.items[0..handler.client.tabs.count]) |*slot| {
                 const tab = if (slot.*) |*item| item else continue;
                 try handler.detachTab(tab);
@@ -881,7 +882,6 @@ fn closeTab(handler: *InputHandler) !void {
     if (handler.client.requests.has(.tab_operation)) return;
     const tab = handler.client.tabs.active() orelse return;
     const request_id = try handler.client.nextId();
-    try handler.client.clearPaneFocus();
     try handler.detachTab(tab);
     try handler.client.enqueueRequest(
         request_id,
