@@ -372,6 +372,8 @@ pub const Event = union(enum) {
             home,
             end,
             delete,
+            page_up,
+            page_down,
             enter,
             escape,
             backspace,
@@ -545,6 +547,8 @@ pub fn parse(input: []const u8) ?Parsed {
         '~' => switch (params[0]) {
             1, 7 => return key(.home, modsOf(params[1]), length),
             3 => return key(.delete, modsOf(params[1]), length),
+            5 => return key(.page_up, modsOf(params[1]), length),
+            6 => return key(.page_down, modsOf(params[1]), length),
             4, 8 => return key(.end, modsOf(params[1]), length),
             200 => return .{ .event = .paste_start, .len = length },
             201 => return .{ .event = .paste_end, .len = length },
@@ -1232,6 +1236,11 @@ test "a paste is bracketed, so a newline inside it is text" {
 
 test "a partial paste marker asks for more bytes" {
     try testing.expectEqual(@as(usize, 0), parse("\x1b[200").?.len);
+}
+
+test "page keys use their numbered CSI forms" {
+    try std.testing.expectEqual(Event.Key.Code.page_up, parse("\x1b[5~").?.event.key.code);
+    try std.testing.expectEqual(Event.Key.Code.page_down, parse("\x1b[6~").?.event.key.code);
 }
 
 test "the real cursor is placed only when a field asks for it" {

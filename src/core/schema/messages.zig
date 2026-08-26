@@ -34,6 +34,7 @@ pub const max_history_results = types.max_history_results;
 pub const max_history_command_bytes = types.max_history_command_bytes;
 pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;
 pub const max_workspace_list_entries = types.max_workspace_list_entries;
+pub const max_clipboard_bytes = 64 * 1024;
 
 pub const TerminalSize = types.TerminalSize;
 pub const PaneTarget = types.PaneTarget;
@@ -101,6 +102,8 @@ pub const ClientTag = enum(u8) {
     request_runtime_state = 0x14,
     create_workspace = 0x15,
     rename_workspace = 0x16,
+    set_pane_viewport = 0x17,
+    copy_selection = 0x18,
 };
 
 pub const ServerTag = enum(u8) {
@@ -129,6 +132,7 @@ pub const ServerTag = enum(u8) {
     system_metrics = 0x97,
     workspace_list = 0x98,
     pane_cwd = 0x99,
+    pane_clipboard = 0x9a,
 };
 
 pub const LaunchView = struct {
@@ -339,6 +343,22 @@ pub const MoveTab = struct {
 
 pub const RequestGraphicsSnapshot = struct { pane_id: PaneId };
 
+/// Absolute scrollback row to place at the top of one client attachment.
+pub const SetPaneViewport = struct {
+    pane_id: PaneId,
+    offset: u32,
+};
+
+/// Selection coordinates use the full screen history, not viewport rows.
+pub const CopySelection = struct {
+    pane_id: PaneId,
+    start_x: u16,
+    start_y: u32,
+    end_x: u16,
+    end_y: u32,
+    linewise: bool = false,
+};
+
 pub const QueryHistory = struct {
     request_id: RequestId,
     query: []const u8 = "",
@@ -372,6 +392,8 @@ pub const ClientMessage = union(enum) {
     request_runtime_state: void,
     create_workspace: CreateWorkspaceView,
     rename_workspace: RenameWorkspace,
+    set_pane_viewport: SetPaneViewport,
+    copy_selection: CopySelection,
 };
 
 pub const PaneOpened = struct {
@@ -390,6 +412,11 @@ pub const PaneExited = struct {
 pub const PaneCwd = struct {
     pane_id: PaneId,
     cwd: []const u8,
+};
+
+pub const PaneClipboard = struct {
+    pane_id: PaneId,
+    bytes: []const u8,
 };
 
 pub const RequestFailed = struct {
@@ -691,6 +718,7 @@ pub const ServerMessage = union(enum) {
     system_metrics: SystemMetrics,
     workspace_list: WorkspaceListView,
     pane_cwd: PaneCwd,
+    pane_clipboard: PaneClipboard,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -916,6 +944,24 @@ pub fn encodeRequestGraphicsSnapshot(
     );
 }
 
+pub fn encodeSetPaneViewport(buffer: []u8, message: SetPaneViewport) ![]const u8 {
+    return encodeDerived(
+        @intFromEnum(ClientTag.set_pane_viewport),
+        SetPaneViewport,
+        buffer,
+        message,
+    );
+}
+
+pub fn encodeCopySelection(buffer: []u8, message: CopySelection) ![]const u8 {
+    return encodeDerived(
+        @intFromEnum(ClientTag.copy_selection),
+        CopySelection,
+        buffer,
+        message,
+    );
+}
+
 pub fn decodeClient(payload: []const u8) !ClientMessage {
     var decoder = wire.Decoder.init(payload);
     const tag = try decodeTag(ClientTag, try decoder.readByte());
@@ -952,6 +998,12 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .request_runtime_state => .{ .request_runtime_state = {} },
         .create_workspace => .{ .create_workspace = try decodeCreateWorkspace(&decoder) },
         .rename_workspace => .{ .rename_workspace = try decodeRenameWorkspace(&decoder) },
+        .set_pane_viewport => .{
+            .set_pane_viewport = try Derived(SetPaneViewport).decode(&decoder),
+        },
+        .copy_selection => .{
+            .copy_selection = try Derived(CopySelection).decode(&decoder),
+        },
     };
     try decoder.ensureEnd();
     return message;
@@ -965,6 +1017,16 @@ pub fn encodePaneFrame(buffer: []u8, message: frame.Frame) ![]const u8 {
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.pane_frame));
     try frame.encodeBody(&encoder, message);
+    return encoder.finish();
+}
+
+pub fn encodePaneClipboard(buffer: []u8, message: PaneClipboard) ![]const u8 {
+    try validatePaneId(message.pane_id);
+    if (message.bytes.len > max_clipboard_bytes) return error.ClipboardTooLarge;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.pane_clipboard));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeSized32(message.bytes);
     return encoder.finish();
 }
 
@@ -1225,7 +1287,13 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .system_metrics => .{ .system_metrics = try Derived(SystemMetrics).decode(&decoder) },
         .workspace_list => .{ .workspace_list = try decodeWorkspaceList(&decoder) },
         .pane_cwd => .{ .pane_cwd = try decodePaneCwd(&decoder) },
+        .pane_clipboard => .{ .pane_clipboard = .{
+            .pane_id = try id.pane(try decoder.readInt(u64)),
+            .bytes = try decoder.readSized32(),
+        } },
     };
+    if (message == .pane_clipboard and message.pane_clipboard.bytes.len > max_clipboard_bytes)
+        return error.ClipboardTooLarge;
     try decoder.ensureEnd();
     return message;
 }

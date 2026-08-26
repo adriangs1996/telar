@@ -49,6 +49,14 @@ pub fn encodeKey(buffer: []u8, key: Key, modes: Modes) ![]const u8 {
             try writer.writeAll("\x1b[3~")
         else
             try writer.print("\x1b[3;{d}~", .{modifier}),
+        .page_up => if (modifier == 1)
+            try writer.writeAll("\x1b[5~")
+        else
+            try writer.print("\x1b[5;{d}~", .{modifier}),
+        .page_down => if (modifier == 1)
+            try writer.writeAll("\x1b[6~")
+        else
+            try writer.print("\x1b[6;{d}~", .{modifier}),
         .enter => try withAlt(&writer, key.mods.alt, "\r"),
         .escape => try writer.writeByte(0x1b),
         .backspace => try withAlt(&writer, key.mods.alt, "\x7f"),
@@ -105,5 +113,17 @@ test "paste framing follows the focused child's mode" {
     try std.testing.expectEqualStrings(
         "\x1b[200~hello\x1b[201~",
         try encodePaste(&buffer, "hello", .{ .bracketed_paste = true }),
+    );
+}
+
+test "page keys preserve modifiers" {
+    var buffer: [32]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "\x1b[5~",
+        try encodeKey(&buffer, .plain(.page_up), .{}),
+    );
+    try std.testing.expectEqualStrings(
+        "\x1b[6;5~",
+        try encodeKey(&buffer, .{ .code = .page_down, .mods = .{ .ctrl = true } }, .{}),
     );
 }

@@ -38,6 +38,7 @@ pub const Action = union(enum) {
     close_tab,
     move_tab: TabMove,
     detach,
+    enter_copy_mode,
     lua_callback: CallbackRef,
     lua_expr: CallbackRef,
     plugin: PluginAction,
@@ -83,6 +84,7 @@ pub const Action = union(enum) {
         if (std.mem.eql(u8, name, "move-tab-next"))
             return .{ .move_tab = .next };
         if (std.mem.eql(u8, name, "detach")) return .detach;
+        if (std.mem.eql(u8, name, "copy-mode")) return .enter_copy_mode;
 
         const prefix = "select-tab-";
         if (std.mem.startsWith(u8, name, prefix)) {
@@ -129,6 +131,7 @@ test "built-in names compile to parameterized actions" {
     );
     try std.testing.expectEqual(Action.new_workspace, try Action.parse("new-workspace"));
     try std.testing.expectEqual(Action.rename_workspace, try Action.parse("rename-workspace"));
+    try std.testing.expectEqual(Action.enter_copy_mode, try Action.parse("copy-mode"));
     try std.testing.expectError(error.UnknownAction, Action.parse("select-tab-0"));
     try std.testing.expectError(error.UnknownAction, Action.parse("select-workspace-0"));
     try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));

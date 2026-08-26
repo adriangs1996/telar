@@ -164,6 +164,10 @@ const ClientSession = struct {
     agent_revision_sent: u64 = 0,
     system_metrics_revision_sent: u64 = 0,
     workspace_list_revision_sent: u64 = 0,
+    clipboard_storage: [2 * schema.max_clipboard_bytes + 1]u8 = undefined,
+    clipboard_len: u32 = 0,
+    clipboard_pane: schema.PaneId = .invalid,
+    clipboard_pending: bool = false,
 
     fn create(
         gpa: std.mem.Allocator,
@@ -789,6 +793,16 @@ const Server = struct {
             return;
         }
 
+        if (session.clipboard_pending) {
+            const payload = try schema.encodePaneClipboard(buffer, .{
+                .pane_id = session.clipboard_pane,
+                .bytes = session.clipboard_storage[0..session.clipboard_len],
+            });
+            session.clipboard_pending = false;
+            try startSessionSend(io, select, session, payload);
+            return;
+        }
+
         if (session.runtime_state_requested and !session.proxy_status_sent) {
             const payload = try schema.encodeProxyStatus(buffer, .{
                 .active = server.proxy_service != null,
@@ -1200,6 +1214,48 @@ const Server = struct {
                 // queue it behind the bounded PTY response writer.
                 if (!active.pane.ingest_pending)
                     try schedulePaneResponse(io, select, active.pane);
+            },
+            .set_pane_viewport => |viewport| {
+                const active = attachments.find(viewport.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
+                try active.setViewport(viewport.offset);
+            },
+            .copy_selection => |request| {
+                const active = attachments.find(request.pane_id) orelse {
+                    metrics.stale_client_messages += 1;
+                    return;
+                };
+                const screen = active.pane.terminal.screens.active;
+                const cols = active.pane.screen.w;
+                const start_y = if (request.linewise)
+                    @min(request.start_y, request.end_y)
+                else
+                    request.start_y;
+                const end_y = if (request.linewise)
+                    @max(request.start_y, request.end_y)
+                else
+                    request.end_y;
+                const start_x: u16 = if (request.linewise) 0 else @min(request.start_x, cols - 1);
+                const end_x: u16 = if (request.linewise) cols - 1 else @min(request.end_x, cols - 1);
+                const start = screen.pages.pin(.{ .screen = .{
+                    .x = start_x,
+                    .y = start_y,
+                } }) orelse screen.pages.getBottomRight(.screen) orelse return;
+                const end = screen.pages.pin(.{ .screen = .{
+                    .x = end_x,
+                    .y = end_y,
+                } }) orelse screen.pages.getBottomRight(.screen) orelse return;
+                var allocator = std.heap.FixedBufferAllocator.init(&session.clipboard_storage);
+                const selected = screen.selectionString(allocator.allocator(), .{
+                    .sel = vt.Selection.init(start, end, false),
+                }) catch return;
+                if (selected.len > schema.max_clipboard_bytes) return;
+                std.mem.copyForwards(u8, session.clipboard_storage[0..selected.len], selected);
+                session.clipboard_len = @intCast(selected.len);
+                session.clipboard_pane = request.pane_id;
+                session.clipboard_pending = true;
             },
             .request_graphics_snapshot => |request| {
                 const active = attachments.find(request.pane_id) orelse {

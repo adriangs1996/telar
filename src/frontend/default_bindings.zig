@@ -5,7 +5,7 @@ const config_model = @import("config_model.zig");
 const keybind = @import("keybind.zig");
 
 pub const max_keys = config_model.max_binding_keys;
-pub const count = 33;
+pub const count = 34;
 pub const Binding = keybind.Binding(action.Action, max_keys);
 
 pub fn load(prefix: keybind.Key) ![count]Binding {
@@ -27,6 +27,7 @@ pub fn load(prefix: keybind.Key) ![count]Binding {
         try prefixed(prefix, "W", .rename_workspace),
         try prefixed(prefix, "x", .close_pane),
         try prefixed(prefix, "d", .detach),
+        try prefixed(prefix, "[", .enter_copy_mode),
         try prefixed(prefix, "c", .new_tab),
         try prefixed(prefix, "n", .{ .select_tab_offset = 1 }),
         try prefixed(prefix, "p", .{ .select_tab_offset = -1 }),

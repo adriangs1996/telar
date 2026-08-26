@@ -7,6 +7,7 @@ const client_outbox = @import("client_outbox.zig");
 const client_requests = @import("client_requests.zig");
 const client_telemetry = @import("client_telemetry.zig");
 const client_view = @import("client_ui.zig");
+const copy_mode = @import("copy_mode.zig");
 const default_bindings = @import("default_bindings.zig");
 const input_mod = @import("input.zig");
 const keybind = @import("keybind.zig");
@@ -165,6 +166,7 @@ const Client = struct {
     next_config_generation: u64 = 2,
     plugin_pending: bool = false,
     paste_pane: ?schema.PaneId = null,
+    copy_mode_state: ?copy_mode.State = null,
     /// Owns the cwd borrowed by one queued `create_workspace` launch.
     workspace_create_path: [schema.max_cwd_bytes]u8 = undefined,
     workspace_create_path_len: u16 = 0,
@@ -349,6 +351,11 @@ const Client = struct {
             .tab_moved => |moved| try client.handleTabMoved(moved),
             .pane_frame => |frame| try client.handlePaneFrame(frame),
             .pane_cwd => |cwd| try client.handlePaneCwd(cwd),
+            .pane_clipboard => |clipboard| {
+                if (clipboard.pane_id == .invalid) return error.UnexpectedPane;
+                try term.writeClipboard(client.writer, clipboard.bytes);
+                try client.writer.flush();
+            },
             .pane_exited => |exited| try client.handlePaneExited(exited),
             .request_failed => |failure| try client.handleRequestFailed(failure),
             .resync_required => |required| {
@@ -718,9 +725,33 @@ const Client = struct {
             return;
         }
         const apply_started = diagnostics.now(client.io);
+        const previous_scroll_offset = pane.scroll.offset;
         const tab = client.tabs.tabForPane(frame.pane_id) orelse
             return error.UnexpectedPane;
         const applied = try tab.model.applyFrame(frame);
+        const should_show_graphics = frame.scroll.atBottom(frame.rows) and
+            client.tabs.active() != null and
+            std.meta.eql(client.tabs.active().?.location, tab.location);
+        if (client.graphics_store.paneVisible(frame.pane_id) != should_show_graphics)
+            try client.graphics_store.setPaneVisible(frame.pane_id, should_show_graphics);
+        if (client.copy_mode_state) |*state| {
+            if (state.pane_id == frame.pane_id) {
+                if (frame.scroll.offset < previous_scroll_offset and
+                    state.viewport_offset == previous_scroll_offset)
+                {
+                    const pruned = previous_scroll_offset - frame.scroll.offset;
+                    state.cursor.y -|= pruned;
+                    if (state.anchor) |*anchor| anchor.y -|= pruned;
+                }
+                state.cursor.y = @min(state.cursor.y, frame.scroll.total_rows -| 1);
+                if (state.anchor) |*anchor|
+                    anchor.y = @min(anchor.y, frame.scroll.total_rows -| 1);
+                state.viewport_offset = frame.scroll.offset;
+                const updated = tab.model.find(frame.pane_id).?;
+                updated.copy_view = state.view();
+                tab.model.composition_invalidated = true;
+            }
+        }
         if (comptime diagnostics.enabled) {
             client.metrics.frames += 1;
             client.metrics.frame_cells += applied.cells;
@@ -733,6 +764,9 @@ const Client = struct {
     }
 
     fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
+        if (client.copy_mode_state) |state| {
+            if (state.pane_id == exited.pane_id) client.copy_mode_state = null;
+        }
         client.graphics_store.clearPane(exited.pane_id);
         const tab = client.tabs.tabForPane(exited.pane_id);
         if (client.reported_focus == exited.pane_id) client.forgetPaneFocus();
@@ -1736,6 +1770,7 @@ const InputHandler = struct {
             handler.redraw = true;
             return;
         }
+        if (handler.client.copy_mode_state != null) return;
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         try handler.sendPaneBytes(pane, bytes);
@@ -1745,6 +1780,10 @@ const InputHandler = struct {
         if (handler.client.view.hasNamePrompt()) {
             var editing_bytes: [32]u8 = undefined;
             return handler.forward(try input_mod.encodeKey(&editing_bytes, value, .{}));
+        }
+        if (handler.client.copy_mode_state != null) {
+            try handler.copyModeKey(value);
+            return;
         }
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
@@ -1768,6 +1807,7 @@ const InputHandler = struct {
     pub fn pasteStart(handler: *InputHandler) !void {
         if (handler.client.view.hasNamePrompt())
             return handler.forward("\x1b[200~");
+        if (handler.client.copy_mode_state != null) return;
         const pane = handler.activeModel().focusedPane() orelse return;
         if (!pane.attached) return;
         handler.client.paste_pane = pane.id;
@@ -1777,6 +1817,7 @@ const InputHandler = struct {
 
     pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
         if (handler.client.view.hasNamePrompt()) return handler.forward(text);
+        if (handler.client.copy_mode_state != null) return;
         const pane_id = handler.client.paste_pane orelse return;
         const pane = handler.client.tabs.findPane(pane_id) orelse return;
         if (pane.attached) try handler.sendPaneBytes(pane, text);
@@ -1785,6 +1826,7 @@ const InputHandler = struct {
     pub fn pasteEnd(handler: *InputHandler) !void {
         if (handler.client.view.hasNamePrompt())
             return handler.forward("\x1b[201~");
+        if (handler.client.copy_mode_state != null) return;
         const pane_id = handler.client.paste_pane orelse return;
         handler.client.paste_pane = null;
         const pane = handler.client.tabs.findPane(pane_id) orelse return;
@@ -1798,12 +1840,310 @@ const InputHandler = struct {
         bytes: []const u8,
     ) !void {
         const started = diagnostics.now(handler.client.io);
+        if (!pane.scroll.atBottom(pane.buffer.h)) {
+            const bottom = pane.scroll.maxOffset(pane.buffer.h);
+            try handler.setViewport(pane, bottom);
+        }
         try handler.client.enqueueInput(pane.id, bytes);
         if (comptime diagnostics.enabled) {
             handler.client.metrics.input_events += 1;
             handler.client.metrics.input_bytes += bytes.len;
             handler.client.metrics.input_enqueue.observe(diagnostics.elapsed(started, diagnostics.now(handler.client.io)));
         }
+    }
+
+    fn setViewport(handler: *InputHandler, pane: *multiplexer.Pane, offset: u32) !void {
+        const clamped = @min(offset, pane.scroll.maxOffset(pane.buffer.h));
+        if (pane.scroll.offset == clamped) return;
+        pane.scroll.offset = clamped;
+        try handler.client.graphics_store.setPaneVisible(
+            pane.id,
+            pane.scroll.atBottom(pane.buffer.h),
+        );
+        handler.activeModel().composition_invalidated = true;
+        try handler.client.enqueue(.{ .set_pane_viewport = .{
+            .pane_id = pane.id,
+            .offset = clamped,
+        } });
+        handler.redraw = true;
+    }
+
+    fn enterCopyMode(handler: *InputHandler) !void {
+        if (handler.client.copy_mode_state != null) return;
+        const model = handler.activeModel();
+        const pane = model.focusedPane() orelse return;
+        if (!pane.attached) return;
+        const cursor: copy_mode.Point = if (pane.cursor.visible)
+            .{ .x = pane.cursor.x, .y = pane.scroll.offset + pane.cursor.y }
+        else
+            .{ .x = 0, .y = pane.scroll.offset + pane.buffer.h -| 1 };
+        handler.client.copy_mode_state = .init(pane.id, cursor, pane.scroll.offset);
+        pane.copy_view = handler.client.copy_mode_state.?.view();
+        model.composition_invalidated = true;
+        handler.redraw = true;
+    }
+
+    fn leaveCopyMode(handler: *InputHandler, copy: bool) !void {
+        const state = handler.client.copy_mode_state orelse return;
+        const model = handler.activeModel();
+        const pane = model.find(state.pane_id);
+        if (copy and state.anchor != null) {
+            const anchor = state.anchor.?;
+            try handler.client.enqueue(.{ .copy_selection = .{
+                .pane_id = state.pane_id,
+                .start_x = anchor.x,
+                .start_y = anchor.y,
+                .end_x = state.cursor.x,
+                .end_y = state.cursor.y,
+                .linewise = state.linewise,
+            } });
+        }
+        if (pane) |value| {
+            value.copy_view = null;
+            try handler.setViewport(value, state.entry_offset);
+        }
+        handler.client.copy_mode_state = null;
+        model.composition_invalidated = true;
+        handler.redraw = true;
+    }
+
+    fn copyModeKey(handler: *InputHandler, pressed: keybind.Key) !void {
+        const state = if (handler.client.copy_mode_state) |*value| value else return;
+        const model = handler.activeModel();
+        const pane = model.find(state.pane_id) orelse {
+            handler.client.copy_mode_state = null;
+            return;
+        };
+        const page: i32 = @intCast(@max(@as(u16, 1), pane.buffer.h -| 1));
+        var handled = true;
+        switch (pressed.code) {
+            .escape => if (!state.clearSelection()) try handler.leaveCopyMode(false),
+            .enter => try handler.leaveCopyMode(true),
+            .left => state.horizontal(-1, pane.buffer.w),
+            .right => state.horizontal(1, pane.buffer.w),
+            .up => state.vertical(-1, pane.scroll, pane.buffer.h),
+            .down => state.vertical(1, pane.scroll, pane.buffer.h),
+            .home => state.lineStart(),
+            .end => handler.lastNonBlank(state, pane),
+            .page_up => state.vertical(-page, pane.scroll, pane.buffer.h),
+            .page_down => state.vertical(page, pane.scroll, pane.buffer.h),
+            .char => |char| if (pressed.mods.ctrl) {
+                if (char.eql("b"))
+                    state.vertical(-page, pane.scroll, pane.buffer.h)
+                else if (char.eql("f"))
+                    state.vertical(page, pane.scroll, pane.buffer.h)
+                else if (char.eql("u"))
+                    state.vertical(-@divTrunc(page, 2), pane.scroll, pane.buffer.h)
+                else if (char.eql("d"))
+                    state.vertical(@divTrunc(page, 2), pane.scroll, pane.buffer.h)
+                else
+                    handled = false;
+            } else if (char.eql("h")) {
+                state.horizontal(-1, pane.buffer.w);
+            } else if (char.eql("j")) {
+                state.vertical(1, pane.scroll, pane.buffer.h);
+            } else if (char.eql("k")) {
+                state.vertical(-1, pane.scroll, pane.buffer.h);
+            } else if (char.eql("l")) {
+                state.horizontal(1, pane.buffer.w);
+            } else if (char.eql("0")) {
+                state.lineStart();
+            } else if (char.eql("^")) {
+                handler.firstNonBlank(state, pane);
+            } else if (char.eql("$")) {
+                handler.lastNonBlank(state, pane);
+            } else if (char.eql("w")) {
+                handler.wordForward(state, pane, false);
+            } else if (char.eql("e")) {
+                handler.wordForward(state, pane, true);
+            } else if (char.eql("b")) {
+                handler.wordBackward(state, pane);
+            } else if (char.eql("{")) {
+                handler.paragraph(state, pane, -1);
+            } else if (char.eql("}")) {
+                handler.paragraph(state, pane, 1);
+            } else if (char.eql("g")) {
+                state.top();
+            } else if (char.eql("G")) {
+                state.bottom(pane.scroll, pane.buffer.h);
+            } else if (char.eql("v") or char.eql(" ")) {
+                state.toggleSelection(false);
+            } else if (char.eql("V")) {
+                state.toggleSelection(true);
+            } else if (char.eql("y")) {
+                try handler.leaveCopyMode(true);
+            } else if (char.eql("q")) {
+                try handler.leaveCopyMode(false);
+            } else {
+                handled = false;
+            },
+            else => handled = false,
+        }
+        if (!handled or handler.client.copy_mode_state == null) return;
+        pane.copy_view = state.view();
+        model.composition_invalidated = true;
+        try handler.setViewport(pane, state.viewport_offset);
+        handler.redraw = true;
+    }
+
+    const WordClass = enum { space, word, punctuation };
+
+    fn rowIndex(pane: *const multiplexer.Pane, absolute_y: u32) ?u16 {
+        if (absolute_y < pane.scroll.offset or absolute_y >= pane.scroll.offset + pane.buffer.h)
+            return null;
+        return @intCast(absolute_y - pane.scroll.offset);
+    }
+
+    fn firstNonBlank(
+        handler: *InputHandler,
+        state: *copy_mode.State,
+        pane: *const multiplexer.Pane,
+    ) void {
+        _ = handler;
+        const row = rowIndex(pane, state.cursor.y) orelse return state.lineStart();
+        var x: u16 = 0;
+        while (x < pane.buffer.w) : (x += 1) {
+            const text = pane.buffer.cells[@as(usize, row) * pane.buffer.w + x].text();
+            if (text.len != 0 and !std.ascii.isWhitespace(text[0])) break;
+        }
+        state.cursor.x = @min(x, pane.buffer.w -| 1);
+    }
+
+    fn lastNonBlank(
+        handler: *InputHandler,
+        state: *copy_mode.State,
+        pane: *const multiplexer.Pane,
+    ) void {
+        _ = handler;
+        const row = rowIndex(pane, state.cursor.y) orelse return state.lineEnd(pane.buffer.w);
+        var x = pane.buffer.w;
+        while (x != 0) {
+            x -= 1;
+            const text = pane.buffer.cells[@as(usize, row) * pane.buffer.w + x].text();
+            if (text.len != 0 and !std.ascii.isWhitespace(text[0])) break;
+        }
+        state.cursor.x = x;
+    }
+
+    fn paragraph(
+        handler: *InputHandler,
+        state: *copy_mode.State,
+        pane: *const multiplexer.Pane,
+        direction: i32,
+    ) void {
+        _ = handler;
+        var y = state.cursor.y;
+        while (true) {
+            const next = if (direction < 0) y -| 1 else @min(y +| 1, pane.scroll.total_rows -| 1);
+            if (next == y) break;
+            y = next;
+            const row = rowIndex(pane, y) orelse break;
+            var blank = true;
+            for (pane.buffer.cells[@as(usize, row) * pane.buffer.w ..][0..pane.buffer.w]) |cell| {
+                const text = cell.text();
+                if (text.len != 0 and !std.ascii.isWhitespace(text[0])) {
+                    blank = false;
+                    break;
+                }
+            }
+            if (blank) break;
+        }
+        state.cursor.y = y;
+        state.cursor.x = 0;
+        state.vertical(0, pane.scroll, pane.buffer.h);
+    }
+
+    fn wordClass(pane: *const multiplexer.Pane, point: copy_mode.Point) ?WordClass {
+        const row = rowIndex(pane, point.y) orelse return null;
+        const cell = pane.buffer.cells[@as(usize, row) * pane.buffer.w + point.x];
+        const text = cell.text();
+        if (text.len == 0 or std.ascii.isWhitespace(text[0])) return .space;
+        return if (std.ascii.isAlphanumeric(text[0]) or text[0] == '_')
+            .word
+        else
+            .punctuation;
+    }
+
+    fn nextPoint(point: copy_mode.Point, cols: u16, total_rows: u32) copy_mode.Point {
+        if (point.x + 1 < cols) return .{ .x = point.x + 1, .y = point.y };
+        if (point.y + 1 < total_rows) return .{ .x = 0, .y = point.y + 1 };
+        return point;
+    }
+
+    fn previousPoint(point: copy_mode.Point, cols: u16) copy_mode.Point {
+        if (point.x != 0) return .{ .x = point.x - 1, .y = point.y };
+        if (point.y != 0) return .{ .x = cols - 1, .y = point.y - 1 };
+        return point;
+    }
+
+    fn wordForward(
+        handler: *InputHandler,
+        state: *copy_mode.State,
+        pane: *const multiplexer.Pane,
+        end: bool,
+    ) void {
+        _ = handler;
+        const initial = wordClass(pane, state.cursor) orelse {
+            state.vertical(1, pane.scroll, pane.buffer.h);
+            state.lineStart();
+            return;
+        };
+        var point = state.cursor;
+        if (end and initial != .space) {
+            while (true) {
+                const next = nextPoint(point, pane.buffer.w, pane.scroll.total_rows);
+                if (std.meta.eql(next, point) or wordClass(pane, next) != initial) break;
+                point = next;
+            }
+        } else {
+            while (wordClass(pane, point)) |class| {
+                if (class != initial) break;
+                const next = nextPoint(point, pane.buffer.w, pane.scroll.total_rows);
+                if (std.meta.eql(next, point)) break;
+                point = next;
+            }
+            while (wordClass(pane, point) == .space) {
+                const next = nextPoint(point, pane.buffer.w, pane.scroll.total_rows);
+                if (std.meta.eql(next, point)) break;
+                point = next;
+            }
+            if (end) {
+                const class = wordClass(pane, point) orelse .space;
+                while (true) {
+                    const next = nextPoint(point, pane.buffer.w, pane.scroll.total_rows);
+                    if (std.meta.eql(next, point) or wordClass(pane, next) != class) break;
+                    point = next;
+                }
+            }
+        }
+        state.cursor = point;
+        state.vertical(0, pane.scroll, pane.buffer.h);
+    }
+
+    fn wordBackward(
+        handler: *InputHandler,
+        state: *copy_mode.State,
+        pane: *const multiplexer.Pane,
+    ) void {
+        _ = handler;
+        var point = previousPoint(state.cursor, pane.buffer.w);
+        while (wordClass(pane, point) == .space) {
+            const previous = previousPoint(point, pane.buffer.w);
+            if (std.meta.eql(previous, point)) break;
+            point = previous;
+        }
+        const class = wordClass(pane, point) orelse {
+            state.vertical(-1, pane.scroll, pane.buffer.h);
+            state.lineStart();
+            return;
+        };
+        while (true) {
+            const previous = previousPoint(point, pane.buffer.w);
+            if (std.meta.eql(previous, point) or wordClass(pane, previous) != class) break;
+            point = previous;
+        }
+        state.cursor = point;
+        state.vertical(0, pane.scroll, pane.buffer.h);
     }
 
     pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
@@ -1836,10 +2176,47 @@ const InputHandler = struct {
         }
         handler.redraw = handler.redraw or interaction.redraw;
         if (interaction.select_tab != null or !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
-        const pane = model.focusedPane() orelse return;
+        const wheel_delta: ?i32 = switch (cell_event.kind) {
+            .scroll_up => -3,
+            .scroll_down => 3,
+            else => null,
+        };
+        var pane = model.focusedPane() orelse return;
+        if (wheel_delta != null) {
+            for (model.layoutSnapshot(handler.client.view.workbench()).views()) |candidate| {
+                if (!candidate.content.contains(cell_event.x, cell_event.y)) continue;
+                pane = model.find(candidate.pane_id) orelse return;
+                break;
+            }
+        }
         const pane_view = model.viewForPane(pane.id, handler.client.view.workbench()) orelse return;
-        if (!pane_view.content.contains(cell_event.x, cell_event.y) or !pane.mouse.sgr or
-            !mouseTracked(pane.mouse.tracking, cell_event.kind)) return;
+        if (!pane_view.content.contains(cell_event.x, cell_event.y)) return;
+        if (wheel_delta) |delta| {
+            if (handler.client.copy_mode_state) |*state| {
+                if (state.pane_id == pane.id) {
+                    state.vertical(delta, pane.scroll, pane.buffer.h);
+                    pane.copy_view = state.view();
+                    model.composition_invalidated = true;
+                    try handler.setViewport(pane, state.viewport_offset);
+                    handler.redraw = true;
+                    return;
+                }
+            }
+            if (!pane.mouse.sgr or !mouseTracked(pane.mouse.tracking, cell_event.kind)) {
+                if (pane.input_modes.alternate_screen and pane.input_modes.alternate_scroll and
+                    pane.scroll.atBottom(pane.buffer.h))
+                {
+                    const bytes = if (delta < 0) "\x1b[A" else "\x1b[B";
+                    for (0..@abs(delta)) |_| try handler.client.enqueueInput(pane.id, bytes);
+                } else {
+                    const current: i64 = pane.scroll.offset;
+                    const wanted: u32 = @intCast(@max(0, current + delta));
+                    try handler.setViewport(pane, wanted);
+                }
+                return;
+            }
+        }
+        if (!pane.mouse.sgr or !mouseTracked(pane.mouse.tracking, cell_event.kind)) return;
         var encoded: [64]u8 = undefined;
         const exact_x: ?u32 = if (pane.mouse.pixels and exterior_pixels)
             event.raw_x - @as(u32, pane_view.content.x) * cell_size.width
@@ -1983,6 +2360,11 @@ const InputHandler = struct {
 
     fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control {
         switch (value) {
+            .enter_copy_mode => {},
+            else => if (handler.client.copy_mode_state != null)
+                try handler.leaveCopyMode(false),
+        }
+        switch (value) {
             .split_pane => |direction| try handler.beginSplit(switch (direction) {
                 .horizontal => .horizontal,
                 .vertical => .vertical,
@@ -2043,6 +2425,7 @@ const InputHandler = struct {
                 }
                 return .stop;
             },
+            .enter_copy_mode => try handler.enterCopyMode(),
             .lua_callback, .lua_expr, .plugin => unreachable,
         }
         return .continue_routing;

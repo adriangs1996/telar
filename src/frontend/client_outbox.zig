@@ -60,6 +60,8 @@ pub const Message = union(enum) {
     configure_graphics: schema.ConfigureGraphics,
     create_workspace: schema.CreateWorkspace,
     rename_workspace: OwnedWorkspaceRename,
+    set_pane_viewport: schema.SetPaneViewport,
+    copy_selection: schema.CopySelection,
 };
 
 pub const Stats = struct {
@@ -190,6 +192,8 @@ pub const Outbox = struct {
                 .workspace = value.workspace,
                 .name = value.slice(),
             }),
+            .set_pane_viewport => |value| schema.encodeSetPaneViewport(buffer, value),
+            .copy_selection => |value| schema.encodeCopySelection(buffer, value),
         };
     }
 

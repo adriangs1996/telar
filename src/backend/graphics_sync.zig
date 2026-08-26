@@ -9,6 +9,7 @@ const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const history = @import("history/root.zig");
+const blit = @import("blit.zig");
 const media_mod = @import("media.zig");
 const pane_mod = @import("pane.zig");
 const pty = @import("pty.zig");
@@ -112,6 +113,12 @@ pub const Attachment = struct {
     acknowledged_cursor: schema.frame.Cursor = .{},
     acknowledged_mouse: schema.frame.Mouse = .{},
     acknowledged_input_modes: schema.frame.InputModes = .{},
+    acknowledged_scroll: schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 },
+    projected: core.ui.Buffer,
+    projected_damage: []bool,
+    projected_state: vt.RenderState = .empty,
+    viewport_pin: ?*vt.Pin = null,
+    viewport_screen: vt.ScreenSet.Key,
     observed_cell_revision: u64 = 0,
     observed_cwd_revision: u64 = 0,
     next_frame_id: u64 = 1,
@@ -142,9 +149,19 @@ pub const Attachment = struct {
     gpa: std.mem.Allocator,
 
     pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
+        var acknowledged = try core.ui.Buffer.init(gpa, pane.screen.w, pane.screen.h);
+        errdefer acknowledged.deinit();
+        var projected = try core.ui.Buffer.init(gpa, pane.screen.w, pane.screen.h);
+        errdefer projected.deinit();
+        const projected_damage = try gpa.alloc(bool, pane.screen.h);
+        errdefer gpa.free(projected_damage);
+        @memset(projected_damage, false);
         return .{
             .pane = pane,
-            .acknowledged = try .init(gpa, pane.screen.w, pane.screen.h),
+            .acknowledged = acknowledged,
+            .projected = projected,
+            .projected_damage = projected_damage,
+            .viewport_screen = pane.terminal.screens.active_key,
             .gpa = gpa,
             .graphics_snapshot = if (!pane.graphics_present)
                 .idle
@@ -158,7 +175,11 @@ pub const Attachment = struct {
     }
 
     pub fn deinit(attachment: *Attachment) void {
+        attachment.clearViewport();
         attachment.freeTransfer();
+        attachment.projected_state.deinit(attachment.gpa);
+        attachment.gpa.free(attachment.projected_damage);
+        attachment.projected.deinit();
         attachment.acknowledged.deinit();
     }
 
@@ -172,9 +193,100 @@ pub const Attachment = struct {
             attachment.pane.screen.w,
             attachment.pane.screen.h,
         );
+        try pane_mod.resizeScreenStorage(
+            attachment.gpa,
+            &attachment.projected,
+            &attachment.projected_damage,
+            attachment.pane.screen.w,
+            attachment.pane.screen.h,
+        );
         attachment.outstanding_frame_id = 0;
         attachment.snapshot_pending = true;
         return true;
+    }
+
+    fn syncViewportScreen(attachment: *Attachment) void {
+        const active_key = attachment.pane.terminal.screens.active_key;
+        if (attachment.viewport_screen == active_key) return;
+        attachment.clearViewport();
+        attachment.viewport_screen = active_key;
+    }
+
+    pub fn clearViewport(attachment: *Attachment) void {
+        if (attachment.viewport_pin) |pin| {
+            const screen = attachment.pane.terminal.screens.get(attachment.viewport_screen).?;
+            screen.scroll(.{ .active = {} });
+            screen.pages.untrackPin(pin);
+        }
+        attachment.viewport_pin = null;
+    }
+
+    /// Moves only this attachment. The terminal's canonical viewport is
+    /// restored before returning, so another client never observes the move.
+    pub fn setViewport(attachment: *Attachment, requested: u32) !void {
+        attachment.syncViewportScreen();
+        const screen = attachment.pane.terminal.screens.active;
+        if (attachment.viewport_pin) |pin| screen.scroll(.{ .pin = pin.* }) else screen.scroll(.{ .active = {} });
+        screen.scroll(.{ .row = requested });
+        const scrollbar = screen.pages.scrollbar();
+        if (scrollbar.offset + scrollbar.len >= scrollbar.total) {
+            screen.scroll(.{ .active = {} });
+            attachment.clearViewport();
+        } else {
+            const top = screen.pages.pin(.{ .viewport = .{} }).?;
+            if (attachment.viewport_pin) |pin| {
+                pin.* = top;
+            } else {
+                attachment.viewport_pin = try screen.pages.trackPin(top);
+            }
+            screen.scroll(.{ .active = {} });
+        }
+        attachment.snapshot_pending = true;
+    }
+
+    pub const Projection = struct {
+        buffer: *const core.ui.Buffer,
+        damaged_rows: []const bool,
+        cursor: schema.frame.Cursor,
+        scroll: schema.frame.Scroll,
+    };
+
+    pub fn project(attachment: *Attachment, force: bool) !Projection {
+        attachment.syncViewportScreen();
+        const pane = attachment.pane;
+        const screen = pane.terminal.screens.active;
+        if (attachment.viewport_pin) |pin| {
+            if (pin.garbage) pin.garbage = false;
+            screen.scroll(.{ .pin = pin.* });
+            defer screen.scroll(.{ .active = {} });
+            try attachment.projected_state.update(attachment.gpa, &pane.terminal);
+            _ = blit.blit(
+                &attachment.projected,
+                attachment.projected.area(),
+                &pane.terminal,
+                &attachment.projected_state,
+                .{ .force = force, .damaged_rows = attachment.projected_damage },
+            );
+            return .{
+                .buffer = &attachment.projected,
+                .damaged_rows = attachment.projected_damage,
+                .cursor = .{},
+                .scroll = scrollState(screen.pages.scrollbar()),
+            };
+        }
+        return .{
+            .buffer = &pane.screen,
+            .damaged_rows = pane.damaged_rows,
+            .cursor = pane.cursor,
+            .scroll = scrollState(screen.pages.scrollbar()),
+        };
+    }
+
+    fn scrollState(value: anytype) schema.frame.Scroll {
+        return .{
+            .total_rows = @intCast(@min(value.total, std.math.maxInt(u32))),
+            .offset = @intCast(@min(value.offset, std.math.maxInt(u32))),
+        };
     }
 
     pub fn resetGraphics(attachment: *Attachment) void {
@@ -648,6 +760,58 @@ pub fn placementValue(
     image: vt.kitty.graphics.Image,
 ) ?core.graphics.Placement {
     return media_mod.placementValue(&pane.media.terminal, key, placement, image);
+}
+
+test "attachments keep independent scrollback viewports" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try history.Service.init(gpa, ":memory:");
+    defer {
+        service.closeQueues(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&args);
+    const pane = try Pane.create(
+        io,
+        gpa,
+        .{ .id = try schema.id.pane(1), .generation = 1 },
+        .{
+            .workspace = .{ .workspace = try schema.id.workspace(1) },
+            .tab_id = try schema.id.tab(1),
+        },
+        &command,
+        "/",
+        &service,
+        .{ .cols = 8, .rows = 3 },
+        .{},
+        &budget,
+    );
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+    _ = try pane.ingest(io, "zero\r\none\r\ntwo\r\nthree\r\nfour\r\nfive\r\n");
+    try pane.render(false);
+
+    var first = try Attachment.init(gpa, pane);
+    defer first.deinit();
+    var second = try Attachment.init(gpa, pane);
+    defer second.deinit();
+
+    try first.setViewport(0);
+    const first_projection = try first.project(true);
+    const second_projection = try second.project(true);
+    try std.testing.expectEqual(@as(u32, 0), first_projection.scroll.offset);
+    try std.testing.expect(second_projection.scroll.atBottom(pane.screen.h));
+    try std.testing.expect(!std.mem.eql(
+        u8,
+        first_projection.buffer.cells[0].text(),
+        second_projection.buffer.cells[0].text(),
+    ));
+    try std.testing.expect(pane.terminal.screens.active.pages.scrollbar().offset +
+        pane.screen.h >= pane.terminal.screens.active.pages.scrollbar().total);
 }
 
 test "an unsupported stored image degrades graphics sync instead of killing it" {

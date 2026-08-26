@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const diff = @import("diff.zig");
+const copy_mode = @import("copy_mode.zig");
 const frame_apply = @import("frame.zig");
 const layout_mod = @import("layout.zig");
 const term = @import("term.zig");
@@ -33,6 +34,8 @@ pub const Pane = struct {
     cursor: schema.frame.Cursor = .{},
     mouse: schema.frame.Mouse = .{},
     input_modes: schema.frame.InputModes = .{},
+    scroll: schema.frame.Scroll,
+    copy_view: ?copy_mode.View = null,
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
     graphics_placeholder: bool = false,
@@ -56,6 +59,7 @@ pub const Pane = struct {
             .buffer = buffer,
             .damage_rows = damage_rows,
             .attached = attached,
+            .scroll = .{ .total_rows = size.rows, .offset = 0 },
         };
     }
 
@@ -345,6 +349,8 @@ pub const Model = struct {
         const applied = try frame_apply.applyBuffer(&pane.buffer, &pane.cursor, frame);
         pane.mouse = frame.mouse;
         pane.input_modes = frame.input_modes;
+        if (!std.meta.eql(pane.scroll, frame.scroll)) model.composition_invalidated = true;
+        pane.scroll = frame.scroll;
         if (replacement_damage) |rows| {
             @memset(rows, .{});
             model.gpa.free(pane.damage_rows);
@@ -411,6 +417,13 @@ pub const Model = struct {
             .focused = palette.accent,
             .unfocused = palette.overlay0,
         };
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            if (pane.copy_view != null) {
+                model.composition_invalidated = true;
+                break;
+            }
+        }
         if (model.border_theme == null or !std.meta.eql(model.border_theme.?, border_theme)) {
             model.border_theme = border_theme;
             model.composition_invalidated = true;
@@ -452,23 +465,40 @@ pub const Model = struct {
                     const source = &pane.buffer.cells[
                         @as(usize, y) * pane.buffer.w + x
                     ];
+                    var style = source.style;
+                    if (pane.copy_view) |copy| {
+                        const absolute_y = pane.scroll.offset + y;
+                        if (copy.selected(x, absolute_y)) style.flags.inverse = !style.flags.inverse;
+                    }
                     target.setCell(
                         view.content.x + x,
                         view.content.y + y,
                         source.text(),
                         source.width,
-                        source.style,
+                        style,
                     );
                     stats.cells += 1;
                 }
             }
-            if (view.focused and pane.cursor.visible and
-                pane.cursor.x < view.content.w and pane.cursor.y < view.content.h)
-            {
-                screen.cursor = .{
-                    .x = view.content.x + pane.cursor.x,
-                    .y = view.content.y + pane.cursor.y,
-                };
+            if (view.focused) {
+                if (pane.copy_view) |copy| {
+                    if (copy.cursor.y >= pane.scroll.offset and
+                        copy.cursor.y < pane.scroll.offset + pane.buffer.h and
+                        copy.cursor.x < view.content.w)
+                    {
+                        screen.cursor = .{
+                            .x = view.content.x + copy.cursor.x,
+                            .y = view.content.y + @as(u16, @intCast(copy.cursor.y - pane.scroll.offset)),
+                        };
+                    }
+                } else if (pane.cursor.visible and
+                    pane.cursor.x < view.content.w and pane.cursor.y < view.content.h)
+                {
+                    screen.cursor = .{
+                        .x = view.content.x + pane.cursor.x,
+                        .y = view.content.y + pane.cursor.y,
+                    };
+                }
             }
             if (pane.graphics_placeholder) drawGraphicsPlaceholder(target, view.content, palette);
         }
@@ -705,6 +735,34 @@ test "two pane buffers compose into their layout rectangles" {
     try std.testing.expect(!screen.back.cells[19].style.flags.inverse);
 }
 
+test "copy mode highlights an absolute scrollback selection" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 4, .rows = 2 });
+    const pane = model.find(@enumFromInt(1)).?;
+    pane.scroll = .{ .total_rows = 12, .offset = 10 };
+    pane.copy_view = .{
+        .anchor = .{ .x = 1, .y = 10 },
+        .cursor = .{ .x = 2, .y = 11 },
+        .linewise = false,
+    };
+
+    var screen = try term.Screen.init(gpa, 4, 2);
+    defer screen.deinit();
+    _ = try model.render(&screen, screen.back.area());
+
+    try std.testing.expect(!screen.back.cells[0].style.flags.inverse);
+    try std.testing.expect(screen.back.cells[1].style.flags.inverse);
+    try std.testing.expect(screen.back.cells[6].style.flags.inverse);
+    try std.testing.expect(!screen.back.cells[7].style.flags.inverse);
+    try std.testing.expectEqual(term.Screen.Position{ .x = 2, .y = 1 }, screen.cursor.?);
+}
+
 test "fullscreen composes only the focused pane across the whole tab" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
@@ -812,6 +870,7 @@ test "frame state and pending acknowledgements stay per pane" {
         .base_frame_id = 0,
         .cols = 2,
         .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     });
     _ = try model.applyFrame((try schema.decodeServer(payload)).pane_frame);
@@ -870,6 +929,7 @@ test "unchanged composition produces no terminal damage" {
         .base_frame_id = 0,
         .cols = 8,
         .rows = 3,
+        .scroll = .{ .total_rows = 3, .offset = 0 },
         .spans = &snapshot_spans,
     });
     _ = try model.applyFrame((try schema.decodeServer(snapshot_payload)).pane_frame);
@@ -896,6 +956,7 @@ test "unchanged composition produces no terminal damage" {
         .base_frame_id = 1,
         .cols = 8,
         .rows = 3,
+        .scroll = .{ .total_rows = 3, .offset = 0 },
         .spans = &patch_spans,
     });
     _ = try model.applyFrame((try schema.decodeServer(patch_payload)).pane_frame);

@@ -97,6 +97,8 @@ fn parseCode(text: []const u8) !Key.Code {
     if (eqlAscii(text, "home")) return .home;
     if (eqlAscii(text, "end")) return .end;
     if (eqlAscii(text, "delete") or eqlAscii(text, "del")) return .delete;
+    if (eqlAscii(text, "pageup") or eqlAscii(text, "page-up")) return .page_up;
+    if (eqlAscii(text, "pagedown") or eqlAscii(text, "page-down")) return .page_down;
     if (eqlAscii(text, "enter") or eqlAscii(text, "return")) return .enter;
     if (eqlAscii(text, "escape") or eqlAscii(text, "esc")) return .escape;
     if (eqlAscii(text, "backspace")) return .backspace;

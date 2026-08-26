@@ -79,6 +79,18 @@ state.
 The default bindings are `prefix`, then `shift+left`, `shift+right`, `shift+up`,
 or `shift+down`.
 
+`telar.action.copy_mode()` enters the focused pane's scrollback. Its default
+binding is `prefix`, then `[`. The mouse wheel scrolls three rows per notch;
+applications that own mouse reporting keep receiving wheel events, and an
+alternate-screen application with alternate-scroll enabled receives cursor
+keys instead. Normal pane input returns the viewport to the bottom.
+
+Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
+`}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
+Press `v` or Space for a character selection, `V` for a line selection, then
+`y` or Enter to copy through OSC 52. Escape first clears an active selection;
+a second Escape, or `q`, leaves copy mode and restores the entry viewport.
+
 `telar.action.toggle_pane_fullscreen()` makes the focused pane occupy the whole
 tab. The client retains the tiled layout and its split ratios, so invoking the
 action again restores the previous geometry. Directional focus still selects

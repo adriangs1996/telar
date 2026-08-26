@@ -89,6 +89,7 @@ test "a patch updates the screen and reports its work" {
         .base_frame_id = 1,
         .cols = 4,
         .rows = 2,
+        .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &spans,
     });
     const decoded = (try schema.decodeServer(payload)).pane_frame;
@@ -113,6 +114,7 @@ test "a patch cannot silently resize the client screen" {
         .base_frame_id = 1,
         .cols = 5,
         .rows = 2,
+        .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &spans,
     });
     const decoded = (try schema.decodeServer(payload)).pane_frame;

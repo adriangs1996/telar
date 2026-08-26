@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 50;
+const corpus_len = 53;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -251,6 +251,22 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add("request_runtime_state", .client, false, golden.request_runtime_state, helper.commit(
         try schema.encodeRequestRuntimeState(helper.space()),
     ));
+    helper.add("set_pane_viewport", .client, false, golden.set_pane_viewport, helper.commit(
+        try schema.encodeSetPaneViewport(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .offset = 42,
+        }),
+    ));
+    helper.add("copy_selection", .client, false, golden.copy_selection, helper.commit(
+        try schema.encodeCopySelection(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .start_x = 1,
+            .start_y = 2,
+            .end_x = 3,
+            .end_y = 4,
+            .linewise = true,
+        }),
+    ));
 
     // -- server ------------------------------------------------------------
     helper.add("pane_opened", .server, false, golden.pane_opened, helper.commit(
@@ -287,6 +303,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .rows = 1,
             .cursor = .{ .visible = true, .x = 1, .y = 0 },
             .input_modes = .{ .focus_events = true },
+            .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = &frame_spans,
         }),
     ));
@@ -535,6 +552,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .cwd = "/work/telar",
         }),
     ));
+    helper.add("pane_clipboard", .server, false, golden.pane_clipboard, helper.commit(
+        try schema.encodePaneClipboard(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .bytes = "abc",
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -569,8 +592,10 @@ const golden = struct {
     pub const graphics_credit = "1205000000000000000010000000000000";
     pub const configure_graphics = "1301";
     pub const request_runtime_state = "14";
+    pub const set_pane_viewport = "1705000000000000002a000000";
+    pub const copy_selection = "18050000000000000001000200000003000400000001";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
-    pub const pane_frame = "82040000000000000001000000000000000000000000000000020001000101000000000000000000010100000000000200000012000000a1000000000020a101030201020301040078";
+    pub const pane_frame = "8204000000000000000100000000000000000000000000000002000100010100000000000000000001000001000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
     pub const request_failed = "840500000000000000010070616e6520313220646f6573206e6f74206578697374";
     pub const runtime_stopping = "85";
@@ -594,6 +619,7 @@ const golden = struct {
     pub const system_metrics = "9705000000000000002a5c000154";
     pub const workspace_list = "98030000000000000002000700000000000000050074656c61720b002f776f726b2f74656c61720200090000000000000003006170690900" ++ "2f776f726b2f617069" ++ "0100";
     pub const pane_cwd = "9905000000000000000b002f776f726b2f74656c6172";
+    pub const pane_clipboard = "9a050000000000000003000000616263";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {
@@ -757,6 +783,7 @@ test "a large real-world screen fits the frame budget" {
         .base_frame_id = 0,
         .cols = 480,
         .rows = 150,
+        .scroll = .{ .total_rows = 150, .offset = 0 },
         .spans = &spans,
     });
     const decoded = (try schema.decodeServer(payload)).pane_frame;
@@ -777,6 +804,7 @@ test "iterators over malformed view bytes return errors instead of trapping" {
         .cursor = .{},
         .mouse = .{},
         .input_modes = .{},
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .span_count = 1,
         .encoded_spans = &.{ 0xff, 0xff },
     }).spans();
@@ -806,6 +834,7 @@ test "malformed cell bytes surface as errors during iteration" {
         .base_frame_id = 0,
         .cols = 1,
         .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     });
 
@@ -1249,6 +1278,7 @@ test "pane frames use the server envelope" {
         .base_frame_id = 0,
         .cols = 1,
         .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     };
 
@@ -1419,6 +1449,7 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
         .rows = rows,
         .cursor = .{ .visible = true, .x = 0, .y = 0 },
         .mouse = .{},
+        .scroll = .{ .total_rows = rows, .offset = 0 },
         .spans = spans,
     }));
 }

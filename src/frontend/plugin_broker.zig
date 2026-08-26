@@ -165,6 +165,7 @@ pub const Registry = struct {
                 .select_workspace,
                 .select_tab_offset,
                 .select_tab,
+                .enter_copy_mode,
                 => null,
                 .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
             };

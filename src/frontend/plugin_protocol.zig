@@ -48,6 +48,7 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writer.writeByte(17);
             try writer.writeByte(value);
         },
+        .enter_copy_mode => return error.InvalidWorkerEffect,
         .lua_callback, .lua_expr, .plugin => return error.InvalidWorkerEffect,
     };
     return writer.buffered();

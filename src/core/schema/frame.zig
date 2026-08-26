@@ -10,7 +10,7 @@ pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
-pub const body_header_size = 42;
+pub const body_header_size = 52;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
@@ -44,6 +44,22 @@ pub const InputModes = struct {
     keypad_keys: bool = false,
     bracketed_paste: bool = false,
     focus_events: bool = false,
+    alternate_scroll: bool = false,
+    alternate_screen: bool = false,
+};
+
+/// Position of one client's viewport in the runtime-owned scrollback.
+pub const Scroll = struct {
+    total_rows: u32,
+    offset: u32,
+
+    pub fn maxOffset(scroll: Scroll, rows: u16) u32 {
+        return scroll.total_rows -| rows;
+    }
+
+    pub fn atBottom(scroll: Scroll, rows: u16) bool {
+        return scroll.offset == scroll.maxOffset(rows);
+    }
 };
 
 pub const Span = struct {
@@ -62,6 +78,7 @@ pub const Frame = struct {
     cursor: Cursor = .{},
     mouse: Mouse = .{},
     input_modes: InputModes = .{},
+    scroll: Scroll,
     spans: []const Span,
 };
 
@@ -74,6 +91,7 @@ pub const FrameView = struct {
     cursor: Cursor,
     mouse: Mouse,
     input_modes: InputModes,
+    scroll: Scroll,
     span_count: u16,
     encoded_spans: []const u8,
 
@@ -156,6 +174,10 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     try encoder.writeByte(@intFromBool(frame.input_modes.keypad_keys));
     try encoder.writeByte(@intFromBool(frame.input_modes.bracketed_paste));
     try encoder.writeByte(@intFromBool(frame.input_modes.focus_events));
+    try encoder.writeByte(@intFromBool(frame.input_modes.alternate_scroll));
+    try encoder.writeByte(@intFromBool(frame.input_modes.alternate_screen));
+    try encoder.writeInt(u32, frame.scroll.total_rows);
+    try encoder.writeInt(u32, frame.scroll.offset);
     try encoder.writeInt(u16, @intCast(frame.spans.len));
 
     for (frame.spans) |span| {
@@ -203,6 +225,12 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         .keypad_keys = try decoder.readBool(),
         .bracketed_paste = try decoder.readBool(),
         .focus_events = try decoder.readBool(),
+        .alternate_scroll = try decoder.readBool(),
+        .alternate_screen = try decoder.readBool(),
+    };
+    const scroll: Scroll = .{
+        .total_rows = try decoder.readInt(u32),
+        .offset = try decoder.readInt(u32),
     };
     const span_count = try decoder.readInt(u16);
 
@@ -213,6 +241,7 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         cols,
         rows,
         .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
+        scroll,
         span_count,
     );
 
@@ -257,6 +286,7 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
         .mouse = mouse,
         .input_modes = input_modes,
+        .scroll = scroll,
         .span_count = span_count,
         .encoded_spans = decoder.consumed(spans_start),
     };
@@ -273,6 +303,7 @@ fn validateFrameStructure(frame: Frame) !void {
         frame.cols,
         frame.rows,
         frame.cursor,
+        frame.scroll,
         frame.spans.len,
     );
     const total_cells = try gridCellCount(frame.cols, frame.rows);
@@ -301,6 +332,7 @@ fn validateHeader(
     cols: u16,
     rows: u16,
     cursor: Cursor,
+    scroll: Scroll,
     span_count: usize,
 ) !void {
     if (pane_id == .invalid) return error.InvalidPaneId;
@@ -309,6 +341,8 @@ fn validateHeader(
     if (span_count > max_span_count) return error.TooManySpans;
     if (cursor.visible and (cursor.x >= cols or cursor.y >= rows)) return error.InvalidCursor;
     if (!cursor.visible and (cursor.x != 0 or cursor.y != 0)) return error.InvalidCursor;
+    if (scroll.total_rows < rows or scroll.offset > scroll.maxOffset(rows))
+        return error.InvalidScroll;
 }
 
 fn gridCellCount(cols: u16, rows: u16) !u32 {
@@ -479,6 +513,7 @@ test "full snapshots preserve cells, styles and cursor" {
         .cols = 2,
         .rows = 1,
         .cursor = .{ .visible = true, .x = 1, .y = 0 },
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     };
 
@@ -512,16 +547,17 @@ test "a style run pays two bytes per ordinary cell" {
         .base_frame_id = 0,
         .cols = 3,
         .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     });
 
-    // Header and span: 54 bytes. The first cell carries the five-byte default
+    // Header and span: 64 bytes. The first cell carries the five-byte default
     // style and costs seven bytes. Each following space costs only its packed
     // header and text byte.
-    try std.testing.expectEqual(@as(usize, 65), encoder.finish().len);
-    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[54]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[61]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[63]);
+    try std.testing.expectEqual(@as(usize, 75), encoder.finish().len);
+    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[64]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[71]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[73]);
 }
 
 test "cell run size accounts for inherited style" {
@@ -541,6 +577,7 @@ test "the first cell of every span must define its style" {
         .base_frame_id = 0,
         .cols = 1,
         .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     });
 
@@ -567,6 +604,7 @@ test "patch spans must be ordered and inside the screen" {
         .base_frame_id = 1,
         .cols = 2,
         .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &overlapping,
     }));
 }
@@ -582,6 +620,7 @@ test "a snapshot must contain the complete grid" {
         .base_frame_id = 0,
         .cols = 2,
         .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     }));
 }
@@ -593,4 +632,20 @@ test "the maximum screen is bounded by one transport frame" {
 
     try std.testing.expect(maximum_snapshot_size <= transport.max_frame_size);
     try std.testing.expect(next_snapshot_size > transport.max_frame_size);
+}
+
+test "scroll metadata cannot point beyond retained history" {
+    const cells = [_]ui.Cell{.{}} ** 2;
+    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
+    var buffer: [256]u8 = undefined;
+    var encoder = wire.Encoder.init(&buffer);
+    try std.testing.expectError(error.InvalidScroll, encodeBody(&encoder, .{
+        .pane_id = @enumFromInt(1),
+        .frame_id = 1,
+        .base_frame_id = 0,
+        .cols = 1,
+        .rows = 2,
+        .scroll = .{ .total_rows = 10, .offset = 9 },
+        .spans = &spans,
+    }));
 }

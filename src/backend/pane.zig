@@ -26,6 +26,10 @@ pub const max_pty_response_bytes = 1024;
 
 pub const max_pty_responses = 64;
 
+/// Retained VT history per pane. This matches herdr's default and stays a byte
+/// quota so wide, styled terminal rows are charged for what they retain.
+pub const default_scrollback_bytes = 10_000_000;
+
 /// How long a child's synchronized-output block (DEC mode 2026) may hold
 /// frames back before it is ignored. Same value ghostty uses to reset the
 /// mode when a program forgets to close its block.
@@ -481,6 +485,7 @@ pub const Pane = struct {
         pane.terminal = try .init(io, gpa, .{
             .cols = size.cols,
             .rows = size.rows,
+            .max_scrollback_bytes = default_scrollback_bytes,
             .kitty_image_storage_limit = 0,
             .kitty_image_loading_limits = .direct,
         });
@@ -597,6 +602,8 @@ pub const Pane = struct {
             .keypad_keys = modes.get(.keypad_keys),
             .bracketed_paste = modes.get(.bracketed_paste),
             .focus_events = modes.get(.focus_event),
+            .alternate_scroll = modes.get(.mouse_alternate_scroll),
+            .alternate_screen = pane.terminal.screens.active_key == .alternate,
         };
     }
 

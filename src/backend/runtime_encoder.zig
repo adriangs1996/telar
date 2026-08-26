@@ -36,29 +36,32 @@ pub fn encodeFrame(
     if (!force_snapshot and pane.holdFrames(io)) return null;
     const started = diagnostics.now(io);
     if (pane.render_pending) try pane.render(false);
+    const projection = try attachment.project(force_snapshot);
+    const source = projection.buffer;
     var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
     var snapshot = force_snapshot;
     const diff = if (snapshot)
         damage.Diff{}
     else
         damage.collectSpans(
-            pane.screen.cells,
+            source.cells,
             attachment.acknowledged.cells,
-            pane.screen.w,
-            pane.damaged_rows,
+            source.w,
+            projection.damaged_rows,
             &span_storage,
         );
     var span_count = diff.span_count;
     snapshot = snapshot or diff.snapshot_required;
 
-    const cursor_changed = !std.meta.eql(pane.cursor, attachment.acknowledged_cursor);
+    const cursor_changed = !std.meta.eql(projection.cursor, attachment.acknowledged_cursor);
     const mouse_changed = !std.meta.eql(pane.mouse, attachment.acknowledged_mouse);
     const input_modes_changed = !std.meta.eql(
         pane.input_modes,
         attachment.acknowledged_input_modes,
     );
+    const scroll_changed = !std.meta.eql(projection.scroll, attachment.acknowledged_scroll);
     if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
-        !input_modes_changed)
+        !input_modes_changed and !scroll_changed)
     {
         if (comptime diagnostics.enabled) {
             metrics.noop_frames += 1;
@@ -72,7 +75,7 @@ pub fn encodeFrame(
         return null;
     }
     if (snapshot) {
-        span_storage[0] = .{ .start = 0, .cells = pane.screen.cells };
+        span_storage[0] = .{ .start = 0, .cells = source.cells };
         span_count = 1;
     }
 
@@ -82,24 +85,28 @@ pub fn encodeFrame(
         .pane_id = pane.id,
         .frame_id = frame_id,
         .base_frame_id = if (snapshot) 0 else attachment.acknowledged_frame_id,
-        .cols = pane.screen.w,
-        .rows = pane.screen.h,
-        .cursor = pane.cursor,
+        .cols = source.w,
+        .rows = source.h,
+        .cursor = projection.cursor,
         .mouse = pane.mouse,
         .input_modes = pane.input_modes,
+        .scroll = projection.scroll,
         .spans = span_storage[0..span_count],
     });
     if (snapshot) {
-        @memcpy(attachment.acknowledged.cells, pane.screen.cells);
+        @memcpy(attachment.acknowledged.cells, source.cells);
     } else {
         for (span_storage[0..span_count]) |span| {
             const start: usize = @intCast(span.start);
             @memcpy(attachment.acknowledged.cells[start..][0..span.cells.len], span.cells);
         }
     }
-    attachment.acknowledged_cursor = pane.cursor;
+    attachment.acknowledged_cursor = projection.cursor;
     attachment.acknowledged_mouse = pane.mouse;
     attachment.acknowledged_input_modes = pane.input_modes;
+    attachment.acknowledged_scroll = projection.scroll;
+    if (projection.buffer == &attachment.projected)
+        @memset(attachment.projected_damage, false);
     attachment.observed_cell_revision = pane.cell_revision;
     attachment.outstanding_frame_id = frame_id;
     attachment.frame_sent_ns = diagnostics.now(io);
