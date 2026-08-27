@@ -11,9 +11,11 @@ failure before that point aborts only the launch and never stops the runtime.
 
 ## Decision
 
-`Server` owns the launch transaction and returns either a `running` pane or an
-error. `PaneStore` owns every spawned pane allocation while the launch moves
-from `starting` to `running` or `aborting`. Discovery and attachment expose only
+The runtime owns the launch transaction through a concrete `PaneLauncher`
+module and returns either a `running` pane or an error. `PaneLauncher` owns only
+the cohesive launch dependencies and never receives `Server` or client state.
+`PaneStore` owns every spawned pane allocation while the launch moves from
+`starting` to `running` or `aborting`. Discovery and attachment expose only
 `running` panes.
 
 The runtime schedules `waitPane` before `readPane`. If a later launch step
@@ -22,10 +24,11 @@ the PTY, and retains the allocation until the child is reaped and no actor can
 access it. A consumed `PaneKey` is never reused.
 
 A workspace or tab created for the first pane remains provisional until
-`Server` commits the pane. Failure removes the provisional container and any
-geometry lease acquired for it. After commit, attachment or response delivery
-failure removes neither the pane nor its container. Reconnection discovers the
-committed pane from runtime state and never replays the launch automatically.
+`PaneLauncher` commits the pane. Flow entrypoints, rather than `PaneLauncher`,
+own rollback of provisional containers and geometry leases. After commit,
+attachment or response delivery failure removes neither the pane nor its
+container. Reconnection discovers the committed pane from runtime state and
+never replays the launch automatically.
 
 Pre-commit failures keep the existing protocol categories: `resource_limit`,
 `invalid_request`, and `spawn_failed`. Internal phase and cause stay in

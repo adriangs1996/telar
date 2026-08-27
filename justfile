@@ -32,6 +32,10 @@ check: fmt-check test
 test *args:
     zig build test {{ args }}
 
+# Run the native tests with zcov and write coverage.lcov.
+coverage *args:
+    tools/coverage.sh {{ args }}
+
 # Run frontend tests.
 test-frontend:
     zig build test-frontend
@@ -45,8 +49,11 @@ test-schema:
     zig build test-schema
 
 # Run the standalone proxy tests.
-test-proxy:
-    zig build test-proxy
+test-proxy-example:
+    zig build test-proxy-example
+
+test-backend-proxy:
+    zig build test-backend-proxy
 
 # Build the standalone proxy example.
 proxy:

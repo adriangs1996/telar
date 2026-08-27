@@ -31,6 +31,17 @@ _Avoid_: Pane working directory, current path
 The per-connection acknowledgement that exposes a completed pane launch to one
 client.
 
+**Client delivery**:
+The per-client policy that selects and commits the next bounded runtime message.
+Queued management responses coexist with projections of the latest authoritative
+runtime state; visual state is never accumulated as a replay.
+_Avoid_: Output queue, socket writer
+
+**Attachment synchronization**:
+The per-client, per-pane state that tracks acknowledged cells, graphics credit,
+snapshots and transfer progress. It is disposable and does not own pane state.
+_Avoid_: Pane replica, client pane
+
 **Pane launch state**:
 The lifecycle of a pane whose launch has not settled. A pane is `starting`,
 `running`, or `aborting` during this lifecycle.
@@ -38,6 +49,12 @@ The lifecycle of a pane whose launch has not settled. A pane is `starting`,
 **Launch attempt**:
 A history record for a child process that was spawned but whose pane launch did
 not complete. It is distinct from a normal pane session.
+
+**Proxy credential**:
+A pane-generation-scoped capability that authorizes one child to use Telar's
+observation proxy. It expires when pane launch aborts or that pane generation
+retires.
+_Avoid_: Proxy token, proxy authentication
 
 **Host input**:
 User input received from the host terminal before Telar classifies its intent.

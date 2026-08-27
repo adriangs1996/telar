@@ -11,3 +11,5 @@ references/*
 !references/README.md
 .lavish/*
 state/
+/coverage.lcov
+/*.zcov

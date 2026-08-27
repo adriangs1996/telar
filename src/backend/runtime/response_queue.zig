@@ -102,6 +102,7 @@ pub const ResponseQueue = struct {
     items: [capacity]PendingResponse = undefined,
     head: u8 = 0,
     len: u8 = 0,
+    high_water: u8 = 0,
     dropped: u64 = 0,
     resync_workspace: ?schema.WorkspaceLocation = null,
     resync_previous_workspace: ?schema.WorkspaceId = null,
@@ -116,6 +117,7 @@ pub const ResponseQueue = struct {
         const index = (@as(usize, queue.head) + queue.len) % queue.items.len;
         queue.items[index] = response;
         queue.len += 1;
+        queue.high_water = @max(queue.high_water, queue.len);
     }
 
     /// Observation notifications may be dropped under backpressure. State
@@ -241,6 +243,24 @@ test "management responses overtake observation work" {
     try std.testing.expectEqual(@as(u8, 0), queue.peekObservation().?.offset);
     // The fake pointer only tests ordering and must not reach `clear`.
     queue.len = 0;
+}
+
+test "queue records lifetime high water" {
+    var queue: ResponseQueue = .{};
+    try queue.push(.{ .request_failed = .{
+        .request_id = @enumFromInt(1),
+        .code = .internal,
+        .message = "first",
+    } });
+    try queue.push(.{ .request_failed = .{
+        .request_id = @enumFromInt(2),
+        .code = .internal,
+        .message = "second",
+    } });
+    queue.pop();
+    try std.testing.expectEqual(@as(u8, 2), queue.high_water);
+    queue.clear();
+    try std.testing.expectEqual(@as(u8, 2), queue.high_water);
 }
 
 test "a dropped workspace close preserves its handoff target" {

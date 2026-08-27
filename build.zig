@@ -3,6 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const coverage = Coverage.init(b);
 
     // Parsing PTY output is the hottest part of the interactive path. Keep the
     // application debuggable, but build the third-party emulator as optimized
@@ -17,8 +18,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = vt_optimize,
     }).module("ghostty-vt");
+    coverage.excludeCSourceCoverage(b, ghostty_vt);
 
     const lua_api = addLua(b, target, optimize, "lua");
+    coverage.instrumentModule(lua_api);
     const tls = b.dependency("tls", .{
         .target = target,
         .optimize = optimize,
@@ -45,6 +48,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     unicode.addImport("ghostty-vt", ghostty_vt);
+    coverage.instrumentModule(unicode);
 
     // These module edges are the process boundary in code before IPC exists.
     // Both sides may import core. They cannot import each other.
@@ -54,6 +58,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     core.addImport("unicode", unicode);
+    coverage.instrumentModule(core);
 
     const backend = b.addModule("telar-backend", .{
         .root_source_file = b.path("src/backend/root.zig"),
@@ -68,6 +73,7 @@ pub fn build(b: *std.Build) void {
     backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
     backend.linkSystemLibrary("nghttp2", .{});
     backend.linkSystemLibrary("sqlite3", .{});
+    coverage.instrumentModule(backend);
 
     const frontend = b.addModule("telar-frontend", .{
         .root_source_file = b.path("src/frontend/root.zig"),
@@ -75,14 +81,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    const freetype = addFreeType(b, target, optimize);
+    const freetype = addFreeType(b, target, optimize, coverage.enabled);
     frontend.addImport("telar-core", core);
     frontend.addImport("lua-api", lua_api);
     frontend.addImport("freetype", freetype);
     if (target.result.os.tag == .macos) {
         frontend.addCSourceFile(.{
             .file = b.path("src/frontend/attachments/darwin.m"),
-            .flags = &.{"-fobjc-arc"},
+            .flags = cFlags(b, &.{"-fobjc-arc"}, coverage.enabled),
         });
         frontend.linkFramework("AppKit", .{});
         frontend.linkFramework("ImageIO", .{});
@@ -90,7 +96,6 @@ pub fn build(b: *std.Build) void {
     } else if (target.result.os.tag == .windows) {
         frontend.linkSystemLibrary("user32", .{});
     }
-
     // One shipped binary contains both the client and runtime entry points.
     const exe = b.addExecutable(.{
         .name = "telar",
@@ -155,7 +160,7 @@ pub fn build(b: *std.Build) void {
         .optimize = bench_optimize,
         .link_libc = true,
     });
-    const bench_freetype = addFreeType(b, target, bench_optimize);
+    const bench_freetype = addFreeType(b, target, bench_optimize, false);
     bench_frontend.addImport("telar-core", bench_core);
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("freetype", bench_freetype);
@@ -233,6 +238,10 @@ pub fn build(b: *std.Build) void {
     // ---------------------------------------------------------------------
 
     const test_step = b.step("test", "Run the tests");
+    const backend_proxy_test_step = b.step(
+        "test-backend-proxy",
+        "Run the runtime observation proxy tests",
+    );
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
     const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");
@@ -275,7 +284,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/backend/history/agent_detection.zig" },
         .{ .path = "src/backend/runtime/system_metrics.zig" },
         .{ .path = "src/frontend/widgets/workspace_model.zig" },
-        .{ .path = "src/backend/proxy/root.zig", .libc = true },
+        .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/damage.zig" },
         .{ .path = "src/backend/history/root.zig", .vt = true, .libc = true },
@@ -313,8 +322,11 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
         tests.root_module.linkSystemLibrary("nghttp2", .{});
         if (suite.vt) tests.root_module.addImport("ghostty-vt", ghostty_vt);
+        coverage.instrumentTest(tests);
         const run_tests = b.addRunArtifact(tests);
         test_step.dependOn(&run_tests.step);
+        if (std.mem.eql(u8, suite.path, "src/backend/proxy_test.zig"))
+            backend_proxy_test_step.dependOn(&run_tests.step);
         if (suite.transport) transport_test_step.dependOn(&run_tests.step);
         if (suite.schema) schema_test_step.dependOn(&run_tests.step);
         if (suite.frontend) frontend_test_step.dependOn(&run_tests.step);
@@ -328,6 +340,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    coverage.instrumentModule(unicode_fake);
     const substitution = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/core/unicode_substitution_test.zig"),
@@ -337,6 +350,7 @@ pub fn build(b: *std.Build) void {
         .filters = &.{"injected table"},
     });
     substitution.root_module.addImport("unicode", unicode_fake);
+    coverage.instrumentTest(substitution);
     test_step.dependOn(&b.addRunArtifact(substitution).step);
 
     // ---------------------------------------------------------------------
@@ -382,7 +396,7 @@ pub fn build(b: *std.Build) void {
     const proxy_step = b.step("proxy", "Build the pty and TLS proxy example");
     proxy_step.dependOn(&b.addInstallArtifact(proxy, .{}).step);
 
-    const proxy_test_step = b.step("test-proxy", "Run the proxy example's tests");
+    const proxy_test_step = b.step("test-proxy-example", "Run the proxy example's tests");
     for ([_][]const u8{
         "examples/proxy/ca.zig",
         "examples/proxy/tls.zig",
@@ -395,6 +409,7 @@ pub fn build(b: *std.Build) void {
         const tests = b.addTest(.{
             .root_module = proxyModule(b, path, target, optimize, tls, ghostty_vt, nghttp2_prefix),
         });
+        coverage.instrumentTest(tests);
         proxy_test_step.dependOn(&b.addRunArtifact(tests).step);
     }
 
@@ -445,7 +460,7 @@ pub fn build(b: *std.Build) void {
         });
         raster_check.root_module.addImport(
             "freetype",
-            addFreeType(b, cross_target, .Debug),
+            addFreeType(b, cross_target, .Debug, false),
         );
         cross_step.dependOn(&raster_check.step);
         const sound_check = b.addTest(.{
@@ -477,6 +492,64 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(cross_step);
 }
 
+const Coverage = struct {
+    enabled: bool,
+    runtime_path: ?[]const u8,
+
+    fn init(b: *std.Build) Coverage {
+        const enabled = b.option(bool, "coverage", "Enable zig-cov instrumentation") orelse false;
+        const runtime_path = b.option([]const u8, "coverage-rt", "Path to zig-cov-rt.o");
+        if (enabled and runtime_path == null)
+            std.debug.panic("-Dcoverage requires -Dcoverage-rt=<path>", .{});
+        return .{
+            .enabled = enabled,
+            .runtime_path = runtime_path,
+        };
+    }
+
+    fn instrumentModule(coverage: Coverage, module: *std.Build.Module) void {
+        if (coverage.enabled) module.fuzz = true;
+    }
+
+    fn instrumentTest(coverage: Coverage, test_executable: *std.Build.Step.Compile) void {
+        if (!coverage.enabled) return;
+        test_executable.use_llvm = true;
+        test_executable.root_module.fuzz = true;
+        test_executable.root_module.link_libc = true;
+        test_executable.root_module.addObjectFile(.{ .cwd_relative = coverage.runtime_path.? });
+    }
+
+    fn excludeCSourceCoverage(
+        coverage: Coverage,
+        b: *std.Build,
+        module: *std.Build.Module,
+    ) void {
+        if (!coverage.enabled) return;
+        for (module.link_objects.items) |link_object| switch (link_object) {
+            .c_source_file => |source| source.flags = cFlags(b, source.flags, true),
+            .c_source_files => |sources| sources.flags = cFlags(b, sources.flags, true),
+            else => {},
+        };
+    }
+};
+
+// Root fuzz instrumentation also reaches linked C-family sources. zcov's
+// runtime does not provide every callback those sources emit, so keep native
+// dependencies outside the coverage graph.
+const no_c_coverage = "-fno-sanitize-coverage=trace-pc-guard,trace-cmp,inline-8bit-counters,pc-table";
+
+fn cFlags(
+    b: *std.Build,
+    base: []const []const u8,
+    disable_coverage: bool,
+) []const []const u8 {
+    if (!disable_coverage) return base;
+    const flags = b.allocator.alloc([]const u8, base.len + 1) catch @panic("OOM");
+    @memcpy(flags[0..base.len], base);
+    flags[base.len] = no_c_coverage;
+    return flags;
+}
+
 /// Builds the same static FreeType and HarfBuzz sources Ghostty uses for font
 /// faces and shaping. Telar leaves system zlib disabled, so FreeType's bundled
 /// gzip decoder remains self-contained and the frontend gains no runtime
@@ -485,6 +558,7 @@ fn addFreeType(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    disable_coverage: bool,
 ) *std.Build.Module {
     const upstream = b.dependency("freetype", .{});
     const harfbuzz = b.dependency("harfbuzz", .{});
@@ -497,7 +571,7 @@ fn addFreeType(
     });
     module.addIncludePath(upstream.path("include"));
     module.addIncludePath(harfbuzz.path("src"));
-    const flags: []const []const u8 = if (target.result.os.tag == .windows)
+    const base_flags: []const []const u8 = if (target.result.os.tag == .windows)
         &.{
             "-DFT2_BUILD_LIBRARY",
             "-fno-sanitize=undefined",
@@ -509,6 +583,7 @@ fn addFreeType(
             "-DHAVE_FCNTL_H",
             "-fno-sanitize=undefined",
         };
+    const flags = cFlags(b, base_flags, disable_coverage);
     module.addCSourceFiles(.{
         .root = upstream.path(""),
         .files = freetype_sources,
@@ -530,7 +605,7 @@ fn addFreeType(
             upstream.path("src/base/ftdebug.c"),
         .flags = flags,
     });
-    const harfbuzz_flags: []const []const u8 = if (target.result.os.tag == .windows)
+    const harfbuzz_base_flags: []const []const u8 = if (target.result.os.tag == .windows)
         &.{
             "-DHAVE_STDBOOL_H",
             "-DHAVE_FREETYPE=1",
@@ -552,6 +627,7 @@ fn addFreeType(
             "-DHAVE_FT_DONE_MM_VAR=1",
             "-DHAVE_FT_GET_TRANSFORM=1",
         };
+    const harfbuzz_flags = cFlags(b, harfbuzz_base_flags, disable_coverage);
     module.addCSourceFile(.{
         .file = harfbuzz.path("src/harfbuzz.cc"),
         .flags = harfbuzz_flags,

@@ -72,6 +72,14 @@ pub const Workspace = struct {
         return null;
     }
 
+    pub fn findTabConst(workspace: *const Workspace, tab_id: schema.TabId) ?*const Tab {
+        for (&workspace.tabs) |*slot| {
+            const tab = if (slot.*) |*value| value else continue;
+            if (tab.id == tab_id) return tab;
+        }
+        return null;
+    }
+
     pub fn tabIndex(workspace: *const Workspace, tab_id: schema.TabId) ?usize {
         for (workspace.tabs[0..workspace.tab_count], 0..) |slot, index|
             if (slot != null and slot.?.id == tab_id) return index;
@@ -242,6 +250,29 @@ pub const WorkspaceStore = struct {
         return workspace.findTab(location.tab_id);
     }
 
+    pub fn findConst(
+        store: *const WorkspaceStore,
+        location: schema.WorkspaceLocation,
+    ) ?*const Workspace {
+        const workspace_id = switch (location) {
+            .workspace => |id| id,
+            .worktree => return null,
+        };
+        for (&store.items) |*slot| {
+            const workspace = if (slot.*) |*value| value else continue;
+            if (workspace.id == workspace_id) return workspace;
+        }
+        return null;
+    }
+
+    pub fn findTabConst(
+        store: *const WorkspaceStore,
+        location: schema.TabLocation,
+    ) ?*const Tab {
+        const workspace = store.findConst(location.workspace) orelse return null;
+        return workspace.findTabConst(location.tab_id);
+    }
+
     pub fn createTab(
         store: *WorkspaceStore,
         workspace_location: schema.WorkspaceLocation,
@@ -322,12 +353,12 @@ pub const WorkspaceStore = struct {
     }
 
     pub fn descriptors(
-        store: *WorkspaceStore,
+        store: *const WorkspaceStore,
         workspace_location: schema.WorkspaceLocation,
         panes: *const PaneStore,
         output: *[max_tabs_per_workspace]schema.TabDescriptor,
     ) ?DescriptorSnapshot {
-        const workspace = store.find(workspace_location) orelse return null;
+        const workspace = store.findConst(workspace_location) orelse return null;
         for (workspace.tabs[0..workspace.tab_count], 0..) |*slot, index| {
             const tab = &slot.*.?;
             const location: schema.TabLocation = .{

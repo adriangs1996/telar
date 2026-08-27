@@ -34,7 +34,17 @@ def load(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
 
 
 def validate_metadata(baseline: dict[str, Any], candidate: dict[str, Any]) -> None:
-    fields = ("zig", "mode", "arch", "cpu", "os", "cols", "rows")
+    fields = (
+        "zig",
+        "mode",
+        "arch",
+        "cpu",
+        "os",
+        "cols",
+        "rows",
+        "samples",
+        "sample_target_ns",
+    )
     mismatches = [
         f"{field}: {baseline.get(field)!r} != {candidate.get(field)!r}"
         for field in fields

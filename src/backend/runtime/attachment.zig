@@ -1,332 +1,278 @@
-//! Per-client graphics synchronization and runtime-side KGP quotas.
+//! Per-client synchronization of one runtime-owned pane.
 //!
-//! The runtime owns child image bytes and quotas; each `Attachment` tracks
-//! what one client has acknowledged and streams the difference through the
-//! bounded transport.
+//! `Attachment` is the supported seam. Cell projection and graphics transfer
+//! remain private synchronization modules with independent state and budgets.
 
 const std = @import("std");
-const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const history = @import("../history/root.zig");
 const pane_mod = @import("../pane/root.zig");
-const blit = pane_mod.blit;
 const media_mod = @import("../media/root.zig");
 const pty = @import("../pty/root.zig");
+const cell = @import("attachment/cell.zig");
+const graphics = @import("attachment/graphics.zig");
 
 const Io = std.Io;
 const schema = core.schema;
-const diagnostics = core.diagnostics;
 const GraphicsBudget = pane_mod.GraphicsBudget;
 const Pane = pane_mod.Pane;
 const SlotIndex = pane_mod.SlotIndex;
 const max_panes = pane_mod.max_panes;
 
-const shm_supported =
-    builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
-
-/// One counter for every attachment in the process, so a name can never be
-/// reused while any process might still unlink the previous owner of it.
-var shared_freeze_sequence = std.atomic.Value(u64).init(0);
-/// Random per-process prefix. Names stay unguessable so another local user
-/// cannot squat the next one; content is protected by the 0600 mode either
-/// way.
-var shared_freeze_nonce = std.atomic.Value(u32).init(0);
-
-/// Seeds the name prefix from the platform CSPRNG. Called once at server
-/// startup; without it names fall back to a pid-derived prefix that is still
-/// unique but guessable, which only enables the squatting nuisance above.
 pub fn initSharedFreezeNonce(io: Io) void {
-    var bytes: [4]u8 = undefined;
-    io.random(&bytes);
-    shared_freeze_nonce.store(@as(u32, @bitCast(bytes)) | 1, .monotonic);
-}
-
-/// Copies one frozen frame into a fresh runtime-owned shared memory object
-/// and returns its name, or null when the platform or a race denies it and
-/// the caller must fall back to the heap copy. One memcpy, no allocation.
-fn freezeSharedPixels(pixels: []const u8) ?core.graphics.ShmName {
-    if (comptime !shm_supported) return null;
-    var nonce = shared_freeze_nonce.load(.monotonic);
-    if (nonce == 0) {
-        nonce = @as(u32, @bitCast(std.c.getpid())) | 1;
-        shared_freeze_nonce.store(nonce, .monotonic);
-    }
-    const sequence = shared_freeze_sequence.fetchAdd(1, .monotonic);
-    var text: [core.graphics.max_shm_name_bytes]u8 = undefined;
-    const printed = std.fmt.bufPrint(&text, "/tlr{x:0>8}{x}", .{ nonce, sequence }) catch
-        return null;
-    const name = core.graphics.ShmName.init(printed) catch return null;
-    const fd = std.c.shm_open(
-        name.sliceZ(),
-        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
-        @as(u16, 0o600),
-    );
-    if (std.posix.errno(fd) != .SUCCESS) return null;
-    defer _ = std.c.close(fd);
-    if (std.c.ftruncate(fd, @intCast(pixels.len)) != 0) {
-        _ = std.c.shm_unlink(name.sliceZ());
-        return null;
-    }
-    const map = std.posix.mmap(
-        null,
-        pixels.len,
-        .{ .READ = true, .WRITE = true },
-        std.c.MAP{ .TYPE = .SHARED },
-        fd,
-        0,
-    ) catch {
-        _ = std.c.shm_unlink(name.sliceZ());
-        return null;
-    };
-    defer std.posix.munmap(map);
-    @memcpy(map[0..pixels.len], pixels);
-    return name;
+    graphics.initSharedFreezeNonce(io);
 }
 
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 pub const Attachment = struct {
-    pub const KnownImage = struct { key: core.graphics.ImageKey };
-    pub const KnownPlacement = struct { placement: core.graphics.Placement };
-    pub const Transfer = struct {
-        metadata: core.graphics.Image,
-        pixels: []u8,
-        /// Set when the frozen copy lives in a runtime-owned shared memory
-        /// object instead of `pixels`. The client maps it; the host terminal
-        /// unlinks it after consuming, and whoever discards it first unlinks
-        /// it too, which is idempotent because names are never reused.
-        shared_name: ?core.graphics.ShmName = null,
-        /// Bytes reserved against the media allocator for this transfer.
-        /// `pixels.len` for the heap path, the image length for the shared
-        /// path whose `pixels` slice stays empty.
-        reserved_len: usize = 0,
-        placements: [core.graphics.max_placements_per_pane]core.graphics.Placement = undefined,
-        placement_count: usize = 0,
-        placement_index: usize = 0,
-        offset: usize = 0,
-        metadata_sent: bool = false,
-    };
-    pub const SnapshotState = enum { begin_pending, open, idle };
+    pub const GraphicsCounts = struct { images: u32, placements: u32 };
+    pub const Prepared = struct {
+        bytes: []const u8,
+        effect: Effect,
 
+        const Effect = union(enum) {
+            cwd: u64,
+            foreground: u64,
+            cells,
+            exit,
+            graphics: GraphicsCounts,
+        };
+    };
+
+    pub const CommitEffect = struct {
+        detach_after_send: ?schema.PaneId = null,
+        graphics_message: bool = false,
+        graphics: GraphicsCounts = .{ .images = 0, .placements = 0 },
+    };
     pane: *Pane,
-    acknowledged: core.ui.Buffer,
-    acknowledged_cursor: schema.frame.Cursor = .{},
-    acknowledged_mouse: schema.frame.Mouse = .{},
-    acknowledged_input_modes: schema.frame.InputModes = .{},
-    acknowledged_scroll: schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 },
-    projected: core.ui.Buffer,
-    projected_damage: []bool,
-    projected_state: vt.RenderState = .empty,
-    viewport_pin: ?*vt.Pin = null,
-    viewport_screen: vt.ScreenSet.Key,
-    observed_cell_revision: u64 = 0,
+    cells: cell.Sync,
+    graphics: graphics.Sync,
     observed_cwd_revision: u64 = 0,
     observed_foreground_revision: u64 = 0,
-    next_frame_id: u64 = 1,
-    acknowledged_frame_id: u64 = 0,
-    outstanding_frame_id: u64 = 0,
-    frame_sent_ns: u64 = 0,
-    snapshot_pending: bool = true,
     exit_sent: bool = false,
-    graphics_snapshot: SnapshotState = .begin_pending,
-    graphics_revision: u64 = 1,
-    graphics_target_revision: u64 = 0,
-    graphics_batch_active: bool = false,
-    observed_graphics_revision: u64 = 0,
-    graphics_credit: usize = core.graphics.max_image_bytes_per_pane,
-    /// The client declared it can map runtime-named shared memory. Off by
-    /// default: shared transport is negotiated, never assumed, so a future
-    /// remote client keeps the chunked path.
-    shared_transport: bool = false,
-    /// Image and placement messages encoded since the runtime last harvested
-    /// them into its telemetry counters.
-    sent_images: u32 = 0,
-    sent_placements: u32 = 0,
-    transfer: ?Transfer = null,
-    known_images: [core.graphics.max_images_per_pane]?KnownImage =
-        [_]?KnownImage{null} ** core.graphics.max_images_per_pane,
-    known_placements: [core.graphics.max_placements_per_pane]?KnownPlacement =
-        [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane,
-    gpa: std.mem.Allocator,
 
     pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
-        var acknowledged = try core.ui.Buffer.init(gpa, pane.screen.w, pane.screen.h);
-        errdefer acknowledged.deinit();
-        var projected = try core.ui.Buffer.init(gpa, pane.screen.w, pane.screen.h);
-        errdefer projected.deinit();
-        const projected_damage = try gpa.alloc(bool, pane.screen.h);
-        errdefer gpa.free(projected_damage);
-        @memset(projected_damage, false);
         return .{
             .pane = pane,
-            .acknowledged = acknowledged,
-            .projected = projected,
-            .projected_damage = projected_damage,
-            .viewport_screen = pane.terminal.screens.active_key,
-            .gpa = gpa,
-            .graphics_snapshot = if (!pane.graphics_present)
-                .idle
-            else
-                .begin_pending,
-            .observed_graphics_revision = if (!pane.graphics_present)
-                pane.graphics_revision
-            else
-                0,
+            .cells = try .init(gpa, pane),
+            .graphics = .init(gpa, pane),
         };
     }
 
     pub fn deinit(attachment: *Attachment) void {
-        attachment.clearViewport();
-        attachment.freeTransfer();
-        attachment.projected_state.deinit(attachment.gpa);
-        attachment.gpa.free(attachment.projected_damage);
-        attachment.projected.deinit();
-        attachment.acknowledged.deinit();
+        attachment.cells.deinit(attachment.pane);
+        attachment.graphics.deinit();
     }
 
     pub fn resizeIfNeeded(attachment: *Attachment) !bool {
-        if (attachment.acknowledged.w == attachment.pane.screen.w and
-            attachment.acknowledged.h == attachment.pane.screen.h)
-        {
-            return false;
-        }
-        try attachment.acknowledged.resize(
-            attachment.pane.screen.w,
-            attachment.pane.screen.h,
-        );
-        try pane_mod.resizeScreenStorage(
-            attachment.gpa,
-            &attachment.projected,
-            &attachment.projected_damage,
-            attachment.pane.screen.w,
-            attachment.pane.screen.h,
-        );
-        attachment.outstanding_frame_id = 0;
-        attachment.snapshot_pending = true;
-        return true;
+        return attachment.cells.resizeIfNeeded(attachment.pane);
     }
 
-    fn syncViewportScreen(attachment: *Attachment) void {
-        const active_key = attachment.pane.terminal.screens.active_key;
-        if (attachment.viewport_screen == active_key) return;
-        attachment.clearViewport();
-        attachment.viewport_screen = active_key;
-    }
-
-    pub fn clearViewport(attachment: *Attachment) void {
-        if (attachment.viewport_pin) |pin| {
-            const screen = attachment.pane.terminal.screens.get(attachment.viewport_screen).?;
-            screen.scroll(.{ .active = {} });
-            screen.pages.untrackPin(pin);
-        }
-        attachment.viewport_pin = null;
-    }
-
-    /// Moves only this attachment. The terminal's canonical viewport is
-    /// restored before returning, so another client never observes the move.
     pub fn setViewport(attachment: *Attachment, requested: u32) !void {
-        const terminal_allocations = diagnostics.enterTerminalAllocations();
-        defer terminal_allocations.restore();
-        attachment.syncViewportScreen();
-        const screen = attachment.pane.terminal.screens.active;
-        if (attachment.viewport_pin) |pin| screen.scroll(.{ .pin = pin.* }) else screen.scroll(.{ .active = {} });
-        screen.scroll(.{ .row = requested });
-        const scrollbar = screen.pages.scrollbar();
-        if (scrollbar.offset + scrollbar.len >= scrollbar.total) {
-            screen.scroll(.{ .active = {} });
-            attachment.clearViewport();
-        } else {
-            const top = screen.pages.pin(.{ .viewport = .{} }).?;
-            if (attachment.viewport_pin) |pin| {
-                pin.* = top;
-            } else {
-                attachment.viewport_pin = try screen.pages.trackPin(top);
-            }
-            screen.scroll(.{ .active = {} });
-        }
-        attachment.snapshot_pending = true;
+        return attachment.cells.setViewport(attachment.pane, requested);
     }
 
-    pub const Projection = struct {
-        buffer: *const core.ui.Buffer,
-        damaged_rows: []const bool,
-        cursor: schema.frame.Cursor,
-        scroll: schema.frame.Scroll,
-    };
+    pub fn requestCellSnapshot(attachment: *Attachment) void {
+        attachment.cells.requestSnapshot();
+    }
 
-    pub fn project(attachment: *Attachment, force: bool) !Projection {
-        attachment.syncViewportScreen();
+    pub fn outstandingFrameId(attachment: *const Attachment) u64 {
+        return attachment.cells.outstandingFrameId();
+    }
+
+    pub fn observedCellRevision(attachment: *const Attachment) u64 {
+        return attachment.cells.observed_revision;
+    }
+
+    pub fn acknowledgeFrame(attachment: *Attachment, frame_id: u64, now_ns: u64) ?u64 {
+        return attachment.cells.acknowledge(frame_id, now_ns);
+    }
+
+    pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?Prepared {
         const pane = attachment.pane;
-        const screen = pane.terminal.screens.active;
-        if (attachment.viewport_pin) |pin| {
-            if (pin.garbage) pin.garbage = false;
-            screen.scroll(.{ .pin = pin.* });
-            defer screen.scroll(.{ .active = {} });
-            {
-                const terminal_allocations = diagnostics.enterTerminalAllocations();
-                defer terminal_allocations.restore();
-                try attachment.projected_state.update(attachment.gpa, &pane.terminal);
-            }
-            _ = blit.blit(
-                &attachment.projected,
-                attachment.projected.area(),
-                &pane.terminal,
-                &attachment.projected_state,
-                .{ .force = force, .damaged_rows = attachment.projected_damage },
-            );
-            return .{
-                .buffer = &attachment.projected,
-                .damaged_rows = attachment.projected_damage,
-                .cursor = .{},
-                .scroll = scrollState(screen.pages.scrollbar()),
-            };
-        }
+        if (attachment.observed_cwd_revision == pane.cwd.revision) return null;
         return .{
-            .buffer = &pane.screen,
-            .damaged_rows = pane.damaged_rows,
-            .cursor = pane.cursor,
-            .scroll = scrollState(screen.pages.scrollbar()),
+            .bytes = try schema.encodePaneCwd(buffer, .{
+                .pane_id = pane.id,
+                .cwd = pane.cwd.slice(),
+            }),
+            .effect = .{ .cwd = pane.cwd.revision },
         };
     }
 
-    fn scrollState(value: anytype) schema.frame.Scroll {
+    pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?Prepared {
+        const pane = attachment.pane;
+        if (attachment.observed_foreground_revision == pane.foreground_revision) return null;
         return .{
-            .total_rows = @intCast(@min(value.total, std.math.maxInt(u32))),
-            .offset = @intCast(@min(value.offset, std.math.maxInt(u32))),
+            .bytes = try schema.encodePaneForeground(buffer, .{
+                .pane_id = pane.id,
+                .name = pane.agent_process_cache.name(),
+            }),
+            .effect = .{ .foreground = pane.foreground_revision },
+        };
+    }
+
+    pub fn prepareNextCells(
+        attachment: *Attachment,
+        io: Io,
+        buffer: []u8,
+        metrics: anytype,
+    ) !?Prepared {
+        const pane = attachment.pane;
+        if (pane.ingest_pending) return null;
+        if (attachment.cells.snapshot_pending) {
+            const payload = (try attachment.cells.prepare(io, buffer, pane, true, metrics)) orelse
+                unreachable;
+            attachment.cells.snapshot_pending = false;
+            return .{ .bytes = payload, .effect = .cells };
+        }
+        if (attachment.cells.hasOutstanding() or
+            (!pane.dirty and attachment.cells.observed_revision == pane.cell_revision))
+            return null;
+        const payload = (try attachment.cells.prepare(io, buffer, pane, false, metrics)) orelse
+            return null;
+        return .{ .bytes = payload, .effect = .cells };
+    }
+
+    pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?Prepared {
+        const pane = attachment.pane;
+        if (pane.ingest_pending or attachment.exit_sent or !pane.output_done or
+            pane.exit == null or attachment.outstandingFrameId() != 0) return null;
+        const exit = pane.exit.?;
+        return .{
+            .bytes = try schema.encodePaneExited(buffer, .{
+                .pane_id = pane.id,
+                .kind = switch (exit) {
+                    .exited => .exited,
+                    .signaled => .signaled,
+                },
+                .value = switch (exit) {
+                    .exited => |status| status,
+                    .signaled => |signal| @intFromEnum(signal),
+                },
+            }),
+            .effect = .exit,
         };
     }
 
     pub fn resetGraphics(attachment: *Attachment) void {
-        attachment.freeTransfer();
-        attachment.graphics_snapshot = .begin_pending;
-        attachment.graphics_batch_active = false;
-        attachment.graphics_target_revision = 0;
-        attachment.observed_graphics_revision = 0;
-        attachment.transfer = null;
-        attachment.known_images = [_]?KnownImage{null} ** core.graphics.max_images_per_pane;
-        attachment.known_placements = [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane;
+        attachment.graphics.reset();
+    }
+
+    pub fn configureGraphics(attachment: *Attachment, shared: bool) void {
+        attachment.graphics.shared_transport = shared;
+    }
+
+    pub fn grantGraphicsCredit(attachment: *Attachment, bytes: usize) bool {
+        if (bytes > core.graphics.max_image_bytes_per_pane - attachment.graphics.credit)
+            return false;
+        attachment.graphics.credit += bytes;
+        return true;
+    }
+
+    pub fn graphicsCredit(attachment: *const Attachment) usize {
+        return attachment.graphics.credit;
+    }
+
+    pub fn hasFrozenGraphics(attachment: *const Attachment) bool {
+        return attachment.graphics.transfer != null;
+    }
+
+    pub fn hasGraphicsWork(attachment: *const Attachment) bool {
+        return attachment.graphics.snapshot != .idle or
+            attachment.graphics.transfer != null or
+            attachment.graphics.observed_revision != attachment.pane.graphics_revision;
+    }
+
+    pub fn prepareNextGraphics(
+        attachment: *Attachment,
+        buffer: []u8,
+        global_credit: usize,
+        live_storage_available: bool,
+    ) !?Prepared {
+        const payload = (try encodeNextGraphics(
+            buffer,
+            attachment,
+            global_credit,
+            live_storage_available,
+        )) orelse return null;
+        return .{
+            .bytes = payload,
+            .effect = .{ .graphics = attachment.takeGraphicsCounts() },
+        };
+    }
+
+    pub fn abandonGraphics(attachment: *Attachment) void {
+        abandonGraphicsBatch(attachment);
+    }
+
+    pub fn takeGraphicsCounts(attachment: *Attachment) GraphicsCounts {
+        const result: GraphicsCounts = .{
+            .images = attachment.graphics.sent_images,
+            .placements = attachment.graphics.sent_placements,
+        };
+        attachment.graphics.sent_images = 0;
+        attachment.graphics.sent_placements = 0;
+        return result;
+    }
+
+    pub fn stageGraphics(attachment: *Attachment, global_credit: usize) !StageResult {
+        return stageNextTransfer(attachment, global_credit);
+    }
+
+    pub fn graphicsCaughtUp(attachment: *const Attachment) bool {
+        return !attachment.graphics.batch_active and
+            attachment.graphics.observed_revision == attachment.pane.graphics_revision;
+    }
+
+    pub fn graphicsTransferBytes(attachment: *const Attachment) usize {
+        return if (attachment.graphics.transfer) |transfer| transfer.reserved_len else 0;
+    }
+
+    pub fn commitPrepared(attachment: *Attachment, prepared: Prepared) CommitEffect {
+        return switch (prepared.effect) {
+            .cwd => |revision| effect: {
+                attachment.observed_cwd_revision = revision;
+                break :effect .{};
+            },
+            .foreground => |revision| effect: {
+                attachment.observed_foreground_revision = revision;
+                break :effect .{};
+            },
+            .cells => .{},
+            .exit => effect: {
+                attachment.exit_sent = true;
+                break :effect .{ .detach_after_send = attachment.pane.id };
+            },
+            .graphics => |counts| .{ .graphics_message = true, .graphics = counts },
+        };
     }
 
     pub fn freeTransfer(attachment: *Attachment) void {
-        if (attachment.transfer) |transfer| {
-            attachment.gpa.free(transfer.pixels);
-            attachment.pane.media_allocator.releaseManual(transfer.reserved_len);
-            if (transfer.shared_name) |name| if (!transfer.metadata_sent) {
-                // The client never learned this name, so nobody else can
-                // reclaim the object.
-                _ = std.c.shm_unlink(name.sliceZ());
-            };
-        }
-        attachment.transfer = null;
+        attachment.graphics.freeTransfer();
     }
 };
 
 pub const AttachmentStore = struct {
+    pub const capacity = max_panes;
+    pub const Iterator = struct {
+        store: *const AttachmentStore,
+        position: usize = 0,
+
+        pub fn next(self: *Iterator) ?*const Attachment {
+            while (self.position < self.store.items.len) {
+                defer self.position += 1;
+                if (self.store.items[self.position]) |*value| return value;
+            }
+            return null;
+        }
+    };
+
     items: [max_panes]?Attachment = [_]?Attachment{null} ** max_panes,
     count: usize = 0,
     index: SlotIndex(2 * max_panes) = .{},
-    next_send: usize = 0,
     workspace: ?schema.WorkspaceLocation = null,
 
     pub fn find(store: *AttachmentStore, pane_id: schema.PaneId) ?*Attachment {
@@ -334,6 +280,34 @@ pub const AttachmentStore = struct {
         const attachment = &store.items[slot].?;
         std.debug.assert(attachment.pane.id == pane_id);
         return attachment;
+    }
+
+    pub fn at(store: *AttachmentStore, index: usize) ?*Attachment {
+        if (index >= store.items.len) return null;
+        return if (store.items[index]) |*attachment| attachment else null;
+    }
+
+    pub fn iterator(store: *const AttachmentStore) Iterator {
+        return .{ .store = store };
+    }
+
+    pub fn len(store: *const AttachmentStore) usize {
+        return store.count;
+    }
+
+    pub fn currentWorkspace(store: *const AttachmentStore) ?schema.WorkspaceLocation {
+        return store.workspace;
+    }
+
+    pub fn configureGraphics(store: *AttachmentStore, shared: bool) void {
+        for (&store.items) |*slot| {
+            const attachment = if (slot.*) |*value| value else continue;
+            attachment.configureGraphics(shared);
+        }
+    }
+
+    pub fn forgetWorkspaceIfEmpty(store: *AttachmentStore) void {
+        if (store.count == 0) store.workspace = null;
     }
 
     pub fn attach(
@@ -375,6 +349,17 @@ pub const AttachmentStore = struct {
         return store.workspace != null and std.meta.eql(store.workspace.?, workspace);
     }
 
+    pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
+        var outstanding: usize = 0;
+        for (store.items) |slot| {
+            const attachment = slot orelse continue;
+            outstanding +|= core.graphics.max_image_bytes_per_pane -
+                @min(attachment.graphicsCredit(), core.graphics.max_image_bytes_per_pane);
+        }
+        return core.graphics.max_image_bytes_global -|
+            @min(outstanding, core.graphics.max_image_bytes_global);
+    }
+
     pub fn deinit(store: *AttachmentStore) void {
         for (&store.items) |*slot| {
             if (slot.*) |*attachment| attachment.deinit();
@@ -382,7 +367,6 @@ pub const AttachmentStore = struct {
         }
         store.index.reset();
         store.count = 0;
-        store.next_send = 0;
         store.workspace = null;
     }
 };
@@ -434,9 +418,9 @@ pub fn enforceGraphicsCounts(io: Io, pane: *Pane, screen_key: vt.ScreenSet.Key) 
 /// revision is marked observed so the send loop cannot spin on the failure.
 pub fn abandonGraphicsBatch(attachment: *Attachment) void {
     attachment.freeTransfer();
-    attachment.graphics_batch_active = false;
-    attachment.graphics_snapshot = .idle;
-    attachment.observed_graphics_revision = attachment.pane.graphics_revision;
+    attachment.graphics.batch_active = false;
+    attachment.graphics.snapshot = .idle;
+    attachment.graphics.observed_revision = attachment.pane.graphics_revision;
 }
 
 pub fn encodeNextGraphics(
@@ -447,18 +431,18 @@ pub fn encodeNextGraphics(
 ) !?[]const u8 {
     const pane = attachment.pane;
     const storage = &pane.media.terminal.screens.active.kitty_images;
-    if (!attachment.graphics_batch_active) {
-        attachment.graphics_target_revision = pane.graphics_revision;
-        attachment.graphics_revision = @max(pane.graphics_revision, @as(u64, 1));
-        attachment.graphics_batch_active = true;
+    if (!attachment.graphics.batch_active) {
+        attachment.graphics.target_revision = pane.graphics_revision;
+        attachment.graphics.revision = @max(pane.graphics_revision, @as(u64, 1));
+        attachment.graphics.batch_active = true;
     }
-    const revision = attachment.graphics_revision;
+    const revision = attachment.graphics.revision;
 
-    if (attachment.graphics_snapshot == .begin_pending) {
-        attachment.known_images = [_]?Attachment.KnownImage{null} ** core.graphics.max_images_per_pane;
-        attachment.known_placements = [_]?Attachment.KnownPlacement{null} ** core.graphics.max_placements_per_pane;
+    if (attachment.graphics.snapshot == .begin_pending) {
+        attachment.graphics.known_images = [_]?graphics.Sync.KnownImage{null} ** core.graphics.max_images_per_pane;
+        attachment.graphics.known_placements = [_]?graphics.Sync.KnownPlacement{null} ** core.graphics.max_placements_per_pane;
         attachment.freeTransfer();
-        attachment.graphics_snapshot = .open;
+        attachment.graphics.snapshot = .open;
         return try schema.encodeGraphicsSnapshot(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
@@ -466,7 +450,7 @@ pub fn encodeNextGraphics(
         });
     }
 
-    if (attachment.transfer) |*transfer| {
+    if (attachment.graphics.transfer) |*transfer| {
         if (!transfer.metadata_sent) {
             // The flag flips only after a successful encode; on failure the
             // abandon path still owns the shared object and unlinks it.
@@ -478,7 +462,7 @@ pub fn encodeNextGraphics(
                     .name = name,
                 });
                 transfer.metadata_sent = true;
-                attachment.sent_images +|= 1;
+                attachment.graphics.sent_images +|= 1;
                 return payload;
             }
             const payload = try schema.encodeGraphicsImage(buffer, .{
@@ -487,7 +471,7 @@ pub fn encodeNextGraphics(
                 .image = transfer.metadata,
             });
             transfer.metadata_sent = true;
-            attachment.sent_images +|= 1;
+            attachment.graphics.sent_images +|= 1;
             return payload;
         }
         if (transfer.offset < transfer.pixels.len) {
@@ -511,7 +495,7 @@ pub fn encodeNextGraphics(
                 known.placement = placement
             else
                 try rememberPlacement(attachment, placement);
-            attachment.sent_placements +|= 1;
+            attachment.graphics.sent_placements +|= 1;
             return try schema.encodeGraphicsPlacement(buffer, .{
                 .pane_id = pane.id,
                 .revision = revision,
@@ -530,7 +514,7 @@ pub fn encodeNextGraphics(
     // Keep the currently displayed generation until its replacement image and
     // placements have crossed the bounded transport. Exterior IDs include the
     // generation, so both may coexist without aliasing during the handoff.
-    for (&attachment.known_images) |*slot| {
+    for (&attachment.graphics.known_images) |*slot| {
         const known = slot.* orelse continue;
         const current = storage.imageById(known.key.image_id);
         if (current != null and current.?.generation == known.key.generation) continue;
@@ -558,7 +542,7 @@ pub fn encodeNextGraphics(
         .idle => {},
     }
 
-    for (&attachment.known_placements) |*slot| {
+    for (&attachment.graphics.known_placements) |*slot| {
         const known = slot.* orelse continue;
         if (findPlacement(storage, known.placement.virtual_id) != null) continue;
         slot.* = null;
@@ -582,7 +566,7 @@ pub fn encodeNextGraphics(
             if (std.meta.eql(known.placement, placement)) continue;
             known.placement = placement;
         } else try rememberPlacement(attachment, placement);
-        attachment.sent_placements +|= 1;
+        attachment.graphics.sent_placements +|= 1;
         return try schema.encodeGraphicsPlacement(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
@@ -590,10 +574,10 @@ pub fn encodeNextGraphics(
         });
     }
 
-    attachment.observed_graphics_revision = attachment.graphics_target_revision;
-    attachment.graphics_batch_active = false;
-    if (attachment.graphics_snapshot == .open) {
-        attachment.graphics_snapshot = .idle;
+    attachment.graphics.observed_revision = attachment.graphics.target_revision;
+    attachment.graphics.batch_active = false;
+    if (attachment.graphics.snapshot == .open) {
+        attachment.graphics.snapshot = .idle;
         return try schema.encodeGraphicsSnapshot(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
@@ -625,10 +609,10 @@ pub const StageResult = enum {
 /// which is what keeps a continuously streaming pane from ceiling out at the
 /// rate of coincidences between "media idle" and "socket ready".
 pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageResult {
-    if (attachment.transfer != null) return .staged;
+    if (attachment.graphics.transfer != null) return .staged;
     // The begin branch of the walk resets known state and frees any transfer;
     // staging before it would only create work for it to throw away.
-    if (attachment.graphics_snapshot == .begin_pending) return .idle;
+    if (attachment.graphics.snapshot == .begin_pending) return .idle;
     const pane = attachment.pane;
     const storage = &pane.media.terminal.screens.active.kitty_images;
     var image_iterator = storage.images.iterator();
@@ -658,22 +642,22 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
             .byte_len = pixels.len,
         };
         _ = try metadata.validate(pane.graphics_storage_limit);
-        if (pixels.len > attachment.graphics_credit or pixels.len > global_credit)
+        if (pixels.len > attachment.graphics.credit or pixels.len > global_credit)
             return .blocked;
         if (!pane.media_allocator.reserveManual(pixels.len))
             return error.GraphicsQuotaExceeded;
         errdefer pane.media_allocator.releaseManual(pixels.len);
-        var transfer: Attachment.Transfer = .{
+        var transfer: graphics.Sync.Transfer = .{
             .metadata = metadata,
             .pixels = &.{},
             .reserved_len = pixels.len,
         };
-        if (attachment.shared_transport)
-            transfer.shared_name = freezeSharedPixels(pixels);
+        if (attachment.graphics.shared_transport)
+            transfer.shared_name = graphics.freezeSharedPixels(pixels);
         if (transfer.shared_name == null)
-            transfer.pixels = try attachment.gpa.dupe(u8, pixels);
-        attachment.graphics_credit -= pixels.len;
-        attachment.transfer = transfer;
+            transfer.pixels = try attachment.graphics.gpa.dupe(u8, pixels);
+        attachment.graphics.credit -= pixels.len;
+        attachment.graphics.transfer = transfer;
         var placement_iterator = storage.placements.iterator();
         while (placement_iterator.next()) |placement_entry| {
             if (placement_entry.key_ptr.image_id != image.id) continue;
@@ -683,10 +667,10 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
                 placement_entry.value_ptr.*,
                 image.*,
             ) orelse continue;
-            const index = attachment.transfer.?.placement_count;
+            const index = attachment.graphics.transfer.?.placement_count;
             if (index == core.graphics.max_placements_per_pane) break;
-            attachment.transfer.?.placements[index] = placement;
-            attachment.transfer.?.placement_count += 1;
+            attachment.graphics.transfer.?.placements[index] = placement;
+            attachment.graphics.transfer.?.placement_count += 1;
         }
         return .staged;
     }
@@ -694,7 +678,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
 }
 
 pub fn knowsImage(attachment: *const Attachment, key: core.graphics.ImageKey) bool {
-    for (attachment.known_images) |slot| if (slot) |known| {
+    for (attachment.graphics.known_images) |slot| if (slot) |known| {
         if (std.meta.eql(known.key, key)) return true;
     };
     return false;
@@ -702,7 +686,7 @@ pub fn knowsImage(attachment: *const Attachment, key: core.graphics.ImageKey) bo
 
 pub fn rememberImage(attachment: *Attachment, key: core.graphics.ImageKey) !void {
     if (knowsImage(attachment, key)) return;
-    for (&attachment.known_images) |*slot| if (slot.* == null) {
+    for (&attachment.graphics.known_images) |*slot| if (slot.* == null) {
         slot.* = .{ .key = key };
         return;
     };
@@ -713,7 +697,7 @@ pub fn rememberImage(attachment: *Attachment, key: core.graphics.ImageKey) !void
 /// older generations of the same logical image no longer need attachment
 /// slots. The client retires them as part of the same atomic handoff.
 fn forgetReplacedGenerations(attachment: *Attachment, current: core.graphics.ImageKey) void {
-    for (&attachment.known_images) |*slot| {
+    for (&attachment.graphics.known_images) |*slot| {
         const known = slot.* orelse continue;
         if (known.key.image_id == current.image_id and
             known.key.generation != current.generation)
@@ -724,14 +708,14 @@ fn forgetReplacedGenerations(attachment: *Attachment, current: core.graphics.Ima
 }
 
 pub fn forgetPlacementsForImage(attachment: *Attachment, key: core.graphics.ImageKey) void {
-    for (&attachment.known_placements) |*slot| {
+    for (&attachment.graphics.known_placements) |*slot| {
         const known = slot.* orelse continue;
         if (std.meta.eql(known.placement.key, key)) slot.* = null;
     }
 }
 
-pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*Attachment.KnownPlacement {
-    for (&attachment.known_placements) |*slot| {
+pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*graphics.Sync.KnownPlacement {
+    for (&attachment.graphics.known_placements) |*slot| {
         const known = if (slot.*) |*value| value else continue;
         if (known.placement.virtual_id == virtual_id) return known;
     }
@@ -739,7 +723,7 @@ pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*Attachment.Kno
 }
 
 pub fn rememberPlacement(attachment: *Attachment, placement: core.graphics.Placement) !void {
-    for (&attachment.known_placements) |*slot| if (slot.* == null) {
+    for (&attachment.graphics.known_placements) |*slot| if (slot.* == null) {
         slot.* = .{ .placement = placement };
         return;
     };
@@ -810,8 +794,8 @@ test "attachments keep independent scrollback viewports" {
     defer second.deinit();
 
     try first.setViewport(0);
-    const first_projection = try first.project(true);
-    const second_projection = try second.project(true);
+    const first_projection = try first.cells.project(pane, true);
+    const second_projection = try second.cells.project(pane, true);
     try std.testing.expectEqual(@as(u32, 0), first_projection.scroll.offset);
     try std.testing.expect(second_projection.scroll.atBottom(pane.screen.h));
     try std.testing.expect(!std.mem.eql(
@@ -885,16 +869,16 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
         messages += 1;
         try std.testing.expect(messages < 64);
     }
-    try std.testing.expectEqual(Attachment.SnapshotState.idle, attachment.graphics_snapshot);
-    try std.testing.expectEqual(pane.graphics_revision, attachment.observed_graphics_revision);
+    try std.testing.expectEqual(graphics.SnapshotState.idle, attachment.graphics.snapshot);
+    try std.testing.expectEqual(pane.graphics_revision, attachment.graphics.observed_revision);
 
     // Residual media errors abandon the batch and leave cells flowing.
-    attachment.graphics_snapshot = .open;
-    attachment.graphics_batch_active = true;
+    attachment.graphics.snapshot = .open;
+    attachment.graphics.batch_active = true;
     abandonGraphicsBatch(&attachment);
-    try std.testing.expectEqual(Attachment.SnapshotState.idle, attachment.graphics_snapshot);
-    try std.testing.expect(!attachment.graphics_batch_active);
-    try std.testing.expectEqual(pane.graphics_revision, attachment.observed_graphics_revision);
+    try std.testing.expectEqual(graphics.SnapshotState.idle, attachment.graphics.snapshot);
+    try std.testing.expect(!attachment.graphics.batch_active);
+    try std.testing.expectEqual(pane.graphics_revision, attachment.graphics.observed_revision);
 }
 
 test "graphics transfers wait for pane and client memory credit" {
@@ -949,18 +933,18 @@ test "graphics transfers wait for pane and client memory credit" {
 
     // Snapshot framing itself consumes no image memory.
     try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 3, true) != null);
-    attachment.graphics_credit = 3;
+    attachment.graphics.credit = 3;
     try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 4, true) == null);
-    try std.testing.expect(attachment.transfer == null);
+    try std.testing.expect(attachment.graphics.transfer == null);
 
-    attachment.graphics_credit = 4;
+    attachment.graphics.credit = 4;
     try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 3, true) == null);
-    try std.testing.expect(attachment.transfer == null);
+    try std.testing.expect(attachment.graphics.transfer == null);
 
     const payload = (try encodeNextGraphics(&buffer, &attachment, 4, true)).?;
     try std.testing.expect((try schema.decodeServer(payload)) == .graphics_image);
-    try std.testing.expectEqual(@as(usize, 0), attachment.graphics_credit);
-    try std.testing.expect(attachment.transfer != null);
+    try std.testing.expectEqual(@as(usize, 0), attachment.graphics.credit);
+    try std.testing.expect(attachment.graphics.transfer != null);
 }
 
 test "a staged transfer drains while the media actor stays busy" {
@@ -1024,20 +1008,20 @@ test "a staged transfer drains while the media actor stays busy" {
     // The runtime stages at its media-idle boundary; the send loop then
     // drains the frozen copy while the media actor is busy again.
     try std.testing.expectEqual(StageResult.staged, try stageNextTransfer(&attachment, credit));
-    try std.testing.expect(attachment.transfer != null);
+    try std.testing.expect(attachment.graphics.transfer != null);
     try std.testing.expect((try schema.decodeServer(
         (try encodeNextGraphics(&buffer, &attachment, credit, false)).?,
     )) == .graphics_image);
     try std.testing.expect((try schema.decodeServer(
         (try encodeNextGraphics(&buffer, &attachment, credit, false)).?,
     )) == .graphics_image_chunk);
-    try std.testing.expectEqual(@as(u32, 1), attachment.sent_images);
+    try std.testing.expectEqual(@as(u32, 1), attachment.graphics.sent_images);
 
     // With the transfer drained the walk needs live storage; the batch stays
     // open instead of closing blind.
     try std.testing.expect((try encodeNextGraphics(&buffer, &attachment, credit, false)) == null);
-    try std.testing.expect(attachment.graphics_batch_active);
-    try std.testing.expect(attachment.transfer == null);
+    try std.testing.expect(attachment.graphics.batch_active);
+    try std.testing.expect(attachment.graphics.transfer == null);
 
     // Once the media actor rests, the batch completes normally.
     var closed = false;
@@ -1047,13 +1031,13 @@ test "a staged transfer drains while the media actor stays busy" {
             closed = true;
     }
     try std.testing.expect(closed);
-    try std.testing.expectEqual(pane.graphics_revision, attachment.observed_graphics_revision);
+    try std.testing.expectEqual(pane.graphics_revision, attachment.graphics.observed_revision);
 }
 
 test "completed replacements do not exhaust attachment image slots" {
     var attachment: Attachment = undefined;
-    attachment.known_images =
-        [_]?Attachment.KnownImage{null} ** core.graphics.max_images_per_pane;
+    attachment.graphics.known_images =
+        [_]?graphics.Sync.KnownImage{null} ** core.graphics.max_images_per_pane;
 
     const replacements = core.graphics.max_images_per_pane * 2;
     for (1..replacements + 1) |generation| {
@@ -1067,7 +1051,7 @@ test "completed replacements do not exhaust attachment image slots" {
     }
 
     var known_count: usize = 0;
-    for (attachment.known_images) |slot| known_count += @intFromBool(slot != null);
+    for (attachment.graphics.known_images) |slot| known_count += @intFromBool(slot != null);
     try std.testing.expectEqual(@as(usize, 1), known_count);
 }
 
@@ -1127,7 +1111,7 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
 }
 
 test "a shared-transport attachment ships one name instead of pixel chunks" {
-    if (comptime !shm_supported) return error.SkipZigTest;
+    if (comptime !graphics.shared_memory_supported) return error.SkipZigTest;
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     var service = try history.Service.init(gpa, ":memory:");
@@ -1176,7 +1160,7 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
 
     var attachment = try Attachment.init(gpa, pane);
     defer attachment.deinit();
-    attachment.shared_transport = true;
+    attachment.graphics.shared_transport = true;
     var buffer: [1024]u8 = undefined;
 
     // Snapshot begin, then the complete image as one small named message.
@@ -1224,7 +1208,7 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
 }
 
 test "an abandoned unsent shared transfer unlinks its object" {
-    if (comptime !shm_supported) return error.SkipZigTest;
+    if (comptime !graphics.shared_memory_supported) return error.SkipZigTest;
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     var service = try history.Service.init(gpa, ":memory:");
@@ -1257,10 +1241,10 @@ test "an abandoned unsent shared transfer unlinks its object" {
         pane.destroy();
     }
 
-    const name = freezeSharedPixels(&[_]u8{ 1, 2, 3, 255 }).?;
+    const name = graphics.freezeSharedPixels(&[_]u8{ 1, 2, 3, 255 }).?;
     var attachment = try Attachment.init(gpa, pane);
     defer attachment.deinit();
-    attachment.transfer = .{
+    attachment.graphics.transfer = .{
         .metadata = .{
             .key = .{ .image_id = 7, .generation = 1 },
             .format = .rgba,

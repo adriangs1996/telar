@@ -117,7 +117,8 @@ questions already.
 
 Outside the default build, because it links sqlite3 and libnghttp2 from the
 system and the core builds with nothing but a Zig compiler. `zig build proxy`
-and `zig build test-proxy` ask for it.
+and `zig build test-proxy-example` ask for it. The runtime proxy has its own
+`zig build test-backend-proxy` gate.
 
 **`main.zig`** runs four actors feeding one event queue, and a main loop
 that owns every piece of mutable state. Actors only move bytes.

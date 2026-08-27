@@ -137,6 +137,8 @@ pub const Pipeline = struct {
     enabled: bool,
     dropped_events: u64 = 0,
     dropped_bytes: u64 = 0,
+    queue_event_high_water: usize = 0,
+    queue_byte_high_water: usize = 0,
     resets: u64 = 0,
     failures: u64 = 0,
 
@@ -169,6 +171,8 @@ pub const Pipeline = struct {
         pipeline.enabled = true;
         pipeline.dropped_events = 0;
         pipeline.dropped_bytes = 0;
+        pipeline.queue_event_high_water = 0;
+        pipeline.queue_byte_high_water = 0;
         pipeline.resets = 0;
         pipeline.failures = 0;
     }
@@ -191,6 +195,7 @@ pub const Pipeline = struct {
             batch = &pipeline.batches[pipeline.active];
             _ = batch.pushOutput(bytes);
         }
+        pipeline.observeQueueDepth();
     }
 
     pub fn queueResize(pipeline: *Pipeline, size: schema.TerminalSize) void {
@@ -200,6 +205,7 @@ pub const Pipeline = struct {
             batch = &pipeline.batches[pipeline.active];
             _ = batch.pushResize(size);
         }
+        pipeline.observeQueueDepth();
     }
 
     pub fn hasPending(pipeline: *const Pipeline) bool {
@@ -269,6 +275,17 @@ pub const Pipeline = struct {
         pipeline.dropped_bytes +|= batch.len + incoming_bytes;
         batch.reset();
         batch.reset_before = true;
+    }
+
+    fn observeQueueDepth(pipeline: *Pipeline) void {
+        var events: usize = 0;
+        var bytes: usize = 0;
+        for (&pipeline.batches) |*batch| {
+            events += batch.event_count;
+            bytes += batch.len;
+        }
+        pipeline.queue_event_high_water = @max(pipeline.queue_event_high_water, events);
+        pipeline.queue_byte_high_water = @max(pipeline.queue_byte_high_water, bytes);
     }
 
     fn resetState(pipeline: *Pipeline, size: schema.TerminalSize) !void {

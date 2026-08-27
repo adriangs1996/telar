@@ -68,7 +68,7 @@ on run argv
         repeat with term in terminals of tb
           if (id of term) as text is targetId then
             focus term
-            send mouse position x 600 y 300 to term
+            send mouse position x 1200 y 500 to term
             send mouse button left button action press to term
             send mouse button left button action release to term
             delay 0.2
@@ -223,6 +223,10 @@ def main() -> int:
         ),
         "no_pty_response_drops": bool(runtime_samples)
         and all(int(sample.get("pty_response_dropped", 0)) == 0 for sample in runtime_samples),
+        "no_response_queue_drops": bool(runtime_samples)
+        and all(int(sample.get("response_queue_dropped", 0)) == 0 for sample in runtime_samples),
+        "no_client_resyncs": bool(runtime_samples)
+        and all(int(sample.get("client_resyncs", 0)) == 0 for sample in runtime_samples),
         "no_media_resets": bool(runtime_samples)
         and all(int(sample.get("media_resets", 0)) == 0 for sample in runtime_samples),
         "no_media_drops": bool(runtime_samples)

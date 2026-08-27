@@ -109,6 +109,37 @@ rejections likewise distinguish missing or malformed authorization from an
 otherwise valid credential that is no longer registered, without logging
 either value.
 
+## Test coverage
+
+Telar uses [zcov](https://github.com/ericsssan/zcov) to run the native test
+suites with SanitizerCoverage and write an LCOV tracefile:
+
+```sh
+just coverage
+```
+
+`zig-cov` and its adjacent `zig-cov-rt.o` must be installed together. Set
+`ZIG_COV_BIN` when the executable is not on `PATH`, or
+`TELAR_COVERAGE_FILE` to change the default `coverage.lcov` destination:
+
+```sh
+ZIG_COV_BIN=/path/to/zig-cov just coverage
+```
+
+The coverage build forces LLVM and libc only for native test executables. It
+instruments Telar's Zig-only shared modules and suite roots, while leaving
+C-family dependencies and cross-target compile checks alone. Generated
+packages, caches, and vendored sources are excluded from the report. The
+historical proxy example under `examples/proxy` is outside the default test
+step and therefore outside this report.
+
+Feed the result into `zig-crap` to join line coverage with per-function
+complexity:
+
+```sh
+zig-crap src --lcov coverage.lcov --lcov-base .
+```
+
 ## Performance benchmarks
 
 Run the controlled interactive-path workloads with:
@@ -144,7 +175,8 @@ zig build verify-terminal-browser
 
 Save JSON Lines before and after a change, then compare median time and payload
 bytes per operation. The comparison rejects runs built with different Zig
-versions, optimization modes, CPUs, targets, or screen sizes.
+versions, optimization modes, CPUs, targets, screen sizes, sample counts or
+sample durations.
 
 ```sh
 zig build bench -- --json > /tmp/telar-before.jsonl
@@ -157,3 +189,25 @@ python3 tools/bench_compare.py /tmp/telar-before.jsonl /tmp/telar-after.jsonl
 median regresses by more than five percent. `--fail-payload-above 0` also
 rejects any wire payload growth. Keep benchmark result files outside the
 repository because absolute timings belong to the machine that produced them.
+
+Architecture changes use five repeated runs of 200 samples. `perf_gate.py`
+compares the median p50, p95 and p99 across those runs, rejects regressions over
+5%, 8% and 10% respectively, rejects wire-payload changes, and emits no verdict
+when either group is noisier than those bounds:
+
+```sh
+python3 tools/perf_gate.py \
+  --baseline '/tmp/telar-before-*.jsonl' \
+  --candidate '/tmp/telar-after-*.jsonl'
+```
+
+CI cadence and release-candidate requirements are recorded in
+[`docs/performance-gates.md`](docs/performance-gates.md).
+
+The runtime observation proxy and the independent historical example use
+separate gates:
+
+```sh
+zig build test-backend-proxy
+zig build test-proxy-example
+```

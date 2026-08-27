@@ -115,6 +115,8 @@ pub const Service = struct {
     started: bool = false,
     event_storage: [event_capacity]middleware.Event = undefined,
     events: Io.Queue(middleware.Event),
+    queued_events: std.atomic.Value(u64) = .init(0),
+    event_queue_high_water: std.atomic.Value(u64) = .init(0),
     dropped_events: std.atomic.Value(u64) = .init(0),
     rejected_connections: std.atomic.Value(u64) = .init(0),
     invalid_authorization_rejections: std.atomic.Value(u64) = .init(0),
@@ -209,7 +211,12 @@ pub const Service = struct {
     }
 
     pub fn receive(service: *Service, io: Io) anyerror!middleware.Event {
-        return service.events.getOne(io);
+        while (true) {
+            var event = try service.events.getOne(io);
+            _ = service.queued_events.fetchSub(1, .monotonic);
+            if (service.credentials.contains(service.io, event.credential)) return event;
+            std.crypto.secureZero(u8, &event.credential.token);
+        }
     }
 
     pub fn credentialUrl(
@@ -230,6 +237,14 @@ pub const Service = struct {
         service.credentials.remove(service.io, credential);
     }
 
+    pub fn unregisterPane(
+        service: *Service,
+        pane_id: schema.PaneId,
+        pane_generation: u64,
+    ) void {
+        service.credentials.removePane(service.io, pane_id, pane_generation);
+    }
+
     /// Register before `run` starts. The immutable pipeline can later be
     /// backed by a bounded worker without giving it access to tunnel state.
     pub fn addTransformer(service: *Service, transformer: middleware.Transformer) !void {
@@ -241,8 +256,14 @@ pub const Service = struct {
 
     fn enqueueEvent(context: *anyopaque, io: Io, event: middleware.Event) void {
         const service: *Service = @ptrCast(@alignCast(context));
+        if (!service.credentials.contains(service.io, event.credential)) return;
         const queued = service.events.put(io, &.{event}, 0) catch 0;
-        if (queued == 0) _ = service.dropped_events.fetchAdd(1, .monotonic);
+        if (queued == 0) {
+            _ = service.dropped_events.fetchAdd(1, .monotonic);
+            return;
+        }
+        const depth = service.queued_events.fetchAdd(1, .monotonic) + 1;
+        _ = service.event_queue_high_water.fetchMax(depth, .monotonic);
     }
 };
 
@@ -271,6 +292,24 @@ const CredentialRegistry = struct {
         for (&registry.slots) |*slot| {
             const existing = if (slot.*) |*value| value else continue;
             if (!sameCredential(existing.*, credential)) continue;
+            std.crypto.secureZero(u8, &existing.token);
+            slot.* = null;
+            return;
+        }
+    }
+
+    fn removePane(
+        registry: *CredentialRegistry,
+        io: Io,
+        pane_id: schema.PaneId,
+        pane_generation: u64,
+    ) void {
+        registry.mutex.lockUncancelable(io);
+        defer registry.mutex.unlock(io);
+        for (&registry.slots) |*slot| {
+            const existing = if (slot.*) |*value| value else continue;
+            if (existing.pane_id != pane_id or existing.pane_generation != pane_generation)
+                continue;
             std.crypto.secureZero(u8, &existing.token);
             slot.* = null;
             return;
@@ -838,7 +877,7 @@ fn listenTestOrigin(io: Io) !Bound {
     return error.TestOriginPortUnavailable;
 }
 
-test "passthrough CONNECT relays opaque bytes without TLS interception" {
+test "passthrough CONNECT relays bytes with a saturated observation queue" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const payload = "not-a-tls-client-hello";
@@ -868,6 +907,25 @@ test "passthrough CONNECT relays opaque bytes without TLS interception" {
         .token = .{0x11} ** identity.token_bytes,
     };
     try service.registerCredential(credential);
+    const observation: middleware.Event = .{
+        .credential = credential,
+        .provider = .codex,
+        .phase = .response_activity,
+        .protocol = .http11,
+        .connection_id = 1,
+        .observed_at_ms = 1,
+    };
+    for (0..event_capacity) |_| service.pipeline.publish(io, observation);
+    service.pipeline.publish(io, observation);
+    try std.testing.expectEqual(
+        @as(u64, event_capacity),
+        service.queued_events.load(.monotonic),
+    );
+    try std.testing.expectEqual(
+        @as(u64, event_capacity),
+        service.event_queue_high_water.load(.monotonic),
+    );
+    try std.testing.expectEqual(@as(u64, 1), service.dropped_events.load(.monotonic));
     var worker = try io.concurrent(Service.run, .{service});
     defer worker.cancel(io) catch {};
 
@@ -929,6 +987,79 @@ test "proxy credentials are revoked with their pane" {
     try std.testing.expectError(error.DuplicateProxyCredential, registry.register(io, credential));
     registry.remove(io, credential);
     try std.testing.expect(!registry.contains(io, credential));
+}
+
+test "pane revocation removes only that generation" {
+    const io = std.testing.io;
+    var registry: CredentialRegistry = .{};
+    const current: identity.Credential = .{
+        .pane_id = try schema.id.pane(7),
+        .pane_generation = 2,
+        .token = .{0x5a} ** identity.token_bytes,
+    };
+    const next: identity.Credential = .{
+        .pane_id = current.pane_id,
+        .pane_generation = 3,
+        .token = .{0x6b} ** identity.token_bytes,
+    };
+    try registry.register(io, current);
+    try registry.register(io, next);
+    registry.removePane(io, current.pane_id, current.pane_generation);
+    try std.testing.expect(!registry.contains(io, current));
+    try std.testing.expect(registry.contains(io, next));
+}
+
+test "receive discards observations queued before pane revocation" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const service = try Service.create(io, gpa, .{
+        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
+        .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
+        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+    });
+    defer service.destroy();
+
+    const current: identity.Credential = .{
+        .pane_id = try schema.id.pane(7),
+        .pane_generation = 2,
+        .token = .{0x5a} ** identity.token_bytes,
+    };
+    const next: identity.Credential = .{
+        .pane_id = current.pane_id,
+        .pane_generation = 3,
+        .token = .{0x6b} ** identity.token_bytes,
+    };
+    try service.registerCredential(current);
+    service.pipeline.publish(io, .{
+        .credential = current,
+        .provider = .codex,
+        .phase = .request_started,
+        .protocol = .http11,
+        .connection_id = 1,
+        .observed_at_ms = 1,
+    });
+    service.unregisterPane(current.pane_id, current.pane_generation);
+    try service.registerCredential(next);
+    service.pipeline.publish(io, .{
+        .credential = next,
+        .provider = .codex,
+        .phase = .request_started,
+        .protocol = .http11,
+        .connection_id = 2,
+        .observed_at_ms = 2,
+    });
+
+    const received = try service.receive(io);
+    try std.testing.expectEqual(next.pane_generation, received.credential.pane_generation);
+    try std.testing.expectEqual(@as(u64, 0), service.queued_events.load(.monotonic));
 }
 
 test "loopback service rejects a CONNECT without a live pane capability" {

@@ -3,13 +3,13 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
-const graphics_sync = @import("graphics_sync.zig");
+const attachment_mod = @import("attachment.zig");
 const history = @import("../history/root.zig");
 const pane_mod = @import("../pane/root.zig");
 
 const Io = std.Io;
 const diagnostics = core.diagnostics;
-const AttachmentStore = graphics_sync.AttachmentStore;
+const AttachmentStore = attachment_mod.AttachmentStore;
 const PaneStore = pane_mod.PaneStore;
 
 pub const RuntimeMetrics = struct {
@@ -84,9 +84,12 @@ pub fn formatRuntimeTelemetry(
     panes: *const PaneStore,
     history_service: *const history.Service,
     response_queue_depth: usize,
+    response_queue_high_water: usize,
     response_queue_dropped: u64,
     proxy_active: bool,
     proxy_active_connections: u32,
+    proxy_event_queue_depth: u64,
+    proxy_event_queue_high_water: u64,
     proxy_dropped_events: u64,
     proxy_rejected_connections: u64,
     proxy_invalid_authorization_rejections: u64,
@@ -124,6 +127,8 @@ pub fn formatRuntimeTelemetry(
     var graphics_loading_bytes: usize = 0;
     var media_queue_events: usize = 0;
     var media_queue_bytes: usize = 0;
+    var media_queue_event_high_water: usize = 0;
+    var media_queue_byte_high_water: usize = 0;
     var media_dropped_events: u64 = 0;
     var media_dropped_bytes: u64 = 0;
     var pty_response_queue_depth: usize = 0;
@@ -144,6 +149,8 @@ pub fn formatRuntimeTelemetry(
         history_input_dropped +|= pane.history_observer.dropped_events;
         media_dropped_events +|= pane.media.dropped_events;
         media_dropped_bytes +|= pane.media.dropped_bytes;
+        media_queue_event_high_water +|= pane.media.queue_event_high_water;
+        media_queue_byte_high_water +|= pane.media.queue_byte_high_water;
         pane_media_used += pane.media_allocator.used;
         vt_scrollback_bytes += pane.vtScrollbackBytes();
         vt_screen_bytes += pane.vtScreenBytes();
@@ -178,15 +185,14 @@ pub fn formatRuntimeTelemetry(
         }
     }
     for (attachment_stores) |attachments| {
-        attachment_count += attachments.count;
-        for (attachments.items) |slot| {
-            const active = slot orelse continue;
+        attachment_count += attachments.len();
+        var iterator = attachments.iterator();
+        while (iterator.next()) |active| {
             if (active.pane.ingest_pending) continue;
-            if (active.transfer) |transfer| {
-                graphics_transfer_bytes += transfer.pixels.len;
-                graphics_resident_bytes += transfer.pixels.len;
-            }
-            if (active.outstanding_frame_id != 0) outstanding_frames += 1;
+            const transfer_bytes = active.graphicsTransferBytes();
+            graphics_transfer_bytes += transfer_bytes;
+            graphics_resident_bytes += transfer_bytes;
+            if (active.outstandingFrameId() != 0) outstanding_frames += 1;
         }
     }
     const history_stats = history_service.statsSnapshot();
@@ -244,13 +250,16 @@ pub fn formatRuntimeTelemetry(
             "\"media_unavailable_frames\":{d},\"media_forwarded_frames\":{d}," ++
             "\"media_resets\":{d},\"media_failures\":{d}," ++
             "\"media_queue_events\":{d},\"media_queue_bytes\":{d}," ++
+            "\"media_queue_event_high_water\":{d}," ++
+            "\"media_queue_byte_high_water\":{d}," ++
             "\"media_dropped_events\":{d},\"media_dropped_bytes\":{d}," ++
             "\"graphics_images\":{d},\"graphics_placements\":{d}," ++
             "\"graphics_resident_bytes\":{d},\"graphics_transfer_bytes\":{d}," ++
             "\"graphics_loading_bytes\":{d}," ++
             "\"pty_response_queue_depth\":{d},\"pty_response_dropped\":{d}," ++
             "\"pane_input_queue_depth\":{d},\"pane_input_dropped_bytes\":{d}," ++
-            "\"response_queue_depth\":{d},\"response_queue_dropped\":{d},",
+            "\"response_queue_depth\":{d},\"response_queue_high_water\":{d}," ++
+            "\"response_queue_dropped\":{d},",
         .{
             metrics.graphics_messages,
             metrics.graphics_bytes,
@@ -265,6 +274,8 @@ pub fn formatRuntimeTelemetry(
             metrics.media_failures,
             media_queue_events,
             media_queue_bytes,
+            media_queue_event_high_water,
+            media_queue_byte_high_water,
             media_dropped_events,
             media_dropped_bytes,
             graphics_images,
@@ -277,6 +288,7 @@ pub fn formatRuntimeTelemetry(
             pane_input_queue_depth,
             pane_input_dropped_bytes,
             response_queue_depth,
+            response_queue_high_water,
             response_queue_dropped,
         },
     );
@@ -310,7 +322,10 @@ pub fn formatRuntimeTelemetry(
     try output.print(
         "\"agent_process_inspections\":{d},\"agent_process_misses\":{d}," ++
             "\"proxy_active\":{d},\"proxy_observations\":{d}," ++
-            "\"proxy_active_connections\":{d},\"proxy_dropped_events\":{d}," ++
+            "\"proxy_active_connections\":{d}," ++
+            "\"proxy_event_queue_depth\":{d}," ++
+            "\"proxy_event_queue_high_water\":{d}," ++
+            "\"proxy_dropped_events\":{d}," ++
             "\"proxy_rejected_connections\":{d}," ++
             "\"proxy_invalid_authorization_rejections\":{d}," ++
             "\"proxy_unknown_credential_rejections\":{d}," ++
@@ -328,6 +343,8 @@ pub fn formatRuntimeTelemetry(
             @intFromBool(proxy_active),
             metrics.proxy_observations,
             proxy_active_connections,
+            proxy_event_queue_depth,
+            proxy_event_queue_high_water,
             proxy_dropped_events,
             proxy_rejected_connections,
             proxy_invalid_authorization_rejections,
@@ -457,7 +474,10 @@ test "runtime telemetry reports retained memory domains" {
             &service,
             0,
             0,
+            0,
             false,
+            0,
+            0,
             0,
             0,
             0,

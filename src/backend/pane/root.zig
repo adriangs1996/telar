@@ -428,7 +428,6 @@ pub const Pane = struct {
     history_session_started: bool = false,
     history_session_finished: bool = false,
     history_exit_queued: bool = false,
-    proxy_token: ?[16]u8 = null,
     workspace_path: []u8,
     cwd: CwdState,
     pending_size: ?schema.TerminalSize = null,
@@ -639,7 +638,6 @@ pub const Pane = struct {
         pane.media_allocator.detach();
         pane.terminal.deinit(gpa);
         pane.session.deinit();
-        if (pane.proxy_token) |*token| std.crypto.secureZero(u8, token);
         gpa.destroy(pane);
     }
 
@@ -1018,6 +1016,14 @@ pub const PaneStore = struct {
 
     pub fn resolve(store: *PaneStore, key: PaneKey) ?*Pane {
         const pane = store.find(key.id) orelse return null;
+        if (pane.generation != key.generation) return null;
+        return pane;
+    }
+
+    pub fn resolveConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
+        const slot = store.index.get(schema.id.raw(key.id)) orelse return null;
+        const pane = store.items[slot].?;
+        std.debug.assert(pane.id == key.id);
         if (pane.generation != key.generation) return null;
         return pane;
     }
