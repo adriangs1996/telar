@@ -380,11 +380,25 @@ fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
 
 /// Claude's prompt glyph is meaningful only in the terminal's current screen.
 /// A copy found in raw PTY bytes may have been erased or moved before the batch
-/// finished. The visible cursor must sit immediately after the prompt, which
-/// excludes the stale input row Claude leaves behind while it is working.
+/// finished. Claude may use either the terminal cursor or an inverse-video cell
+/// as its editor cursor. In both cases the cursor must belong to the prompt row,
+/// which excludes the stale input row Claude leaves behind while it is working.
 fn claudeReadyPrompt(terminal: *const vt.Terminal) ?agent_detection.Signal {
-    if (!terminal.modes.get(.cursor_visible)) return null;
-    const cursor = terminal.screens.active.cursor.page_pin.*;
+    const screen = terminal.screens.active;
+    const ready = if (terminal.modes.get(.cursor_visible))
+        promptBeforeTerminalCursor(screen.cursor.page_pin.*)
+    else
+        promptWithSoftwareCursor(screen, terminal.rows);
+    if (!ready) return null;
+    return .{
+        .provider = .claude,
+        .status = .ready,
+        .confidence = 96,
+        .ready_confirmed = true,
+    };
+}
+
+fn promptBeforeTerminalCursor(cursor: vt.Pin) bool {
     const cells = cursor.cells(.left);
     const max_prompt_distance = 8;
     var index = cells.len;
@@ -395,15 +409,46 @@ fn claudeReadyPrompt(terminal: *const vt.Terminal) ?agent_detection.Signal {
         if (!cell.hasText()) continue;
         const codepoint = cell.codepoint();
         if (codepoint == ' ') continue;
-        if (codepoint != 0x276f) return null;
-        return .{
-            .provider = .claude,
-            .status = .ready,
-            .confidence = 96,
-            .ready_confirmed = true,
-        };
+        return codepoint == 0x276f;
     }
-    return null;
+    return false;
+}
+
+fn promptWithSoftwareCursor(screen: *const vt.Screen, rows: u16) bool {
+    const max_prompt_rows = 12;
+    const first_row = rows - @min(rows, max_prompt_rows);
+    for (first_row..rows) |y| {
+        const pin = screen.pages.pin(.{ .viewport = .{ .y = @intCast(y) } }) orelse
+            continue;
+        const cells = pin.cells(.all);
+        var prompt: ?usize = null;
+        for (cells, 0..) |*cell, x| {
+            if (cell.codepoint() == 0x276f and rowPrefixIsBlank(cells[0..x])) {
+                prompt = x;
+                continue;
+            }
+            if (prompt == null or x <= prompt.?) continue;
+            if (cell.content_tag == .bg_color_palette or cell.content_tag == .bg_color_rgb)
+                return true;
+            const cell_style = pin.style(cell);
+            if (cell_style.flags.inverse or hasBackground(cell_style.bg_color)) return true;
+        }
+    }
+    return false;
+}
+
+fn rowPrefixIsBlank(cells: []const vt.Cell) bool {
+    for (cells) |cell| {
+        if (cell.hasText() and cell.codepoint() != ' ') return false;
+    }
+    return true;
+}
+
+fn hasBackground(color: vt.Style.Color) bool {
+    return switch (color) {
+        .none => false,
+        .palette, .rgb => true,
+    };
 }
 
 test "input and output are observed in enqueue order" {
@@ -459,28 +504,16 @@ test "overflow marks the observer for a counted reset" {
 }
 
 test "Claude readiness comes from the prompt at the visible cursor" {
-    var observer: Observer = undefined;
     const size: schema.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
         .cell_height_px = 0,
     };
-    try observer.init(std.testing.io, std.testing.allocator, "/work", size);
-    defer observer.deinit();
-
-    const Noop = struct {
-        fn capture(_: *@This(), _: terminal_history.Command) void {}
-    };
-    var noop: Noop = .{};
-    const clock: terminal_history.Clock = .{ .real_ms = 1, .awake_ns = 1 };
-    observer.queueOutput("Working (1s, esc to interrupt)\r\x1b[2K\xe2\x9d\xaf ", false, clock);
-    try std.testing.expect(observer.seal());
-    var stats: Stats = .{};
-    observer.processSealed(null, size, &stats, &noop, Noop.capture);
-    observer.finishSealed();
-
-    const signal = stats.agent_signal.?;
+    const signal = (try agentSignalForOutput(
+        "Working (1s, esc to interrupt)\r\x1b[2K\xe2\x9d\xaf ",
+        size,
+    )).?;
     try std.testing.expectEqual(agent_detection.Status.ready, signal.status);
     try std.testing.expectEqual(schema.AgentProvider.claude, signal.provider);
     try std.testing.expect(!signal.identity_confirmed);
@@ -488,13 +521,49 @@ test "Claude readiness comes from the prompt at the visible cursor" {
 }
 
 test "a raw Claude prompt with a hidden cursor is not ready" {
-    var observer: Observer = undefined;
     const size: schema.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
         .cell_height_px = 0,
     };
+    try std.testing.expect(try agentSignalForOutput("\x1b[?25l\xe2\x9d\xaf ", size) == null);
+}
+
+test "Claude software cursor confirms readiness while the terminal cursor is hidden" {
+    const size: schema.TerminalSize = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    const signal = (try agentSignalForOutput(
+        "\x1b[?25l\xe2\x9d\xaf \x1b[7my\x1b[27m ma\xc3\xb1ana ?\r\nstatus",
+        size,
+    )).?;
+    try std.testing.expectEqual(agent_detection.Status.ready, signal.status);
+    try std.testing.expectEqual(schema.AgentProvider.claude, signal.provider);
+    try std.testing.expect(signal.ready_confirmed);
+}
+
+test "an inverse status row does not revive a stale Claude prompt" {
+    const size: schema.TerminalSize = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    try std.testing.expect(try agentSignalForOutput(
+        "\x1b[?25l\xe2\x9d\xaf stale request\r\n\x1b[7mworking\x1b[27m",
+        size,
+    ) == null);
+}
+
+fn agentSignalForOutput(
+    output: []const u8,
+    size: schema.TerminalSize,
+) !?agent_detection.Signal {
+    var observer: Observer = undefined;
     try observer.init(std.testing.io, std.testing.allocator, "/work", size);
     defer observer.deinit();
 
@@ -502,15 +571,10 @@ test "a raw Claude prompt with a hidden cursor is not ready" {
         fn capture(_: *@This(), _: terminal_history.Command) void {}
     };
     var noop: Noop = .{};
-    observer.queueOutput(
-        "\x1b[?25l\xe2\x9d\xaf ",
-        false,
-        .{ .real_ms = 1, .awake_ns = 1 },
-    );
+    observer.queueOutput(output, false, .{ .real_ms = 1, .awake_ns = 1 });
     try std.testing.expect(observer.seal());
     var stats: Stats = .{};
     observer.processSealed(null, size, &stats, &noop, Noop.capture);
     observer.finishSealed();
-
-    try std.testing.expect(stats.agent_signal == null);
+    return stats.agent_signal;
 }

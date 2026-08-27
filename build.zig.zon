@@ -3,7 +3,20 @@
     .version = "0.0.0",
     .minimum_zig_version = "0.16.0",
     .fingerprint = 0x45a8ce91699581f1,
-    .paths = .{ "build.zig", "build.zig.zon", "src", "examples", "vendor", "README.md", "LICENSE" },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "examples",
+        "test/fuzz/build.zig",
+        "test/fuzz/build.zig.zon",
+        "test/fuzz/README.md",
+        "test/fuzz/src",
+        "test/fuzz/afl",
+        "vendor",
+        "README.md",
+        "LICENSE",
+    },
     .dependencies = .{
         .ghostty_vt = .{
             .url = "git+https://github.com/ghostty-org/ghostty#a4edca2a90d6cf89900bb058e71cb6860cec78c5",

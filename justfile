@@ -19,11 +19,11 @@ run *args:
 
 # Format the project Zig sources.
 fmt:
-    zig fmt build.zig build.zig.zon src examples benchmarks
+    zig fmt build.zig build.zig.zon src examples benchmarks test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
 
 # Check formatting without changing files.
 fmt-check:
-    zig fmt --check build.zig build.zig.zon src examples benchmarks
+    zig fmt --check build.zig build.zig.zon src examples benchmarks test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
 
 # Run formatting checks and the complete test suite.
 check: fmt-check test
@@ -35,6 +35,14 @@ test *args:
 # Run the native tests with zcov and write coverage.lcov.
 coverage *args:
     tools/coverage.sh {{ args }}
+
+# Build AFL++ harnesses and replay their seed corpus.
+fuzz-check:
+    cd test/fuzz && zig build check
+
+# Run one AFL++ campaign: schema-client, schema-server, or escape.
+fuzz target="schema-client":
+    cd test/fuzz && zig build run-{{ target }}
 
 # Run frontend tests.
 test-frontend:

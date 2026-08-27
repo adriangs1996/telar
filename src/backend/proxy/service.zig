@@ -213,7 +213,7 @@ pub const Service = struct {
     pub fn receive(service: *Service, io: Io) anyerror!middleware.Event {
         while (true) {
             var event = try service.events.getOne(io);
-            _ = service.queued_events.fetchSub(1, .monotonic);
+            releaseEventSlot(&service.queued_events);
             if (service.credentials.contains(service.io, event.credential)) return event;
             std.crypto.secureZero(u8, &event.credential.token);
         }
@@ -257,15 +257,43 @@ pub const Service = struct {
     fn enqueueEvent(context: *anyopaque, io: Io, event: middleware.Event) void {
         const service: *Service = @ptrCast(@alignCast(context));
         if (!service.credentials.contains(service.io, event.credential)) return;
+        // A waiting getter may consume the queue's direct handoff before
+        // `put` returns, so the matching depth must exist before publication.
+        const depth = reserveEventSlot(&service.queued_events) orelse {
+            _ = service.dropped_events.fetchAdd(1, .monotonic);
+            return;
+        };
         const queued = service.events.put(io, &.{event}, 0) catch 0;
         if (queued == 0) {
+            releaseEventSlot(&service.queued_events);
             _ = service.dropped_events.fetchAdd(1, .monotonic);
             return;
         }
-        const depth = service.queued_events.fetchAdd(1, .monotonic) + 1;
         _ = service.event_queue_high_water.fetchMax(depth, .monotonic);
     }
 };
+
+fn reserveEventSlot(queued_events: *std.atomic.Value(u64)) ?u64 {
+    var current = queued_events.load(.monotonic);
+    while (current < event_capacity) {
+        if (queued_events.cmpxchgWeak(
+            current,
+            current + 1,
+            .monotonic,
+            .monotonic,
+        )) |observed| {
+            current = observed;
+            continue;
+        }
+        return current + 1;
+    }
+    return null;
+}
+
+fn releaseEventSlot(queued_events: *std.atomic.Value(u64)) void {
+    const previous = queued_events.fetchSub(1, .monotonic);
+    std.debug.assert(previous != 0);
+}
 
 const CredentialRegistry = struct {
     mutex: Io.Mutex = .init,
@@ -875,6 +903,21 @@ fn listenTestOrigin(io: Io) !Bound {
         return .{ .listener = listener, .port = port };
     }
     return error.TestOriginPortUnavailable;
+}
+
+test "observation event reservations stay bounded and balanced" {
+    var queued_events: std.atomic.Value(u64) = .init(0);
+
+    for (1..event_capacity + 1) |expected_depth| {
+        try std.testing.expectEqual(
+            @as(?u64, @intCast(expected_depth)),
+            reserveEventSlot(&queued_events),
+        );
+    }
+    try std.testing.expect(reserveEventSlot(&queued_events) == null);
+
+    for (0..event_capacity) |_| releaseEventSlot(&queued_events);
+    try std.testing.expectEqual(@as(u64, 0), queued_events.load(.monotonic));
 }
 
 test "passthrough CONNECT relays bytes with a saturated observation queue" {

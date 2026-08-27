@@ -13,3 +13,4 @@ references/*
 state/
 /coverage.lcov
 /*.zcov
+/test/fuzz/afl-out/

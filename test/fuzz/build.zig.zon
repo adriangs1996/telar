@@ -1,0 +1,16 @@
+.{
+    .name = .telar_fuzz,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.16.0",
+    .fingerprint = 0x7587843091a54114,
+    .dependencies = .{
+        .afl = .{ .path = "afl" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "README.md",
+        "src",
+        "afl",
+    },
+}

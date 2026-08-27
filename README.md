@@ -140,6 +140,24 @@ complexity:
 zig-crap src --lcov coverage.lcov --lcov-base .
 ```
 
+## Fuzzing
+
+Telar has development-only AFL++ harnesses for byte-stream boundaries owned by
+Telar:
+
+```sh
+just fuzz-check
+just fuzz schema-client
+just fuzz schema-server
+just fuzz escape
+```
+
+The fuzz package builds instrumented binaries for client IPC schema decoding,
+server IPC schema decoding, and history escape scanners. AFL++ output is kept
+under `test/fuzz/afl-out/` and ignored. The harness glue is never linked into
+Telar's runtime or client binaries. See [`test/fuzz/README.md`](test/fuzz/README.md)
+for setup, replay, and target details.
+
 ## Performance benchmarks
 
 Run the controlled interactive-path workloads with:
