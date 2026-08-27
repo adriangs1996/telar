@@ -291,6 +291,48 @@ pub const Buffer = struct {
             _ = b.writeText(inside, r.x + 2, r.y, t, style);
         }
     }
+
+    /// Draws a box on the outside edge of its cells.
+    ///
+    /// Box-drawing glyphs sit around the centre of a cell. When the cell also
+    /// carries a panel background, half of that background appears outside the
+    /// visible line. Edge-aligned side blocks and terminal decorations keep
+    /// the entire cell on the inside of the frame instead.
+    pub fn edgeBox(b: *Buffer, r: Rect, style: Style, title: ?[]const u8) void {
+        if (r.w < 2 or r.h < 2) return;
+        if (@as(u32, r.x) + r.w - 1 > std.math.maxInt(u16) or
+            @as(u32, r.y) + r.h - 1 > std.math.maxInt(u16)) return;
+        const right = r.x + r.w - 1;
+        const bottom = r.y + r.h - 1;
+
+        var top_style = style;
+        top_style.flags.overline = true;
+        var bottom_style = style;
+        bottom_style.flags.underline = .single;
+        bottom_style.underline_color = style.fg;
+
+        var x = r.x;
+        while (x < right) : (x += 1) {
+            b.setCell(x, r.y, " ", 1, top_style);
+            b.setCell(x, bottom, " ", 1, bottom_style);
+        }
+        b.setCell(right, r.y, " ", 1, top_style);
+        b.setCell(right, bottom, " ", 1, bottom_style);
+        var y = r.y + 1;
+        while (y < bottom) : (y += 1) {
+            b.setCell(r.x, y, "▏", 1, style);
+            b.setCell(right, y, "▕", 1, style);
+        }
+        b.setCell(r.x, r.y, "▏", 1, top_style);
+        b.setCell(right, r.y, "▕", 1, top_style);
+        b.setCell(r.x, bottom, "▏", 1, bottom_style);
+        b.setCell(right, bottom, "▕", 1, bottom_style);
+
+        if (title) |t| {
+            const inside: Rect = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
+            _ = b.writeText(inside, r.x + 2, r.y, t, top_style);
+        }
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -416,6 +458,28 @@ test "right aligned text ends at the right edge" {
     _ = buf.writeRight(r, 0, "6 tasks", .{});
     try testing.expectEqualStrings("s", buf.at(19, 0).?.text());
     try testing.expectEqualStrings("6", buf.at(13, 0).?.text());
+}
+
+test "an edge box keeps its background inside the visible frame" {
+    const gpa = testing.allocator;
+    var buf = try Buffer.init(gpa, 8, 5);
+    defer buf.deinit();
+
+    const background: cell_mod.Color = .{ .rgb = .{ 20, 21, 22 } };
+    const accent: cell_mod.Color = .{ .rgb = .{ 230, 180, 120 } };
+    const area: Rect = .{ .x = 1, .y = 1, .w = 6, .h = 3 };
+    buf.fill(area, " ", .{ .bg = background });
+    buf.edgeBox(area, .{ .fg = accent, .bg = background }, "hi");
+
+    try testing.expect(buf.at(1, 1).?.style.flags.overline);
+    try testing.expectEqualStrings("▏", buf.at(1, 1).?.text());
+    try testing.expectEqualStrings("▕", buf.at(6, 2).?.text());
+    try testing.expectEqual(Style.Underline.single, buf.at(3, 3).?.style.flags.underline);
+    try testing.expect(std.meta.eql(buf.at(3, 3).?.style.underline_color, accent));
+    try testing.expect(std.meta.eql(buf.at(1, 2).?.style.bg, background));
+    try testing.expect(std.meta.eql(buf.at(0, 2).?.style.bg, cell_mod.Color.default));
+    try testing.expectEqualStrings("h", buf.at(3, 1).?.text());
+    try testing.expect(buf.at(3, 1).?.style.flags.overline);
 }
 
 test "an oversized cluster is truncated on a codepoint boundary" {

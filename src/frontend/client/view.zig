@@ -8,6 +8,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const diff = presentation.diff;
 const icon_graphics = @import("../graphics/root.zig").icons;
 const kitty = @import("../graphics/root.zig").kitty;
+const modal_graphics = @import("../graphics/root.zig").modal;
 const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
 const term = presentation.screen;
@@ -52,6 +53,7 @@ const GraphicsPlan = struct {
     provider_mark_count: u8 = 0,
     icons: ui.icons.Plan = .{},
     attachments: attachments.Plan = .{},
+    modal_area: ui.Rect = .{},
 };
 
 pub const NameInput = union(enum) {
@@ -96,6 +98,7 @@ pub const State = struct {
     kitty_sidebar: kitty.KittySidebarRenderer,
     kitty_icons: icon_graphics.Renderer,
     kitty_toasts: toast_graphics.Renderer,
+    kitty_modal: modal_graphics.Renderer,
     attachment_store: attachments.Store,
     graphics_plan: GraphicsPlan = .{},
     graphics_plan_dirty: bool = false,
@@ -131,6 +134,7 @@ pub const State = struct {
             .kitty_sidebar = .init(gpa),
             .kitty_icons = .init(gpa),
             .kitty_toasts = .init(gpa),
+            .kitty_modal = .init(gpa),
             .attachment_store = .init(gpa),
         };
     }
@@ -140,6 +144,7 @@ pub const State = struct {
         state.kitty_sidebar.deinit();
         state.kitty_icons.deinit();
         state.kitty_toasts.deinit();
+        state.kitty_modal.deinit();
         state.attachment_store.deinit();
     }
 
@@ -272,6 +277,7 @@ pub const State = struct {
     ) !void {
         const resolved = try requested.resolve(support);
         const toast_changed = state.kitty_toasts.configure(support, cell_width, cell_height);
+        const modal_changed = state.kitty_modal.configure(support, cell_width, cell_height);
         const icons_changed = state.kitty_icons.configure(support, cell_width, cell_height);
         const attachments_changed = state.attachment_store.configure(
             support,
@@ -280,7 +286,7 @@ pub const State = struct {
         );
         if (state.sidebar_rendering != resolved or state.cell_width_px != cell_width or
             state.cell_height_px != cell_height or toast_changed or icons_changed or
-            attachments_changed)
+            modal_changed or attachments_changed)
         {
             state.sidebar_rendering = resolved;
             state.cell_width_px = cell_width;
@@ -295,6 +301,10 @@ pub const State = struct {
 
     pub fn kittyToasts(state: *State) *toast_graphics.Renderer {
         return &state.kitty_toasts;
+    }
+
+    pub fn kittyModal(state: *State) *modal_graphics.Renderer {
+        return &state.kitty_modal;
     }
 
     pub fn kittyIcons(state: *State) *icon_graphics.Renderer {
@@ -371,6 +381,7 @@ pub const State = struct {
             state.icon_theme,
         );
         state.attachment_store.prepare(state.graphics_plan.attachments);
+        state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
         try state.kitty_sidebar.prepare(
             state.graphics_plan.sidebar_area,
             state.graphics_plan.focused_card,
@@ -394,6 +405,14 @@ pub const State = struct {
 
     pub fn graphicalToastsCover(state: *const State) bool {
         return state.kitty_toasts.covers(&state.notifications);
+    }
+
+    pub fn graphicalModalCovers(state: *const State, area: ui.Rect) bool {
+        return state.kitty_modal.covers(area);
+    }
+
+    pub fn graphicalModalCoversPlan(state: *const State) bool {
+        return state.graphicalModalCovers(state.graphics_plan.modal_area);
     }
 
     pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
@@ -730,6 +749,7 @@ pub const State = struct {
             widgets.attachment_preview.modalArea(state.regions.workbench)
         else
             ui.Rect{};
+        const graphical_modal = state.graphicalModalCovers(current_modal_area);
         if (!state.modal_overlay_area.isEmpty())
             model.copyComposedArea(&state.scratch, state.modal_overlay_area);
         if (!current_modal_area.isEmpty() and
@@ -752,6 +772,7 @@ pub const State = struct {
             state.regions.workbench,
             &attachment_snapshot,
             &attachment_plan,
+            graphical_modal,
         );
         if (hybrid) {
             var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;
@@ -782,6 +803,7 @@ pub const State = struct {
         }
         state.graphics_plan.toast_area = toast_area;
         state.graphics_plan.attachments = attachment_plan;
+        state.graphics_plan.modal_area = drawn_modal_area;
         state.graphics_plan_dirty = true;
 
         var stats: RenderStats = .{};
@@ -1133,7 +1155,14 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     defer screen.deinit();
 
     _ = try state.render(&screen, null, &model, true, null);
-    try std.testing.expectEqualStrings("W", screen.back.at(6, 0).?.text());
+    const workspace_mark = for (state.graphics_plan.icons.slice()) |mark| {
+        if (mark.icon == .workspace_menu) break mark;
+    } else null;
+    try std.testing.expect(workspace_mark != null);
+    try std.testing.expectEqualStrings(
+        "W",
+        screen.back.at(workspace_mark.?.area.x, workspace_mark.?.area.y).?.text(),
+    );
     try std.testing.expect(state.graphics_plan.icons.len != 0);
     _ = try state.prepareGraphics(true);
     try std.testing.expect(state.kittyIcons().retainedBytes() != 0);
@@ -1161,7 +1190,14 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     defer screen.deinit();
 
     _ = try state.render(&screen, null, &model, true, null);
-    try std.testing.expectEqualStrings("\u{2756}", screen.back.at(6, 0).?.text());
+    const marker = for (state.hits.registered()) |entry| {
+        if (std.meta.activeTag(entry.action) == .toggle_workspace_list) break entry.rect;
+    } else null;
+    try std.testing.expect(marker != null);
+    try std.testing.expectEqualStrings(
+        "\u{2756}",
+        screen.back.at(marker.?.x + 1, marker.?.y).?.text(),
+    );
     try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.icons.len);
 }
 

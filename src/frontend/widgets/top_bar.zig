@@ -53,9 +53,19 @@ pub fn render(context: *widget.Context, input: Input) void {
     const badge_width: u16 = if (input.proxy_tls_active) @min(area.w, 3) else 0;
     const row_end = area.x + area.w - badge_width;
 
-    var x: u16 = toggle.x + toggle.w + 1;
-    const marker_width = @min(@as(u16, 3), row_end -| x);
-    const marker_rect: ui.Rect = .{ .x = x, .y = area.y, .w = marker_width, .h = 1 };
+    const safe_start = toggle.x + toggle.w + 1;
+    const safe_width = row_end -| safe_start;
+    const marker_width = @min(@as(u16, 3), safe_width);
+    const active_id = activeWorkspaceId(input.location);
+    const list_width = renderedListWidth(
+        input,
+        active_id,
+        safe_width -| marker_width,
+    );
+    const group_width = marker_width + list_width;
+    const centered_x = area.x + (area.w - group_width) / 2;
+    const group_x = @min(@max(centered_x, safe_start), row_end -| group_width);
+    const marker_rect: ui.Rect = .{ .x = group_x, .y = area.y, .w = marker_width, .h = 1 };
     context.hits.add(marker_rect, .toggle_workspace_list);
     const marker_style: ui.Style = .{
         .fg = if (context.isHovered(.toggle_workspace_list))
@@ -67,18 +77,17 @@ pub fn render(context: *widget.Context, input: Input) void {
     context.buffer.fill(marker_rect, " ", marker_style);
     if (marker_width >= 2) _ = context.drawIcon(
         marker_rect,
-        x + 1,
+        group_x + 1,
         area.y,
         .workspace_menu,
         marker_style,
     );
-    x += marker_width;
+    const list_x = group_x + marker_width;
 
-    const active_id = activeWorkspaceId(input.location);
     if (input.workspaces.count == 0) {
-        renderFallback(context, input, x, row_end, area.y);
+        renderFallback(context, input, list_x, row_end, area.y);
     } else {
-        renderList(context, input, active_id, x, row_end, area.y);
+        renderList(context, input, active_id, list_x, row_end, area.y);
     }
 
     if (input.proxy_tls_active) {
@@ -102,6 +111,35 @@ pub fn render(context: *widget.Context, input: Input) void {
             badge_style,
         );
     }
+}
+
+fn renderedListWidth(input: Input, active_id: ?schema.WorkspaceId, available: u16) u16 {
+    if (input.workspaces.count == 0) {
+        var workspace_buffer: [schema.max_workspace_name_bytes + 16]u8 = undefined;
+        const workspace = workspaceLabel(input.location, input.workspace_name, &workspace_buffer);
+        return @min(ui.measure(workspace) + 1, available);
+    }
+
+    const snapshot = input.workspaces;
+    const active_index = if (active_id) |id| snapshot.indexOf(id) else null;
+    const expanded_width = listWidth(snapshot, active_index, input.workspace_name);
+    if (!input.collapsed and expanded_width <= available) return expanded_width;
+
+    const shown = active_index orelse 0;
+    var width = ui.measure(workspaceNameAt(
+        snapshot,
+        shown,
+        active_index,
+        input.workspace_name,
+    )) + 2;
+    if (snapshot.count > 1) {
+        var counter_buffer: [8]u8 = undefined;
+        const counter = std.fmt.bufPrint(&counter_buffer, " +{d} ", .{
+            snapshot.count - 1,
+        }) catch " + ";
+        width +|= ui.measure(counter);
+    }
+    return @min(width, available);
 }
 
 fn renderList(
@@ -238,12 +276,19 @@ fn listFits(
     active_name: []const u8,
     available: u16,
 ) bool {
+    return listWidth(snapshot, active_index, active_name) <= available;
+}
+
+fn listWidth(
+    snapshot: *const workspace_model.Snapshot,
+    active_index: ?usize,
+    active_name: []const u8,
+) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
         total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) + 2;
-        if (total > available) return false;
     }
-    return true;
+    return total;
 }
 
 fn workspaceNameAt(
@@ -374,4 +419,39 @@ test "sidebar toggle publishes the matching Nerd Font action icon" {
     render(&context, hidden);
     try std.testing.expect(plan.len >= 1);
     try std.testing.expectEqual(ui.icons.Icon.sidebar_expand, plan.slice()[0].icon);
+}
+
+test "workspace navigation is centered independently of the sidebar toggle" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+    };
+    var workspaces: workspace_model.Snapshot = .{};
+    const entries = [_]workspace_model.EntryInput{
+        .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
+    };
+    _ = try workspaces.replace(.{ .revision = 1, .entries = &entries });
+
+    render(&context, .{
+        .area = buffer.area(),
+        .sidebar_visible = true,
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .workspace_name = "telar",
+        .workspaces = &workspaces,
+        .collapsed = false,
+        .proxy_tls_active = false,
+    });
+
+    // The complete 10-column group is centered: marker [15, 18), label [18, 25).
+    try std.testing.expectEqual(widget.Action.toggle_workspace_list, hits.at(16, 0).?);
+    try std.testing.expectEqual(widget.Action.active_workspace, hits.at(18, 0).?);
+    try std.testing.expect(hits.at(5, 0) == null);
 }

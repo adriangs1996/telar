@@ -11,6 +11,7 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const client_telemetry = @import("telemetry.zig");
 const kitty = graphics.kitty;
+const modal_graphics = graphics.modal;
 const toast_graphics = graphics.toast;
 const multiplexer = workspace_capability.multiplexer;
 const pace = presentation.pace;
@@ -133,6 +134,7 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         toast_graphics.idle_after_ns;
     client.view.kittyAttachments().reapRetired();
     const covered_before = client.view.graphicalToastsCover();
+    const modal_covered_before = client.view.graphicalModalCoversPlan();
     const icon_fallback_changed = try client.view.prepareGraphics(media_idle);
     if (icon_fallback_changed) try presenter.requestDraw();
     if (!presenter.mediaWorkPending(client)) return;
@@ -155,6 +157,7 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         .sidebar = client.view.kittySidebar(),
         .icons = client.view.kittyIcons(),
         .toasts = client.view.kittyToasts(),
+        .modal = client.view.kittyModal(),
         .attachments = client.view.kittyAttachments(),
         .allow_toast_transmission = media_idle,
         .metrics = presenter.metrics,
@@ -173,7 +176,9 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
     }
 
-    if (covered_before != client.view.graphicalToastsCover()) {
+    if (covered_before != client.view.graphicalToastsCover() or
+        modal_covered_before != client.view.graphicalModalCoversPlan())
+    {
         client.view.invalidate();
         try presenter.requestDraw();
     }
@@ -191,7 +196,8 @@ fn mediaWorkPending(presenter: *const Presenter, client: *Client) bool {
         (client.capabilities.kitty_graphics == .supported and
             (client.view.graphicsPreparationPending() or client.graphics_store.damage or
                 client.view.kittySidebar().damaged() or client.view.kittyIcons().damaged() or
-                client.view.kittyToasts().damaged() or client.view.kittyAttachments().damaged()));
+                client.view.kittyToasts().damaged() or client.view.kittyModal().damaged() or
+                client.view.kittyAttachments().damaged()));
 }
 
 fn onlyWaitingForMediaIdle(
@@ -203,6 +209,7 @@ fn onlyWaitingForMediaIdle(
     return !media_idle and !client.view.graphicsPreparationPending() and
         !client.graphics_store.damage and !client.view.kittySidebar().damaged() and
         !client.view.kittyIcons().damaged() and !client.view.kittyAttachments().damaged() and
+        !client.view.kittyModal().damaged() and
         client.view.kittyToasts().waitingForMediaIdle();
 }
 
@@ -271,6 +278,7 @@ const CombinedGraphicsWriter = struct {
     sidebar: *kitty.KittySidebarRenderer,
     icons: *icon_graphics.Renderer,
     toasts: *toast_graphics.Renderer,
+    modal: *modal_graphics.Renderer,
     attachments: *attachments.Store,
     allow_toast_transmission: bool,
     metrics: *ClientMetrics,
@@ -281,6 +289,7 @@ const CombinedGraphicsWriter = struct {
         var toast_bytes: usize = 0;
         var sidebar_bytes: usize = 0;
         var icon_bytes: usize = 0;
+        var modal_bytes: usize = 0;
         var attachment_bytes: usize = 0;
 
         // KGP continuation chunks do not identify their image. Whichever
@@ -288,6 +297,8 @@ const CombinedGraphicsWriter = struct {
         // a pane, toast, or icon atlas can never interleave another transfer.
         if (self.attachments.transferInProgress()) {
             attachment_bytes = try self.attachments.write(writer);
+        } else if (self.modal.transferInProgress()) {
+            modal_bytes = try self.modal.write(writer);
         } else if (self.toasts.transferInProgress()) {
             toast_bytes = try self.toasts.write(
                 writer,
@@ -298,13 +309,16 @@ const CombinedGraphicsWriter = struct {
         } else {
             pane_bytes = try self.panes.write(writer);
             if (pane_bytes == 0 and self.panes.store.partial == null) {
-                attachment_bytes = try self.attachments.write(writer);
-                if (attachment_bytes == 0) {
-                    toast_bytes = try self.toasts.write(writer, self.allow_toast_transmission);
-                    if (toast_bytes == 0) {
-                        sidebar_bytes = try self.sidebar.write(writer);
-                        if (sidebar_bytes == 0)
-                            icon_bytes = try self.icons.write(writer);
+                modal_bytes = try self.modal.write(writer);
+                if (modal_bytes == 0) {
+                    attachment_bytes = try self.attachments.write(writer);
+                    if (attachment_bytes == 0) {
+                        toast_bytes = try self.toasts.write(writer, self.allow_toast_transmission);
+                        if (toast_bytes == 0) {
+                            sidebar_bytes = try self.sidebar.write(writer);
+                            if (sidebar_bytes == 0)
+                                icon_bytes = try self.icons.write(writer);
+                        }
                     }
                 }
             }
@@ -314,9 +328,10 @@ const CombinedGraphicsWriter = struct {
             self.metrics.toast_graphics_flushed_bytes += toast_bytes;
             self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
             self.metrics.icon_graphics_flushed_bytes += icon_bytes;
+            self.metrics.modal_graphics_flushed_bytes += modal_bytes;
             self.metrics.attachment_graphics_flushed_bytes += attachment_bytes;
         }
-        return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes + attachment_bytes;
+        return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes + modal_bytes + attachment_bytes;
     }
 };
 

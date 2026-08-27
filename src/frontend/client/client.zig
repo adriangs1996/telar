@@ -834,6 +834,7 @@ pub fn handleTelemetryTickEvent(
             .toast_cache_bytes = client.view.kittyToasts().retainedBytes(),
             .sidebar_cache_bytes = client.view.kittySidebar().retainedBytes(),
             .icon_cache_bytes = client.view.kittyIcons().retainedBytes(),
+            .modal_cache_bytes = client.view.kittyModal().retainedBytes(),
             .attachment_cache_bytes = client.view.kittyAttachments().retainedBytes(),
             .screen_bytes = (client.presenter.screen.front.cells.len +
                 client.presenter.screen.back.cells.len) *

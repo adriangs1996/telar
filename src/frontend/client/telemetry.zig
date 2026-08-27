@@ -48,6 +48,7 @@ pub const Metrics = struct {
     toast_graphics_flushed_bytes: u64 = 0,
     sidebar_graphics_flushed_bytes: u64 = 0,
     icon_graphics_flushed_bytes: u64 = 0,
+    modal_graphics_flushed_bytes: u64 = 0,
     attachment_graphics_flushed_bytes: u64 = 0,
     media_flushes: u64 = 0,
     max_pending_updates: u64 = 0,
@@ -84,6 +85,7 @@ pub const Snapshot = struct {
     toast_cache_bytes: usize,
     sidebar_cache_bytes: usize,
     icon_cache_bytes: usize,
+    modal_cache_bytes: usize,
     attachment_cache_bytes: usize,
     screen_bytes: usize,
     heap: diagnostics.Heap.Snapshot,
@@ -185,6 +187,7 @@ pub fn format(
         "\"toast_graphics_flushed_bytes\":{d}," ++
         "\"sidebar_graphics_flushed_bytes\":{d}," ++
         "\"icon_graphics_flushed_bytes\":{d}," ++
+        "\"modal_graphics_flushed_bytes\":{d}," ++
         "\"attachment_graphics_flushed_bytes\":{d},\"media_flushes\":{d}," ++
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
@@ -195,22 +198,24 @@ pub fn format(
         "\"media_flush_avg_us\":{d},\"media_flush_max_us\":{d}," ++
         "\"draw_late_avg_us\":{d},\"draw_late_max_us\":{d}," ++
         "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}", .{
-        metrics.pane_graphics_flushed_bytes,                   metrics.toast_graphics_flushed_bytes,
-        metrics.sidebar_graphics_flushed_bytes,                metrics.icon_graphics_flushed_bytes,
-        metrics.attachment_graphics_flushed_bytes,             metrics.media_flushes,
-        metrics.decode.average() / std.time.ns_per_us,         metrics.decode.max_ns / std.time.ns_per_us,
-        metrics.apply.average() / std.time.ns_per_us,          metrics.apply.max_ns / std.time.ns_per_us,
-        metrics.compose.average() / std.time.ns_per_us,        metrics.compose.max_ns / std.time.ns_per_us,
-        metrics.ack_enqueue.average() / std.time.ns_per_us,    metrics.ack_enqueue.max_ns / std.time.ns_per_us,
-        metrics.input_enqueue.average() / std.time.ns_per_us,  metrics.input_enqueue.max_ns / std.time.ns_per_us,
-        metrics.flush.average() / std.time.ns_per_us,          metrics.flush.max_ns / std.time.ns_per_us,
-        metrics.media_flush.average() / std.time.ns_per_us,    metrics.media_flush.max_ns / std.time.ns_per_us,
-        metrics.draw_lateness.average() / std.time.ns_per_us,  metrics.draw_lateness.max_ns / std.time.ns_per_us,
-        metrics.paced_interval.average() / std.time.ns_per_us, metrics.paced_interval.max_ns / std.time.ns_per_us,
+        metrics.pane_graphics_flushed_bytes,                metrics.toast_graphics_flushed_bytes,
+        metrics.sidebar_graphics_flushed_bytes,             metrics.icon_graphics_flushed_bytes,
+        metrics.modal_graphics_flushed_bytes,               metrics.attachment_graphics_flushed_bytes,
+        metrics.media_flushes,                              metrics.decode.average() / std.time.ns_per_us,
+        metrics.decode.max_ns / std.time.ns_per_us,         metrics.apply.average() / std.time.ns_per_us,
+        metrics.apply.max_ns / std.time.ns_per_us,          metrics.compose.average() / std.time.ns_per_us,
+        metrics.compose.max_ns / std.time.ns_per_us,        metrics.ack_enqueue.average() / std.time.ns_per_us,
+        metrics.ack_enqueue.max_ns / std.time.ns_per_us,    metrics.input_enqueue.average() / std.time.ns_per_us,
+        metrics.input_enqueue.max_ns / std.time.ns_per_us,  metrics.flush.average() / std.time.ns_per_us,
+        metrics.flush.max_ns / std.time.ns_per_us,          metrics.media_flush.average() / std.time.ns_per_us,
+        metrics.media_flush.max_ns / std.time.ns_per_us,    metrics.draw_lateness.average() / std.time.ns_per_us,
+        metrics.draw_lateness.max_ns / std.time.ns_per_us,  metrics.paced_interval.average() / std.time.ns_per_us,
+        metrics.paced_interval.max_ns / std.time.ns_per_us,
     });
     try writer.print(",\"rss_bytes\":{d},\"lua_used\":{d},\"lua_limit\":{d}," ++
         "\"kitty_store_bytes\":{d},\"toast_cache_bytes\":{d}," ++
         "\"sidebar_cache_bytes\":{d},\"icon_cache_bytes\":{d}," ++
+        "\"modal_cache_bytes\":{d}," ++
         "\"attachment_cache_bytes\":{d}," ++
         "\"screen_bytes\":{d}," ++
         "\"heap_live_bytes\":{d},\"heap_live_allocs\":{d}," ++
@@ -226,6 +231,7 @@ pub fn format(
         state.toast_cache_bytes,
         state.sidebar_cache_bytes,
         state.icon_cache_bytes,
+        state.modal_cache_bytes,
         state.attachment_cache_bytes,
         state.screen_bytes,
         state.heap.live_bytes,
@@ -270,6 +276,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
         .toast_cache_bytes = 8,
         .sidebar_cache_bytes = 12,
         .icon_cache_bytes = 16,
+        .modal_cache_bytes = 18,
         .attachment_cache_bytes = 20,
         .screen_bytes = 80 * 24 * 32,
         .heap = .{

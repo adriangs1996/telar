@@ -13,9 +13,30 @@ return telar.config({
 	api_version = 2,
 
 	runtime = {
+		graphics = {
+			pane_mib = 64,
+			global_mib = 256,
+		},
+
 		proxy = {
 			enabled = true,
 			ca_dir = "state/proxy",
+		},
+
+		agent_descriptions = {
+			command = {
+				"codex",
+				"exec",
+				"--ephemeral",
+				"--ignore-rules",
+				"--skip-git-repo-check",
+				"--model",
+				"gpt-5.6-luna",
+				"-c",
+				'model_reasoning_effort="low"',
+				"-",
+			},
+			timeout_ms = 15000,
 		},
 	},
 
