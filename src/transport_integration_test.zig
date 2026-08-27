@@ -298,6 +298,79 @@ test "partial pane actor startup aborts only that launch" {
     }) |phase| try expectPartialLaunchRecovery(phase);
 }
 
+test "invalid launch cwd fails before workspace commit" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/invalid-cwd.sock", .{directory});
+    var missing_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const missing = try std.fmt.bufPrint(&missing_buffer, "{s}/missing", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, socket_path);
+    defer connection.deinit(io);
+    var send_buffer: [1024]u8 = undefined;
+    var receive_buffer: [4096]u8 = undefined;
+    const arguments = [_][]const u8{ "/bin/sleep", "600" };
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = missing, .arguments = &arguments },
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .request_failed => |failed| {
+            try std.testing.expectEqual(schema.FailureCode.spawn_failed, failed.code);
+            break;
+        },
+        .pane_opened => return error.InvalidCwdPaneBecameVisible,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .pane_opened => break,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    try connection.send(io, try schema.encodeRequestRuntimeState(&send_buffer));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .workspace_list => |list| {
+            var entries = list.entries();
+            const only = (try entries.next()).?;
+            try std.testing.expectEqualStrings(directory, only.path);
+            try std.testing.expect((try entries.next()) == null);
+            break;
+        },
+        .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(
+            &send_buffer,
+            .{ .pane_id = frame.pane_id, .frame_id = frame.frame_id },
+        )),
+        else => {},
+    };
+}
+
 fn expectPartialLaunchRecovery(phase: backend.history.LaunchPhase) !void {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
@@ -1176,6 +1249,121 @@ test "explicit workspace creation and selection use identity instead of path" {
     try std.testing.expectEqual(first.pane_id, selected.pane_id);
     try std.testing.expect(std.meta.eql(first.location, selected.location));
     try std.testing.expect(!selected.created);
+}
+
+test "tab launch inherits cwd from a runtime-owned pane" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var nested_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const nested = try std.fmt.bufPrint(&nested_buffer, "{s}/nested", .{directory});
+    try std.Io.Dir.cwd().createDir(io, nested, std.Io.File.Permissions.fromMode(0o700));
+    var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/cwd-source.sock", .{directory});
+    var sentinel_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const sentinel_path = try std.fmt.bufPrint(&sentinel_buffer, "{s}/inherited-cwd", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, socket_path);
+    defer connection.deinit(io);
+    var send_buffer: [4096]u8 = undefined;
+    var receive_buffer: [4096]u8 = undefined;
+    const source_arguments = [_][]const u8{
+        "/bin/sh",
+        "-c",
+        "cd nested; printf ready; sleep 600",
+    };
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &source_arguments },
+    }));
+
+    var source_pane: schema.PaneId = .invalid;
+    var source_location: schema.TabLocation = undefined;
+    var source_cwd_observed = false;
+    while (!source_cwd_observed) switch (try schema.decodeServer(
+        try connection.receive(io, &receive_buffer),
+    )) {
+        .pane_opened => |opened| {
+            source_pane = opened.pane_id;
+            source_location = opened.location;
+        },
+        .pane_cwd => |cwd| {
+            if (cwd.pane_id == source_pane and std.mem.eql(u8, cwd.cwd, nested))
+                source_cwd_observed = true;
+        },
+        .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(
+            &send_buffer,
+            .{ .pane_id = frame.pane_id, .frame_id = frame.frame_id },
+        )),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    const inherited_arguments = [_][]const u8{
+        "/bin/sh",
+        "-c",
+        "pwd > \"$1\"; sleep 600",
+        "telar",
+        sentinel_path,
+    };
+    try connection.send(io, try schema.encodeCreateTab(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .workspace = source_location.workspace,
+        .label = "inherited",
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{
+            .cwd = directory,
+            .cwd_source = source_pane,
+            .arguments = &inherited_arguments,
+        },
+    }));
+    while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
+        .tab_created => break,
+        .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(
+            &send_buffer,
+            .{ .pane_id = frame.pane_id, .frame_id = frame.frame_id },
+        )),
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+
+    var written = false;
+    for (0..1000) |_| {
+        if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
+            written = true;
+            break;
+        } else |err| switch (err) {
+            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
+            else => return err,
+        }
+    }
+    try std.testing.expect(written);
+    const inherited = try std.Io.Dir.cwd().readFileAlloc(
+        io,
+        sentinel_path,
+        gpa,
+        .limited(std.fs.max_path_bytes),
+    );
+    defer gpa.free(inherited);
+    try std.testing.expectEqualStrings(nested, std.mem.trimEnd(u8, inherited, "\r\n"));
 }
 
 test "runtime owns the complete tab lifecycle" {

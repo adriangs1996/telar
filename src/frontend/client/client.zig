@@ -208,9 +208,6 @@ plugin_pending: bool = false,
 attachment_capture: attachments.CaptureState = .{},
 paste_pane: ?schema.PaneId = null,
 mode: Mode = .normal,
-/// Owns the cwd borrowed by one queued `create_workspace` launch.
-workspace_create_path: [schema.max_cwd_bytes]u8 = undefined,
-workspace_create_path_len: u16 = 0,
 workspace_create_name: [schema.max_tab_label_bytes]u8 = undefined,
 workspace_create_name_len: u8 = 0,
 

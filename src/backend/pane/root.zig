@@ -444,6 +444,7 @@ pub const Pane = struct {
         identity: PaneKey,
         location: schema.TabLocation,
         command: *const pty.Command,
+        launch_cwd: []const u8,
         workspace_path: []const u8,
         history_service: *history.Service,
         size: schema.TerminalSize,
@@ -474,7 +475,7 @@ pub const Pane = struct {
             .history_session_id = history_service.newSessionId(io),
             .started_at_ms = 0,
             .workspace_path = workspace_copy,
-            .cwd = try .init(workspace_path),
+            .cwd = try .init(launch_cwd),
             .session = undefined,
             .size = size,
             .terminal = undefined,
@@ -520,7 +521,7 @@ pub const Pane = struct {
             Pane.writeMediaPty,
         );
         errdefer pane.media.deinit();
-        try pane.history_observer.init(io, gpa, workspace_path, size);
+        try pane.history_observer.init(io, gpa, launch_cwd, size);
         errdefer pane.history_observer.deinit();
         pane.screen = try .init(gpa, size.cols, size.rows);
         errdefer pane.screen.deinit();
@@ -1311,6 +1312,7 @@ test "pane creation releases every partial allocation" {
             },
             &command,
             "/work/telar",
+            "/work/telar",
             &history_service,
             .{ .cols = 20, .rows = 5 },
             limits,
@@ -1325,6 +1327,38 @@ test "pane creation releases every partial allocation" {
         }
         try std.testing.expectEqual(@as(usize, 0), budget.used);
     }
+}
+
+test "pane keeps launch cwd separate from workspace path" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var history_service = try history.Service.init(gpa, ":memory:");
+    defer history_service.deinit(io);
+    const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&argv);
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const pane = try Pane.create(
+        io,
+        gpa,
+        .{ .id = @enumFromInt(1), .generation = 1 },
+        .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        &command,
+        "/",
+        "/work/telar",
+        &history_service,
+        .{ .cols = 20, .rows = 5 },
+        .{},
+        &budget,
+    );
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+    try std.testing.expectEqualStrings("/", pane.cwd.slice());
+    try std.testing.expectEqualStrings("/work/telar", pane.workspace_path);
 }
 
 test "a pane is destroyable only when no actor can still borrow it" {

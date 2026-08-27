@@ -149,6 +149,63 @@ test "bootstrap answers the initial open with both snapshot requests" {
     try std.testing.expectEqual(TestHarness.bootstrap_pane, harness.client.reported_focus);
 }
 
+test "new tab inherits cwd from the focused runtime pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    harness.client.options.arguments = &.{"/bin/sh"};
+
+    var handler: InputHandler = .{ .client = harness.client };
+    _ = try handler.applyNativeAction(.new_tab);
+    try harness.settle();
+
+    var buffer: [512]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .create_tab);
+    const created = message.create_tab;
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, created.launch.cwd_source.?);
+}
+
+test "new pane inherits cwd from the focused runtime pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    harness.client.options.arguments = &.{"/bin/sh"};
+
+    var handler: InputHandler = .{ .client = harness.client };
+    _ = try handler.applyNativeAction(.{ .split_pane = .horizontal });
+    try harness.settle();
+
+    var buffer: [512]u8 = undefined;
+    try std.testing.expect((try harness.nextClientMessage(&buffer)) == .pane_resize);
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .create_pane);
+    const created = message.create_pane;
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, created.launch.cwd_source.?);
+}
+
+test "new workspace inherits cwd from the focused runtime pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    harness.client.options.arguments = &.{"/bin/sh"};
+    harness.client.requests = .{};
+
+    var handler: InputHandler = .{ .client = harness.client };
+    _ = try handler.applyNativeAction(.new_workspace);
+    try handler.forward("agents\r");
+    try harness.settle();
+
+    var buffer: [512]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .create_workspace);
+    const created = message.create_workspace;
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, created.launch.cwd_source.?);
+}
+
 test "workspace handoff opens the pane remembered for that workspace" {
     var harness: TestHarness = undefined;
     try harness.init();

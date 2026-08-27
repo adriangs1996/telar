@@ -117,6 +117,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .name = "agents",
             .launch = .{
                 .cwd = "/work",
+                .cwd_source = @enumFromInt(5),
                 .arguments = &arguments,
                 .environment_mode = .replace,
                 .environment = &environment,
@@ -171,7 +172,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(21),
             .location = location,
             .size = .{ .cols = 60, .rows = 20 },
-            .launch = .{ .cwd = "/work", .arguments = &.{"/bin/sh"} },
+            .launch = .{
+                .cwd = "/work",
+                .cwd_source = @enumFromInt(6),
+                .arguments = &.{"/bin/sh"},
+            },
         }),
     ));
     helper.add("close_pane", .client, false, golden.close_pane, helper.commit(
@@ -209,7 +214,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .workspace = .{ .workspace = @enumFromInt(7) },
             .label = "logs",
             .size = .{ .cols = 80, .rows = 24 },
-            .launch = .{ .cwd = "/work", .arguments = &.{"/bin/sh"} },
+            .launch = .{
+                .cwd = "/work",
+                .cwd_source = @enumFromInt(7),
+                .arguments = &.{"/bin/sh"},
+            },
         }),
     ));
     helper.add("rename_tab", .client, false, golden.rename_tab, helper.commit(
@@ -618,10 +627,10 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
 /// "GOLDEN" print block below when an encoding change is intentional, and
 /// bump `handshake.schema_id` to the new fingerprint in the same commit.
 const golden = struct {
-    pub const open_pane_default = "01090000000000000000780028000800100005002f776f726b020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
+    pub const open_pane_default = "01090000000000000000780028000800100005002f776f726b0000000000000000020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
     pub const open_pane_attach = "0102000000000000000129000000000000005000180000000000";
     pub const open_workspace = "0103000000000000000207000000000000005000180000000000";
-    pub const create_workspace = "150400000000000000500018000000000006006167656e747305002f776f726b020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
+    pub const create_workspace = "150400000000000000500018000000000006006167656e747305002f776f726b0500000000000000020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
     pub const rename_workspace = "16050000000000000000070000000000000006006167656e7473";
     pub const pane_input = "020300000000000000616263";
     pub const pane_resize = "0303000000000000005a001e0000000000";
@@ -630,12 +639,12 @@ const golden = struct {
     pub const detach_pane = "060300000000000000";
     pub const runtime_stop = "07";
     pub const request_tab_snapshot = "0814000000000000000007000000000000000300000000000000";
-    pub const create_pane = "09150000000000000000070000000000000003000000000000003c0014000000000005002f776f726b010007002f62696e2f7368000000";
+    pub const create_pane = "09150000000000000000070000000000000003000000000000003c0014000000000005002f776f726b0600000000000000010007002f62696e2f7368000000";
     pub const close_pane = "0a16000000000000000800000000000000";
     pub const query_history_cwd = "0b1f0000000000000009007a6967206275696c64010b002f776f726b2f74656c6172010c00";
     pub const query_history_pane = "0b20000000000000000000030900000000000000001400";
     pub const request_workspace_snapshot = "0c2800000000000000000700000000000000";
-    pub const create_tab = "0d290000000000000000070000000000000004006c6f6773500018000000000005002f776f726b010007002f62696e2f7368000000";
+    pub const create_tab = "0d290000000000000000070000000000000004006c6f6773500018000000000005002f776f726b0700000000000000010007002f62696e2f7368000000";
     pub const rename_tab = "0e2a0000000000000000070000000000000003000000000000000600736572766572";
     pub const close_tab = "0f2b000000000000000007000000000000000300000000000000";
     pub const move_tab = "102c00000000000000000700000000000000030000000000000000";
@@ -1017,10 +1026,15 @@ test "explicit workspace attachment and creation round trip" {
         .request_id = @enumFromInt(3),
         .size = .{ .cols = 80, .rows = 24 },
         .name = "agents",
-        .launch = .{ .cwd = "/work/project", .arguments = &arguments },
+        .launch = .{
+            .cwd = "/work/project",
+            .cwd_source = @enumFromInt(8),
+            .arguments = &arguments,
+        },
     }))).create_workspace;
     try std.testing.expectEqualStrings("agents", created.name);
     try std.testing.expectEqualStrings("/work/project", created.launch.cwd);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(8)), created.launch.cwd_source.?);
     var iterator = created.launch.arguments();
     try std.testing.expectEqualStrings("/bin/sh", (try iterator.next()).?);
     try std.testing.expect((try iterator.next()) == null);
@@ -1101,10 +1115,26 @@ test "multi-pane client messages round trip" {
         .request_id = @enumFromInt(21),
         .location = location,
         .size = .{ .cols = 60, .rows = 20 },
-        .launch = .{ .cwd = "/work", .arguments = &.{ "/bin/sh", "-l" } },
+        .launch = .{
+            .cwd = "/work",
+            .cwd_source = @enumFromInt(9),
+            .arguments = &.{ "/bin/sh", "-l" },
+        },
     }))).create_pane;
     try std.testing.expectEqual(@as(u16, 60), created.size.cols);
     try std.testing.expectEqualStrings("/work", created.launch.cwd);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(9)), created.launch.cwd_source.?);
+
+    try std.testing.expectError(error.InvalidPaneId, schema.encodeCreatePane(&buffer, .{
+        .request_id = @enumFromInt(22),
+        .location = location,
+        .size = .{ .cols = 60, .rows = 20 },
+        .launch = .{
+            .cwd = "/work",
+            .cwd_source = .invalid,
+            .arguments = &.{"/bin/sh"},
+        },
+    }));
 
     const closed = (try schema.decodeClient(try schema.encodeClosePane(&buffer, .{
         .request_id = @enumFromInt(22),
@@ -1129,10 +1159,15 @@ test "tab lifecycle client messages round trip" {
         .workspace = workspace,
         .label = "logs",
         .size = .{ .cols = 80, .rows = 24 },
-        .launch = .{ .cwd = "/work", .arguments = &.{"/bin/sh"} },
+        .launch = .{
+            .cwd = "/work",
+            .cwd_source = @enumFromInt(10),
+            .arguments = &.{"/bin/sh"},
+        },
     }))).create_tab;
     try std.testing.expectEqualStrings("logs", created.label);
     try std.testing.expectEqualStrings("/work", created.launch.cwd);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(10)), created.launch.cwd_source.?);
 
     const renamed = (try schema.decodeClient(try schema.encodeRenameTab(&buffer, .{
         .request_id = @enumFromInt(42),

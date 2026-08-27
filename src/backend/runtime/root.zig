@@ -356,6 +356,7 @@ const OwnedCommand = struct {
     fn init(
         gpa: std.mem.Allocator,
         launch: schema.LaunchView,
+        cwd_path: []const u8,
         environment: *const pty.Environment,
     ) !OwnedCommand {
         if (launch.environment_mode != .inherit_runtime or launch.environment_count != 0)
@@ -371,7 +372,7 @@ const OwnedCommand = struct {
             arguments[initialized] = try gpa.dupeZ(u8, argument);
             initialized += 1;
         }
-        const cwd = try gpa.dupeZ(u8, launch.cwd);
+        const cwd = try gpa.dupeZ(u8, cwd_path);
         errdefer gpa.free(cwd);
 
         var command: pty.Command = .{
@@ -499,6 +500,53 @@ const Server = struct {
         pane.abortLaunch();
     }
 
+    const CwdSourceScope = union(enum) {
+        any,
+        workspace: schema.WorkspaceLocation,
+        tab: schema.TabLocation,
+    };
+
+    /// Resolves inherited cwd from runtime-owned pane state. The source must
+    /// belong to this client and to the container affected by the operation.
+    fn resolveLaunchCwd(
+        session: *ClientSession,
+        launch: schema.LaunchView,
+        scope: CwdSourceScope,
+    ) ![]const u8 {
+        const source_id = launch.cwd_source orelse return launch.cwd;
+        const attachment = session.attachments.find(source_id) orelse
+            return error.CwdSourcePaneUnavailable;
+        const pane = attachment.pane;
+        if (pane.close_requested or pane.exit != null)
+            return error.CwdSourcePaneUnavailable;
+        switch (scope) {
+            .any => {},
+            .workspace => |workspace| if (!std.meta.eql(pane.location.workspace, workspace))
+                return error.CwdSourceOutsideWorkspace,
+            .tab => |location| if (!std.meta.eql(pane.location, location))
+                return error.CwdSourceOutsideTab,
+        }
+        return pane.cwd.slice();
+    }
+
+    fn requestLaunchCwd(
+        session: *ClientSession,
+        responses: *ResponseQueue,
+        request_id: schema.RequestId,
+        launch: schema.LaunchView,
+        scope: CwdSourceScope,
+    ) !?[]const u8 {
+        return resolveLaunchCwd(session, launch, scope) catch {
+            try queueFailure(
+                responses,
+                request_id,
+                .invalid_request,
+                "cwd source pane is unavailable",
+            );
+            return null;
+        };
+    }
+
     /// Starts a pane and returns only after the runtime can observe both its
     /// output and exit. Client attachment and response delivery happen later.
     fn launchPane(
@@ -506,6 +554,8 @@ const Server = struct {
         location: schema.TabLocation,
         size: schema.TerminalSize,
         launch: schema.LaunchView,
+        launch_cwd: []const u8,
+        workspace_path: []const u8,
     ) !*Pane {
         const pane_key = try server.panes.allocateKey();
         var proxy_environment: ?pty.Environment = null;
@@ -545,7 +595,7 @@ const Server = struct {
             );
             break :block &proxy_environment.?;
         } else server.child_environment;
-        var command = try OwnedCommand.init(server.gpa, launch, child_environment);
+        var command = try OwnedCommand.init(server.gpa, launch, launch_cwd, child_environment);
         defer command.deinit();
         const shell = std.mem.span(command.command.file);
         const fresh = try Pane.create(
@@ -554,7 +604,8 @@ const Server = struct {
             pane_key,
             location,
             &command.command,
-            launch.cwd,
+            launch_cwd,
+            workspace_path,
             server.history_service,
             size,
             server.panes.graphics_limits,
@@ -1879,7 +1930,14 @@ const Server = struct {
                     },
                     .default => pane: {
                         const launch = open.launch.?;
-                        const ensured = workspaces.ensure(launch.cwd) catch {
+                        const launch_cwd = (try requestLaunchCwd(
+                            session,
+                            responses,
+                            open.request_id,
+                            launch,
+                            .any,
+                        )) orelse return;
+                        const ensured = workspaces.ensure(launch_cwd) catch {
                             try queueFailure(responses, open.request_id, .resource_limit, "could not create workspace");
                             return;
                         };
@@ -1908,7 +1966,14 @@ const Server = struct {
                             );
                             return;
                         }
-                        const fresh = server.launchPane(location, open.size, launch) catch |err| {
+                        const workspace_path = workspaces.find(location.workspace).?.path;
+                        const fresh = server.launchPane(
+                            location,
+                            open.size,
+                            launch,
+                            launch_cwd,
+                            workspace_path,
+                        ) catch |err| {
                             try queueSpawnFailure(responses, open.request_id, err);
                             return;
                         };
@@ -1941,7 +2006,14 @@ const Server = struct {
                 } });
             },
             .create_workspace => |create| {
-                const location = workspaces.create(create.launch.cwd, create.name) catch {
+                const launch_cwd = (try requestLaunchCwd(
+                    session,
+                    responses,
+                    create.request_id,
+                    create.launch,
+                    .any,
+                )) orelse return;
+                const location = workspaces.create(launch_cwd, create.name) catch {
                     try queueFailure(
                         responses,
                         create.request_id,
@@ -1968,7 +2040,13 @@ const Server = struct {
                     );
                     return;
                 }
-                const fresh = server.launchPane(location, create.size, create.launch) catch |err| {
+                const fresh = server.launchPane(
+                    location,
+                    create.size,
+                    create.launch,
+                    launch_cwd,
+                    launch_cwd,
+                ) catch |err| {
                     try queueSpawnFailure(responses, create.request_id, err);
                     return;
                 };
@@ -2201,10 +2279,20 @@ const Server = struct {
                     );
                     return;
                 }
+                const launch_cwd = (try requestLaunchCwd(
+                    session,
+                    responses,
+                    create.request_id,
+                    create.launch,
+                    .{ .tab = create.location },
+                )) orelse return;
+                const workspace_path = workspaces.find(create.location.workspace).?.path;
                 const fresh = server.launchPane(
                     create.location,
                     create.size,
                     create.launch,
+                    launch_cwd,
+                    workspace_path,
                 ) catch |err| {
                     try queueSpawnFailure(responses, create.request_id, err);
                     return;
@@ -2254,6 +2342,13 @@ const Server = struct {
                     );
                     return;
                 }
+                const launch_cwd = (try requestLaunchCwd(
+                    session,
+                    responses,
+                    create.request_id,
+                    create.launch,
+                    .{ .workspace = create.workspace },
+                )) orelse return;
                 var generated_label: [schema.max_tab_label_bytes]u8 = undefined;
                 const created = workspaces.createTab(
                     create.workspace,
@@ -2285,6 +2380,8 @@ const Server = struct {
                     created.location,
                     create.size,
                     create.launch,
+                    launch_cwd,
+                    workspaces.find(create.workspace).?.path,
                 ) catch |err| {
                     try queueSpawnFailure(responses, create.request_id, err);
                     return;

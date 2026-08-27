@@ -157,6 +157,7 @@ pub const ServerTag = enum(u8) {
 
 pub const LaunchView = struct {
     cwd: []const u8,
+    cwd_source: ?PaneId = null,
     argument_count: u16,
     encoded_arguments: []const u8,
     environment_mode: EnvironmentMode,
@@ -1474,12 +1475,14 @@ fn validateNotificationText(bytes: []const u8, maximum: usize, empty_allowed: bo
 
 fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
     try validateBytes(launch.cwd, max_cwd_bytes, false);
+    if (launch.cwd_source) |pane_id| try validatePaneId(pane_id);
     if (launch.arguments.len == 0 or launch.arguments.len > max_argument_count)
         return error.InvalidArgumentCount;
     if (launch.environment.len > max_environment_count)
         return error.TooManyEnvironmentEntries;
 
     try encoder.writeSized16(launch.cwd);
+    try encoder.writeInt(u64, if (launch.cwd_source) |pane_id| id.raw(pane_id) else 0);
     try encoder.writeInt(u16, @intCast(launch.arguments.len));
     var argument_bytes: usize = 0;
     for (launch.arguments, 0..) |argument, index| {
@@ -1548,6 +1551,11 @@ fn decodeLaunch(decoder: *wire.Decoder) !LaunchView {
     // consumer decodes each item, so items are only scanned once.
     const cwd = try decoder.readSized16();
     try validateBytes(cwd, max_cwd_bytes, false);
+    const cwd_source_raw = try decoder.readInt(u64);
+    const cwd_source = if (cwd_source_raw == 0)
+        null
+    else
+        try id.pane(cwd_source_raw);
 
     const argument_count = try decoder.readInt(u16);
     if (argument_count == 0 or argument_count > max_argument_count)
@@ -1573,6 +1581,7 @@ fn decodeLaunch(decoder: *wire.Decoder) !LaunchView {
     }
     return .{
         .cwd = cwd,
+        .cwd_source = cwd_source,
         .argument_count = argument_count,
         .encoded_arguments = encoded_arguments,
         .environment_mode = environment_mode,

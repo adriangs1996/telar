@@ -760,7 +760,11 @@ fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
             .request_id = request_id,
             .location = location,
             .size = new_size,
-            .launch = .{ .cwd = paneLaunchCwd(handler.client, pane), .arguments = handler.client.options.arguments },
+            .launch = .{
+                .cwd = handler.client.options.cwd,
+                .cwd_source = pane.id,
+                .arguments = handler.client.options.arguments,
+            },
         } },
     ) catch |err| {
         try handler.restoreFocusedSize(pane.id);
@@ -830,6 +834,9 @@ fn closeFocused(handler: *InputHandler) !void {
 
 fn createTab(handler: *InputHandler) !void {
     if (handler.client.requests.has(.tab_operation)) return;
+    const model = handler.activeModel() orelse return;
+    const pane = model.focusedPane() orelse return;
+    if (!pane.attached) return;
     const workspace = handler.client.tabs.workspace orelse return;
     const request_id = try handler.client.nextId();
     try handler.client.enqueueRequest(
@@ -839,7 +846,11 @@ fn createTab(handler: *InputHandler) !void {
             .request_id = request_id,
             .workspace = workspace,
             .size = rectSize(handler.client.view.workbench()) orelse return,
-            .launch = .{ .cwd = handler.client.options.cwd, .arguments = handler.client.options.arguments },
+            .launch = .{
+                .cwd = handler.client.options.cwd,
+                .cwd_source = pane.id,
+                .arguments = handler.client.options.arguments,
+            },
         } },
     );
 }
@@ -860,9 +871,6 @@ fn submitWorkspaceCreate(handler: *InputHandler, name: []const u8) !void {
     const model = handler.activeModel() orelse return;
     const pane = model.focusedPane() orelse return;
     if (!pane.attached) return;
-    const cwd = paneLaunchCwd(client, pane);
-    @memcpy(client.workspace_create_path[0..cwd.len], cwd);
-    client.workspace_create_path_len = @intCast(cwd.len);
     @memcpy(client.workspace_create_name[0..name.len], name);
     client.workspace_create_name_len = @intCast(name.len);
     const request_id = try client.nextId();
@@ -874,7 +882,8 @@ fn submitWorkspaceCreate(handler: *InputHandler, name: []const u8) !void {
             .size = rectSize(client.view.workbench()) orelse return,
             .name = client.workspace_create_name[0..client.workspace_create_name_len],
             .launch = .{
-                .cwd = client.workspace_create_path[0..client.workspace_create_path_len],
+                .cwd = client.options.cwd,
+                .cwd_source = pane.id,
                 .arguments = client.options.arguments,
             },
         } },
@@ -893,24 +902,6 @@ fn submitWorkspaceRename(handler: *InputHandler, name: []const u8) !void {
         .name = name,
     });
     client.finishNamePrompt();
-}
-
-fn paneLaunchCwd(client: *const Client, pane: *const multiplexer.Pane) []const u8 {
-    return preferredPaneCwd(
-        pane.cwdSlice(),
-        currentWorkspacePath(client),
-        client.options.cwd,
-    );
-}
-
-fn currentWorkspacePath(client: *const Client) ?[]const u8 {
-    const current = client.tabs.workspace orelse return null;
-    const workspace_id = switch (current) {
-        .workspace => |id| id,
-        .worktree => return null,
-    };
-    const index = client.view.workspace_list.indexOf(workspace_id) orelse return null;
-    return client.view.workspace_list.pathAt(index);
 }
 
 fn selectTabOffset(handler: *InputHandler, offset: isize) !void {
@@ -976,30 +967,6 @@ fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
         .{ .rename_tab = tab.location },
     );
     handler.client.finishNamePrompt();
-}
-
-fn preferredPaneCwd(
-    observed: []const u8,
-    workspace_path: ?[]const u8,
-    initial: []const u8,
-) []const u8 {
-    if (observed.len != 0) return observed;
-    return workspace_path orelse initial;
-}
-
-test "pane launch cwd prefers the focused pane observation" {
-    try std.testing.expectEqualStrings(
-        "/work/agents",
-        preferredPaneCwd("/work/agents", "/work/telar", "/initial"),
-    );
-    try std.testing.expectEqualStrings(
-        "/work/telar",
-        preferredPaneCwd("", "/work/telar", "/initial"),
-    );
-    try std.testing.expectEqualStrings(
-        "/initial",
-        preferredPaneCwd("", null, "/initial"),
-    );
 }
 
 test "only an unmodified control-v triggers local image inspection" {

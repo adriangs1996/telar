@@ -185,6 +185,18 @@ pub const Session = struct {
     reaped: std.atomic.Value(bool) = .init(false),
 
     pub fn spawn(command: *const Command, initial_size: Size) !Session {
+        const cwd_fd: ?std.c.fd_t = if (command.cwd) |cwd_path|
+            std.posix.openat(std.posix.AT.FDCWD, std.mem.span(cwd_path), .{
+                .ACCMODE = .RDONLY,
+                .CLOEXEC = true,
+                .DIRECTORY = true,
+            }, 0) catch return error.InvalidWorkingDirectory
+        else
+            null;
+        defer {
+            if (cwd_fd) |fd| _ = std.c.close(fd);
+        }
+
         const size = initial_size.valid();
         var window: std.posix.winsize = .{
             .row = size.rows,
@@ -210,7 +222,7 @@ pub const Session = struct {
 
         const pid = std.c.fork();
         if (pid < 0) return error.ForkFailed;
-        if (pid == 0) childExec(master, slave, command);
+        if (pid == 0) childExec(master, slave, cwd_fd, command);
 
         _ = std.c.close(slave);
         return .{ .master = master, .pid = pid };
@@ -341,10 +353,12 @@ fn cwdLinux(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
 fn childExec(
     master: std.c.fd_t,
     slave: std.c.fd_t,
+    cwd_fd: ?std.c.fd_t,
     command: *const Command,
 ) noreturn {
     if (std.c.setsid() < 0) std.c._exit(1);
     if (std.c.ioctl(slave, TIOC.SCTTY, @as(c_int, 0)) != 0) std.c._exit(1);
+    if (cwd_fd) |fd| if (std.c.fchdir(fd) != 0) std.c._exit(126);
 
     if (std.c.dup2(slave, std.c.STDIN_FILENO) < 0) std.c._exit(1);
     if (std.c.dup2(slave, std.c.STDOUT_FILENO) < 0) std.c._exit(1);
@@ -352,9 +366,6 @@ fn childExec(
 
     _ = std.c.close(master);
     if (slave > std.c.STDERR_FILENO) _ = std.c.close(slave);
-    if (command.cwd) |cwd| {
-        if (std.c.chdir(cwd) != 0) std.c._exit(126);
-    }
 
     // `fork` gave this child a private address space. Repointing libc's
     // environment here cannot race with the runtime and lets `execvp` retain
@@ -552,6 +563,26 @@ test "a command accepts the schema's maximum argument count" {
     const command = try Command.fromArgv(&args);
     try std.testing.expectEqualStrings("/bin/true", std.mem.span(command.file));
     try std.testing.expect(command.argv[max_args - 1] != null);
+}
+
+test "spawn rejects an invalid working directory before forking" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const missing = try std.fmt.bufPrintZ(
+        &path_buffer,
+        "{s}/missing",
+        .{directory_buffer[0..directory_len]},
+    );
+    const args = [_][*:0]const u8{ "/bin/sh", "-c", "exit 0" };
+    var command = try Command.fromArgv(&args);
+    command.cwd = missing.ptr;
+    try std.testing.expectError(
+        error.InvalidWorkingDirectory,
+        Session.spawn(&command, .{ .cols = 20, .rows = 5 }),
+    );
 }
 
 test "one argument past the limit is rejected" {

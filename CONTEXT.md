@@ -11,6 +11,22 @@ terminal size. It ends when the runtime owns a usable pane, independently of
 any client's attachment or confirmation.
 _Avoid_: Pane creation, pane spawn
 
+**Launch working directory**:
+The local directory where a pane's child process starts. A launch may name it
+explicitly or inherit it from a source pane.
+_Avoid_: Workspace path, client path
+
+**Pane working directory**:
+The runtime's current working-directory value for one pane. It changes as the
+pane's shell changes directory and can be inherited by a later pane launch.
+_Avoid_: Workspace path, launch path
+
+**Workspace path**:
+The stable local directory associated with a workspace for identity, display,
+and history scope. It does not change when one of the workspace's panes changes
+its working directory.
+_Avoid_: Pane working directory, current path
+
 **Client confirmation**:
 The per-connection acknowledgement that exposes a completed pane launch to one
 client.
