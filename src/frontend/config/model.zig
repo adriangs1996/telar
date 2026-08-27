@@ -20,6 +20,9 @@ pub const max_plugins = 32;
 pub const max_plugin_path_bytes = 512;
 pub const max_history_path_bytes = 1024;
 pub const max_proxy_path_bytes = 1024;
+pub const max_proxy_passthrough_hosts = core.proxy.max_passthrough_hosts;
+pub const max_proxy_passthrough_host_bytes = core.proxy.max_hostname_bytes;
+pub const max_proxy_passthrough_bytes = core.proxy.max_passthrough_bytes;
 pub const max_agent_description_command_args = 32;
 pub const max_agent_description_command_bytes = 4096;
 pub const default_agent_description_timeout_ms: u32 = 15_000;
@@ -80,6 +83,135 @@ pub const AgentDescriptionCommand = struct {
     }
 };
 
+pub const SoundConfig = struct {
+    enabled: bool = true,
+    ready: bool = true,
+    needs_input: bool = true,
+
+    pub fn allows(config: SoundConfig, sound: core.schema.AgentSound) bool {
+        if (!config.enabled) return false;
+        return switch (sound) {
+            .ready => config.ready,
+            .needs_input => config.needs_input,
+        };
+    }
+};
+
+test "sound settings can disable each transition independently" {
+    const config: SoundConfig = .{ .ready = false };
+    try std.testing.expect(!config.allows(.ready));
+    try std.testing.expect(config.allows(.needs_input));
+    try std.testing.expect(!(SoundConfig{ .enabled = false }).allows(.needs_input));
+}
+
+pub const ProxyPassthroughHosts = struct {
+    const Reference = struct {
+        offset: u16,
+        len: u8,
+    };
+
+    bytes: [max_proxy_passthrough_bytes]u8 = undefined,
+    byte_len: u16 = 0,
+    references: [max_proxy_passthrough_hosts]Reference = undefined,
+    count: u16 = 0,
+
+    comptime {
+        std.debug.assert(max_proxy_passthrough_bytes <= std.math.maxInt(u16));
+    }
+
+    pub fn append(hosts: *ProxyPassthroughHosts, host: []const u8) !void {
+        if (hosts.count == max_proxy_passthrough_hosts) return error.TooManyProxyPassthroughHosts;
+        if (host.len == 0 or host.len > max_proxy_passthrough_host_bytes)
+            return error.InvalidProxyPassthroughHost;
+        const end = @as(usize, hosts.byte_len) + host.len;
+        if (end > hosts.bytes.len) return error.ProxyPassthroughHostsTooLarge;
+        const offset = hosts.byte_len;
+        for (host, hosts.bytes[offset..end]) |byte, *destination|
+            destination.* = std.ascii.toLower(byte);
+        hosts.references[hosts.count] = .{
+            .offset = offset,
+            .len = @intCast(host.len),
+        };
+        hosts.byte_len = @intCast(end);
+        hosts.count += 1;
+    }
+
+    pub fn sortAndDeduplicate(hosts: *ProxyPassthroughHosts) void {
+        std.mem.sort(
+            Reference,
+            hosts.references[0..hosts.count],
+            hosts,
+            struct {
+                fn lessThan(context: *const ProxyPassthroughHosts, left: Reference, right: Reference) bool {
+                    return core.proxy.orderHostname(
+                        context.value(left),
+                        context.value(right),
+                    ) == .lt;
+                }
+            }.lessThan,
+        );
+        var unique_count: usize = 0;
+        for (hosts.references[0..hosts.count]) |reference| {
+            if (unique_count != 0 and core.proxy.orderHostname(
+                hosts.value(hosts.references[unique_count - 1]),
+                hosts.value(reference),
+            ) == .eq) continue;
+            hosts.references[unique_count] = reference;
+            unique_count += 1;
+        }
+        hosts.count = @intCast(unique_count);
+    }
+
+    pub fn contains(hosts: *const ProxyPassthroughHosts, host: []const u8) bool {
+        const Context = struct {
+            hosts: *const ProxyPassthroughHosts,
+            target: []const u8,
+        };
+        return std.sort.binarySearch(
+            Reference,
+            hosts.references[0..hosts.count],
+            Context{ .hosts = hosts, .target = host },
+            struct {
+                fn compare(context: Context, reference: Reference) std.math.Order {
+                    return core.proxy.orderHostname(
+                        context.target,
+                        context.hosts.value(reference),
+                    );
+                }
+            }.compare,
+        ) != null;
+    }
+
+    pub fn slices(
+        hosts: *const ProxyPassthroughHosts,
+        storage: *[max_proxy_passthrough_hosts][]const u8,
+    ) []const []const u8 {
+        for (hosts.references[0..hosts.count], 0..) |reference, index|
+            storage[index] = hosts.value(reference);
+        return storage[0..hosts.count];
+    }
+
+    fn value(hosts: *const ProxyPassthroughHosts, reference: Reference) []const u8 {
+        return hosts.bytes[reference.offset..][0..reference.len];
+    }
+};
+
+test "proxy passthrough hosts are compact, canonical, sorted, and unique" {
+    var hosts: ProxyPassthroughHosts = .{};
+    try hosts.append("Updates.Example.com");
+    try hosts.append("api.example.com");
+    try hosts.append("API.EXAMPLE.COM");
+    hosts.sortAndDeduplicate();
+
+    var storage: [max_proxy_passthrough_hosts][]const u8 = undefined;
+    const sorted = hosts.slices(&storage);
+    try std.testing.expectEqual(@as(usize, 2), sorted.len);
+    try std.testing.expectEqualStrings("api.example.com", sorted[0]);
+    try std.testing.expectEqualStrings("updates.example.com", sorted[1]);
+    try std.testing.expect(hosts.contains("API.EXAMPLE.COM"));
+    try std.testing.expect(!hosts.contains("other.example.com"));
+}
+
 pub const RuntimeSnapshot = struct {
     graphics_pane_bytes: usize = core.graphics.max_image_bytes_per_pane,
     graphics_global_bytes: usize = core.graphics.max_image_bytes_global,
@@ -88,6 +220,7 @@ pub const RuntimeSnapshot = struct {
     proxy_enabled: bool = false,
     proxy_ca_dir_bytes: [max_proxy_path_bytes]u8 = undefined,
     proxy_ca_dir_len: u16 = 0,
+    proxy_passthrough_hosts: ProxyPassthroughHosts = .{},
     agent_descriptions: AgentDescriptionCommand = .{},
 
     pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
@@ -99,6 +232,13 @@ pub const RuntimeSnapshot = struct {
         if (snapshot.proxy_ca_dir_len == 0) return null;
         return snapshot.proxy_ca_dir_bytes[0..snapshot.proxy_ca_dir_len];
     }
+
+    pub fn proxyPassthroughHosts(
+        snapshot: *const RuntimeSnapshot,
+        storage: *[max_proxy_passthrough_hosts][]const u8,
+    ) []const []const u8 {
+        return snapshot.proxy_passthrough_hosts.slices(storage);
+    }
 };
 
 pub const Snapshot = struct {
@@ -107,6 +247,7 @@ pub const Snapshot = struct {
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
     pane_gaps: bool = true,
+    sound: SoundConfig = .{},
     prefix: keybind.Key = keybind.default_prefix,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
     input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,

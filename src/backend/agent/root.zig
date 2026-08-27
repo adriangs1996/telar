@@ -19,7 +19,6 @@ pub const max_records = schema.max_agent_snapshot_entries;
 pub const working_expiry_ms: i64 = 2 * 60 * 1000;
 pub const settled_expiry_ms: i64 = 30 * 60 * 1000;
 pub const activity_refresh_ms: i64 = 5 * 1000;
-pub const idle_confirmations = 3;
 pub const max_active_proxy_requests = 128;
 
 pub const ScreenStatus = detection.Status;
@@ -74,7 +73,6 @@ const Record = struct {
     active_proxy: [max_active_proxy_requests]?ProxyRequest = @splat(null),
     active_proxy_count: u16 = 0,
     screen: ?Evidence = null,
-    idle_samples: u8 = 0,
     title: Title = .{},
     projected: schema.AgentSnapshotEntry,
 };
@@ -94,7 +92,6 @@ const Title = struct {
     source: schema.AgentTitleSource = .telar,
     state: schema.AgentTitleState = .placeholder,
     phase: TitlePhase = .waiting_query,
-    saw_working: bool = false,
     capture: description.Capture = .{},
 
     fn slice(title: *const Title) []const u8 {
@@ -141,7 +138,6 @@ pub const Store = struct {
             .candidate, .stale, .exited => .active,
             .active, .obscured, .resumed => record.authority,
         };
-        record.idle_samples = 0;
         return store.reproject(record, observed_at_ms);
     }
 
@@ -192,9 +188,12 @@ pub const Store = struct {
                 return store.reproject(record, observed_at_ms);
             }
         };
+        // An HTTP response completes one model exchange, not the agent turn.
+        // Claude may execute tools and issue another request before it returns
+        // to its input prompt. Only confirmed screen evidence may settle this
+        // network work as ready.
         const status: schema.AgentStatus = switch (phase) {
-            .request_started, .response_activity => .working,
-            .response_finished => if (record.active_proxy_count == 0) .ready else .working,
+            .request_started, .response_activity, .response_finished => .working,
             .request_failed => .failed,
         };
         record.proxy = .{
@@ -225,7 +224,6 @@ pub const Store = struct {
             .active, .obscured, .resumed => record.authority,
             .exited => return false,
         };
-        record.idle_samples = 0;
         return store.reproject(record, observed_at_ms);
     }
 
@@ -258,18 +256,12 @@ pub const Store = struct {
             (existing == null or recordProvider(existing.?) != signal.provider)) return false;
         if (known_provider == .unknown) return false;
         var record = store.ensure(identity) orelse return false;
-        // Codex's explicit input prompt is conclusive. Generic prompts need
-        // repetition so a shell glyph or stale screen fragment cannot settle
-        // live network work.
+        // A branded header or a prompt glyph seen in raw output cannot settle
+        // live work. `ready_confirmed` means the observer found the prompt next
+        // to the visible cursor in its emulated terminal.
         if (signal.status == .ready and
             currentStatus(record) == .working and
-            !signal.ready_confirmed)
-        {
-            record.idle_samples +|= 1;
-            if (record.idle_samples < idle_confirmations) return false;
-        } else {
-            record.idle_samples = 0;
-        }
+            !signal.ready_confirmed) return false;
         record.screen = .{
             .provider = known_provider,
             .status = switch (signal.status) {
@@ -341,6 +333,14 @@ pub const Store = struct {
             count += 1;
         }
         return entries[0..count];
+    }
+
+    pub fn projectedStatus(store: *const Store, key: PaneKey) ?schema.AgentStatus {
+        for (&store.records) |*slot| {
+            const record = if (slot.*) |*value| value else continue;
+            if (sameKey(record.key, key)) return record.projected.status;
+        }
+        return null;
     }
 
     /// Captures only the first submitted request for an already identified
@@ -517,12 +517,10 @@ pub const Store = struct {
         record: *Record,
         status: schema.AgentStatus,
     ) bool {
-        if (record.title.phase != .waiting_work) return false;
-        if (status == .working) {
-            record.title.saw_working = true;
-            return false;
-        }
-        if (!record.title.saw_working or (status != .ready and status != .failed)) return false;
+        // Model work confirms that the captured input was a real request. The
+        // title generator can now run alongside the turn instead of waiting
+        // for the agent to return to its prompt.
+        if (record.title.phase != .waiting_work or status != .working) return false;
         if (store.pendingDescriptionCount() >= description.max_pending_jobs) {
             record.title.phase = .failed;
             record.title.state = .failed;
@@ -617,12 +615,11 @@ fn chooseEvidence(record: *const Record, now_ms: i64) ?Evidence {
         null;
 
     // A permission prompt is visible truth. Active terminal work also wins
-    // over an early network completion, while proxy work wins over a merely
-    // idle prompt until the response actually settles.
+    // over network activity, while proxy work wins over an older idle prompt.
     if (screen) |value| if (value.status == .blocked) return value;
     if (screen) |value| if (value.status == .working) return value;
-    // A ready screen reaches the store only after three consecutive samples,
-    // so it may recover a request whose completion event was dropped.
+    // A ready screen reaches the store only after the observer confirms an
+    // input prompt at the visible cursor.
     if (proxy) |proxy_work| if (proxy_work.status == .working) {
         // A confirmed prompt may repair a dropped completion, but it must not
         // mask network work which started after that prompt was sampled.
@@ -704,6 +701,25 @@ fn observeTestProxy(
     );
 }
 
+fn observeTestReadyPrompt(
+    store: *Store,
+    identity: Identity,
+    provider: schema.AgentProvider,
+    observed_at_ms: i64,
+) bool {
+    return store.observeScreen(
+        identity,
+        .{
+            .provider = provider,
+            .status = .ready,
+            .confidence = 96,
+            .identity_confirmed = true,
+            .ready_confirmed = true,
+        },
+        observed_at_ms,
+    );
+}
+
 test "display context changes advance the public snapshot revision" {
     var store: Store = .{};
     const before = store.revision;
@@ -711,23 +727,29 @@ test "display context changes advance the public snapshot revision" {
     try std.testing.expectEqual(before + 1, store.revision);
 }
 
-test "repeated ready screen recovers a dropped proxy completion" {
+test "only a confirmed prompt settles model work" {
     var store: Store = .{};
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 100));
-    for (0..idle_confirmations - 1) |_| try std.testing.expect(!store.observeScreen(
+    try std.testing.expect(observeTestProxy(&store, identity, .claude, .response_finished, 200));
+    try std.testing.expect(!store.observeScreen(
         identity,
-        .{ .provider = .claude, .status = .ready, .confidence = 72 },
-        200,
-    ));
-    try std.testing.expect(store.observeScreen(
-        identity,
-        .{ .provider = .claude, .status = .ready, .confidence = 72 },
-        200,
+        .{
+            .provider = .claude,
+            .status = .ready,
+            .confidence = 90,
+            .identity_confirmed = true,
+        },
+        300,
     ));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = store.snapshot(&entries);
+    var snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
+
+    try std.testing.expect(observeTestReadyPrompt(&store, identity, .claude, 400));
+    snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
@@ -820,7 +842,7 @@ test "foreground process establishes agent identity without screen branding" {
     try std.testing.expectEqual(@as(u32, 84), snapshot[0].process_id);
 }
 
-test "first completed request becomes one generated session title" {
+test "first working turn starts one generated session title" {
     var store: Store = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProcess(identity, .codex, 84, 100));
@@ -830,8 +852,11 @@ test "first completed request becomes one generated session title" {
     try std.testing.expectEqual(schema.AgentTitleState.placeholder, snapshot[0].title_state);
 
     try std.testing.expect(store.observeInput(identity.key, "improve the sidebar\r"));
+    try std.testing.expect(observeTestReadyPrompt(&store, identity, .codex, 150));
+    snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentTitleState.placeholder, snapshot[0].title_state);
+
     try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 200));
-    try std.testing.expect(observeTestProxy(&store, identity, .codex, .response_finished, 300));
     snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentTitleState.pending, snapshot[0].title_state);
 
@@ -859,7 +884,6 @@ test "manual title wins over a late generated result" {
     try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
     try std.testing.expect(store.observeInput(identity.key, "fix tests\r"));
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 200));
-    try std.testing.expect(observeTestProxy(&store, identity, .claude, .response_finished, 300));
     var job = store.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expect(try store.setManualTitle(identity.key, "Release audit"));
@@ -890,7 +914,6 @@ test "description backpressure fails the ninth queued request without retry" {
         try std.testing.expect(store.observeProcess(identity, .codex, @intCast(raw), 100));
         try std.testing.expect(store.observeInput(identity.key, "do work\r"));
         try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 200));
-        try std.testing.expect(observeTestProxy(&store, identity, .codex, .response_finished, 300));
     }
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = store.snapshot(&entries);
@@ -961,7 +984,7 @@ test "new foreground process replaces prior session evidence" {
     try std.testing.expectEqual(@as(u32, 85), snapshot[0].process_id);
 }
 
-test "Claude branding establishes identity for a later generic prompt" {
+test "confirmed Claude prompt refreshes branded identity" {
     var store: Store = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeScreen(
@@ -974,11 +997,7 @@ test "Claude branding establishes identity for a later generic prompt" {
         },
         100,
     ));
-    try std.testing.expect(store.observeScreen(
-        identity,
-        .{ .provider = .claude, .status = .ready, .confidence = 72 },
-        200,
-    ));
+    try std.testing.expect(observeTestReadyPrompt(&store, identity, .claude, 200));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
@@ -1007,11 +1026,7 @@ test "new network work supersedes an older ready prompt" {
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 50));
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .response_finished, 100));
-    try std.testing.expect(store.observeScreen(
-        identity,
-        .{ .provider = .claude, .status = .ready, .confidence = 72 },
-        200,
-    ));
+    try std.testing.expect(observeTestReadyPrompt(&store, identity, .claude, 200));
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 300));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = store.snapshot(&entries);
@@ -1067,7 +1082,7 @@ test "a bare shell prompt is not Claude identity" {
     try std.testing.expectEqual(@as(usize, 0), store.snapshot(&entries).len);
 }
 
-test "one completed HTTP2 stream does not settle another active stream" {
+test "completed HTTP2 streams do not settle the agent turn" {
     var store: Store = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProxy(
@@ -1087,7 +1102,64 @@ test "one completed HTTP2 stream does not settle another active stream" {
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     _ = store.observeProxy(identity, .codex, .response_finished, .h2, 9, 3, 300);
     snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+
+    try std.testing.expect(observeTestReadyPrompt(&store, identity, .codex, 400));
+    snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+}
+
+test "sequential model requests stay working until a confirmed prompt" {
+    var store: Store = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(store.observeProxy(
+        identity,
+        .claude,
+        .request_started,
+        .h2,
+        9,
+        1,
+        100,
+    ));
+    try std.testing.expect(store.observeProxy(
+        identity,
+        .claude,
+        .response_finished,
+        .h2,
+        9,
+        1,
+        200,
+    ));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    var snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+
+    try std.testing.expect(store.observeProxy(
+        identity,
+        .claude,
+        .request_started,
+        .h2,
+        9,
+        3,
+        300,
+    ));
+    try std.testing.expect(store.observeProxy(
+        identity,
+        .claude,
+        .response_finished,
+        .h2,
+        9,
+        3,
+        400,
+    ));
+    snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+
+    try std.testing.expect(observeTestReadyPrompt(&store, identity, .claude, 500));
+    snapshot = store.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 
 test "HTTP2 connection failure settles all of its active streams" {

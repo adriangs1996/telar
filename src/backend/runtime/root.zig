@@ -50,6 +50,18 @@ const ResponseQueue = response_queue.ResponseQueue;
 const encodeFrame = runtime_encoder.encodeFrame;
 const encodeResponse = runtime_encoder.encodeResponse;
 
+fn agentSoundForTransition(
+    previous: ?schema.AgentStatus,
+    current: ?schema.AgentStatus,
+) ?schema.AgentSound {
+    if (previous != .working) return null;
+    return switch (current orelse return null) {
+        .ready => .ready,
+        .blocked => .needs_input,
+        .unknown, .working, .failed => null,
+    };
+}
+
 const AgentDisplayStorage = struct {
     workspace: [schema.max_agent_workspace_label_bytes]u8 = undefined,
     cwd: [schema.max_agent_cwd_label_bytes]u8 = undefined,
@@ -79,7 +91,42 @@ pub const ProxyOptions = struct {
     key_path: []const u8,
     certificate_path: []const u8,
     bundle_path: []const u8,
+    passthrough_hosts: []const []const u8 = &.{},
 };
+
+const proxy_environment_override_count = 11;
+
+fn proxyEnvironmentOverrides(
+    proxy_url: []const u8,
+    certificate_path: []const u8,
+    bundle_path: []const u8,
+) [proxy_environment_override_count]pty.Environment.Override {
+    return .{
+        .{ .name = "HTTPS_PROXY", .value = proxy_url },
+        .{ .name = "https_proxy", .value = proxy_url },
+        .{ .name = "NODE_USE_ENV_PROXY", .value = "1" },
+        .{ .name = "NODE_EXTRA_CA_CERTS", .value = certificate_path },
+        .{ .name = "SSL_CERT_FILE", .value = bundle_path },
+        .{ .name = "CURL_CA_BUNDLE", .value = bundle_path },
+        .{ .name = "REQUESTS_CA_BUNDLE", .value = bundle_path },
+        .{ .name = "AWS_CA_BUNDLE", .value = bundle_path },
+        .{ .name = "GIT_SSL_CAINFO", .value = bundle_path },
+        .{ .name = "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE", .value = bundle_path },
+        .{ .name = "TELAR_PROXY_TLS", .value = "1" },
+    };
+}
+
+test "proxy environment covers Git and Google Cloud trust stores" {
+    const overrides = proxyEnvironmentOverrides(
+        "http://127.0.0.1:45100",
+        "/state/ca-cert.pem",
+        "/state/ca-bundle.pem",
+    );
+    try std.testing.expectEqualStrings("GIT_SSL_CAINFO", overrides[8].name);
+    try std.testing.expectEqualStrings("/state/ca-bundle.pem", overrides[8].value);
+    try std.testing.expectEqualStrings("CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE", overrides[9].name);
+    try std.testing.expectEqualStrings("/state/ca-bundle.pem", overrides[9].value);
+}
 
 pub const ClientKey = history.model.ClientKey;
 
@@ -485,17 +532,11 @@ const Server = struct {
             var proxy_url_buffer: [256]u8 = undefined;
             defer std.crypto.secureZero(u8, &proxy_url_buffer);
             const proxy_url = try service.credentialUrl(&proxy_url_buffer, credential);
-            const overrides = [_]pty.Environment.Override{
-                .{ .name = "HTTPS_PROXY", .value = proxy_url },
-                .{ .name = "https_proxy", .value = proxy_url },
-                .{ .name = "NODE_USE_ENV_PROXY", .value = "1" },
-                .{ .name = "NODE_EXTRA_CA_CERTS", .value = service.certificate_path },
-                .{ .name = "SSL_CERT_FILE", .value = service.bundle_path },
-                .{ .name = "CURL_CA_BUNDLE", .value = service.bundle_path },
-                .{ .name = "REQUESTS_CA_BUNDLE", .value = service.bundle_path },
-                .{ .name = "AWS_CA_BUNDLE", .value = service.bundle_path },
-                .{ .name = "TELAR_PROXY_TLS", .value = "1" },
-            };
+            const overrides = proxyEnvironmentOverrides(
+                proxy_url,
+                service.certificate_path,
+                service.bundle_path,
+            );
             proxy_environment = try pty.Environment.initWithOverrides(
                 server.gpa,
                 server.inherited_environment,
@@ -726,6 +767,14 @@ const Server = struct {
             if (recipient.responses.pushNotification(pending)) delivered += 1;
         }
         return delivered;
+    }
+
+    fn publishAgentSound(server: *Server, notification: schema.AgentSoundNotification) void {
+        for (&server.clients.items) |*slot| {
+            const recipient = slot.* orelse continue;
+            if (!recipient.active() or recipient.role != .ui) continue;
+            _ = recipient.responses.pushAgentSound(notification);
+        }
     }
 
     fn scheduleAgentDescription(server: *Server) void {
@@ -1545,8 +1594,10 @@ const Server = struct {
             active.agent_process_cache,
             active.session.pid,
         )) {
-            _ = server.agents.observeScreen(
-                agent_mod.Identity.fromPane(active),
+            const identity = agent_mod.Identity.fromPane(active);
+            const previous_status = server.agents.projectedStatus(identity.key);
+            const changed = server.agents.observeScreen(
+                identity,
                 .{
                     .provider = signal.provider,
                     .status = switch (signal.status) {
@@ -1560,6 +1611,14 @@ const Server = struct {
                 },
                 Io.Timestamp.now(server.io, .real).toMilliseconds(),
             );
+            if (changed) if (agentSoundForTransition(
+                previous_status,
+                server.agents.projectedStatus(identity.key),
+            )) |sound| server.publishAgentSound(.{
+                .pane_id = identity.key.id,
+                .pane_generation = identity.key.generation,
+                .sound = sound,
+            });
         };
         server.scheduleAgentDescription();
         try schedulePaneObservation(server.select, active);
@@ -1715,6 +1774,30 @@ const Server = struct {
                 0,
             if (server.proxy_service) |service|
                 service.h2_decode_failures.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
+                service.passthrough_connections.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
+                service.upstream_connect_failures.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
+                service.tls_context_failures.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
+                service.tls_upstream_handshake_failures.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
+                service.tls_downstream_handshake_failures.load(.monotonic)
+            else
+                0,
+            if (server.proxy_service) |service|
+                service.tls_mint_failures.load(.monotonic)
             else
                 0,
             server.heap,
@@ -2398,6 +2481,7 @@ fn serveInternal(
             .key = proxy_options.key_path,
             .certificate = proxy_options.certificate_path,
             .bundle = proxy_options.bundle_path,
+            .passthrough_hosts = proxy_options.passthrough_hosts,
         })
     else
         null;
@@ -3062,6 +3146,21 @@ test "agent display labels are bounded, valid UTF-8, and cwd-aware" {
     try std.testing.expect(std.unicode.utf8ValidateSlice(shortened_cwd));
     try std.testing.expect(std.mem.startsWith(u8, shortened_cwd, "…"));
     try std.testing.expect(std.mem.endsWith(u8, shortened_cwd, "/agents/telar"));
+}
+
+test "agent sounds require exact working transitions" {
+    try std.testing.expectEqual(
+        schema.AgentSound.ready,
+        agentSoundForTransition(.working, .ready).?,
+    );
+    try std.testing.expectEqual(
+        schema.AgentSound.needs_input,
+        agentSoundForTransition(.working, .blocked).?,
+    );
+    try std.testing.expect(agentSoundForTransition(null, .ready) == null);
+    try std.testing.expect(agentSoundForTransition(.ready, .ready) == null);
+    try std.testing.expect(agentSoundForTransition(.blocked, .ready) == null);
+    try std.testing.expect(agentSoundForTransition(.working, .failed) == null);
 }
 
 test {

@@ -93,6 +93,12 @@ pub fn formatRuntimeTelemetry(
     proxy_unknown_credential_rejections: u64,
     proxy_connection_limit_drops: u64,
     proxy_h2_decode_failures: u64,
+    proxy_passthrough_connections: u64,
+    proxy_upstream_connect_failures: u64,
+    proxy_tls_context_failures: u64,
+    proxy_tls_upstream_handshake_failures: u64,
+    proxy_tls_downstream_handshake_failures: u64,
+    proxy_tls_mint_failures: u64,
     heap: *const diagnostics.Heap,
 ) ![]const u8 {
     const now_ns = diagnostics.now(io);
@@ -309,7 +315,13 @@ pub fn formatRuntimeTelemetry(
             "\"proxy_invalid_authorization_rejections\":{d}," ++
             "\"proxy_unknown_credential_rejections\":{d}," ++
             "\"proxy_connection_limit_drops\":{d}," ++
-            "\"proxy_h2_decode_failures\":{d},",
+            "\"proxy_h2_decode_failures\":{d}," ++
+            "\"proxy_passthrough_connections\":{d}," ++
+            "\"proxy_upstream_connect_failures\":{d}," ++
+            "\"proxy_tls_context_failures\":{d}," ++
+            "\"proxy_tls_upstream_handshake_failures\":{d}," ++
+            "\"proxy_tls_downstream_handshake_failures\":{d}," ++
+            "\"proxy_tls_mint_failures\":{d},",
         .{
             metrics.agent_process_inspections,
             metrics.agent_process_misses,
@@ -322,6 +334,12 @@ pub fn formatRuntimeTelemetry(
             proxy_unknown_credential_rejections,
             proxy_connection_limit_drops,
             proxy_h2_decode_failures,
+            proxy_passthrough_connections,
+            proxy_upstream_connect_failures,
+            proxy_tls_context_failures,
+            proxy_tls_upstream_handshake_failures,
+            proxy_tls_downstream_handshake_failures,
+            proxy_tls_mint_failures,
         },
     );
     try output.print("\"history_available\":{d},\"sqlite_open_failures\":{d}," ++
@@ -440,6 +458,12 @@ test "runtime telemetry reports retained memory domains" {
             0,
             0,
             false,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             0,
             0,
             0,

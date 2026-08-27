@@ -193,6 +193,9 @@ A design is incomplete while any item is unknown.
 - Reject malformed, option-looking, duplicated, stale, or wrong-owner session
   references before launch.
 - Distinguish reattach, restore, resume, and handoff in code, UI, and docs.
+- The runtime decides audible agent transitions and publishes pane identity
+  plus generation. Only clients touch host audio, and playback stays on the
+  observation path.
 
 ## History and proxy
 

@@ -11,6 +11,7 @@ return telar.config({
     proxy = {
       enabled = false,
       ca_dir = "state/proxy",
+      passthrough_hosts = { "updates.example.com" },
     },
     -- Explicit opt-in: the first user request is sent through stdin to this
     -- command so it never appears in the process arguments.
@@ -36,6 +37,7 @@ return telar.config({
       colors = { accent = "#ffc799" },
     }),
     sidebar = { visible = true, renderer = "automatic" },
+    sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     keybindings = {
       telar.bind({ "[" }, telar.action.copy_mode()),

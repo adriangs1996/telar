@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 57;
+const corpus_len = 58;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -602,6 +602,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .delivered_clients = 2,
         }),
     ));
+    helper.add("agent_sound", .server, false, golden.agent_sound, helper.commit(
+        try schema.encodeAgentSound(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 7,
+            .sound = .needs_input,
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -668,6 +675,7 @@ const golden = struct {
     pub const pane_clipboard = "9a050000000000000003000000616263";
     pub const notification = "9b02b80b00000203000000000000000d004167656e742077616974696e67130052657669657720697473207175657374696f6e";
     pub const notification_shown = "9c2e0000000000000002";
+    pub const agent_sound = "9e0500000000000000070000000000000001";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {

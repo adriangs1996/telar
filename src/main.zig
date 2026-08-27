@@ -349,6 +349,8 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     var configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var proxy_enabled = false;
     var configured_proxy_directory: ?[]u8 = null;
+    var proxy_passthrough_host_storage: [frontend.config.max_proxy_passthrough_hosts][]const u8 = undefined;
+    var proxy_passthrough_hosts: []const []const u8 = &.{};
     var description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined;
     var agent_description_options: ?backend.runtime.AgentDescriptionOptions = null;
     defer if (configured_proxy_directory) |directory| init.gpa.free(directory);
@@ -382,6 +384,9 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
             );
         }
         proxy_enabled = generation.snapshot.runtime.proxy_enabled;
+        proxy_passthrough_hosts = generation.snapshot.runtime.proxyPassthroughHosts(
+            &proxy_passthrough_host_storage,
+        );
         if (proxy_enabled) if (generation.snapshot.runtime.proxyCaDir()) |ca_dir| {
             configured_proxy_directory = if (std.fs.path.isAbsolute(ca_dir))
                 try init.gpa.dupe(u8, ca_dir)
@@ -431,6 +436,7 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
             .key_path = try std.fmt.bufPrint(&proxy_key_buffer, "{s}/ca-key.pem", .{directory}),
             .certificate_path = try std.fmt.bufPrint(&proxy_cert_buffer, "{s}/ca-cert.pem", .{directory}),
             .bundle_path = try std.fmt.bufPrint(&proxy_bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+            .passthrough_hosts = proxy_passthrough_hosts,
         };
     } else null;
     try backend.runtime.serve(
@@ -588,6 +594,7 @@ fn runClient(
             options.sidebar_rendering,
         .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
         .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
+        .sound = if (snapshot) |value| value.sound else .{},
         .host_shared_memory = init.minimal.environ.getPosix("SSH_CONNECTION") == null and
             if (init.minimal.environ.getPosix("TERM_PROGRAM")) |program|
                 std.ascii.eqlIgnoreCase(program, "ghostty")

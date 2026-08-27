@@ -30,6 +30,7 @@ return telar.config({
       colors = { accent = "#ffc799" },
     }),
     sidebar = { visible = true, renderer = "automatic" },
+    sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     keybindings = {
       telar.bind({ "s" }, telar.action.toggle_sidebar()),
@@ -41,7 +42,11 @@ return telar.config({
   runtime = {
     history = { path = "state/history.db" },
     graphics = { pane_mib = 64, global_mib = 256 },
-    proxy = { enabled = false, ca_dir = "state/proxy" },
+    proxy = {
+      enabled = false,
+      ca_dir = "state/proxy",
+      passthrough_hosts = { "updates.example.com" },
+    },
     agent_descriptions = {
       command = {
         "codex", "exec", "--ephemeral", "--ignore-rules",
@@ -63,10 +68,11 @@ return telar.config({
 })
 ```
 
-`runtime.agent_descriptions` is an explicit privacy opt-in. After the first
-user request completes, Telar sends that request through standard input to the
-configured command and accepts one short line as the session title. The
-command is executed directly, without a shell. It may contain 1 to 32
+`runtime.agent_descriptions` is an explicit privacy opt-in. When the first user
+request starts model work, Telar sends that request through standard input to
+the configured command and accepts one short line as the session title. The
+command runs in parallel with the agent and is executed directly, without a
+shell. It may contain 1 to 32
 arguments and 4096 bytes in total; `timeout_ms` must be between 1000 and 60000.
 Telar retains its local placeholder if the command is missing, busy, times out,
 or returns invalid output.
@@ -90,6 +96,12 @@ Font theme uses a glyph subset embedded in Telar and does not require a Nerd
 Font in the host terminal. It needs Kitty Graphics support and RGB theme
 colors. Telar keeps the Unicode cell icons as the fallback when either is
 unavailable.
+
+`client.sound` controls audible agent notifications. All three fields default
+to `true`. `ready` applies only to `working -> ready`; `needs_input` applies
+only to `working -> blocked`. Initial snapshots, reconnects, repeated states,
+failures, and transitions from any other state remain silent. Set
+`enabled = false` to disable both sounds for that client or profile.
 
 ## Bindings
 
@@ -219,10 +231,16 @@ The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
 `config.lua`; its parent directory must already exist. `runtime.proxy` accepts
-only `enabled` and `ca_dir`. ProxyTLS is disabled by default. A relative
-`ca_dir` is also resolved beside `config.lua`; Telar creates it owner-only and
-stores its private CA and derived trust bundle there with owner-only file
-permissions. Explicit server CLI
+`enabled`, `ca_dir`, and `passthrough_hosts`. ProxyTLS is disabled by default. A
+relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
+owner-only and stores its private CA and derived trust bundle there with
+owner-only file permissions. `passthrough_hosts` accepts at most 256 exact DNS
+hostnames within a 64,768-byte budget; it extends the built-in exclusions for
+`api.github.com` and `ab.chatgpt.com`. Telar canonicalizes case, sorts the set,
+and removes duplicates when the runtime starts. Wildcards are rejected.
+Excluded connections still pass through Telar's authenticated CONNECT
+listener, but their TCP payload is forwarded opaquely and is not observed.
+Explicit server CLI
 graphics limits still override the Lua values. Runtime-owned settings take
 effect when the long-lived runtime starts; restart that runtime to apply a
 changed runtime profile.

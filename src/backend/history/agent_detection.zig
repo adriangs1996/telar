@@ -67,9 +67,10 @@ pub const Detector = struct {
                 .ready_confirmed = true,
             };
 
-        // Claude's branded header and prompt often arrive in different sealed
-        // observation batches. The header establishes identity on its own;
-        // later generic prompts may then refresh the existing agent record.
+        // Claude's branded header establishes identity only. Readiness comes
+        // from the observer's emulated screen, where the prompt must be next to
+        // the visible cursor. A prompt glyph in this byte sample may already
+        // have been erased by a later control sequence.
         if (containsAsciiInsensitive(text, "claude code"))
             return .{
                 .provider = .claude,
@@ -78,11 +79,6 @@ pub const Detector = struct {
                 .identity_confirmed = true,
             };
 
-        if (std.mem.indexOf(u8, text, "\xe2\x9d\xaf") != null) return .{
-            .provider = .claude,
-            .status = .ready,
-            .confidence = 72,
-        };
         return null;
     }
 
@@ -179,7 +175,7 @@ test "recognizes an open Codex prompt without proxy evidence" {
     try std.testing.expect(detected.ready_confirmed);
 }
 
-test "Claude branding and prompt may arrive in separate samples" {
+test "Claude branding confirms identity without claiming a prompt" {
     var detector: Detector = .{};
     detector.observe("\x1b[1mClaude Code\x1b[0m v2.1");
     const branded = detector.signal().?;
@@ -190,11 +186,7 @@ test "Claude branding and prompt may arrive in separate samples" {
 
     detector.resetSample();
     detector.observe("\xe2\x9d\xaf");
-    const prompt = detector.signal().?;
-    try std.testing.expectEqual(Status.ready, prompt.status);
-    try std.testing.expectEqual(schema.AgentProvider.claude, prompt.provider);
-    try std.testing.expect(!prompt.identity_confirmed);
-    try std.testing.expect(!prompt.ready_confirmed);
+    try std.testing.expect(detector.signal() == null);
 }
 
 test "terminal controls may split at every byte" {

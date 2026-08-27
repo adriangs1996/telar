@@ -6,6 +6,22 @@ validates its bounds and broadcasts it, and each connected UI client copies it
 into disposable toast state. Notifications are not persisted and never become
 runtime lifecycle state.
 
+Routine lifecycle changes are intentionally silent. Creating, renaming, or
+closing panes, tabs, and workspaces does not create a toast, and neither does a
+pane process exiting. The UI state itself confirms those changes. Request
+failures, actionable agent transitions, explicit notifications, and the TLS
+interception indicator remain visible.
+
+Agent transition sounds use a separate bounded semantic event. The runtime,
+which owns agent truth, emits it only for `working -> ready` and
+`working -> blocked`. The event carries the pane ID and generation. A client
+discards it when that identity is absent from its current agent snapshot, then
+applies its local `client.sound` policy.
+
+The runtime offers the event to every active UI client. Each client validates
+the pane identity and applies its own profile, so a remote profile can mute
+sounds without changing the runtime or another attached client.
+
 ## CLI
 
 ```sh
@@ -70,6 +86,21 @@ transition; once stable, the client sleeps until the next expiry instead of
 polling. Toasts can be dismissed explicitly, and click targets are semantic
 IDs; a pane, tab, or workspace that disappeared before the click is safely
 ignored.
+
+## Agent sound playback
+
+Playback belongs to the client because the runtime may be headless or on a
+different machine. It runs as an observation task and never delays input,
+rendering, PTY traffic, or another client. Each client keeps at most one sound
+in flight and one coalesced successor; a needs-input sound wins over a ready
+sound in the same burst.
+
+On macOS Telar uses `afplay` with the system Glass and Ping sounds. On Windows
+it uses `MessageBeep`. On Linux it first asks `canberra-gtk-play` for the
+Freedesktop `complete` or `dialog-warning` event, then tries `paplay`,
+`pw-play`, `ffplay`, and `mpv` with the corresponding Freedesktop sound file.
+Missing players, missing sound files, and playback errors leave the visual
+notification intact and do not affect the client.
 
 ## Rendering
 

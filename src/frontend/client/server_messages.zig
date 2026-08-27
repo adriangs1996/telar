@@ -121,6 +121,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .request_failed => |failure| try handleRequestFailed(client, failure),
         .notification => |notification| try handleRuntimeNotification(client, notification),
         .notification_shown => |shown| try handleNotificationShown(client, shown),
+        .agent_sound => |sound| try handleAgentSound(client, sound),
         .resync_required => |required| return handleResyncMessage(client, required),
         .runtime_stopping => return 0,
         .history_results => return error.UnexpectedHistoryResults,
@@ -138,6 +139,14 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         => try handleGraphics(client, message),
     }
     return null;
+}
+
+fn handleAgentSound(client: *Client, notification: schema.AgentSoundNotification) !void {
+    if (client.view.sidebar_snapshot.find(.{
+        .pane_id = notification.pane_id,
+        .pane_generation = notification.pane_generation,
+    }) == null) return;
+    try client.scheduleAgentSound(notification.sound);
 }
 
 /// Entrypoint for a clipboard write a pane requested via OSC 52: the bytes
@@ -368,11 +377,6 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
             }
             client.tabs.deinit();
             try bootstrapWorkspace(client, opened);
-            try client.notify(.{
-                .level = .success,
-                .title = "Workspace created",
-                .message = "The new workspace is ready",
-            });
         },
         .split => |split| {
             if (!std.meta.eql(split.location, opened.location))
@@ -468,7 +472,6 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
         .rename_workspace => |workspace| workspace,
         else => return error.UnexpectedWorkspaceSnapshot,
     };
-    const renamed = continuation == .rename_workspace;
     if (!std.meta.eql(expected_workspace, snapshot.workspace))
         return error.UnexpectedWorkspaceSnapshot;
     var canonical_tabs: [tabs_mod.max_tabs]schema.TabId = undefined;
@@ -500,14 +503,7 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
         }
     }
     client.view.invalidate();
-    if (renamed) {
-        try client.notify(.{
-            .level = .success,
-            .title = "Workspace renamed",
-            .message = "The workspace name was updated",
-            .target = notificationTarget(continuation),
-        });
-    } else try client.presenter.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 /// A created tab becomes active; the previous one detaches.
@@ -527,12 +523,7 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
     );
     try client.syncPaneFocus(&client.tabs.active().?.model);
     client.view.invalidate();
-    try client.notify(.{
-        .level = .success,
-        .title = "Tab created",
-        .message = created.label,
-        .target = .{ .select_tab = created.location.tab_id },
-    });
+    try client.presenter.requestDraw();
 }
 
 /// A confirmed tab rename.
@@ -545,12 +536,7 @@ fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
     if (!client.tabs.rename(renamed.location.tab_id, renamed.label))
         return error.UnexpectedTab;
     client.view.invalidate();
-    try client.notify(.{
-        .level = .success,
-        .title = "Tab renamed",
-        .message = renamed.label,
-        .target = .{ .select_tab = renamed.location.tab_id },
-    });
+    try client.presenter.requestDraw();
 }
 
 /// A closed tab: lifecycle event or reply, possibly ending the workspace.
@@ -658,24 +644,16 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
         client.mode = .normal;
     client.graphics_store.clearPane(exited.pane_id);
     const tab = client.tabs.tabForPane(exited.pane_id);
-    const tab_id = if (tab) |value| value.location.tab_id else null;
     if (client.reported_focus == exited.pane_id) client.forgetPaneFocus();
     if (tab) |value| _ = value.model.removePane(exited.pane_id);
     client.view.invalidate();
-    const requested = client.requests.completePaneClose(exited.pane_id);
+    _ = client.requests.completePaneClose(exited.pane_id);
     if (client.tabs.active()) |active| {
         try client.syncPaneFocus(&active.model);
         if (active.model.pane_count != 0)
             try client.resizeAttached(&active.model, client.view.workbench());
     }
-    if (!requested) {
-        try client.notify(.{
-            .level = .warning,
-            .title = "Pane exited",
-            .message = "The process in this pane has stopped",
-            .target = if (tab_id) |id| .{ .select_tab = id } else .none,
-        });
-    } else try client.presenter.requestDraw();
+    try client.presenter.requestDraw();
 }
 
 /// A failed request: roll back what the continuation had staged and tell the user.

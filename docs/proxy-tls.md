@@ -15,6 +15,7 @@ return {
     proxy = {
       enabled = true,
       ca_dir = "state/proxy",
+      passthrough_hosts = { "updates.example.com" },
     },
   },
 }
@@ -32,12 +33,28 @@ process exit revokes one before its pane storage is released. Runtime event
 handling validates the same generation and token again before changing agent
 state.
 
-Telar injects both forms of `HTTPS_PROXY` and the relevant process-local CA
-variables into new panes. It deliberately does not change plaintext
-`HTTP_PROXY`. The local authority directory is mode 0700; its key, certificate,
-and combined system root bundle are written atomically with mode 0600. Existing
-corrupt or partial authority files are not overwritten. Telar never installs
-this CA in the system trust store.
+Telar injects both forms of `HTTPS_PROXY` and process-local CA variables into
+new panes. The generic variables cover OpenSSL, curl, Requests, Node.js, and
+AWS clients. `GIT_SSL_CAINFO` covers Git, while
+`CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE` covers Google Cloud CLI clients that
+otherwise select their own certifi bundle. Telar deliberately does not change
+plaintext `HTTP_PROXY`. The local authority directory is mode 0700; its key,
+certificate, and combined system root bundle are written atomically with mode
+0600. Existing corrupt or partial authority files are not overwritten. Telar
+never installs this CA in the system trust store.
+
+Some clients validate through a platform trust API and cannot consume a
+process-local CA. Telar therefore has an exact-host passthrough policy.
+`api.github.com`, used by lazygit's internal GitHub requests, and
+`ab.chatgpt.com`, used by Codex on macOS, are built in. Entries in
+`passthrough_hosts` extend that list; wildcards and suffix matches are rejected.
+The runtime accepts 256 configured entries, canonicalizes and deduplicates them
+at startup, then uses binary search for every CONNECT hostname.
+The CONNECT request still requires a live pane capability, but after the `200`
+response Telar forwards the TCP stream byte for byte. TLS remains end to end
+between the child and origin, and Telar produces no HTTP lifecycle observation
+for that connection. The child validates the origin with its normal trust
+store.
 
 The proxy connects to and validates the real origin first, carrying the
 child's ALPN offer upstream, then mirrors only the selected protocol
@@ -109,27 +126,32 @@ capability.
 ## Agent state
 
 Hosts below `anthropic.com` identify Claude Code and hosts below `openai.com`
-or `chatgpt.com` identify Codex. A request start or response data means
-`working`; a completed response means `ready`. HTTP/1.1 error responses,
-HTTP/2 stream resets, and failures while connecting or establishing TLS mean
-`failed`. HTTP/2 response status is decoded from HPACK, so a completed response
-with status 400 or greater also means `failed`.
+or `chatgpt.com` identify Codex. A request start, response data, or successful
+response completion means `working`: one completed model exchange may be
+followed by local tool execution and another model request within the same
+agent turn. HTTP/1.1 error responses, HTTP/2 stream resets, and failures while
+connecting or establishing TLS mean `failed`. HTTP/2 response status is decoded
+from HPACK, so a completed response with status 400 or greater also means
+`failed`.
 
-HTTP/2 lifecycle state is keyed by protocol, connection ID, and stream ID. A
-completed stream does not make a pane ready while another stream on that pane
-is active. A connection-level failure settles every remaining stream on that
-connection, while a graceful duplicate sentinel after all streams completed
-does not overwrite their result. Both the protocol observer and agent store
-track at most 128 concurrent streams per bounded record.
+HTTP/2 lifecycle state is keyed by protocol, connection ID, and stream ID.
+Completing every active stream still does not prove that the agent turn ended.
+A connection-level failure settles every remaining stream on that connection,
+while a graceful duplicate sentinel after all streams completed does not
+overwrite their result. Both the protocol observer and agent store track at
+most 128 concurrent streams per bounded record.
 
 Network evidence cannot see a terminal permission dialog, so the observation
 worker also recognizes bounded presentation hints found in Codex, Claude Code,
 and herdr behavior. Permission and confirmation prompts produce `blocked` and
 override proxy activity. Working text overrides an early response completion.
-Claude's ready prompt is accepted only after Claude identity is already known
-and requires three consecutive samples before it overrides a lost proxy
-completion. Codex's explicit branded input prompt confirms `ready` in one
-sample. Generic prompts without established agent identity are discarded.
+Claude becomes `ready` only when the emulated terminal's current screen has a
+visible cursor immediately after its `❯` input prompt. The raw PTY byte stream
+cannot establish that state because a later terminal control sequence may have
+erased or moved the glyph. Claude identity must already be known from the
+foreground process, proxy, or branding; a bare `❯` never establishes it.
+Codex's explicit branded input prompt confirms `ready` in one sample. Generic
+prompts without established agent identity are discarded.
 Evidence expires, and pane generation plus process and history-session
 identity prevent a late event from attaching to a reused pane.
 
@@ -138,6 +160,10 @@ command, resumes a session, kills a process, or generates terminal input.
 Observation values contain only connection, stream, protocol, provider, phase,
 status code, pane identity, and timestamps. Queue saturation drops
 observations, never traffic.
+
+Bounded counters distinguish rejected authentication, upstream connection
+failures, each TLS interception stage, HTTP/2 decode failures, and passthrough
+connections. They never retain the destination hostname or payload.
 
 ## Lua middleware boundary
 
@@ -153,13 +179,11 @@ runtime loop, a TLS session, or a tunnel actor, and it never receives a Zig
 pointer. Registering a new immutable pipeline generation happens before it can
 accept connections.
 
-## Process-local trust exception
+## System trust remains unchanged
 
-Some programs do not honor process-local CA variables. The known Codex
-`ab.chatgpt.com` path on macOS can validate through Security.framework and
-ignore the injected bundle. Telar reports only traffic it actually observes;
-installing a CA into Keychain remains a separate user decision and is outside
-the current implementation.
+Installing Telar's CA into Keychain or another system trust store remains a
+separate user decision and is outside the current implementation. The built-in
+passthrough hosts do not require that installation.
 
 ## Build dependency
 

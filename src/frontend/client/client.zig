@@ -15,6 +15,7 @@ const client_requests = @import("requests.zig");
 const client_telemetry = @import("telemetry.zig");
 const client_view = @import("view.zig");
 const lua_config = @import("../config/root.zig");
+const sound_mod = @import("../sound.zig");
 const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
@@ -71,6 +72,7 @@ pub const Options = struct {
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
     pane_gaps: bool = true,
+    sound: lua_config.SoundConfig = .{},
     host_shared_memory: bool = false,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
     input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
@@ -114,6 +116,7 @@ pub const ClientEvent = union(enum) {
     media_tick: anyerror!void,
     sidebar_animation_tick: anyerror!void,
     notification_tick: anyerror!void,
+    sound_played: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!config_reload.ConfigReload,
@@ -200,6 +203,7 @@ plugin_registry: ?*plugin_broker.Registry,
 trust_store: ?*core.plugin.TrustStore,
 reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
+sound_config: lua_config.SoundConfig,
 plugin_pending: bool = false,
 attachment_capture: attachments.CaptureState = .{},
 paste_pane: ?schema.PaneId = null,
@@ -216,6 +220,8 @@ requests: client_requests.Tracker = .{},
 sidebar_animation_pending: bool = false,
 notification_tick_pending: bool = false,
 notification_timer: NotificationTimer = .{},
+sound_pending: bool = false,
+queued_sound: ?sound_mod.Kind = null,
 reported_focus: ?schema.PaneId = null,
 reported_focus_events: bool = false,
 
@@ -290,6 +296,7 @@ pub fn init(params: Params) !*Client {
         .plugin_registry = params.options.plugin_registry,
         .trust_store = params.options.trust_store,
         .sidebar_rendering = params.options.sidebar_rendering,
+        .sound_config = params.options.sound,
         .reload = .{ .mtime_ns = params.options.config_mtime_ns },
     };
     // The select's storage lives inside the heap-stable client, so the
@@ -791,6 +798,27 @@ pub fn handleNotificationTickEvent(client: *Client, result: anyerror!void) !void
     try client.scheduleNotificationTick();
 }
 
+pub fn scheduleAgentSound(client: *Client, kind: sound_mod.Kind) !void {
+    if (!client.sound_config.allows(kind)) return;
+    if (client.sound_pending) {
+        client.queued_sound = sound_mod.coalesce(client.queued_sound, kind);
+        return;
+    }
+    client.sound_pending = true;
+    client.select.concurrent(.sound_played, sound_mod.play, .{ client.io, kind }) catch |err| {
+        client.sound_pending = false;
+        return err;
+    };
+}
+
+pub fn handleSoundPlayedEvent(client: *Client, result: anyerror!void) !void {
+    _ = result catch {};
+    client.sound_pending = false;
+    const queued = client.queued_sound;
+    client.queued_sound = null;
+    if (queued) |kind| try client.scheduleAgentSound(kind);
+}
+
 pub fn handleTelemetryTickEvent(
     client: *Client,
     result: anyerror!void,
@@ -942,6 +970,8 @@ pub fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
     client.sidebar_rendering = adoption.sidebar_rendering;
     client.view.setSidebarVisible(snapshot.sidebar_visible);
     client.tabs.setPaneGaps(snapshot.pane_gaps);
+    client.sound_config = snapshot.sound;
+    if (!client.sound_config.enabled) client.queued_sound = null;
     const cell_size = client.capabilities.cellSize(
         client.host_size.cols,
         client.host_size.rows,

@@ -19,11 +19,83 @@ pub const port_attempts: u16 = 128;
 pub const max_connections: u32 = 64;
 pub const event_capacity = 256;
 pub const max_credentials = schema.max_agent_snapshot_entries;
+pub const max_configured_passthrough_hosts = core.proxy.max_passthrough_hosts;
+pub const default_passthrough_hosts = [_][]const u8{
+    "api.github.com",
+    "ab.chatgpt.com",
+};
+const max_passthrough_hosts = max_configured_passthrough_hosts + default_passthrough_hosts.len;
+
+const proxy_authentication_required =
+    "HTTP/1.1 407 Proxy Authentication Required\r\n" ++
+    "Proxy-Authenticate: Basic realm=\"telar\"\r\n" ++
+    "Content-Length: 0\r\n" ++
+    "Connection: close\r\n\r\n";
 
 pub const Paths = struct {
     key: []const u8,
     certificate: []const u8,
     bundle: []const u8,
+    passthrough_hosts: []const []const u8 = &.{},
+};
+
+const PassthroughHosts = struct {
+    storage: [max_passthrough_hosts][]const u8 = undefined,
+    count: u16 = 0,
+
+    fn init(configured: []const []const u8) !PassthroughHosts {
+        if (configured.len > max_configured_passthrough_hosts)
+            return error.TooManyProxyPassthroughHosts;
+        var hosts: PassthroughHosts = .{};
+        for (default_passthrough_hosts) |host| hosts.append(host);
+        for (configured) |host| {
+            if (host.len == 0 or host.len > core.proxy.max_hostname_bytes)
+                return error.InvalidProxyPassthroughHost;
+            hosts.append(host);
+        }
+        std.mem.sort(
+            []const u8,
+            hosts.storage[0..hosts.count],
+            {},
+            struct {
+                fn lessThan(_: void, left: []const u8, right: []const u8) bool {
+                    return core.proxy.orderHostname(left, right) == .lt;
+                }
+            }.lessThan,
+        );
+        hosts.deduplicate();
+        return hosts;
+    }
+
+    fn contains(hosts: *const PassthroughHosts, host: []const u8) bool {
+        return std.sort.binarySearch(
+            []const u8,
+            hosts.storage[0..hosts.count],
+            host,
+            struct {
+                fn compare(target: []const u8, candidate: []const u8) std.math.Order {
+                    return core.proxy.orderHostname(target, candidate);
+                }
+            }.compare,
+        ) != null;
+    }
+
+    fn append(hosts: *PassthroughHosts, host: []const u8) void {
+        hosts.storage[hosts.count] = host;
+        hosts.count += 1;
+    }
+
+    fn deduplicate(hosts: *PassthroughHosts) void {
+        var unique_count: usize = 0;
+        for (hosts.storage[0..hosts.count]) |host| {
+            if (unique_count != 0 and
+                core.proxy.orderHostname(hosts.storage[unique_count - 1], host) == .eq)
+                continue;
+            hosts.storage[unique_count] = host;
+            unique_count += 1;
+        }
+        hosts.count = @intCast(unique_count);
+    }
 };
 
 pub const Service = struct {
@@ -35,6 +107,7 @@ pub const Service = struct {
     roots: tls.Roots,
     certificate_path: []const u8,
     bundle_path: []const u8,
+    passthrough_hosts: PassthroughHosts,
     credentials: CredentialRegistry = .{},
     pipeline: middleware.Pipeline = .{},
     transforms: middleware.TransformPipeline = .{},
@@ -48,6 +121,12 @@ pub const Service = struct {
     unknown_credential_rejections: std.atomic.Value(u64) = .init(0),
     connection_limit_drops: std.atomic.Value(u64) = .init(0),
     h2_decode_failures: std.atomic.Value(u64) = .init(0),
+    passthrough_connections: std.atomic.Value(u64) = .init(0),
+    upstream_connect_failures: std.atomic.Value(u64) = .init(0),
+    tls_context_failures: std.atomic.Value(u64) = .init(0),
+    tls_upstream_handshake_failures: std.atomic.Value(u64) = .init(0),
+    tls_downstream_handshake_failures: std.atomic.Value(u64) = .init(0),
+    tls_mint_failures: std.atomic.Value(u64) = .init(0),
     active_connections: std.atomic.Value(u32) = .init(0),
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
@@ -79,6 +158,7 @@ pub const Service = struct {
             .roots = roots,
             .certificate_path = paths.certificate,
             .bundle_path = paths.bundle,
+            .passthrough_hosts = try .init(paths.passthrough_hosts),
             .events = undefined,
         };
         service.events = .init(&service.event_storage);
@@ -224,13 +304,22 @@ fn listen(io: Io) !Bound {
     var port = first_port;
     while (port < first_port + port_attempts) : (port += 1) {
         const address = net.IpAddress.parse("127.0.0.1", port) catch unreachable;
-        const listener = address.listen(io, .{ .reuse_address = true }) catch |err| switch (err) {
+        const listener = address.listen(io, .{}) catch |err| switch (err) {
             error.AddressInUse => continue,
             else => |other| return other,
         };
         return .{ .listener = listener, .port = port };
     }
     return error.ProxyPortUnavailable;
+}
+
+test "proxy listeners own distinct loopback ports" {
+    const io = std.testing.io;
+    var first = try listen(io);
+    defer first.listener.deinit(io);
+    var second = try listen(io);
+    defer second.listener.deinit(io);
+    try std.testing.expect(first.port != second.port);
 }
 
 const TunnelContext = struct {
@@ -293,13 +382,13 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     defer std.crypto.secureZero(u8, head[0..head_len]);
     var credential = identity.parseProxyAuthorization(head[0..head_len]) orelse {
         recordRejection(service, .invalid_authorization);
-        reply(service.io, stream, "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"telar\"\r\nContent-Length: 0\r\n\r\n");
+        reply(service.io, stream, proxy_authentication_required);
         return;
     };
     defer std.crypto.secureZero(u8, &credential.token);
     if (!service.credentials.contains(service.io, credential)) {
         recordRejection(service, .unknown_credential);
-        reply(service.io, stream, "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"telar\"\r\nContent-Length: 0\r\n\r\n");
+        reply(service.io, stream, proxy_authentication_required);
         return;
     }
     const target = connectTarget(head[0..head_len]) orelse {
@@ -320,12 +409,19 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
         return;
     };
     const upstream = connectUpstream(host_name, service.io, target.port) catch {
+        _ = service.upstream_connect_failures.fetchAdd(1, .monotonic);
         context.publish(.request_failed, 0);
         reply(service.io, stream, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
         return;
     };
     defer upstream.close(service.io);
     reply(service.io, stream, "HTTP/1.1 200 Connection Established\r\n\r\n");
+
+    if (service.passthrough_hosts.contains(target.host)) {
+        _ = service.passthrough_connections.fetchAdd(1, .monotonic);
+        relayPassthrough(service.io, stream, upstream);
+        return;
+    }
 
     var cause: anyerror = error.Unknown;
     const session = tls.intercept(
@@ -337,7 +433,8 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
         stream,
         upstream,
         &cause,
-    ) catch {
+    ) catch |err| {
+        recordTlsFailure(service, err);
         context.publish(.request_failed, 0);
         return;
     };
@@ -489,6 +586,16 @@ fn recordRejection(service: *Service, rejection: Rejection) void {
     }
 }
 
+fn recordTlsFailure(service: *Service, failure: tls.Error) void {
+    const counter = switch (failure) {
+        error.ContextFailed => &service.tls_context_failures,
+        error.UpstreamHandshakeFailed => &service.tls_upstream_handshake_failures,
+        error.DownstreamHandshakeFailed => &service.tls_downstream_handshake_failures,
+        error.MintFailed => &service.tls_mint_failures,
+    };
+    _ = counter.fetchAdd(1, .monotonic);
+}
+
 fn relayH2Request(session: *tls.Session, context: *TunnelContext) h2.Stats {
     return h2.relay(
         session,
@@ -583,6 +690,25 @@ fn relayUpgrade(io: Io, session: *tls.Session, context: *TunnelContext) void {
     context.publish(.response_finished, 0);
 }
 
+fn relayPassthrough(io: Io, child: net.Stream, origin: net.Stream) void {
+    var outbound = io.concurrent(pumpPassthrough, .{ io, child, origin }) catch return;
+    pumpPassthrough(io, origin, child);
+    outbound.await(io);
+}
+
+fn pumpPassthrough(io: Io, source: net.Stream, destination: net.Stream) void {
+    var read_buffer: [16 * 1024]u8 = undefined;
+    var write_buffer: [16 * 1024]u8 = undefined;
+    var reader = source.reader(io, &read_buffer);
+    var writer = destination.writer(io, &write_buffer);
+    while (true) {
+        const copied = reader.interface.stream(&writer.interface, .unlimited) catch break;
+        writer.interface.flush() catch break;
+        if (copied == 0) break;
+    }
+    destination.shutdown(io, .send) catch {};
+}
+
 fn pumpUpgrade(
     session: *tls.Session,
     from: tls.Session.Side,
@@ -672,6 +798,117 @@ test "provider domains require a label boundary" {
     try std.testing.expectEqual(schema.AgentProvider.unknown, providerForHost("evilopenai.com"));
 }
 
+test "passthrough policy sorts, deduplicates, and binary searches exact hostnames" {
+    const hosts = try PassthroughHosts.init(&.{
+        "updates.example.com",
+        "API.GITHUB.COM",
+    });
+    try std.testing.expectEqual(@as(u16, 3), hosts.count);
+    try std.testing.expect(hosts.contains("api.github.com"));
+    try std.testing.expect(hosts.contains("AB.CHATGPT.COM"));
+    try std.testing.expect(hosts.contains("UPDATES.EXAMPLE.COM"));
+    try std.testing.expect(!hosts.contains("github.com"));
+    try std.testing.expect(!hosts.contains("evil-api.github.com"));
+}
+
+fn echoOpaquePayload(io: Io, listener: *net.Server, expected: []const u8) !void {
+    const stream = try listener.accept(io);
+    defer stream.close(io);
+    var read_buffer: [256]u8 = undefined;
+    var reader = stream.reader(io, &read_buffer);
+    var payload: [256]u8 = undefined;
+    for (payload[0..expected.len]) |*byte| byte.* = try reader.interface.takeByte();
+    try std.testing.expectEqualStrings(expected, payload[0..expected.len]);
+    var write_buffer: [256]u8 = undefined;
+    var writer = stream.writer(io, &write_buffer);
+    try writer.interface.writeAll(payload[0..expected.len]);
+    try writer.interface.flush();
+}
+
+fn listenTestOrigin(io: Io) !Bound {
+    var port: u16 = 49_152;
+    while (port < 49_280) : (port += 1) {
+        const address = net.IpAddress.parse("127.0.0.1", port) catch unreachable;
+        const listener = address.listen(io, .{}) catch |err| switch (err) {
+            error.AddressInUse => continue,
+            else => |other| return other,
+        };
+        return .{ .listener = listener, .port = port };
+    }
+    return error.TestOriginPortUnavailable;
+}
+
+test "passthrough CONNECT relays opaque bytes without TLS interception" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const payload = "not-a-tls-client-hello";
+    var origin = try listenTestOrigin(io);
+    defer origin.listener.deinit(io);
+    var origin_worker = try io.concurrent(echoOpaquePayload, .{ io, &origin.listener, payload });
+    defer origin_worker.cancel(io) catch {};
+
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const service = try Service.create(io, gpa, .{
+        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
+        .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
+        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+        .passthrough_hosts = &.{"localhost"},
+    });
+    defer service.destroy();
+    const credential: identity.Credential = .{
+        .pane_id = try schema.id.pane(7),
+        .pane_generation = 12,
+        .token = .{0x11} ** identity.token_bytes,
+    };
+    try service.registerCredential(credential);
+    var worker = try io.concurrent(Service.run, .{service});
+    defer worker.cancel(io) catch {};
+
+    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.port);
+    const client = try proxy_address.connect(io, .{ .mode = .stream });
+    defer client.close(io);
+    var write_buffer: [512]u8 = undefined;
+    var writer = client.writer(io, &write_buffer);
+    const raw = "telar:7.12.11111111111111111111111111111111";
+    var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
+    const basic = std.base64.standard.Encoder.encode(&encoded, raw);
+    var request_buffer: [512]u8 = undefined;
+    const request = try std.fmt.bufPrint(
+        &request_buffer,
+        "CONNECT localhost:{d} HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n",
+        .{ origin.port, basic },
+    );
+    try writer.interface.writeAll(request);
+    try writer.interface.flush();
+    var read_buffer: [512]u8 = undefined;
+    var reader = client.reader(io, &read_buffer);
+    var response: ["HTTP/1.1 200 Connection Established\r\n\r\n".len]u8 = undefined;
+    try reader.interface.readSliceAll(&response);
+    try std.testing.expectEqualStrings(
+        "HTTP/1.1 200 Connection Established\r\n\r\n",
+        &response,
+    );
+
+    try writer.interface.writeAll(payload);
+    try writer.interface.flush();
+    var echoed: [payload.len]u8 = undefined;
+    for (&echoed) |*byte| byte.* = try reader.interface.takeByte();
+    try std.testing.expectEqualStrings(payload, &echoed);
+    client.shutdown(io, .send) catch {};
+    try origin_worker.await(io);
+    try std.testing.expectEqual(
+        @as(u64, 1),
+        service.passthrough_connections.load(.monotonic),
+    );
+}
+
 test "CONNECT target parser rejects non-CONNECT requests" {
     try std.testing.expectEqualStrings("api.openai.com", connectTarget(
         "CONNECT api.openai.com:443 HTTP/1.1\r\n\r\n",
@@ -730,6 +967,11 @@ test "loopback service rejects a CONNECT without a live pane capability" {
         response[0..response_len],
         "HTTP/1.1 407 Proxy Authentication Required\r\n",
     ));
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        response[0..response_len],
+        "Connection: close\r\n",
+    ) != null);
     try std.testing.expectEqual(
         @as(u64, 1),
         service.invalid_authorization_rejections.load(.monotonic),

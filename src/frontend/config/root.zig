@@ -34,6 +34,9 @@ pub const max_plugin_path_bytes = config_model.max_plugin_path_bytes;
 pub const max_profile_name_bytes = 64;
 pub const max_history_path_bytes = config_model.max_history_path_bytes;
 pub const max_proxy_path_bytes = config_model.max_proxy_path_bytes;
+pub const max_proxy_passthrough_hosts = config_model.max_proxy_passthrough_hosts;
+pub const max_proxy_passthrough_host_bytes = config_model.max_proxy_passthrough_host_bytes;
+pub const max_proxy_passthrough_bytes = config_model.max_proxy_passthrough_bytes;
 pub const max_agent_description_command_args = config_model.max_agent_description_command_args;
 pub const max_agent_description_command_bytes = config_model.max_agent_description_command_bytes;
 pub const min_agent_description_timeout_ms = config_model.min_agent_description_timeout_ms;
@@ -51,6 +54,7 @@ pub const Snapshot = config_model.Snapshot;
 pub const PluginSpec = config_model.PluginSpec;
 pub const RuntimeSnapshot = config_model.RuntimeSnapshot;
 pub const AgentDescriptionCommand = config_model.AgentDescriptionCommand;
+pub const SoundConfig = config_model.SoundConfig;
 
 const Callback = struct {
     registry_ref: c_int,
@@ -833,7 +837,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "enabled", "ca_dir" },
+            &.{ "enabled", "ca_dir", "passthrough_hosts" },
             "config.runtime.proxy",
             diagnostic,
         );
@@ -849,20 +853,73 @@ pub const Generation = struct {
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "ca_dir");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            const path = string(state, -1) orelse {
+                pop(state, 1);
+                diagnostic.set("config.runtime.proxy.ca_dir must be a string", .{});
+                return error.InvalidConfig;
+            };
+            if (path.len == 0 or path.len > max_proxy_path_bytes or
+                std.mem.indexOfScalar(u8, path, 0) != null)
+            {
+                pop(state, 1);
+                diagnostic.set("config.runtime.proxy.ca_dir is invalid", .{});
+                return error.InvalidConfig;
+            }
+            @memcpy(generation.snapshot.runtime.proxy_ca_dir_bytes[0..path.len], path);
+            generation.snapshot.runtime.proxy_ca_dir_len = @intCast(path.len);
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "passthrough_hosts");
         defer pop(state, 1);
         if (lua.lua_type(state, -1) == lua.LUA_TNIL) return;
-        const path = string(state, -1) orelse {
-            diagnostic.set("config.runtime.proxy.ca_dir must be a string", .{});
-            return error.InvalidConfig;
-        };
-        if (path.len == 0 or path.len > max_proxy_path_bytes or
-            std.mem.indexOfScalar(u8, path, 0) != null)
-        {
-            diagnostic.set("config.runtime.proxy.ca_dir is invalid", .{});
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.proxy.passthrough_hosts must be an array", .{});
             return error.InvalidConfig;
         }
-        @memcpy(generation.snapshot.runtime.proxy_ca_dir_bytes[0..path.len], path);
-        generation.snapshot.runtime.proxy_ca_dir_len = @intCast(path.len);
+        const hosts = lua.lua_absindex(state, -1);
+        const count = lua.lua_rawlen(state, hosts);
+        if (count > max_proxy_passthrough_hosts) {
+            diagnostic.set(
+                "config.runtime.proxy.passthrough_hosts exceeds {d} entries",
+                .{max_proxy_passthrough_hosts},
+            );
+            return error.InvalidConfig;
+        }
+        try ensureArrayOnly(
+            state,
+            hosts,
+            count,
+            "config.runtime.proxy.passthrough_hosts",
+            diagnostic,
+        );
+        for (0..count) |host_index| {
+            _ = lua.lua_geti(state, hosts, @intCast(host_index + 1));
+            defer pop(state, 1);
+            const host = string(state, -1) orelse {
+                diagnostic.set(
+                    "config.runtime.proxy.passthrough_hosts[{d}] must be a hostname",
+                    .{host_index + 1},
+                );
+                return error.InvalidConfig;
+            };
+            if (!validProxyHostname(host)) {
+                diagnostic.set(
+                    "config.runtime.proxy.passthrough_hosts[{d}] is not a valid hostname",
+                    .{host_index + 1},
+                );
+                return error.InvalidConfig;
+            }
+            generation.snapshot.runtime.proxy_passthrough_hosts.append(host) catch {
+                diagnostic.set(
+                    "config.runtime.proxy.passthrough_hosts exceeds its {d}-byte budget",
+                    .{max_proxy_passthrough_bytes},
+                );
+                return error.InvalidConfig;
+            };
+        }
+        generation.snapshot.runtime.proxy_passthrough_hosts.sortAndDeduplicate();
     }
 
     fn parseHistory(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -892,7 +949,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "input", "keybindings" },
+            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "sound", "input", "keybindings" },
             "config.client",
             diagnostic,
         );
@@ -936,6 +993,11 @@ pub const Generation = struct {
             }
             generation.snapshot.pane_gaps = lua.lua_toboolean(state, -1) != 0;
         }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "sound");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseSound(-1, diagnostic);
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "input");
@@ -997,6 +1059,34 @@ pub const Generation = struct {
             10_000,
             diagnostic,
         );
+    }
+
+    fn parseSound(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.client.sound must be a table", .{});
+            return error.InvalidConfig;
+        }
+        try ensureOnlyFields(
+            state,
+            absolute,
+            &.{ "enabled", "ready", "needs_input" },
+            "config.client.sound",
+            diagnostic,
+        );
+        inline for (.{ "enabled", "ready", "needs_input" }) |field| {
+            _ = lua.lua_getfield(state, absolute, field);
+            if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+                if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                    pop(state, 1);
+                    diagnostic.set("config.client.sound.{s} must be a boolean", .{field});
+                    return error.InvalidConfig;
+                }
+                @field(generation.snapshot.sound, field) = lua.lua_toboolean(state, -1) != 0;
+            }
+            pop(state, 1);
+        }
     }
 
     fn parseSidebar(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -1675,6 +1765,29 @@ fn validProfileName(name: []const u8) bool {
     return true;
 }
 
+fn validProxyHostname(host: []const u8) bool {
+    if (host.len == 0 or host.len > max_proxy_passthrough_host_bytes) return false;
+    var label_len: usize = 0;
+    for (host) |byte| switch (byte) {
+        '.' => {
+            if (label_len == 0 or label_len > 63) return false;
+            label_len = 0;
+        },
+        '-' => {
+            if (label_len == 0) return false;
+            label_len += 1;
+        },
+        else => {
+            if (!std.ascii.isAlphanumeric(byte)) return false;
+            label_len += 1;
+        },
+    };
+    if (label_len == 0 or label_len > 63 or host[host.len - 1] == '-') return false;
+    var labels = std.mem.splitScalar(u8, host, '.');
+    while (labels.next()) |label| if (label[label.len - 1] == '-') return false;
+    return true;
+}
+
 fn raiseLua(state: *lua.lua_State, message: [*:0]const u8) c_int {
     _ = lua.lua_pushstring(state, message);
     return lua.lua_error(state);
@@ -2183,6 +2296,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\  }),
         \\  sidebar = { visible = false, renderer = "cells" },
         \\  pane_gaps = false,
+        \\  sound = { enabled = true, ready = false, needs_input = true },
         \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
         \\  keybindings = {
         \\    telar.bind({ "%" }, telar.action.split_pane({ direction = "horizontal" })),
@@ -2210,6 +2324,9 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expectEqual(@as(u16, 1), generation.callback_count);
     try std.testing.expect(!generation.snapshot.sidebar_visible);
     try std.testing.expect(!generation.snapshot.pane_gaps);
+    try std.testing.expect(generation.snapshot.sound.enabled);
+    try std.testing.expect(!generation.snapshot.sound.ready);
+    try std.testing.expect(generation.snapshot.sound.needs_input);
     try std.testing.expectEqual(icons.Theme.nerd_font, generation.snapshot.icon_theme);
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
@@ -2280,6 +2397,25 @@ test "client config rejects non-boolean pane gaps" {
     );
     try std.testing.expectEqualStrings(
         "config.client.pane_gaps must be a boolean",
+        diagnostic.message(),
+    );
+}
+
+test "client config rejects non-boolean sound settings" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(
+        error.InvalidConfig,
+        Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            "return { api_version = 2, client = { sound = { ready = 1 } } }",
+            "@config.lua",
+            1,
+            &diagnostic,
+        ),
+    );
+    try std.testing.expectEqualStrings(
+        "config.client.sound.ready must be a boolean",
         diagnostic.message(),
     );
 }
@@ -2588,7 +2724,11 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         \\  runtime = {
         \\    history = { path = "state/history.db" },
         \\    graphics = { pane_mib = 32, global_mib = 128 },
-        \\    proxy = { enabled = true, ca_dir = "state/proxy" },
+        \\    proxy = {
+        \\      enabled = true,
+        \\      ca_dir = "state/proxy",
+        \\      passthrough_hosts = { "updates.example.com", "API.EXAMPLE.COM" },
+        \\    },
         \\    agent_descriptions = {
         \\      command = { "claude", "--print", "--tools", "" },
         \\      timeout_ms = 12000,
@@ -2622,6 +2762,13 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         "state/proxy",
         generation.snapshot.runtime.proxyCaDir().?,
     );
+    var passthrough_host_storage: [max_proxy_passthrough_hosts][]const u8 = undefined;
+    const passthrough_hosts = generation.snapshot.runtime.proxyPassthroughHosts(
+        &passthrough_host_storage,
+    );
+    try std.testing.expectEqual(@as(usize, 2), passthrough_hosts.len);
+    try std.testing.expectEqualStrings("api.example.com", passthrough_hosts[0]);
+    try std.testing.expectEqualStrings("updates.example.com", passthrough_hosts[1]);
     var arguments: [max_agent_description_command_args][]const u8 = undefined;
     const description_command = &generation.snapshot.runtime.agent_descriptions;
     try std.testing.expect(description_command.enabled());
@@ -2630,6 +2777,63 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
     try std.testing.expectEqual(@as(usize, 4), argv.len);
     try std.testing.expectEqualStrings("claude", argv[0]);
     try std.testing.expectEqualStrings("", argv[3]);
+}
+
+test "runtime proxy rejects unsafe passthrough host patterns" {
+    const cases = [_]struct { source: []const u8, message: []const u8 }{
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { passthrough_hosts = { '*.example.com' } } } }",
+            .message = "is not a valid hostname",
+        },
+        .{
+            .source = "local h = {}; for i = 1, 257 do h[i] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { passthrough_hosts = h } } }",
+            .message = "exceeds 256 entries",
+        },
+    };
+    for (cases) |case| {
+        var diagnostic: Diagnostic = .{};
+        try std.testing.expectError(
+            error.InvalidConfig,
+            Generation.loadSource(
+                std.testing.allocator,
+                std.testing.io,
+                case.source,
+                "@config.lua",
+                1,
+                &diagnostic,
+            ),
+        );
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), case.message) != null);
+    }
+}
+
+test "runtime proxy accepts and sorts 256 passthrough hosts" {
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "local h = {}; for i = 256, 1, -1 do h[#h + 1] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { passthrough_hosts = h } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    var storage: [max_proxy_passthrough_hosts][]const u8 = undefined;
+    const hosts = generation.snapshot.runtime.proxyPassthroughHosts(&storage);
+    try std.testing.expectEqual(@as(usize, 256), hosts.len);
+    for (hosts[1..], hosts[0 .. hosts.len - 1]) |current, previous|
+        try std.testing.expect(core.proxy.orderHostname(previous, current) == .lt);
+}
+
+test "proxy passthrough host validation requires exact DNS labels" {
+    try std.testing.expect(validProxyHostname("api.github.com"));
+    try std.testing.expect(validProxyHostname("API-2.example"));
+    try std.testing.expect(!validProxyHostname(""));
+    try std.testing.expect(!validProxyHostname(".example.com"));
+    try std.testing.expect(!validProxyHostname("example.com."));
+    try std.testing.expect(!validProxyHostname("-api.example.com"));
+    try std.testing.expect(!validProxyHostname("api-.example.com"));
+    try std.testing.expect(!validProxyHostname("*.example.com"));
 }
 
 test "runtime description command rejects unbounded values" {

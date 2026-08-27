@@ -37,9 +37,9 @@ the existing semantic pane-focus operation.
 Every detected agent starts with a local placeholder such as `New Codex
 session`. Title generation is disabled unless `runtime.agent_descriptions` is
 configured in Lua. When enabled, Telar captures at most 4096 bytes from the
-first submitted user request, waits for that turn to move from working to a
-settled state, then runs one configured argv command outside the interactive
-path. The request is written to stdin and never appears in process arguments or
+first submitted user request. When the agent first moves to `working`, Telar
+runs the configured argv command in parallel and outside the interactive path.
+The request is written to stdin and never appears in process arguments or
 history storage.
 
 The queue admits eight pending jobs and one active child. Output is capped at

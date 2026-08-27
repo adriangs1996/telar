@@ -397,6 +397,25 @@ test "a workspace snapshot reconciles the tab list" {
         TestHarness.bootstrap_location.tab_id,
         harness.client.tabs.active().?.location.tab_id,
     );
+
+    try harness.client.requests.add(@enumFromInt(4), .{
+        .rename_workspace = TestHarness.bootstrap_location.workspace,
+    });
+    const renamed = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = @enumFromInt(4),
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .name = "renamed",
+        .tabs = &.{
+            .{ .tab_id = @enumFromInt(1), .position = 0, .pane_count = 1, .label = "main" },
+            .{ .tab_id = @enumFromInt(2), .position = 1, .pane_count = 1, .label = "second" },
+        },
+    });
+    _ = try server_messages.handleServerMessage(
+        harness.client,
+        try schema.decodeServer(renamed),
+    );
+    try harness.settle();
+    try std.testing.expect(!harness.client.notification_tick_pending);
 }
 
 test "resync required requests one workspace snapshot and coalesces repeats" {
@@ -537,6 +556,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
     try harness.settle();
 
+    try std.testing.expect(!client.notification_tick_pending);
     try std.testing.expectEqualDeep(
         @as(?schema.WorkspaceLocation, new_location.workspace),
         client.tabs.workspace,
@@ -637,6 +657,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(created));
     try harness.settle();
+    try std.testing.expect(!client.notification_tick_pending);
     try std.testing.expectEqual(@as(usize, 2), client.tabs.count);
     try std.testing.expectEqual(second_location.tab_id, client.tabs.active().?.location.tab_id);
     var buffer: [256]u8 = undefined;
@@ -656,6 +677,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         "renamed",
         client.tabs.find(second_location.tab_id).?.labelSlice(),
     );
+    try std.testing.expect(!client.notification_tick_pending);
 
     // Moved to the front.
     try client.requests.add(@enumFromInt(6), .{ .move_tab = second_location });
@@ -827,7 +849,7 @@ test "a foreground report renames the pane" {
     );
 }
 
-test "an unrequested pane exit removes the pane and its client state" {
+test "an unrequested pane exit removes the pane silently" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -847,7 +869,7 @@ test "an unrequested pane exit removes the pane and its client state" {
     try std.testing.expect(client.tabs.findPane(TestHarness.bootstrap_pane) == null);
     try std.testing.expect(client.mode == .normal);
     try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(!client.notification_tick_pending);
 }
 
 test "a failed request surfaces as a notification" {

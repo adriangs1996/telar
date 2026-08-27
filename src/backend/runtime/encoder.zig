@@ -194,6 +194,7 @@ pub fn encodeResponse(
             notification.view(),
         ),
         .notification_shown => |shown| try schema.encodeNotificationShown(buffer, shown),
+        .agent_sound => |sound| try schema.encodeAgentSound(buffer, sound),
         .history_result => |result| payload: {
             history_result.* = result;
             break :payload try encodeHistoryResult(buffer, result, &history_storage);

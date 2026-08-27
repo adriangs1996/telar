@@ -272,7 +272,19 @@ pub const Observer = struct {
             ),
             .interrupt => |clock| observer.tracker.interrupt(clock, context, on_command),
         };
-        stats.agent_signal = observer.detector.signal();
+        const stream_signal = observer.detector.signal();
+        const screen_signal = claudeReadyPrompt(&observer.terminal);
+        stats.agent_signal = if (stream_signal) |signal|
+            if (signal.status == .blocked)
+                signal
+            else if (signal.provider != .codex and screen_signal != null) merged: {
+                var result = screen_signal.?;
+                result.identity_confirmed = signal.provider == .claude and
+                    signal.identity_confirmed;
+                break :merged result;
+            } else signal
+        else
+            screen_signal;
     }
 
     fn observeOutput(
@@ -366,6 +378,34 @@ fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
     };
 }
 
+/// Claude's prompt glyph is meaningful only in the terminal's current screen.
+/// A copy found in raw PTY bytes may have been erased or moved before the batch
+/// finished. The visible cursor must sit immediately after the prompt, which
+/// excludes the stale input row Claude leaves behind while it is working.
+fn claudeReadyPrompt(terminal: *const vt.Terminal) ?agent_detection.Signal {
+    if (!terminal.modes.get(.cursor_visible)) return null;
+    const cursor = terminal.screens.active.cursor.page_pin.*;
+    const cells = cursor.cells(.left);
+    const max_prompt_distance = 8;
+    var index = cells.len;
+    var distance: usize = 0;
+    while (index != 0 and distance < max_prompt_distance) : (distance += 1) {
+        index -= 1;
+        const cell = cells[index];
+        if (!cell.hasText()) continue;
+        const codepoint = cell.codepoint();
+        if (codepoint == ' ') continue;
+        if (codepoint != 0x276f) return null;
+        return .{
+            .provider = .claude,
+            .status = .ready,
+            .confidence = 96,
+            .ready_confirmed = true,
+        };
+    }
+    return null;
+}
+
 test "input and output are observed in enqueue order" {
     var observer: Observer = undefined;
     const size: schema.TerminalSize = .{
@@ -416,4 +456,61 @@ test "overflow marks the observer for a counted reset" {
     try std.testing.expect(observer.seal());
     try std.testing.expect(observer.dropped_events != 0);
     observer.finishSealed();
+}
+
+test "Claude readiness comes from the prompt at the visible cursor" {
+    var observer: Observer = undefined;
+    const size: schema.TerminalSize = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    try observer.init(std.testing.io, std.testing.allocator, "/work", size);
+    defer observer.deinit();
+
+    const Noop = struct {
+        fn capture(_: *@This(), _: terminal_history.Command) void {}
+    };
+    var noop: Noop = .{};
+    const clock: terminal_history.Clock = .{ .real_ms = 1, .awake_ns = 1 };
+    observer.queueOutput("Working (1s, esc to interrupt)\r\x1b[2K\xe2\x9d\xaf ", false, clock);
+    try std.testing.expect(observer.seal());
+    var stats: Stats = .{};
+    observer.processSealed(null, size, &stats, &noop, Noop.capture);
+    observer.finishSealed();
+
+    const signal = stats.agent_signal.?;
+    try std.testing.expectEqual(agent_detection.Status.ready, signal.status);
+    try std.testing.expectEqual(schema.AgentProvider.claude, signal.provider);
+    try std.testing.expect(!signal.identity_confirmed);
+    try std.testing.expect(signal.ready_confirmed);
+}
+
+test "a raw Claude prompt with a hidden cursor is not ready" {
+    var observer: Observer = undefined;
+    const size: schema.TerminalSize = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    try observer.init(std.testing.io, std.testing.allocator, "/work", size);
+    defer observer.deinit();
+
+    const Noop = struct {
+        fn capture(_: *@This(), _: terminal_history.Command) void {}
+    };
+    var noop: Noop = .{};
+    observer.queueOutput(
+        "\x1b[?25l\xe2\x9d\xaf ",
+        false,
+        .{ .real_ms = 1, .awake_ns = 1 },
+    );
+    try std.testing.expect(observer.seal());
+    var stats: Stats = .{};
+    observer.processSealed(null, size, &stats, &noop, Noop.capture);
+    observer.finishSealed();
+
+    try std.testing.expect(stats.agent_signal == null);
 }

@@ -87,6 +87,8 @@ pub fn build(b: *std.Build) void {
         frontend.linkFramework("AppKit", .{});
         frontend.linkFramework("ImageIO", .{});
         frontend.linkFramework("CoreGraphics", .{});
+    } else if (target.result.os.tag == .windows) {
+        frontend.linkSystemLibrary("user32", .{});
     }
 
     // One shipped binary contains both the client and runtime entry points.
@@ -400,16 +402,28 @@ pub fn build(b: *std.Build) void {
     // Other targets
     // ---------------------------------------------------------------------
 
-    // Type-checks the platform files for targets this machine is not. A Windows
-    // implementation that silently stopped compiling would otherwise be
+    // Type-checks platform-dependent frontend code for targets this machine is
+    // not. A Windows implementation that silently stopped compiling would
+    // otherwise be
     // invisible until somebody on Windows tried to build - which, for a project
     // developed on one machine, means until a user reports it.
-    const cross_step = b.step("cross", "Type-check the platform files elsewhere");
+    const cross_step = b.step("cross", "Type-check platform-dependent code elsewhere");
     for ([_]std.Target.Query{
         .{ .os_tag = .windows, .cpu_arch = .x86_64 },
         .{ .os_tag = .linux, .cpu_arch = .x86_64, .abi = .gnu },
     }) |query| {
         const cross_target = b.resolveTargetQuery(query);
+        const cross_unicode = b.createModule(.{
+            .root_source_file = b.path("src/core/unicode_fake.zig"),
+            .target = cross_target,
+            .optimize = .Debug,
+        });
+        const cross_core = b.createModule(.{
+            .root_source_file = b.path("src/core/root.zig"),
+            .target = cross_target,
+            .optimize = .Debug,
+        });
+        cross_core.addImport("unicode", cross_unicode);
         const check = b.addObject(.{
             .name = b.fmt("platform-{s}", .{@tagName(query.os_tag.?)}),
             .root_module = b.createModule(.{
@@ -434,18 +448,19 @@ pub fn build(b: *std.Build) void {
             addFreeType(b, cross_target, .Debug),
         );
         cross_step.dependOn(&raster_check.step);
+        const sound_check = b.addTest(.{
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/frontend/sound.zig"),
+                .target = cross_target,
+                .optimize = .Debug,
+                .link_libc = true,
+            }),
+        });
+        sound_check.root_module.addImport("telar-core", cross_core);
+        if (query.os_tag.? == .windows)
+            sound_check.root_module.linkSystemLibrary("user32", .{});
+        cross_step.dependOn(&sound_check.step);
         if (query.os_tag.? == .linux) {
-            const cross_unicode = b.createModule(.{
-                .root_source_file = b.path("src/core/unicode_fake.zig"),
-                .target = cross_target,
-                .optimize = .Debug,
-            });
-            const cross_core = b.createModule(.{
-                .root_source_file = b.path("src/core/root.zig"),
-                .target = cross_target,
-                .optimize = .Debug,
-            });
-            cross_core.addImport("unicode", cross_unicode);
             const local_transport_check = b.addObject(.{
                 .name = "local-transport-linux",
                 .root_module = b.createModule(.{

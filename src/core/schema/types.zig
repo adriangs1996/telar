@@ -176,6 +176,20 @@ pub const AgentStatus = enum(u8) {
     failed = 4,
 };
 
+/// Audible client-side effects produced by exact runtime-owned agent
+/// transitions. The pane generation prevents a delayed effect from being
+/// attributed to a reused pane ID.
+pub const AgentSound = enum(u8) {
+    ready = 0,
+    needs_input = 1,
+};
+
+pub const AgentSoundNotification = struct {
+    pane_id: id.PaneId,
+    pane_generation: u64,
+    sound: AgentSound,
+};
+
 pub const AgentSource = enum(u8) {
     proxy_tls = 0,
     screen = 1,

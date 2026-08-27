@@ -63,6 +63,8 @@ pub const HistoryStatus = types.HistoryStatus;
 pub const HistoryEntry = types.HistoryEntry;
 pub const AgentProvider = types.AgentProvider;
 pub const AgentStatus = types.AgentStatus;
+pub const AgentSound = types.AgentSound;
+pub const AgentSoundNotification = types.AgentSoundNotification;
 pub const AgentSource = types.AgentSource;
 pub const AgentAuthority = types.AgentAuthority;
 pub const AgentTitleSource = types.AgentTitleSource;
@@ -150,6 +152,7 @@ pub const ServerTag = enum(u8) {
     notification = 0x9b,
     notification_shown = 0x9c,
     pane_foreground = 0x9d,
+    agent_sound = 0x9e,
 };
 
 pub const LaunchView = struct {
@@ -763,6 +766,7 @@ pub const ServerMessage = union(enum) {
     pane_clipboard: PaneClipboard,
     notification: Notification,
     notification_shown: NotificationShown,
+    agent_sound: AgentSoundNotification,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -1103,6 +1107,17 @@ pub fn encodeNotificationShown(buffer: []u8, message: NotificationShown) ![]cons
     );
 }
 
+pub fn encodeAgentSound(buffer: []u8, message: AgentSoundNotification) ![]const u8 {
+    try validatePaneId(message.pane_id);
+    if (message.pane_generation == 0) return error.InvalidPaneGeneration;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.agent_sound));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(@intFromEnum(message.sound));
+    return encoder.finish();
+}
+
 pub fn encodePaneExited(buffer: []u8, message: PaneExited) ![]const u8 {
     return encodeDerived(@intFromEnum(ServerTag.pane_exited), PaneExited, buffer, message);
 }
@@ -1379,7 +1394,15 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .notification_shown => .{
             .notification_shown = try Derived(NotificationShown).decode(&decoder),
         },
+        .agent_sound => .{ .agent_sound = .{
+            .pane_id = try id.pane(try decoder.readInt(u64)),
+            .pane_generation = try decoder.readInt(u64),
+            .sound = std.enums.fromInt(AgentSound, try decoder.readByte()) orelse
+                return error.InvalidAgentSound,
+        } },
     };
+    if (message == .agent_sound and message.agent_sound.pane_generation == 0)
+        return error.InvalidPaneGeneration;
     if (message == .pane_clipboard and message.pane_clipboard.bytes.len > max_clipboard_bytes)
         return error.ClipboardTooLarge;
     try decoder.ensureEnd();

@@ -14,6 +14,7 @@ pub const diagnostics = @import("diagnostics.zig");
 pub const graphics = @import("graphics.zig");
 pub const plugin = @import("plugin.zig");
 pub const fixed_index = @import("fixed_index.zig");
+pub const proxy = @import("proxy.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

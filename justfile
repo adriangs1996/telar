@@ -6,6 +6,10 @@ default:
 build *args:
     zig build {{ args }}
 
+# Build an optimized Telar binary at `.zig-out/prod/bin/telar`.
+release:
+    zig build --prefix .zig-out/prod -Doptimize=ReleaseFast
+
 stop:
   zig build run -- server stop
 

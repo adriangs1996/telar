@@ -94,6 +94,7 @@ pub const PendingResponse = union(enum) {
     tab_moved: schema.TabMoved,
     notification: PendingNotification,
     notification_shown: schema.NotificationShown,
+    agent_sound: schema.AgentSoundNotification,
     history_result: *history.model.QueryResult,
 };
 
@@ -139,6 +140,14 @@ pub const ResponseQueue = struct {
 
     pub fn pushNotification(queue: *ResponseQueue, notification: PendingNotification) bool {
         queue.push(.{ .notification = notification }) catch {
+            queue.dropped += 1;
+            return false;
+        };
+        return true;
+    }
+
+    pub fn pushAgentSound(queue: *ResponseQueue, sound: schema.AgentSoundNotification) bool {
+        queue.push(.{ .agent_sound = sound }) catch {
             queue.dropped += 1;
             return false;
         };
