@@ -20,9 +20,16 @@
 
 const std = @import("std");
 
+/// Maximum number of bytes retained for one `event` field value.
 pub const max_event_name_bytes = 128;
+
+/// Maximum number of bytes retained for one logical SSE line.
 pub const max_line_bytes = 4 * 1024;
+
+/// Maximum number of bytes retained across the `data` fields of one event.
 pub const max_data_bytes = 4 * 1024;
+
+const utf8_bom = "\xEF\xBB\xBF";
 
 /// One complete SSE event.
 ///
@@ -30,11 +37,21 @@ pub const max_data_bytes = 4 * 1024;
 /// while the callback passed to `Decoder.feed` is running. A consumer that
 /// needs either value afterwards must copy it.
 pub const Event = struct {
+    /// Explicit `event` value, or `"message"` when no value was provided.
     name: []const u8,
+
+    /// Values from all `data` fields, joined with one LF between fields.
     data: []const u8,
+
+    /// Whether a line, event name, or event data exceeded its fixed bound.
     truncated: bool,
 };
 
+/// Incremental decoder for one SSE response body.
+///
+/// Initialize with `.{}`, call `feed` for every response-body chunk in order,
+/// then call `deinit` when the response ends. A decoder owns the unfinished
+/// state of one stream and must not be shared by concurrent responses.
 pub const Decoder = struct {
     /// The current logical line without its CR, LF, or CRLF terminator.
     /// `feed` consumes terminators instead of storing them here.
@@ -57,18 +74,27 @@ pub const Decoder = struct {
     /// the same CRLF terminator and must not create another empty line.
     swallow_lf: bool = false,
 
+    /// Whether `feed` has decided if the stream starts with a UTF-8 BOM.
+    /// Once true, every later byte is ordinary SSE input.
+    bom_checked: bool = false,
+
+    /// Number of leading bytes that currently match `utf8_bom` while the
+    /// stream-start decision remains incomplete.
+    bom_prefix_len: usize = 0,
+
     /// Consumes the next contiguous bytes from one SSE response body.
     ///
     /// `input` may contain part of a line, several complete events, or nothing.
     /// The method retains incomplete state for the next call. Every blank-line
-    /// terminated event with at least one `data:` field invokes `emit` exactly
+    /// terminated event with at least one `data` field invokes `emit` exactly
     /// once. One call may therefore invoke `emit` zero, one, or many times.
     ///
     /// The callback receives borrowed slices into this decoder. It must copy
     /// them if it needs to retain them. `feed` returns no value because events
     /// are its output. It must not allocate, parse JSON, or report malformed
-    /// input as a transport failure. Oversized input marks the current event as
-    /// truncated and the decoder resumes at the next line boundary.
+    /// input as a transport failure. An oversized line contributes the prefix
+    /// that fits, marks the current event as truncated, and discards its tail
+    /// until the next line boundary.
     ///
     /// At the start of the stream, this method must ignore one leading UTF-8
     /// BOM when present, including when its three bytes arrive in separate
@@ -99,33 +125,26 @@ pub const Decoder = struct {
     /// ```
     pub fn feed(decoder: *Decoder, input: []const u8, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
         for (input) |byte| {
-            const byteIsLF = byte == '\n';
-            const byteIsCR = byte == '\r';
+            if (!decoder.bom_checked) {
+                if (byte == utf8_bom[decoder.bom_prefix_len]) {
+                    decoder.bom_prefix_len += 1;
 
-            if (decoder.swallow_lf) {
-                decoder.swallow_lf = false;
-                if (byteIsLF) {
+                    if (decoder.bom_prefix_len == utf8_bom.len) {
+                        decoder.bom_checked = true;
+                        decoder.bom_prefix_len = 0;
+                    }
+
                     continue;
                 }
-            }
 
-            if (decoder.discarding_line) {
-                if (byteIsLF or byteIsCR) {
-                    decoder.discarding_line = false;
-                    decoder.resetLine();
-                    decoder.swallow_lf = byteIsCR;
+                const prefix_len = decoder.bom_prefix_len;
+                decoder.bom_checked = true;
+                decoder.bom_prefix_len = 0;
+                for (utf8_bom[0..prefix_len]) |prefix_byte| {
+                    decoder.consumeByte(prefix_byte, context, emit);
                 }
-                continue;
             }
-
-            switch (byte) {
-                '\r' => {
-                    decoder.finishLine(context, emit);
-                    decoder.swallow_lf = true;
-                },
-                '\n' => decoder.finishLine(context, emit),
-                else => decoder.pushByte(byte),
-            }
+            decoder.consumeByte(byte, context, emit);
         }
     }
 
@@ -150,6 +169,42 @@ pub const Decoder = struct {
         std.crypto.secureZero(u8, std.mem.asBytes(decoder));
     }
 
+    /// Consumes one byte after the optional stream-start BOM is resolved.
+    ///
+    /// This method handles CR, LF, and CRLF line endings, skips the remainder
+    /// of oversized lines, and appends ordinary bytes to the current line. It
+    /// may emit an event when the byte completes a blank line. It never handles
+    /// BOM state; `feed` owns that stream-level decision.
+    fn consumeByte(decoder: *Decoder, byte: u8, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
+        const byte_is_lf = byte == '\n';
+        const byte_is_cr = byte == '\r';
+
+        if (decoder.swallow_lf) {
+            decoder.swallow_lf = false;
+            if (byte_is_lf) {
+                return;
+            }
+        }
+
+        if (decoder.discarding_line) {
+            if (byte_is_lf or byte_is_cr) {
+                decoder.discarding_line = false;
+                decoder.resetLine();
+                decoder.swallow_lf = byte_is_cr;
+            }
+            return;
+        }
+
+        switch (byte) {
+            '\r' => {
+                decoder.finishLine(context, emit);
+                decoder.swallow_lf = true;
+            },
+            '\n' => decoder.finishLine(context, emit),
+            else => decoder.pushByte(byte),
+        }
+    }
+
     /// Processes the logical line whose terminator `feed` just consumed.
     ///
     /// A non-empty line updates the pending event through `processLine`. An
@@ -163,7 +218,7 @@ pub const Decoder = struct {
     fn finishLine(decoder: *Decoder, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
         defer decoder.resetLine();
 
-        if (!decoder.hasEmptyLine()) {
+        if (!decoder.isLineEmpty()) {
             decoder.processLine();
             return;
         }
@@ -186,123 +241,85 @@ pub const Decoder = struct {
         decoder.resetEvent();
     }
 
-    /// Returns whether the current logical line contains no bytes.
-    ///
-    /// Only `finishLine` uses this distinction. An empty line ends the pending
-    /// event, while a non-empty line contributes a field to it.
-    fn hasEmptyLine(decoder: *Decoder) bool {
+    fn isLineEmpty(decoder: *Decoder) bool {
         return decoder.line_len == 0;
     }
 
     /// Appends one non-terminator byte to the current line without allocating.
     ///
-    /// Once the fixed line buffer is full, this method preserves memory safety
-    /// by entering discard mode instead of writing past the buffer. It also
-    /// marks the pending event as truncated. `feed` then ignores bytes until
-    /// the next line terminator.
+    /// Once the fixed line buffer is full, this method processes the retained
+    /// prefix as a truncated field, then ignores the tail until the next line
+    /// terminator. The prefix is processed exactly once.
     fn pushByte(decoder: *Decoder, byte: u8) void {
         if (decoder.line_len < max_line_bytes) {
             decoder.line[decoder.line_len] = byte;
             decoder.line_len += 1;
         } else {
-            decoder.discarding_line = true;
             decoder.event_truncated = true;
+            decoder.processLine();
+            decoder.resetLine();
+            decoder.discarding_line = true;
         }
     }
 
-    /// Logically discards every field accumulated for the pending event.
-    ///
-    /// This resets lengths and flags but does not wipe the backing arrays.
-    /// `deinit` performs the secure wipe when the decoder is destroyed. Any
-    /// slices previously returned by `getEventName` or `getEventData` become
-    /// invalid after this call.
+    /// Clears pending event metadata without wiping its buffers.
     fn resetEvent(decoder: *Decoder) void {
-        decoder.event_data = undefined;
-        decoder.event_name = undefined;
         decoder.event_name_len = 0;
         decoder.event_data_len = 0;
         decoder.has_data = false;
         decoder.event_truncated = false;
     }
 
-    /// Logically discards the current line so the next byte starts a new one.
-    ///
-    /// This resets `line_len` but does not wipe the backing array. A slice
-    /// previously returned by `fieldValue` becomes invalid after this call.
+    /// Clears the current line length without wiping its buffer.
     fn resetLine(decoder: *Decoder) void {
-        decoder.line = undefined;
         decoder.line_len = 0;
     }
 
-    /// Returns whether the pending event has no explicit event name.
-    ///
-    /// `finishLine` uses this result to select the SSE default name,
-    /// `"message"`, when dispatching an event.
     fn isEventNameEmpty(decoder: *Decoder) bool {
         return decoder.event_name_len == 0;
     }
 
-    /// Returns the initialized portion of the pending event-name buffer.
-    ///
-    /// The returned slice borrows decoder storage. It remains valid only until
-    /// the decoder replaces or resets the pending event.
     fn getEventName(decoder: *Decoder) []const u8 {
         return decoder.event_name[0..decoder.event_name_len];
     }
 
-    /// Returns the initialized portion of the pending event-data buffer.
-    ///
-    /// The returned slice borrows decoder storage. It remains valid only until
-    /// the decoder appends more data or resets the pending event.
     fn getEventData(decoder: *Decoder) []const u8 {
         return decoder.event_data[0..decoder.event_data_len];
     }
 
-    /// Interprets one complete, non-empty SSE line and updates the pending event.
+    fn getLine(decoder: *Decoder) []const u8 {
+        return decoder.line[0..decoder.line_len];
+    }
+
+    /// Interprets the buffered SSE line and updates the pending event.
     ///
-    /// The line is split at its first colon. A line without a colon has an
-    /// empty value. Exactly one leading ASCII space is removed from the value.
-    /// Comment lines and unknown fields are ignored. An `event` field replaces
-    /// the pending name. A `data` field appends its value, inserting one LF
-    /// between consecutive data fields. This method never emits an event.
+    /// The buffer contains either a complete line or the retained prefix of an
+    /// oversized line. It is split at its first colon. A line without a colon
+    /// has an empty value. Exactly one leading ASCII space is removed from the
+    /// value. Comment lines and unknown fields are ignored. An `event` field
+    /// replaces the pending name. A `data` field appends its value, inserting
+    /// one LF between consecutive data fields. This method never emits an event.
     fn processLine(decoder: *Decoder) void {
-        if (decoder.line_len > 0 and decoder.line[0] == ':') {
-            return;
+        const line = decoder.getLine();
+        const colon = std.mem.indexOfScalar(u8, line, ':');
+        const field_name = line[0..(colon orelse line.len)];
+        var field_value = if (colon) |index|
+            line[index + 1 ..]
+        else
+            "";
+
+        if (field_value.len > 0 and field_value[0] == ' ') {
+            field_value = field_value[1..];
         }
 
-        if (decoder.hasPrefix("event:")) {
-            const value = decoder.fieldValue("event:");
-            decoder.setEventName(value);
-        }
-
-        if (decoder.hasPrefix("data:")) {
-            const value = decoder.fieldValue("data:");
+        if (std.mem.eql(u8, field_name, "event")) {
+            decoder.setEventName(field_value);
+        } else if (std.mem.eql(u8, field_name, "data")) {
             if (decoder.has_data) {
                 decoder.appendData("\n");
             }
-            decoder.appendData(value);
+            decoder.appendData(field_value);
         }
-    }
-
-    /// Returns the value after a field prefix that includes its colon.
-    ///
-    /// The caller must first prove that the current line starts with `field`.
-    /// The returned slice excludes at most one leading ASCII space and borrows
-    /// storage from the current line buffer.
-    fn fieldValue(decoder: *Decoder, comptime field: []const u8) []const u8 {
-        var rest = decoder.line[field.len..decoder.line_len];
-        if (rest.len > 0 and rest[0] == ' ') rest = rest[1..]; // spec: a single space
-        return rest;
-    }
-
-    /// Returns whether the current line starts with the exact byte sequence.
-    ///
-    /// Comparison is case-sensitive, as required for SSE field names. This
-    /// method does not give `prefix` any field-boundary semantics.
-    fn hasPrefix(decoder: *Decoder, prefix: []const u8) bool {
-        if (decoder.line_len <= 0) return false;
-
-        return std.mem.startsWith(u8, decoder.line[0..decoder.line_len], prefix);
     }
 
     /// Replaces the pending event name with a bounded copy of `event_name`.
@@ -311,18 +328,14 @@ pub const Decoder = struct {
     /// If the value exceeds `max_event_name_bytes`, this method keeps the
     /// prefix that fits and marks the pending event as truncated.
     fn setEventName(decoder: *Decoder, event_name: []const u8) void {
-        if (decoder.event_name_len > 0) {
-            // We have received two event: directives
-            // Overwrite with the latest one
-            decoder.event_name_len = 0;
-        }
+        decoder.event_name_len = 0;
         const n = @min(max_event_name_bytes, event_name.len);
         if (n < event_name.len) {
             decoder.event_truncated = true;
         }
 
-        @memcpy(decoder.event_name[decoder.event_name_len..][0..n], event_name[0..n]);
-        decoder.event_name_len += n;
+        @memcpy(decoder.event_name[0..n], event_name[0..n]);
+        decoder.event_name_len = n;
     }
 
     /// Appends bytes to the bounded event-data buffer.
@@ -411,7 +424,10 @@ fn expectEventCount(decoder: *const Decoder, capture: *const Capture, expected: 
             "    pending data bytes: {d}\n" ++
             "    has data:           {}\n" ++
             "    discarding line:    {}\n" ++
-            "    truncated:          {}\n",
+            "    swallow next LF:     {}\n" ++
+            "    BOM checked:         {}\n" ++
+            "    BOM prefix bytes:    {d}\n" ++
+            "    truncated:           {}\n",
         .{
             expected,
             capture.len,
@@ -421,6 +437,9 @@ fn expectEventCount(decoder: *const Decoder, capture: *const Capture, expected: 
             decoder.event_data_len,
             decoder.has_data,
             decoder.discarding_line,
+            decoder.swallow_lf,
+            decoder.bom_checked,
+            decoder.bom_prefix_len,
             decoder.event_truncated,
         },
     );
@@ -644,7 +663,7 @@ test "an event without data is not emitted" {
 }
 
 test "an oversized event is marked truncated and the next event still parses" {
-    var oversized: [max_line_bytes + 1]u8 = @splat('x');
+    const oversized: [max_line_bytes + 1]u8 = @splat('x');
     var decoder: Decoder = .{};
     defer decoder.deinit();
     var capture: Capture = .{};
@@ -652,7 +671,7 @@ test "an oversized event is marked truncated and the next event still parses" {
     decoder.feed(
         "event: oversized\n" ++
             "data: kept\n" ++
-            "data: ",
+            "ignored: ",
         &capture,
         Capture.emit,
     );
@@ -676,6 +695,54 @@ test "an oversized event is marked truncated and the next event still parses" {
     );
     try expectCaptured(&capture, 0, "oversized", "kept", true);
     try expectCaptured(&capture, 1, "message_stop", "{}", false);
+}
+
+test "a data line at max_line_bytes is retained completely" {
+    const field = "data: ";
+    const payload_len = max_line_bytes - field.len;
+    const payload: [payload_len]u8 = @splat('x');
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(field, &capture, Capture.emit);
+    decoder.feed(&payload, &capture, Capture.emit);
+    decoder.feed("\n\n", &capture, Capture.emit);
+
+    try expectEventCount(
+        &decoder,
+        &capture,
+        1,
+        "A line exactly at the byte limit must be processed without truncation.",
+    );
+    try expectCaptured(&capture, 0, "message", &payload, false);
+}
+
+test "an oversized data line retains its bounded prefix" {
+    const field = "data: ";
+    const retained_payload_len = max_line_bytes - field.len;
+    const payload: [retained_payload_len + 1]u8 = @splat('x');
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(field, &capture, Capture.emit);
+    decoder.feed(&payload, &capture, Capture.emit);
+    decoder.feed("\n\n", &capture, Capture.emit);
+
+    try expectEventCount(
+        &decoder,
+        &capture,
+        1,
+        "An oversized data field still counts as data and must dispatch a truncated event.",
+    );
+    try expectCaptured(
+        &capture,
+        0,
+        "message",
+        payload[0..retained_payload_len],
+        true,
+    );
 }
 
 test "a later event field replaces previous event name" {
@@ -742,6 +809,32 @@ test "one leading UTF-8 BOM is ignored across every two-chunk split" {
         );
         try expectEventCount(&decoder, &capture, 1, hint);
         try expectCaptured(&capture, 0, "named", "payload", false);
+    }
+}
+
+test "a BOM-like UTF-8 prefix is replayed when it diverges" {
+    const inputs = [_][]const u8{
+        "\xEF\xBA\x80",
+        "\xEF\xBB\x80",
+    };
+
+    for (inputs) |input| {
+        for (0..input.len + 1) |split| {
+            var decoder: Decoder = .{};
+            defer decoder.deinit();
+            var capture: Capture = .{};
+
+            decoder.feed(input[0..split], &capture, Capture.emit);
+            decoder.feed(input[split..], &capture, Capture.emit);
+
+            try expectEventCount(
+                &decoder,
+                &capture,
+                0,
+                "An unterminated line must remain pending while its BOM-like prefix is replayed.",
+            );
+            try std.testing.expectEqualStrings(input, decoder.getLine());
+        }
     }
 }
 
@@ -905,7 +998,7 @@ test "empty data fields and NUL bytes are preserved" {
 }
 
 test "an oversized line resynchronizes at a lone CR" {
-    var oversized: [max_line_bytes + 1]u8 = @splat('x');
+    const oversized: [max_line_bytes + 1]u8 = @splat('x');
     var decoder: Decoder = .{};
     defer decoder.deinit();
     var capture: Capture = .{};
@@ -913,7 +1006,7 @@ test "an oversized line resynchronizes at a lone CR" {
     decoder.feed(
         "event: oversized\n" ++
             "data: kept\n" ++
-            "data: ",
+            "ignored: ",
         &capture,
         Capture.emit,
     );
