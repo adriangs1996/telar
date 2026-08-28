@@ -93,6 +93,7 @@ pub fn builtin(name: Builtin) Theme {
         .base = name,
         .palette = switch (name) {
             .vesper => .{
+                // .accent = rgb(168, 201, 140),
                 .accent = rgb(255, 199, 153),
                 .panel_bg = rgb(26, 26, 26),
                 .surface0 = rgb(35, 35, 35),

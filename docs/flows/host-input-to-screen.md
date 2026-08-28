@@ -99,6 +99,36 @@ attached pane and calls `input.host.encodeKey` from
 cursor/application, modify-key and bracketed-paste modes; host bytes are not
 copied blindly into the child.
 
+### Modified Enter
+
+The host session requests Kitty keyboard disambiguation. The parser recognizes
+modified Enter in both CSI-u and xterm modifyOtherKeys reports. A bare LF stays
+Ctrl+J, so a host mapping that sends LF for multiline input is not rewritten to
+Enter.
+
+The runtime reads keyboard flags from the pane's VT and publishes them in
+`pane_frame.input_modes`. The client uses them when encoding Enter:
+
+- Kitty flags preserve modifiers as CSI-u. Plain Enter remains CR unless the
+  child requests all keys as escape codes.
+- xterm modifyOtherKeys mode 2 preserves modifiers in its numeric encoding.
+- A child with neither mode active receives the legacy Enter encoding.
+
+The application decides whether Shift+Enter inserts a newline. Telar does not
+infer this from agent detection or inject a paste. A host that sends the same CR
+for Enter and Shift+Enter provides no modifier to preserve.
+
+Keyboard mode stacks belong to the runtime VT, including separate main and
+alternate screens. Snapshots and mode-only frame updates rebuild the client's
+copy after changes or reattachment. The two extra frame bytes and fixed input
+buffers add no allocation or queue to the interactive path.
+
+The encodings follow the
+[Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) and
+[xterm key modifier controls](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html).
+
+### Enqueueing input
+
 `InputHandler.sendPaneBytes` then calls, in order:
 
 1. `Client.enqueueInput`;
@@ -198,6 +228,16 @@ The `.draw` event calls `Client.handleDrawEvent`, then `Client.presentDue` and
   tests in the same file prove parser and routing boundaries.
 - `cursor keys follow the focused child's mode` in
   `src/frontend/input/host.zig` proves semantic child encoding.
+- The modified-Enter parser and router tests cover both host encodings,
+  malformed reports and every byte boundary. The encoder tests cover modifier
+  combinations, protocol precedence, plain Enter, LF and bounded output.
+- `host Enter variants use the keyboard modes received in a pane frame` in
+  `src/frontend/client/client_test.zig` proves frame decoding, normal key
+  routing and the outgoing `pane_input` bytes.
+- `modified Enter follows child keyboard negotiation through the PTY` in
+  `src/transport_integration_test.zig` proves that a real child can enable
+  Kitty, switch to modifyOtherKeys and return to legacy mode while receiving
+  the corresponding bytes.
 - `PTY input remains live while the bounded ingest actor is occupied` in
   `src/transport_integration_test.zig` proves that input does not wait for VT
   ingestion.

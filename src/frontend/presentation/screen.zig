@@ -550,6 +550,8 @@ pub fn parse(input: []const u8) ?Parsed {
             5 => return key(.page_up, modsOf(params[1]), length),
             6 => return key(.page_down, modsOf(params[1]), length),
             4, 8 => return key(.end, modsOf(params[1]), length),
+            27 => return parseModifyOtherKeys(input[2..final], length) orelse
+                .{ .event = .incomplete, .len = length },
             200 => return .{ .event = .paste_start, .len = length },
             201 => return .{ .event = .paste_end, .len = length },
             else => {},
@@ -593,6 +595,19 @@ fn parseKittyKey(body: []const u8, length: usize) ?Parsed {
             std.fmt.parseUnsigned(u32, value, 10) catch return null
     else
         1;
+    return codepointKey(codepoint, modifier, length);
+}
+
+fn parseModifyOtherKeys(body: []const u8, length: usize) ?Parsed {
+    var fields = std.mem.splitScalar(u8, body, ';');
+    if (!std.mem.eql(u8, fields.next() orelse return null, "27")) return null;
+    const modifier = std.fmt.parseUnsigned(u32, fields.next() orelse return null, 10) catch return null;
+    const codepoint = std.fmt.parseUnsigned(u32, fields.next() orelse return null, 10) catch return null;
+    if (fields.next() != null) return null;
+    return codepointKey(codepoint, modifier, length);
+}
+
+fn codepointKey(codepoint: u32, modifier: u32, length: usize) ?Parsed {
     if (modifier == 0) return null;
     const modifier_bits = modifier - 1;
     const unsupported_modifier_bits = modifier_bits & ~@as(u32, 0b1100_0111);
@@ -644,7 +659,9 @@ fn parseApc(input: []const u8) Parsed {
 
 fn parseByte(input: []const u8) ?Parsed {
     switch (input[0]) {
-        '\r', '\n' => return key(.enter, .{}, 1),
+        // LF is Ctrl+J, also used by host mappings for multiline prompts.
+        // Collapsing it into Enter would turn it into CR when re-encoded.
+        '\r' => return key(.enter, .{}, 1),
         '\t' => return key(.tab, .{}, 1),
         // Both codes terminals send for the key marked Backspace.
         0x7f, 0x08 => return key(.backspace, .{}, 1),
@@ -1170,6 +1187,44 @@ test "Kitty keyboard mode disambiguates Ctrl keys from legacy controls" {
     try testing.expectEqual(KeyCode.enter, parse("\x1b[13u").?.event.key.code);
 }
 
+test "modified Enter is decoded from CSI-u and modifyOtherKeys" {
+    const cases = [_]struct { sequence: []const u8, mods: Event.Key.Mods }{
+        .{ .sequence = "\x1b[13;2u", .mods = .{ .shift = true } },
+        .{ .sequence = "\x1b[27;2;13~", .mods = .{ .shift = true } },
+        .{ .sequence = "\x1b[13;6u", .mods = .{ .shift = true, .ctrl = true } },
+        .{ .sequence = "\x1b[27;6;13~", .mods = .{ .shift = true, .ctrl = true } },
+    };
+    for (cases) |case| {
+        const parsed = parse(case.sequence).?;
+        try testing.expectEqual(case.sequence.len, parsed.len);
+        try testing.expectEqualDeep(Event{ .key = .{ .code = .enter, .mods = case.mods } }, parsed.event);
+    }
+}
+
+test "a bare line feed remains Ctrl+J instead of becoming Enter" {
+    const parsed = parse("\n").?;
+    try testing.expectEqual(@as(usize, 1), parsed.len);
+    try testing.expect(parsed.event.key.isCtrl('j'));
+    try testing.expectEqualDeep(Event{ .key = .plain(.enter) }, parse("\r").?.event);
+}
+
+test "malformed modifyOtherKeys reports are consumed without producing keys" {
+    for ([_][]const u8{
+        "\x1b[27;0;13~",
+        "\x1b[27;;13~",
+        "\x1b[27;2~",
+        "\x1b[27;2;13;1~",
+        "\x1b[27;2;13:1~",
+        "\x1b[27;2;4294967296~",
+        "\x1b[27;2;55296~",
+        "\x1b[27;9;13~",
+    }) |sequence| {
+        const parsed = parse(sequence).?;
+        try testing.expectEqual(sequence.len, parsed.len);
+        try testing.expectEqual(Event.incomplete, parsed.event);
+    }
+}
+
 test "an absent modifier parameter is no modifiers, not every modifier" {
     // The parameter is one *plus* the bits, so a missing one reads as zero and
     // subtracting blindly would set every bit - reporting a plain arrow as
@@ -1212,6 +1267,7 @@ test "a paste is bracketed, so a newline inside it is text" {
     try testing.expectEqual(Event.paste_start, start.event);
     at += start.len;
 
+    var characters: usize = 0;
     var newlines: usize = 0;
     var enters: usize = 0;
     while (at < paste.len) {
@@ -1219,18 +1275,21 @@ test "a paste is bracketed, so a newline inside it is text" {
         at += parsed.len;
         switch (parsed.event) {
             .paste_end => break,
-            .key => |k| switch (k.code) {
-                // The newline still parses as `enter`; what makes it text is
-                // that the client knows a paste is in progress.
-                .enter => enters += 1,
-                .char => newlines += 1,
-                else => {},
+            .key => |k| {
+                if (k.isCtrl('j')) {
+                    newlines += 1;
+                } else switch (k.code) {
+                    .enter => enters += 1,
+                    .char => characters += 1,
+                    else => {},
+                }
             },
             else => {},
         }
     }
-    try testing.expectEqual(@as(usize, 1), enters);
-    try testing.expectEqual(@as(usize, 6), newlines);
+    try testing.expectEqual(@as(usize, 0), enters);
+    try testing.expectEqual(@as(usize, 1), newlines);
+    try testing.expectEqual(@as(usize, 6), characters);
     try testing.expect(at == paste.len);
 }
 

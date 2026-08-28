@@ -10,7 +10,7 @@ pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
-pub const body_header_size = 52;
+pub const body_header_size = 54;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
@@ -46,6 +46,8 @@ pub const InputModes = struct {
     focus_events: bool = false,
     alternate_scroll: bool = false,
     alternate_screen: bool = false,
+    kitty_keyboard_flags: u5 = 0,
+    modify_other_keys_2: bool = false,
 };
 
 /// Position of one client's viewport in the runtime-owned scrollback.
@@ -176,6 +178,8 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     try encoder.writeByte(@intFromBool(frame.input_modes.focus_events));
     try encoder.writeByte(@intFromBool(frame.input_modes.alternate_scroll));
     try encoder.writeByte(@intFromBool(frame.input_modes.alternate_screen));
+    try encoder.writeByte(frame.input_modes.kitty_keyboard_flags);
+    try encoder.writeByte(@intFromBool(frame.input_modes.modify_other_keys_2));
     try encoder.writeInt(u32, frame.scroll.total_rows);
     try encoder.writeInt(u32, frame.scroll.offset);
     try encoder.writeInt(u16, @intCast(frame.spans.len));
@@ -227,6 +231,9 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         .focus_events = try decoder.readBool(),
         .alternate_scroll = try decoder.readBool(),
         .alternate_screen = try decoder.readBool(),
+        .kitty_keyboard_flags = std.math.cast(u5, try decoder.readByte()) orelse
+            return error.InvalidKeyboardFlags,
+        .modify_other_keys_2 = try decoder.readBool(),
     };
     const scroll: Scroll = .{
         .total_rows = try decoder.readInt(u32),
@@ -551,13 +558,13 @@ test "a style run pays two bytes per ordinary cell" {
         .spans = &spans,
     });
 
-    // Header and span: 64 bytes. The first cell carries the five-byte default
-    // style and costs seven bytes. Each following space costs only its packed
-    // header and text byte.
-    try std.testing.expectEqual(@as(usize, 75), encoder.finish().len);
-    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[64]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[71]);
-    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[73]);
+    // The first cell carries the five-byte default style and costs seven
+    // bytes. Each following space costs only its packed header and text byte.
+    const cells_start = body_header_size + span_header_size;
+    try std.testing.expectEqual(@as(usize, cells_start + 11), encoder.finish().len);
+    try std.testing.expectEqual(@as(u8, 0xa1), encoder.finish()[cells_start]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[cells_start + 7]);
+    try std.testing.expectEqual(@as(u8, 0x21), encoder.finish()[cells_start + 9]);
 }
 
 test "cell run size accounts for inherited style" {

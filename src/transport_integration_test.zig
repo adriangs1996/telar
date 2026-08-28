@@ -1866,6 +1866,100 @@ test "runtime persists terminal-edited commands without shell integration" {
     }
 }
 
+test "modified Enter follows child keyboard negotiation through the PTY" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var socket_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/keyboard.sock", .{directory});
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var connection = try connectRuntimeForTest(io, socket_path);
+    defer connection.deinit(io);
+    // Each read checks Shift+Enter followed by plain Enter. The child changes
+    // its own modes; no test mutates the runtime's VT or the client's modes.
+    const script =
+        "stty raw -echo; " ++
+        "printf '\\033[>5uKITTY_READY'; " ++
+        "reply=$(dd bs=1 count=8 2>/dev/null); " ++
+        "[ \"$reply\" = \"$(printf '\\033[13;2u\\r')\" ] || exit 1; " ++
+        "printf '\\033[<u\\033[>4;2m\\033[2J\\033[HXTERM_READY'; " ++
+        "reply=$(dd bs=1 count=11 2>/dev/null); " ++
+        "[ \"$reply\" = \"$(printf '\\033[27;2;13~\\r')\" ] || exit 2; " ++
+        "printf '\\033[>4;0m\\033[2J\\033[HLEGACY_READY'; " ++
+        "reply=$(dd bs=1 count=2 2>/dev/null); " ++
+        "[ \"$reply\" = \"$(printf '\\r\\r')\" ] || exit 3; " ++
+        "printf '\\033[2J\\033[HINPUT_OK'; " ++
+        "dd bs=1 count=1 of=/dev/null 2>/dev/null";
+    const arguments = [_][]const u8{ "/bin/sh", "-c", script };
+    var send_buffer: [4096]u8 = undefined;
+    try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .size = .{ .cols = 40, .rows = 8 },
+        .launch = .{ .cwd = directory, .arguments = &arguments },
+    }));
+
+    const stages = [_]struct { marker: []const u8, expected: []const u8 }{
+        .{ .marker = "KITTY_READY", .expected = "\x1b[13;2u\r" },
+        .{ .marker = "XTERM_READY", .expected = "\x1b[27;2;13~\r" },
+        .{ .marker = "LEGACY_READY", .expected = "\r\r" },
+    };
+    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    defer gpa.free(receive_buffer);
+    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var stage: usize = 0;
+    while (true) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+        .pane_frame => |frame| {
+            try applyFrameCells(&cells, frame);
+            try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            }));
+            if (stage == stages.len) {
+                if (rowContains(&cells, "INPUT_OK")) return;
+                continue;
+            }
+            if (!rowContains(&cells, stages[stage].marker)) continue;
+            var input_buffer: [64]u8 = undefined;
+            const shifted = try frontend.input.encodeKey(
+                &input_buffer,
+                frontend.term.parse("\x1b[13;2u").?.event.key,
+                frame.input_modes,
+            );
+            const plain = try frontend.input.encodeKey(
+                input_buffer[shifted.len..],
+                frontend.term.parse("\r").?.event.key,
+                frame.input_modes,
+            );
+            const bytes = input_buffer[0 .. shifted.len + plain.len];
+            try std.testing.expectEqualStrings(stages[stage].expected, bytes);
+            try connection.send(io, try schema.encodePaneInput(&send_buffer, .{
+                .pane_id = frame.pane_id,
+                .bytes = bytes,
+            }));
+            stage += 1;
+        },
+        .pane_exited => return error.ChildRejectedKeyboardInput,
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+}
+
 test "PTY input remains live while the bounded ingest actor is occupied" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;

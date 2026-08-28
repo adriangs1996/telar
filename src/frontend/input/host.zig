@@ -57,7 +57,20 @@ pub fn encodeKey(buffer: []u8, key: Key, modes: Modes) ![]const u8 {
             try writer.writeAll("\x1b[6~")
         else
             try writer.print("\x1b[6;{d}~", .{modifier}),
-        .enter => try withAlt(&writer, key.mods.alt, "\r"),
+        .enter => {
+            // Kitty takes precedence over modifyOtherKeys. Plain Enter keeps
+            // its legacy CR unless the child explicitly requests every key.
+            const report_all = modes.kitty_keyboard_flags & 0b01000 != 0;
+            if (modes.kitty_keyboard_flags != 0 and (modifier != 1 or report_all)) {
+                try writer.writeAll("\x1b[13");
+                if (modifier != 1) try writer.print(";{d}", .{modifier});
+                try writer.writeByte('u');
+            } else if (modes.modify_other_keys_2 and modifier != 1) {
+                try writer.print("\x1b[27;{d};13~", .{modifier});
+            } else {
+                try withAlt(&writer, key.mods.alt, "\r");
+            }
+        },
         .escape => try writer.writeByte(0x1b),
         .backspace => try withAlt(&writer, key.mods.alt, "\x7f"),
         .tab => try withAlt(&writer, key.mods.alt, "\t"),
@@ -126,4 +139,55 @@ test "page keys preserve modifiers" {
         "\x1b[6;5~",
         try encodeKey(&buffer, .{ .code = .page_down, .mods = .{ .ctrl = true } }, .{}),
     );
+}
+
+test "Enter modifiers follow the child's keyboard protocol" {
+    var buffer: [32]u8 = undefined;
+    var expected_buffer: [32]u8 = undefined;
+    for (0..8) |bits| {
+        const mods: Key.Mods = @bitCast(@as(u3, @intCast(bits)));
+        const pressed: Key = .{ .code = .enter, .mods = mods };
+        const legacy = if (mods.alt) "\x1b\r" else "\r";
+        try std.testing.expectEqualStrings(legacy, try encodeKey(&buffer, pressed, .{}));
+        const xterm = if (bits == 0) "\r" else try std.fmt.bufPrint(
+            &expected_buffer,
+            "\x1b[27;{d};13~",
+            .{bits + 1},
+        );
+        try std.testing.expectEqualStrings(
+            xterm,
+            try encodeKey(&buffer, pressed, .{ .modify_other_keys_2 = true }),
+        );
+        for ([_]u5{ 1, 5, 8, 31 }) |flags| {
+            const kitty = if (bits != 0)
+                try std.fmt.bufPrint(&expected_buffer, "\x1b[13;{d}u", .{bits + 1})
+            else if (flags & 8 != 0)
+                "\x1b[13u"
+            else
+                "\r";
+            for ([_]bool{ false, true }) |modify_other_keys| {
+                try std.testing.expectEqualStrings(
+                    kitty,
+                    try encodeKey(&buffer, pressed, .{
+                        .kitty_keyboard_flags = flags,
+                        .modify_other_keys_2 = modify_other_keys,
+                    }),
+                );
+            }
+        }
+    }
+}
+
+test "line-feed shortcuts preserve LF when encoded for a legacy child" {
+    var buffer: [32]u8 = undefined;
+    try std.testing.expectEqualStrings("\n", try encodeKey(&buffer, term.parse("\n").?.event.key, .{}));
+    try std.testing.expectEqualStrings("\r", try encodeKey(&buffer, term.parse("\r").?.event.key, .{}));
+}
+
+test "modified Enter encoding reports insufficient output space" {
+    const pressed: Key = .{ .code = .enter, .mods = .{ .shift = true } };
+    var kitty_buffer: [6]u8 = undefined;
+    try std.testing.expectError(error.WriteFailed, encodeKey(&kitty_buffer, pressed, .{ .kitty_keyboard_flags = 1 }));
+    var xterm_buffer: [9]u8 = undefined;
+    try std.testing.expectError(error.WriteFailed, encodeKey(&xterm_buffer, pressed, .{ .modify_other_keys_2 = true }));
 }

@@ -323,7 +323,11 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .cols = 2,
             .rows = 1,
             .cursor = .{ .visible = true, .x = 1, .y = 0 },
-            .input_modes = .{ .focus_events = true },
+            .input_modes = .{
+                .focus_events = true,
+                .kitty_keyboard_flags = 5,
+                .modify_other_keys_2 = true,
+            },
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = &frame_spans,
         }),
@@ -656,7 +660,7 @@ const golden = struct {
     pub const copy_selection = "18050000000000000001000200000003000400000001";
     pub const show_notification = "192d0000000000000001c40900000105000000000000000e004275696c6420636f6d706c6574650d004f70656e207468652070616e65";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
-    pub const pane_frame = "8204000000000000000100000000000000000000000000000002000100010100000000000000000001000001000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
+    pub const pane_frame = "82040000000000000001000000000000000000000000000000020001000101000000000000000000010000050101000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
     pub const request_failed = "840500000000000000010070616e6520313220646f6573206e6f74206578697374";
     pub const runtime_stopping = "85";
@@ -1394,15 +1398,28 @@ test "pane frames use the server envelope" {
         .base_frame_id = 0,
         .cols = 1,
         .rows = 1,
+        .input_modes = .{ .kitty_keyboard_flags = 31, .modify_other_keys_2 = true },
         .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     };
 
     const decoded = (try schema.decodeServer(try schema.encodePaneFrame(&buffer, message))).pane_frame;
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(4)), decoded.pane_id);
+    try std.testing.expectEqualDeep(message.input_modes, decoded.input_modes);
     var span_iterator = decoded.spans();
     var cell_iterator = ((try span_iterator.next()).?).cells();
     try std.testing.expectEqualDeep(cells[0], (try cell_iterator.next()).?);
+}
+
+test "pane frames reject unsupported keyboard flags" {
+    var buffer: [256]u8 = undefined;
+    const payload = try std.fmt.hexToBytes(&buffer, golden.pane_frame);
+    // Tag + pane/frame identities + geometry + cursor + mouse + six modes.
+    const keyboard_flags_offset = 1 + 24 + 4 + 5 + 3 + 6;
+    for ([_]u8{ 32, 64, 128, 255 }) |flags| {
+        payload[keyboard_flags_offset] = flags;
+        try std.testing.expectError(error.InvalidKeyboardFlags, schema.decodeServer(payload));
+    }
 }
 
 test "malformed application messages are rejected" {

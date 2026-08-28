@@ -499,6 +499,63 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
 
+test "host Enter variants use the keyboard modes received in a pane frame" {
+    const cases = [_]struct { modes: schema.frame.InputModes, expected: []const u8 }{
+        .{
+            .modes = .{ .kitty_keyboard_flags = 5 },
+            .expected = "\x1b[13;2u\x1b[13;2u\r\n",
+        },
+        .{
+            .modes = .{ .modify_other_keys_2 = true },
+            .expected = "\x1b[27;2;13~\x1b[27;2;13~\r\n",
+        },
+        .{ .modes = .{}, .expected = "\r\r\r\n" },
+    };
+    for (cases) |case| {
+        var harness: TestHarness = undefined;
+        try harness.init();
+        defer harness.deinit();
+        try harness.bootstrap();
+
+        var payload: [128]u8 = undefined;
+        const cells = [_]core.ui.Cell{.{}};
+        const snapshot = try schema.encodePaneFrame(&payload, .{
+            .pane_id = TestHarness.bootstrap_pane,
+            .frame_id = 1,
+            .base_frame_id = 0,
+            .cols = 1,
+            .rows = 1,
+            .input_modes = case.modes,
+            .scroll = .{ .total_rows = 1, .offset = 0 },
+            .spans = &.{.{ .start = 0, .cells = &cells }},
+        });
+        _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
+        const host_bytes = "\x1b[13;2u\x1b[27;2;13~\r\n";
+        var chunk: InputChunk = .{};
+        @memcpy(chunk.bytes[0..host_bytes.len], host_bytes);
+        chunk.len = host_bytes.len;
+        try std.testing.expect(!try harness.client.handleHostInput(chunk));
+        try harness.settle();
+
+        var received: [32]u8 = undefined;
+        var received_len: usize = 0;
+        var buffer: [256]u8 = undefined;
+        while (received_len < case.expected.len) {
+            switch (try harness.nextClientMessage(&buffer)) {
+                .pane_input => |input| {
+                    try std.testing.expectEqual(TestHarness.bootstrap_pane, input.pane_id);
+                    try std.testing.expect(input.bytes.len <= received.len - received_len);
+                    @memcpy(received[received_len..][0..input.bytes.len], input.bytes);
+                    received_len += input.bytes.len;
+                },
+                .frame_ack => {},
+                else => return error.UnexpectedClientMessage,
+            }
+        }
+        try std.testing.expectEqualStrings(case.expected, received[0..received_len]);
+    }
+}
+
 test "focus reporting emits focus-in only after the pane opts in" {
     var harness: TestHarness = undefined;
     try harness.init();

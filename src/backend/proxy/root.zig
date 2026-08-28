@@ -250,5 +250,6 @@ test {
     std.testing.refAllDecls(identity);
     std.testing.refAllDecls(middleware);
     std.testing.refAllDecls(service_mod);
+    std.testing.refAllDecls(@import("sse.zig"));
     std.testing.refAllDecls(@import("tls.zig"));
 }

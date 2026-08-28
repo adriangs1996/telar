@@ -622,6 +622,8 @@ pub const Pane = struct {
             .focus_events = modes.get(.focus_event),
             .alternate_scroll = modes.get(.mouse_alternate_scroll),
             .alternate_screen = pane.terminal.screens.active_key == .alternate,
+            .kitty_keyboard_flags = pane.terminal.screens.active.kitty_keyboard.current().int(),
+            .modify_other_keys_2 = pane.terminal.flags.modify_other_keys_2,
         };
     }
 
@@ -1435,6 +1437,34 @@ test "pane input modes expose child focus reporting" {
     try std.testing.expect(!pane.inputModeState().focus_events);
     pane.terminal.modes.set(.focus_event, true);
     try std.testing.expect(pane.inputModeState().focus_events);
+}
+
+test "pane keyboard modes follow VT negotiation and screen-local stacks" {
+    const gpa = std.testing.allocator;
+    var pane: Pane = undefined;
+    pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 2, .rows = 1 });
+    defer pane.terminal.deinit(gpa);
+    var stream = pane.terminal.vtStream();
+    defer stream.deinit();
+
+    const steps = [_]struct { sequence: []const u8, flags: u5, modify_other_keys: bool = false }{
+        .{ .sequence = "\x1b[>1u", .flags = 1 },
+        .{ .sequence = "\x1b[>5u", .flags = 5 },
+        .{ .sequence = "\x1b[<u", .flags = 1 },
+        .{ .sequence = "\x1b[?1049h", .flags = 0 },
+        .{ .sequence = "\x1b[>8u", .flags = 8 },
+        .{ .sequence = "\x1b[?1049l", .flags = 1 },
+        .{ .sequence = "\x1b[<u", .flags = 0 },
+        .{ .sequence = "\x1b[>4;2m", .flags = 0, .modify_other_keys = true },
+        .{ .sequence = "\x1b[>4;0m", .flags = 0 },
+    };
+    for (steps) |step| {
+        // VT parsing must retain a control sequence across arbitrary PTY reads.
+        for (step.sequence) |byte| stream.nextSlice(&.{byte});
+        const modes = pane.inputModeState();
+        try std.testing.expectEqual(step.flags, modes.kitty_keyboard_flags);
+        try std.testing.expectEqual(step.modify_other_keys, modes.modify_other_keys_2);
+    }
 }
 
 test "a failed resize cannot split the screen from its damage flags" {
