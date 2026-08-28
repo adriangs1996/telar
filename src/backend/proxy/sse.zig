@@ -36,10 +36,13 @@ pub const Event = struct {
 };
 
 pub const Decoder = struct {
-    /// The current line without its terminating LF. A trailing CR belongs to
-    /// the line until `feed` recognizes a CRLF terminator.
+    /// The current logical line without its CR, LF, or CRLF terminator.
+    /// `feed` consumes terminators instead of storing them here.
     line: [max_line_bytes]u8 = undefined,
     line_len: usize = 0,
+
+    /// Whether `feed` is ignoring the rest of a line that exceeded
+    /// `max_line_bytes`.
     discarding_line: bool = false,
 
     /// Fields accumulated for the event that has not reached its blank line.
@@ -49,6 +52,10 @@ pub const Decoder = struct {
     event_data_len: usize = 0,
     has_data: bool = false,
     event_truncated: bool = false,
+
+    /// Whether the previous byte was CR. The next LF, if present, belongs to
+    /// the same CRLF terminator and must not create another empty line.
+    swallow_lf: bool = false,
 
     /// Consumes the next contiguous bytes from one SSE response body.
     ///
@@ -62,46 +69,63 @@ pub const Decoder = struct {
     /// are its output. It must not allocate, parse JSON, or report malformed
     /// input as a transport failure. Oversized input marks the current event as
     /// truncated and the decoder resumes at the next line boundary.
+    ///
+    /// At the start of the stream, this method must ignore one leading UTF-8
+    /// BOM when present, including when its three bytes arrive in separate
+    /// calls. A later BOM is ordinary input.
+    ///
+    /// Example:
+    ///
+    /// ```zig
+    /// const std = @import("std");
+    /// const sse = @import("sse.zig");
+    ///
+    /// const Sink = struct {
+    ///     fn emit(count: *usize, event: sse.Event) void {
+    ///         std.debug.assert(std.mem.eql(u8, event.name, "message_stop"));
+    ///         std.debug.assert(std.mem.eql(u8, event.data, "{}"));
+    ///         count.* += 1;
+    ///     }
+    /// };
+    ///
+    /// pub fn main() void {
+    ///     var decoder: sse.Decoder = .{};
+    ///     defer decoder.deinit();
+    ///     var count: usize = 0;
+    ///
+    ///     decoder.feed("event: message_stop\ndata: {}\n\n", &count, Sink.emit);
+    ///     std.debug.assert(count == 1);
+    /// }
+    /// ```
     pub fn feed(decoder: *Decoder, input: []const u8, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
         for (input) |byte| {
+            const byteIsLF = byte == '\n';
+            const byteIsCR = byte == '\r';
+
+            if (decoder.swallow_lf) {
+                decoder.swallow_lf = false;
+                if (byteIsLF) {
+                    continue;
+                }
+            }
+
             if (decoder.discarding_line) {
-                if (byte == '\n') {
+                if (byteIsLF or byteIsCR) {
                     decoder.discarding_line = false;
                     decoder.resetLine();
+                    decoder.swallow_lf = byteIsCR;
                 }
                 continue;
             }
 
-            if (byte == '\n') {
-                if (decoder.lineEndsWithCarriageReturn()) {
-                    decoder.line_len -= 1;
-                }
-
-                if (decoder.hasEmptyLine()) {
-                    if (decoder.has_data) {
-                        const event_name = if (decoder.isEventNameEmpty())
-                            "message"
-                        else
-                            decoder.getEventName();
-
-                        emit(
-                            context,
-                            Event{
-                                .data = decoder.getEventData(),
-                                .name = event_name,
-                                .truncated = decoder.event_truncated,
-                            },
-                        );
-                    }
-                    decoder.resetEvent();
-                } else {
-                    decoder.processLine();
-                }
-                decoder.resetLine();
-                continue;
+            switch (byte) {
+                '\r' => {
+                    decoder.finishLine(context, emit);
+                    decoder.swallow_lf = true;
+                },
+                '\n' => decoder.finishLine(context, emit),
+                else => decoder.pushByte(byte),
             }
-
-            decoder.pushByte(byte);
         }
     }
 
@@ -110,18 +134,72 @@ pub const Decoder = struct {
     /// This method emits nothing and returns nothing. Call it when the HTTP
     /// response, HTTP/2 stream, or owning connection is destroyed. The secure
     /// wipe matters because SSE data may contain model output or secrets.
+    /// Assign `.{}` to the decoder before using it again.
+    ///
+    /// Example:
+    ///
+    /// ```zig
+    /// const sse = @import("sse.zig");
+    ///
+    /// pub fn main() void {
+    ///     var decoder: sse.Decoder = .{};
+    ///     defer decoder.deinit();
+    /// }
+    /// ```
     pub fn deinit(decoder: *Decoder) void {
         std.crypto.secureZero(u8, std.mem.asBytes(decoder));
     }
 
+    /// Processes the logical line whose terminator `feed` just consumed.
+    ///
+    /// A non-empty line updates the pending event through `processLine`. An
+    /// empty line emits that event when it contains at least one `data` field,
+    /// then clears the event even when nothing was emitted. The callback must
+    /// finish using its borrowed slices before this method resets the buffers.
+    /// The line buffer is cleared on every return path.
+    ///
+    /// `feed` must not call this method for a discarded oversized line because
+    /// that line has no valid field to process.
+    fn finishLine(decoder: *Decoder, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
+        defer decoder.resetLine();
+
+        if (!decoder.hasEmptyLine()) {
+            decoder.processLine();
+            return;
+        }
+
+        if (decoder.has_data) {
+            const event_name = if (decoder.isEventNameEmpty())
+                "message"
+            else
+                decoder.getEventName();
+
+            emit(
+                context,
+                Event{
+                    .data = decoder.getEventData(),
+                    .name = event_name,
+                    .truncated = decoder.event_truncated,
+                },
+            );
+        }
+        decoder.resetEvent();
+    }
+
+    /// Returns whether the current logical line contains no bytes.
+    ///
+    /// Only `finishLine` uses this distinction. An empty line ends the pending
+    /// event, while a non-empty line contributes a field to it.
     fn hasEmptyLine(decoder: *Decoder) bool {
         return decoder.line_len == 0;
     }
 
-    fn lineEndsWithCarriageReturn(decoder: *Decoder) bool {
-        return decoder.line_len > 0 and decoder.line[decoder.line_len - 1] == '\r';
-    }
-
+    /// Appends one non-terminator byte to the current line without allocating.
+    ///
+    /// Once the fixed line buffer is full, this method preserves memory safety
+    /// by entering discard mode instead of writing past the buffer. It also
+    /// marks the pending event as truncated. `feed` then ignores bytes until
+    /// the next line terminator.
     fn pushByte(decoder: *Decoder, byte: u8) void {
         if (decoder.line_len < max_line_bytes) {
             decoder.line[decoder.line_len] = byte;
@@ -132,6 +210,12 @@ pub const Decoder = struct {
         }
     }
 
+    /// Logically discards every field accumulated for the pending event.
+    ///
+    /// This resets lengths and flags but does not wipe the backing arrays.
+    /// `deinit` performs the secure wipe when the decoder is destroyed. Any
+    /// slices previously returned by `getEventName` or `getEventData` become
+    /// invalid after this call.
     fn resetEvent(decoder: *Decoder) void {
         decoder.event_data = undefined;
         decoder.event_name = undefined;
@@ -141,23 +225,46 @@ pub const Decoder = struct {
         decoder.event_truncated = false;
     }
 
+    /// Logically discards the current line so the next byte starts a new one.
+    ///
+    /// This resets `line_len` but does not wipe the backing array. A slice
+    /// previously returned by `fieldValue` becomes invalid after this call.
     fn resetLine(decoder: *Decoder) void {
         decoder.line = undefined;
         decoder.line_len = 0;
     }
 
+    /// Returns whether the pending event has no explicit event name.
+    ///
+    /// `finishLine` uses this result to select the SSE default name,
+    /// `"message"`, when dispatching an event.
     fn isEventNameEmpty(decoder: *Decoder) bool {
         return decoder.event_name_len == 0;
     }
 
+    /// Returns the initialized portion of the pending event-name buffer.
+    ///
+    /// The returned slice borrows decoder storage. It remains valid only until
+    /// the decoder replaces or resets the pending event.
     fn getEventName(decoder: *Decoder) []const u8 {
         return decoder.event_name[0..decoder.event_name_len];
     }
 
+    /// Returns the initialized portion of the pending event-data buffer.
+    ///
+    /// The returned slice borrows decoder storage. It remains valid only until
+    /// the decoder appends more data or resets the pending event.
     fn getEventData(decoder: *Decoder) []const u8 {
         return decoder.event_data[0..decoder.event_data_len];
     }
 
+    /// Interprets one complete, non-empty SSE line and updates the pending event.
+    ///
+    /// The line is split at its first colon. A line without a colon has an
+    /// empty value. Exactly one leading ASCII space is removed from the value.
+    /// Comment lines and unknown fields are ignored. An `event` field replaces
+    /// the pending name. A `data` field appends its value, inserting one LF
+    /// between consecutive data fields. This method never emits an event.
     fn processLine(decoder: *Decoder) void {
         if (decoder.line_len > 0 and decoder.line[0] == ':') {
             return;
@@ -177,18 +284,32 @@ pub const Decoder = struct {
         }
     }
 
+    /// Returns the value after a field prefix that includes its colon.
+    ///
+    /// The caller must first prove that the current line starts with `field`.
+    /// The returned slice excludes at most one leading ASCII space and borrows
+    /// storage from the current line buffer.
     fn fieldValue(decoder: *Decoder, comptime field: []const u8) []const u8 {
         var rest = decoder.line[field.len..decoder.line_len];
         if (rest.len > 0 and rest[0] == ' ') rest = rest[1..]; // spec: a single space
         return rest;
     }
 
+    /// Returns whether the current line starts with the exact byte sequence.
+    ///
+    /// Comparison is case-sensitive, as required for SSE field names. This
+    /// method does not give `prefix` any field-boundary semantics.
     fn hasPrefix(decoder: *Decoder, prefix: []const u8) bool {
         if (decoder.line_len <= 0) return false;
 
         return std.mem.startsWith(u8, decoder.line[0..decoder.line_len], prefix);
     }
 
+    /// Replaces the pending event name with a bounded copy of `event_name`.
+    ///
+    /// An empty value clears the name, which makes `finishLine` use `"message"`.
+    /// If the value exceeds `max_event_name_bytes`, this method keeps the
+    /// prefix that fits and marks the pending event as truncated.
     fn setEventName(decoder: *Decoder, event_name: []const u8) void {
         if (decoder.event_name_len > 0) {
             // We have received two event: directives
@@ -204,6 +325,12 @@ pub const Decoder = struct {
         decoder.event_name_len += n;
     }
 
+    /// Appends bytes to the bounded event-data buffer.
+    ///
+    /// Calling this method records the presence of a `data` field even when
+    /// `bytes` is empty. If the value does not fit, the method copies the
+    /// prefix that fits and marks the pending event as truncated. It does not
+    /// add separators. `processLine` inserts the LF between data fields.
     fn appendData(decoder: *Decoder, bytes: []const u8) void {
         const room = max_data_bytes - decoder.event_data_len;
         const n = @min(room, bytes.len);
