@@ -77,21 +77,23 @@ pub const Decoder = struct {
                     decoder.line_len -= 1;
                 }
 
-                if (decoder.hasEmptyLineWithData()) {
-                    const event_name = if (decoder.isEventNameEmpty())
-                        "message"
-                    else
-                        decoder.getEventName();
+                if (decoder.line_len == 0) {
+                    if (decoder.has_data) {
+                        const event_name = if (decoder.isEventNameEmpty())
+                            "message"
+                        else
+                            decoder.getEventName();
 
-                    emit(
-                        context,
-                        Event{
-                            .data = decoder.getEventData(),
-                            .name = event_name,
-                            .truncated = decoder.event_truncated,
-                        },
-                    );
-                    decoder.resetEventData();
+                        emit(
+                            context,
+                            Event{
+                                .data = decoder.getEventData(),
+                                .name = event_name,
+                                .truncated = decoder.event_truncated,
+                            },
+                        );
+                    }
+                    decoder.resetEvent();
                 } else {
                     decoder.processLine();
                 }
@@ -126,7 +128,7 @@ pub const Decoder = struct {
         }
     }
 
-    fn resetEventData(decoder: *Decoder) void {
+    fn resetEvent(decoder: *Decoder) void {
         decoder.event_data = undefined;
         decoder.event_name = undefined;
         decoder.event_name_len = 0;
@@ -150,10 +152,6 @@ pub const Decoder = struct {
 
     fn getEventData(decoder: *Decoder) []const u8 {
         return decoder.event_data[0..decoder.event_data_len];
-    }
-
-    fn hasEmptyLineWithData(decoder: *Decoder) bool {
-        return decoder.line_len == 0 and decoder.has_data;
     }
 
     fn processLine(decoder: *Decoder) void {
@@ -564,4 +562,25 @@ test "a later event field replaces previous event name" {
 
     try expectEventCount(&decoder, &capture, 1, "A later event field must replace the previous event name.");
     try expectCaptured(&capture, 0, "second", "payload", false);
+}
+
+test "an event without data does not leak its name into the next event" {
+    const input =
+        "event: stale\n" ++
+        "\n" ++
+        "data: payload\n" ++
+        "\n";
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(
+        &decoder,
+        &capture,
+        1,
+        "A discarded event must not affect the following event.",
+    );
+    try expectCaptured(&capture, 0, "message", "payload", false);
 }
