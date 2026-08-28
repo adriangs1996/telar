@@ -57,11 +57,11 @@ The source tree enforces the process split before IPC exists. Both sides may
 import `telar-core`. Backend and frontend never import each other. `src/main.zig`
 is the temporary in-process bootstrap that composes them.
 
-| Package          | Owns                                                               |
-| ---------------- | ------------------------------------------------------------------ |
+| Package          | Owns                                                              |
+| ---------------- | ----------------------------------------------------------------- |
 | `telar-core`     | cells, buffers, geometry, hit testing, focus, selection values    |
 | `telar-backend`  | child processes, PTYs, terminal emulation, VT-to-cell translation |
-| `telar-frontend` | host terminal, cell diff, input, pacing, editing, client platform  |
+| `telar-frontend` | host terminal, cell diff, input, pacing, editing, client platform |
 
 The module roots are `src/core/root.zig`, `src/backend/root.zig` and
 `src/frontend/root.zig`. Put a type in core only when both processes need its
@@ -110,63 +110,6 @@ The test is easy to apply. Parsing JSON or decompressing a large image while
 forwarding a keystroke crosses a budget. Move the work to its queue and let the
 keystroke go.
 
-### The proxy, as built
-
-`examples/proxy/`. Read it before writing the runtime; it settled these
-questions already.
-
-Outside the default build, because it links sqlite3 and libnghttp2 from the
-system and the core builds with nothing but a Zig compiler. `zig build proxy`
-and `zig build test-proxy-example` ask for it. The runtime proxy has its own
-`zig build test-backend-proxy` gate.
-
-**`main.zig`** runs four actors feeding one event queue, and a main loop
-that owns every piece of mutable state. Actors only move bytes.
-
-```
-input actor    stdin        -> user_input
-output actor   pty master   -> the terminal, plus the OSC 133 tap
-signal actor   wake pipe    -> resized
-proxy actor    :PORT        -> upstream_opened / upstream_closed
-```
-
-**`osc.zig`** scans for OSC 133 shell markers. Framing is ours because
-`vt.osc.Parser` consumes a payload and knows nothing about `ESC ]` or its
-terminators; parsing is the emulator's.
-
-**`ca.zig`** is a local authority that mints one leaf per host. It writes a
-bundle of the system roots plus its own certificate, because `SSL_CERT_FILE`
-replaces a trust store rather than extending it. No OpenSSL: X.509 issuance is
-`tls.zig`'s.
-
-**`tls.zig`** terminates both ends. It peeks the child's ClientHello for the
-ALPN offer, negotiates upstream first, then mirrors the result downstream, so a
-child never gets h2 to an HTTP/1.1 listener.
-
-**`http.zig`** frames HTTP/1.1 half duplex, which is what the protocol already
-is, so neither TLS session is touched by two threads. Chunked and
-close-delimited bodies forward as they arrive, so SSE still streams. Secret
-headers are redacted before anything is stored.
-
-**`h2.zig`** observes rather than proxies. Frames relay byte for byte, with a
-copy fed through nghttp2's standalone HPACK inflater. No sessions, no stream id
-mapping, no flow-control windows. Enough to read the conversation, not enough to
-alter it.
-
-**`db.zig`** merges both taps onto one `event` table in SQLite: what the shell
-ran and what went out over the network, ordered together.
-
-Three things it does not do yet, and each is a decision rather than an oversight
-waiting to happen. Response bodies are stored unredacted, and one of them has
-already been observed carrying an API key. `timeline.db` lands in the working
-directory with default permissions while holding prompts and replies in clear.
-And interception is on with nothing on screen saying so.
-
-One known failure: `ab.chatgpt.com` from Codex. Its binary links
-Security.framework, which validates against the Keychain and ignores every
-environment variable the proxy sets. Fixing it means installing the CA into the
-system trust store, which is the user's decision and not the runtime's.
-
 ## Performance, no matter what
 
 Doing so much work and placing between the terminal emulator and the actual pty,
@@ -187,3 +130,8 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 - user means the person using telar.
 - agent means the coding agent a user runs inside a telar's pane. It could include you.
 - client means the TUI that connects to a telar's server.
+
+## Code Style
+
+- Do not end function's signature's parameter list with a ",".
+- Always write the function's signature on a single line.
