@@ -5,8 +5,8 @@
 //! streaming and unchanged.
 
 const std = @import("std");
-const middleware = @import("middleware.zig");
-const tls = @import("tls.zig");
+const middleware = @import("../middleware.zig");
+const tls = @import("../tls.zig");
 
 pub const max_head_bytes = 32 * 1024;
 pub const max_chunk_line_bytes = 128;

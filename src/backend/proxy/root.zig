@@ -246,7 +246,7 @@ test "pane registration owns and disposes its ephemeral environment" {
 test {
     std.testing.refAllDecls(@import("ca.zig"));
     std.testing.refAllDecls(@import("h2.zig"));
-    std.testing.refAllDecls(@import("http.zig"));
+    std.testing.refAllDecls(@import("http/root.zig"));
     std.testing.refAllDecls(identity);
     std.testing.refAllDecls(middleware);
     std.testing.refAllDecls(service_mod);
