@@ -69,6 +69,7 @@ pub const Decoder = struct {
                     decoder.discarding_line = false;
                     decoder.resetLine();
                 }
+                continue;
             }
 
             if (byte == '\n') {
@@ -187,8 +188,12 @@ pub const Decoder = struct {
     }
 
     fn setEventName(decoder: *Decoder, event_name: []const u8) void {
-        const room = max_event_name_bytes - decoder.event_name_len;
-        const n = @min(room, event_name.len);
+        if (decoder.event_name_len > 0) {
+            // We have received two event: directives
+            // Overwrite with the latest one
+            decoder.event_name_len = 0;
+        }
+        const n = @min(max_event_name_bytes, event_name.len);
         if (n < event_name.len) {
             decoder.event_truncated = true;
         }
@@ -523,8 +528,10 @@ test "an oversized event is marked truncated and the next event still parses" {
         Capture.emit,
     );
     decoder.feed(&oversized, &capture, Capture.emit);
+    decoder.feed("\n", &capture, Capture.emit);
+    try expectEventCount(&decoder, &capture, 0, "The newline terminating a discarded line must not terminate the event");
     decoder.feed(
-        "\n\n" ++
+        "\n" ++
             "event: message_stop\n" ++
             "data: {}\n" ++
             "\n",
@@ -540,4 +547,21 @@ test "an oversized event is marked truncated and the next event still parses" {
     );
     try expectCaptured(&capture, 0, "oversized", "kept", true);
     try expectCaptured(&capture, 1, "message_stop", "{}", false);
+}
+
+test "a later event field replaces previous event name" {
+    const input =
+        "event: first\n" ++
+        "event: second\n" ++
+        "data: payload\n" ++
+        "\n";
+
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(&decoder, &capture, 1, "A later event field must replace the previous event name.");
+    try expectCaptured(&capture, 0, "second", "payload", false);
 }
