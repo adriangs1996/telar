@@ -77,7 +77,7 @@ pub const Decoder = struct {
                     decoder.line_len -= 1;
                 }
 
-                if (decoder.line_len == 0) {
+                if (decoder.hasEmptyLine()) {
                     if (decoder.has_data) {
                         const event_name = if (decoder.isEventNameEmpty())
                             "message"
@@ -112,6 +112,10 @@ pub const Decoder = struct {
     /// wipe matters because SSE data may contain model output or secrets.
     pub fn deinit(decoder: *Decoder) void {
         std.crypto.secureZero(u8, std.mem.asBytes(decoder));
+    }
+
+    fn hasEmptyLine(decoder: *Decoder) bool {
+        return decoder.line_len == 0;
     }
 
     fn lineEndsWithCarriageReturn(decoder: *Decoder) bool {
@@ -583,4 +587,233 @@ test "an event without data does not leak its name into the next event" {
         "A discarded event must not affect the following event.",
     );
     try expectCaptured(&capture, 0, "message", "payload", false);
+}
+
+// These cases project the WHATWG EventSource parsing algorithm onto Telar's
+// bounded `Event { name, data, truncated }` contract. They mirror the wire
+// cases covered by Web Platform Tests under `eventsource/format-*.any.js`.
+test "one leading UTF-8 BOM is ignored across every two-chunk split" {
+    const input =
+        "\xEF\xBB\xBF" ++
+        "event: named\r\n" ++
+        "data: payload\r\n" ++
+        "\r\n";
+
+    for (0..input.len + 1) |split| {
+        var decoder: Decoder = .{};
+        defer decoder.deinit();
+        var capture: Capture = .{};
+
+        decoder.feed(input[0..split], &capture, Capture.emit);
+        decoder.feed(input[split..], &capture, Capture.emit);
+
+        var hint_buffer: [192]u8 = undefined;
+        const hint = try std.fmt.bufPrint(
+            &hint_buffer,
+            "The leading UTF-8 BOM or the CRLF stream was split at byte {d} of {d}.",
+            .{ split, input.len },
+        );
+        try expectEventCount(&decoder, &capture, 1, hint);
+        try expectCaptured(&capture, 0, "named", "payload", false);
+    }
+}
+
+test "only the first UTF-8 BOM is ignored" {
+    const input =
+        "\xEF\xBB\xBF" ++
+        "\xEF\xBB\xBF" ++
+        "data: hidden\n" ++
+        "\n" ++
+        "data: visible\n" ++
+        "\n";
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(
+        &decoder,
+        &capture,
+        1,
+        "Only one BOM at the start of the stream is stripped. A second BOM becomes part of the field name.",
+    );
+    try expectCaptured(&capture, 0, "message", "visible", false);
+}
+
+test "LF CRLF and lone CR line endings survive every two-chunk split" {
+    const input =
+        "event: mixed\r\n" ++
+        "data: first\r" ++
+        "data: second\n" ++
+        "\r";
+
+    for (0..input.len + 1) |split| {
+        var decoder: Decoder = .{};
+        defer decoder.deinit();
+        var capture: Capture = .{};
+
+        decoder.feed(input[0..split], &capture, Capture.emit);
+        decoder.feed(input[split..], &capture, Capture.emit);
+
+        var hint_buffer: [192]u8 = undefined;
+        const hint = try std.fmt.bufPrint(
+            &hint_buffer,
+            "A mixed-newline SSE stream was split at byte {d} of {d}.",
+            .{ split, input.len },
+        );
+        try expectEventCount(&decoder, &capture, 1, hint);
+        try expectCaptured(&capture, 0, "mixed", "first\nsecond", false);
+    }
+}
+
+test "a CRLF pair is one line ending rather than two" {
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed("data: payload\r\n", &capture, Capture.emit);
+    try expectEventCount(
+        &decoder,
+        &capture,
+        0,
+        "The LF following a CR must be swallowed instead of becoming a blank line.",
+    );
+
+    decoder.feed("\r\n", &capture, Capture.emit);
+    try expectEventCount(&decoder, &capture, 1, "The second CRLF is the blank line that dispatches the event.");
+    try expectCaptured(&capture, 0, "message", "payload", false);
+}
+
+test "fields without a colon have an empty value" {
+    const input =
+        "event: stale\n" ++
+        "event\n" ++
+        "data\n" ++
+        "\n" ++
+        "data\n" ++
+        "data\n" ++
+        "\n";
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(
+        &decoder,
+        &capture,
+        2,
+        "A colonless event field clears the name and every colonless data field contributes an empty value.",
+    );
+    try expectCaptured(&capture, 0, "message", "", false);
+    try expectCaptured(&capture, 1, "message", "\n", false);
+}
+
+test "field parsing uses the first colon and removes exactly one leading space" {
+    const input =
+        "data:\ttab\n" ++
+        "data:  spaced\n" ++
+        "data:value:with:colons\n" ++
+        "\n";
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(&decoder, &capture, 1, "Field parsing must split once and remove one ASCII space, never a tab.");
+    try expectCaptured(&capture, 0, "message", "\ttab\n spaced\nvalue:with:colons", false);
+}
+
+test "field names are case-sensitive and unknown fields are ignored" {
+    const input =
+        "Data: uppercase\n" ++
+        " data: prefixed\n" ++
+        "unknown: value\n" ++
+        "justsometext\n" ++
+        "data: kept\n" ++
+        "\n";
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(&decoder, &capture, 1, "Only the exact lowercase data field has protocol meaning.");
+    try expectCaptured(&capture, 0, "message", "kept", false);
+}
+
+test "valid UTF-8 bytes are preserved in event names and data" {
+    const input =
+        "event: r\xC3\xA9ponse\n" ++
+        "data: ok\xE2\x80\xA6\n" ++
+        "\n";
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(&decoder, &capture, 1, "SSE is UTF-8 and non-ASCII bytes must survive framing unchanged.");
+    try expectCaptured(&capture, 0, "r\xC3\xA9ponse", "ok\xE2\x80\xA6", false);
+}
+
+test "empty data fields and NUL bytes are preserved" {
+    const input =
+        "data:\n" ++
+        "\n" ++
+        "data: \x00\n" ++
+        "data:\n" ++
+        "\n";
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(input, &capture, Capture.emit);
+
+    try expectEventCount(&decoder, &capture, 2, "An empty data field still dispatches, and NUL is valid event data.");
+    try expectCaptured(&capture, 0, "message", "", false);
+    try expectCaptured(&capture, 1, "message", "\x00\n", false);
+}
+
+test "an oversized line resynchronizes at a lone CR" {
+    var oversized: [max_line_bytes + 1]u8 = @splat('x');
+    var decoder: Decoder = .{};
+    defer decoder.deinit();
+    var capture: Capture = .{};
+
+    decoder.feed(
+        "event: oversized\n" ++
+            "data: kept\n" ++
+            "data: ",
+        &capture,
+        Capture.emit,
+    );
+    decoder.feed(&oversized, &capture, Capture.emit);
+    decoder.feed("\r", &capture, Capture.emit);
+    try expectEventCount(
+        &decoder,
+        &capture,
+        0,
+        "The CR terminates only the discarded oversized line, not the pending event.",
+    );
+
+    decoder.feed(
+        "\r" ++
+            "event: next\r" ++
+            "data: ok\r" ++
+            "\r",
+        &capture,
+        Capture.emit,
+    );
+
+    try expectEventCount(
+        &decoder,
+        &capture,
+        2,
+        "After a discarded line ends with CR, both the pending and following events must parse.",
+    );
+    try expectCaptured(&capture, 0, "oversized", "kept", true);
+    try expectCaptured(&capture, 1, "next", "ok", false);
 }
