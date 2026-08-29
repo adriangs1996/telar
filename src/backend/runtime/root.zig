@@ -954,25 +954,28 @@ const Server = struct {
             server.metrics.proxy_observations +|= 1;
         }
 
-        _ = server.agents.observeProxy(
-            agent_mod.Identity.fromPane(active),
-            event.provider,
-            switch (event.phase) {
+        _ = server.agents.observeProxy(.{
+            .identity = agent_mod.Identity.fromPane(active),
+            .provider = event.provider,
+            .phase = switch (event.phase) {
                 .request_started => .request_started,
                 .auxiliary_request_started => return,
                 .response_activity => .response_activity,
                 .response_finished => .response_finished,
                 .request_failed => .request_failed,
             },
-            switch (event.protocol) {
-                .http11 => .http11,
-                .h2 => .h2,
-                .upgraded => .upgraded,
+            .exchange = .{
+                .protocol = switch (event.protocol) {
+                    .http11 => .http11,
+                    .h2 => .h2,
+                    .upgraded => .upgraded,
+                },
+                .connection_id = event.connection_id,
+                .stream_id = event.stream_id,
             },
-            event.connection_id,
-            event.stream_id,
-            event.observed_at_ms,
-        );
+            .observed_at_ms = event.observed_at_ms,
+        });
+
         server.scheduleAgentDescription();
         server.pumpAll();
     }

@@ -135,3 +135,68 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 
 - Do not end function's signature's parameter list with a ",".
 - Always write the function's signature on a single line.
+
+```zig
+// BAD
+pub fn observeProxy(
+  store: *Store,
+  observation: ProxyObservation,
+) bool { }
+
+// GOOD
+pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {}
+```
+
+- Add comments only on non-trivial and behavior rich methods. Always include
+  example of usage in comments for public methods.
+- Always leave a blank line between blocks of code inside a method.
+  Example:
+
+```zig
+// Bad
+    pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {
+        if (observation.provider == .unknown) {
+            return false;
+        }
+        var record = switch (observation.phase) {
+            .request_started => store.ensure(observation.identity) orelse return false,
+            .response_activity, .response_finished, .request_failed => store.find(observation.identity.key) orelse return false,
+        };
+        const request: ProxyRequest = .{
+            .protocol = observation.exchange.protocol,
+            .connection_id = observation.exchange.connection_id,
+            .stream_id = observation.exchange.stream_id,
+        };
+
+// Good
+    pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {
+        if (observation.provider == .unknown) {
+            return false;
+        }
+
+        var record = switch (observation.phase) {
+            .request_started => store.ensure(observation.identity) orelse return false,
+            .response_activity, .response_finished, .request_failed => store.find(observation.identity.key) orelse return false,
+        };
+
+        const request: ProxyRequest = .{
+            .protocol = observation.exchange.protocol,
+            .connection_id = observation.exchange.connection_id,
+            .stream_id = observation.exchange.stream_id,
+        };
+```
+
+- Always put single If statements inside brackets
+
+```zig
+// Bad
+        if (observation.provider == .unknown) return false;
+
+// Good
+        if (observation.provider == .unknown) {
+            return false;
+        }
+```
+
+- Do not clamp parameter's list. A function could have at most 3 parameters. More is a smell and
+  needs to get worked around

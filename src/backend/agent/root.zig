@@ -47,12 +47,6 @@ pub const ProxyPhase = enum {
 
 pub const ProxyProtocol = enum { http11, h2, upgraded };
 
-const ProxyRequest = struct {
-    protocol: ProxyProtocol,
-    connection_id: u64,
-    stream_id: u32,
-};
-
 const Evidence = struct {
     provider: schema.AgentProvider,
     status: schema.AgentStatus,
@@ -70,7 +64,7 @@ const Record = struct {
     authority: schema.AgentAuthority = .candidate,
     process: ?Evidence = null,
     proxy: ?Evidence = null,
-    active_proxy: [max_active_proxy_requests]?ProxyRequest = @splat(null),
+    active_proxy: [max_active_proxy_requests]?ProxyExchange = @splat(null),
     active_proxy_count: u16 = 0,
     screen: ?Evidence = null,
     title: Title = .{},
@@ -101,6 +95,32 @@ const Title = struct {
     fn clearSensitive(title: *Title) void {
         title.capture.clear();
     }
+};
+
+/// Identifies one intercepted model exchange within the proxy observation
+/// stream.
+///
+/// `stream_id` is zero for HTTP/1.1 and upgraded connections. HTTP/2 normally
+/// uses its peer stream identifier; a `request_failed` observation may use zero
+/// to settle every active stream on the named connection.
+pub const ProxyExchange = struct {
+    protocol: ProxyProtocol,
+    connection_id: u64,
+    stream_id: u32,
+};
+
+/// Owned proxy evidence enriched by the runtime with the exact agent identity
+/// that was active when the observation arrived.
+///
+/// The exchange identifies the network work being observed, while
+/// `observed_at_ms` orders evidence and determines its expiry. Callers exclude
+/// auxiliary provider traffic before constructing this value.
+pub const ProxyObservation = struct {
+    identity: Identity,
+    provider: schema.AgentProvider,
+    phase: ProxyPhase,
+    exchange: ProxyExchange,
+    observed_at_ms: i64,
 };
 
 pub const Store = struct {
@@ -145,7 +165,7 @@ pub const Store = struct {
     }
 
     /// Applies one proxy lifecycle observation to the agent identified by
-    /// `identity`.
+    /// `observation.identity`.
     ///
     /// `request_started` opens a bounded tracked exchange and may create the
     /// agent record. Activity, completion, and failure observations require a
@@ -160,70 +180,88 @@ pub const Store = struct {
     ///
     /// ```zig
     /// fn observeHttp11Exchange(store: *Store, identity: Identity) void {
-    ///     const connection_id = 17;
-    ///     _ = store.observeProxy(identity, .claude, .request_started, .http11, connection_id, 0, 1_000);
-    ///     _ = store.observeProxy(identity, .claude, .response_activity, .http11, connection_id, 0, 1_100);
-    ///     _ = store.observeProxy(identity, .claude, .response_finished, .http11, connection_id, 0, 1_200);
+    ///     const exchange: ProxyExchange = .{
+    ///         .protocol = .http11,
+    ///         .connection_id = 17,
+    ///         .stream_id = 0,
+    ///     };
+    ///     _ = store.observeProxy(.{
+    ///         .identity = identity,
+    ///         .provider = .claude,
+    ///         .phase = .request_started,
+    ///         .exchange = exchange,
+    ///         .observed_at_ms = 1_000,
+    ///     });
+    ///     _ = store.observeProxy(.{
+    ///         .identity = identity,
+    ///         .provider = .claude,
+    ///         .phase = .response_activity,
+    ///         .exchange = exchange,
+    ///         .observed_at_ms = 1_100,
+    ///     });
+    ///     _ = store.observeProxy(.{
+    ///         .identity = identity,
+    ///         .provider = .claude,
+    ///         .phase = .response_finished,
+    ///         .exchange = exchange,
+    ///         .observed_at_ms = 1_200,
+    ///     });
     /// }
     /// ```
-    pub fn observeProxy(store: *Store, identity: Identity, provider: schema.AgentProvider, phase: ProxyPhase, protocol: ProxyProtocol, connection_id: u64, stream_id: u32, observed_at_ms: i64) bool {
-        if (provider == .unknown) return false;
-        var record = switch (phase) {
-            .request_started => store.ensure(identity) orelse return false,
-            .response_activity, .response_finished, .request_failed => store.find(identity.key) orelse return false,
+    pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {
+        if (observation.provider == .unknown) {
+            return false;
+        }
+
+        var record = switch (observation.phase) {
+            .request_started => store.ensure(observation.identity) orelse return false,
+            .response_activity, .response_finished, .request_failed => store.find(observation.identity.key) orelse return false,
         };
-        const request: ProxyRequest = .{
-            .protocol = protocol,
-            .connection_id = connection_id,
-            .stream_id = stream_id,
+
+        const tracked = switch (observation.phase) {
+            .request_started => markProxyActive(record, observation.exchange),
+            .response_activity => hasProxyActive(record, observation.exchange),
+            .response_finished, .request_failed => settleProxy(record, observation.exchange),
         };
-        const tracked = switch (phase) {
-            .request_started => markProxyActive(record, request),
-            .response_activity => hasProxyActive(record, request),
-            .response_finished, .request_failed => settleProxy(record, request),
-        };
-        // Starts are filtered to model-inference routes by the proxy. Ignore
-        // response events without a matching start so auxiliary provider
-        // traffic cannot create or settle agent work on its own.
-        if (phase != .request_started and !tracked) return false;
-        if (phase == .response_activity) if (record.proxy) |*evidence| {
-            if (evidence.provider == provider and evidence.status == .working) {
-                if (observed_at_ms - evidence.observed_at_ms < activity_refresh_ms)
-                    return false;
-                evidence.observed_at_ms = observed_at_ms;
-                evidence.expires_at_ms = observed_at_ms + working_expiry_ms;
-                return store.reproject(record, observed_at_ms);
+
+        if (observation.phase != .request_started and !tracked) {
+            return false;
+        }
+
+        if (observation.phase == .response_activity) {
+            if (record.proxy) |*evidence| {
+                if (evidence.provider == observation.provider and evidence.status == .working) {
+                    if (observation.observed_at_ms - evidence.observed_at_ms < activity_refresh_ms)
+                        return false;
+                    evidence.observed_at_ms = observation.observed_at_ms;
+                    evidence.expires_at_ms = observation.observed_at_ms + working_expiry_ms;
+                    return store.reproject(record, observation.observed_at_ms);
+                }
             }
-        };
-        // An HTTP response completes one model exchange, not the agent turn.
-        // Claude may execute tools and issue another request before it returns
-        // to its input prompt. Only confirmed screen evidence may settle this
-        // network work as ready.
-        const status: schema.AgentStatus = switch (phase) {
+        }
+
+        const status: schema.AgentStatus = switch (observation.phase) {
             .request_started, .response_activity, .response_finished => .working,
             .request_failed => .failed,
         };
+
         record.proxy = .{
-            .provider = provider,
+            .provider = observation.provider,
             .status = status,
             .source = .proxy_tls,
-            .confidence = switch (phase) {
+            .confidence = switch (observation.phase) {
                 .request_started, .response_finished => 95,
                 .response_activity => 90,
                 .request_failed => 98,
             },
-            .observed_at_ms = observed_at_ms,
-            .expires_at_ms = observed_at_ms + if (status == .working)
+            .observed_at_ms = observation.observed_at_ms,
+            .expires_at_ms = observation.observed_at_ms + if (status == .working)
                 working_expiry_ms
             else
                 settled_expiry_ms,
         };
-        record.authority = if (record.authority == .obscured and
-            (phase == .request_started or phase == .response_activity))
-        resumed: {
-            // Fresh network work proves that a previously visible permission
-            // prompt no longer owns the session. Its bounded screen evidence
-            // must not keep masking the resumed request.
+
+        record.authority = if (record.authority == .obscured and (observation.phase == .request_started or observation.phase == .response_activity)) resumed: {
             record.screen = null;
             break :resumed .resumed;
         } else switch (record.authority) {
@@ -231,7 +269,8 @@ pub const Store = struct {
             .active, .obscured, .resumed => record.authority,
             .exited => return false,
         };
-        return store.reproject(record, observed_at_ms);
+
+        return store.reproject(record, observation.observed_at_ms);
     }
 
     pub fn observeScreen(store: *Store, identity: Identity, signal: ScreenSignal, observed_at_ms: i64) bool {
@@ -546,11 +585,11 @@ pub const Store = struct {
     }
 };
 
-fn markProxyActive(record: *Record, request: ProxyRequest) bool {
-    var free: ?*?ProxyRequest = null;
+fn markProxyActive(record: *Record, request: ProxyExchange) bool {
+    var free: ?*?ProxyExchange = null;
     for (&record.active_proxy) |*slot| {
         if (slot.*) |active| {
-            if (sameProxyRequest(active, request)) return false;
+            if (sameProxyExchange(active, request)) return false;
         } else if (free == null) {
             free = slot;
         }
@@ -561,13 +600,13 @@ fn markProxyActive(record: *Record, request: ProxyRequest) bool {
     return true;
 }
 
-fn hasProxyActive(record: *const Record, request: ProxyRequest) bool {
+fn hasProxyActive(record: *const Record, request: ProxyExchange) bool {
     for (record.active_proxy) |active|
-        if (active != null and sameProxyRequest(active.?, request)) return true;
+        if (active != null and sameProxyExchange(active.?, request)) return true;
     return false;
 }
 
-fn settleProxy(record: *Record, request: ProxyRequest) bool {
+fn settleProxy(record: *Record, request: ProxyExchange) bool {
     if (request.protocol == .h2 and request.stream_id == 0) {
         var removed = false;
         for (&record.active_proxy) |*slot| {
@@ -582,7 +621,7 @@ fn settleProxy(record: *Record, request: ProxyRequest) bool {
     }
     for (&record.active_proxy) |*slot| {
         const active = slot.* orelse continue;
-        if (!sameProxyRequest(active, request)) continue;
+        if (!sameProxyExchange(active, request)) continue;
         slot.* = null;
         record.active_proxy_count -= 1;
         return true;
@@ -595,7 +634,7 @@ fn clearProxyActive(record: *Record) void {
     record.active_proxy_count = 0;
 }
 
-fn sameProxyRequest(left: ProxyRequest, right: ProxyRequest) bool {
+fn sameProxyExchange(left: ProxyExchange, right: ProxyExchange) bool {
     return left.protocol == right.protocol and
         left.connection_id == right.connection_id and
         left.stream_id == right.stream_id;
@@ -681,30 +720,21 @@ fn testIdentity() !Identity {
     };
 }
 
-fn observeTestProxy(
-    store: *Store,
-    identity: Identity,
-    provider: schema.AgentProvider,
-    phase: ProxyPhase,
-    observed_at_ms: i64,
-) bool {
-    return store.observeProxy(
-        identity,
-        provider,
-        phase,
-        .h2,
-        1,
-        1,
-        observed_at_ms,
-    );
+fn observeTestProxy(store: *Store, identity: Identity, provider: schema.AgentProvider, phase: ProxyPhase, observed_at_ms: i64) bool {
+    return store.observeProxy(.{
+        .identity = identity,
+        .provider = provider,
+        .phase = phase,
+        .observed_at_ms = observed_at_ms,
+        .exchange = .{
+            .protocol = .h2,
+            .connection_id = 1,
+            .stream_id = 1,
+        },
+    });
 }
 
-fn observeTestReadyPrompt(
-    store: *Store,
-    identity: Identity,
-    provider: schema.AgentProvider,
-    observed_at_ms: i64,
-) bool {
+fn observeTestReadyPrompt(store: *Store, identity: Identity, provider: schema.AgentProvider, observed_at_ms: i64) bool {
     return store.observeScreen(
         identity,
         .{
@@ -1035,24 +1065,21 @@ test "new network work supersedes an older ready prompt" {
 test "unmatched proxy responses cannot create agent state" {
     var store: Store = .{};
     const identity = try testIdentity();
-    try std.testing.expect(!store.observeProxy(
-        identity,
-        .claude,
-        .response_activity,
-        .h2,
-        9,
-        3,
-        100,
-    ));
-    try std.testing.expect(!store.observeProxy(
-        identity,
-        .claude,
-        .request_failed,
-        .h2,
-        9,
-        3,
-        200,
-    ));
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
+    try std.testing.expect(!store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_activity,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(!store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_failed,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(@as(usize, 0), store.snapshot(&entries).len);
@@ -1083,22 +1110,40 @@ test "a bare shell prompt is not Claude identity" {
 test "completed HTTP2 streams do not settle the agent turn" {
     var store: Store = .{};
     const identity = try testIdentity();
-    try std.testing.expect(store.observeProxy(
-        identity,
-        .codex,
-        .request_started,
-        .h2,
-        9,
-        1,
-        100,
-    ));
-    _ = store.observeProxy(identity, .codex, .request_started, .h2, 9, 3, 101);
-    _ = store.observeProxy(identity, .codex, .response_finished, .h2, 9, 1, 200);
+    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
+    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
+    try std.testing.expect(store.observeProxy(.{
+        .identity = identity,
+        .provider = .codex,
+        .phase = .request_started,
+        .exchange = first,
+        .observed_at_ms = 100,
+    }));
+    _ = store.observeProxy(.{
+        .identity = identity,
+        .provider = .codex,
+        .phase = .request_started,
+        .exchange = second,
+        .observed_at_ms = 101,
+    });
+    _ = store.observeProxy(.{
+        .identity = identity,
+        .provider = .codex,
+        .phase = .response_finished,
+        .exchange = first,
+        .observed_at_ms = 200,
+    });
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     var snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
-    _ = store.observeProxy(identity, .codex, .response_finished, .h2, 9, 3, 300);
+    _ = store.observeProxy(.{
+        .identity = identity,
+        .provider = .codex,
+        .phase = .response_finished,
+        .exchange = second,
+        .observed_at_ms = 300,
+    });
     snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
@@ -1110,47 +1155,41 @@ test "completed HTTP2 streams do not settle the agent turn" {
 test "sequential model requests stay working until a confirmed prompt" {
     var store: Store = .{};
     const identity = try testIdentity();
-    try std.testing.expect(store.observeProxy(
-        identity,
-        .claude,
-        .request_started,
-        .h2,
-        9,
-        1,
-        100,
-    ));
-    try std.testing.expect(store.observeProxy(
-        identity,
-        .claude,
-        .response_finished,
-        .h2,
-        9,
-        1,
-        200,
-    ));
+    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
+    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
+    try std.testing.expect(store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = first,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_finished,
+        .exchange = first,
+        .observed_at_ms = 200,
+    }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     var snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
-    try std.testing.expect(store.observeProxy(
-        identity,
-        .claude,
-        .request_started,
-        .h2,
-        9,
-        3,
-        300,
-    ));
-    try std.testing.expect(store.observeProxy(
-        identity,
-        .claude,
-        .response_finished,
-        .h2,
-        9,
-        3,
-        400,
-    ));
+    try std.testing.expect(store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = second,
+        .observed_at_ms = 300,
+    }));
+    try std.testing.expect(store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_finished,
+        .exchange = second,
+        .observed_at_ms = 400,
+    }));
     snapshot = store.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
@@ -1163,25 +1202,36 @@ test "sequential model requests stay working until a confirmed prompt" {
 test "HTTP2 connection failure settles all of its active streams" {
     var store: Store = .{};
     const identity = try testIdentity();
-    _ = store.observeProxy(identity, .claude, .request_started, .h2, 11, 1, 100);
-    _ = store.observeProxy(identity, .claude, .request_started, .h2, 11, 3, 101);
-    try std.testing.expect(store.observeProxy(
-        identity,
-        .claude,
-        .request_failed,
-        .h2,
-        11,
-        0,
-        200,
-    ));
+    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 1 };
+    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 3 };
+    const connection: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 0 };
+    _ = store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = first,
+        .observed_at_ms = 100,
+    });
+    _ = store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = second,
+        .observed_at_ms = 101,
+    });
+    try std.testing.expect(store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_failed,
+        .exchange = connection,
+        .observed_at_ms = 200,
+    }));
     try std.testing.expectEqual(@as(u16, 0), store.find(identity.key).?.active_proxy_count);
-    try std.testing.expect(!store.observeProxy(
-        identity,
-        .claude,
-        .request_failed,
-        .h2,
-        11,
-        0,
-        201,
-    ));
+    try std.testing.expect(!store.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_failed,
+        .exchange = connection,
+        .observed_at_ms = 201,
+    }));
 }
