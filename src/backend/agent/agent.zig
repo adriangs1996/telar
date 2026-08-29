@@ -115,6 +115,15 @@ pub fn matches(agent: *const Agent, key: PaneKey) bool {
     return agent.key.id == key.id and agent.key.generation == key.generation;
 }
 
+/// Returns the exact pane generation that identifies this aggregate.
+///
+/// ```zig
+/// const key = agent.paneKey();
+/// ```
+pub fn paneKey(agent: *const Agent) PaneKey {
+    return agent.key;
+}
+
 /// Applies authoritative foreground-process evidence and replaces evidence
 /// belonging to an earlier agent process.
 ///

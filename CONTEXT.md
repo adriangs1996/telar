@@ -138,11 +138,10 @@ without requesting tool execution or continuation. It is evidence that the
 agent can become ready once no other model exchange remains.
 _Avoid_: Transport completion, agent ready
 
-**Agent registry**:
-The runtime-owned collection of agents currently associated with pane
-generations. It is the authoritative source for agent lifecycle observations
-and client-facing agent snapshots.
-_Avoid_: Agent store
+**Agent tracker**:
+The runtime authority that reconciles process, proxy, and screen observations
+with the corresponding agents and publishes their client-facing state.
+_Avoid_: Agent registry, Agent observer, Agent repository
 
 **Open agent**:
 An agent session whose process still belongs to a pane. Being open says nothing

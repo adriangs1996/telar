@@ -110,7 +110,7 @@ pub fn createTab(
     events.changed(events.context, client, create.workspace);
 }
 
-pub fn renameTab(workspaces: *WorkspaceStore, responses: *common.ResponseQueue, agents: *agent_mod.Registry, client: common.ClientKey, events: common.WorkspaceEvents, rename: schema.RenameTab) !void {
+pub fn renameTab(workspaces: *WorkspaceStore, responses: *common.ResponseQueue, agents: *agent_mod.Tracker, client: common.ClientKey, events: common.WorkspaceEvents, rename: schema.RenameTab) !void {
     const tab = workspaces.findTab(rename.location) orelse {
         try common.queueFailure(responses, rename.request_id, .tab_not_found, "tab not found");
         return;

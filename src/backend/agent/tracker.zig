@@ -1,12 +1,13 @@
-//! Bounded runtime-owned collection of agent aggregates.
+//! Runtime-owned coordinator for agent observations and projections.
 //!
-//! The registry resolves observations to one pane generation, delegates every
+//! The tracker resolves observations to one pane generation, delegates every
 //! state transition to that aggregate, and publishes revisioned snapshots.
 
 const std = @import("std");
 const core = @import("telar-core");
 const Agent = @import("agent.zig");
 const pane_mod = @import("../pane/root.zig");
+const repository_mod = @import("repository.zig");
 const types = @import("types.zig");
 const description = @import("description.zig");
 
@@ -20,9 +21,10 @@ const ScreenObservation = types.ScreenObservation;
 const ProxyPhase = types.ProxyPhase;
 const ProxyExchange = types.ProxyExchange;
 const ProxyObservation = types.ProxyObservation;
+const Repository = repository_mod.Repository;
 
-pub const Registry = struct {
-    agents: [max_records]?Agent = @splat(null),
+pub const Tracker = struct {
+    repository: Repository = .{},
     revision: u64 = 1,
     sequence: u64 = 0,
 
@@ -30,25 +32,25 @@ pub const Registry = struct {
     /// aggregate and republishes the resulting projection.
     ///
     /// ```zig
-    /// _ = registry.observeProcess(.{
+    /// _ = tracker.observeProcess(.{
     ///     .identity = identity,
     ///     .provider = .claude,
     ///     .process_id = 84,
     ///     .observed_at_ms = 1_000,
     /// });
     /// ```
-    pub fn observeProcess(registry: *Registry, observation: ProcessObservation) bool {
+    pub fn observeProcess(tracker: *Tracker, observation: ProcessObservation) bool {
         if (observation.provider == .unknown or observation.process_id == 0) {
             return false;
         }
 
-        const agent = registry.ensure(observation.identity) orelse return false;
+        const agent = tracker.ensure(observation.identity) orelse return false;
 
         if (!agent.applyProcess(observation)) {
             return false;
         }
 
-        return registry.reproject(agent, observation.observed_at_ms);
+        return tracker.reproject(agent, observation.observed_at_ms);
     }
 
     /// A foreground process-group change is authoritative session exit. Old
@@ -56,16 +58,16 @@ pub const Registry = struct {
     /// sidebar row alive after the shell regains control.
     ///
     /// ```zig
-    /// _ = registry.clearProcess(pane_key);
+    /// _ = tracker.clearProcess(pane_key);
     /// ```
-    pub fn clearProcess(registry: *Registry, key: PaneKey) bool {
-        const agent = registry.find(key) orelse return false;
+    pub fn clearProcess(tracker: *Tracker, key: PaneKey) bool {
+        const agent = tracker.repository.find(key) orelse return false;
 
         if (!agent.processExited()) {
             return false;
         }
 
-        return registry.removeSlot(key);
+        return tracker.removeStored(key);
     }
 
     /// Applies one proxy lifecycle observation to the agent identified by
@@ -84,27 +86,27 @@ pub const Registry = struct {
     /// state changed. This method does not parse HTTP bodies or provider events.
     ///
     /// ```zig
-    /// fn observeHttp11Exchange(registry: *Registry, identity: Identity) void {
+    /// fn observeHttp11Exchange(tracker: *Tracker, identity: Identity) void {
     ///     const exchange: ProxyExchange = .{
     ///         .protocol = .http11,
     ///         .connection_id = 17,
     ///         .stream_id = 0,
     ///     };
-    ///     _ = registry.observeProxy(.{
+    ///     _ = tracker.observeProxy(.{
     ///         .identity = identity,
     ///         .provider = .claude,
     ///         .phase = .request_started,
     ///         .exchange = exchange,
     ///         .observed_at_ms = 1_000,
     ///     });
-    ///     _ = registry.observeProxy(.{
+    ///     _ = tracker.observeProxy(.{
     ///         .identity = identity,
     ///         .provider = .claude,
     ///         .phase = .response_activity,
     ///         .exchange = exchange,
     ///         .observed_at_ms = 1_100,
     ///     });
-    ///     _ = registry.observeProxy(.{
+    ///     _ = tracker.observeProxy(.{
     ///         .identity = identity,
     ///         .provider = .claude,
     ///         .phase = .response_finished,
@@ -113,36 +115,36 @@ pub const Registry = struct {
     ///     });
     /// }
     /// ```
-    pub fn observeProxy(registry: *Registry, observation: ProxyObservation) bool {
+    pub fn observeProxy(tracker: *Tracker, observation: ProxyObservation) bool {
         if (observation.provider == .unknown) {
             return false;
         }
 
-        const agent = registry.resolveProxyAgent(&observation) orelse return false;
+        const agent = tracker.resolveProxyAgent(&observation) orelse return false;
         if (!agent.applyProxy(observation)) {
             return false;
         }
 
-        return registry.reproject(agent, observation.observed_at_ms);
+        return tracker.reproject(agent, observation.observed_at_ms);
     }
 
     /// Applies one screen observation after the aggregate reconciles it with
     /// stronger process and proxy identity evidence.
     ///
     /// ```zig
-    /// _ = registry.observeScreen(.{
+    /// _ = tracker.observeScreen(.{
     ///     .identity = identity,
     ///     .signal = signal,
     ///     .observed_at_ms = 1_000,
     /// });
     /// ```
-    pub fn observeScreen(registry: *Registry, observation: ScreenObservation) bool {
-        if (registry.find(observation.identity.key)) |agent| {
+    pub fn observeScreen(tracker: *Tracker, observation: ScreenObservation) bool {
+        if (tracker.repository.find(observation.identity.key)) |agent| {
             if (!agent.applyScreen(observation)) {
                 return false;
             }
 
-            return registry.reproject(agent, observation.observed_at_ms);
+            return tracker.reproject(agent, observation.observed_at_ms);
         }
 
         var candidate = Agent.init(observation.identity);
@@ -151,30 +153,30 @@ pub const Registry = struct {
             return false;
         }
 
-        const agent = registry.insert(candidate) orelse return false;
-        return registry.reproject(agent, observation.observed_at_ms);
+        const agent = tracker.repository.insert(candidate) orelse return false;
+        return tracker.reproject(agent, observation.observed_at_ms);
     }
 
     /// Expires stale evidence across all agents and removes aggregates with no
     /// remaining evidence.
     ///
     /// ```zig
-    /// _ = registry.expire(now_ms);
+    /// _ = tracker.expire(now_ms);
     /// ```
-    pub fn expire(registry: *Registry, now_ms: i64) bool {
+    pub fn expire(tracker: *Tracker, now_ms: i64) bool {
         var changed = false;
+        var iterator = tracker.repository.iterator();
 
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
-
+        while (iterator.next()) |agent| {
             if (agent.expire(now_ms)) {
-                slot.* = null;
-                registry.bumpRevision();
+                const removed = iterator.removeCurrent();
+                std.debug.assert(removed);
+                tracker.bumpRevision();
                 changed = true;
                 continue;
             }
 
-            changed = registry.reproject(agent, now_ms) or changed;
+            changed = tracker.reproject(agent, now_ms) or changed;
         }
 
         return changed;
@@ -183,25 +185,25 @@ pub const Registry = struct {
     /// Removes one pane generation and clears its sensitive pending input.
     ///
     /// ```zig
-    /// _ = registry.remove(pane_key);
+    /// _ = tracker.remove(pane_key);
     /// ```
-    pub fn remove(registry: *Registry, key: PaneKey) bool {
-        const agent = registry.find(key) orelse return false;
+    pub fn remove(tracker: *Tracker, key: PaneKey) bool {
+        const agent = tracker.repository.find(key) orelse return false;
         agent.retire();
-        return registry.removeSlot(key);
+        return tracker.removeStored(key);
     }
 
     /// Copies the current client projections into caller-owned bounded storage.
     ///
     /// ```zig
     /// var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    /// const snapshot = registry.snapshot(&entries);
+    /// const snapshot = tracker.snapshot(&entries);
     /// ```
-    pub fn snapshot(registry: *const Registry, entries: *[max_records]schema.AgentSnapshotEntry) []const schema.AgentSnapshotEntry {
+    pub fn snapshot(tracker: *const Tracker, entries: *[max_records]schema.AgentSnapshotEntry) []const schema.AgentSnapshotEntry {
         var count: usize = 0;
+        var iterator = tracker.repository.constIterator();
 
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
+        while (iterator.next()) |agent| {
             entries[count] = agent.snapshot();
             count += 1;
         }
@@ -212,10 +214,10 @@ pub const Registry = struct {
     /// Returns the last projected status for one exact pane generation.
     ///
     /// ```zig
-    /// const status = registry.projectedStatus(pane_key);
+    /// const status = tracker.projectedStatus(pane_key);
     /// ```
-    pub fn projectedStatus(registry: *const Registry, key: PaneKey) ?schema.AgentStatus {
-        const agent = registry.findConst(key) orelse return null;
+    pub fn projectedStatus(tracker: *const Tracker, key: PaneKey) ?schema.AgentStatus {
+        const agent = tracker.repository.findConst(key) orelse return null;
         return agent.projectedStatus();
     }
 
@@ -223,10 +225,10 @@ pub const Registry = struct {
     /// agent. Callers gate this method on explicit description configuration.
     ///
     /// ```zig
-    /// _ = registry.observeInput(pane_key, bytes);
+    /// _ = tracker.observeInput(pane_key, bytes);
     /// ```
-    pub fn observeInput(registry: *Registry, key: PaneKey, bytes: []const u8) bool {
-        const agent = registry.find(key) orelse return false;
+    pub fn observeInput(tracker: *Tracker, key: PaneKey, bytes: []const u8) bool {
+        const agent = tracker.repository.find(key) orelse return false;
         return agent.observeInput(bytes);
     }
 
@@ -234,23 +236,23 @@ pub const Registry = struct {
     /// becomes a failed placeholder and is never retried.
     ///
     /// ```zig
-    /// const job = registry.nextDescriptionJob();
+    /// const job = tracker.nextDescriptionJob();
     /// ```
-    pub fn nextDescriptionJob(registry: *Registry) ?description.Job {
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
+    pub fn nextDescriptionJob(tracker: *Tracker) ?description.Job {
+        var running = tracker.repository.constIterator();
 
+        while (running.next()) |agent| {
             if (agent.hasRunningDescription()) {
                 return null;
             }
         }
 
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
+        var queued = tracker.repository.iterator();
 
+        while (queued.next()) |agent| {
             switch (agent.startDescriptionJob()) {
                 .not_queued => {},
-                .failed => registry.bumpRevision(),
+                .failed => tracker.bumpRevision(),
                 .started => |job| return job,
             }
         }
@@ -263,28 +265,28 @@ pub const Registry = struct {
     /// stale by construction.
     ///
     /// ```zig
-    /// _ = registry.finishDescription(&result);
+    /// _ = tracker.finishDescription(&result);
     /// ```
-    pub fn finishDescription(registry: *Registry, result: *const description.Result) bool {
-        const agent = registry.find(result.pane) orelse return false;
+    pub fn finishDescription(tracker: *Tracker, result: *const description.Result) bool {
+        const agent = tracker.repository.find(result.pane) orelse return false;
 
         if (!agent.finishDescription(result)) {
             return false;
         }
 
-        registry.bumpRevision();
+        tracker.bumpRevision();
         return true;
     }
 
     /// Replaces generated or pending title state for one existing agent.
     ///
     /// ```zig
-    /// _ = try registry.setManualTitle(pane_key, "Review proxy lifecycle");
+    /// _ = try tracker.setManualTitle(pane_key, "Review proxy lifecycle");
     /// ```
-    pub fn setManualTitle(registry: *Registry, key: PaneKey, value: []const u8) !bool {
-        const agent = registry.find(key) orelse return false;
+    pub fn setManualTitle(tracker: *Tracker, key: PaneKey, value: []const u8) !bool {
+        const agent = tracker.repository.find(key) orelse return false;
         try agent.setManualTitle(value);
-        registry.bumpRevision();
+        tracker.bumpRevision();
         return true;
     }
 
@@ -292,107 +294,62 @@ pub const Registry = struct {
     /// otherwise unchanged agents.
     ///
     /// ```zig
-    /// registry.touch();
+    /// tracker.touch();
     /// ```
-    pub fn touch(registry: *Registry) void {
-        registry.bumpRevision();
+    pub fn touch(tracker: *Tracker) void {
+        tracker.bumpRevision();
     }
 
-    fn resolveProxyAgent(registry: *Registry, observation: *const ProxyObservation) ?*Agent {
+    fn resolveProxyAgent(tracker: *Tracker, observation: *const ProxyObservation) ?*Agent {
         return switch (observation.phase) {
-            .request_started => registry.ensure(observation.identity),
-            .response_activity, .provider_turn_completed, .response_finished, .request_failed => registry.find(observation.identity.key),
+            .request_started => tracker.ensure(observation.identity),
+            .response_activity, .provider_turn_completed, .response_finished, .request_failed => tracker.repository.find(observation.identity.key),
         };
     }
 
-    fn ensure(registry: *Registry, identity: Identity) ?*Agent {
-        if (registry.find(identity.key)) |agent| {
+    fn ensure(tracker: *Tracker, identity: Identity) ?*Agent {
+        if (tracker.repository.find(identity.key)) |agent| {
             return agent;
         }
 
-        return registry.insert(Agent.init(identity));
+        return tracker.repository.insert(Agent.init(identity));
     }
 
-    fn insert(registry: *Registry, candidate: Agent) ?*Agent {
-        for (&registry.agents) |*slot| {
-            if (slot.* != null) {
-                continue;
-            }
-
-            slot.* = candidate;
-            return &slot.*.?;
+    fn removeStored(tracker: *Tracker, key: PaneKey) bool {
+        if (!tracker.repository.remove(key)) {
+            return false;
         }
 
-        return null;
+        tracker.bumpRevision();
+        return true;
     }
 
-    fn find(registry: *Registry, key: PaneKey) ?*Agent {
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
-
-            if (agent.matches(key)) {
-                return agent;
-            }
-        }
-
-        return null;
-    }
-
-    fn findConst(registry: *const Registry, key: PaneKey) ?*const Agent {
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
-
-            if (agent.matches(key)) {
-                return agent;
-            }
-        }
-
-        return null;
-    }
-
-    fn removeSlot(registry: *Registry, key: PaneKey) bool {
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
-
-            if (!agent.matches(key)) {
-                continue;
-            }
-
-            slot.* = null;
-            registry.bumpRevision();
-            return true;
-        }
-
-        return false;
-    }
-
-    fn reproject(registry: *Registry, agent: *Agent, now_ms: i64) bool {
-        const previous_sequence = registry.sequence;
+    fn reproject(tracker: *Tracker, agent: *Agent, now_ms: i64) bool {
+        const previous_sequence = tracker.sequence;
         const result = agent.reproject(.{
-            .sequence = registry.nextSequence(),
+            .sequence = tracker.nextSequence(),
             .now_ms = now_ms,
-            .can_queue_description = registry.pendingDescriptionCount() < description.max_pending_jobs,
+            .can_queue_description = tracker.pendingDescriptionCount() < description.max_pending_jobs,
         });
 
         switch (result) {
             .no_evidence => {
-                registry.sequence = previous_sequence;
+                tracker.sequence = previous_sequence;
                 return false;
             },
             .unchanged => return false,
             .changed => {},
         }
 
-        registry.bumpRevision();
+        tracker.bumpRevision();
         return true;
     }
 
-    fn pendingDescriptionCount(registry: *const Registry) usize {
+    fn pendingDescriptionCount(tracker: *const Tracker) usize {
         var count: usize = 0;
+        var iterator = tracker.repository.constIterator();
 
-        for (&registry.agents) |*slot| {
-            const agent = if (slot.*) |*value| value else continue;
-
+        while (iterator.next()) |agent| {
             if (agent.hasPendingDescription()) {
                 count += 1;
             }
@@ -401,21 +358,21 @@ pub const Registry = struct {
         return count;
     }
 
-    fn nextSequence(registry: *Registry) u64 {
-        registry.sequence +%= 1;
+    fn nextSequence(tracker: *Tracker) u64 {
+        tracker.sequence +%= 1;
 
-        if (registry.sequence == 0) {
-            registry.sequence = 1;
+        if (tracker.sequence == 0) {
+            tracker.sequence = 1;
         }
 
-        return registry.sequence;
+        return tracker.sequence;
     }
 
-    fn bumpRevision(registry: *Registry) void {
-        registry.revision +%= 1;
+    fn bumpRevision(tracker: *Tracker) void {
+        tracker.revision +%= 1;
 
-        if (registry.revision == 0) {
-            registry.revision = 1;
+        if (tracker.revision == 0) {
+            tracker.revision = 1;
         }
     }
 };
@@ -425,6 +382,14 @@ fn testIdentity() !Identity {
         .key = .{ .id = try schema.id.pane(7), .generation = 3 },
         .process_id = 42,
         .session_id = .{0xa5} ** 16,
+    };
+}
+
+fn testIdentityAt(id: u32, generation: u64) !Identity {
+    return .{
+        .key = .{ .id = try schema.id.pane(id), .generation = generation },
+        .process_id = id,
+        .session_id = .{@as(u8, @intCast(id))} ** 16,
     };
 }
 
@@ -447,8 +412,8 @@ fn testReadyPrompt(provider: schema.AgentProvider, observed_at_ms: i64) TestRead
     return .{ .provider = provider, .observed_at_ms = observed_at_ms };
 }
 
-fn observeTestProxy(registry: *Registry, identity: Identity, observation: TestProxyObservation) bool {
-    return registry.observeProxy(.{
+fn observeTestProxy(tracker: *Tracker, identity: Identity, observation: TestProxyObservation) bool {
+    return tracker.observeProxy(.{
         .identity = identity,
         .provider = observation.provider,
         .phase = observation.phase,
@@ -461,8 +426,8 @@ fn observeTestProxy(registry: *Registry, identity: Identity, observation: TestPr
     });
 }
 
-fn observeTestReadyPrompt(registry: *Registry, identity: Identity, prompt: TestReadyPrompt) bool {
-    return registry.observeScreen(.{
+fn observeTestReadyPrompt(tracker: *Tracker, identity: Identity, prompt: TestReadyPrompt) bool {
+    return tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
             .provider = prompt.provider,
@@ -476,27 +441,64 @@ fn observeTestReadyPrompt(registry: *Registry, identity: Identity, prompt: TestR
 }
 
 test "display context changes advance the public snapshot revision" {
-    var registry: Registry = .{};
-    const before = registry.revision;
-    registry.touch();
-    try std.testing.expectEqual(before + 1, registry.revision);
+    var tracker: Tracker = .{};
+    const before = tracker.revision;
+    tracker.touch();
+    try std.testing.expectEqual(before + 1, tracker.revision);
 }
 
 test "an agent without evidence does not consume a projection sequence" {
-    var registry: Registry = .{ .sequence = 41 };
+    var tracker: Tracker = .{ .sequence = 41 };
     var agent = Agent.init(try testIdentity());
 
-    try std.testing.expect(!registry.reproject(&agent, 100));
-    try std.testing.expectEqual(@as(u64, 41), registry.sequence);
-    try std.testing.expectEqual(@as(u64, 1), registry.revision);
+    try std.testing.expect(!tracker.reproject(&agent, 100));
+    try std.testing.expectEqual(@as(u64, 41), tracker.sequence);
+    try std.testing.expectEqual(@as(u64, 1), tracker.revision);
+}
+
+test "tracker rejects every observation that would exceed repository capacity" {
+    var tracker: Tracker = .{};
+
+    for (0..max_records) |index| {
+        const identity = try testIdentityAt(@intCast(index + 1), 1);
+        try std.testing.expect(tracker.observeProcess(.{
+            .identity = identity,
+            .provider = .claude,
+            .process_id = identity.process_id,
+            .observed_at_ms = 100,
+        }));
+    }
+
+    const overflow = try testIdentityAt(@intCast(max_records + 1), 1);
+    try std.testing.expect(!tracker.observeProcess(.{
+        .identity = overflow,
+        .provider = .claude,
+        .process_id = overflow.process_id,
+        .observed_at_ms = 200,
+    }));
+    try std.testing.expect(!tracker.observeScreen(.{
+        .identity = overflow,
+        .signal = .{
+            .provider = .claude,
+            .status = .ready,
+            .confidence = 96,
+            .identity_confirmed = true,
+            .ready_confirmed = true,
+        },
+        .observed_at_ms = 200,
+    }));
+    try std.testing.expect(!observeTestProxy(&tracker, overflow, testProxy(.claude, .request_started, 200)));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    try std.testing.expectEqual(max_records, tracker.snapshot(&entries).len);
 }
 
 test "only a confirmed prompt settles model work" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .request_started, 100)));
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .response_finished, 200)));
-    try std.testing.expect(!registry.observeScreen(.{
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .response_finished, 200)));
+    try std.testing.expect(!tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
             .provider = .claude,
@@ -507,22 +509,22 @@ test "only a confirmed prompt settles model work" {
         .observed_at_ms = 300,
     }));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
 
-    try std.testing.expect(observeTestReadyPrompt(&registry, identity, testReadyPrompt(.claude, 400)));
-    snapshot = registry.snapshot(&entries);
+    try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 400)));
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 
 test "explicit Codex prompt settles working without repetition" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.codex, .request_started, 100)));
-    try std.testing.expect(registry.observeScreen(.{
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 100)));
+    try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
             .provider = .codex,
@@ -535,16 +537,16 @@ test "explicit Codex prompt settles working without repetition" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 
 test "agent branding alone does not settle working" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .request_started, 100)));
-    try std.testing.expect(!registry.observeScreen(.{
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 100)));
+    try std.testing.expect(!tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
             .provider = .claude,
@@ -556,15 +558,15 @@ test "agent branding alone does not settle working" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
 }
 
 test "explicitly identified ready screen registers an agent" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeScreen(.{
+    try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
             .provider = .codex,
@@ -575,16 +577,16 @@ test "explicitly identified ready screen registers an agent" {
         .observed_at_ms = 100,
     }));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(schema.AgentProvider.codex, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
 }
 
 test "foreground process establishes agent identity without screen branding" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeProcess(.{
+    try std.testing.expect(tracker.observeProcess(.{
         .identity = identity,
         .provider = .claude,
         .process_id = 84,
@@ -592,19 +594,19 @@ test "foreground process establishes agent identity without screen branding" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.foreground_process, snapshot[0].source);
     try std.testing.expectEqual(@as(u32, 84), snapshot[0].process_id);
 
-    try std.testing.expect(registry.observeScreen(.{
+    try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{ .provider = .unknown, .status = .working, .confidence = 78 },
         .observed_at_ms = 200,
     }));
-    snapshot = registry.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
@@ -612,29 +614,29 @@ test "foreground process establishes agent identity without screen branding" {
 }
 
 test "first working turn starts one generated session title" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeProcess(.{
+    try std.testing.expect(tracker.observeProcess(.{
         .identity = identity,
         .provider = .codex,
         .process_id = 84,
         .observed_at_ms = 100,
     }));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqualStrings("New Codex session", snapshot[0].session_title);
     try std.testing.expectEqual(schema.AgentTitleState.placeholder, snapshot[0].title_state);
 
-    try std.testing.expect(registry.observeInput(identity.key, "improve the sidebar\r"));
-    try std.testing.expect(observeTestReadyPrompt(&registry, identity, testReadyPrompt(.codex, 150)));
-    snapshot = registry.snapshot(&entries);
+    try std.testing.expect(tracker.observeInput(identity.key, "improve the sidebar\r"));
+    try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.codex, 150)));
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentTitleState.placeholder, snapshot[0].title_state);
 
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.codex, .request_started, 200)));
-    snapshot = registry.snapshot(&entries);
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 200)));
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentTitleState.pending, snapshot[0].title_state);
 
-    var job = registry.nextDescriptionJob().?;
+    var job = tracker.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expectEqualStrings("improve the sidebar", job.querySlice());
     var result: description.Result = .{
@@ -644,28 +646,28 @@ test "first working turn starts one generated session title" {
         .title_len = "Improve agent sidebar".len,
     };
     @memcpy(result.title[0..result.title_len], "Improve agent sidebar");
-    try std.testing.expect(registry.finishDescription(&result));
-    snapshot = registry.snapshot(&entries);
+    try std.testing.expect(tracker.finishDescription(&result));
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqualStrings("Improve agent sidebar", snapshot[0].session_title);
     try std.testing.expectEqual(schema.AgentTitleSource.generated, snapshot[0].title_source);
     try std.testing.expectEqual(schema.AgentTitleState.ready, snapshot[0].title_state);
-    try std.testing.expect(registry.nextDescriptionJob() == null);
+    try std.testing.expect(tracker.nextDescriptionJob() == null);
 }
 
 test "manual title wins over a late generated result" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeProcess(.{
+    try std.testing.expect(tracker.observeProcess(.{
         .identity = identity,
         .provider = .claude,
         .process_id = 84,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(registry.observeInput(identity.key, "fix tests\r"));
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .request_started, 200)));
-    var job = registry.nextDescriptionJob().?;
+    try std.testing.expect(tracker.observeInput(identity.key, "fix tests\r"));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 200)));
+    var job = tracker.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
-    try std.testing.expect(try registry.setManualTitle(identity.key, "Release audit"));
+    try std.testing.expect(try tracker.setManualTitle(identity.key, "Release audit"));
 
     var result: description.Result = .{
         .pane = job.pane,
@@ -674,15 +676,15 @@ test "manual title wins over a late generated result" {
         .title_len = "Generated title".len,
     };
     @memcpy(result.title[0..result.title_len], "Generated title");
-    try std.testing.expect(!registry.finishDescription(&result));
+    try std.testing.expect(!tracker.finishDescription(&result));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqualStrings("Release audit", snapshot[0].session_title);
     try std.testing.expectEqual(schema.AgentTitleSource.manual, snapshot[0].title_source);
 }
 
 test "description backpressure fails the ninth queued request without retry" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     for (0..description.max_pending_jobs + 1) |index| {
         const raw: u64 = @intCast(index + 1);
         const identity: Identity = .{
@@ -690,17 +692,17 @@ test "description backpressure fails the ninth queued request without retry" {
             .process_id = @intCast(raw),
             .session_id = @splat(@intCast(raw)),
         };
-        try std.testing.expect(registry.observeProcess(.{
+        try std.testing.expect(tracker.observeProcess(.{
             .identity = identity,
             .provider = .codex,
             .process_id = @intCast(raw),
             .observed_at_ms = 100,
         }));
-        try std.testing.expect(registry.observeInput(identity.key, "do work\r"));
-        try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.codex, .request_started, 200)));
+        try std.testing.expect(tracker.observeInput(identity.key, "do work\r"));
+        try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 200)));
     }
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     var pending: usize = 0;
     var failed: usize = 0;
     for (snapshot) |entry| switch (entry.title_state) {
@@ -713,15 +715,15 @@ test "description backpressure fails the ninth queued request without retry" {
 }
 
 test "process identity rejects contradictory screen branding" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeProcess(.{
+    try std.testing.expect(tracker.observeProcess(.{
         .identity = identity,
         .provider = .claude,
         .process_id = 84,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(!registry.observeScreen(.{
+    try std.testing.expect(!tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
             .provider = .codex,
@@ -733,46 +735,46 @@ test "process identity rejects contradictory screen branding" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentSource.foreground_process, snapshot[0].source);
 }
 
 test "foreground process exit removes all evidence for that session" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeProcess(.{
+    try std.testing.expect(tracker.observeProcess(.{
         .identity = identity,
         .provider = .claude,
         .process_id = 84,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(registry.observeScreen(.{
+    try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
         .observed_at_ms = 200,
     }));
-    try std.testing.expect(registry.clearProcess(identity.key));
+    try std.testing.expect(tracker.clearProcess(identity.key));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), registry.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
 }
 
 test "new foreground process replaces prior session evidence" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeProcess(.{
+    try std.testing.expect(tracker.observeProcess(.{
         .identity = identity,
         .provider = .claude,
         .process_id = 84,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(registry.observeScreen(.{
+    try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{ .provider = .unknown, .status = .blocked, .confidence = 88 },
         .observed_at_ms = 200,
     }));
-    try std.testing.expect(registry.observeProcess(.{
+    try std.testing.expect(tracker.observeProcess(.{
         .identity = identity,
         .provider = .codex,
         .process_id = 85,
@@ -780,7 +782,7 @@ test "new foreground process replaces prior session evidence" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentProvider.codex, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.foreground_process, snapshot[0].source);
@@ -789,9 +791,9 @@ test "new foreground process replaces prior session evidence" {
 }
 
 test "confirmed Claude prompt refreshes branded identity" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeScreen(.{
+    try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
             .provider = .claude,
@@ -801,9 +803,9 @@ test "confirmed Claude prompt refreshes branded identity" {
         },
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(observeTestReadyPrompt(&registry, identity, testReadyPrompt(.claude, 200)));
+    try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 200)));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
@@ -811,52 +813,52 @@ test "confirmed Claude prompt refreshes branded identity" {
 }
 
 test "network work resumes a visibly blocked agent" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(registry.observeScreen(.{
+    try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88 },
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .request_started, 200)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 200)));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentAuthority.resumed, snapshot[0].authority);
 }
 
 test "new network work supersedes an older ready prompt" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .response_finished, 100)));
-    try std.testing.expect(observeTestReadyPrompt(&registry, identity, testReadyPrompt(.claude, 200)));
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.claude, .request_started, 300)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .response_finished, 100)));
+    try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 200)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 300)));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
 }
 
 test "unmatched proxy responses cannot create agent state" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-    try std.testing.expect(!registry.observeProxy(.{
+    try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .response_activity,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(!registry.observeProxy(.{
+    try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
     }));
-    try std.testing.expect(!registry.observeProxy(.{
+    try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_failed,
@@ -865,22 +867,22 @@ test "unmatched proxy responses cannot create agent state" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), registry.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
 }
 
 test "a contradictory provider cannot complete another agent's exchange" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
 
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     });
-    try std.testing.expect(!registry.observeProxy(.{
+    try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
         .provider = .codex,
         .phase = .provider_turn_completed,
@@ -889,35 +891,35 @@ test "a contradictory provider cannot complete another agent's exchange" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 300,
     }));
-    snapshot = registry.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
 }
 
 test "transport completion without provider turn completion remains working" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
 
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .response_finished,
@@ -926,7 +928,7 @@ test "transport completion without provider turn completion remains working" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), snapshot.len);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
@@ -934,18 +936,18 @@ test "transport completion without provider turn completion remains working" {
 }
 
 test "provider turn completion projects ready and ignores later transport completion" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
 
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .provider_turn_completed,
@@ -954,32 +956,32 @@ test "provider turn completion projects ready and ignores later transport comple
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
     try std.testing.expectEqual(@as(u8, 99), snapshot[0].confidence);
     try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
 
-    try std.testing.expect(!registry.observeProxy(.{
+    try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .response_finished,
         .exchange = exchange,
         .observed_at_ms = 300,
     }));
-    snapshot = registry.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
 }
 
 test "all concurrent model exchanges must complete before ready" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
 
     for ([_]ProxyExchange{ first, second }, 0..) |exchange, index| {
-        try std.testing.expect(registry.observeProxy(.{
+        try std.testing.expect(tracker.observeProxy(.{
             .identity = identity,
             .provider = .claude,
             .phase = .request_started,
@@ -988,7 +990,7 @@ test "all concurrent model exchanges must complete before ready" {
         }));
     }
 
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .provider_turn_completed,
@@ -996,41 +998,41 @@ test "all concurrent model exchanges must complete before ready" {
         .observed_at_ms = 200,
     }));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .provider_turn_completed,
         .exchange = second,
         .observed_at_ms = 300,
     }));
-    snapshot = registry.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
 }
 
 test "new model work supersedes a completed response" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const completed: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
     const next: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
 
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = completed,
         .observed_at_ms = 100,
     });
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .provider_turn_completed,
         .exchange = completed,
         .observed_at_ms = 200,
     });
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
@@ -1039,53 +1041,68 @@ test "new model work supersedes a completed response" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    const snapshot = registry.snapshot(&entries);
+    const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     try std.testing.expectEqual(@as(i64, 300), snapshot[0].observed_at_ms);
 }
 
 test "expired agent evidence is removed" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.codex, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(&registry, identity, testProxy(.codex, .response_finished, 100)));
-    try std.testing.expect(registry.expire(100 + settled_expiry_ms));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .response_finished, 100)));
+    try std.testing.expect(tracker.expire(100 + settled_expiry_ms));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), registry.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
+}
+
+test "expiration removes every adjacent stale aggregate" {
+    var tracker: Tracker = .{};
+    const first = try testIdentityAt(1, 1);
+    const second = try testIdentityAt(2, 1);
+
+    try std.testing.expect(observeTestProxy(&tracker, first, testProxy(.codex, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, first, testProxy(.codex, .response_finished, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, second, testProxy(.codex, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, second, testProxy(.codex, .response_finished, 100)));
+    try std.testing.expect(tracker.expire(100 + settled_expiry_ms));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
 }
 
 test "a bare shell prompt is not Claude identity" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(!registry.observeScreen(.{
+    try std.testing.expect(!tracker.observeScreen(.{
         .identity = identity,
         .signal = .{ .provider = .claude, .status = .ready, .confidence = 72 },
         .observed_at_ms = 100,
     }));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), registry.snapshot(&entries).len);
+    try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
 }
 
 test "completed HTTP2 streams do not settle the agent turn" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .codex,
         .phase = .request_started,
         .exchange = first,
         .observed_at_ms = 100,
     }));
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .codex,
         .phase = .request_started,
         .exchange = second,
         .observed_at_ms = 101,
     });
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .codex,
         .phase = .response_finished,
@@ -1094,36 +1111,36 @@ test "completed HTTP2 streams do not settle the agent turn" {
     });
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .codex,
         .phase = .response_finished,
         .exchange = second,
         .observed_at_ms = 300,
     });
-    snapshot = registry.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
-    try std.testing.expect(observeTestReadyPrompt(&registry, identity, testReadyPrompt(.codex, 400)));
-    snapshot = registry.snapshot(&entries);
+    try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.codex, 400)));
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
 }
 
 test "sequential model requests stay working until a confirmed prompt" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = first,
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .response_finished,
@@ -1132,60 +1149,60 @@ test "sequential model requests stay working until a confirmed prompt" {
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    var snapshot = registry.snapshot(&entries);
+    var snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = second,
         .observed_at_ms = 300,
     }));
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .response_finished,
         .exchange = second,
         .observed_at_ms = 400,
     }));
-    snapshot = registry.snapshot(&entries);
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
 
-    try std.testing.expect(observeTestReadyPrompt(&registry, identity, testReadyPrompt(.claude, 500)));
-    snapshot = registry.snapshot(&entries);
+    try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 500)));
+    snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 
 test "HTTP2 connection failure settles all of its active streams" {
-    var registry: Registry = .{};
+    var tracker: Tracker = .{};
     const identity = try testIdentity();
     const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 1 };
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 3 };
     const connection: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 0 };
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = first,
         .observed_at_ms = 100,
     });
-    _ = registry.observeProxy(.{
+    _ = tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_started,
         .exchange = second,
         .observed_at_ms = 101,
     });
-    try std.testing.expect(registry.observeProxy(.{
+    try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_failed,
         .exchange = connection,
         .observed_at_ms = 200,
     }));
-    try std.testing.expect(!registry.observeProxy(.{
+    try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
         .provider = .claude,
         .phase = .request_failed,

@@ -1,14 +1,14 @@
 //! Public namespace for runtime-owned agent observation and projection.
 //!
-//! Callers submit typed observations to `Registry`. Aggregate state, evidence
+//! Callers submit typed observations to `Tracker`. Aggregate state, evidence
 //! precedence, proxy tracking, and title lifecycle remain implementation
 //! details of this capability.
 
-const registry = @import("registry.zig");
+const tracker = @import("tracker.zig");
 const types = @import("types.zig");
 
 pub const description = @import("description.zig");
-pub const Registry = registry.Registry;
+pub const Tracker = tracker.Tracker;
 
 pub const max_records = types.max_records;
 pub const ScreenStatus = types.ScreenStatus;
@@ -25,5 +25,6 @@ test {
     _ = @import("agent.zig");
     _ = @import("evidence.zig");
     _ = @import("proxy_state.zig");
-    _ = @import("registry.zig");
+    _ = @import("repository.zig");
+    _ = @import("tracker.zig");
 }
