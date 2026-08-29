@@ -108,13 +108,7 @@ pub const Store = struct {
     revision: u64 = 1,
     sequence: u64 = 0,
 
-    pub fn observeProcess(
-        store: *Store,
-        identity: Identity,
-        provider: schema.AgentProvider,
-        process_id: u32,
-        observed_at_ms: i64,
-    ) bool {
+    pub fn observeProcess(store: *Store, identity: Identity, provider: schema.AgentProvider, process_id: u32, observed_at_ms: i64) bool {
         if (provider == .unknown or process_id == 0) return false;
         var record = store.ensure(identity) orelse return false;
         const replaced_process = record.process != null;
@@ -150,16 +144,7 @@ pub const Store = struct {
         return store.remove(key);
     }
 
-    pub fn observeProxy(
-        store: *Store,
-        identity: Identity,
-        provider: schema.AgentProvider,
-        phase: ProxyPhase,
-        protocol: ProxyProtocol,
-        connection_id: u64,
-        stream_id: u32,
-        observed_at_ms: i64,
-    ) bool {
+    pub fn observeProxy(store: *Store, identity: Identity, provider: schema.AgentProvider, phase: ProxyPhase, protocol: ProxyProtocol, connection_id: u64, stream_id: u32, observed_at_ms: i64) bool {
         if (provider == .unknown) return false;
         var record = switch (phase) {
             .request_started => store.ensure(identity) orelse return false,
@@ -227,12 +212,7 @@ pub const Store = struct {
         return store.reproject(record, observed_at_ms);
     }
 
-    pub fn observeScreen(
-        store: *Store,
-        identity: Identity,
-        signal: ScreenSignal,
-        observed_at_ms: i64,
-    ) bool {
+    pub fn observeScreen(store: *Store, identity: Identity, signal: ScreenSignal, observed_at_ms: i64) bool {
         const existing = store.find(identity.key);
         const process_provider = if (existing) |record|
             if (record.process) |evidence| evidence.provider else schema.AgentProvider.unknown
@@ -512,11 +492,7 @@ pub const Store = struct {
         return true;
     }
 
-    fn advanceTitle(
-        store: *const Store,
-        record: *Record,
-        status: schema.AgentStatus,
-    ) bool {
+    fn advanceTitle(store: *const Store, record: *Record, status: schema.AgentStatus) bool {
         // Model work confirms that the captured input was a real request. The
         // title generator can now run alongside the turn instead of waiting
         // for the agent to return to its prompt.

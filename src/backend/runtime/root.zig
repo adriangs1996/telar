@@ -1180,13 +1180,7 @@ const Server = struct {
         server.pumpAll();
     }
 
-    fn handleTelemetryTickEvent(
-        server: *Server,
-        result: anyerror!void,
-        telemetry: *diagnostics.Sink,
-        buffer: *[12288]u8,
-        write_pending: *bool,
-    ) void {
+    fn handleTelemetryTickEvent(server: *Server, result: anyerror!void, telemetry: *diagnostics.Sink, buffer: *[12288]u8, write_pending: *bool) void {
         result catch {
             telemetry.deinit(server.io);
             return;
@@ -1258,21 +1252,12 @@ const Server = struct {
         };
     }
 
-    fn handleTelemetryWrittenEvent(
-        server: *Server,
-        result: anyerror!void,
-        telemetry: *diagnostics.Sink,
-        write_pending: *bool,
-    ) void {
+    fn handleTelemetryWrittenEvent(server: *Server, result: anyerror!void, telemetry: *diagnostics.Sink, write_pending: *bool) void {
         write_pending.* = false;
         result catch telemetry.deinit(server.io);
     }
 
-    fn dispatchClientMessage(
-        server: *Server,
-        session: *ClientSession,
-        message: schema.ClientMessage,
-    ) !void {
+    fn dispatchClientMessage(server: *Server, session: *ClientSession, message: schema.ClientMessage) !void {
         const io = server.io;
         const gpa = server.gpa;
         const panes = &server.panes;
@@ -1528,14 +1513,7 @@ fn entrypointLauncher(server: *Server) entrypoint_common.Launcher {
     return .{ .context = server, .launch = entrypointLaunchPane };
 }
 
-fn entrypointLaunchPane(
-    context: *anyopaque,
-    location: schema.TabLocation,
-    size: schema.TerminalSize,
-    launch: schema.LaunchView,
-    launch_cwd: []const u8,
-    workspace_path: []const u8,
-) !*Pane {
+fn entrypointLaunchPane(context: *anyopaque, location: schema.TabLocation, size: schema.TerminalSize, launch: schema.LaunchView, launch_cwd: []const u8, workspace_path: []const u8) !*Pane {
     const server: *Server = @ptrCast(@alignCast(context));
     return server.launchPane(location, size, launch, launch_cwd, workspace_path);
 }
@@ -1548,39 +1526,22 @@ fn entrypointWorkspaceEvents(server: *Server) entrypoint_common.WorkspaceEvents 
     };
 }
 
-fn entrypointWorkspaceChanged(
-    context: *anyopaque,
-    except: ClientKey,
-    workspace: schema.WorkspaceLocation,
-) void {
+fn entrypointWorkspaceChanged(context: *anyopaque, except: ClientKey, workspace: schema.WorkspaceLocation) void {
     const server: *Server = @ptrCast(@alignCast(context));
     server.notifyWorkspaceChanged(except, workspace);
 }
 
-fn entrypointWorkspaceClosed(
-    context: *anyopaque,
-    except: ClientKey,
-    workspace: schema.WorkspaceLocation,
-    previous: ?schema.WorkspaceId,
-) void {
+fn entrypointWorkspaceClosed(context: *anyopaque, except: ClientKey, workspace: schema.WorkspaceLocation, previous: ?schema.WorkspaceId) void {
     const server: *Server = @ptrCast(@alignCast(context));
     server.notifyWorkspaceClosed(except, workspace, previous);
 }
 
-fn entrypointHoldsGeometry(
-    context: *anyopaque,
-    client: ClientKey,
-    workspace: schema.WorkspaceLocation,
-) bool {
+fn entrypointHoldsGeometry(context: *anyopaque, client: ClientKey, workspace: schema.WorkspaceLocation) bool {
     const server: *Server = @ptrCast(@alignCast(context));
     return server.holdsGeometry(client, workspace);
 }
 
-fn entrypointReleaseGeometry(
-    context: *anyopaque,
-    client: ClientKey,
-    workspace: schema.WorkspaceLocation,
-) void {
+fn entrypointReleaseGeometry(context: *anyopaque, client: ClientKey, workspace: schema.WorkspaceLocation) void {
     const server: *Server = @ptrCast(@alignCast(context));
     server.releaseGeometryFor(client, workspace);
 }
@@ -1594,10 +1555,7 @@ fn entrypointControl(server: *Server) control_entrypoints.Actions {
     };
 }
 
-fn entrypointPublishNotification(
-    context: *anyopaque,
-    notification: schema.Notification,
-) u8 {
+fn entrypointPublishNotification(context: *anyopaque, notification: schema.Notification) u8 {
     const server: *Server = @ptrCast(@alignCast(context));
     return server.publishNotification(notification);
 }
@@ -1612,12 +1570,7 @@ fn entrypointRequestStop(context: *anyopaque, client: ClientKey) void {
     server.requestShutdown(client);
 }
 
-fn serveInternal(
-    io: Io,
-    backing_gpa: std.mem.Allocator,
-    endpoint: []const u8,
-    options: ServeOptions,
-) !void {
+fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, options: ServeOptions) !void {
     var heap = diagnostics.Heap.init(backing_gpa);
     const gpa = heap.allocator();
     try options.graphics.validate();
