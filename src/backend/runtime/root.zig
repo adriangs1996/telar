@@ -329,7 +329,7 @@ const Server = struct {
     geometry_leases: [max_workspaces]?GeometryLease = @splat(null),
     workspaces: WorkspaceStore,
     panes: PaneStore,
-    agents: agent_mod.Store = .{},
+    agents: agent_mod.Registry = .{},
     system_metrics: system_metrics_mod.Sampler = .{},
     metrics: RuntimeMetrics,
 

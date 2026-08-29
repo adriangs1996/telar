@@ -56,7 +56,7 @@ const Evidence = struct {
     expires_at_ms: i64,
 };
 
-const Record = struct {
+const Agent = struct {
     key: PaneKey,
     process_id: u32,
     agent_process_id: ?u32 = null,
@@ -68,7 +68,7 @@ const Record = struct {
     title: Title = .{},
     projected: schema.AgentSnapshotEntry,
 
-    fn trackObservation(record: *Record, observation: ProxyObservation) bool {
+    fn trackObservation(record: *Agent, observation: ProxyObservation) bool {
         return switch (observation.phase) {
             .request_started => record.proxy.start(observation.exchange),
             .response_activity => record.proxy.contains(observation.exchange),
@@ -207,12 +207,12 @@ const ProxyState = struct {
     }
 };
 
-pub const Store = struct {
-    records: [max_records]?Record = @splat(null),
+pub const Registry = struct {
+    records: [max_records]?Agent = @splat(null),
     revision: u64 = 1,
     sequence: u64 = 0,
 
-    pub fn observeProcess(store: *Store, identity: Identity, provider: schema.AgentProvider, process_id: u32, observed_at_ms: i64) bool {
+    pub fn observeProcess(store: *Registry, identity: Identity, provider: schema.AgentProvider, process_id: u32, observed_at_ms: i64) bool {
         if (provider == .unknown or process_id == 0) return false;
         var record = store.ensure(identity) orelse return false;
         const replaced_process = record.process != null;
@@ -241,7 +241,7 @@ pub const Store = struct {
     /// A foreground process-group change is authoritative session exit. Old
     /// proxy and screen evidence belongs to that process and must not keep its
     /// sidebar row alive after the shell regains control.
-    pub fn clearProcess(store: *Store, key: PaneKey) bool {
+    pub fn clearProcess(store: *Registry, key: PaneKey) bool {
         const record = store.find(key) orelse return false;
         if (record.process == null) return false;
         return store.remove(key);
@@ -262,7 +262,7 @@ pub const Store = struct {
     /// state changed. This method does not parse HTTP bodies or provider events.
     ///
     /// ```zig
-    /// fn observeHttp11Exchange(store: *Store, identity: Identity) void {
+    /// fn observeHttp11Exchange(store: *Registry, identity: Identity) void {
     ///     const exchange: ProxyExchange = .{
     ///         .protocol = .http11,
     ///         .connection_id = 17,
@@ -291,7 +291,7 @@ pub const Store = struct {
     ///     });
     /// }
     /// ```
-    pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {
+    pub fn observeProxy(store: *Registry, observation: ProxyObservation) bool {
         if (observation.provider == .unknown) {
             return false;
         }
@@ -348,7 +348,7 @@ pub const Store = struct {
         return store.reproject(record, observation.observed_at_ms);
     }
 
-    pub fn observeScreen(store: *Store, identity: Identity, signal: ScreenSignal, observed_at_ms: i64) bool {
+    pub fn observeScreen(store: *Registry, identity: Identity, signal: ScreenSignal, observed_at_ms: i64) bool {
         const existing = store.find(identity.key);
         const process_provider = if (existing) |record|
             if (record.process) |evidence| evidence.provider else schema.AgentProvider.unknown
@@ -397,7 +397,7 @@ pub const Store = struct {
         return store.reproject(record, observed_at_ms);
     }
 
-    pub fn expire(store: *Store, now_ms: i64) bool {
+    pub fn expire(store: *Registry, now_ms: i64) bool {
         var changed = false;
         for (&store.records) |*slot| {
             var record = if (slot.*) |*value| value else continue;
@@ -422,7 +422,7 @@ pub const Store = struct {
         return changed;
     }
 
-    pub fn remove(store: *Store, key: PaneKey) bool {
+    pub fn remove(store: *Registry, key: PaneKey) bool {
         for (&store.records) |*slot| {
             var record = if (slot.*) |*value| value else continue;
             if (!sameKey(record.key, key)) continue;
@@ -434,10 +434,7 @@ pub const Store = struct {
         return false;
     }
 
-    pub fn snapshot(
-        store: *const Store,
-        entries: *[max_records]schema.AgentSnapshotEntry,
-    ) []const schema.AgentSnapshotEntry {
+    pub fn snapshot(store: *const Registry, entries: *[max_records]schema.AgentSnapshotEntry) []const schema.AgentSnapshotEntry {
         var count: usize = 0;
         for (&store.records) |*slot| {
             const record = if (slot.*) |*value| value else continue;
@@ -450,7 +447,7 @@ pub const Store = struct {
         return entries[0..count];
     }
 
-    pub fn projectedStatus(store: *const Store, key: PaneKey) ?schema.AgentStatus {
+    pub fn projectedStatus(store: *const Registry, key: PaneKey) ?schema.AgentStatus {
         for (&store.records) |*slot| {
             const record = if (slot.*) |*value| value else continue;
             if (sameKey(record.key, key)) return record.projected.status;
@@ -460,7 +457,7 @@ pub const Store = struct {
 
     /// Captures only the first submitted request for an already identified
     /// agent. Callers gate this method on explicit description configuration.
-    pub fn observeInput(store: *Store, key: PaneKey, bytes: []const u8) bool {
+    pub fn observeInput(store: *Registry, key: PaneKey, bytes: []const u8) bool {
         const record = store.find(key) orelse return false;
         if (record.title.phase != .waiting_query) return false;
         if (!record.title.capture.feed(bytes)) return false;
@@ -470,7 +467,7 @@ pub const Store = struct {
 
     /// Starts one bounded job at a time. Invalid captured input deterministically
     /// becomes a failed placeholder and is never retried.
-    pub fn nextDescriptionJob(store: *Store) ?description.Job {
+    pub fn nextDescriptionJob(store: *Registry) ?description.Job {
         for (&store.records) |*slot| {
             const record = if (slot.*) |*value| value else continue;
             if (record.title.phase == .running) return null;
@@ -504,7 +501,7 @@ pub const Store = struct {
     /// A completion applies only to the exact session which launched it. A
     /// manual title changes the phase, so a concurrent generated result is
     /// stale by construction.
-    pub fn finishDescription(store: *Store, result: *const description.Result) bool {
+    pub fn finishDescription(store: *Registry, result: *const description.Result) bool {
         const record = store.find(result.pane) orelse return false;
         if (record.title.phase != .running or
             !std.mem.eql(u8, &record.session_id, &result.session_id)) return false;
@@ -530,7 +527,7 @@ pub const Store = struct {
         return true;
     }
 
-    pub fn setManualTitle(store: *Store, key: PaneKey, value: []const u8) !bool {
+    pub fn setManualTitle(store: *Registry, key: PaneKey, value: []const u8) !bool {
         const record = store.find(key) orelse return false;
         if (!validTitle(value) or value.len > record.title.bytes.len)
             return error.InvalidAgentTitle;
@@ -546,18 +543,18 @@ pub const Store = struct {
 
     /// Publishes pane-topology changes that alter the display position of
     /// otherwise unchanged agent records.
-    pub fn touch(store: *Store) void {
+    pub fn touch(store: *Registry) void {
         store.bumpRevision();
     }
 
-    fn getRecordInPhase(store: *Store, identity: Identity, phase: ProxyPhase) !*Record {
+    fn getRecordInPhase(store: *Registry, identity: Identity, phase: ProxyPhase) !*Agent {
         return switch (phase) {
             .request_started => store.ensure(identity) orelse return error.ErrorCreatingRecord,
             .response_activity, .response_finished, .request_failed => store.find(identity.key) orelse return error.ErrorFindingRecord,
         };
     }
 
-    fn ensure(store: *Store, identity: Identity) ?*Record {
+    fn ensure(store: *Registry, identity: Identity) ?*Agent {
         const key = identity.key;
         if (store.find(key)) |record| return record;
         for (&store.records) |*slot| {
@@ -586,7 +583,7 @@ pub const Store = struct {
         return null;
     }
 
-    fn find(store: *Store, key: PaneKey) ?*Record {
+    fn find(store: *Registry, key: PaneKey) ?*Agent {
         for (&store.records) |*slot| {
             const record = if (slot.*) |*value| value else continue;
             if (sameKey(record.key, key)) return record;
@@ -594,7 +591,7 @@ pub const Store = struct {
         return null;
     }
 
-    fn reproject(store: *Store, record: *Record, now_ms: i64) bool {
+    fn reproject(store: *Registry, record: *Agent, now_ms: i64) bool {
         const evidence = chooseEvidence(record, now_ms) orelse return false;
 
         const provider = if (record.process) |process|
@@ -643,7 +640,7 @@ pub const Store = struct {
         return true;
     }
 
-    fn advanceTitle(store: *const Store, record: *Record, status: schema.AgentStatus) bool {
+    fn advanceTitle(store: *const Registry, record: *Agent, status: schema.AgentStatus) bool {
         // Model work confirms that the captured input was a real request. The
         // title generator can now run alongside the turn instead of waiting
         // for the agent to return to its prompt.
@@ -659,7 +656,7 @@ pub const Store = struct {
         return true;
     }
 
-    fn pendingDescriptionCount(store: *const Store) usize {
+    fn pendingDescriptionCount(store: *const Registry) usize {
         var count: usize = 0;
         for (&store.records) |*slot| {
             const record = if (slot.*) |*value| value else continue;
@@ -669,7 +666,7 @@ pub const Store = struct {
         return count;
     }
 
-    fn bumpRevision(store: *Store) void {
+    fn bumpRevision(store: *Registry) void {
         store.revision +%= 1;
         if (store.revision == 0) store.revision = 1;
     }
@@ -681,7 +678,7 @@ fn sameProxyExchange(left: ProxyExchange, right: ProxyExchange) bool {
         left.stream_id == right.stream_id;
 }
 
-fn chooseEvidence(record: *const Record, now_ms: i64) ?Evidence {
+fn chooseEvidence(record: *const Agent, now_ms: i64) ?Evidence {
     const process = record.process;
     const screen = if (record.screen) |value|
         if (value.expires_at_ms > now_ms) value else null
@@ -711,11 +708,11 @@ fn chooseEvidence(record: *const Record, now_ms: i64) ?Evidence {
     return process;
 }
 
-fn currentStatus(record: *const Record) schema.AgentStatus {
+fn currentStatus(record: *const Agent) schema.AgentStatus {
     return record.projected.status;
 }
 
-fn recordProvider(record: *const Record) schema.AgentProvider {
+fn recordProvider(record: *const Agent) schema.AgentProvider {
     if (record.process) |evidence| {
         return evidence.provider;
     }
@@ -733,7 +730,7 @@ fn recordProvider(record: *const Record) schema.AgentProvider {
     return .unknown;
 }
 
-fn ensurePlaceholder(record: *Record, provider: schema.AgentProvider) void {
+fn ensurePlaceholder(record: *Agent, provider: schema.AgentProvider) void {
     if (record.title.source != .telar) return;
     const placeholder = switch (provider) {
         .codex => "New Codex session",
@@ -772,7 +769,7 @@ fn testIdentity() !Identity {
     };
 }
 
-fn observeTestProxy(store: *Store, identity: Identity, provider: schema.AgentProvider, phase: ProxyPhase, observed_at_ms: i64) bool {
+fn observeTestProxy(store: *Registry, identity: Identity, provider: schema.AgentProvider, phase: ProxyPhase, observed_at_ms: i64) bool {
     return store.observeProxy(.{
         .identity = identity,
         .provider = provider,
@@ -786,7 +783,7 @@ fn observeTestProxy(store: *Store, identity: Identity, provider: schema.AgentPro
     });
 }
 
-fn observeTestReadyPrompt(store: *Store, identity: Identity, provider: schema.AgentProvider, observed_at_ms: i64) bool {
+fn observeTestReadyPrompt(store: *Registry, identity: Identity, provider: schema.AgentProvider, observed_at_ms: i64) bool {
     return store.observeScreen(
         identity,
         .{
@@ -904,14 +901,14 @@ test "proxy state clear removes evidence and every active exchange" {
 }
 
 test "display context changes advance the public snapshot revision" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const before = store.revision;
     store.touch();
     try std.testing.expectEqual(before + 1, store.revision);
 }
 
 test "only a confirmed prompt settles model work" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 100));
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .response_finished, 200));
@@ -938,7 +935,7 @@ test "only a confirmed prompt settles model work" {
 }
 
 test "explicit Codex prompt settles working without repetition" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 100));
     try std.testing.expect(store.observeScreen(
@@ -960,7 +957,7 @@ test "explicit Codex prompt settles working without repetition" {
 }
 
 test "agent branding alone does not settle working" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 100));
     try std.testing.expect(!store.observeScreen(
@@ -981,7 +978,7 @@ test "agent branding alone does not settle working" {
 }
 
 test "explicitly identified ready screen opens an agent record" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeScreen(
         identity,
@@ -1001,7 +998,7 @@ test "explicitly identified ready screen opens an agent record" {
 }
 
 test "foreground process establishes agent identity without screen branding" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
 
@@ -1026,7 +1023,7 @@ test "foreground process establishes agent identity without screen branding" {
 }
 
 test "first working turn starts one generated session title" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProcess(identity, .codex, 84, 100));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
@@ -1062,7 +1059,7 @@ test "first working turn starts one generated session title" {
 }
 
 test "manual title wins over a late generated result" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
     try std.testing.expect(store.observeInput(identity.key, "fix tests\r"));
@@ -1086,7 +1083,7 @@ test "manual title wins over a late generated result" {
 }
 
 test "description backpressure fails the ninth queued request without retry" {
-    var store: Store = .{};
+    var store: Registry = .{};
     for (0..description.max_pending_jobs + 1) |index| {
         const raw: u64 = @intCast(index + 1);
         const identity: Identity = .{
@@ -1112,7 +1109,7 @@ test "description backpressure fails the ninth queued request without retry" {
 }
 
 test "process identity rejects contradictory screen branding" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
     try std.testing.expect(!store.observeScreen(
@@ -1133,7 +1130,7 @@ test "process identity rejects contradictory screen branding" {
 }
 
 test "foreground process exit removes all evidence for that session" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
     try std.testing.expect(store.observeScreen(
@@ -1148,7 +1145,7 @@ test "foreground process exit removes all evidence for that session" {
 }
 
 test "new foreground process replaces prior session evidence" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeProcess(identity, .claude, 84, 100));
     try std.testing.expect(store.observeScreen(
@@ -1168,7 +1165,7 @@ test "new foreground process replaces prior session evidence" {
 }
 
 test "confirmed Claude prompt refreshes branded identity" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeScreen(
         identity,
@@ -1190,7 +1187,7 @@ test "confirmed Claude prompt refreshes branded identity" {
 }
 
 test "network work resumes a visibly blocked agent" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(store.observeScreen(
         identity,
@@ -1205,7 +1202,7 @@ test "network work resumes a visibly blocked agent" {
 }
 
 test "new network work supersedes an older ready prompt" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .request_started, 50));
     try std.testing.expect(observeTestProxy(&store, identity, .claude, .response_finished, 100));
@@ -1218,7 +1215,7 @@ test "new network work supersedes an older ready prompt" {
 }
 
 test "unmatched proxy responses cannot create agent state" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
     try std.testing.expect(!store.observeProxy(.{
@@ -1241,7 +1238,7 @@ test "unmatched proxy responses cannot create agent state" {
 }
 
 test "expired agent evidence is removed" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(observeTestProxy(&store, identity, .codex, .request_started, 50));
     try std.testing.expect(observeTestProxy(&store, identity, .codex, .response_finished, 100));
@@ -1251,7 +1248,7 @@ test "expired agent evidence is removed" {
 }
 
 test "a bare shell prompt is not Claude identity" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     try std.testing.expect(!store.observeScreen(
         identity,
@@ -1263,7 +1260,7 @@ test "a bare shell prompt is not Claude identity" {
 }
 
 test "completed HTTP2 streams do not settle the agent turn" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
@@ -1308,7 +1305,7 @@ test "completed HTTP2 streams do not settle the agent turn" {
 }
 
 test "sequential model requests stay working until a confirmed prompt" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
@@ -1355,7 +1352,7 @@ test "sequential model requests stay working until a confirmed prompt" {
 }
 
 test "HTTP2 connection failure settles all of its active streams" {
-    var store: Store = .{};
+    var store: Registry = .{};
     const identity = try testIdentity();
     const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 1 };
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 3 };

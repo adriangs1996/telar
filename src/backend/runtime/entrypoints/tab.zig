@@ -16,12 +16,7 @@ const PendingTabRenamed = response_queue.PendingTabRenamed;
 const WorkspaceStore = workspace_mod.WorkspaceStore;
 const schema = core.schema;
 
-pub fn requestTabSnapshot(
-    panes: *PaneStore,
-    workspaces: *WorkspaceStore,
-    responses: *common.ResponseQueue,
-    request: schema.RequestTabSnapshot,
-) !void {
+pub fn requestTabSnapshot(panes: *PaneStore, workspaces: *WorkspaceStore, responses: *common.ResponseQueue, request: schema.RequestTabSnapshot) !void {
     if (!workspaces.contains(request.location) or panes.countAt(request.location) == 0) {
         try common.queueFailure(responses, request.request_id, .tab_not_found, "tab not found");
         return;
@@ -115,14 +110,7 @@ pub fn createTab(
     events.changed(events.context, client, create.workspace);
 }
 
-pub fn renameTab(
-    workspaces: *WorkspaceStore,
-    responses: *common.ResponseQueue,
-    agents: *agent_mod.Store,
-    client: common.ClientKey,
-    events: common.WorkspaceEvents,
-    rename: schema.RenameTab,
-) !void {
+pub fn renameTab(workspaces: *WorkspaceStore, responses: *common.ResponseQueue, agents: *agent_mod.Registry, client: common.ClientKey, events: common.WorkspaceEvents, rename: schema.RenameTab) !void {
     const tab = workspaces.findTab(rename.location) orelse {
         try common.queueFailure(responses, rename.request_id, .tab_not_found, "tab not found");
         return;

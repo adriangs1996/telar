@@ -24,7 +24,7 @@ const WorkspaceStore = workspace_mod.WorkspaceStore;
 pub const Sources = struct {
     panes: *const PaneStore,
     workspaces: *const WorkspaceStore,
-    agents: *const agent_mod.Store,
+    agents: *const agent_mod.Registry,
     system_metrics: *const system_metrics_mod.Sampler,
     proxy_active: bool,
     home: ?[]const u8,
@@ -569,7 +569,7 @@ test "delivery preserves management before resync wire order" {
     var panes: PaneStore = .{};
     var workspaces = WorkspaceStore.init(std.testing.allocator);
     defer workspaces.deinit();
-    var agents: agent_mod.Store = .{};
+    var agents: agent_mod.Registry = .{};
     var system_metrics: system_metrics_mod.Sampler = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
     const workspace: schema.WorkspaceLocation = .{

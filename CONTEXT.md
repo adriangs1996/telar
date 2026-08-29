@@ -116,6 +116,12 @@ The agent associated with the focused pane, if that pane has an agent. A client
 may have no focused agent even when the runtime reports other agents.
 _Avoid_: Selected agent, active agent
 
+**Agent registry**:
+The runtime-owned collection of agents currently associated with pane
+generations. It is the authoritative source for agent lifecycle observations
+and client-facing agent snapshots.
+_Avoid_: Agent store
+
 **Open agent**:
 An agent session whose process still belongs to a pane. Being open says nothing
 about whether the agent is working or waiting for input.

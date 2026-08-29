@@ -17,15 +17,7 @@ const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
 
-pub fn paneInput(
-    io: Io,
-    attachments: *AttachmentStore,
-    metrics: *RuntimeMetrics,
-    agents: *agent_mod.Store,
-    observe_agent_input: bool,
-    scheduler: common.Scheduler,
-    input: schema.PaneInput,
-) !void {
+pub fn paneInput(io: Io, attachments: *AttachmentStore, metrics: *RuntimeMetrics, agents: *agent_mod.Registry, observe_agent_input: bool, scheduler: common.Scheduler, input: schema.PaneInput) !void {
     const active = attachments.find(input.pane_id) orelse {
         metrics.stale_client_messages += 1;
         return;

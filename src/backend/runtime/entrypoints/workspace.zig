@@ -83,14 +83,7 @@ pub fn createWorkspace(
     } });
 }
 
-pub fn renameWorkspace(
-    workspaces: *WorkspaceStore,
-    responses: *common.ResponseQueue,
-    agents: *agent_mod.Store,
-    client: common.ClientKey,
-    events: common.WorkspaceEvents,
-    rename: schema.RenameWorkspace,
-) !void {
+pub fn renameWorkspace(workspaces: *WorkspaceStore, responses: *common.ResponseQueue, agents: *agent_mod.Registry, client: common.ClientKey, events: common.WorkspaceEvents, rename: schema.RenameWorkspace) !void {
     workspaces.rename(rename.workspace, rename.name) catch |err| {
         switch (err) {
             error.WorkspaceNotFound => try common.queueFailure(
