@@ -1060,12 +1060,12 @@ const Server = struct {
         if (event.process_probe.changed) {
             const observed_at_ms = Io.Timestamp.now(server.io, .real).toMilliseconds();
             if (event.process_probe.cache.provider != .unknown) {
-                _ = server.agents.observeProcess(
-                    agent_mod.Identity.fromPane(active),
-                    event.process_probe.cache.provider,
-                    event.process_probe.cache.process_group_id.?,
-                    observed_at_ms,
-                );
+                _ = server.agents.observeProcess(.{
+                    .identity = agent_mod.Identity.fromPane(active),
+                    .provider = event.process_probe.cache.provider,
+                    .process_id = event.process_probe.cache.process_group_id.?,
+                    .observed_at_ms = observed_at_ms,
+                });
             } else if (agent_process.shellForeground(
                 event.process_probe.cache,
                 active.session.pid,
@@ -1088,9 +1088,9 @@ const Server = struct {
         )) {
             const identity = agent_mod.Identity.fromPane(active);
             const previous_status = server.agents.projectedStatus(identity.key);
-            const changed = server.agents.observeScreen(
-                identity,
-                .{
+            const changed = server.agents.observeScreen(.{
+                .identity = identity,
+                .signal = .{
                     .provider = signal.provider,
                     .status = switch (signal.status) {
                         .working => .working,
@@ -1101,8 +1101,8 @@ const Server = struct {
                     .identity_confirmed = signal.identity_confirmed,
                     .ready_confirmed = signal.ready_confirmed,
                 },
-                Io.Timestamp.now(server.io, .real).toMilliseconds(),
-            );
+                .observed_at_ms = Io.Timestamp.now(server.io, .real).toMilliseconds(),
+            });
             if (changed) if (agentSoundForTransition(
                 previous_status,
                 server.agents.projectedStatus(identity.key),

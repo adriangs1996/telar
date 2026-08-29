@@ -116,6 +116,12 @@ The agent associated with the focused pane, if that pane has an agent. A client
 may have no focused agent even when the runtime reports other agents.
 _Avoid_: Selected agent, active agent
 
+**Agent**:
+The runtime-owned identity and lifecycle of one coding-agent session associated
+with an exact pane generation. Process, proxy, and screen observations describe
+the same agent; none of those observations is an agent by itself.
+_Avoid_: Agent record, detector result
+
 **Agent registry**:
 The runtime-owned collection of agents currently associated with pane
 generations. It is the authoritative source for agent lifecycle observations
