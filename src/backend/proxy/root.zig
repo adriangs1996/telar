@@ -245,6 +245,7 @@ test {
     std.testing.refAllDecls(@import("http/root.zig"));
     std.testing.refAllDecls(identity);
     std.testing.refAllDecls(middleware);
+    std.testing.refAllDecls(@import("provider/root.zig"));
     std.testing.refAllDecls(service_mod);
     std.testing.refAllDecls(@import("sse.zig"));
     std.testing.refAllDecls(@import("tls.zig"));

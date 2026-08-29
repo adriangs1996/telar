@@ -16,6 +16,7 @@ pub const Phase = enum {
     request_started,
     auxiliary_request_started,
     response_activity,
+    provider_turn_completed,
     response_finished,
     request_failed,
 };
@@ -30,6 +31,41 @@ pub fn isInferenceRequest(method: []const u8, target: []const u8) bool {
     return std.mem.eql(u8, path, "/v1/messages") or
         std.mem.eql(u8, path, "/v1/responses") or
         std.mem.eql(u8, path, "/backend-api/codex/responses");
+}
+
+/// Recognizes the SSE media type while allowing parameters and ASCII case.
+///
+/// ```zig
+/// const streaming = isEventStreamContentType("text/event-stream; charset=utf-8");
+/// ```
+pub fn isEventStreamContentType(value: []const u8) bool {
+    const parameters = std.mem.indexOfScalar(u8, value, ';') orelse value.len;
+    return std.ascii.eqlIgnoreCase(
+        std.mem.trim(u8, value[0..parameters], " \t"),
+        "text/event-stream",
+    );
+}
+
+/// Returns whether a present Content-Encoding value leaves bytes unchanged.
+///
+/// ```zig
+/// const unchanged = isIdentityContentEncoding("identity");
+/// ```
+pub fn isIdentityContentEncoding(value: []const u8) bool {
+    var tokens = std.mem.splitScalar(u8, value, ',');
+    var found = false;
+
+    while (tokens.next()) |token| {
+        const coding = std.mem.trim(u8, token, " \t");
+
+        if (coding.len == 0 or !std.ascii.eqlIgnoreCase(coding, "identity")) {
+            return false;
+        }
+
+        found = true;
+    }
+
+    return found;
 }
 
 pub const Event = struct {
@@ -50,6 +86,29 @@ test "only model generation routes count as inference" {
     try std.testing.expect(!isInferenceRequest("GET", "/v1/messages?beta=true"));
     try std.testing.expect(!isInferenceRequest("POST", "/v1/messages/count_tokens?beta=true"));
     try std.testing.expect(!isInferenceRequest("POST", "/api/event_logging/v2/batch"));
+}
+
+test "observable SSE headers require one event-stream type and identity bytes" {
+    var headers: Headers = .{};
+    try headers.append("content-type", "Text/Event-Stream; charset=utf-8", false);
+    try std.testing.expect(hasObservableSseBody(&headers));
+
+    try headers.append("content-encoding", "identity", false);
+    try std.testing.expect(hasObservableSseBody(&headers));
+
+    var encoded: Headers = .{};
+    try encoded.append("content-type", "text/event-stream", false);
+    try encoded.append("content-encoding", "gzip", false);
+    try std.testing.expect(!hasObservableSseBody(&encoded));
+
+    var duplicate: Headers = .{};
+    try duplicate.append("content-type", "text/event-stream", false);
+    try duplicate.append("content-type", "text/event-stream", false);
+    try std.testing.expect(!hasObservableSseBody(&duplicate));
+
+    var missing: Headers = .{};
+    try missing.append("content-encoding", "identity", false);
+    try std.testing.expect(!hasObservableSseBody(&missing));
 }
 
 pub const Observer = struct {
@@ -306,6 +365,39 @@ pub const Headers = struct {
         headers.copyFrom(&replacement);
     }
 };
+
+/// Returns whether decoded headers describe directly observable SSE bytes.
+///
+/// Missing Content-Encoding means identity. Duplicate Content-Type fields and
+/// any content coding make the body ineligible.
+///
+/// ```zig
+/// const observable = hasObservableSseBody(&headers);
+/// ```
+pub fn hasObservableSseBody(headers: *const Headers) bool {
+    var content_type_seen = false;
+    var event_stream = false;
+
+    for (headers.fields[0..headers.len]) |field| {
+        const name = headers.name(field);
+        const value = headers.value(field);
+
+        if (std.ascii.eqlIgnoreCase(name, "content-type")) {
+            if (content_type_seen) {
+                return false;
+            }
+
+            content_type_seen = true;
+            event_stream = isEventStreamContentType(value);
+        }
+
+        if (std.ascii.eqlIgnoreCase(name, "content-encoding") and !isIdentityContentEncoding(value)) {
+            return false;
+        }
+    }
+
+    return content_type_seen and event_stream;
+}
 
 fn effectName(effect: Effect) []const u8 {
     return switch (effect) {

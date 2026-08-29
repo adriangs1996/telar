@@ -37,6 +37,7 @@ pub const Head = struct {
     message: Message,
     framing: Framing,
     inference_request: bool,
+    sse_body: bool,
 };
 
 /// Reads one complete head into `buffer` and returns its byte length.
@@ -83,7 +84,48 @@ pub fn analyze(bytes: []const u8, is_response: bool, response_to_head: bool) ?He
         },
         .framing = framing,
         .inference_request = !is_response and inferenceRequest(start_line),
+        .sse_body = is_response and hasObservableSseBody(bytes),
     };
+}
+
+fn hasObservableSseBody(bytes: []const u8) bool {
+    var event_stream = false;
+    var content_type_seen = false;
+    var identity_encoding = true;
+    var lines = std.mem.splitSequence(u8, bytes, "\r\n");
+    _ = lines.next();
+
+    while (lines.next()) |line| {
+        const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
+        const name = std.mem.trim(u8, line[0..colon], " \t");
+        const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
+
+        if (std.ascii.eqlIgnoreCase(name, "content-type")) {
+            if (content_type_seen) {
+                return false;
+            }
+
+            content_type_seen = true;
+            event_stream = middleware.isEventStreamContentType(value);
+        }
+
+        if (std.ascii.eqlIgnoreCase(name, "content-encoding") and !middleware.isIdentityContentEncoding(value)) {
+            identity_encoding = false;
+        }
+
+        if (std.ascii.eqlIgnoreCase(name, "transfer-encoding") and !onlyChunkedCoding(value)) {
+            identity_encoding = false;
+        }
+    }
+
+    return content_type_seen and event_stream and identity_encoding;
+}
+
+fn onlyChunkedCoding(value: []const u8) bool {
+    var tokens = std.mem.splitScalar(u8, value, ',');
+    const coding = std.mem.trim(u8, tokens.next() orelse return false, " \t");
+
+    return coding.len != 0 and std.ascii.eqlIgnoreCase(coding, "chunked") and tokens.next() == null;
 }
 
 fn inferenceRequest(start_line: []const u8) bool {
@@ -257,6 +299,43 @@ test "responses without an explicit length close the connection" {
     const parsed = analyze("HTTP/1.1 200 OK\r\n\r\n", true, false).?;
     try std.testing.expectEqual(Framing.until_close, parsed.framing);
     try std.testing.expect(parsed.message.closes);
+}
+
+test "SSE response metadata accepts identity payloads across HTTP framing modes" {
+    const cases = [_][]const u8{
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\ncOnTeNt-TyPe: Text/Event-Stream ; charset=utf-8\r\nContent-Encoding: identity\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n",
+    };
+
+    for (cases) |bytes| {
+        try std.testing.expect(analyze(bytes, true, false).?.sse_body);
+    }
+}
+
+test "SSE response metadata rejects ambiguous non-SSE and encoded payloads" {
+    const cases = [_][]const u8{
+        "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Encoding: gzip\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Encoding:\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: gzip, chunked\r\n\r\n",
+    };
+
+    for (cases) |bytes| {
+        try std.testing.expect(!analyze(bytes, true, false).?.sse_body);
+    }
+}
+
+test "request content type never assigns response SSE metadata" {
+    const parsed = analyze(
+        "POST /v1/messages HTTP/1.1\r\nContent-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n",
+        false,
+        false,
+    ).?;
+
+    try std.testing.expect(!parsed.sse_body);
 }
 
 test "bodyless responses ignore declared framing" {

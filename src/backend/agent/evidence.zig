@@ -30,16 +30,14 @@ pub const Evidence = struct {
         };
     }
 
-    /// Converts one accepted proxy observation into expiring agent evidence.
+    /// Converts one accepted proxy observation and the aggregate status after
+    /// that transition into expiring evidence.
     ///
     /// ```zig
-    /// const evidence = Evidence.fromProxy(&observation);
+    /// const evidence = Evidence.fromProxy(&observation, .working);
     /// ```
-    pub fn fromProxy(observation: *const types.ProxyObservation) Evidence {
-        const status: schema.AgentStatus = switch (observation.phase) {
-            .request_started, .response_activity, .response_finished => .working,
-            .request_failed => .failed,
-        };
+    pub fn fromProxy(observation: *const types.ProxyObservation, status: schema.AgentStatus) Evidence {
+        std.debug.assert(status == .working or status == .ready or status == .failed);
 
         return .{
             .provider = observation.provider,
@@ -48,6 +46,7 @@ pub const Evidence = struct {
             .confidence = switch (observation.phase) {
                 .request_started, .response_finished => 95,
                 .response_activity => 90,
+                .provider_turn_completed => 99,
                 .request_failed => 98,
             },
             .observed_at_ms = observation.observed_at_ms,
@@ -105,7 +104,7 @@ pub const Evidence = struct {
     }
 };
 
-test "proxy evidence derives status confidence and expiry from its phase" {
+test "proxy evidence derives confidence and expiry from phase and aggregate status" {
     const identity: types.Identity = .{
         .key = .{ .id = try schema.id.pane(7), .generation = 3 },
         .process_id = 42,
@@ -121,6 +120,8 @@ test "proxy evidence derives status confidence and expiry from its phase" {
     }{
         .{ .phase = .request_started, .status = .working, .confidence = 95, .lifetime_ms = types.working_expiry_ms },
         .{ .phase = .response_activity, .status = .working, .confidence = 90, .lifetime_ms = types.working_expiry_ms },
+        .{ .phase = .provider_turn_completed, .status = .ready, .confidence = 99, .lifetime_ms = types.settled_expiry_ms },
+        .{ .phase = .provider_turn_completed, .status = .working, .confidence = 99, .lifetime_ms = types.working_expiry_ms },
         .{ .phase = .response_finished, .status = .working, .confidence = 95, .lifetime_ms = types.working_expiry_ms },
         .{ .phase = .request_failed, .status = .failed, .confidence = 98, .lifetime_ms = types.settled_expiry_ms },
     };
@@ -133,7 +134,7 @@ test "proxy evidence derives status confidence and expiry from its phase" {
             .exchange = exchange,
             .observed_at_ms = observed_at_ms,
         };
-        const evidence = Evidence.fromProxy(&observation);
+        const evidence = Evidence.fromProxy(&observation, expectation.status);
 
         try std.testing.expectEqual(schema.AgentProvider.claude, evidence.provider);
         try std.testing.expectEqual(expectation.status, evidence.status);

@@ -161,6 +161,12 @@ pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
         return false;
     }
 
+    const established_provider = agent.provider();
+
+    if (established_provider != .unknown and observation.provider != established_provider) {
+        return false;
+    }
+
     switch (agent.proxy.apply(observation)) {
         .ignored => return false,
         .activity_refreshed => return true,
@@ -667,6 +673,102 @@ test "agent applies a tracked proxy lifecycle" {
     try std.testing.expectEqual(schema.AgentStatus.working, evidence.status);
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, evidence.source);
     try std.testing.expectEqual(@as(i64, 200), evidence.observed_at_ms);
+}
+
+test "agent applies semantic completion without changing its authority" {
+    const identity = try testIdentity();
+    var agent = Agent.init(identity);
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+
+    const evidence = agent.proxy.currentEvidence().?;
+    try std.testing.expectEqual(schema.AgentStatus.ready, evidence.status);
+    try std.testing.expectEqual(schema.AgentAuthority.active, agent.authority);
+}
+
+test "agent rejects completion from a contradictory provider" {
+    const identity = try testIdentity();
+    var agent = Agent.init(identity);
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    _ = agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    });
+    try std.testing.expect(!agent.applyProxy(.{
+        .identity = identity,
+        .provider = .codex,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+    var evidence = agent.proxy.currentEvidence().?;
+    try std.testing.expectEqual(schema.AgentProvider.claude, evidence.provider);
+    try std.testing.expectEqual(schema.AgentStatus.working, evidence.status);
+    try std.testing.expectEqual(@as(i64, 100), evidence.observed_at_ms);
+
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 300,
+    }));
+    evidence = agent.proxy.currentEvidence().?;
+    try std.testing.expectEqual(schema.AgentProvider.claude, evidence.provider);
+    try std.testing.expectEqual(schema.AgentStatus.ready, evidence.status);
+    try std.testing.expectEqual(@as(i64, 300), evidence.observed_at_ms);
+}
+
+test "semantic completion does not clear stronger blocked screen evidence" {
+    const identity = try testIdentity();
+    var agent = Agent.init(identity);
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    _ = agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    });
+    agent.authority = .obscured;
+    agent.screen = .{
+        .provider = .claude,
+        .status = .blocked,
+        .source = .screen,
+        .confidence = 98,
+        .observed_at_ms = 150,
+        .expires_at_ms = 150 + types.settled_expiry_ms,
+    };
+
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+    try std.testing.expectEqual(schema.AgentAuthority.obscured, agent.authority);
+    try std.testing.expect(agent.screen != null);
+    try std.testing.expectEqual(schema.AgentStatus.blocked, agent.chooseEvidence(200).?.status);
 }
 
 test "agent coalesces frequent proxy activity" {

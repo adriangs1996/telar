@@ -53,6 +53,7 @@ pub const ScreenObservation = struct {
 pub const ProxyPhase = enum {
     request_started,
     response_activity,
+    provider_turn_completed,
     response_finished,
     request_failed,
 };
@@ -83,18 +84,6 @@ pub const ProxyObservation = struct {
     phase: ProxyPhase,
     exchange: ProxyExchange,
     observed_at_ms: i64,
-
-    /// Reports whether this phase is valid only for an exchange already opened
-    /// by `request_started`.
-    ///
-    /// ```zig
-    /// if (observation.requiresTrackedExchange()) {
-    ///     validateExchange();
-    /// }
-    /// ```
-    pub fn requiresTrackedExchange(observation: *const ProxyObservation) bool {
-        return observation.phase != .request_started;
-    }
 
     /// Compares the observed provider with an established provider identity.
     ///

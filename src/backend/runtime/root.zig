@@ -961,6 +961,7 @@ const Server = struct {
                 .request_started => .request_started,
                 .auxiliary_request_started => return,
                 .response_activity => .response_activity,
+                .provider_turn_completed => .provider_turn_completed,
                 .response_finished => .response_finished,
                 .request_failed => .request_failed,
             },

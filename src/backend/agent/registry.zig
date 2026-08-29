@@ -72,9 +72,10 @@ pub const Registry = struct {
     /// `observation.identity`.
     ///
     /// `request_started` opens a bounded tracked exchange and may create the
-    /// agent. Activity, completion, and failure observations require a
-    /// matching exchange; unmatched observations cannot create or settle agent
-    /// state. Callers must filter auxiliary requests before calling this method.
+    /// agent. Activity, provider turn completion, transport completion, and failure
+    /// observations require a matching exchange; unmatched observations cannot
+    /// create or settle agent state. Callers must filter auxiliary requests
+    /// before calling this method.
     ///
     /// An accepted observation refreshes proxy evidence and recomputes the
     /// public agent projection. A successful HTTP response remains `working`
@@ -300,7 +301,7 @@ pub const Registry = struct {
     fn resolveProxyAgent(registry: *Registry, observation: *const ProxyObservation) ?*Agent {
         return switch (observation.phase) {
             .request_started => registry.ensure(observation.identity),
-            .response_activity, .response_finished, .request_failed => registry.find(observation.identity.key),
+            .response_activity, .provider_turn_completed, .response_finished, .request_failed => registry.find(observation.identity.key),
         };
     }
 
@@ -851,13 +852,196 @@ test "unmatched proxy responses cannot create agent state" {
     try std.testing.expect(!registry.observeProxy(.{
         .identity = identity,
         .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+    try std.testing.expect(!registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
         .phase = .request_failed,
+        .exchange = exchange,
+        .observed_at_ms = 300,
+    }));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    try std.testing.expectEqual(@as(usize, 0), registry.snapshot(&entries).len);
+}
+
+test "a contradictory provider cannot complete another agent's exchange" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
+
+    _ = registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    });
+    try std.testing.expect(!registry.observeProxy(.{
+        .identity = identity,
+        .provider = .codex,
+        .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
     }));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
-    try std.testing.expectEqual(@as(usize, 0), registry.snapshot(&entries).len);
+    var snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 300,
+    }));
+    snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+}
+
+test "transport completion without provider turn completion remains working" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
+
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_finished,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.len);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
+    try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
+}
+
+test "provider turn completion projects ready and ignores later transport completion" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
+
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    var snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
+    try std.testing.expectEqual(@as(u8, 99), snapshot[0].confidence);
+    try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
+
+    try std.testing.expect(!registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_finished,
+        .exchange = exchange,
+        .observed_at_ms = 300,
+    }));
+    snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
+}
+
+test "all concurrent model exchanges must complete before ready" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
+    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
+
+    for ([_]ProxyExchange{ first, second }, 0..) |exchange, index| {
+        try std.testing.expect(registry.observeProxy(.{
+            .identity = identity,
+            .provider = .claude,
+            .phase = .request_started,
+            .exchange = exchange,
+            .observed_at_ms = @intCast(100 + index),
+        }));
+    }
+
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = first,
+        .observed_at_ms = 200,
+    }));
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    var snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = second,
+        .observed_at_ms = 300,
+    }));
+    snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+}
+
+test "new model work supersedes a completed response" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const completed: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 1 };
+    const next: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
+
+    _ = registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = completed,
+        .observed_at_ms = 100,
+    });
+    _ = registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = completed,
+        .observed_at_ms = 200,
+    });
+    try std.testing.expect(registry.observeProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = next,
+        .observed_at_ms = 300,
+    }));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = registry.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(@as(i64, 300), snapshot[0].observed_at_ms);
 }
 
 test "expired agent evidence is removed" {

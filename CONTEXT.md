@@ -122,6 +122,22 @@ with an exact pane generation. Process, proxy, and screen observations describe
 the same agent; none of those observations is an agent by itself.
 _Avoid_: Agent record, detector result
 
+**Model exchange**:
+One inference request and its provider response. Several model exchanges may
+belong to the same agent session and may overlap in time.
+_Avoid_: Agent turn, HTTP connection
+
+**Transport completion**:
+The end of an HTTP response stream. It says that no more response bytes remain,
+but does not say why the model stopped or whether the agent is ready.
+_Avoid_: Provider turn completion, agent completion
+
+**Provider turn completion**:
+An explicit provider-protocol outcome saying that one model exchange ended
+without requesting tool execution or continuation. It is evidence that the
+agent can become ready once no other model exchange remains.
+_Avoid_: Transport completion, agent ready
+
 **Agent registry**:
 The runtime-owned collection of agents currently associated with pane
 generations. It is the authoritative source for agent lifecycle observations

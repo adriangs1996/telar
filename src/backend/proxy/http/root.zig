@@ -16,11 +16,39 @@ pub const max_chunk_line_bytes = body.max_chunk_line_bytes;
 pub const Message = head.Message;
 pub const Framing = head.Framing;
 pub const Head = head.Head;
+pub const BodyFragment = body.Fragment;
+pub const BodyRoute = body.Route;
+
+pub const MessageRoute = struct {
+    from: tls.Session.Side,
+    to: tls.Session.Side,
+    is_response: bool,
+    response_to_head: bool,
+};
+
+pub const HeadTransform = struct {
+    route: MessageRoute,
+    pipeline: *const middleware.TransformPipeline,
+    io: std.Io,
+    context: middleware.TransformContext,
+};
 
 /// Relays one complete HTTP/1.1 message and returns its metadata.
-pub fn relay(session: anytype, from: tls.Session.Side, to: tls.Session.Side, is_response: bool, response_to_head: bool, context: anytype, comptime activity: fn (@TypeOf(context), usize) void) ?Message {
-    const parsed = relayHead(session, from, to, is_response, response_to_head) orelse return null;
-    if (!relayBody(session, from, to, parsed.framing, context, activity)) return null;
+///
+/// ```zig
+/// const message = relay(session, route, &observer);
+/// ```
+pub fn relay(session: anytype, route: MessageRoute, observer: anytype) ?Message {
+    const parsed = relayHead(session, route) orelse return null;
+
+    if (!relayBody(session, .{
+        .from = route.from,
+        .to = route.to,
+        .framing = parsed.framing,
+    }, observer)) {
+        return null;
+    }
+
     return parsed.message;
 }
 
@@ -28,11 +56,19 @@ pub fn relay(session: anytype, from: tls.Session.Side, to: tls.Session.Side, is_
 ///
 /// The connection owner can therefore run the request body and response
 /// concurrently for `Expect: 100-continue` and early final responses.
-pub fn relayHead(session: anytype, from: tls.Session.Side, to: tls.Session.Side, is_response: bool, response_to_head: bool) ?Head {
+///
+/// ```zig
+/// const head = relayHead(session, route);
+/// ```
+pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
     var buffer: [max_head_bytes]u8 = undefined;
-    const len = head.read(session, from, &buffer) orelse return null;
-    if (!session.writeAll(to, buffer[0..len])) return null;
-    return head.analyze(buffer[0..len], is_response, response_to_head);
+    const len = head.read(session, route.from, &buffer) orelse return null;
+
+    if (!session.writeAll(route.to, buffer[0..len])) {
+        return null;
+    }
+
+    return head.analyze(buffer[0..len], route.is_response, route.response_to_head);
 }
 
 /// Relays one HTTP head after applying the configured transformation pipeline.
@@ -40,16 +76,21 @@ pub fn relayHead(session: anytype, from: tls.Session.Side, to: tls.Session.Side,
 /// Invalid, oversized, or framing-changing results preserve the original head.
 /// The pipeline never receives the session, and this function performs the one
 /// network write selected by its decision.
-pub fn relayHeadTransformed(session: anytype, from: tls.Session.Side, to: tls.Session.Side, is_response: bool, response_to_head: bool, pipeline: *const middleware.TransformPipeline, io: std.Io, transform_context: middleware.TransformContext) ?Head {
-    if (pipeline.len == 0)
-        return relayHead(session, from, to, is_response, response_to_head);
+///
+/// ```zig
+/// const head = relayHeadTransformed(session, transformation);
+/// ```
+pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?Head {
+    if (transformation.pipeline.len == 0) {
+        return relayHead(session, transformation.route);
+    }
 
     var original: [max_head_bytes]u8 = undefined;
-    const original_len = head.read(session, from, &original) orelse return null;
+    const original_len = head.read(session, transformation.route.from, &original) orelse return null;
     const original_head = head.analyze(
         original[0..original_len],
-        is_response,
-        response_to_head,
+        transformation.route.is_response,
+        transformation.route.response_to_head,
     ) orelse return null;
 
     var encoded: [max_head_bytes]u8 = undefined;
@@ -57,11 +98,11 @@ pub fn relayHeadTransformed(session: anytype, from: tls.Session.Side, to: tls.Se
     const selected_bytes = switch (transform.decide(
         original[0..original_len],
         original_head,
-        is_response,
-        response_to_head,
-        pipeline,
-        io,
-        transform_context,
+        transformation.route.is_response,
+        transformation.route.response_to_head,
+        transformation.pipeline,
+        transformation.io,
+        transformation.context,
         &encoded,
     )) {
         .preserve => original[0..original_len],
@@ -71,18 +112,31 @@ pub fn relayHeadTransformed(session: anytype, from: tls.Session.Side, to: tls.Se
         },
     };
 
-    if (!session.writeAll(to, selected_bytes)) return null;
+    if (!session.writeAll(transformation.route.to, selected_bytes)) {
+        return null;
+    }
+
     return selected_head;
 }
 
-/// Relays one HTTP body according to framing derived from its head.
-pub fn relayBody(session: anytype, from: tls.Session.Side, to: tls.Session.Side, framing: Framing, context: anytype, comptime activity: fn (@TypeOf(context), usize) void) bool {
-    return body.relay(session, from, to, framing, context, activity);
+/// Relays one HTTP body and exposes only successfully forwarded fragments.
+///
+/// ```zig
+/// const forwarded = relayBody(session, .{
+///     .from = .origin,
+///     .to = .child,
+///     .framing = response.framing,
+/// }, &observer);
+/// ```
+pub fn relayBody(session: anytype, route: BodyRoute, observer: anytype) bool {
+    return body.relay(session, route, observer);
 }
 
 const FakeSession = @import("test_support.zig").FakeSession;
 
-fn ignoreTestActivity(_: void, _: usize) void {}
+const IgnoreTestObserver = struct {
+    pub fn observe(_: IgnoreTestObserver, _: BodyFragment) void {}
+};
 
 test "request head is forwarded before its body is consumed" {
     const request = "POST /upload HTTP/1.1\r\n" ++
@@ -93,7 +147,12 @@ test "request head is forwarded before its body is consumed" {
     const head_len = std.mem.indexOf(u8, request, "\r\n\r\n").? + 4;
     var fake: FakeSession = .{ .child_input = request };
 
-    const parsed = relayHead(&fake, .child, .origin, false, false).?;
+    const parsed = relayHead(&fake, .{
+        .from = .child,
+        .to = .origin,
+        .is_response = false,
+        .response_to_head = false,
+    }).?;
 
     try std.testing.expectEqual(head_len, fake.child_offset);
     try std.testing.expectEqualStrings(request[0..head_len], fake.originOutput());
@@ -101,11 +160,8 @@ test "request head is forwarded before its body is consumed" {
 
     try std.testing.expect(relayBody(
         &fake,
-        .child,
-        .origin,
-        parsed.framing,
-        {},
-        ignoreTestActivity,
+        .{ .from = .child, .to = .origin, .framing = parsed.framing },
+        IgnoreTestObserver{},
     ));
     try std.testing.expectEqualStrings(request, fake.originOutput());
 }
@@ -128,16 +184,17 @@ test "transformed head selection is the only head written" {
     const request = "POST /upload HTTP/1.1\r\nHost: example.test\r\nContent-Length: 4\r\n\r\ndata";
     var fake: FakeSession = .{ .child_input = request };
 
-    const parsed = relayHeadTransformed(
-        &fake,
-        .child,
-        .origin,
-        false,
-        false,
-        &pipeline,
-        std.testing.io,
-        undefined,
-    ).?;
+    const parsed = relayHeadTransformed(&fake, .{
+        .route = .{
+            .from = .child,
+            .to = .origin,
+            .is_response = false,
+            .response_to_head = false,
+        },
+        .pipeline = &pipeline,
+        .io = std.testing.io,
+        .context = undefined,
+    }).?;
 
     try std.testing.expectEqualDeep(Framing{ .length = 4 }, parsed.framing);
     try std.testing.expect(std.mem.indexOf(u8, fake.originOutput(), "x-telar: enabled\r\n") != null);
@@ -161,16 +218,17 @@ test "a preserved transformation forwards the original head exactly" {
     const request = "GET / HTTP/1.1\r\nhOsT:\texample.test\r\nX-Duplicate: one\r\nX-Duplicate: two\r\n\r\n";
     var fake: FakeSession = .{ .child_input = request };
 
-    _ = relayHeadTransformed(
-        &fake,
-        .child,
-        .origin,
-        false,
-        false,
-        &pipeline,
-        std.testing.io,
-        undefined,
-    ).?;
+    _ = relayHeadTransformed(&fake, .{
+        .route = .{
+            .from = .child,
+            .to = .origin,
+            .is_response = false,
+            .response_to_head = false,
+        },
+        .pipeline = &pipeline,
+        .io = std.testing.io,
+        .context = undefined,
+    }).?;
 
     try std.testing.expectEqualStrings(request, fake.originOutput());
 }
@@ -180,24 +238,14 @@ test "informational response is delimited before the final response" {
         "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
     var fake: FakeSession = .{ .origin_input = responses };
 
-    const informational = relay(
-        &fake,
-        .origin,
-        .child,
-        true,
-        false,
-        {},
-        ignoreTestActivity,
-    ).?;
-    const final = relay(
-        &fake,
-        .origin,
-        .child,
-        true,
-        false,
-        {},
-        ignoreTestActivity,
-    ).?;
+    const route: MessageRoute = .{
+        .from = .origin,
+        .to = .child,
+        .is_response = true,
+        .response_to_head = false,
+    };
+    const informational = relay(&fake, route, IgnoreTestObserver{}).?;
+    const final = relay(&fake, route, IgnoreTestObserver{}).?;
 
     try std.testing.expect(informational.informational);
     try std.testing.expectEqual(@as(u16, 200), final.status_code);

@@ -8,6 +8,7 @@ const h2 = @import("h2.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
 const middleware = @import("middleware.zig");
+const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
 
 const Io = std.Io;
@@ -397,8 +398,8 @@ const TunnelContext = struct {
         context.publishStatus(phase, stream_id, context.status_code);
     }
 
-    fn publishH2(context: *TunnelContext, phase: middleware.Phase, stream_id: u32, status_code: u16) void {
-        context.publishStatus(phase, stream_id, status_code);
+    fn publishH2(context: *TunnelContext, lifecycle: h2.Lifecycle) void {
+        context.publishStatus(lifecycle.phase, lifecycle.stream_id, lifecycle.status_code);
     }
 
     fn publishStatus(context: *TunnelContext, phase: middleware.Phase, stream_id: u32, status_code: u16) void {
@@ -432,6 +433,38 @@ const TunnelContext = struct {
         };
     }
 };
+
+const H2EventObserver = struct {
+    context: *TunnelContext,
+    responses: ?*provider.ResponseStreams = null,
+
+    pub fn emit(observer: *H2EventObserver, event: h2.Event) void {
+        switch (event) {
+            .lifecycle => |lifecycle| {
+                observer.context.publishH2(lifecycle);
+
+                if (observer.responses) |responses| {
+                    if (lifecycle.stream_id != 0 and
+                        (lifecycle.phase == .response_finished or lifecycle.phase == .request_failed))
+                    {
+                        responses.finish(lifecycle.stream_id);
+                    }
+                }
+            },
+            .response_body => |body| {
+                const responses = observer.responses orelse return;
+
+                if (shouldInspectH2Body(body) and responses.feed(body.stream_id, body.bytes)) {
+                    observer.context.publishStatus(.provider_turn_completed, body.stream_id, 0);
+                }
+            },
+        }
+    }
+};
+
+fn shouldInspectH2Body(body: h2.ResponseBody) bool {
+    return body.sse_body and body.status_code >= 200 and body.status_code < 300;
+}
 
 fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     const path = diagnostics.enter(.observation);
@@ -505,6 +538,12 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
 
     context.protocol = if (session.negotiated() == .h2) .h2 else .http11;
     if (session.negotiated() == .h2) {
+        var response_streams = provider.ResponseStreams.init(service.gpa, context.provider);
+        defer response_streams.deinit();
+        var response_observer: H2EventObserver = .{
+            .context = &context,
+            .responses = if (context.provider == .claude) &response_streams else null,
+        };
         var child_settings: h2.PeerSettings = .{};
         var origin_settings: h2.PeerSettings = .{};
         var outbound = if (service.transforms.len == 0)
@@ -522,8 +561,8 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
                 .origin,
                 .child,
                 .response,
-                &context,
-                TunnelContext.publishH2,
+                &response_observer,
+                H2EventObserver.emit,
             )
         else
             h2.relayTransformed(
@@ -536,8 +575,8 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
                 &service.transforms,
                 service.io,
                 context.transformContext(.response, .response, 0),
-                &context,
-                TunnelContext.publishH2,
+                &response_observer,
+                H2EventObserver.emit,
             );
         const request_stats = outbound.cancel(service.io);
         if (response_stats.decode_failed)
@@ -552,16 +591,17 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     }
 
     while (true) {
-        const request = http.relayHeadTransformed(
-            session,
-            .child,
-            .origin,
-            false,
-            false,
-            &service.transforms,
-            service.io,
-            context.transformContext(.request, .request, 0),
-        ) orelse return;
+        const request = http.relayHeadTransformed(session, .{
+            .route = .{
+                .from = .child,
+                .to = .origin,
+                .is_response = false,
+                .response_to_head = false,
+            },
+            .pipeline = &service.transforms,
+            .io = service.io,
+            .context = context.transformContext(.request, .request, 0),
+        }) orelse return;
         context.publish(
             if (request.inference_request)
                 .request_started
@@ -575,14 +615,13 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
             exchange.concurrent(.request_body, relayHttpRequestBody, .{
                 session,
                 request.framing,
-                &context,
             }) catch {
                 context.publish(.request_failed, 0);
                 return;
             };
             exchange.concurrent(.response, relayHttpResponse, .{
                 session,
-                request.message.head_request,
+                HttpResponseRequest.fromHead(request),
                 &context,
             }) catch {
                 exchange.cancelDiscard();
@@ -621,7 +660,7 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
                     break :response final;
                 },
             };
-        } else relayHttpResponse(session, request.message.head_request, &context) orelse {
+        } else relayHttpResponse(session, HttpResponseRequest.fromHead(request), &context) orelse {
             context.publish(.request_failed, 0);
             return;
         };
@@ -660,13 +699,15 @@ fn recordTlsFailure(service: *Service, failure: tls.Error) void {
 }
 
 fn relayH2Request(session: *tls.Session, context: *TunnelContext) h2.Stats {
+    var observer: H2EventObserver = .{ .context = context };
+
     return h2.relay(
         session,
         .child,
         .origin,
         .request,
-        context,
-        TunnelContext.publishH2,
+        &observer,
+        H2EventObserver.emit,
     );
 }
 
@@ -676,6 +717,8 @@ fn relayH2RequestTransformed(
     child_settings: *h2.PeerSettings,
     origin_settings: *h2.PeerSettings,
 ) h2.Stats {
+    var observer: H2EventObserver = .{ .context = context };
+
     return h2.relayTransformed(
         session,
         .child,
@@ -686,64 +729,157 @@ fn relayH2RequestTransformed(
         &context.service.transforms,
         context.service.io,
         context.transformContext(.request, .request, 0),
-        context,
-        TunnelContext.publishH2,
+        &observer,
+        H2EventObserver.emit,
     );
 }
-
-fn ignoreActivity(_: *TunnelContext, _: usize) void {}
 
 const HttpExchangeEvent = union(enum) {
     request_body: bool,
     response: ?http.Message,
 };
 
-fn relayHttpRequestBody(
-    session: *tls.Session,
-    framing: http.Framing,
-    context: *TunnelContext,
-) bool {
+const HttpResponseRequest = struct {
+    response_to_head: bool,
+    inference: bool,
+
+    fn fromHead(head: http.Head) HttpResponseRequest {
+        return .{
+            .response_to_head = head.message.head_request,
+            .inference = head.inference_request,
+        };
+    }
+};
+
+const IgnoreBodyObserver = struct {
+    pub fn observe(_: IgnoreBodyObserver, _: http.BodyFragment) void {}
+};
+
+fn relayHttpRequestBody(session: *tls.Session, framing: http.Framing) bool {
     return http.relayBody(
         session,
-        .child,
-        .origin,
-        framing,
-        context,
-        ignoreActivity,
+        .{ .from = .child, .to = .origin, .framing = framing },
+        IgnoreBodyObserver{},
     );
 }
 
-fn relayHttpResponse(
-    session: *tls.Session,
-    response_to_head: bool,
-    context: *TunnelContext,
-) ?http.Message {
+fn relayHttpResponse(session: *tls.Session, request: HttpResponseRequest, context: *TunnelContext) ?http.Message {
     while (true) {
-        const head = http.relayHeadTransformed(
-            session,
-            .origin,
-            .child,
-            true,
-            response_to_head,
-            &context.service.transforms,
-            context.service.io,
-            context.transformContext(.response, .response, 0),
-        ) orelse return null;
-        if (!http.relayBody(
-            session,
-            .origin,
-            .child,
-            head.framing,
+        const head = http.relayHeadTransformed(session, .{
+            .route = .{
+                .from = .origin,
+                .to = .child,
+                .is_response = true,
+                .response_to_head = request.response_to_head,
+            },
+            .pipeline = &context.service.transforms,
+            .io = context.service.io,
+            .context = context.transformContext(.response, .response, 0),
+        }) orelse return null;
+
+        var observer: HttpResponseObserver = .init(
             context,
-            responseActivity,
-        )) return null;
+            shouldInspectHttpResponse(request, head),
+        );
+        const forwarded = http.relayBody(
+            session,
+            .{ .from = .origin, .to = .child, .framing = head.framing },
+            &observer,
+        );
+        observer.deinit();
+
+        if (!forwarded) {
+            return null;
+        }
+
         const candidate = head.message;
-        if (!candidate.informational) return candidate;
+
+        if (!candidate.informational) {
+            return candidate;
+        }
     }
 }
 
-fn responseActivity(context: *TunnelContext, bytes: usize) void {
-    if (bytes != 0) context.publish(.response_activity, 0);
+const HttpResponseObserver = struct {
+    context: *TunnelContext,
+    response: provider.ResponseObserver,
+    inspect_payload: bool,
+
+    fn init(context: *TunnelContext, inspect_payload: bool) HttpResponseObserver {
+        return .{
+            .context = context,
+            .response = .init(context.provider),
+            .inspect_payload = inspect_payload,
+        };
+    }
+
+    pub fn observe(observer: *HttpResponseObserver, fragment: http.BodyFragment) void {
+        if (fragment.forwarded_bytes != 0) {
+            observer.context.publish(.response_activity, 0);
+        }
+
+        if (observer.inspect_payload and fragment.payload.len != 0 and observer.response.feed(fragment.payload)) {
+            observer.context.publish(.provider_turn_completed, 0);
+        }
+    }
+
+    fn deinit(observer: *HttpResponseObserver) void {
+        observer.response.deinit();
+        observer.inspect_payload = false;
+    }
+};
+
+fn shouldInspectHttpResponse(request: HttpResponseRequest, head: http.Head) bool {
+    return request.inference and head.sse_body and
+        head.message.status_code >= 200 and head.message.status_code < 300;
+}
+
+test "provider payload inspection requires a successful inference stream" {
+    const request: HttpResponseRequest = .{ .response_to_head = false, .inference = true };
+    const successful: http.Head = .{
+        .message = .{ .status_code = 200 },
+        .framing = .none,
+        .inference_request = false,
+        .sse_body = true,
+    };
+
+    try std.testing.expect(shouldInspectHttpResponse(request, successful));
+    try std.testing.expect(!shouldInspectHttpResponse(.{
+        .response_to_head = false,
+        .inference = false,
+    }, successful));
+
+    var non_sse = successful;
+    non_sse.sse_body = false;
+    try std.testing.expect(!shouldInspectHttpResponse(request, non_sse));
+
+    inline for (.{ @as(u16, 199), 300, 429, 500 }) |status_code| {
+        var failed = successful;
+        failed.message.status_code = status_code;
+        try std.testing.expect(!shouldInspectHttpResponse(request, failed));
+        try std.testing.expect(!shouldInspectH2Body(.{
+            .stream_id = 1,
+            .status_code = status_code,
+            .sse_body = true,
+            .bytes = "",
+        }));
+    }
+
+    inline for (.{ @as(u16, 200), 204, 299 }) |status_code| {
+        try std.testing.expect(shouldInspectH2Body(.{
+            .stream_id = 1,
+            .status_code = status_code,
+            .sse_body = true,
+            .bytes = "",
+        }));
+    }
+
+    try std.testing.expect(!shouldInspectH2Body(.{
+        .stream_id = 1,
+        .status_code = 200,
+        .sse_body = false,
+        .bytes = "",
+    }));
 }
 
 fn relayUpgrade(io: Io, session: *tls.Session, context: *TunnelContext) void {
