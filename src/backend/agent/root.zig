@@ -144,6 +144,28 @@ pub const Store = struct {
         return store.remove(key);
     }
 
+    /// Applies one proxy lifecycle observation to the agent identified by
+    /// `identity`.
+    ///
+    /// `request_started` opens a bounded tracked exchange and may create the
+    /// agent record. Activity, completion, and failure observations require a
+    /// matching exchange; unmatched observations cannot create or settle agent
+    /// state. Callers must filter auxiliary requests before calling this method.
+    ///
+    /// An accepted observation refreshes proxy evidence and recomputes the
+    /// public agent projection. A successful HTTP response remains `working`
+    /// because transport completion does not prove that the agent turn ended.
+    /// The return value is `true` only when the projected snapshot or title
+    /// state changed. This method does not parse HTTP bodies or provider events.
+    ///
+    /// ```zig
+    /// fn observeHttp11Exchange(store: *Store, identity: Identity) void {
+    ///     const connection_id = 17;
+    ///     _ = store.observeProxy(identity, .claude, .request_started, .http11, connection_id, 0, 1_000);
+    ///     _ = store.observeProxy(identity, .claude, .response_activity, .http11, connection_id, 0, 1_100);
+    ///     _ = store.observeProxy(identity, .claude, .response_finished, .http11, connection_id, 0, 1_200);
+    /// }
+    /// ```
     pub fn observeProxy(store: *Store, identity: Identity, provider: schema.AgentProvider, phase: ProxyPhase, protocol: ProxyProtocol, connection_id: u64, stream_id: u32, observed_at_ms: i64) bool {
         if (provider == .unknown) return false;
         var record = switch (phase) {

@@ -98,11 +98,7 @@ pub const Proxy = struct {
         proxy.service.events.close(io);
     }
 
-    pub fn registerPane(
-        proxy: *Proxy,
-        key: PaneKey,
-        inherited: std.process.Environ,
-    ) !PaneEnvironment {
+    pub fn registerPane(proxy: *Proxy, key: PaneKey, inherited: std.process.Environ) !PaneEnvironment {
         var credential: identity.Credential = .{
             .pane_id = key.id,
             .pane_generation = key.generation,

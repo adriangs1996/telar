@@ -928,22 +928,32 @@ const Server = struct {
         server.pumpAll();
     }
 
-    fn handleProxyEvent(
-        server: *Server,
-        event_result: anyerror!proxy_mod.Observation,
-    ) !void {
+    /// Applies one proxy observation as agent-lifecycle evidence for the live pane
+    /// generation that authorized the intercepted connection.
+    ///
+    /// Successful receives are rearmed before processing. Receive failures,
+    /// observations for retired panes, and auxiliary requests do not alter agent
+    /// state. Accepted observations may update the projected agent state, schedule
+    /// description work, and make a new snapshot available for client delivery.
+    fn handleProxyEvent(server: *Server, event_result: anyerror!proxy_mod.Observation) !void {
         const event = event_result catch return;
+
         if (server.proxy) |proxy|
             try server.select.concurrent(
                 .proxy_event,
                 proxy_mod.Proxy.receive,
                 .{ proxy, server.io },
             );
+
         const active = server.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
-        if (comptime diagnostics.enabled) server.metrics.proxy_observations +|= 1;
+
+        if (comptime diagnostics.enabled) {
+            server.metrics.proxy_observations +|= 1;
+        }
+
         _ = server.agents.observeProxy(
             agent_mod.Identity.fromPane(active),
             event.provider,

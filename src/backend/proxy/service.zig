@@ -132,11 +132,7 @@ pub const Service = struct {
     active_connections: std.atomic.Value(u32) = .init(0),
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
-    pub fn create(
-        io: Io,
-        gpa: std.mem.Allocator,
-        paths: Paths,
-    ) !*Service {
+    pub fn create(io: Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         var authority = try ca.Authority.loadOrCreate(
             io,
             gpa,
