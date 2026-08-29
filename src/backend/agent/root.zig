@@ -63,12 +63,18 @@ const Record = struct {
     session_id: [16]u8,
     authority: schema.AgentAuthority = .candidate,
     process: ?Evidence = null,
-    proxy: ?Evidence = null,
-    active_proxy: [max_active_proxy_requests]?ProxyExchange = @splat(null),
-    active_proxy_count: u16 = 0,
+    proxy: ProxyState = .{},
     screen: ?Evidence = null,
     title: Title = .{},
     projected: schema.AgentSnapshotEntry,
+
+    fn trackObservation(record: *Record, observation: ProxyObservation) bool {
+        return switch (observation.phase) {
+            .request_started => record.proxy.start(observation.exchange),
+            .response_activity => record.proxy.contains(observation.exchange),
+            .response_finished, .request_failed => record.proxy.settle(observation.exchange),
+        };
+    }
 };
 
 const TitlePhase = enum {
@@ -121,6 +127,84 @@ pub const ProxyObservation = struct {
     phase: ProxyPhase,
     exchange: ProxyExchange,
     observed_at_ms: i64,
+
+    fn requiresTrackedExchange(observation: *const ProxyObservation) bool {
+        return observation.phase != .request_started;
+    }
+};
+
+const ProxyState = struct {
+    evidence: ?Evidence = null,
+    active: [max_active_proxy_requests]?ProxyExchange = @splat(null),
+    active_count: u16 = 0,
+
+    fn start(state: *ProxyState, exchange: ProxyExchange) bool {
+        var free: ?*?ProxyExchange = null;
+
+        for (&state.active) |*slot| {
+            if (slot.*) |active| {
+                if (sameProxyExchange(active, exchange)) {
+                    return false;
+                }
+            } else if (free == null) {
+                free = slot;
+            }
+        }
+
+        const destination = free orelse return false;
+        destination.* = exchange;
+        state.active_count += 1;
+        return true;
+    }
+
+    fn contains(state: *const ProxyState, exchange: ProxyExchange) bool {
+        for (state.active) |active| {
+            if (active != null and sameProxyExchange(active.?, exchange)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    fn settle(state: *ProxyState, exchange: ProxyExchange) bool {
+        if (exchange.protocol == .h2 and exchange.stream_id == 0) {
+            var removed = false;
+
+            for (&state.active) |*slot| {
+                const active = slot.* orelse continue;
+
+                if (active.protocol != .h2 or active.connection_id != exchange.connection_id) {
+                    continue;
+                }
+
+                slot.* = null;
+                state.active_count -= 1;
+                removed = true;
+            }
+            return removed;
+        }
+
+        for (&state.active) |*slot| {
+            const active = slot.* orelse continue;
+
+            if (!sameProxyExchange(active, exchange)) {
+                continue;
+            }
+
+            slot.* = null;
+            state.active_count -= 1;
+            return true;
+        }
+
+        return false;
+    }
+
+    fn clear(state: *ProxyState) void {
+        state.evidence = null;
+        state.active = @splat(null);
+        state.active_count = 0;
+    }
 };
 
 pub const Store = struct {
@@ -136,8 +220,7 @@ pub const Store = struct {
             if (evidence.provider == provider and record.agent_process_id == process_id)
                 return false;
             record.screen = null;
-            record.proxy = null;
-            clearProxyActive(record);
+            record.proxy.clear();
         }
         record.agent_process_id = process_id;
         record.process = .{
@@ -213,23 +296,15 @@ pub const Store = struct {
             return false;
         }
 
-        var record = switch (observation.phase) {
-            .request_started => store.ensure(observation.identity) orelse return false,
-            .response_activity, .response_finished, .request_failed => store.find(observation.identity.key) orelse return false,
-        };
+        var record = store.getRecordInPhase(observation.identity, observation.phase) catch return false;
 
-        const tracked = switch (observation.phase) {
-            .request_started => markProxyActive(record, observation.exchange),
-            .response_activity => hasProxyActive(record, observation.exchange),
-            .response_finished, .request_failed => settleProxy(record, observation.exchange),
-        };
-
-        if (observation.phase != .request_started and !tracked) {
+        const tracked = record.trackObservation(observation);
+        if (observation.requiresTrackedExchange() and !tracked) {
             return false;
         }
 
         if (observation.phase == .response_activity) {
-            if (record.proxy) |*evidence| {
+            if (record.proxy.evidence) |*evidence| {
                 if (evidence.provider == observation.provider and evidence.status == .working) {
                     if (observation.observed_at_ms - evidence.observed_at_ms < activity_refresh_ms)
                         return false;
@@ -245,7 +320,7 @@ pub const Store = struct {
             .request_failed => .failed,
         };
 
-        record.proxy = .{
+        record.proxy.evidence = .{
             .provider = observation.provider,
             .status = status,
             .source = .proxy_tls,
@@ -326,16 +401,15 @@ pub const Store = struct {
         var changed = false;
         for (&store.records) |*slot| {
             var record = if (slot.*) |*value| value else continue;
-            if (record.proxy) |evidence| {
+            if (record.proxy.evidence) |evidence| {
                 if (evidence.expires_at_ms <= now_ms) {
-                    record.proxy = null;
-                    clearProxyActive(record);
+                    record.proxy.clear();
                 }
             }
             if (record.screen) |evidence| {
                 if (evidence.expires_at_ms <= now_ms) record.screen = null;
             }
-            if (record.process == null and record.proxy == null and record.screen == null) {
+            if (record.process == null and record.proxy.evidence == null and record.screen == null) {
                 record.authority = .stale;
                 record.title.clearSensitive();
                 slot.* = null;
@@ -476,6 +550,13 @@ pub const Store = struct {
         store.bumpRevision();
     }
 
+    fn getRecordInPhase(store: *Store, identity: Identity, phase: ProxyPhase) !*Record {
+        return switch (phase) {
+            .request_started => store.ensure(identity) orelse return error.ErrorCreatingRecord,
+            .response_activity, .response_finished, .request_failed => store.find(identity.key) orelse return error.ErrorFindingRecord,
+        };
+    }
+
     fn ensure(store: *Store, identity: Identity) ?*Record {
         const key = identity.key;
         if (store.find(key)) |record| return record;
@@ -515,20 +596,26 @@ pub const Store = struct {
 
     fn reproject(store: *Store, record: *Record, now_ms: i64) bool {
         const evidence = chooseEvidence(record, now_ms) orelse return false;
+
         const provider = if (record.process) |process|
             process.provider
         else if (evidence.provider != .unknown)
             evidence.provider
-        else if (record.proxy) |proxy|
+        else if (record.proxy.evidence) |proxy|
             proxy.provider
         else if (record.screen) |screen|
             screen.provider
         else
             .unknown;
+
         const previous = record.projected;
         ensurePlaceholder(record, provider);
         store.sequence +%= 1;
-        if (store.sequence == 0) store.sequence = 1;
+
+        if (store.sequence == 0) {
+            store.sequence = 1;
+        }
+
         record.projected = .{
             .pane_id = record.key.id,
             .pane_generation = record.key.generation,
@@ -543,12 +630,15 @@ pub const Store = struct {
             .observed_at_ms = evidence.observed_at_ms,
             .expires_at_ms = evidence.expires_at_ms,
         };
+
         const title_changed = store.advanceTitle(record, evidence.status);
+
         if (sameProjection(previous, record.projected)) {
             record.projected.sequence = previous.sequence;
             if (title_changed) store.bumpRevision();
             return title_changed;
         }
+
         store.bumpRevision();
         return true;
     }
@@ -585,55 +675,6 @@ pub const Store = struct {
     }
 };
 
-fn markProxyActive(record: *Record, request: ProxyExchange) bool {
-    var free: ?*?ProxyExchange = null;
-    for (&record.active_proxy) |*slot| {
-        if (slot.*) |active| {
-            if (sameProxyExchange(active, request)) return false;
-        } else if (free == null) {
-            free = slot;
-        }
-    }
-    const destination = free orelse return false;
-    destination.* = request;
-    record.active_proxy_count += 1;
-    return true;
-}
-
-fn hasProxyActive(record: *const Record, request: ProxyExchange) bool {
-    for (record.active_proxy) |active|
-        if (active != null and sameProxyExchange(active.?, request)) return true;
-    return false;
-}
-
-fn settleProxy(record: *Record, request: ProxyExchange) bool {
-    if (request.protocol == .h2 and request.stream_id == 0) {
-        var removed = false;
-        for (&record.active_proxy) |*slot| {
-            const active = slot.* orelse continue;
-            if (active.protocol != .h2 or active.connection_id != request.connection_id)
-                continue;
-            slot.* = null;
-            record.active_proxy_count -= 1;
-            removed = true;
-        }
-        return removed;
-    }
-    for (&record.active_proxy) |*slot| {
-        const active = slot.* orelse continue;
-        if (!sameProxyExchange(active, request)) continue;
-        slot.* = null;
-        record.active_proxy_count -= 1;
-        return true;
-    }
-    return false;
-}
-
-fn clearProxyActive(record: *Record) void {
-    record.active_proxy = @splat(null);
-    record.active_proxy_count = 0;
-}
-
 fn sameProxyExchange(left: ProxyExchange, right: ProxyExchange) bool {
     return left.protocol == right.protocol and
         left.connection_id == right.connection_id and
@@ -646,7 +687,7 @@ fn chooseEvidence(record: *const Record, now_ms: i64) ?Evidence {
         if (value.expires_at_ms > now_ms) value else null
     else
         null;
-    const proxy = if (record.proxy) |value|
+    const proxy = if (record.proxy.evidence) |value|
         if (value.expires_at_ms > now_ms) value else null
     else
         null;
@@ -675,9 +716,20 @@ fn currentStatus(record: *const Record) schema.AgentStatus {
 }
 
 fn recordProvider(record: *const Record) schema.AgentProvider {
-    if (record.process) |evidence| return evidence.provider;
-    if (record.proxy) |evidence| if (evidence.provider != .unknown) return evidence.provider;
-    if (record.screen) |evidence| return evidence.provider;
+    if (record.process) |evidence| {
+        return evidence.provider;
+    }
+
+    if (record.proxy.evidence) |evidence| {
+        if (evidence.provider != .unknown) {
+            return evidence.provider;
+        }
+    }
+
+    if (record.screen) |evidence| {
+        return evidence.provider;
+    }
+
     return .unknown;
 }
 
@@ -746,6 +798,109 @@ fn observeTestReadyPrompt(store: *Store, identity: Identity, provider: schema.Ag
         },
         observed_at_ms,
     );
+}
+
+test "proxy state starts an exchange" {
+    var state: ProxyState = .{};
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    try std.testing.expect(state.start(exchange));
+    try std.testing.expect(state.contains(exchange));
+    try std.testing.expectEqual(@as(u16, 1), state.active_count);
+}
+
+test "proxy state rejects a duplicate exchange without changing its count" {
+    var state: ProxyState = .{};
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    try std.testing.expect(state.start(exchange));
+    try std.testing.expect(!state.start(exchange));
+    try std.testing.expect(state.contains(exchange));
+    try std.testing.expectEqual(@as(u16, 1), state.active_count);
+}
+
+test "proxy state does not exceed its bounded exchange capacity" {
+    var state: ProxyState = .{};
+
+    for (0..max_active_proxy_requests) |index| {
+        const exchange: ProxyExchange = .{
+            .protocol = .h2,
+            .connection_id = 7,
+            .stream_id = @intCast(index + 1),
+        };
+        try std.testing.expect(state.start(exchange));
+    }
+
+    const overflow: ProxyExchange = .{
+        .protocol = .h2,
+        .connection_id = 7,
+        .stream_id = @intCast(max_active_proxy_requests + 1),
+    };
+    try std.testing.expect(!state.start(overflow));
+    try std.testing.expect(!state.contains(overflow));
+    try std.testing.expectEqual(@as(u16, max_active_proxy_requests), state.active_count);
+}
+
+test "proxy state settles only the specified exchange" {
+    var state: ProxyState = .{};
+    const settled: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+    const remaining: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 3 };
+
+    try std.testing.expect(state.start(settled));
+    try std.testing.expect(state.start(remaining));
+    try std.testing.expect(state.settle(settled));
+
+    try std.testing.expect(!state.contains(settled));
+    try std.testing.expect(state.contains(remaining));
+    try std.testing.expectEqual(@as(u16, 1), state.active_count);
+    try std.testing.expect(!state.settle(settled));
+    try std.testing.expectEqual(@as(u16, 1), state.active_count);
+}
+
+test "proxy state HTTP2 sentinel settles only its connection streams" {
+    var state: ProxyState = .{};
+    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+    const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 3 };
+    const other_connection: ProxyExchange = .{ .protocol = .h2, .connection_id = 8, .stream_id = 1 };
+    const other_protocol: ProxyExchange = .{ .protocol = .http11, .connection_id = 7, .stream_id = 0 };
+    const connection: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 0 };
+
+    try std.testing.expect(state.start(first));
+    try std.testing.expect(state.start(second));
+    try std.testing.expect(state.start(other_connection));
+    try std.testing.expect(state.start(other_protocol));
+    try std.testing.expect(state.settle(connection));
+
+    try std.testing.expect(!state.contains(first));
+    try std.testing.expect(!state.contains(second));
+    try std.testing.expect(state.contains(other_connection));
+    try std.testing.expect(state.contains(other_protocol));
+    try std.testing.expectEqual(@as(u16, 2), state.active_count);
+}
+
+test "proxy state clear removes evidence and every active exchange" {
+    var state: ProxyState = .{};
+    const first: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+    const second: ProxyExchange = .{ .protocol = .http11, .connection_id = 8, .stream_id = 0 };
+
+    state.evidence = .{
+        .provider = .claude,
+        .status = .working,
+        .source = .proxy_tls,
+        .confidence = 95,
+        .observed_at_ms = 100,
+        .expires_at_ms = 200,
+    };
+    try std.testing.expect(state.start(first));
+    try std.testing.expect(state.start(second));
+
+    state.clear();
+
+    try std.testing.expect(state.evidence == null);
+    try std.testing.expectEqual(@as(u16, 0), state.active_count);
+    for (state.active) |exchange| {
+        try std.testing.expect(exchange == null);
+    }
 }
 
 test "display context changes advance the public snapshot revision" {
@@ -1226,7 +1381,7 @@ test "HTTP2 connection failure settles all of its active streams" {
         .exchange = connection,
         .observed_at_ms = 200,
     }));
-    try std.testing.expectEqual(@as(u16, 0), store.find(identity.key).?.active_proxy_count);
+    try std.testing.expectEqual(@as(u16, 0), store.find(identity.key).?.proxy.active_count);
     try std.testing.expect(!store.observeProxy(.{
         .identity = identity,
         .provider = .claude,
