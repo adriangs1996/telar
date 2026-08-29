@@ -1,7 +1,7 @@
 //! Runtime-owned agent evidence and projection.
 //!
 //! Process, network, and terminal observers publish bounded evidence here.
-//! This store is the only place that turns those observations into sidebar
+//! This registry is the only place that turns those observations into sidebar
 //! state, so another detector cannot bypass precedence, expiry, or
 //! pane-generation checks.
 
@@ -54,6 +54,34 @@ const Evidence = struct {
     confidence: u8,
     observed_at_ms: i64,
     expires_at_ms: i64,
+
+    /// Converts one accepted proxy observation into expiring agent evidence.
+    fn fromProxyObservation(observation: *const ProxyObservation) Evidence {
+        const status: schema.AgentStatus = switch (observation.phase) {
+            .request_started, .response_activity, .response_finished => .working,
+            .request_failed => .failed,
+        };
+
+        return .{
+            .provider = observation.provider,
+            .status = status,
+            .source = .proxy_tls,
+            .confidence = switch (observation.phase) {
+                .request_started, .response_finished => 95,
+                .response_activity => 90,
+                .request_failed => 98,
+            },
+            .observed_at_ms = observation.observed_at_ms,
+            .expires_at_ms = observation.observed_at_ms + if (status == .working)
+                working_expiry_ms
+            else
+                settled_expiry_ms,
+        };
+    }
+
+    fn isWorking(evidence: *const Evidence) bool {
+        return evidence.status == .working;
+    }
 };
 
 const Agent = struct {
@@ -68,12 +96,28 @@ const Agent = struct {
     title: Title = .{},
     projected: schema.AgentSnapshotEntry,
 
-    fn trackObservation(record: *Agent, observation: ProxyObservation) bool {
-        return switch (observation.phase) {
-            .request_started => record.proxy.start(observation.exchange),
-            .response_activity => record.proxy.contains(observation.exchange),
-            .response_finished, .request_failed => record.proxy.settle(observation.exchange),
+    fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
+        switch (agent.proxy.apply(observation)) {
+            .ignored => return false,
+            .activity_refreshed => return true,
+            .evidence_replaced => {},
+        }
+
+        if (agent.authority == .obscured and
+            (observation.phase == .request_started or observation.phase == .response_activity))
+        {
+            agent.screen = null;
+            agent.authority = .resumed;
+            return true;
+        }
+
+        agent.authority = switch (agent.authority) {
+            .candidate, .stale => .active,
+            .active, .obscured, .resumed => agent.authority,
+            .exited => return false,
         };
+
+        return true;
     }
 };
 
@@ -131,12 +175,63 @@ pub const ProxyObservation = struct {
     fn requiresTrackedExchange(observation: *const ProxyObservation) bool {
         return observation.phase != .request_started;
     }
+
+    fn hasSameProvider(observation: *const ProxyObservation, evidence: *const Evidence) bool {
+        return observation.provider == evidence.provider;
+    }
+
+    fn isResponseActivity(observation: *const ProxyObservation) bool {
+        return observation.phase == .response_activity;
+    }
 };
 
 const ProxyState = struct {
+    const ApplyResult = enum {
+        ignored,
+        activity_refreshed,
+        evidence_replaced,
+    };
+
     evidence: ?Evidence = null,
     active: [max_active_proxy_requests]?ProxyExchange = @splat(null),
     active_count: u16 = 0,
+
+    fn replaceEvidence(state: *ProxyState, observation: *const ProxyObservation) void {
+        state.evidence = Evidence.fromProxyObservation(observation);
+    }
+
+    fn apply(state: *ProxyState, observation: ProxyObservation) ApplyResult {
+        const tracked = state.track(observation.phase, observation.exchange);
+
+        if (observation.requiresTrackedExchange() and !tracked) {
+            return .ignored;
+        }
+
+        if (observation.isResponseActivity()) {
+            if (state.evidence) |*evidence| {
+                if (observation.hasSameProvider(evidence) and evidence.isWorking()) {
+                    if (observation.observed_at_ms - evidence.observed_at_ms < activity_refresh_ms) {
+                        return .ignored;
+                    }
+
+                    evidence.observed_at_ms = observation.observed_at_ms;
+                    evidence.expires_at_ms = observation.observed_at_ms + working_expiry_ms;
+                    return .activity_refreshed;
+                }
+            }
+        }
+
+        state.replaceEvidence(&observation);
+        return .evidence_replaced;
+    }
+
+    fn track(state: *ProxyState, phase: ProxyPhase, exchange: ProxyExchange) bool {
+        return switch (phase) {
+            .request_started => state.start(exchange),
+            .response_activity => state.contains(exchange),
+            .response_finished, .request_failed => state.settle(exchange),
+        };
+    }
 
     fn start(state: *ProxyState, exchange: ProxyExchange) bool {
         var free: ?*?ProxyExchange = null;
@@ -262,27 +357,27 @@ pub const Registry = struct {
     /// state changed. This method does not parse HTTP bodies or provider events.
     ///
     /// ```zig
-    /// fn observeHttp11Exchange(store: *Registry, identity: Identity) void {
+    /// fn observeHttp11Exchange(registry: *Registry, identity: Identity) void {
     ///     const exchange: ProxyExchange = .{
     ///         .protocol = .http11,
     ///         .connection_id = 17,
     ///         .stream_id = 0,
     ///     };
-    ///     _ = store.observeProxy(.{
+    ///     _ = registry.observeProxy(.{
     ///         .identity = identity,
     ///         .provider = .claude,
     ///         .phase = .request_started,
     ///         .exchange = exchange,
     ///         .observed_at_ms = 1_000,
     ///     });
-    ///     _ = store.observeProxy(.{
+    ///     _ = registry.observeProxy(.{
     ///         .identity = identity,
     ///         .provider = .claude,
     ///         .phase = .response_activity,
     ///         .exchange = exchange,
     ///         .observed_at_ms = 1_100,
     ///     });
-    ///     _ = store.observeProxy(.{
+    ///     _ = registry.observeProxy(.{
     ///         .identity = identity,
     ///         .provider = .claude,
     ///         .phase = .response_finished,
@@ -291,61 +386,17 @@ pub const Registry = struct {
     ///     });
     /// }
     /// ```
-    pub fn observeProxy(store: *Registry, observation: ProxyObservation) bool {
+    pub fn observeProxy(registry: *Registry, observation: ProxyObservation) bool {
         if (observation.provider == .unknown) {
             return false;
         }
 
-        var record = store.getRecordInPhase(observation.identity, observation.phase) catch return false;
-
-        const tracked = record.trackObservation(observation);
-        if (observation.requiresTrackedExchange() and !tracked) {
+        const agent = registry.resolveProxyAgent(&observation) orelse return false;
+        if (!agent.applyProxy(observation)) {
             return false;
         }
 
-        if (observation.phase == .response_activity) {
-            if (record.proxy.evidence) |*evidence| {
-                if (evidence.provider == observation.provider and evidence.status == .working) {
-                    if (observation.observed_at_ms - evidence.observed_at_ms < activity_refresh_ms)
-                        return false;
-                    evidence.observed_at_ms = observation.observed_at_ms;
-                    evidence.expires_at_ms = observation.observed_at_ms + working_expiry_ms;
-                    return store.reproject(record, observation.observed_at_ms);
-                }
-            }
-        }
-
-        const status: schema.AgentStatus = switch (observation.phase) {
-            .request_started, .response_activity, .response_finished => .working,
-            .request_failed => .failed,
-        };
-
-        record.proxy.evidence = .{
-            .provider = observation.provider,
-            .status = status,
-            .source = .proxy_tls,
-            .confidence = switch (observation.phase) {
-                .request_started, .response_finished => 95,
-                .response_activity => 90,
-                .request_failed => 98,
-            },
-            .observed_at_ms = observation.observed_at_ms,
-            .expires_at_ms = observation.observed_at_ms + if (status == .working)
-                working_expiry_ms
-            else
-                settled_expiry_ms,
-        };
-
-        record.authority = if (record.authority == .obscured and (observation.phase == .request_started or observation.phase == .response_activity)) resumed: {
-            record.screen = null;
-            break :resumed .resumed;
-        } else switch (record.authority) {
-            .candidate, .stale => .active,
-            .active, .obscured, .resumed => record.authority,
-            .exited => return false,
-        };
-
-        return store.reproject(record, observation.observed_at_ms);
+        return registry.reproject(agent, observation.observed_at_ms);
     }
 
     pub fn observeScreen(store: *Registry, identity: Identity, signal: ScreenSignal, observed_at_ms: i64) bool {
@@ -547,10 +598,10 @@ pub const Registry = struct {
         store.bumpRevision();
     }
 
-    fn getRecordInPhase(store: *Registry, identity: Identity, phase: ProxyPhase) !*Agent {
-        return switch (phase) {
-            .request_started => store.ensure(identity) orelse return error.ErrorCreatingRecord,
-            .response_activity, .response_finished, .request_failed => store.find(identity.key) orelse return error.ErrorFindingRecord,
+    fn resolveProxyAgent(registry: *Registry, observation: *const ProxyObservation) ?*Agent {
+        return switch (observation.phase) {
+            .request_started => registry.ensure(observation.identity),
+            .response_activity, .response_finished, .request_failed => registry.find(observation.identity.key),
         };
     }
 
@@ -797,6 +848,41 @@ fn observeTestReadyPrompt(store: *Registry, identity: Identity, provider: schema
     );
 }
 
+test "proxy evidence derives status confidence and expiry from its phase" {
+    const identity = try testIdentity();
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+    const observed_at_ms: i64 = 100;
+    const expectations = [_]struct {
+        phase: ProxyPhase,
+        status: schema.AgentStatus,
+        confidence: u8,
+        lifetime_ms: i64,
+    }{
+        .{ .phase = .request_started, .status = .working, .confidence = 95, .lifetime_ms = working_expiry_ms },
+        .{ .phase = .response_activity, .status = .working, .confidence = 90, .lifetime_ms = working_expiry_ms },
+        .{ .phase = .response_finished, .status = .working, .confidence = 95, .lifetime_ms = working_expiry_ms },
+        .{ .phase = .request_failed, .status = .failed, .confidence = 98, .lifetime_ms = settled_expiry_ms },
+    };
+
+    for (expectations) |expectation| {
+        const observation: ProxyObservation = .{
+            .identity = identity,
+            .provider = .claude,
+            .phase = expectation.phase,
+            .exchange = exchange,
+            .observed_at_ms = observed_at_ms,
+        };
+        const evidence = Evidence.fromProxyObservation(&observation);
+
+        try std.testing.expectEqual(schema.AgentProvider.claude, evidence.provider);
+        try std.testing.expectEqual(expectation.status, evidence.status);
+        try std.testing.expectEqual(schema.AgentSource.proxy_tls, evidence.source);
+        try std.testing.expectEqual(expectation.confidence, evidence.confidence);
+        try std.testing.expectEqual(observed_at_ms, evidence.observed_at_ms);
+        try std.testing.expectEqual(observed_at_ms + expectation.lifetime_ms, evidence.expires_at_ms);
+    }
+}
+
 test "proxy state starts an exchange" {
     var state: ProxyState = .{};
     const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
@@ -898,6 +984,117 @@ test "proxy state clear removes evidence and every active exchange" {
     for (state.active) |exchange| {
         try std.testing.expect(exchange == null);
     }
+}
+
+test "agent rejects an untracked proxy response" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const agent = registry.ensure(identity).?;
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    try std.testing.expect(!agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_activity,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent.proxy.evidence == null);
+    try std.testing.expectEqual(@as(u16, 0), agent.proxy.active_count);
+    try std.testing.expectEqual(schema.AgentAuthority.candidate, agent.authority);
+}
+
+test "agent applies a tracked proxy lifecycle" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const agent = registry.ensure(identity).?;
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expectEqual(schema.AgentAuthority.active, agent.authority);
+    try std.testing.expectEqual(@as(u16, 1), agent.proxy.active_count);
+
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_finished,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+
+    const evidence = agent.proxy.evidence.?;
+    try std.testing.expectEqual(schema.AgentProvider.claude, evidence.provider);
+    try std.testing.expectEqual(schema.AgentStatus.working, evidence.status);
+    try std.testing.expectEqual(schema.AgentSource.proxy_tls, evidence.source);
+    try std.testing.expectEqual(@as(i64, 200), evidence.observed_at_ms);
+    try std.testing.expectEqual(@as(u16, 0), agent.proxy.active_count);
+}
+
+test "agent coalesces frequent proxy activity" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const agent = registry.ensure(identity).?;
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(!agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_activity,
+        .exchange = exchange,
+        .observed_at_ms = 100 + activity_refresh_ms - 1,
+    }));
+    try std.testing.expectEqual(@as(i64, 100), agent.proxy.evidence.?.observed_at_ms);
+
+    const refreshed_at = 100 + activity_refresh_ms;
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .response_activity,
+        .exchange = exchange,
+        .observed_at_ms = refreshed_at,
+    }));
+    try std.testing.expectEqual(refreshed_at, agent.proxy.evidence.?.observed_at_ms);
+    try std.testing.expectEqual(refreshed_at + working_expiry_ms, agent.proxy.evidence.?.expires_at_ms);
+}
+
+test "new proxy work resumes an obscured agent" {
+    var registry: Registry = .{};
+    const identity = try testIdentity();
+    const agent = registry.ensure(identity).?;
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    agent.authority = .obscured;
+    agent.screen = .{
+        .provider = .claude,
+        .status = .blocked,
+        .source = .screen,
+        .confidence = 88,
+        .observed_at_ms = 50,
+        .expires_at_ms = settled_expiry_ms,
+    };
+
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expectEqual(schema.AgentAuthority.resumed, agent.authority);
+    try std.testing.expect(agent.screen == null);
 }
 
 test "display context changes advance the public snapshot revision" {
