@@ -166,7 +166,7 @@ pub const Attachment = struct {
         attachment.graphics.reset();
     }
 
-    pub fn configureGraphics(attachment: *Attachment, shared: bool) void {
+    fn configureGraphics(attachment: *Attachment, shared: bool) void {
         attachment.graphics.shared_transport = shared;
     }
 
@@ -281,6 +281,11 @@ pub const GraphicsCreditUpdate = enum {
     invalid_amount,
 };
 
+pub const GraphicsConfigurationUpdate = enum {
+    changed,
+    unchanged,
+};
+
 pub const SelectionRange = selection.Range;
 pub const SelectionResult = selection.Result;
 pub const selection_scratch_bytes = selection.scratch_bytes;
@@ -308,6 +313,7 @@ pub const AttachmentStore = struct {
     count: usize = 0,
     index: SlotIndex(2 * max_panes) = .{},
     workspace: ?schema.WorkspaceLocation = null,
+    shared_graphics: bool = false,
 
     pub fn find(store: *AttachmentStore, pane_id: schema.PaneId) ?*Attachment {
         const slot = store.index.get(schema.id.raw(pane_id)) orelse return null;
@@ -413,11 +419,24 @@ pub const AttachmentStore = struct {
         return store.workspace;
     }
 
-    pub fn configureGraphics(store: *AttachmentStore, shared: bool) void {
+    /// Changes the transport policy for existing and future attachments as one
+    /// aggregate update. Repeating the active policy leaves every item intact.
+    ///
+    /// ```zig
+    /// const update = store.configureGraphics(true);
+    /// ```
+    pub fn configureGraphics(store: *AttachmentStore, shared: bool) GraphicsConfigurationUpdate {
+        if (store.shared_graphics == shared) {
+            return .unchanged;
+        }
+
+        store.shared_graphics = shared;
         for (&store.items) |*slot| {
             const attachment = if (slot.*) |*value| value else continue;
             attachment.configureGraphics(shared);
         }
+
+        return .changed;
     }
 
     pub fn attach(
@@ -435,6 +454,7 @@ pub const AttachmentStore = struct {
         for (&store.items, 0..) |*slot, position| {
             if (slot.* == null) {
                 slot.* = try Attachment.init(gpa, pane);
+                slot.*.?.configureGraphics(store.shared_graphics);
                 store.index.put(schema.id.raw(pane.id), position);
                 if (store.workspace == null) store.workspace = pane.location.workspace;
                 store.count += 1;
@@ -502,7 +522,13 @@ pub const AttachmentStore = struct {
             @min(outstanding, core.graphics.max_image_bytes_global);
     }
 
-    pub fn deinit(store: *AttachmentStore) void {
+    /// Releases every attachment while preserving per-client configuration for
+    /// the next workspace view.
+    ///
+    /// ```zig
+    /// store.clearAttachments();
+    /// ```
+    pub fn clearAttachments(store: *AttachmentStore) void {
         for (&store.items) |*slot| {
             if (slot.*) |*attachment| attachment.deinit();
             slot.* = null;
@@ -510,6 +536,11 @@ pub const AttachmentStore = struct {
         store.index.reset();
         store.count = 0;
         store.workspace = null;
+    }
+
+    pub fn deinit(store: *AttachmentStore) void {
+        store.clearAttachments();
+        store.shared_graphics = false;
     }
 };
 

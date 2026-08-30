@@ -27,6 +27,8 @@ const detach_pane_commands = @import("commands/detach_pane.zig");
 const detach_pane_controller = @import("controllers/detach_pane.zig");
 const frame_ack_commands = @import("commands/frame_ack.zig");
 const frame_ack_controller = @import("controllers/frame_ack.zig");
+const graphics_configuration_commands = @import("commands/graphics_configuration.zig");
+const graphics_configuration_controller = @import("controllers/graphics_configuration.zig");
 const graphics_credit_commands = @import("commands/graphics_credit.zig");
 const graphics_credit_controller = @import("controllers/graphics_credit.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
@@ -92,6 +94,7 @@ const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
+const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
 const GraphicsCreditController = graphics_credit_controller.Controller(*graphics_credit_commands.ReturnGraphicsCreditHandler);
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
@@ -219,10 +222,6 @@ const ClientSession = struct {
     read_pending: bool = false,
     send_pending: bool = false,
     closing: bool = false,
-    /// Declared by the client through `configure_graphics` before it opens
-    /// panes; attachments created afterwards inherit it.
-    shared_graphics: bool = false,
-
     fn create(gpa: std.mem.Allocator, key: ClientKey, connection: core.transport.SocketChannel) !*ClientSession {
         const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
         errdefer gpa.free(receive_buffer);
@@ -1528,11 +1527,14 @@ const Server = struct {
 
                 try controller.requestGraphicsSnapshot(request);
             },
-            .configure_graphics => |configure| attachment_entrypoints.configureGraphics(
-                attachments,
-                &session.shared_graphics,
-                configure,
-            ),
+            .configure_graphics => |configure| {
+                var handler: graphics_configuration_commands.ConfigureGraphicsHandler = .{
+                    .attachments = attachments,
+                };
+                var controller = GraphicsConfigurationController.init(&handler);
+
+                try controller.configureGraphics(configure);
+            },
             .request_runtime_state => attachment_entrypoints.requestRuntimeState(&session.delivery),
             .graphics_credit => |credit| {
                 var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
@@ -1927,7 +1929,6 @@ fn attachOpenPane(context: *anyopaque, launched: pane_mod.PaneLaunched) !void {
     const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
     const pane = client.server.model.panes.resolve(launched.key) orelse return error.PaneUnavailable;
     const attachment = try client.session.attachments.attach(client.server.gpa, pane);
-    attachment.configureGraphics(client.session.shared_graphics);
     _ = try attachment.resizeIfNeeded();
 }
 
@@ -1958,8 +1959,7 @@ fn attachCreatedTab(context: *anyopaque, launched: create_tab_commands.LaunchedP
     const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
     const pane = client.server.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
 
-    const attachment = try client.session.attachments.attach(client.server.gpa, pane);
-    attachment.configureGraphics(client.session.shared_graphics);
+    _ = try client.session.attachments.attach(client.server.gpa, pane);
 }
 
 fn launchCreatedTabPane(context: *anyopaque, request: create_tab_commands.LaunchPane) !create_tab_commands.LaunchedPane {
@@ -2012,13 +2012,12 @@ fn replaceCreatedWorkspaceAttachments(context: *anyopaque, launched: create_work
     const pane = client.server.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
     const previous_workspace = client.session.attachments.currentWorkspace();
 
-    client.session.attachments.deinit();
+    client.session.attachments.clearAttachments();
     if (previous_workspace) |previous| {
         client.server.releaseGeometryFor(client.session.key, previous);
     }
 
     const attachment = try client.session.attachments.attach(client.server.gpa, pane);
-    attachment.configureGraphics(client.session.shared_graphics);
     _ = try attachment.resizeIfNeeded();
 }
 
@@ -2052,8 +2051,7 @@ fn launchCreatedPane(context: *anyopaque, request: create_pane_commands.LaunchPa
 fn attachCreatedPane(context: *anyopaque, launched: pane_mod.PaneLaunched) !void {
     const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
     const pane = client.server.model.panes.resolve(launched.key) orelse return error.LaunchedPaneUnavailable;
-    const attachment = try client.session.attachments.attach(client.server.gpa, pane);
-    attachment.configureGraphics(client.session.shared_graphics);
+    _ = try client.session.attachments.attach(client.server.gpa, pane);
 }
 
 fn publishTabCreated(context: *anyopaque, event: workspace_mod.TabCreated) void {
@@ -2763,6 +2761,8 @@ test {
     _ = detach_pane_controller;
     _ = frame_ack_commands;
     _ = frame_ack_controller;
+    _ = graphics_configuration_commands;
+    _ = graphics_configuration_controller;
     _ = graphics_credit_commands;
     _ = graphics_credit_controller;
     _ = move_tab_commands;
@@ -2797,6 +2797,7 @@ test {
     _ = @import("create_workspace_test.zig");
     _ = @import("detach_pane_test.zig");
     _ = @import("frame_ack_test.zig");
+    _ = @import("graphics_configuration_test.zig");
     _ = @import("graphics_credit_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("open_pane_test.zig");
