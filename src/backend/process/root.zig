@@ -73,11 +73,11 @@ pub const Probe = struct {
 /// Resolve a process group without allocating. A known group is cached until
 /// `tcgetpgrp` reports a different one. Unknown groups receive a small bounded
 /// retry window because process metadata can lag just behind terminal control.
-pub fn probe(
-    process_group_id: ?std.c.pid_t,
-    shell_pid: std.c.pid_t,
-    previous: Cache,
-) Probe {
+///
+/// ```zig
+/// const result = probe(process_group_id, shell_pid, previous);
+/// ```
+pub fn probe(process_group_id: ?std.c.pid_t, shell_pid: std.c.pid_t, previous: Cache) Probe {
     return probeWith(process_group_id, shell_pid, previous, identifyProcessGroup);
 }
 

@@ -2525,7 +2525,7 @@ fn startAgentDescription(server: *Server, command: agent_mod.description.Command
     try server.select.concurrent(
         .agent_description,
         agent_mod.description.generate,
-        .{ server.io, server.gpa, command, job },
+        .{ server.io, server.gpa, .{ .command = command, .job = job } },
     );
 }
 

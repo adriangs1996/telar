@@ -90,19 +90,20 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             );
             defer command.deinit();
             const shell = std.mem.span(command.command.file);
-            const fresh = try Pane.create(
-                launcher.io,
-                launcher.gpa,
-                pane_key,
-                request.location,
-                &command.command,
-                request.launch_cwd,
-                request.workspace_path,
-                launcher.history_service,
-                request.size,
-                launcher.panes.graphics_limits,
-                &launcher.panes.graphics_budget,
-            );
+            const fresh = try Pane.create(.{
+                .io = launcher.io,
+                .gpa = launcher.gpa,
+                .history_service = launcher.history_service,
+                .graphics_budget = &launcher.panes.graphics_budget,
+            }, .{
+                .identity = pane_key,
+                .location = request.location,
+                .command = &command.command,
+                .launch_cwd = request.launch_cwd,
+                .workspace_path = request.workspace_path,
+                .size = request.size,
+                .graphics_limits = launcher.panes.graphics_limits,
+            });
 
             launcher.panes.insert(fresh) catch |err| {
                 launcher.recordFailure(fresh, shell, .pane_registration, err);

@@ -80,19 +80,20 @@ pub const PaneFixture = struct {
     pub fn createPane(fixture: *PaneFixture, pane_id: schema.PaneId) !*pane_mod.Pane {
         const arguments = [_][*:0]const u8{ "/bin/sleep", "600" };
         const command = try pty.Command.fromArgv(&arguments);
-        const pane = try pane_mod.Pane.create(
-            std.testing.io,
-            fixture.pane_allocator.allocator(),
-            .{ .id = pane_id, .generation = schema.id.raw(pane_id) },
-            location,
-            &command,
-            "/",
-            "/work/telar",
-            &fixture.history_service,
-            initial_size,
-            .{},
-            &fixture.budget,
-        );
+        const pane = try pane_mod.Pane.create(.{
+            .io = std.testing.io,
+            .gpa = fixture.pane_allocator.allocator(),
+            .history_service = &fixture.history_service,
+            .graphics_budget = &fixture.budget,
+        }, .{
+            .identity = .{ .id = pane_id, .generation = schema.id.raw(pane_id) },
+            .location = location,
+            .command = &command,
+            .launch_cwd = "/",
+            .workspace_path = "/work/telar",
+            .size = initial_size,
+            .graphics_limits = .{},
+        });
         pane.commitLaunch("/bin/sleep");
         return pane;
     }

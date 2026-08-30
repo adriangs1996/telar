@@ -183,13 +183,13 @@ const Emulator = struct {
         force: bool,
     ) !?term.Screen.Position {
         try emulator.render_state.update(emulator.gpa, &emulator.terminal);
-        _ = blit.blit(
-            buffer,
-            area,
-            &emulator.terminal,
-            &emulator.render_state,
-            .{ .force = force },
-        );
+        _ = blit.blit(.{
+            .buffer = buffer,
+            .area = area,
+            .terminal = &emulator.terminal,
+            .state = &emulator.render_state,
+            .options = .{ .force = force },
+        });
         const cursor = emulator.render_state.cursor;
         if (!cursor.visible or cursor.viewport == null or
             cursor.viewport.?.x >= area.w or cursor.viewport.?.y >= area.h)
@@ -296,12 +296,11 @@ const GraphicsMirror = struct {
             while (placements.next()) |entry| {
                 if (entry.key_ptr.image_id != next.metadata.key.image_id) continue;
                 const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
-                const placement = media.placementValue(
-                    &emulator.terminal,
-                    entry.key_ptr.*,
-                    entry.value_ptr.*,
-                    image,
-                ) orelse continue;
+                const placement = media.placementValue(&emulator.terminal, .{
+                    .key = entry.key_ptr.*,
+                    .placement = entry.value_ptr.*,
+                    .image = image,
+                }) orelse continue;
                 if (next_placement != null) return error.ExamplePlacementLimitExceeded;
                 next_placement = placement;
             }

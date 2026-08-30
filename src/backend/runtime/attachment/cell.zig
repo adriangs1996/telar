@@ -75,13 +75,13 @@ pub const Sync = struct {
             return false;
         }
         try sync.acknowledged.resize(pane.screen.w, pane.screen.h);
-        try pane_mod.resizeScreenStorage(
-            sync.gpa,
-            &sync.projected,
-            &sync.projected_damage,
-            pane.screen.w,
-            pane.screen.h,
-        );
+        try pane_mod.resizeScreenStorage(.{
+            .gpa = sync.gpa,
+            .screen = &sync.projected,
+            .damaged_rows = &sync.projected_damage,
+            .cols = pane.screen.w,
+            .rows = pane.screen.h,
+        });
         sync.outstanding = null;
         sync.snapshot_pending = true;
         return true;
@@ -185,13 +185,13 @@ pub const Sync = struct {
                 defer terminal_allocations.restore();
                 try sync.projected_state.update(sync.gpa, &pane.terminal);
             }
-            _ = pane_mod.blit.blit(
-                &sync.projected,
-                sync.projected.area(),
-                &pane.terminal,
-                &sync.projected_state,
-                .{ .force = force, .damaged_rows = sync.projected_damage },
-            );
+            _ = pane_mod.blit.blit(.{
+                .buffer = &sync.projected,
+                .area = sync.projected.area(),
+                .terminal = &pane.terminal,
+                .state = &sync.projected_state,
+                .options = .{ .force = force, .damaged_rows = sync.projected_damage },
+            });
             return .{
                 .buffer = &sync.projected,
                 .damaged_rows = sync.projected_damage,
@@ -237,13 +237,12 @@ pub const Sync = struct {
         const diff = if (snapshot)
             pane_mod.damage.Diff{}
         else
-            pane_mod.damage.collectSpans(
-                source.cells,
-                sync.acknowledged.cells,
-                source.w,
-                projection.damaged_rows,
-                &span_storage,
-            );
+            pane_mod.damage.collectSpans(.{
+                .current = source.cells,
+                .acknowledged = sync.acknowledged.cells,
+                .cols = source.w,
+                .damaged_rows = projection.damaged_rows,
+            }, &span_storage);
         var span_count = diff.span_count;
         snapshot = snapshot or diff.snapshot_required;
 

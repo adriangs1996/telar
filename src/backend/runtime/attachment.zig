@@ -943,7 +943,11 @@ fn placementValue(
     placement: vt.kitty.graphics.ImageStorage.Placement,
     image: vt.kitty.graphics.Image,
 ) ?core.graphics.Placement {
-    return media_mod.placementValue(&pane.media.terminal, key, placement, image);
+    return media_mod.placementValue(&pane.media.terminal, .{
+        .key = key,
+        .placement = placement,
+        .image = image,
+    });
 }
 
 test "attachment store reports and commits workspace departure on the last pane" {
@@ -958,36 +962,38 @@ test "attachment store reports and commits workspace departure on the last pane"
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try pty.Command.fromArgv(&args);
     const workspace: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(1) };
-    const first = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(1), .generation = 1 },
-        .{ .workspace = workspace, .tab_id = try schema.id.tab(1) },
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 8, .rows = 3 },
-        .{},
-        &budget,
-    );
+    const first = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(1), .generation = 1 },
+        .location = .{ .workspace = workspace, .tab_id = try schema.id.tab(1) },
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 8, .rows = 3 },
+        .graphics_limits = .{},
+    });
     defer {
         first.session.shutdown();
         first.destroy();
     }
-    const second = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(2), .generation = 2 },
-        .{ .workspace = workspace, .tab_id = try schema.id.tab(1) },
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 8, .rows = 3 },
-        .{},
-        &budget,
-    );
+    const second = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(2), .generation = 2 },
+        .location = .{ .workspace = workspace, .tab_id = try schema.id.tab(1) },
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 8, .rows = 3 },
+        .graphics_limits = .{},
+    });
     defer {
         second.session.shutdown();
         second.destroy();
@@ -1034,22 +1040,23 @@ test "attachments keep independent scrollback viewports" {
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try pty.Command.fromArgv(&args);
-    const pane = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(1), .generation = 1 },
-        .{
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(1), .generation = 1 },
+        .location = .{
             .workspace = .{ .workspace = try schema.id.workspace(1) },
             .tab_id = try schema.id.tab(1),
         },
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 8, .rows = 3 },
-        .{},
-        &budget,
-    );
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 8, .rows = 3 },
+        .graphics_limits = .{},
+    });
     defer {
         pane.session.shutdown();
         pane.destroy();
@@ -1091,19 +1098,20 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
         .workspace = .{ .workspace = try schema.id.workspace(1) },
         .tab_id = try schema.id.tab(1),
     };
-    const pane = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(1), .generation = 1 },
-        location,
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 20, .rows = 5 },
-        .{},
-        &budget,
-    );
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(1), .generation = 1 },
+        .location = location,
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{},
+    });
     defer {
         pane.session.shutdown();
         pane.destroy();
@@ -1165,19 +1173,20 @@ test "graphics transfers wait for pane and client memory credit" {
         .workspace = .{ .workspace = try schema.id.workspace(1) },
         .tab_id = try schema.id.tab(1),
     };
-    const pane = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(1), .generation = 1 },
-        location,
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 20, .rows = 5 },
-        .{},
-        &budget,
-    );
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(1), .generation = 1 },
+        .location = location,
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{},
+    });
     defer {
         pane.session.shutdown();
         pane.destroy();
@@ -1231,19 +1240,20 @@ test "a staged transfer drains while the media actor stays busy" {
         .workspace = .{ .workspace = try schema.id.workspace(1) },
         .tab_id = try schema.id.tab(1),
     };
-    const pane = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(1), .generation = 1 },
-        location,
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 20, .rows = 5 },
-        .{},
-        &budget,
-    );
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(1), .generation = 1 },
+        .location = location,
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{},
+    });
     defer {
         pane.session.shutdown();
         pane.destroy();
@@ -1339,19 +1349,20 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
         .workspace = .{ .workspace = try schema.id.workspace(1) },
         .tab_id = try schema.id.tab(1),
     };
-    const pane = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(1), .generation = 1 },
-        location,
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 20, .rows = 5 },
-        .{ .images_per_pane = 4 },
-        &budget,
-    );
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(1), .generation = 1 },
+        .location = location,
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{ .images_per_pane = 4 },
+    });
     defer {
         pane.session.shutdown();
         pane.destroy();
@@ -1395,19 +1406,20 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
         .workspace = .{ .workspace = try schema.id.workspace(1) },
         .tab_id = try schema.id.tab(1),
     };
-    const pane = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(1), .generation = 1 },
-        location,
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 20, .rows = 5 },
-        .{},
-        &budget,
-    );
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(1), .generation = 1 },
+        .location = location,
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{},
+    });
     defer {
         pane.session.shutdown();
         pane.destroy();
@@ -1492,19 +1504,20 @@ test "an abandoned unsent shared transfer unlinks its object" {
         .workspace = .{ .workspace = try schema.id.workspace(1) },
         .tab_id = try schema.id.tab(1),
     };
-    const pane = try Pane.create(
-        io,
-        gpa,
-        .{ .id = try schema.id.pane(2), .generation = 1 },
-        location,
-        &command,
-        "/",
-        "/",
-        &service,
-        .{ .cols = 20, .rows = 5 },
-        .{},
-        &budget,
-    );
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = try schema.id.pane(2), .generation = 1 },
+        .location = location,
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{},
+    });
     defer {
         pane.session.shutdown();
         pane.destroy();

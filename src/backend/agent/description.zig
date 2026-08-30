@@ -19,6 +19,11 @@ pub const Command = struct {
     timeout_ms: u32,
 };
 
+pub const Generation = struct {
+    command: Command,
+    job: Job,
+};
+
 pub const Capture = struct {
     scanner: escape.InputScanner = .{},
     bytes: [max_query_bytes]u8 = undefined,
@@ -91,13 +96,15 @@ pub const Result = struct {
     }
 };
 
-pub fn generate(
-    io: std.Io,
-    gpa: std.mem.Allocator,
-    command: Command,
-    job_value: Job,
-) Result {
-    var job = job_value;
+/// Runs one bounded title-generation subprocess and returns a validated,
+/// fixed-size result without retaining the captured prompt.
+///
+/// ```zig
+/// const result = generate(io, gpa, .{ .command = command, .job = job });
+/// ```
+pub fn generate(io: std.Io, gpa: std.mem.Allocator, generation: Generation) Result {
+    const command = generation.command;
+    var job = generation.job;
     defer std.crypto.secureZero(u8, &job.query);
     var result: Result = .{
         .pane = job.pane,
@@ -355,27 +362,39 @@ test "description command succeeds, rejects invalid output, times out, and may b
         .query_len = 0,
     };
     const success = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{ "/bin/sh", "-c", "printf 'Improve agent sidebar\\n'" },
-        .timeout_ms = 1000,
-    }, job);
+        .command = .{
+            .arguments = &.{ "/bin/sh", "-c", "printf 'Improve agent sidebar\\n'" },
+            .timeout_ms = 1000,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.success, success.status);
     try std.testing.expectEqualStrings("Improve agent sidebar", success.titleSlice());
 
     const invalid = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{ "/bin/sh", "-c", "printf 'first\\nsecond\\n'" },
-        .timeout_ms = 1000,
-    }, job);
+        .command = .{
+            .arguments = &.{ "/bin/sh", "-c", "printf 'first\\nsecond\\n'" },
+            .timeout_ms = 1000,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.invalid_output, invalid.status);
 
     const timed_out = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{ "/bin/sh", "-c", "sleep 1" },
-        .timeout_ms = 20,
-    }, job);
+        .command = .{
+            .arguments = &.{ "/bin/sh", "-c", "sleep 1" },
+            .timeout_ms = 20,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.timeout, timed_out.status);
 
     const unavailable = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{"/definitely/not/a/telar-command"},
-        .timeout_ms = 1000,
-    }, job);
+        .command = .{
+            .arguments = &.{"/definitely/not/a/telar-command"},
+            .timeout_ms = 1000,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.unavailable, unavailable.status);
 }

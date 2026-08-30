@@ -156,12 +156,10 @@ pub const Proxy = struct {
             service.certificate_path,
             service.bundle_path,
         );
-        return .{ .value = try pty.Environment.initWithOverrides(
-            proxy.gpa,
-            inherited,
-            "telar",
-            &overrides,
-        ) };
+        return .{ .value = try pty.Environment.initWithOverrides(proxy.gpa, inherited, .{
+            .term_program = "telar",
+            .overrides = &overrides,
+        }) };
     }
 
     /// Revokes new tunnels and observations for one exact pane generation.
