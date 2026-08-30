@@ -9,7 +9,6 @@ const history = @import("../history/root.zig");
 const attachment_mod = @import("attachment.zig");
 const delivery_mod = @import("delivery.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
-const control_entrypoints = @import("entrypoints/control.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("controllers/close_tab.zig");
 const close_pane_commands = @import("commands/close_pane.zig");
@@ -46,6 +45,8 @@ const request_graphics_snapshot_commands = @import("commands/request_graphics_sn
 const request_graphics_snapshot_controller = @import("controllers/request_graphics_snapshot.zig");
 const request_snapshot_commands = @import("commands/request_snapshot.zig");
 const request_snapshot_controller = @import("controllers/request_snapshot.zig");
+const runtime_stop_commands = @import("commands/runtime_stop.zig");
+const runtime_stop_controller = @import("controllers/runtime_stop.zig");
 const runtime_state_controller = @import("controllers/runtime_state.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
@@ -64,6 +65,7 @@ const media_mod = @import("../media/root.zig");
 const model_mod = @import("model/root.zig");
 const pty = @import("../pty/root.zig");
 const response_queue = @import("response_queue.zig");
+const shutdown_mod = @import("shutdown.zig");
 const proxy_mod = @import("../proxy/root.zig");
 const runtime_encoder = @import("encoder.zig");
 pub const system_metrics = @import("system_metrics.zig");
@@ -320,11 +322,6 @@ const ClientStore = struct {
     }
 };
 
-const ShutdownState = struct {
-    requested: bool = false,
-    initiator: ?ClientKey = null,
-};
-
 const GeometryLease = struct {
     workspace: schema.WorkspaceLocation,
     owner: ClientKey,
@@ -369,7 +366,7 @@ const Server = struct {
     clients: *ClientStore,
     handshake_slot: ?core.transport.SocketChannel = null,
     handshake_pending: bool = false,
-    shutdown: ShutdownState = .{},
+    shutdown: shutdown_mod.State = .{},
     geometry_leases: [max_workspaces]?GeometryLease = @splat(null),
     model: RuntimeModel,
     system_metrics: system_metrics_mod.Sampler = .{},
@@ -714,22 +711,20 @@ const Server = struct {
         pane.dirty = false;
     }
 
-    fn requestShutdown(server: *Server, initiator: ClientKey) void {
-        if (server.shutdown.requested) return;
-        server.shutdown = .{ .requested = true, .initiator = initiator };
-        for (&server.clients.items) |*slot| {
-            const session = slot.* orelse continue;
-            if (session.active()) session.delivery.requestStop();
-        }
-    }
-
     fn shutdownDelivered(server: *const Server) bool {
-        if (!server.shutdown.requested) return false;
+        if (!server.shutdown.isRequested()) {
+            return false;
+        }
+
         for (&server.clients.items) |*slot| {
             const session = slot.* orelse continue;
             if (!session.closing and
-                (session.delivery.stopping() or session.send_pending)) return false;
+                (session.delivery.stopping() or session.send_pending))
+            {
+                return false;
+            }
         }
+
         return true;
     }
 
@@ -798,7 +793,7 @@ const Server = struct {
             server.dropClient(event.client);
             return false;
         };
-        if (!server.shutdown.requested) {
+        if (!server.shutdown.isRequested()) {
             startSessionRead(server.io, server.select, session) catch
                 server.dropClient(event.client);
             return false;
@@ -925,7 +920,7 @@ const Server = struct {
             try server.select.concurrent(.accepted, acceptClient, .{ server.io, listener });
             return;
         };
-        if (server.shutdown.requested) {
+        if (server.shutdown.isRequested()) {
             accepted.deinit(server.io);
             return;
         }
@@ -959,7 +954,7 @@ const Server = struct {
             negotiated.deinit(server.io);
             return;
         };
-        if (server.shutdown.requested) {
+        if (server.shutdown.isRequested()) {
             negotiated.deinit(server.io);
             return;
         }
@@ -991,13 +986,16 @@ const Server = struct {
             server.collect();
         }
         if (session.delivery.shouldCloseAfterReply() and
-            !server.shutdown.requested)
+            !server.shutdown.isRequested())
         {
             server.dropClient(event.client);
             return false;
         }
         server.pump(session) catch server.dropClient(event.client);
-        if (!server.shutdown.requested) return false;
+        if (!server.shutdown.isRequested()) {
+            return false;
+        }
+
         server.pumpAll();
         return server.shutdownDelivered();
     }
@@ -1778,7 +1776,13 @@ const Server = struct {
                 try controller.showNotification(request);
             },
             .runtime_stop => {
-                control_entrypoints.runtimeStop(session.key, entrypointControl(server));
+                var handler: runtime_stop_commands.RuntimeStopHandler = .{
+                    .shutdown = &server.shutdown,
+                    .notifications = runtimeStopNotifications(server),
+                };
+                var controller = runtime_stop_controller.Controller.init(handler.executor());
+
+                controller.runtimeStop(session.key);
             },
         }
     }
@@ -2131,11 +2135,22 @@ fn publishTabRemoved(context: *anyopaque, event: workspace_mod.TabRemoved) void 
     }
 }
 
-fn entrypointControl(server: *Server) control_entrypoints.Actions {
-    return .{
-        .context = server,
-        .request_stop = entrypointRequestStop,
-    };
+fn runtimeStopNotifications(server: *Server) runtime_stop_commands.Notifications {
+    return .{ .context = server, .publish_fn = publishRuntimeStop };
+}
+
+fn publishRuntimeStop(context: *anyopaque, event: shutdown_mod.StopRequested) void {
+    const server: *Server = @ptrCast(@alignCast(context));
+    std.debug.assert(server.shutdown.isRequested());
+    std.debug.assert(std.meta.eql(server.shutdown.initiator.?, event.initiator));
+
+    for (&server.clients.items) |*slot| {
+        const session = slot.* orelse continue;
+
+        if (session.active()) {
+            session.delivery.requestStop();
+        }
+    }
 }
 
 fn notificationPublisher(server: *Server) show_notification_commands.NotificationPublisher {
@@ -2154,11 +2169,6 @@ fn notificationDelivery(server: *Server) show_notification_controller.Delivery {
 fn pumpNotificationClients(context: *anyopaque) void {
     const server: *Server = @ptrCast(@alignCast(context));
     server.pumpAll();
-}
-
-fn entrypointRequestStop(context: *anyopaque, client: ClientKey) void {
-    const server: *Server = @ptrCast(@alignCast(context));
-    server.requestShutdown(client);
 }
 
 fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, options: ServeOptions) !void {
@@ -2805,6 +2815,8 @@ test {
     _ = request_graphics_snapshot_controller;
     _ = request_snapshot_commands;
     _ = request_snapshot_controller;
+    _ = runtime_stop_commands;
+    _ = runtime_stop_controller;
     _ = runtime_state_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
@@ -2834,6 +2846,7 @@ test {
     _ = @import("pane_viewport_test.zig");
     _ = @import("request_graphics_snapshot_test.zig");
     _ = @import("request_snapshot_test.zig");
+    _ = @import("runtime_stop_test.zig");
     _ = @import("runtime_state_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
@@ -2844,5 +2857,6 @@ test {
     _ = pane_mod;
     _ = workspace_mod;
     _ = attachment_mod;
+    _ = shutdown_mod;
     _ = telemetry_mod;
 }
