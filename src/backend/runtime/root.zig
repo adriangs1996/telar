@@ -17,11 +17,12 @@ const create_tab_commands = @import("commands/create_tab.zig");
 const create_tab_controller = @import("controllers/create_tab.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
+const tab_snapshot_query = @import("queries/tab_snapshot.zig");
+const tab_snapshot_controller = @import("controllers/tab_snapshot.zig");
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const history_entrypoints = @import("entrypoints/history.zig");
 const pane_entrypoints = @import("entrypoints/pane.zig");
-const tab_entrypoints = @import("entrypoints/tab.zig");
 const workspace_entrypoints = @import("entrypoints/workspace.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_mod = @import("../pane/root.zig");
@@ -1394,11 +1395,20 @@ const Server = struct {
                 );
             },
             .request_tab_snapshot => |request| {
-                try tab_entrypoints.requestTabSnapshot(.{
+                var source_context: TabSnapshotSourceContext = .{
                     .panes = panes,
                     .workspaces = workspaces,
-                    .responses = responses,
-                }, request);
+                };
+                var handler: tab_snapshot_query.Handler = .{
+                    .source = .{
+                        .context = &source_context,
+                        .contains_tab = tabSnapshotContainsTab,
+                        .running_panes = tabSnapshotRunningPanes,
+                    },
+                };
+                var controller = tab_snapshot_controller.Controller.init(responses, handler.executor());
+
+                try controller.requestTabSnapshot(request);
             },
             .create_pane => |create| {
                 try pane_entrypoints.createPane(.{
@@ -1598,6 +1608,21 @@ const WorkspaceEventContext = struct {
     server: *Server,
     origin: ClientKey,
 };
+
+const TabSnapshotSourceContext = struct {
+    panes: *PaneStore,
+    workspaces: *WorkspaceRepository,
+};
+
+fn tabSnapshotContainsTab(context: *anyopaque, location: schema.TabLocation) bool {
+    const source: *TabSnapshotSourceContext = @ptrCast(@alignCast(context));
+    return source.workspaces.reader().contains(location);
+}
+
+fn tabSnapshotRunningPanes(context: *anyopaque, location: schema.TabLocation) u16 {
+    const source: *TabSnapshotSourceContext = @ptrCast(@alignCast(context));
+    return source.panes.countAt(location);
+}
 
 fn prepareCreateTabLaunch(context: *anyopaque, request: create_tab_commands.PrepareLaunch) ![]const u8 {
     const client: *CreateTabClientContext = @ptrCast(@alignCast(context));
@@ -2324,12 +2349,15 @@ test {
     _ = create_tab_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
+    _ = tab_snapshot_query;
+    _ = tab_snapshot_controller;
     _ = tab_commands;
     _ = tab_controller;
     _ = @import("close_tab_test.zig");
     _ = @import("create_tab_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("rename_tab_test.zig");
+    _ = @import("tab_snapshot_test.zig");
     _ = model_mod;
     _ = pane_mod;
     _ = workspace_mod;

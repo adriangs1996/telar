@@ -49,7 +49,7 @@ protocol request necessarily extends this inventory.
 | BCR-05 | `request_snapshot` | `runtime/entrypoints/attachment.zig` | Snapshot query controller | Pending | Query behavior needs a narrow context and response/backpressure tests. |
 | BCR-06 | `detach_pane` | `runtime/entrypoints/attachment.zig` | Detach controller and attachment command | Pending | Geometry release and attachment mutation need explicit ordering tests. |
 | BCR-07 | `runtime_stop` | `runtime/entrypoints/control.zig` | Runtime control controller | Pending | Small, but shutdown authority and acknowledgement semantics lack focused tests. |
-| BCR-08 | `request_tab_snapshot` | `runtime/entrypoints/tab.zig` | Tab snapshot query controller | Pending | Query and protocol response mapping are combined and untested in isolation. |
+| BCR-08 | `request_tab_snapshot` | `runtime/controllers/tab_snapshot.zig` | Tab snapshot query controller | Ready | Query/source boundary, protocol mapping, absence, short-circuit, unexpected-error, backpressure, and vertical tests pass. |
 | BCR-09 | `create_pane` | `runtime/entrypoints/pane.zig` | Create-pane controller and launch command | Pending | Entrypoint owns validation, cwd resolution, launch, attachment, response, and event publication. |
 | BCR-10 | `close_pane` | `runtime/entrypoints/pane.zig` | Close-pane controller and pane lifecycle command | Pending | Mutates `Pane` directly through an attachment and has no focused tests. |
 | BCR-11 | `query_history` | `runtime/entrypoints/history.zig` | History query controller and observation service port | Pending | Six-parameter entrypoint and asynchronous reply ownership need separation. |
