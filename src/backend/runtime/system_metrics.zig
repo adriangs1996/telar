@@ -36,6 +36,13 @@ pub const Sampler = struct {
     previous_busy: u64 = 0,
     previous_total: u64 = 0,
 
+    /// Reads the current host counters and retains the previous projection when
+    /// the platform cannot provide a complete sample. The revision changes
+    /// only when the values visible to clients change.
+    ///
+    /// ```zig
+    /// sampler.sample();
+    /// ```
     pub fn sample(sampler: *Sampler) void {
         const raw = readRaw() orelse return;
         sampler.apply(raw);

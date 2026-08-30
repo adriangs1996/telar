@@ -82,6 +82,7 @@ const proxy_observation_adapter = @import("proxy_observation_adapter.zig");
 const runtime_encoder = @import("encoder.zig");
 pub const system_metrics = @import("system_metrics.zig");
 const system_metrics_mod = system_metrics;
+const system_metrics_coordinator = @import("system_metrics_coordinator.zig");
 const telemetry_mod = @import("telemetry.zig");
 const telemetry_tick_coordinator = @import("telemetry_tick_coordinator.zig");
 const transport = @import("../transport/root.zig");
@@ -883,10 +884,8 @@ const Server = struct {
     }
 
     fn handleMetricsTickEvent(server: *Server, result: anyerror!void) !void {
-        result catch return;
-        try server.select.concurrent(.metrics_tick, waitForMetricsTick, .{server.io});
-        server.system_metrics.sample();
-        server.pumpAll();
+        var coordinator = systemMetricsCoordinator(server);
+        return coordinator.handle(result);
     }
 
     fn handlePaneInputWrittenEvent(server: *Server, event: PaneInputEvent) !void {
@@ -2325,6 +2324,26 @@ fn runtimeWallClockMs(server: *Server) i64 {
     return Io.Timestamp.now(server.io, .real).toMilliseconds();
 }
 
+const system_metrics_runtime_port: system_metrics_coordinator.RuntimePort(Server) = .{
+    .rearm_tick = rearmSystemMetrics,
+    .sample = sampleSystemMetrics,
+    .pump_clients = pumpRuntimeClients,
+};
+
+const RuntimeSystemMetricsCoordinator = system_metrics_coordinator.Coordinator(Server, system_metrics_runtime_port);
+
+fn systemMetricsCoordinator(server: *Server) RuntimeSystemMetricsCoordinator {
+    return RuntimeSystemMetricsCoordinator.init(server, .{ .sampler = &server.system_metrics });
+}
+
+fn rearmSystemMetrics(server: *Server) !void {
+    try server.select.concurrent(.metrics_tick, waitForMetricsTick, .{server.io});
+}
+
+fn sampleSystemMetrics(_: *Server, sampler: *system_metrics_mod.Sampler) void {
+    sampler.sample();
+}
+
 const proxy_observation_runtime_port: proxy_observation_adapter.RuntimePort(Server) = .{
     .rearm_receive = rearmProxyObservation,
     .schedule_description = scheduleAgentDescriptionWork,
@@ -2696,6 +2715,7 @@ test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
 test {
     _ = agent_description_coordinator;
     _ = agent_maintenance_coordinator;
+    _ = system_metrics_coordinator;
     _ = close_tab_commands;
     _ = close_tab_controller;
     _ = close_pane_commands;
