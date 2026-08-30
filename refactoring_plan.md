@@ -42,7 +42,7 @@ protocol request necessarily extends this inventory.
 
 | ID | Trigger | Current entrypoint | Target owner | Status | Evidence / missing proof |
 | --- | --- | --- | --- | --- | --- |
-| BCR-01 | `open_pane` | `runtime/entrypoints/pane.zig` | Open-pane controller and launch/attachment command | Pending | Entrypoint still owns lookup, workspace creation, pane launch, resize, attachment, scheduling, rollback, and response mapping. |
+| BCR-01 | `open_pane` | `runtime/controllers/open_pane.zig` | Open-pane controller and launch/attachment command | Ready | Explicit/default/workspace selection, invisible workspace proposal, geometry and launch rollback, typed events, post-commit durability, response mapping, backpressure, root-path naming, and vertical integration tests pass. |
 | BCR-02 | `pane_input` | `runtime/entrypoints/attachment.zig` | Attachment input controller and pane-input command | Pending | Seven-parameter entrypoint and runtime scheduling concerns are coupled. |
 | BCR-03 | `pane_resize` | `runtime/entrypoints/attachment.zig` | Attachment resize controller and geometry command | Pending | Six-parameter entrypoint; ownership and scheduling tests need isolation. |
 | BCR-04 | `frame_ack` | `runtime/entrypoints/attachment.zig` | Attachment synchronization capability | Pending | Protocol mapping and synchronization mutation share the entrypoint. |

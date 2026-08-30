@@ -120,6 +120,19 @@ pub const Reader = struct {
         return reader.find(location) != null;
     }
 
+    /// Returns the default tab location for the first aggregate with `path`.
+    ///
+    /// ```zig
+    /// const location = reader.locationByPath("/work/telar") orelse return;
+    /// ```
+    pub fn locationByPath(reader: Reader, path: []const u8) ?schema.TabLocation {
+        const workspace = reader.findByPath(path) orelse return null;
+        return .{
+            .workspace = .{ .workspace = workspace.id },
+            .tab_id = workspace.defaultTab(),
+        };
+    }
+
     fn find(reader: Reader, location: schema.WorkspaceLocation) ?*const Workspace {
         const workspace_id = workspaceId(location) orelse return null;
 
@@ -288,12 +301,9 @@ pub const Repository = struct {
     /// const ensured = try repository.ensure("/work/telar");
     /// ```
     pub fn ensure(repository: *Repository, path: []const u8) !Ensured {
-        if (repository.reader().findByPath(path)) |workspace| {
+        if (repository.reader().locationByPath(path)) |location| {
             return .{
-                .location = .{
-                    .workspace = .{ .workspace = workspace.id },
-                    .tab_id = workspace.defaultTab(),
-                },
+                .location = location,
                 .created = false,
             };
         }
@@ -431,6 +441,8 @@ test "repository ensures stable path identity and owns aggregate storage" {
     try std.testing.expectEqualDeep(first.location, same.location);
     try std.testing.expect(!std.meta.eql(first.location, other.location));
     try std.testing.expect(reader_value.contains(first.location));
+    try std.testing.expectEqualDeep(first.location, reader_value.locationByPath("/work/project").?);
+    try std.testing.expect(reader_value.locationByPath("/work/missing") == null);
 
     var unknown_tab = first.location;
     unknown_tab.tab_id = try schema.id.tab(999);

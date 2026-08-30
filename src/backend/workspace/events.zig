@@ -27,24 +27,31 @@ const OwnedTabLabel = struct {
     }
 };
 
-const OwnedWorkspaceName = struct {
-    bytes: [schema.max_tab_label_bytes]u8 = undefined,
-    len: u8,
+fn OwnedWorkspaceName(comptime max_bytes: usize) type {
+    return struct {
+        const Self = @This();
 
-    fn init(name: []const u8) !OwnedWorkspaceName {
-        if (name.len == 0 or name.len > schema.max_tab_label_bytes) {
-            return error.InvalidWorkspaceName;
+        bytes: [max_bytes]u8 = undefined,
+        len: u16,
+
+        fn init(name: []const u8) !Self {
+            if (name.len == 0 or name.len > max_bytes) {
+                return error.InvalidWorkspaceName;
+            }
+
+            var owned: Self = .{ .len = @intCast(name.len) };
+            @memcpy(owned.bytes[0..name.len], name);
+            return owned;
         }
 
-        var owned: OwnedWorkspaceName = .{ .len = @intCast(name.len) };
-        @memcpy(owned.bytes[0..name.len], name);
-        return owned;
-    }
+        fn slice(name: *const Self) []const u8 {
+            return name.bytes[0..name.len];
+        }
+    };
+}
 
-    fn slice(name: *const OwnedWorkspaceName) []const u8 {
-        return name.bytes[0..name.len];
-    }
-};
+const OwnedExplicitWorkspaceName = OwnedWorkspaceName(schema.max_tab_label_bytes);
+const OwnedCreatedWorkspaceName = OwnedWorkspaceName(schema.max_workspace_name_bytes);
 
 pub const TabCreated = struct {
     location: schema.TabLocation,
@@ -145,7 +152,7 @@ pub const TabMoved = struct {
 
 pub const WorkspaceRenamed = struct {
     location: schema.WorkspaceLocation,
-    name: OwnedWorkspaceName,
+    name: OwnedExplicitWorkspaceName,
 
     /// Validates and owns the canonical name of a renamed workspace.
     ///
@@ -168,7 +175,7 @@ pub const WorkspaceRenamed = struct {
 
 pub const WorkspaceCreated = struct {
     location: schema.TabLocation,
-    name: OwnedWorkspaceName,
+    name: OwnedCreatedWorkspaceName,
 
     /// Creates a committed workspace event that owns its canonical name.
     ///
@@ -315,11 +322,22 @@ test "WorkspaceCreated owns its canonical name and root tab identity" {
     try std.testing.expectEqualStrings("backend", event.nameSlice());
 }
 
+test "WorkspaceCreated owns path-derived names beyond the explicit label limit" {
+    const location = try testingLocation();
+    var source: [schema.max_tab_label_bytes + 1]u8 = @splat('p');
+    const event = try WorkspaceCreated.init(location, &source);
+
+    @memset(&source, 'x');
+
+    try std.testing.expectEqual(@as(usize, schema.max_tab_label_bytes + 1), event.nameSlice().len);
+    try std.testing.expect(std.mem.allEqual(u8, event.nameSlice(), 'p'));
+}
+
 test "WorkspaceCreated rejects names the aggregate cannot store" {
     const location = try testingLocation();
 
     try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceCreated.init(location, ""));
 
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized: [schema.max_workspace_name_bytes + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceCreated.init(location, &oversized));
 }

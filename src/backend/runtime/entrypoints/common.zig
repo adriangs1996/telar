@@ -25,18 +25,6 @@ pub const Geometry = struct {
     release: *const fn (*anyopaque, ClientKey, schema.WorkspaceLocation) void,
 };
 
-pub const Launcher = struct {
-    context: *anyopaque,
-    launch: *const fn (
-        *anyopaque,
-        schema.TabLocation,
-        schema.TerminalSize,
-        schema.LaunchView,
-        []const u8,
-        []const u8,
-    ) anyerror!*Pane,
-};
-
 pub fn queueFailure(
     responses: *ResponseQueue,
     request_id: schema.RequestId,

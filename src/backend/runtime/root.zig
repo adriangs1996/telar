@@ -23,6 +23,8 @@ const create_workspace_commands = @import("commands/create_workspace.zig");
 const create_workspace_controller = @import("controllers/create_workspace.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
+const open_pane_commands = @import("commands/open_pane.zig");
+const open_pane_controller = @import("controllers/open_pane.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
 const tab_snapshot_query = @import("queries/tab_snapshot.zig");
@@ -32,7 +34,6 @@ const workspace_snapshot_controller = @import("controllers/workspace_snapshot.zi
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const history_entrypoints = @import("entrypoints/history.zig");
-const pane_entrypoints = @import("entrypoints/pane.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_mod = @import("../pane/root.zig");
 const blit = pane_mod.blit;
@@ -1295,7 +1296,6 @@ const Server = struct {
 
     fn dispatchClientMessage(server: *Server, session: *ClientSession, message: schema.ClientMessage) !void {
         const io = server.io;
-        const gpa = server.gpa;
         const panes = &server.model.panes;
         var workspace_repository = server.workspaceRepository();
         const workspaces = &workspace_repository;
@@ -1305,18 +1305,37 @@ const Server = struct {
         const history_service = server.history_service;
         switch (message) {
             .open_pane => |open| {
-                try pane_entrypoints.openPane(.{
-                    .gpa = gpa,
-                    .panes = panes,
+                var client_context: ClientLaunchContext = .{
+                    .server = server,
+                    .session = session,
+                };
+                var handler: open_pane_commands.OpenPaneHandler = .{
                     .workspaces = workspaces,
-                    .attachments = attachments,
-                    .responses = responses,
-                    .client = session.key,
-                    .shared_graphics = session.shared_graphics,
-                    .geometry = entrypointGeometry(server),
-                    .launcher = entrypointLauncher(server),
-                    .scheduler = entrypointScheduler(server),
-                }, open);
+                    .panes = .{
+                        .context = &client_context,
+                        .find = findOpenPane,
+                        .first = findFirstOpenPane,
+                        .launch = launchOpenPane,
+                        .prepare_view = prepareOpenPaneView,
+                        .attach = attachOpenPane,
+                    },
+                    .authority = .{
+                        .context = &client_context,
+                        .prepare = prepareOpenPaneLaunch,
+                    },
+                    .geometry = .{
+                        .context = &client_context,
+                        .acquire = acquireCreatedWorkspaceGeometry,
+                        .release = releaseCreatedWorkspaceGeometry,
+                    },
+                    .events = .{
+                        .context = &client_context,
+                        .publish = publishOpenPaneEvent,
+                    },
+                };
+                var controller = open_pane_controller.Controller.init(responses, handler.executor());
+
+                try controller.openPane(open);
             },
             .create_workspace => |create| {
                 var client_context: ClientLaunchContext = .{
@@ -1654,15 +1673,6 @@ fn entrypointGeometry(server: *Server) entrypoint_common.Geometry {
     };
 }
 
-fn entrypointLauncher(server: *Server) entrypoint_common.Launcher {
-    return .{ .context = server, .launch = entrypointLaunchPane };
-}
-
-fn entrypointLaunchPane(context: *anyopaque, location: schema.TabLocation, size: schema.TerminalSize, launch: schema.LaunchView, launch_cwd: []const u8, workspace_path: []const u8) !*Pane {
-    const server: *Server = @ptrCast(@alignCast(context));
-    return server.launchPane(location, size, launch, launch_cwd, workspace_path);
-}
-
 const ClientLaunchContext = struct {
     server: *Server,
     session: *ClientSession,
@@ -1697,6 +1707,75 @@ fn requestAttachedPaneClose(context: *anyopaque, pane_id: schema.PaneId) ?bool {
 fn createPaneHasRunning(context: *anyopaque, location: schema.TabLocation) bool {
     const panes: *PaneStore = @ptrCast(@alignCast(context));
     return panes.countAt(location) != 0;
+}
+
+fn findOpenPane(context: *anyopaque, pane_id: schema.PaneId) ?pane_mod.PaneLaunched {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    const pane = client.server.model.panes.findRunning(pane_id) orelse return null;
+
+    if (pane.close_requested or pane.exit != null) {
+        return null;
+    }
+
+    return .{ .key = pane.key(), .location = pane.location };
+}
+
+fn findFirstOpenPane(context: *anyopaque, location: schema.TabLocation) ?pane_mod.PaneLaunched {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    const pane = client.server.model.panes.firstAt(location) orelse return null;
+    return .{ .key = pane.key(), .location = pane.location };
+}
+
+fn prepareOpenPaneLaunch(context: *anyopaque, request: open_pane_commands.PrepareLaunch) ![]const u8 {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    return entrypoint_common.resolveLaunchCwd(
+        &client.session.attachments,
+        request.launch,
+        .any,
+    ) catch error.InvalidLaunchCwd;
+}
+
+fn launchOpenPane(context: *anyopaque, request: open_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    const pane = try client.server.launchPane(
+        request.location,
+        request.size,
+        request.launch,
+        request.launch_cwd,
+        request.workspace_path,
+    );
+
+    return .{ .key = pane.key(), .location = pane.location };
+}
+
+fn prepareOpenPaneView(context: *anyopaque, request: open_pane_commands.PrepareView) !void {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    const pane = client.server.model.panes.resolve(request.pane.key) orelse return error.PaneUnavailable;
+    const resize_result = if (pane.ingest_pending)
+        pane.requestResize(request.size)
+    else
+        pane.resize(request.size);
+    resize_result catch return error.PaneResizeFailed;
+
+    try schedulePaneObservation(client.server.select, pane);
+    try schedulePaneMedia(client.server.select, pane);
+}
+
+fn attachOpenPane(context: *anyopaque, launched: pane_mod.PaneLaunched) !void {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    const pane = client.server.model.panes.resolve(launched.key) orelse return error.PaneUnavailable;
+    const attachment = try client.session.attachments.attach(client.server.gpa, pane);
+    attachment.configureGraphics(client.session.shared_graphics);
+    _ = try attachment.resizeIfNeeded();
+}
+
+fn publishOpenPaneEvent(context: *anyopaque, event: open_pane_commands.RuntimeEvent) void {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    const workspace = switch (event) {
+        .workspace_created => |created| created.location.workspace,
+        .pane_launched => |launched| launched.location.workspace,
+    };
+    client.server.notifyWorkspaceChanged(client.session.key, workspace);
 }
 
 fn prepareCreateTabLaunch(context: *anyopaque, request: create_tab_commands.PrepareLaunch) ![]const u8 {
@@ -2522,6 +2601,8 @@ test {
     _ = create_workspace_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
+    _ = open_pane_commands;
+    _ = open_pane_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
     _ = tab_snapshot_query;
@@ -2536,6 +2617,7 @@ test {
     _ = @import("create_pane_test.zig");
     _ = @import("create_workspace_test.zig");
     _ = @import("move_tab_test.zig");
+    _ = @import("open_pane_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
     _ = @import("tab_snapshot_test.zig");

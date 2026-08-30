@@ -49,6 +49,10 @@ pub const Workspace = struct {
     tab_count: usize = 0,
 
     pub fn init(options: Init) !Workspace {
+        if (options.path.len == 0 or options.path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, options.path, 0) != null) {
+            return error.InvalidWorkspacePath;
+        }
+
         var workspace: Workspace = .{
             .id = options.id,
             .path = options.path,
@@ -71,7 +75,8 @@ pub const Workspace = struct {
             return workspace.explicit_name[0..workspace.explicit_name_len];
         }
 
-        return std.fs.path.basename(workspace.path);
+        const basename = std.fs.path.basename(workspace.path);
+        return if (basename.len == 0) workspace.path else basename;
     }
 
     pub fn pathSlice(workspace: *const Workspace) []const u8 {
@@ -290,6 +295,62 @@ test "workspace derives its name from its path until explicitly renamed" {
 
     try std.testing.expectError(error.InvalidWorkspaceName, workspace.rename(""));
     try std.testing.expectEqualStrings("agents", workspace.name());
+}
+
+test "workspace uses its root path as a non-empty derived name" {
+    const path = try std.testing.allocator.dupe(u8, "/");
+    var workspace = try Workspace.init(.{
+        .id = try schema.id.workspace(1),
+        .path = path,
+        .default_tab_id = try schema.id.tab(1),
+    });
+    defer workspace.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("/", workspace.name());
+}
+
+test "workspace rejects paths that cannot cross the runtime protocol" {
+    const workspace_id = try schema.id.workspace(1);
+    const tab_id = try schema.id.tab(1);
+    const invalid_paths = [_][]const u8{
+        "",
+        "bad\x00path",
+    };
+
+    for (invalid_paths) |invalid| {
+        const path = try std.testing.allocator.dupe(u8, invalid);
+        defer std.testing.allocator.free(path);
+
+        try std.testing.expectError(error.InvalidWorkspacePath, Workspace.init(.{
+            .id = workspace_id,
+            .path = path,
+            .default_tab_id = tab_id,
+        }));
+    }
+
+    const oversized_source: [schema.max_cwd_bytes + 1]u8 = @splat('x');
+    const oversized = try std.testing.allocator.dupe(u8, &oversized_source);
+    defer std.testing.allocator.free(oversized);
+
+    try std.testing.expectError(error.InvalidWorkspacePath, Workspace.init(.{
+        .id = workspace_id,
+        .path = oversized,
+        .default_tab_id = tab_id,
+    }));
+}
+
+test "workspace explicit names follow the request label limit" {
+    var workspace = try testingWorkspace();
+    defer workspace.deinit(std.testing.allocator);
+    const accepted: [schema.max_tab_label_bytes]u8 = @splat('a');
+    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+
+    const renamed = try workspace.rename(&accepted);
+
+    try std.testing.expectEqualSlices(u8, &accepted, workspace.name());
+    try std.testing.expectEqualSlices(u8, &accepted, renamed.nameSlice());
+    try std.testing.expectError(error.InvalidWorkspaceName, workspace.rename(&oversized));
+    try std.testing.expectEqualSlices(u8, &accepted, workspace.name());
 }
 
 test "renameTab validates and mutates only the requested tab" {
