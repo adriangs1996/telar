@@ -658,10 +658,7 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
 
 /// A failed request: roll back what the continuation had staged and tell the user.
 fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
-    const continuation = client.requests.take(failure.request_id) orelse {
-        std.debug.print("telar runtime: {s}\n", .{failure.message});
-        return error.UnexpectedRequestFailure;
-    };
+    const continuation = client.requests.take(failure.request_id) orelse return error.UnexpectedRequestFailure;
     switch (continuation) {
         .ignored, .close_pane, .rename_tab, .rename_workspace, .move_tab => {},
         .split => {
@@ -681,14 +678,12 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
         },
         .create_workspace, .notification => {},
         .initial_open => |open| {
-            const workspace = open.fallback_workspace orelse {
-                std.debug.print("telar runtime: {s}\n", .{failure.message});
-                return error.RuntimeRequestFailed;
-            };
+            const workspace = open.fallback_workspace orelse return error.RuntimeRequestFailed;
+
             if (failure.code != .pane_not_found) {
-                std.debug.print("telar runtime: {s}\n", .{failure.message});
                 return error.RuntimeRequestFailed;
             }
+
             client.navigation_history.forget(.{ .workspace = workspace });
             const request_id = try client.nextId();
             try client.enqueueRequest(
@@ -706,10 +701,7 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
             try client.presenter.requestDraw();
             return;
         },
-        .workspace_snapshot, .tab_snapshot, .create_tab => {
-            std.debug.print("telar runtime: {s}\n", .{failure.message});
-            return error.RuntimeRequestFailed;
-        },
+        .workspace_snapshot, .tab_snapshot, .create_tab => return error.RuntimeRequestFailed,
     }
     if (continuation == .ignored) {
         try client.presenter.requestDraw();

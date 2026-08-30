@@ -2221,6 +2221,10 @@ test "a workspace snapshot for a vanished workspace degrades to a failure reply"
 }
 
 test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
+    const previous_log_level = std.testing.log_level;
+    std.testing.log_level = .err;
+    defer std.testing.log_level = previous_log_level;
+
     const Capture = struct {
         var bytes: [512]u8 = undefined;
         var len: usize = 0;

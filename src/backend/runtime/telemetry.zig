@@ -498,8 +498,17 @@ test "runtime telemetry reports retained memory domains" {
         try std.testing.expect(std.mem.indexOf(u8, line, "\"vt_scrollback_bytes\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"history_sqlite_bytes\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"heap_live_bytes\":16") != null);
-        try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":1") != null);
+        const expected_heap = if (diagnostics.enabled)
+            "\"heap_live_bytes\":16"
+        else
+            "\"heap_live_bytes\":0";
+        const expected_observation_allocs = if (diagnostics.enabled)
+            "\"observation_allocs\":1"
+        else
+            "\"observation_allocs\":0";
+
+        try std.testing.expect(std.mem.indexOf(u8, line, expected_heap) != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, expected_observation_allocs) != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_vt_allocs\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_telar_allocs\":0") != null);

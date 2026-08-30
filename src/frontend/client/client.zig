@@ -660,7 +660,19 @@ pub fn handleServerEvent(client: *Client, result: anyerror![]u8) !?u8 {
             diagnostics.elapsed(decode_started, diagnostics.now(client.io)),
         );
     }
-    if (try server_messages.handleServerMessage(client, message)) |status| return status;
+    const status = server_messages.handleServerMessage(client, message) catch |err| {
+        switch (message) {
+            .request_failed => |failure| std.debug.print("telar runtime: {s}\n", .{failure.message}),
+            else => {},
+        }
+
+        return err;
+    };
+
+    if (status) |exit_status| {
+        return exit_status;
+    }
+
     try client.returnGraphicsCredits();
     try client.select.concurrent(.server, receive, .{
         client.io,
