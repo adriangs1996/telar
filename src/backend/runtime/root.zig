@@ -21,6 +21,8 @@ const create_pane_commands = @import("commands/create_pane.zig");
 const create_pane_controller = @import("controllers/create_pane.zig");
 const create_workspace_commands = @import("commands/create_workspace.zig");
 const create_workspace_controller = @import("controllers/create_workspace.zig");
+const detach_pane_commands = @import("commands/detach_pane.zig");
+const detach_pane_controller = @import("controllers/detach_pane.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
 const open_pane_commands = @import("commands/open_pane.zig");
@@ -418,12 +420,12 @@ const Server = struct {
                 server.revokePaneCredential(pane);
                 pane.destroy();
 
-                if (store.hasAt(location) or !workspaces.reader().contains(location)) {
-                    continue;
+                if (!store.hasAt(location) and workspaces.reader().contains(location)) {
+                    const removed = workspace_mod.removeTab(&workspaces, location).?;
+                    server.publishLifecycleTabRemoved(removed);
                 }
 
-                const removed = workspace_mod.removeTab(&workspaces, location).?;
-                server.publishLifecycleTabRemoved(removed);
+                server.completeEmptyWorkspaceDepartures(location.workspace);
             }
         }
     }
@@ -509,6 +511,62 @@ const Server = struct {
                 session.delivery.responses.resync_previous_workspace = previous_workspace;
             }
         }
+    }
+
+    fn detachSessionPane(server: *Server, session: *ClientSession, pane_id: schema.PaneId) ?attachment_mod.PaneDetached {
+        const detached = session.attachments.detach(pane_id) orelse return null;
+        server.completeSessionWorkspaceDeparture(session, detached);
+        return detached;
+    }
+
+    fn completeSessionWorkspaceDeparture(server: *Server, session: *ClientSession, detached: attachment_mod.PaneDetached) void {
+        if (!detached.last_attachment) {
+            return;
+        }
+
+        const left_workspace = session.attachments.leaveWorkspace(detached.workspace);
+        std.debug.assert(left_workspace);
+
+        if (!left_workspace) {
+            return;
+        }
+
+        server.releaseGeometryFor(session.key, detached.workspace);
+    }
+
+    /// Completes departures deferred by `pane_exited` only after every pane
+    /// that can still publish lifecycle changes for the workspace is reaped.
+    fn completeEmptyWorkspaceDepartures(server: *Server, workspace: schema.WorkspaceLocation) void {
+        if (server.hasPendingExitedPane(workspace)) {
+            return;
+        }
+
+        for (&server.clients.items) |*slot| {
+            const session = slot.* orelse continue;
+
+            if (session.attachments.len() != 0 or !session.attachments.observes(workspace)) {
+                continue;
+            }
+
+            const left_workspace = session.attachments.leaveWorkspace(workspace);
+            std.debug.assert(left_workspace);
+
+            if (left_workspace) {
+                server.releaseGeometryFor(session.key, workspace);
+            }
+        }
+    }
+
+    fn hasPendingExitedPane(server: *const Server, workspace: schema.WorkspaceLocation) bool {
+        for (server.model.panes.items) |slot| {
+            const pane = slot orelse continue;
+
+            if (pane.exit != null and std.meta.eql(pane.location.workspace, workspace)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// Delivers an automatic tab-removal fact to every client that still
@@ -815,7 +873,7 @@ const Server = struct {
             const client = slot.* orelse continue;
             if (client.attachments.find(active.id)) |attachment| {
                 _ = attachment.resizeIfNeeded() catch {
-                    _ = client.attachments.detach(active.id);
+                    _ = server.detachSessionPane(client, active.id);
                 };
             }
         }
@@ -1445,13 +1503,27 @@ const Server = struct {
                 request,
             ),
             .detach_pane => |detach| {
-                attachment_entrypoints.detachPane(
-                    attachments,
-                    metrics,
-                    session.key,
-                    entrypointGeometry(server),
-                    detach,
-                );
+                var detach_context: DetachPaneContext = .{
+                    .server = server,
+                    .session = session,
+                };
+                var handler: detach_pane_commands.DetachPaneHandler = .{
+                    .attachments = .{
+                        .context = &detach_context,
+                        .detach = detachClientAttachment,
+                        .leave_workspace = leaveClientWorkspace,
+                    },
+                    .geometry = .{
+                        .context = &detach_context,
+                        .release = releaseDetachedWorkspaceGeometry,
+                    },
+                };
+                var controller = detach_pane_controller.Controller.init(handler.executor(), .{
+                    .context = metrics,
+                    .record = recordStaleClientMessage,
+                });
+
+                try controller.detachPane(detach);
             },
             .request_tab_snapshot => |request| {
                 var source_context: TabSnapshotSourceContext = .{
@@ -1678,6 +1750,11 @@ const ClientLaunchContext = struct {
     session: *ClientSession,
 };
 
+const DetachPaneContext = struct {
+    server: *Server,
+    session: *ClientSession,
+};
+
 const WorkspaceEventContext = struct {
     server: *Server,
     origin: ClientKey,
@@ -1707,6 +1784,26 @@ fn requestAttachedPaneClose(context: *anyopaque, pane_id: schema.PaneId) ?bool {
 fn createPaneHasRunning(context: *anyopaque, location: schema.TabLocation) bool {
     const panes: *PaneStore = @ptrCast(@alignCast(context));
     return panes.countAt(location) != 0;
+}
+
+fn detachClientAttachment(context: *anyopaque, pane_id: schema.PaneId) ?attachment_mod.PaneDetached {
+    const detach: *DetachPaneContext = @ptrCast(@alignCast(context));
+    return detach.session.attachments.detach(pane_id);
+}
+
+fn leaveClientWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) bool {
+    const detach: *DetachPaneContext = @ptrCast(@alignCast(context));
+    return detach.session.attachments.leaveWorkspace(workspace);
+}
+
+fn releaseDetachedWorkspaceGeometry(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
+    const detach: *DetachPaneContext = @ptrCast(@alignCast(context));
+    detach.server.releaseGeometryFor(detach.session.key, workspace);
+}
+
+fn recordStaleClientMessage(context: *anyopaque) void {
+    const metrics: *RuntimeMetrics = @ptrCast(@alignCast(context));
+    metrics.stale_client_messages += 1;
 }
 
 fn findOpenPane(context: *anyopaque, pane_id: schema.PaneId) ?pane_mod.PaneLaunched {
@@ -2599,6 +2696,8 @@ test {
     _ = create_pane_controller;
     _ = create_workspace_commands;
     _ = create_workspace_controller;
+    _ = detach_pane_commands;
+    _ = detach_pane_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
     _ = open_pane_commands;
@@ -2616,6 +2715,7 @@ test {
     _ = @import("create_tab_test.zig");
     _ = @import("create_pane_test.zig");
     _ = @import("create_workspace_test.zig");
+    _ = @import("detach_pane_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("open_pane_test.zig");
     _ = @import("rename_tab_test.zig");

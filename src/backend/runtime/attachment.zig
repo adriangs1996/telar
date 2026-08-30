@@ -255,6 +255,13 @@ pub const Attachment = struct {
     }
 };
 
+/// Committed removal of one pane from a client's disposable view state.
+pub const PaneDetached = struct {
+    pane_id: schema.PaneId,
+    workspace: schema.WorkspaceLocation,
+    last_attachment: bool,
+};
+
 pub const AttachmentStore = struct {
     pub const capacity = max_panes;
     pub const Iterator = struct {
@@ -306,10 +313,6 @@ pub const AttachmentStore = struct {
         }
     }
 
-    pub fn forgetWorkspaceIfEmpty(store: *AttachmentStore) void {
-        if (store.count == 0) store.workspace = null;
-    }
-
     pub fn attach(
         store: *AttachmentStore,
         gpa: std.mem.Allocator,
@@ -334,14 +337,46 @@ pub const AttachmentStore = struct {
         unreachable;
     }
 
-    pub fn detach(store: *AttachmentStore, pane_id: schema.PaneId) bool {
-        const position = store.index.get(schema.id.raw(pane_id)) orelse return false;
+    /// Removes one attachment while retaining workspace observation. The
+    /// caller may need that observation to publish lifecycle events before
+    /// completing departure with `leaveWorkspace`.
+    ///
+    /// ```zig
+    /// const detached = store.detach(pane_id) orelse return;
+    /// if (detached.last_attachment) _ = store.leaveWorkspace(detached.workspace);
+    /// ```
+    pub fn detach(store: *AttachmentStore, pane_id: schema.PaneId) ?PaneDetached {
+        const position = store.index.get(schema.id.raw(pane_id)) orelse return null;
         const attachment = &store.items[position].?;
         std.debug.assert(attachment.pane.id == pane_id);
+        const workspace = attachment.pane.location.workspace;
+        std.debug.assert(store.workspace != null and std.meta.eql(store.workspace.?, workspace));
+
         attachment.deinit();
         store.index.remove(schema.id.raw(pane_id));
         store.items[position] = null;
         store.count -= 1;
+
+        return .{
+            .pane_id = pane_id,
+            .workspace = workspace,
+            .last_attachment = store.count == 0,
+        };
+    }
+
+    /// Ends observation of an empty workspace after any lifecycle event that
+    /// depended on it has been published. A mismatched or non-empty store is
+    /// left unchanged.
+    ///
+    /// ```zig
+    /// if (store.leaveWorkspace(workspace)) release(workspace);
+    /// ```
+    pub fn leaveWorkspace(store: *AttachmentStore, workspace: schema.WorkspaceLocation) bool {
+        if (store.count != 0 or store.workspace == null or !std.meta.eql(store.workspace.?, workspace)) {
+            return false;
+        }
+
+        store.workspace = null;
         return true;
     }
 
@@ -752,6 +787,83 @@ pub fn placementValue(
     image: vt.kitty.graphics.Image,
 ) ?core.graphics.Placement {
     return media_mod.placementValue(&pane.media.terminal, key, placement, image);
+}
+
+test "attachment store reports and commits workspace departure on the last pane" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var service = try history.Service.init(gpa, ":memory:");
+    defer {
+        service.closeQueues(io);
+        service.deinit(io);
+    }
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const args = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&args);
+    const workspace: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(1) };
+    const first = try Pane.create(
+        io,
+        gpa,
+        .{ .id = try schema.id.pane(1), .generation = 1 },
+        .{ .workspace = workspace, .tab_id = try schema.id.tab(1) },
+        &command,
+        "/",
+        "/",
+        &service,
+        .{ .cols = 8, .rows = 3 },
+        .{},
+        &budget,
+    );
+    defer {
+        first.session.shutdown();
+        first.destroy();
+    }
+    const second = try Pane.create(
+        io,
+        gpa,
+        .{ .id = try schema.id.pane(2), .generation = 2 },
+        .{ .workspace = workspace, .tab_id = try schema.id.tab(1) },
+        &command,
+        "/",
+        "/",
+        &service,
+        .{ .cols = 8, .rows = 3 },
+        .{},
+        &budget,
+    );
+    defer {
+        second.session.shutdown();
+        second.destroy();
+    }
+    first.commitLaunch("/bin/sleep");
+    second.commitLaunch("/bin/sleep");
+    var store: AttachmentStore = .{};
+    defer store.deinit();
+    _ = try store.attach(gpa, first);
+    _ = try store.attach(gpa, second);
+
+    try std.testing.expect(!store.leaveWorkspace(workspace));
+    try std.testing.expect(store.detach(try schema.id.pane(99)) == null);
+
+    const first_detached = store.detach(first.id).?;
+
+    try std.testing.expectEqual(first.id, first_detached.pane_id);
+    try std.testing.expectEqualDeep(workspace, first_detached.workspace);
+    try std.testing.expect(!first_detached.last_attachment);
+    try std.testing.expectEqual(@as(usize, 1), store.len());
+    try std.testing.expect(store.observes(workspace));
+    try std.testing.expect(store.find(first.id) == null);
+    try std.testing.expect(store.find(second.id) != null);
+
+    const second_detached = store.detach(second.id).?;
+
+    try std.testing.expect(second_detached.last_attachment);
+    try std.testing.expectEqual(@as(usize, 0), store.len());
+    try std.testing.expect(store.observes(workspace));
+    try std.testing.expect(!store.leaveWorkspace(.{ .workspace = try schema.id.workspace(2) }));
+    try std.testing.expect(store.leaveWorkspace(workspace));
+    try std.testing.expect(store.currentWorkspace() == null);
+    try std.testing.expect(!store.observes(workspace));
 }
 
 test "attachments keep independent scrollback viewports" {

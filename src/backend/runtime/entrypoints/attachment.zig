@@ -66,7 +66,19 @@ pub fn paneResize(
         try scheduler.observation(scheduler.context, active.pane);
         try scheduler.media(scheduler.context, active.pane);
         _ = active.resizeIfNeeded() catch {
-            _ = attachments.detach(resize.pane_id);
+            if (attachments.detach(resize.pane_id)) |detached| {
+                if (detached.last_attachment) {
+                    const left_workspace = attachments.leaveWorkspace(detached.workspace);
+                    std.debug.assert(left_workspace);
+
+                    if (!left_workspace) {
+                        return;
+                    }
+
+                    geometry.release(geometry.context, client, detached.workspace);
+                }
+            }
+
             return;
         };
     }
@@ -194,24 +206,4 @@ pub fn requestSnapshot(
         return;
     };
     active.requestCellSnapshot();
-}
-
-pub fn detachPane(
-    attachments: *AttachmentStore,
-    metrics: *RuntimeMetrics,
-    client: common.ClientKey,
-    geometry: common.Geometry,
-    detach: schema.DetachPane,
-) void {
-    const detached_workspace: ?schema.WorkspaceLocation =
-        if (attachments.find(detach.pane_id)) |active|
-            active.pane.location.workspace
-        else
-            null;
-    if (!attachments.detach(detach.pane_id)) {
-        metrics.stale_client_messages += 1;
-    } else if (detached_workspace) |left| {
-        attachments.forgetWorkspaceIfEmpty();
-        if (!attachments.observes(left)) geometry.release(geometry.context, client, left);
-    }
 }

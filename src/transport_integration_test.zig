@@ -518,7 +518,13 @@ test "runtime destroys a pane after its shell exits" {
     var rejected_snapshot = false;
 
     for (0..96) |_| {
-        const payload = try connection.receive(io, receive_buffer);
+        const payload = connection.receive(io, receive_buffer) catch |err| {
+            std.debug.print(
+                "pane teardown stalled: opened={}, output={}, exit={}, tab_closed={}, reattach_rejected={}, snapshot_rejected={}\n",
+                .{ pane_id != .invalid, saw_output, saw_exit, saw_tab_closed, rejected_reattach, rejected_snapshot },
+            );
+            return err;
+        };
         switch (try schema.decodeServer(payload)) {
             .pane_opened => |opened| {
                 if (saw_exit) return error.ExitedPaneReattached;
@@ -973,7 +979,8 @@ test "pane keeps running while its client is disconnected" {
             std.debug.print("reconnected client receive failed: {s}\n", .{@errorName(err)});
             return err;
         };
-        switch (try schema.decodeServer(payload)) {
+        const message = try schema.decodeServer(payload);
+        switch (message) {
             .pane_opened => |opened| {
                 try std.testing.expectEqual(original_pane_id, opened.pane_id);
                 try std.testing.expect(!opened.created);
@@ -1002,8 +1009,14 @@ test "pane keeps running while its client is disconnected" {
             .runtime_stopping => return error.UnexpectedRuntimeShutdown,
             .tab_snapshot => return error.UnexpectedTabSnapshot,
             .history_results => return error.UnexpectedHistoryResults,
+            // The first client's disconnect may release its geometry lease
+            // after this client has already attached to the same workspace.
+            .resync_required => {},
             .pane_cwd, .pane_foreground => {},
-            else => return error.UnexpectedTabMessage,
+            else => {
+                std.debug.print("reconnected client received unexpected {s}\n", .{@tagName(std.meta.activeTag(message))});
+                return error.UnexpectedTabMessage;
+            },
         }
     }
     return error.RuntimeDidNotExit;
