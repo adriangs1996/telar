@@ -769,21 +769,8 @@ const Server = struct {
     }
 
     fn handleHandshakenEvent(server: *Server, result: anyerror!void) void {
-        var negotiated = server.client_admission.takePending();
-        result catch {
-            negotiated.deinit(server.io);
-            return;
-        };
-        if (server.shutdown.isRequested()) {
-            negotiated.deinit(server.io);
-            return;
-        }
-        const session = server.clients.add(server.gpa, negotiated) catch {
-            negotiated.deinit(server.io);
-            return;
-        };
-        startSessionRead(server.io, server.select, session) catch
-            server.dropClient(session.key);
+        var coordinator = handshakenClientCoordinator(server);
+        coordinator.handle(result);
     }
 
     fn handleClientSentEvent(server: *Server, event: ClientSentEvent) bool {
@@ -2009,6 +1996,45 @@ fn deinitAdmissionConnection(runtime: *ClientAdmissionRuntime, connection: *core
 
 fn startClientHandshake(runtime: *ClientAdmissionRuntime, connection: *core.transport.SocketChannel) !void {
     try runtime.server.select.concurrent(.handshaken, handshakeClient, .{ runtime.server.io, connection });
+}
+
+const ClientHandshakeTypes = struct {
+    pub const Connection = core.transport.SocketChannel;
+    pub const Session = *ClientSession;
+};
+
+const client_handshake_runtime_port: client_admission.HandshakePort(Server, ClientHandshakeTypes) = .{
+    .stopping = clientHandshakeStopping,
+    .deinit_connection = deinitNegotiatedConnection,
+    .admit = admitNegotiatedClient,
+    .start_receive = startNegotiatedClientRead,
+    .drop_session = dropAdmittedClient,
+};
+
+const RuntimeHandshakenClientCoordinator = client_admission.HandshakeCoordinator(Server, ClientHandshakeTypes, client_handshake_runtime_port);
+
+fn handshakenClientCoordinator(server: *Server) RuntimeHandshakenClientCoordinator {
+    return RuntimeHandshakenClientCoordinator.init(server, &server.client_admission);
+}
+
+fn clientHandshakeStopping(server: *Server) bool {
+    return server.shutdown.isRequested();
+}
+
+fn deinitNegotiatedConnection(server: *Server, connection: *core.transport.SocketChannel) void {
+    connection.deinit(server.io);
+}
+
+fn admitNegotiatedClient(server: *Server, connection: core.transport.SocketChannel) !*ClientSession {
+    return server.clients.add(server.gpa, connection);
+}
+
+fn startNegotiatedClientRead(server: *Server, session: *ClientSession) !void {
+    try startSessionRead(server.io, server.select, session);
+}
+
+fn dropAdmittedClient(server: *Server, session: *ClientSession) void {
+    server.dropClient(session.key);
 }
 
 const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
