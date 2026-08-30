@@ -5,6 +5,7 @@ pub const close_pane = @import("close_pane.zig");
 pub const close_tab = @import("close_tab.zig");
 pub const create_tab = @import("create_tab.zig");
 pub const create_workspace = @import("create_workspace.zig");
+pub const focus_pane = @import("focus_pane.zig");
 pub const move_tab = @import("move_tab.zig");
 pub const rename_tab = @import("rename_tab.zig");
 pub const rename_workspace = @import("rename_workspace.zig");
@@ -20,6 +21,7 @@ test {
     _ = close_tab;
     _ = create_tab;
     _ = create_workspace;
+    _ = focus_pane;
     _ = move_tab;
     _ = rename_tab;
     _ = rename_workspace;

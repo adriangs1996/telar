@@ -89,6 +89,23 @@ pub const PaneAttachmentConfirmation = enum {
     stale,
 };
 
+pub const PaneFocusTarget = union(enum) {
+    pane_id: schema.PaneId,
+    direction: layout_mod.Direction,
+};
+
+pub const PaneFocusRequest = struct {
+    target: PaneFocusTarget,
+    area: ui.Rect,
+};
+
+pub const PaneFocus = struct {
+    location: schema.TabLocation,
+    previous: schema.PaneId,
+    focused: schema.PaneId,
+    geometry_changed: bool,
+};
+
 pub const RequestPaneSplit = struct {
     axis: layout_mod.Axis,
     area: ui.Rect,
@@ -614,6 +631,37 @@ pub const Model = struct {
 
         const pane = active.model.findConst(attachment.pane_id) orelse return false;
         return std.meta.eql(pane.location, attachment.location) and !pane.attached;
+    }
+
+    /// Changes focus inside the active tab and reports the committed identity.
+    /// Repeated, missing and directionless targets leave every version intact.
+    ///
+    /// ```zig
+    /// const focus = model.focusPane(.{ .target = .{ .direction = .left }, .area = area }) orelse return;
+    /// ```
+    pub fn focusPane(model: *Model, request: PaneFocusRequest) ?PaneFocus {
+        const active = model.workspace.active() orelse return null;
+        const previous = active.model.layout.focused() orelse return null;
+        const focused = switch (request.target) {
+            .pane_id => |pane_id| focused: {
+                if (pane_id == previous or !active.model.focusPane(pane_id)) {
+                    return null;
+                }
+
+                break :focused pane_id;
+            },
+            .direction => |direction| active.model.focusDirection(direction, request.area) orelse return null,
+        };
+        std.debug.assert(focused != previous);
+
+        model.panes_revision +%= 1;
+
+        return .{
+            .location = active.location,
+            .previous = previous,
+            .focused = focused,
+            .geometry_changed = active.model.layout.isFullscreen(),
+        };
     }
 
     /// Plans one split from active client state without changing the semantic
@@ -1913,6 +1961,55 @@ test "tab selection resolves identity position and wrapping offset" {
     try std.testing.expect((try model.selectTab(.{ .offset = 2 })) == null);
     try std.testing.expectError(error.TabNotFound, model.selectTab(.{ .tab_id = @enumFromInt(9) }));
     try std.testing.expectEqual(@as(u64, 4), model.version().active_tab);
+}
+
+test "pane focus resolves identity and direction through one visible revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    try model.workspace.bootstrap(first, location, .{ .cols = 80, .rows = 24 });
+    try model.workspace.active().?.model.split(first, second, location, .horizontal, area);
+
+    const directional = model.focusPane(.{
+        .target = .{ .direction = .left },
+        .area = area,
+    }).?;
+
+    try std.testing.expectEqualDeep(location, directional.location);
+    try std.testing.expectEqual(second, directional.previous);
+    try std.testing.expectEqual(first, directional.focused);
+    try std.testing.expect(!directional.geometry_changed);
+    try std.testing.expectEqual(@as(u64, 1), model.version().panes);
+
+    try std.testing.expect(model.workspace.active().?.model.toggleFullscreen());
+    const identified = model.focusPane(.{
+        .target = .{ .pane_id = second },
+        .area = area,
+    }).?;
+
+    try std.testing.expectEqual(first, identified.previous);
+    try std.testing.expectEqual(second, identified.focused);
+    try std.testing.expect(identified.geometry_changed);
+    try std.testing.expect((model.focusPane(.{
+        .target = .{ .pane_id = second },
+        .area = area,
+    })) == null);
+    try std.testing.expect((model.focusPane(.{
+        .target = .{ .pane_id = @enumFromInt(9) },
+        .area = area,
+    })) == null);
+    try std.testing.expect((model.focusPane(.{
+        .target = .{ .direction = .right },
+        .area = area,
+    })) == null);
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
 }
 
 test "pane closure planning requires the active attached pane without mutation" {

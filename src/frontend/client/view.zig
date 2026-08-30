@@ -31,6 +31,7 @@ pub const Interaction = struct {
     redraw: bool = false,
     layout_changed: bool = false,
     consumed: bool = false,
+    focus_pane: ?schema.PaneId = null,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
     focus_agent: ?widgets.sidebar.AgentKey = null,
@@ -529,13 +530,7 @@ pub const State = struct {
         state.dirty = true;
     }
 
-    pub fn handleMouse(
-        state: *State,
-        tabs: ?*tabs_mod.Model,
-        model: *multiplexer.Model,
-        mouse: term.Event.Mouse,
-        now_ns: u64,
-    ) Interaction {
+    pub fn handleMouse(state: *State, mouse: term.Event.Mouse, now_ns: u64) Interaction {
         var result: Interaction = .{};
         if (state.name_prompt != null) return result;
         if (state.attachment_store.hasModal()) result.consumed = true;
@@ -564,15 +559,8 @@ pub const State = struct {
                 result.redraw = true;
                 result.layout_changed = true;
             },
-            .focus_pane => |pane_id| {
-                const shift = model.focusPaneShift(pane_id);
-                if (shift.focused) {
-                    result.layout_changed = shift.layout_changed;
-                    state.dirty = true;
-                    result.redraw = true;
-                }
-            },
-            .select_tab => |tab_id| if (tabs != null and tabs.?.indexOf(tab_id) != null) {
+            .focus_pane => |pane_id| result.focus_pane = pane_id,
+            .select_tab => |tab_id| {
                 switch (mouse.button & 0b11) {
                     0 => result.select_tab = tab_id,
                     2 => result.rename_tab = tab_id,
@@ -905,6 +893,47 @@ test "empty production sidebar has no task controls" {
     try std.testing.expect(state.hits.at(58, 2) == null);
 }
 
+test "workbench clicks return focus intent without mutating pane layout" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 80, 24);
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    try model.addRoot(first, location, .{ .cols = 50, .rows = 22 });
+    try model.split(first, second, location, .horizontal, state.workbench());
+    try std.testing.expect(model.focusPane(first));
+    var screen = try term.Screen.init(gpa, 80, 24);
+    defer screen.deinit();
+    _ = try model.render(&screen, state.workbench());
+    _ = try state.render(&screen, null, &model, true, null);
+    const second_view = model.layoutSnapshot(state.workbench()).find(second).?;
+    const point = term.Event.Mouse{
+        .x = second_view.content.x,
+        .y = second_view.content.y,
+        .kind = .move,
+    };
+    _ = state.handleMouse(point, 0);
+    state.dirty = false;
+    const revision = model.layout.currentRevision();
+
+    var click = point;
+    click.kind = .press;
+    const interaction = state.handleMouse(click, 0);
+
+    try std.testing.expectEqual(second, interaction.focus_pane.?);
+    try std.testing.expect(!interaction.redraw);
+    try std.testing.expect(!interaction.layout_changed);
+    try std.testing.expectEqual(first, model.layout.focused().?);
+    try std.testing.expectEqual(revision, model.layout.currentRevision());
+    try std.testing.expect(!state.dirty);
+}
+
 test "sidebar agent snapshots focus linked panes and stable hover requests no extra frame" {
     const gpa = std.testing.allocator;
     var state = try State.init(gpa, 100, 30);
@@ -938,10 +967,10 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     _ = try state.render(&screen, null, &model, true, null);
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
-    try std.testing.expect(state.handleMouse(null, &model, first_row, 0).redraw);
-    try std.testing.expect(!state.handleMouse(null, &model, first_row, 0).redraw);
+    try std.testing.expect(state.handleMouse(first_row, 0).redraw);
+    try std.testing.expect(!state.handleMouse(first_row, 0).redraw);
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
-    const interaction = state.handleMouse(null, &model, click, 0);
+    const interaction = state.handleMouse(click, 0);
     try std.testing.expectEqualDeep(agents[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
 }
@@ -991,7 +1020,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         else => {},
     };
     const point = open_point orelse return error.MissingAttachmentHit;
-    const opened = state.handleMouse(null, &model, .{
+    const opened = state.handleMouse(.{
         .x = point.x,
         .y = point.y,
         .kind = .press,
@@ -1000,7 +1029,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
     try std.testing.expect(state.hasAttachmentModal());
 
     _ = try state.render(&screen, null, &model, false, null);
-    const modal_scroll = state.handleMouse(null, &model, .{
+    const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,
         .y = state.regions.workbench.y,
         .kind = .scroll_down,
@@ -1127,7 +1156,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
         Action{ .sidebar_focus_agent = agents[0].key },
         state.hits.at(4, 4).?,
     );
-    const interaction = state.handleMouse(null, &model, .{ .x = 4, .y = 4, .kind = .press }, 0);
+    const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press }, 0);
     try std.testing.expect(interaction.redraw);
     try std.testing.expectEqualDeep(agents[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
@@ -1315,7 +1344,7 @@ test "clickable toast restores pane cells after its exit animation" {
     _ = try model.render(&screen, state.workbench());
     _ = try state.render(&screen, null, &model, false, null);
 
-    const interaction = state.handleMouse(null, &model, .{
+    const interaction = state.handleMouse(.{
         .x = click_x,
         .y = click_y,
         .kind = .press,
@@ -1370,12 +1399,12 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
     // last sixteen columns of the bottom row.
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
-    const interaction = state.handleMouse(&tabs, model, click, 0);
+    const interaction = state.handleMouse(click, 0);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
 
     // A right click only reports the intent: entering the rename prompt is
     // a mode change the client owns.
-    const rename = state.handleMouse(&tabs, model, .{
+    const rename = state.handleMouse(.{
         .x = 65,
         .y = 23,
         .kind = .press,
@@ -1422,7 +1451,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         }
     }
 
-    const interaction = state.handleMouse(null, &model, .{
+    const interaction = state.handleMouse(.{
         .x = workspace_x.?,
         .y = 0,
         .kind = .press,
@@ -1432,7 +1461,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         interaction.select_workspace.?,
     );
 
-    _ = state.handleMouse(null, &model, .{ .x = marker_x.?, .y = 0, .kind = .press }, 0);
+    _ = state.handleMouse(.{ .x = marker_x.?, .y = 0, .kind = .press }, 0);
     try std.testing.expect(state.workspace_list_collapsed);
 }
 

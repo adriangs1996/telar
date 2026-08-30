@@ -388,21 +388,6 @@ pub const Model = struct {
         return true;
     }
 
-    pub const FocusShift = struct { focused: bool, layout_changed: bool };
-
-    /// Focuses the pane and reports whether the change altered geometry,
-    /// which happens only while fullscreen, where the fullscreened pane
-    /// follows focus.
-    pub fn focusPaneShift(model: *Model, pane_id: schema.PaneId) FocusShift {
-        const previous = model.layout.focused();
-        if (!model.focusPane(pane_id)) return .{ .focused = false, .layout_changed = false };
-        return .{
-            .focused = true,
-            .layout_changed = model.layout.isFullscreen() and
-                previous != model.layout.focused(),
-        };
-    }
-
     pub fn focusDirection(
         model: *Model,
         direction: layout_mod.Direction,

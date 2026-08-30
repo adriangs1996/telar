@@ -11,6 +11,7 @@ const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const widgets = @import("../widgets/root.zig");
 const pane_closures = @import("pane_closures.zig");
+const pane_focus = @import("pane_focus.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
@@ -65,6 +66,15 @@ fn selectTab(handler: *InputHandler, target: tab_selections.Target) !void {
     _ = try use_case.execute(.{ .target = target });
 }
 
+fn focusPane(handler: *InputHandler, target: pane_focus.Target) !void {
+    var use_case = pane_focus.handler(handler.client);
+
+    _ = try use_case.execute(.{
+        .target = target,
+        .area = handler.client.view.workbench(),
+    });
+}
+
 /// Switching targets the runtime identity, not its path. Multiple explicit
 /// workspaces may share one cwd and must remain independently selectable.
 fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
@@ -94,16 +104,7 @@ fn focusSidebarAgent(
             try handler.selectTab(.{ .tab_id = tab.location.tab_id });
         }
 
-        const active = handler.client.model.workspace.active() orelse return false;
-        const shift = active.model.focusPaneShift(agent_key.pane_id);
-        if (!shift.focused) return false;
-        if (shift.layout_changed) {
-            handler.client.graphics_store.invalidatePlacements();
-            try handler.client.resizeAttached(&active.model, handler.client.view.workbench());
-        }
-        try handler.client.syncPaneFocus(&active.model);
-        handler.client.view.invalidate();
-        handler.redraw = true;
+        try handler.focusPane(.{ .pane_id = agent_key.pane_id });
         return false;
     }
     if (handler.client.requests.count != 0) return false;
@@ -354,18 +355,16 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
             std.math.maxInt(u16);
     }
     const model = handler.activeModel() orelse return;
-    var interaction = handler.client.view.handleMouse(
-        &handler.client.model.workspace,
-        model,
-        cell_event,
-        monotonic(handler.client.io),
-    );
+    const interaction = handler.client.view.handleMouse(cell_event, monotonic(handler.client.io));
     const agent_handoff = if (interaction.focus_agent) |agent_key|
         try handler.focusSidebarAgent(agent_key)
     else
         false;
     if (interaction.select_tab) |tab_id| {
         try handler.selectTab(.{ .tab_id = tab_id });
+    }
+    if (interaction.focus_pane) |pane_id| {
+        try handler.focusPane(.{ .pane_id = pane_id });
     }
     if (interaction.rename_tab) |tab_id| {
         if (handler.client.mode == .normal) {
@@ -380,18 +379,10 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         .none => {},
         .select_tab => |tab_id| try handler.selectTab(.{ .tab_id = tab_id }),
         .select_workspace => |workspace| try handler.switchWorkspace(workspace),
-        .focus_pane => |pane_id| {
-            const shift = model.focusPaneShift(pane_id);
-            if (shift.focused) {
-                interaction.layout_changed = shift.layout_changed;
-                handler.client.view.invalidate();
-            }
-        },
+        .focus_pane => |pane_id| try handler.focusPane(.{ .pane_id = pane_id }),
     };
     if (interaction.notification_target != null)
         try handler.client.scheduleNotificationTick();
-    if (handler.client.model.workspace.active()) |active|
-        try handler.client.syncPaneFocus(&active.model);
     if (interaction.layout_changed) {
         handler.client.graphics_store.invalidatePlacements();
         try handler.client.resizeAttached(model, handler.client.view.workbench());
@@ -589,12 +580,12 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
             .horizontal => .horizontal,
             .vertical => .vertical,
         }),
-        .focus_pane => |direction| try handler.moveFocus(switch (direction) {
+        .focus_pane => |direction| try handler.focusPane(.{ .direction = switch (direction) {
             .left => .left,
             .right => .right,
             .up => .up,
             .down => .down,
-        }),
+        } }),
         .resize_pane => |direction| try handler.resizePane(switch (direction) {
             .left => .left,
             .right => .right,
@@ -687,22 +678,6 @@ fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
         .axis = axis,
         .area = handler.client.view.workbench(),
     });
-}
-
-fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) !void {
-    const model = handler.activeModel() orelse return;
-    if (model.focusDirection(direction, handler.client.view.workbench()) != null) {
-        try handler.client.syncPaneFocus(model);
-        if (model.layout.isFullscreen()) {
-            handler.client.graphics_store.invalidatePlacements();
-            try handler.client.resizeAttached(
-                model,
-                handler.client.view.workbench(),
-            );
-        }
-        handler.client.view.invalidate();
-        handler.redraw = true;
-    }
 }
 
 fn resizePane(handler: *InputHandler, direction: layout_mod.Direction) !void {

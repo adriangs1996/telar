@@ -6,6 +6,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
+const presentation = @import("../presentation/root.zig");
 const widgets = @import("../widgets/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const keybind = input_capability.keybind;
@@ -13,6 +14,7 @@ const keybind = input_capability.keybind;
 const Io = std.Io;
 const File = Io.File;
 const schema = core.schema;
+const term = presentation.screen;
 
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
@@ -941,6 +943,140 @@ test "focus reporting emits focus-in only after the pane opts in" {
     const message = try harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", message.pane_input.bytes);
+}
+
+test "pane focus commits before reports resize and presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const second: schema.PaneId = @enumFromInt(20);
+    const area = client.view.workbench();
+
+    const split = try client.model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = TestHarness.bootstrap_pane,
+            .location = TestHarness.bootstrap_location,
+            .axis = .horizontal,
+            .area = area,
+        },
+        .new_pane = second,
+    });
+    try std.testing.expect(split.disposition == .active);
+    const model = &client.model.workspace.active().?.model;
+    try std.testing.expect(model.toggleFullscreen());
+    model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    model.find(second).?.input_modes.focus_events = true;
+    try client.observeModel();
+    try harness.settleModelPresentation();
+
+    client.reported_focus = second;
+    client.reported_focus_events = true;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.{ .focus_pane = .left });
+
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, model.layout.focused().?);
+    try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(version_before.workspace, client.model.version().workspace);
+    try std.testing.expectEqual(version_before.tabs, client.model.version().tabs);
+    try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+    const expected_size = model.contentSize(TestHarness.bootstrap_pane, area).?;
+
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const focus_out = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(focus_out == .pane_input);
+    try std.testing.expectEqual(second, focus_out.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[O", focus_out.pane_input.bytes);
+    const focus_in = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(focus_in == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, focus_in.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
+    const resize = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(resize == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, resize.pane_resize.pane_id);
+    try std.testing.expectEqual(expected_size, resize.pane_resize.size);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const version_before_noop = client.model.version();
+    const pending_updates_before_noop = client.presenter.pending_updates;
+    _ = try handler.applyNativeAction(.{ .focus_pane = .left });
+    try client.observeModel();
+
+    try std.testing.expectEqualDeep(version_before_noop, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expect(!handler.redraw);
+}
+
+test "mouse focus precedes forwarding its triggering press" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const first = TestHarness.bootstrap_pane;
+    const second: schema.PaneId = @enumFromInt(20);
+    const area = client.view.workbench();
+
+    _ = try client.model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = first,
+            .location = TestHarness.bootstrap_location,
+            .axis = .horizontal,
+            .area = area,
+        },
+        .new_pane = second,
+    });
+    const model = &client.model.workspace.active().?.model;
+    model.find(first).?.input_modes.focus_events = true;
+    model.find(first).?.mouse = .{ .tracking = .normal, .sgr = true };
+    model.find(second).?.input_modes.focus_events = true;
+    try client.observeModel();
+    try harness.settleModelPresentation();
+
+    client.reported_focus = second;
+    client.reported_focus_events = true;
+    const first_view = model.viewForPane(first, area).?;
+    const point = term.Event.Mouse{
+        .x = first_view.content.x,
+        .y = first_view.content.y,
+        .kind = .move,
+    };
+    var handler: InputHandler = .{ .client = client };
+    try handler.mouse(point);
+    handler.redraw = false;
+    const version_before = client.model.version();
+    var press = point;
+    press.kind = .press;
+
+    try handler.mouse(press);
+
+    try std.testing.expectEqual(first, model.layout.focused().?);
+    try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
+    try std.testing.expect(!handler.redraw);
+    try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    const focus_out = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(focus_out == .pane_input);
+    try std.testing.expectEqual(second, focus_out.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[O", focus_out.pane_input.bytes);
+    const focused_input = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(focused_input == .pane_input);
+    try std.testing.expectEqual(first, focused_input.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[I\x1b[<0;1;1M", focused_input.pane_input.bytes);
 }
 
 test "an active split commits once and presentation observes the model" {
