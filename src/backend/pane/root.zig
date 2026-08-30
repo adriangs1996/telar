@@ -250,6 +250,10 @@ pub const HistoryObservationCompletion = struct {
     shell_foreground: bool,
 };
 
+pub const MediaProcessingBorrow = struct {
+    current_size: schema.TerminalSize,
+};
+
 pub const PtyResponseQueue = struct {
     mutex: ParkingMutex = .{},
     bytes: [max_pty_responses][max_pty_response_bytes]u8 = undefined,
@@ -711,6 +715,51 @@ pub const Pane = struct {
 
     pub fn queueMediaOutput(pane: *Pane, bytes: []const u8) void {
         pane.media.queueOutput(bytes);
+    }
+
+    /// Seals pending graphics work and borrows the pane allocation for one
+    /// media actor. Empty pipelines return null without changing state.
+    ///
+    /// ```zig
+    /// const media = pane.beginMediaProcessing() orelse return;
+    /// ```
+    pub fn beginMediaProcessing(pane: *Pane) ?MediaProcessingBorrow {
+        if (!pane.media.seal()) {
+            return null;
+        }
+
+        pane.actorStarted();
+        return .{ .current_size = pane.size };
+    }
+
+    /// Releases one completed media actor and its sealed batch.
+    ///
+    /// ```zig
+    /// pane.completeMediaProcessing();
+    /// ```
+    pub fn completeMediaProcessing(pane: *Pane) void {
+        pane.actorFinished();
+        pane.media.finishSealed();
+    }
+
+    /// Rolls back a media actor that could not be scheduled.
+    ///
+    /// ```zig
+    /// pane.cancelMediaProcessing();
+    /// ```
+    pub fn cancelMediaProcessing(pane: *Pane) void {
+        pane.completeMediaProcessing();
+    }
+
+    /// Commits graphics damage after quota enforcement and refreshes whether
+    /// the active media screen still contains images.
+    ///
+    /// ```zig
+    /// pane.refreshGraphicsProjection();
+    /// ```
+    pub fn refreshGraphicsProjection(pane: *Pane) void {
+        pane.observeGraphicsDamage();
+        pane.graphics_present = pane.media.terminal.screens.active.kitty_images.images.count() != 0;
     }
 
     pub fn processMedia(

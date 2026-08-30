@@ -59,10 +59,12 @@ const tab_snapshot_query = @import("queries/tab_snapshot.zig");
 const tab_snapshot_controller = @import("controllers/tab_snapshot.zig");
 const workspace_snapshot_query = @import("queries/workspace_snapshot.zig");
 const workspace_snapshot_controller = @import("controllers/workspace_snapshot.zig");
+const media_projection = @import("media_projection.zig");
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_ingest_coordinator = @import("pane_ingest_coordinator.zig");
+const pane_media_coordinator = @import("pane_media_coordinator.zig");
 const pane_observation_coordinator = @import("pane_observation_coordinator.zig");
 const pane_output_pipeline = @import("pane_output_pipeline.zig");
 const pane_mod = @import("../pane/root.zig");
@@ -160,10 +162,7 @@ const PaneIngestEvent = pane_ingest_coordinator.Completion;
 
 const PaneObservationEvent = pane_observation_coordinator.Completion;
 
-const PaneMediaEvent = struct {
-    pane: PaneKey,
-    stats: media_mod.Stats,
-};
+const PaneMediaEvent = pane_media_coordinator.Completion;
 
 const PaneInputEvent = pane_input_pump.Completion;
 
@@ -1000,54 +999,8 @@ const Server = struct {
     }
 
     fn handlePaneMediaEvent(server: *Server, event: PaneMediaEvent) !void {
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-        active.actorFinished();
-        active.media.finishSealed();
-        if (comptime diagnostics.enabled) {
-            server.metrics.media_bytes +|= event.stats.output_bytes;
-            server.metrics.media_discarded_frames +|= event.stats.discarded_frames;
-            server.metrics.media_unavailable_frames +|= event.stats.unavailable_frames;
-            server.metrics.media_forwarded_frames +|= event.stats.forwarded_frames;
-            if (event.stats.failed) server.metrics.media_failures +|= 1;
-            if (event.stats.reset) server.metrics.media_resets +|= 1;
-        }
-        enforceGraphicsQuotas(server.io, active);
-        active.observeGraphicsDamage();
-        active.graphics_present =
-            active.media.terminal.screens.active.kitty_images.images.count() != 0;
-        if (event.stats.reset) {
-            for (&server.clients.items) |*slot| {
-                const client = slot.* orelse continue;
-                _ = client.attachments.requestGraphicsSnapshot(active.id);
-            }
-        }
-        // Freeze the next transfer while the media actor is idle so the send
-        // loop can drain it whenever the transport becomes ready.
-        for (&server.clients.items) |*slot| {
-            const client = slot.* orelse continue;
-            const attachment = client.attachments.find(active.id) orelse continue;
-            if (attachment.hasFrozenGraphics() or attachment.graphicsCaughtUp()) continue;
-            const staged = attachment.stageGraphics(
-                client.attachments.availableGraphicsCredit(),
-            ) catch blk: {
-                attachment.abandonGraphics();
-                break :blk .idle;
-            };
-            switch (staged) {
-                .staged => if (comptime diagnostics.enabled) {
-                    server.metrics.graphics_transfers_staged +|= 1;
-                },
-                .blocked, .idle => {},
-            }
-        }
-        try schedulePaneResponse(server, active);
-        server.pumpAll();
-        try schedulePaneMedia(server.select, active);
-        server.collect();
-        server.pumpAll();
+        var coordinator = paneMediaCoordinator(server);
+        return coordinator.handle(event);
     }
 
     fn handlePaneExitEvent(server: *Server, event: PaneExitEvent) !void {
@@ -1634,7 +1587,7 @@ fn entrypointScheduleObservation(context: *anyopaque, pane: *Pane) !void {
 
 fn entrypointScheduleMedia(context: *anyopaque, pane: *Pane) !void {
     const server: *Server = @ptrCast(@alignCast(context));
-    return schedulePaneMedia(server.select, pane);
+    return schedulePaneMedia(server, pane);
 }
 
 fn entrypointScheduleResponse(context: *anyopaque, pane: *Pane) !void {
@@ -1773,7 +1726,7 @@ fn prepareOpenPaneView(context: *anyopaque, request: open_pane_commands.PrepareV
     resize_result catch return error.PaneResizeFailed;
 
     try schedulePaneObservation(client.server, pane);
-    try schedulePaneMedia(client.server.select, pane);
+    try schedulePaneMedia(client.server, pane);
 }
 
 fn attachOpenPane(context: *anyopaque, launched: pane_mod.PaneLaunched) !void {
@@ -2382,7 +2335,7 @@ fn scheduleOutputObservation(context: *PaneOutputRuntime, pane: *Pane) !void {
 }
 
 fn scheduleOutputMedia(context: *PaneOutputRuntime, pane: *Pane) !void {
-    return schedulePaneMedia(context.server.select, pane);
+    return schedulePaneMedia(context.server, pane);
 }
 
 const PaneIngestTask = struct {
@@ -2461,7 +2414,7 @@ fn scheduleIngestObservation(server: *Server, pane: *Pane) !void {
 }
 
 fn scheduleIngestMedia(server: *Server, pane: *Pane) !void {
-    return schedulePaneMedia(server.select, pane);
+    return schedulePaneMedia(server, pane);
 }
 
 fn refreshPaneClients(server: *Server, pane: *Pane) void {
@@ -2533,25 +2486,57 @@ fn scheduleObservedAgentDescription(server: *Server) void {
     server.scheduleAgentDescription();
 }
 
-fn schedulePaneMedia(
-    select: *Io.Select(RuntimeEvent),
-    pane: *Pane,
-) !void {
-    if (!pane.media.seal()) return;
-    pane.actorStarted();
-    select.concurrent(.pane_media, processPaneMedia, .{ pane, pane.size }) catch |err| {
-        pane.actorFinished();
-        pane.media.finishSealed();
-        return err;
-    };
+const pane_media_runtime_port: pane_media_coordinator.RuntimePort(Server) = .{
+    .start = startPaneMedia,
+    .enforce_quotas = enforcePaneGraphicsQuotas,
+    .synchronize_clients = synchronizeMediaClients,
+    .schedule_response = schedulePaneResponse,
+    .pump_clients = pumpPaneClients,
+    .collect = collectPaneLifecycle,
+};
+
+const RuntimePaneMediaCoordinator = pane_media_coordinator.Coordinator(Server, pane_media_runtime_port);
+
+fn paneMediaCoordinator(server: *Server) RuntimePaneMediaCoordinator {
+    return RuntimePaneMediaCoordinator.init(server, .{
+        .panes = &server.model.panes,
+        .metrics = &server.metrics,
+    });
 }
 
-fn processPaneMedia(pane: *Pane, current_size: schema.TerminalSize) PaneMediaEvent {
+fn schedulePaneMedia(server: *Server, pane: *Pane) !void {
+    var coordinator = paneMediaCoordinator(server);
+    return coordinator.schedule(pane);
+}
+
+fn startPaneMedia(server: *Server, work: pane_media_coordinator.Work) !void {
+    try server.select.concurrent(.pane_media, processPaneMedia, .{work});
+}
+
+fn processPaneMedia(work: pane_media_coordinator.Work) PaneMediaEvent {
     const path = diagnostics.enter(.media);
     defer path.restore();
+
     var stats: media_mod.Stats = .{};
-    pane.processMedia(current_size, &stats);
-    return .{ .pane = pane.key(), .stats = stats };
+    work.pane.processMedia(work.current_size, &stats);
+    return .{ .pane = work.pane.key(), .stats = stats };
+}
+
+fn enforcePaneGraphicsQuotas(server: *Server, pane: *Pane) void {
+    enforceGraphicsQuotas(server.io, pane);
+}
+
+fn synchronizeMediaClients(server: *Server, pane: *Pane, reset: bool) media_projection.Stats {
+    var stores: [max_clients]*AttachmentStore = undefined;
+    var count: usize = 0;
+
+    for (&server.clients.items) |*slot| {
+        const client = slot.* orelse continue;
+        stores[count] = &client.attachments;
+        count += 1;
+    }
+
+    return media_projection.synchronize(pane, stores[0..count], reset);
 }
 
 test "client session storage stays off the runtime stack" {
@@ -2740,12 +2725,14 @@ test {
     _ = history_query_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
+    _ = media_projection;
     _ = open_pane_commands;
     _ = open_pane_controller;
     _ = pane_input_commands;
     _ = pane_input_controller;
     _ = pane_input_pump;
     _ = pane_ingest_coordinator;
+    _ = pane_media_coordinator;
     _ = pane_observation_coordinator;
     _ = pane_output_pipeline;
     _ = pane_response_pump;

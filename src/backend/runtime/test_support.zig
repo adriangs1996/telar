@@ -116,4 +116,22 @@ pub const PaneFixture = struct {
         fixture.attachment_allocator.fail_index = fixture.attachment_allocator.alloc_index;
         fixture.attachment_allocator.resize_fail_index = fixture.attachment_allocator.resize_index;
     }
+
+    /// Adds one complete RGBA image to the fixture's media terminal.
+    ///
+    /// ```zig
+    /// try fixture.addRgbaImage(7);
+    /// ```
+    pub fn addRgbaImage(fixture: *PaneFixture, image_id: u32) !void {
+        const media = fixture.pane.media_allocator.allocator();
+        const pixels = try media.dupe(u8, &[_]u8{ 1, 2, 3, 255 });
+        const screen = fixture.pane.media.terminal.screens.active;
+        try screen.kitty_images.addImage(std.testing.io, media, screen, .{
+            .id = image_id,
+            .width = 1,
+            .height = 1,
+            .format = .rgba,
+            .data = .{ .complete = pixels },
+        });
+    }
 };
