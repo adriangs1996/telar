@@ -144,8 +144,34 @@ and added to this inventory.
 10. Extract agent, metrics, and telemetry event adapters: BRE-13 through BRE-18.
 11. Refactor proxy slices: BPO-01, BPO-03 through BPO-08, BPO-10.
 12. Refactor lifecycle composition: BRL-03, BRL-04, BRL-01, BRE-19, BRL-05.
-13. Run a final public-boundary, ownership, documentation, and performance
-    audit across the backend only.
+13. Completed: run a final public-boundary, ownership, documentation, and
+    performance audit across the backend only.
+
+## Final backend audit
+
+Completed on 2026-08-30 against the implementation through `0ad5b9b`.
+
+- Every ordinary named backend function has a one-line signature, no trailing
+  parameter comma, and at most three parameters. The only exceptions are four
+  callbacks fixed by `std.mem.Allocator.VTable` and the C declarations for
+  `waitid`, `openpty`, and `host_statistics64`; all seven still use one-line
+  signatures and are marked at their integration points.
+- Cohesive operation values now carry launch, client I/O, graphics, rendering,
+  history, process-probe, proxy, and workspace-notification inputs instead of
+  positional parameter groups.
+- Every behavior-rich public method with API documentation includes a Zig usage
+  example. Trivial accessors and lifecycle forwarding methods remain
+  uncommented deliberately.
+- Backend sources contain no frontend imports, and core sources contain no
+  backend or frontend imports. `RuntimeEvent` remains exhaustively classified
+  into interactive, media, observation, or other work before dispatch.
+- Queue and actor boundaries retain either owned fixed storage or a borrow whose
+  owner cannot be released while the operation is pending. The slice evidence
+  above covers rollback, backpressure, generation safety, and post-commit
+  ownership for every external trigger.
+- `just check` and `just verify-release` pass. The complete suite passes
+  `1831/1831` tests in both Debug and ReleaseFast. The transport suite passes
+  `40/40` tests in three serial runs per mode. Release performance gates pass.
 
 ## Baseline
 
