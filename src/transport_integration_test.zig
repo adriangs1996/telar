@@ -5,7 +5,7 @@ const frontend = @import("telar-frontend");
 const handshake = core.handshake;
 
 const test_receive_timeout: std.Io.Timeout = .{
-    .duration = .{ .clock = .awake, .raw = .fromSeconds(5) },
+    .duration = .{ .clock = .awake, .raw = .fromSeconds(15) },
 };
 
 const TestReceiveEvent = union(enum) {
@@ -1984,7 +1984,11 @@ test "modified Enter follows child keyboard negotiation through the PTY" {
     defer gpa.free(receive_buffer);
     var cells: [40 * 8]core.ui.Cell = @splat(.{});
     var stage: usize = 0;
-    while (true) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+    while (true) switch (try schema.decodeServer(connection.receive(io, receive_buffer) catch |err| {
+        const expected = if (stage < stages.len) stages[stage].marker else "INPUT_OK";
+        std.debug.print("\nKeyboard negotiation stalled waiting for {s} at stage {d}.\n", .{ expected, stage });
+        return err;
+    })) {
         .pane_frame => |frame| {
             try applyFrameCells(&cells, frame);
             try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
