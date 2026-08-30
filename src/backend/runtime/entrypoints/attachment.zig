@@ -1,7 +1,6 @@
 //! Entrypoints for one client's disposable pane attachments.
 
 const std = @import("std");
-const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const attachment_mod = @import("../attachment.zig");
 const delivery_mod = @import("../delivery.zig");
@@ -11,43 +10,6 @@ const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const schema = core.schema;
-
-pub fn copySelection(
-    attachments: *AttachmentStore,
-    delivery: *Delivery,
-    metrics: *RuntimeMetrics,
-    request: schema.CopySelection,
-) void {
-    const active = attachments.find(request.pane_id) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    const screen = active.pane.terminal.screens.active;
-    const cols = active.pane.screen.w;
-    const start_y = if (request.linewise)
-        @min(request.start_y, request.end_y)
-    else
-        request.start_y;
-    const end_y = if (request.linewise)
-        @max(request.start_y, request.end_y)
-    else
-        request.end_y;
-    const start_x: u16 = if (request.linewise) 0 else @min(request.start_x, cols - 1);
-    const end_x: u16 = if (request.linewise) cols - 1 else @min(request.end_x, cols - 1);
-    const start = screen.pages.pin(.{ .screen = .{
-        .x = start_x,
-        .y = start_y,
-    } }) orelse screen.pages.getBottomRight(.screen) orelse return;
-    const end = screen.pages.pin(.{ .screen = .{
-        .x = end_x,
-        .y = end_y,
-    } }) orelse screen.pages.getBottomRight(.screen) orelse return;
-    var allocator = std.heap.FixedBufferAllocator.init(&delivery.clipboard_storage);
-    const selected = screen.selectionString(allocator.allocator(), .{
-        .sel = vt.Selection.init(start, end, false),
-    }) catch return;
-    _ = delivery.setClipboard(request.pane_id, selected);
-}
 
 pub fn requestGraphicsSnapshot(
     attachments: *AttachmentStore,

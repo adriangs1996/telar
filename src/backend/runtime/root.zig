@@ -15,6 +15,8 @@ const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("controllers/close_tab.zig");
 const close_pane_commands = @import("commands/close_pane.zig");
 const close_pane_controller = @import("controllers/close_pane.zig");
+const copy_selection_commands = @import("commands/copy_selection.zig");
+const copy_selection_controller = @import("controllers/copy_selection.zig");
 const create_tab_commands = @import("commands/create_tab.zig");
 const create_tab_controller = @import("controllers/create_tab.zig");
 const create_pane_commands = @import("commands/create_pane.zig");
@@ -82,6 +84,7 @@ const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
@@ -1501,12 +1504,14 @@ const Server = struct {
 
                 try controller.setPaneViewport(viewport);
             },
-            .copy_selection => |request| attachment_entrypoints.copySelection(
-                attachments,
-                &session.delivery,
-                metrics,
-                request,
-            ),
+            .copy_selection => |request| {
+                var handler: copy_selection_commands.CopySelectionHandler = .{
+                    .attachments = attachments,
+                };
+                var controller = CopySelectionController.init(metrics, &handler, &session.delivery);
+
+                controller.copySelection(request);
+            },
             .request_graphics_snapshot => |request| attachment_entrypoints.requestGraphicsSnapshot(
                 attachments,
                 metrics,
@@ -2721,6 +2726,8 @@ test {
     _ = close_tab_controller;
     _ = close_pane_commands;
     _ = close_pane_controller;
+    _ = copy_selection_commands;
+    _ = copy_selection_controller;
     _ = create_tab_commands;
     _ = create_tab_controller;
     _ = create_pane_commands;
@@ -2753,6 +2760,7 @@ test {
     _ = tab_controller;
     _ = @import("close_tab_test.zig");
     _ = @import("close_pane_test.zig");
+    _ = @import("copy_selection_test.zig");
     _ = @import("create_tab_test.zig");
     _ = @import("create_pane_test.zig");
     _ = @import("create_workspace_test.zig");

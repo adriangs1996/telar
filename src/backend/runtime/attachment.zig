@@ -12,6 +12,7 @@ const media_mod = @import("../media/root.zig");
 const pty = @import("../pty/root.zig");
 const cell = @import("attachment/cell.zig");
 const graphics = @import("attachment/graphics.zig");
+const selection = @import("attachment/selection.zig");
 
 const Io = std.Io;
 const schema = core.schema;
@@ -76,6 +77,10 @@ pub const Attachment = struct {
 
     fn requestCellSnapshot(attachment: *Attachment) void {
         attachment.cells.requestSnapshot();
+    }
+
+    fn copySelection(attachment: *Attachment, range: selection.Range, scratch: []u8) selection.Result {
+        return selection.extract(attachment.pane, range, scratch);
     }
 
     pub fn outstandingFrameId(attachment: *const Attachment) u64 {
@@ -267,6 +272,14 @@ pub const ViewportUpdate = enum {
     unchanged,
 };
 
+pub const SelectionRange = selection.Range;
+pub const SelectionResult = selection.Result;
+pub const selection_scratch_bytes = selection.scratch_bytes;
+pub const SelectionQuery = struct {
+    range: SelectionRange,
+    scratch: []u8,
+};
+
 pub const AttachmentStore = struct {
     pub const capacity = max_panes;
     pub const Iterator = struct {
@@ -327,6 +340,21 @@ pub const AttachmentStore = struct {
         const attachment = store.find(viewport.pane_id) orelse return null;
         const changed = try attachment.setViewport(viewport.offset);
         return if (changed) .changed else .unchanged;
+    }
+
+    /// Reads one attached pane's inclusive scrollback range into caller-owned
+    /// fixed storage. The returned bytes borrow `scratch`; a missing pane is
+    /// distinguished from an empty or unavailable selection.
+    ///
+    /// ```zig
+    /// const result = store.copySelection(pane_id, .{
+    ///     .range = range,
+    ///     .scratch = &scratch,
+    /// }) orelse return;
+    /// ```
+    pub fn copySelection(store: *AttachmentStore, pane_id: schema.PaneId, query: SelectionQuery) ?SelectionResult {
+        const attachment = store.find(pane_id) orelse return null;
+        return attachment.copySelection(query.range, query.scratch);
     }
 
     pub fn at(store: *AttachmentStore, index: usize) ?*Attachment {

@@ -85,7 +85,7 @@ pub const Delivery = struct {
     agent_revision_sent: u64 = 0,
     system_metrics_revision_sent: u64 = 0,
     workspace_list_revision_sent: u64 = 0,
-    clipboard_storage: [2 * schema.max_clipboard_bytes + 1]u8 = undefined,
+    clipboard_storage: [schema.max_clipboard_bytes]u8 = undefined,
     clipboard_len: u32 = 0,
     clipboard_pane: schema.PaneId = .invalid,
     clipboard_pending: bool = false,
@@ -163,12 +163,17 @@ pub const Delivery = struct {
         return delivery.responses.dropped;
     }
 
-    pub fn setClipboard(
-        delivery: *Delivery,
-        pane_id: schema.PaneId,
-        bytes: []const u8,
-    ) bool {
-        if (bytes.len > schema.max_clipboard_bytes) return false;
+    /// Replaces the pending clipboard message only when `bytes` fits the wire
+    /// bound. Rejected input preserves any clipboard already awaiting delivery.
+    ///
+    /// ```zig
+    /// if (!delivery.setClipboard(pane_id, bytes)) return error.ClipboardTooLarge;
+    /// ```
+    pub fn setClipboard(delivery: *Delivery, pane_id: schema.PaneId, bytes: []const u8) bool {
+        if (bytes.len > schema.max_clipboard_bytes) {
+            return false;
+        }
+
         std.mem.copyForwards(u8, delivery.clipboard_storage[0..bytes.len], bytes);
         delivery.clipboard_len = @intCast(bytes.len);
         delivery.clipboard_pane = pane_id;
@@ -531,6 +536,32 @@ test "delivery display labels are bounded and valid" {
     try std.testing.expect(std.unicode.utf8ValidateSlice(shortened_cwd));
     try std.testing.expect(std.mem.startsWith(u8, shortened_cwd, "…"));
     try std.testing.expect(std.mem.endsWith(u8, shortened_cwd, "/agents/telar"));
+}
+
+test "oversized clipboard input preserves the pending message" {
+    var delivery = try Delivery.init(std.testing.allocator);
+    defer delivery.deinit(std.testing.allocator);
+    const pane_id = try schema.id.pane(7);
+    try std.testing.expect(delivery.setClipboard(pane_id, "pending"));
+    var oversized: [schema.max_clipboard_bytes + 1]u8 = undefined;
+
+    try std.testing.expect(!delivery.setClipboard(try schema.id.pane(8), &oversized));
+
+    try std.testing.expect(delivery.clipboard_pending);
+    try std.testing.expectEqual(pane_id, delivery.clipboard_pane);
+    try std.testing.expectEqualStrings("pending", delivery.clipboard_storage[0..delivery.clipboard_len]);
+}
+
+test "clipboard accepts exactly the wire byte limit" {
+    var delivery = try Delivery.init(std.testing.allocator);
+    defer delivery.deinit(std.testing.allocator);
+    var bytes: [schema.max_clipboard_bytes]u8 = undefined;
+    @memset(&bytes, 'x');
+
+    try std.testing.expect(delivery.setClipboard(try schema.id.pane(7), &bytes));
+
+    try std.testing.expectEqual(@as(u32, schema.max_clipboard_bytes), delivery.clipboard_len);
+    try std.testing.expectEqualSlices(u8, &bytes, &delivery.clipboard_storage);
 }
 
 test "delivery commits one logical send transaction before completion" {
