@@ -179,6 +179,31 @@ pub const Tracker = struct {
         }
     }
 
+    /// Retires only an in-flight client attachment for a pane. Tab detachment
+    /// must not suppress an unrelated close or split operation on that pane.
+    ///
+    /// ```zig
+    /// _ = tracker.ignoreAttachment(pane_id);
+    /// ```
+    pub fn ignoreAttachment(tracker: *Tracker, pane_id: schema.PaneId) bool {
+        for (&tracker.entries) |*slot| {
+            const entry = if (slot.*) |*value| value else continue;
+            switch (entry.continuation) {
+                .attach_pane => |attachment| {
+                    if (attachment.pane_id != pane_id) {
+                        continue;
+                    }
+
+                    entry.continuation = .ignored;
+                    return true;
+                },
+                else => {},
+            }
+        }
+
+        return false;
+    }
+
     /// Pane exit is the successful completion signal for `close_pane`.
     pub fn completePaneClose(tracker: *Tracker, pane_id: schema.PaneId) bool {
         for (&tracker.entries) |*slot| {
@@ -257,6 +282,30 @@ test "pane reconciliation finds attachments and retires pane operations" {
     try std.testing.expect(!tracker.hasPane(.pane_operation, pane_id));
     try std.testing.expect(tracker.take(@enumFromInt(7)).? == .ignored);
     try std.testing.expect(tracker.take(@enumFromInt(8)).? == .ignored);
+}
+
+test "tab detachment retires only the matching pane attachment" {
+    var tracker: Tracker = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(3);
+    try tracker.add(@enumFromInt(7), .{ .attach_pane = .{
+        .pane_id = pane_id,
+        .location = location,
+    } });
+    try tracker.add(@enumFromInt(8), .{ .close_pane = .{
+        .pane_id = pane_id,
+        .location = location,
+    } });
+
+    try std.testing.expect(tracker.ignoreAttachment(pane_id));
+    try std.testing.expect(!tracker.hasPane(.attachment, pane_id));
+    try std.testing.expect(tracker.hasPane(.pane_operation, pane_id));
+    try std.testing.expect(tracker.take(@enumFromInt(7)).? == .ignored);
+    try std.testing.expect(tracker.take(@enumFromInt(8)).? == .close_pane);
+    try std.testing.expect(!tracker.ignoreAttachment(pane_id));
 }
 
 test "pane exit completes only its matching close request" {

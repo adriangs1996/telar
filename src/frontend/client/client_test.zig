@@ -17,6 +17,7 @@ const schema = core.schema;
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
 const server_messages = @import("server_messages.zig");
+const tab_attachments = @import("tab_attachments.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = Client.initial_request_id;
 
@@ -104,6 +105,37 @@ const TestHarness = struct {
     fn nextClientMessage(harness: *TestHarness, buffer: []u8) !schema.ClientMessage {
         const payload = try harness.peer.receive(std.testing.io, buffer);
         return schema.decodeClient(payload);
+    }
+
+    fn nextAttachmentRequest(harness: *TestHarness, pane_id: schema.PaneId, buffer: []u8) !schema.RequestId {
+        while (true) {
+            switch (try harness.nextClientMessage(buffer)) {
+                .open_pane => |open| {
+                    if (open.target == .pane and open.target.pane == pane_id) {
+                        return open.request_id;
+                    }
+
+                    return error.UnexpectedPaneTarget;
+                },
+                .pane_resize, .pane_input, .frame_ack => {},
+                else => return error.UnexpectedClientMessage,
+            }
+        }
+    }
+
+    fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: schema.PaneId, buffer: []u8) !schema.RequestId {
+        const snapshot = try schema.encodeTabSnapshot(buffer, .{
+            .request_id = @enumFromInt(3),
+            .location = bootstrap_location,
+            .panes = &.{
+                .{ .pane_id = bootstrap_pane, .lifecycle = .running },
+                .{ .pane_id = pane_id, .lifecycle = .running },
+            },
+        });
+        _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
+        try harness.settle();
+
+        return harness.nextAttachmentRequest(pane_id, buffer);
     }
 
     const bootstrap_location: schema.TabLocation = .{
@@ -848,27 +880,185 @@ test "an attach reply marks the discovered pane attached" {
 
     const discovered: schema.PaneId = @enumFromInt(11);
     var payload: [256]u8 = undefined;
-    const snapshot = try schema.encodeTabSnapshot(&payload, .{
-        .request_id = @enumFromInt(3),
-        .location = TestHarness.bootstrap_location,
-        .panes = &.{
-            .{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running },
-            .{ .pane_id = discovered, .lifecycle = .running },
-        },
-    });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
     try std.testing.expect(!client.model.workspace.findPane(discovered).?.attached);
 
-    // The attach request enqueued by the snapshot got id 4.
+    const version_before_confirmation = client.model.version();
+    const pending_updates_before_confirmation = client.presenter.pending_updates;
+
     const opened = try schema.encodePaneOpened(&payload, .{
-        .request_id = @enumFromInt(4),
+        .request_id = attachment_request,
         .pane_id = discovered,
         .location = TestHarness.bootstrap_location,
         .created = false,
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
-    try harness.settle();
+
     try std.testing.expect(client.model.workspace.findPane(discovered).?.attached);
+    try std.testing.expectEqualDeep(version_before_confirmation, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_confirmation, client.presenter.pending_updates);
+}
+
+test "tab detachment retires an in-flight pane attachment" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    const discovered: schema.PaneId = @enumFromInt(11);
+    var payload: [256]u8 = undefined;
+    const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
+    try tab_attachments.detach(client, client.model.workspace.active().?);
+    try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    var detached_root = false;
+    var detached_discovered = false;
+    for (0..2) |_| {
+        const message = try harness.nextClientMessage(&message_buffer);
+        try std.testing.expect(message == .detach_pane);
+        if (message.detach_pane.pane_id == TestHarness.bootstrap_pane) {
+            detached_root = true;
+        } else if (message.detach_pane.pane_id == discovered) {
+            detached_discovered = true;
+        } else {
+            return error.UnexpectedDetachedPane;
+        }
+    }
+    try std.testing.expect(detached_root);
+    try std.testing.expect(detached_discovered);
+    try std.testing.expect(!client.requests.hasPane(.attachment, discovered));
+
+    const pending_updates_before_confirmation = client.presenter.pending_updates;
+    const opened = try schema.encodePaneOpened(&payload, .{
+        .request_id = attachment_request,
+        .pane_id = discovered,
+        .location = TestHarness.bootstrap_location,
+        .created = false,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+
+    try std.testing.expect(!client.model.workspace.findPane(discovered).?.attached);
+    try std.testing.expectEqual(pending_updates_before_confirmation, client.presenter.pending_updates);
+}
+
+test "a missing pane attachment keeps local membership until a canonical snapshot" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    const discovered: schema.PaneId = @enumFromInt(11);
+    var payload: [256]u8 = undefined;
+    const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
+    const version_before_failure = client.model.version();
+
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = attachment_request,
+        .code = .pane_not_found,
+        .message = "pane disappeared",
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+
+    const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedBeforeSnapshot;
+    try std.testing.expect(!pane.attached);
+    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try std.testing.expect(client.requests.has(.tab_snapshot));
+    try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    const recovery = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(recovery == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, recovery.request_tab_snapshot.location);
+    try std.testing.expect(client.notification_tick_pending);
+}
+
+test "an internal pane attachment failure waits for a later resync" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    const discovered: schema.PaneId = @enumFromInt(11);
+    var payload: [256]u8 = undefined;
+    const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
+    const version_before_failure = client.model.version();
+
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = attachment_request,
+        .code = .internal,
+        .message = "resize failed",
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+
+    const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedAfterInternalFailure;
+    try std.testing.expect(!pane.attached);
+    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try std.testing.expect(!client.requests.has(.tab_snapshot));
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expect(client.notification_tick_pending);
+}
+
+test "a late pane attachment confirmation retired by a snapshot is ignored" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    const discovered: schema.PaneId = @enumFromInt(11);
+    var payload: [256]u8 = undefined;
+    const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
+    try client.requests.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
+
+    const reconciled = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(90),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(reconciled));
+    try std.testing.expect(client.model.workspace.findPane(discovered) == null);
+    const pending_updates_before_confirmation = client.presenter.pending_updates;
+
+    const opened = try schema.encodePaneOpened(&payload, .{
+        .request_id = attachment_request,
+        .pane_id = discovered,
+        .location = TestHarness.bootstrap_location,
+        .created = false,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+
+    try std.testing.expectEqual(pending_updates_before_confirmation, client.presenter.pending_updates);
+}
+
+test "a late failed pane attachment does not notify or draw" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    try client.requests.add(@enumFromInt(4), .{ .attach_pane = .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+    } });
+    try std.testing.expect(client.requests.ignoreAttachment(TestHarness.bootstrap_pane));
+    const pending_updates_before_failure = client.presenter.pending_updates;
+    var payload: [256]u8 = undefined;
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = @enumFromInt(4),
+        .code = .pane_not_found,
+        .message = "pane disappeared",
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+
+    try std.testing.expectEqual(pending_updates_before_failure, client.presenter.pending_updates);
+    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
 
 test "a created workspace bookmarks and replaces the prior layout" {

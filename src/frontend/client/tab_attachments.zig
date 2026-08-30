@@ -103,7 +103,7 @@ pub fn selectionHandler(client: *Client) select_tab.SelectTabHandler {
     };
 }
 
-/// Detaches every attached pane in a tab after clearing the reported focus.
+/// Detaches every attached or in-flight pane after clearing reported focus.
 ///
 /// ```zig
 /// try detach(client, tab);
@@ -115,11 +115,13 @@ pub fn detach(client: *Client, tab: *tabs_mod.Tab) !void {
 
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {
-        if (!pane.attached) {
+        const attachment_pending = client.requests.hasPane(.attachment, pane.id);
+        if (!pane.attached and !attachment_pending) {
             continue;
         }
 
         try client.enqueue(.{ .detach_pane = .{ .pane_id = pane.id } });
+        _ = client.requests.ignoreAttachment(pane.id);
         try client.graphics_store.setPaneVisible(pane.id, false);
     }
 

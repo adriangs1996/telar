@@ -35,6 +35,7 @@ test {
     _ = @import("client_test.zig");
     _ = @import("config_reload.zig");
     _ = @import("model.zig");
+    _ = @import("pane_attachments.zig");
     _ = @import("presenter.zig");
     _ = @import("server_messages.zig");
     _ = @import("tab_attachments.zig");

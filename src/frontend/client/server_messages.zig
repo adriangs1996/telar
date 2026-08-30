@@ -22,6 +22,7 @@ const diagnostics = core.diagnostics;
 const client_mod = @import("client.zig");
 const Client = client_mod;
 const InputHandler = @import("input_handler.zig");
+const pane_attachments = @import("pane_attachments.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
@@ -359,7 +360,7 @@ fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
     if (replaced) try client.presenter.requestDraw();
 }
 
-/// A pane launch commit: routed by the continuation that asked for it.
+/// An open-pane reply: routed by the continuation that asked for it.
 fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
     const continuation = client.requests.take(opened.request_id) orelse
         return error.UnexpectedRequest;
@@ -396,13 +397,21 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
             try client.syncPaneFocus(model);
         },
         .attach_pane => |attachment| {
-            if (attachment.pane_id != opened.pane_id or
-                !std.meta.eql(attachment.location, opened.location))
-                return error.UnexpectedPane;
-            const tab = client.model.workspace.tabForPane(opened.pane_id) orelse
-                return error.UnexpectedPane;
-            try tab.model.markAttached(opened.pane_id);
+            var use_case = pane_attachments.confirmationHandler(client);
+            _ = try use_case.execute(.{
+                .requested = .{
+                    .pane_id = attachment.pane_id,
+                    .location = attachment.location,
+                },
+                .confirmed = .{
+                    .pane_id = opened.pane_id,
+                    .location = opened.location,
+                },
+                .created = opened.created,
+            });
+            return;
         },
+        .ignored => return,
         else => return error.UnexpectedRequest,
     }
     try client.presenter.requestDraw();
@@ -596,6 +605,7 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
     if (client.reported_focus == exited.pane_id) client.forgetPaneFocus();
     if (tab) |value| _ = value.model.removePane(exited.pane_id);
     client.view.invalidate();
+    _ = client.requests.ignoreAttachment(exited.pane_id);
     _ = client.requests.completePaneClose(exited.pane_id);
     if (client.model.workspace.active()) |active| {
         try client.syncPaneFocus(&active.model);
@@ -605,7 +615,7 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
     try client.presenter.requestDraw();
 }
 
-/// A failed request: roll back what the continuation had staged and tell the user.
+/// A failed request: recover disposable state when needed and tell the user.
 fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
     const continuation = client.requests.take(failure.request_id) orelse return error.UnexpectedRequestFailure;
     switch (continuation) {
@@ -615,11 +625,13 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
                 try client.resizeAttached(&active.model, client.view.workbench());
         },
         .attach_pane => |attachment| {
-            if (client.model.workspace.tabForPane(attachment.pane_id)) |tab|
-                _ = tab.model.removePane(attachment.pane_id);
-            client.view.invalidate();
-            if (client.model.workspace.active()) |active|
-                try client.resizeAttached(&active.model, client.view.workbench());
+            if (failure.code == .pane_not_found) {
+                var recovery = pane_attachments.recoveryHandler(client);
+                _ = try recovery.execute(.{
+                    .pane_id = attachment.pane_id,
+                    .location = attachment.location,
+                });
+            }
         },
         .close_tab => |location| {
             var recovery = tab_attachments.closeRecoveryHandler(client);
@@ -653,16 +665,16 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
         .workspace_snapshot, .tab_snapshot, .create_tab => return error.RuntimeRequestFailed,
     }
     if (continuation == .ignored) {
-        try client.presenter.requestDraw();
-    } else {
-        try client.notify(.{
-            .level = .failure,
-            .title = failureTitle(continuation),
-            .message = failure.message,
-            .target = notificationTarget(continuation),
-            .duration_ns = 7 * std.time.ns_per_s,
-        });
+        return;
     }
+
+    try client.notify(.{
+        .level = .failure,
+        .title = failureTitle(continuation),
+        .message = failure.message,
+        .target = notificationTarget(continuation),
+        .duration_ns = 7 * std.time.ns_per_s,
+    });
 }
 
 pub fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !void {

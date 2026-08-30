@@ -41,6 +41,16 @@ pub const TabCreation = struct {
     created: schema.TabLocation,
 };
 
+pub const PaneAttachment = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+};
+
+pub const PaneAttachmentConfirmation = enum {
+    confirmed,
+    stale,
+};
+
 pub const CloseTab = struct {
     location: schema.TabLocation,
     workspace_closed: bool,
@@ -345,6 +355,44 @@ pub const Model = struct {
         }
 
         return reconciliation;
+    }
+
+    /// Confirms a client attachment only while the requested pane is still
+    /// detached in the active tab. Attachment state is operational and does
+    /// not advance a presentation revision.
+    ///
+    /// ```zig
+    /// const result = model.confirmPaneAttachment(attachment);
+    /// ```
+    pub fn confirmPaneAttachment(model: *Model, attachment: PaneAttachment) PaneAttachmentConfirmation {
+        const active = model.workspace.active() orelse return .stale;
+        if (!std.meta.eql(active.location, attachment.location)) {
+            return .stale;
+        }
+
+        const pane = active.model.find(attachment.pane_id) orelse return .stale;
+        if (!std.meta.eql(pane.location, attachment.location) or pane.attached) {
+            return .stale;
+        }
+
+        active.model.markAttached(attachment.pane_id) catch unreachable;
+        return .confirmed;
+    }
+
+    /// Reports whether the active client replica still needs the requested
+    /// attachment. Stale tabs, missing panes and confirmed panes need no repair.
+    ///
+    /// ```zig
+    /// if (model.needsPaneAttachment(attachment)) requestSnapshot();
+    /// ```
+    pub fn needsPaneAttachment(model: *const Model, attachment: PaneAttachment) bool {
+        const active = model.workspace.activeConst() orelse return false;
+        if (!std.meta.eql(active.location, attachment.location)) {
+            return false;
+        }
+
+        const pane = active.model.findConst(attachment.pane_id) orelse return false;
+        return std.meta.eql(pane.location, attachment.location) and !pane.attached;
     }
 
     /// Commits a runtime-confirmed tab position and advances the model once.
@@ -710,6 +758,63 @@ test "tab reconciliation rejects pane identities owned by another tab" {
 
     try std.testing.expectEqual(@as(usize, 1), model.workspace.find(first.tab_id).?.model.pane_count);
     try std.testing.expectEqual(@as(usize, 1), model.workspace.find(second.tab_id).?.model.pane_count);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "pane attachment confirmation changes only active operational state" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const discovered: schema.PaneId = @enumFromInt(2);
+    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.active().?.model.addDiscovered(discovered, location, .{ .w = 40, .h = 10 });
+    const attachment: PaneAttachment = .{ .pane_id = discovered, .location = location };
+
+    try std.testing.expect(model.needsPaneAttachment(attachment));
+    try std.testing.expectEqual(PaneAttachmentConfirmation.confirmed, model.confirmPaneAttachment(attachment));
+    try std.testing.expect(!model.needsPaneAttachment(attachment));
+    try std.testing.expect(model.workspace.findPane(discovered).?.attached);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+
+    try std.testing.expectEqual(PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "pane attachment confirmation ignores inactive missing and wrong-location panes" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const discovered: schema.PaneId = @enumFromInt(3);
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.active().?.model.addDiscovered(discovered, first, .{ .w = 40, .h = 10 });
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
+
+    const inactive: PaneAttachment = .{ .pane_id = discovered, .location = first };
+    try std.testing.expectEqual(PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(inactive));
+    try std.testing.expect(!model.needsPaneAttachment(inactive));
+    try std.testing.expect(!model.workspace.findPane(discovered).?.attached);
+
+    try std.testing.expect(model.workspace.select(first.tab_id));
+    const missing: PaneAttachment = .{ .pane_id = @enumFromInt(9), .location = first };
+    const wrong_location: PaneAttachment = .{ .pane_id = discovered, .location = second };
+    try std.testing.expectEqual(PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(missing));
+    try std.testing.expectEqual(PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(wrong_location));
+    try std.testing.expect(!model.needsPaneAttachment(missing));
+    try std.testing.expect(!model.needsPaneAttachment(wrong_location));
+    try std.testing.expect(!model.workspace.findPane(discovered).?.attached);
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
