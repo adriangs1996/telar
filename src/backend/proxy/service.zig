@@ -12,6 +12,7 @@ const identity = @import("identity.zig");
 const middleware = @import("middleware.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
+const tls_tunnel = @import("tls_tunnel.zig");
 
 const Io = std.Io;
 const net = Io.net;
@@ -466,6 +467,21 @@ const TunnelContext = struct {
     }
 };
 
+const TlsTunnelContext = struct {
+    service: *Service,
+    tunnel: *TunnelContext,
+};
+
+const tls_tunnel_port: tls_tunnel.Port(TlsTunnelContext, net.Stream, *tls.Session) = .{
+    .passthrough = tlsPassthrough,
+    .record_passthrough = recordTlsPassthrough,
+    .intercept = interceptTls,
+    .record_failure = recordTlsTunnelFailure,
+    .publish_failure = publishTlsTunnelFailure,
+};
+
+const EstablishTlsTunnel = tls_tunnel.Command(TlsTunnelContext, tls_tunnel_port);
+
 const H2EventObserver = struct {
     context: *TunnelContext,
     responses: ?*provider.ResponseStreams = null,
@@ -538,31 +554,29 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     defer upstream.close(service.io);
     reply(service.io, stream, "HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    if (service.passthrough_hosts.contains(target.host.bytes)) {
-        _ = service.passthrough_connections.fetchAdd(1, .monotonic);
-        relayPassthrough(service.io, stream, upstream);
-        return;
-    }
+    var tls_context: TlsTunnelContext = .{ .service = service, .tunnel = &context };
+    const route = EstablishTlsTunnel.execute(&tls_context, .{
+        .host = target.host.bytes,
+        .child = stream,
+        .origin = upstream,
+    }) orelse return;
 
-    var cause: anyerror = error.Unknown;
-    const session = tls.intercept(
-        service.io,
-        service.gpa,
-        &service.authority,
-        &service.roots,
-        target.host.bytes,
-        stream,
-        upstream,
-        &cause,
-    ) catch |err| {
-        recordTlsFailure(service, err);
-        context.publish(.request_failed, 0);
-        return;
+    var negotiated_h2 = false;
+    const session = switch (route) {
+        .passthrough => {
+            relayPassthrough(service.io, stream, upstream);
+            return;
+        },
+        .http11 => |established| established,
+        .h2 => |established| block: {
+            negotiated_h2 = true;
+            break :block established;
+        },
     };
     defer session.deinit();
 
-    context.protocol = if (session.negotiated() == .h2) .h2 else .http11;
-    if (session.negotiated() == .h2) {
+    context.protocol = if (negotiated_h2) .h2 else .http11;
+    if (negotiated_h2) {
         var response_streams = provider.ResponseStreams.init(service.gpa, context.provider);
         defer response_streams.deinit();
         var response_observer: H2EventObserver = .{
@@ -716,6 +730,37 @@ fn recordTlsFailure(service: *Service, failure: tls.Error) void {
         error.MintFailed => &service.tls_mint_failures,
     };
     _ = counter.fetchAdd(1, .monotonic);
+}
+
+fn tlsPassthrough(context: *TlsTunnelContext, host: []const u8) bool {
+    return context.service.passthrough_hosts.contains(host);
+}
+
+fn recordTlsPassthrough(context: *TlsTunnelContext) void {
+    _ = context.service.passthrough_connections.fetchAdd(1, .monotonic);
+}
+
+fn interceptTls(context: *TlsTunnelContext, attempt: tls_tunnel.Attempt(net.Stream)) tls.Error!tls_tunnel.Established(*tls.Session) {
+    const service = context.service;
+    const session = try tls.intercept(.{
+        .io = service.io,
+        .gpa = service.gpa,
+        .authority = &service.authority,
+        .roots = &service.roots,
+        .host = attempt.host,
+        .child = attempt.child,
+        .origin = attempt.origin,
+    });
+
+    return .{ .session = session, .protocol = session.negotiated() };
+}
+
+fn recordTlsTunnelFailure(context: *TlsTunnelContext, failure: tls.Error) void {
+    recordTlsFailure(context.service, failure);
+}
+
+fn publishTlsTunnelFailure(context: *TlsTunnelContext) void {
+    context.tunnel.publish(.request_failed, 0);
 }
 
 fn relayH2Request(session: *tls.Session, context: *TunnelContext) h2.Stats {
@@ -1030,6 +1075,16 @@ fn echoOpaquePayload(io: Io, listener: *net.Server, expected: []const u8) !void 
     try writer.interface.flush();
 }
 
+fn rejectTlsHandshake(io: Io, listener: *net.Server) !void {
+    const stream = try listener.accept(io);
+    defer stream.close(io);
+
+    var write_buffer: [32]u8 = undefined;
+    var writer = stream.writer(io, &write_buffer);
+    try writer.interface.writeAll(&.{ 0x16, 0x03, 0x03, 0xff, 0xff });
+    try writer.interface.flush();
+}
+
 fn listenTestOrigin(io: Io) !Bound {
     var port: u16 = 49_152;
     while (port < 49_280) : (port += 1) {
@@ -1146,6 +1201,86 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
         @as(u64, 1),
         service.passthrough_connections.load(.monotonic),
     );
+}
+
+test "intercepted CONNECT publishes and counts an upstream TLS failure" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var origin = try listenTestOrigin(io);
+    defer origin.listener.deinit(io);
+    var origin_worker = try io.concurrent(rejectTlsHandshake, .{ io, &origin.listener });
+    defer origin_worker.cancel(io) catch {};
+
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const service = try Service.create(io, gpa, .{
+        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
+        .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
+        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+    });
+    defer service.destroy();
+
+    const credential: identity.Credential = .{
+        .pane_id = try schema.id.pane(9),
+        .pane_generation = 4,
+        .token = .{0x22} ** identity.token_bytes,
+    };
+    try service.registerCredential(&credential);
+    var worker = try io.concurrent(Service.run, .{service});
+    defer worker.cancel(io) catch {};
+
+    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.port);
+    const client = try proxy_address.connect(io, .{ .mode = .stream });
+    defer client.close(io);
+    var write_buffer: [512]u8 = undefined;
+    var writer = client.writer(io, &write_buffer);
+    const raw = "telar:9.4.22222222222222222222222222222222";
+    var encoded: [std.base64.standard.Encoder.calcSize(raw.len)]u8 = undefined;
+    const basic = std.base64.standard.Encoder.encode(&encoded, raw);
+    var request_buffer: [512]u8 = undefined;
+    const request = try std.fmt.bufPrint(
+        &request_buffer,
+        "CONNECT localhost:{d} HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n",
+        .{ origin.port, basic },
+    );
+    try writer.interface.writeAll(request);
+    try writer.interface.flush();
+
+    var read_buffer: [512]u8 = undefined;
+    var reader = client.reader(io, &read_buffer);
+    var response: ["HTTP/1.1 200 Connection Established\r\n\r\n".len]u8 = undefined;
+    try reader.interface.readSliceAll(&response);
+    try std.testing.expectEqualStrings(
+        "HTTP/1.1 200 Connection Established\r\n\r\n",
+        &response,
+    );
+
+    try writer.interface.writeAll("not-a-tls-client-hello");
+    try writer.interface.flush();
+    try origin_worker.await(io);
+
+    var event = try service.receive(io);
+    defer std.crypto.secureZero(u8, &event.credential.token);
+    try std.testing.expectEqual(middleware.Phase.request_failed, event.phase);
+    try std.testing.expectEqual(middleware.Protocol.http11, event.protocol);
+    try std.testing.expectEqual(@as(u32, 0), event.stream_id);
+    try std.testing.expect(std.meta.eql(credential, event.credential));
+    try std.testing.expectEqual(
+        @as(u64, 1),
+        service.tls_upstream_handshake_failures.load(.monotonic),
+    );
+    try std.testing.expectEqual(@as(u64, 0), service.tls_context_failures.load(.monotonic));
+    try std.testing.expectEqual(
+        @as(u64, 0),
+        service.tls_downstream_handshake_failures.load(.monotonic),
+    );
+    try std.testing.expectEqual(@as(u64, 0), service.tls_mint_failures.load(.monotonic));
 }
 
 test "proxy credentials are revoked with their pane" {
