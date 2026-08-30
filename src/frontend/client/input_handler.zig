@@ -17,6 +17,7 @@ const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
 const tab_renames = @import("tab_renames.zig");
+const tab_selections = @import("tab_selections.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_renames = @import("workspace_renames.zig");
@@ -58,10 +59,10 @@ pub fn capturesKeys(handler: *const InputHandler) bool {
     return handler.client.mode == .prompt or handler.client.view.hasAttachmentModal();
 }
 
-fn selectTab(handler: *InputHandler, tab_id: schema.TabId) !void {
-    var use_case = tab_attachments.selectionHandler(handler.client);
+fn selectTab(handler: *InputHandler, target: tab_selections.Target) !void {
+    var use_case = tab_selections.selectionHandler(handler.client);
 
-    _ = try use_case.execute(.{ .tab_id = tab_id });
+    _ = try use_case.execute(.{ .target = target });
 }
 
 /// Switching targets the runtime identity, not its path. Multiple explicit
@@ -89,8 +90,10 @@ fn focusSidebarAgent(
 ) !bool {
     const agent = handler.client.view.sidebar_snapshot.find(agent_key) orelse return false;
     if (handler.client.model.workspace.tabForPane(agent_key.pane_id)) |tab| {
-        if (handler.client.model.workspace.activeConst().?.location.tab_id != tab.location.tab_id)
-            try handler.selectTab(tab.location.tab_id);
+        if (handler.client.model.workspace.activeConst().?.location.tab_id != tab.location.tab_id) {
+            try handler.selectTab(.{ .tab_id = tab.location.tab_id });
+        }
+
         const active = handler.client.model.workspace.active() orelse return false;
         const shift = active.model.focusPaneShift(agent_key.pane_id);
         if (!shift.focused) return false;
@@ -361,7 +364,9 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         try handler.focusSidebarAgent(agent_key)
     else
         false;
-    if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
+    if (interaction.select_tab) |tab_id| {
+        try handler.selectTab(.{ .tab_id = tab_id });
+    }
     if (interaction.rename_tab) |tab_id| {
         if (handler.client.mode == .normal) {
             if (handler.client.model.workspace.find(tab_id)) |tab| {
@@ -373,7 +378,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
     if (interaction.notification_target) |target| switch (target) {
         .none => {},
-        .select_tab => |tab_id| try handler.selectTab(tab_id),
+        .select_tab => |tab_id| try handler.selectTab(.{ .tab_id = tab_id }),
         .select_workspace => |workspace| try handler.switchWorkspace(workspace),
         .focus_pane => |pane_id| {
             const shift = model.focusPaneShift(pane_id);
@@ -623,8 +628,8 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
         .select_workspace => |position| try handler.selectWorkspacePosition(position),
         .close_pane => try handler.closeFocused(),
         .new_tab => try handler.createTab(),
-        .select_tab_offset => |offset| try handler.selectTabOffset(offset),
-        .select_tab => |position| try handler.selectTabPosition(position),
+        .select_tab_offset => |offset| try handler.selectTab(.{ .offset = offset }),
+        .select_tab => |position| try handler.selectTab(.{ .position = position }),
         .rename_tab => if (handler.client.model.workspace.active()) |tab| {
             handler.client.beginTabRenamePrompt(tab.location.tab_id, tab.labelSlice());
             handler.redraw = true;
@@ -757,19 +762,6 @@ fn submitWorkspaceRename(handler: *InputHandler, name: []const u8) !void {
     }
 
     client.finishNamePrompt();
-}
-
-fn selectTabOffset(handler: *InputHandler, offset: isize) !void {
-    if (handler.client.model.workspace.count < 2) return;
-    const count: isize = @intCast(handler.client.model.workspace.count);
-    const current: isize = @intCast(handler.client.model.workspace.active_index);
-    const position: usize = @intCast(@mod(current + offset, count));
-    try handler.selectTab(handler.client.model.workspace.items[position].?.location.tab_id);
-}
-
-fn selectTabPosition(handler: *InputHandler, position: usize) !void {
-    if (position >= handler.client.model.workspace.count) return;
-    try handler.selectTab(handler.client.model.workspace.items[position].?.location.tab_id);
 }
 
 fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {

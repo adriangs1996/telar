@@ -501,21 +501,31 @@ pub const Model = struct {
 
     pub fn select(model: *Model, tab_id: schema.TabId) bool {
         const index = model.indexOf(tab_id) orelse return false;
-        if (index == model.active_index) return false;
+        if (index == model.active_index) {
+            return false;
+        }
+
         model.active_index = index;
         return true;
     }
 
     pub fn selectOffset(model: *Model, offset: isize) bool {
-        if (model.count < 2) return false;
+        if (model.count < 2) {
+            return false;
+        }
+
         const count: isize = @intCast(model.count);
-        const current: isize = @intCast(model.active_index);
-        model.active_index = @intCast(@mod(current + offset, count));
-        return true;
+        const wrapped_offset: usize = @intCast(@mod(offset, count));
+        const position = (model.active_index + wrapped_offset) % model.count;
+
+        return model.selectPosition(position);
     }
 
     pub fn selectPosition(model: *Model, position: usize) bool {
-        if (position >= model.count or position == model.active_index) return false;
+        if (position >= model.count or position == model.active_index) {
+            return false;
+        }
+
         model.active_index = position;
         return true;
     }
@@ -589,8 +599,13 @@ test "selection wraps and moving tabs preserves the active identity" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.selectOffset(1));
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
+    try std.testing.expect(!model.selectOffset(0));
+    try std.testing.expect(!model.selectOffset(2));
+    try std.testing.expect(model.selectOffset(std.math.maxInt(isize)));
+    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.activeConst().?.location.tab_id);
+    try std.testing.expect(!model.selectOffset(std.math.minInt(isize)));
     try std.testing.expectEqual(PositionChange.changed, try model.applyPosition(@enumFromInt(1), 1));
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.activeConst().?.location.tab_id);
     try std.testing.expectEqual(PositionChange.unchanged, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectError(error.TabNotFound, model.applyPosition(@enumFromInt(9), 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyPosition(@enumFromInt(1), 2));

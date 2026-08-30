@@ -1,35 +1,9 @@
-//! Synchronizes client-owned pane attachments when the active tab changes.
+//! Synchronizes client-owned pane attachments during tab lifecycle changes.
 
-const std = @import("std");
-const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
-const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
-const schema = core.schema;
-const select_tab = client_application.select_tab;
 const tabs_mod = workspace_capability.tabs;
-
-/// Wires the tab-selection use case to this client's snapshot and attachment ports.
-///
-/// ```zig
-/// var handler = selectionHandler(client);
-/// _ = try handler.execute(.{ .tab_id = tab_id });
-/// ```
-pub fn selectionHandler(client: *Client) select_tab.SelectTabHandler {
-    return .{
-        .model = &client.model,
-        .snapshots = .{
-            .context = client,
-            .pending = tabSnapshotPending,
-        },
-        .effects = .{
-            .context = client,
-            .apply = applySelection,
-        },
-    };
-}
 
 /// Detaches every attached or in-flight pane after clearing reported focus.
 ///
@@ -54,37 +28,4 @@ pub fn detach(client: *Client, tab: *tabs_mod.Tab) !void {
     }
 
     tabs_mod.Model.detachAll(tab);
-}
-
-fn tabSnapshotPending(context: *anyopaque) bool {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.tab_snapshot);
-}
-
-fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    const workspace = &client.model.workspace;
-    const previous = findTab(workspace, selection.previous) orelse
-        return error.UnexpectedTabSelection;
-    const selected = findTab(workspace, selection.selected) orelse
-        return error.UnexpectedTabSelection;
-
-    try detach(client, previous);
-
-    var visible = selected.model.paneIterator();
-    while (visible.next()) |pane| {
-        try client.graphics_store.setPaneVisible(pane.id, true);
-    }
-
-    try client.syncPaneFocus(&selected.model);
-    try client.requestTabSnapshot(selected.location);
-}
-
-fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const tab = workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
-
-    return tab;
 }

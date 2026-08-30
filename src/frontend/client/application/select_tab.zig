@@ -6,8 +6,10 @@ const client_model = @import("../model.zig");
 
 const schema = core.schema;
 
+pub const Target = client_model.TabSelectionTarget;
+
 pub const SelectTab = struct {
-    tab_id: schema.TabId,
+    target: Target,
 };
 
 pub const SnapshotGate = struct {
@@ -29,14 +31,14 @@ pub const SelectTabHandler = struct {
     /// Missing, repeated and snapshot-blocked selections have no effects.
     ///
     /// ```zig
-    /// const selection = try handler.execute(.{ .tab_id = tab_id });
+    /// const selection = try handler.execute(.{ .target = .{ .tab_id = tab_id } });
     /// ```
     pub fn execute(handler: *SelectTabHandler, command: SelectTab) !?client_model.TabSelection {
         if (handler.snapshots.pending(handler.snapshots.context)) {
             return null;
         }
 
-        const selection = handler.model.selectTab(command.tab_id) catch |err| switch (err) {
+        const selection = handler.model.selectTab(command.target) catch |err| switch (err) {
             error.NoActiveTab, error.TabNotFound => return null,
         } orelse return null;
 
@@ -119,7 +121,7 @@ const TestingModel = struct {
     }
 };
 
-test "SelectTabHandler commits before synchronizing client resources" {
+test "SelectTabHandler commits a resolved target before synchronizing resources" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var snapshots: SnapshotGateCapture = .{};
@@ -130,7 +132,7 @@ test "SelectTabHandler commits before synchronizing client resources" {
         .effects = effects.port(),
     };
 
-    const selection = (try handler.execute(.{ .tab_id = testing.second.tab_id })).?;
+    const selection = (try handler.execute(.{ .target = .{ .position = 1 } })).?;
 
     try std.testing.expectEqualDeep(testing.first, selection.previous);
     try std.testing.expectEqualDeep(testing.second, selection.selected);
@@ -138,7 +140,7 @@ test "SelectTabHandler commits before synchronizing client resources" {
     try std.testing.expect(effects.observed_commit);
 }
 
-test "SelectTabHandler suppresses blocked repeated and missing selections" {
+test "SelectTabHandler suppresses blocked and ineffective selections" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var snapshots: SnapshotGateCapture = .{ .blocked = true };
@@ -149,11 +151,18 @@ test "SelectTabHandler suppresses blocked repeated and missing selections" {
         .effects = effects.port(),
     };
 
-    try std.testing.expect((try handler.execute(.{ .tab_id = testing.second.tab_id })) == null);
+    try std.testing.expect((try handler.execute(.{ .target = .{ .offset = 1 } })) == null);
     try std.testing.expectEqualDeep(testing.first, testing.model.activeTabLocation().?);
     snapshots.blocked = false;
-    try std.testing.expect((try handler.execute(.{ .tab_id = testing.first.tab_id })) == null);
-    try std.testing.expect((try handler.execute(.{ .tab_id = @enumFromInt(9) })) == null);
+    try std.testing.expect((try handler.execute(.{ .target = .{ .position = 0 } })) == null);
+    try std.testing.expect((try handler.execute(.{ .target = .{ .position = 9 } })) == null);
+    try std.testing.expect((try handler.execute(.{ .target = .{ .offset = 2 } })) == null);
+    try std.testing.expect((try handler.execute(.{ .target = .{ .tab_id = @enumFromInt(9) } })) == null);
+    try std.testing.expectEqual(@as(usize, 0), effects.calls);
+    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+
+    testing.model.workspace.deinit();
+    try std.testing.expect((try handler.execute(.{ .target = .{ .position = 0 } })) == null);
     try std.testing.expectEqual(@as(usize, 0), effects.calls);
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
@@ -175,7 +184,7 @@ test "SelectTabHandler preserves a committed selection after effect failure" {
 
     try std.testing.expectError(
         error.SelectionSyncFailed,
-        handler.execute(.{ .tab_id = testing.second.tab_id }),
+        handler.execute(.{ .target = .{ .offset = 1 } }),
     );
     try std.testing.expectEqualDeep(testing.second, testing.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(u64, 1), testing.model.version().active_tab);

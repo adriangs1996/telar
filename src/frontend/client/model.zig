@@ -27,6 +27,12 @@ pub const TabSelection = struct {
     selected: schema.TabLocation,
 };
 
+pub const TabSelectionTarget = union(enum) {
+    tab_id: schema.TabId,
+    offset: isize,
+    position: usize,
+};
+
 pub const RenameTab = struct {
     location: schema.TabLocation,
     /// Borrowed only for the synchronous transition.
@@ -894,23 +900,31 @@ pub const Model = struct {
         };
     }
 
-    /// Selects one existing tab and returns the committed identity change.
+    /// Resolves one semantic target and returns the committed identity change.
     ///
     /// ```zig
-    /// const selection = try model.selectTab(tab_id) orelse return;
+    /// const selection = try model.selectTab(.{ .position = 1 }) orelse return;
     /// ```
-    pub fn selectTab(model: *Model, tab_id: schema.TabId) !?TabSelection {
+    pub fn selectTab(model: *Model, target: TabSelectionTarget) !?TabSelection {
         const previous = model.workspace.activeConst() orelse return error.NoActiveTab;
-        const selected_index = model.workspace.indexOf(tab_id) orelse return error.TabNotFound;
-        if (selected_index == model.workspace.active_index) {
+
+        const changed = switch (target) {
+            .tab_id => |tab_id| changed: {
+                const position = model.workspace.indexOf(tab_id) orelse return error.TabNotFound;
+
+                break :changed model.workspace.selectPosition(position);
+            },
+            .offset => |offset| model.workspace.selectOffset(offset),
+            .position => |position| model.workspace.selectPosition(position),
+        };
+        if (!changed) {
             return null;
         }
 
         const selection: TabSelection = .{
             .previous = previous.location,
-            .selected = model.workspace.items[selected_index].?.location,
+            .selected = model.workspace.activeConst().?.location,
         };
-        std.debug.assert(model.workspace.select(tab_id));
         model.active_tab_revision +%= 1;
 
         return selection;
@@ -1861,7 +1875,7 @@ test "workspace closure is validated before the last tab is removed" {
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
 }
 
-test "tab selection advances only the active identity revision" {
+test "tab selection resolves identity position and wrapping offset" {
     var model = Model.init(std.testing.allocator, true);
     defer model.deinit();
 
@@ -1883,7 +1897,7 @@ test "tab selection advances only the active identity revision" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(first.tab_id));
 
-    const selection = (try model.selectTab(second.tab_id)).?;
+    const selection = (try model.selectTab(.{ .position = 1 })).?;
 
     try std.testing.expectEqualDeep(first, selection.previous);
     try std.testing.expectEqualDeep(second, selection.selected);
@@ -1891,9 +1905,14 @@ test "tab selection advances only the active identity revision" {
     try std.testing.expectEqual(@as(u64, 0), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
 
-    try std.testing.expect((try model.selectTab(second.tab_id)) == null);
-    try std.testing.expectError(error.TabNotFound, model.selectTab(@enumFromInt(9)));
-    try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+    try std.testing.expectEqualDeep(first, (try model.selectTab(.{ .offset = 1 })).?.selected);
+    try std.testing.expectEqualDeep(second, (try model.selectTab(.{ .offset = -1 })).?.selected);
+    try std.testing.expectEqualDeep(first, (try model.selectTab(.{ .tab_id = first.tab_id })).?.selected);
+    try std.testing.expect((try model.selectTab(.{ .tab_id = first.tab_id })) == null);
+    try std.testing.expect((try model.selectTab(.{ .position = 9 })) == null);
+    try std.testing.expect((try model.selectTab(.{ .offset = 2 })) == null);
+    try std.testing.expectError(error.TabNotFound, model.selectTab(.{ .tab_id = @enumFromInt(9) }));
+    try std.testing.expectEqual(@as(u64, 4), model.version().active_tab);
 }
 
 test "pane closure planning requires the active attached pane without mutation" {

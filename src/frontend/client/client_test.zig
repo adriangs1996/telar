@@ -1925,6 +1925,40 @@ test "select tab detaches the current tab before requesting the target snapshot"
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
+test "tab selection offset wraps while full turns remain no-ops" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    try harness.allowTabSelection();
+    const client = harness.client;
+    const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
+    const version_before_selection = client.model.version();
+    const request_id_before_selection = client.next_request_id;
+    const pending_updates_before_selection = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.{ .select_tab_offset = 2 });
+
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(version_before_selection, client.model.version());
+    try std.testing.expectEqual(request_id_before_selection, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    _ = try handler.applyNativeAction(.{ .select_tab_offset = -1 });
+
+    try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expectEqual(request_id_before_selection + 1, client.next_request_id);
+    try std.testing.expect(client.requests.has(.tab_snapshot));
+    try std.testing.expectEqual(@as(usize, 2), client.outbox.len);
+    try std.testing.expectEqual(pending_updates_before_selection, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates_before_selection + 1, client.presenter.pending_updates);
+}
+
 test "pending tab snapshot suppresses tab selection without effects" {
     var harness: TestHarness = undefined;
     try harness.init();

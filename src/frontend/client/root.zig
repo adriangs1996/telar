@@ -46,6 +46,7 @@ test {
     _ = @import("tab_creations.zig");
     _ = @import("tab_moves.zig");
     _ = @import("tab_renames.zig");
+    _ = @import("tab_selections.zig");
     _ = @import("tab_snapshots.zig");
     _ = @import("workspace_creations.zig");
     _ = @import("workspace_handoffs.zig");
