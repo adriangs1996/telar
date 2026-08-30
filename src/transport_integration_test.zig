@@ -2030,8 +2030,12 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     const command = try std.fmt.bufPrint(
         &command_buffer,
         "stty raw -echo; printf 'MEDIA_READY\\n'; " ++
-            "dd bs=1 count=1 of=/dev/null 2>/dev/null; " ++
-            ": > '{s}'; printf 'INPUT_FORWARDED\\n'; sleep 1",
+            "dd bs=1 count=1 of=/dev/null 2>/dev/null & reader=$!; " ++
+            "(sleep 2; kill \"$reader\" 2>/dev/null) & watchdog=$!; " ++
+            "if wait \"$reader\"; then " ++
+            "kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; " ++
+            ": > '{s}'; printf 'INPUT_FORWARDED\\n'; sleep 1; " ++
+            "else kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; exit 1; fi",
         .{sentinel_path},
     );
     const arguments = [_][]const u8{ "/bin/sh", "-c", command };
