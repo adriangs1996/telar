@@ -10,6 +10,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const widgets = @import("../widgets/root.zig");
+const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_renames = @import("tab_renames.zig");
 const workspace_renames = @import("workspace_renames.zig");
@@ -704,55 +705,11 @@ fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
 }
 
 fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
-    if (handler.client.requests.has(.pane_operation)) return;
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    const location = model.location orelse return;
-    const prospective = model.prospectiveSplit(
-        pane.id,
-        axis,
-        handler.client.view.workbench(),
-    ) orelse
-        return;
-    const existing_size = rectSize(prospective.existing_content) orelse return;
-    const new_size = rectSize(prospective.new_content) orelse return;
-    const request_id = try handler.client.nextId();
-
-    try handler.client.enqueue(.{ .pane_resize = .{
-        .pane_id = pane.id,
-        .size = existing_size,
-    } });
-    handler.client.enqueueRequest(
-        request_id,
-        .{ .split = .{
-            .target_pane = pane.id,
-            .location = location,
-            .axis = axis,
-        } },
-        .{ .create_pane = .{
-            .request_id = request_id,
-            .location = location,
-            .size = new_size,
-            .launch = .{
-                .cwd = handler.client.options.cwd,
-                .cwd_source = pane.id,
-                .arguments = handler.client.options.arguments,
-            },
-        } },
-    ) catch |err| {
-        try handler.restoreFocusedSize(pane.id);
-        return err;
-    };
-}
-
-fn restoreFocusedSize(handler: *InputHandler, pane_id: schema.PaneId) !void {
-    const model = handler.activeModel() orelse return;
-    const size = model.contentSize(pane_id, handler.client.view.workbench()) orelse return;
-    try handler.client.enqueue(.{ .pane_resize = .{
-        .pane_id = pane_id,
-        .size = size,
-    } });
+    var use_case = pane_splits.requestHandler(handler.client);
+    _ = try use_case.execute(.{
+        .axis = axis,
+        .area = handler.client.view.workbench(),
+    });
 }
 
 fn moveFocus(handler: *InputHandler, direction: layout_mod.Direction) !void {

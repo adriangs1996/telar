@@ -5,6 +5,8 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 
 const schema = core.schema;
+const layout_mod = workspace_capability.layout;
+const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
 const ui = core.ui;
 
@@ -48,6 +50,56 @@ pub const PaneAttachment = struct {
 
 pub const PaneAttachmentConfirmation = enum {
     confirmed,
+    stale,
+};
+
+pub const RequestPaneSplit = struct {
+    axis: layout_mod.Axis,
+    area: ui.Rect,
+};
+
+pub const PaneSplit = struct {
+    target_pane: schema.PaneId,
+    location: schema.TabLocation,
+    axis: layout_mod.Axis,
+    area: ui.Rect,
+};
+
+pub const PaneResize = schema.PaneResize;
+
+pub const PaneSplitPlan = struct {
+    split: PaneSplit,
+    provisional_resize: PaneResize,
+    restore_resize: PaneResize,
+    new_pane_size: schema.TerminalSize,
+};
+
+pub const CommitPaneSplit = struct {
+    split: PaneSplit,
+    new_pane: schema.PaneId,
+};
+
+pub const PaneSplitDisposition = enum {
+    active,
+    inactive,
+    stale,
+};
+
+pub const PaneSplitCommit = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    disposition: PaneSplitDisposition,
+    change: Change,
+};
+
+pub const RecoverPaneSplit = struct {
+    split: PaneSplit,
+    area: ui.Rect,
+};
+
+pub const PaneSplitRecovery = union(enum) {
+    resize: PaneResize,
+    not_required,
     stale,
 };
 
@@ -395,6 +447,139 @@ pub const Model = struct {
         return std.meta.eql(pane.location, attachment.location) and !pane.attached;
     }
 
+    /// Plans one split from active client state without changing the semantic
+    /// model. Both provisional sizes inherit the current cell pixel geometry.
+    ///
+    /// ```zig
+    /// const plan = model.planPaneSplit(.{ .axis = .horizontal, .area = area }) orelse return;
+    /// ```
+    pub fn planPaneSplit(model: *Model, request: RequestPaneSplit) ?PaneSplitPlan {
+        const active = model.workspace.active() orelse return null;
+        const focused = active.model.focusedPane() orelse return null;
+        if (!focused.attached or !std.meta.eql(focused.location, active.location)) {
+            return null;
+        }
+
+        const restore_size = active.model.contentSize(focused.id, request.area) orelse return null;
+        const prospective = active.model.prospectiveSplit(focused.id, request.axis, request.area) orelse
+            return null;
+        var provisional_size = multiplexer.rectSize(prospective.existing_content) orelse return null;
+        var new_pane_size = multiplexer.rectSize(prospective.new_content) orelse return null;
+        inheritCellSize(&provisional_size, restore_size);
+        inheritCellSize(&new_pane_size, restore_size);
+
+        return .{
+            .split = .{
+                .target_pane = focused.id,
+                .location = active.location,
+                .axis = request.axis,
+                .area = request.area,
+            },
+            .provisional_resize = .{ .pane_id = focused.id, .size = provisional_size },
+            .restore_resize = .{ .pane_id = focused.id, .size = restore_size },
+            .new_pane_size = new_pane_size,
+        };
+    }
+
+    /// Commits a runtime-created pane into the exact tab that requested it.
+    /// A missing target is a recoverable race; a missing tab leaves the pane
+    /// unrepresented so the client adapter can detach its runtime attachment.
+    ///
+    /// ```zig
+    /// const commit = try model.commitPaneSplit(command);
+    /// ```
+    pub fn commitPaneSplit(model: *Model, command: CommitPaneSplit) !PaneSplitCommit {
+        const stale: PaneSplitCommit = .{
+            .pane_id = command.new_pane,
+            .location = command.split.location,
+            .disposition = .stale,
+            .change = .unchanged,
+        };
+        const workspace = model.workspace.workspace orelse return stale;
+        if (!std.meta.eql(workspace, command.split.location.workspace)) {
+            return stale;
+        }
+
+        const tab = findTab(&model.workspace, command.split.location) orelse return stale;
+        const active = if (model.workspace.activeConst()) |current|
+            std.meta.eql(current.location, command.split.location)
+        else
+            false;
+        if (model.workspace.tabForPane(command.new_pane)) |owner| {
+            if (owner != tab or command.new_pane == command.split.target_pane) {
+                return error.PaneAlreadyExists;
+            }
+
+            const pane = tab.model.find(command.new_pane).?;
+            if (active) {
+                try tab.model.markAttached(command.new_pane);
+            } else {
+                detachPane(pane);
+            }
+
+            return .{
+                .pane_id = command.new_pane,
+                .location = command.split.location,
+                .disposition = if (active) .active else .inactive,
+                .change = .unchanged,
+            };
+        }
+
+        if (tab.model.find(command.split.target_pane) != null) {
+            try tab.model.split(
+                command.split.target_pane,
+                command.new_pane,
+                command.split.location,
+                command.split.axis,
+                command.split.area,
+            );
+        } else {
+            try tab.model.addDiscovered(command.new_pane, command.split.location, command.split.area);
+            try tab.model.markAttached(command.new_pane);
+        }
+
+        if (!active) {
+            detachPane(tab.model.find(command.new_pane).?);
+        } else {
+            model.panes_revision +%= 1;
+        }
+
+        return .{
+            .pane_id = command.new_pane,
+            .location = command.split.location,
+            .disposition = if (active) .active else .inactive,
+            .change = if (active) .changed else .unchanged,
+        };
+    }
+
+    /// Resolves failure rollback against current state rather than whichever
+    /// tab happens to be active when the response arrives.
+    ///
+    /// ```zig
+    /// const recovery = model.recoverPaneSplit(.{ .split = split, .area = area });
+    /// ```
+    pub fn recoverPaneSplit(model: *Model, command: RecoverPaneSplit) PaneSplitRecovery {
+        const workspace = model.workspace.workspace orelse return .stale;
+        if (!std.meta.eql(workspace, command.split.location.workspace)) {
+            return .stale;
+        }
+
+        const tab = findTab(&model.workspace, command.split.location) orelse return .stale;
+        const pane = tab.model.find(command.split.target_pane) orelse return .stale;
+        if (!std.meta.eql(pane.location, command.split.location)) {
+            return .stale;
+        }
+
+        const active = model.workspace.activeConst() orelse return .stale;
+        if (!std.meta.eql(active.location, command.split.location) or !pane.attached) {
+            return .not_required;
+        }
+
+        const size = tab.model.contentSize(command.split.target_pane, command.area) orelse
+            return .not_required;
+        return .{ .resize = .{ .pane_id = command.split.target_pane, .size = size } };
+    }
+
     /// Commits a runtime-confirmed tab position and advances the model once.
     ///
     /// ```zig
@@ -521,6 +706,25 @@ pub const Model = struct {
         return selection;
     }
 };
+
+fn inheritCellSize(size: *schema.TerminalSize, source: schema.TerminalSize) void {
+    size.cell_width_px = source.cell_width_px;
+    size.cell_height_px = source.cell_height_px;
+}
+
+fn detachPane(pane: *multiplexer.Pane) void {
+    pane.attached = false;
+    pane.pending_frame_id = 0;
+}
+
+fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
+    const tab = workspace.find(location.tab_id) orelse return null;
+    if (!std.meta.eql(tab.location, location)) {
+        return null;
+    }
+
+    return tab;
+}
 
 fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !schema.WorkspaceSnapshotView {
     return (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(buffer, snapshot))).workspace_snapshot;
@@ -1163,4 +1367,116 @@ test "tab selection advances only the active identity revision" {
     try std.testing.expect((try model.selectTab(second.tab_id)) == null);
     try std.testing.expectError(error.TabNotFound, model.selectTab(@enumFromInt(9)));
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+}
+
+test "split confirmation replaces a target retired during pane creation" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const target: schema.PaneId = @enumFromInt(1);
+    const created: schema.PaneId = @enumFromInt(2);
+    try model.workspace.bootstrap(target, location, .{ .cols = 40, .rows = 10 });
+    try std.testing.expect(model.workspace.active().?.model.removePane(target));
+
+    const commit = try model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = target,
+            .location = location,
+            .axis = .horizontal,
+            .area = .{ .w = 40, .h = 10 },
+        },
+        .new_pane = created,
+    });
+
+    try std.testing.expectEqual(PaneSplitDisposition.active, commit.disposition);
+    try std.testing.expectEqual(Change.changed, commit.change);
+    try std.testing.expect(model.workspace.findPane(target) == null);
+    try std.testing.expect(model.workspace.findPane(created).?.attached);
+    try std.testing.expectEqual(created, model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
+}
+
+test "inactive split confirmation retains membership without visible revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const target: schema.PaneId = @enumFromInt(1);
+    const created: schema.PaneId = @enumFromInt(3);
+    try model.workspace.bootstrap(target, first, .{ .cols = 40, .rows = 10 });
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 40, .rows = 10 });
+    tabs_mod.Model.detachAll(model.workspace.find(first.tab_id).?);
+
+    const commit = try model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = target,
+            .location = first,
+            .axis = .vertical,
+            .area = .{ .w = 40, .h = 10 },
+        },
+        .new_pane = created,
+    });
+
+    try std.testing.expectEqual(PaneSplitDisposition.inactive, commit.disposition);
+    try std.testing.expectEqual(Change.unchanged, commit.change);
+    try std.testing.expect(!model.workspace.findPane(created).?.attached);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+    try std.testing.expect(model.recoverPaneSplit(.{
+        .split = commitSplit(target, first, .vertical),
+        .area = .{ .w = 40, .h = 10 },
+    }) == .not_required);
+}
+
+test "split confirmation leaves a retired tab unrepresented" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const target: schema.PaneId = @enumFromInt(1);
+    const created: schema.PaneId = @enumFromInt(3);
+    try model.workspace.bootstrap(target, first, .{ .cols = 40, .rows = 10 });
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 40, .rows = 10 });
+    try std.testing.expect(model.workspace.remove(first.tab_id));
+
+    const commit = try model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = target,
+            .location = first,
+            .axis = .horizontal,
+            .area = .{ .w = 40, .h = 10 },
+        },
+        .new_pane = created,
+    });
+
+    try std.testing.expectEqual(PaneSplitDisposition.stale, commit.disposition);
+    try std.testing.expectEqual(Change.unchanged, commit.change);
+    try std.testing.expect(model.workspace.findPane(created) == null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+fn commitSplit(target: schema.PaneId, location: schema.TabLocation, axis: layout_mod.Axis) PaneSplit {
+    return .{
+        .target_pane = target,
+        .location = location,
+        .axis = axis,
+        .area = .{ .w = 40, .h = 10 },
+    };
 }

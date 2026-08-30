@@ -9,11 +9,13 @@ const core = @import("telar-core");
 const layout = @import("../workspace/root.zig").layout;
 
 const schema = core.schema;
+const ui = core.ui;
 
 pub const Split = struct {
     target_pane: schema.PaneId,
     location: schema.TabLocation,
     axis: layout.Axis,
+    area: ui.Rect,
 };
 
 pub const PaneOperation = struct {
@@ -155,17 +157,24 @@ pub const Tracker = struct {
 
     /// A tab lifecycle notification is authoritative. Requests already sent
     /// for that tab remain identifiable, but their eventual failures need no
-    /// rollback because the tab and its client state are already gone.
+    /// rollback because the tab and its client state are already gone. A split
+    /// keeps its correlation so a late created pane can still be detached.
     pub fn ignoreTab(tracker: *Tracker, tab_id: schema.TabId) void {
         for (&tracker.entries) |*slot| {
             const entry = if (slot.*) |*value| value else continue;
-            if (entry.continuation.tabId() == tab_id)
+            if (entry.continuation.tabId() != tab_id) {
+                continue;
+            }
+
+            if (entry.continuation != .split) {
                 entry.continuation = .ignored;
+            }
         }
     }
 
     /// Suppresses rollback and notification from late failures after a
-    /// canonical snapshot retires a pane.
+    /// canonical snapshot retires a pane. A split remains correlated because
+    /// its success introduces a different pane identity that needs cleanup.
     ///
     /// ```zig
     /// tracker.ignorePane(pane_id);
@@ -174,7 +183,9 @@ pub const Tracker = struct {
         for (&tracker.entries) |*slot| {
             const entry = if (slot.*) |*value| value else continue;
             if (entry.continuation.paneId() == pane_id) {
-                entry.continuation = .ignored;
+                if (entry.continuation != .split) {
+                    entry.continuation = .ignored;
+                }
             }
         }
     }
@@ -322,4 +333,27 @@ test "pane exit completes only its matching close request" {
     try std.testing.expect(!tracker.completePaneClose(@enumFromInt(4)));
     try std.testing.expect(tracker.completePaneClose(@enumFromInt(3)));
     try std.testing.expectEqual(@as(usize, 0), tracker.count);
+}
+
+test "split correlation survives target and tab retirement" {
+    var tracker: Tracker = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(3);
+    try tracker.add(@enumFromInt(7), .{ .split = .{
+        .target_pane = pane_id,
+        .location = location,
+        .axis = .horizontal,
+        .area = .{ .w = 40, .h = 10 },
+    } });
+
+    tracker.ignorePane(pane_id);
+    tracker.ignoreTab(location.tab_id);
+
+    const continuation = tracker.take(@enumFromInt(7)).?;
+    try std.testing.expect(continuation == .split);
+    try std.testing.expectEqualDeep(location, continuation.split.location);
+    try std.testing.expectEqual(pane_id, continuation.split.target_pane);
 }

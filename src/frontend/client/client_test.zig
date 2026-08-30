@@ -846,7 +846,7 @@ test "focus reporting emits focus-in only after the pane opts in" {
     try std.testing.expectEqualStrings("\x1b[I", message.pane_input.bytes);
 }
 
-test "a split reply lands in the tab that asked for it" {
+test "an active split commits once and presentation observes the model" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -858,17 +858,203 @@ test "a split reply lands in the tab that asked for it" {
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
         .axis = .horizontal,
+        .area = client.view.workbench(),
     } });
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
     var payload: [128]u8 = undefined;
     const opened = try schema.encodePaneOpened(&payload, .{
         .request_id = @enumFromInt(4),
         .pane_id = split_pane,
         .location = TestHarness.bootstrap_location,
-        .created = false,
+        .created = true,
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+
+    const pane = client.model.workspace.findPane(split_pane).?;
+    try std.testing.expect(pane.attached);
+    try std.testing.expectEqual(split_pane, client.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+}
+
+test "an inactive split is retained detached without a visible revision" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const first = client.model.workspace.active().?;
+    const second_location = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+    workspace_capability.tabs.Model.detachAll(first);
+    try std.testing.expectEqualDeep(second_location, client.model.activeTabLocation().?);
+
+    const split_pane: schema.PaneId = @enumFromInt(21);
+    try client.requests.add(@enumFromInt(4), .{ .split = .{
+        .target_pane = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .axis = .horizontal,
+        .area = client.view.workbench(),
+    } });
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    var payload: [128]u8 = undefined;
+    const opened = try schema.encodePaneOpened(&payload, .{
+        .request_id = @enumFromInt(4),
+        .pane_id = split_pane,
+        .location = TestHarness.bootstrap_location,
+        .created = true,
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+
+    try std.testing.expect(!client.model.workspace.findPane(split_pane).?.attached);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(!client.graphics_store.paneVisible(split_pane));
     try harness.settle();
-    try std.testing.expect(client.model.workspace.findPane(split_pane) != null);
+    var message_buffer: [128]u8 = undefined;
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(split_pane, detached.detach_pane.pane_id);
+}
+
+test "a split reply for a retired tab detaches and refreshes canonical state" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = client.requests.take(@enumFromInt(2)) orelse return error.MissingWorkspaceSnapshot;
+    _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+
+    const split_pane: schema.PaneId = @enumFromInt(21);
+    try client.requests.add(@enumFromInt(4), .{ .split = .{
+        .target_pane = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .axis = .horizontal,
+        .area = client.view.workbench(),
+    } });
+    client.requests.ignoreTab(TestHarness.bootstrap_location.tab_id);
+    try std.testing.expect(client.model.workspace.remove(TestHarness.bootstrap_location.tab_id));
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    var payload: [128]u8 = undefined;
+    const opened = try schema.encodePaneOpened(&payload, .{
+        .request_id = @enumFromInt(4),
+        .pane_id = split_pane,
+        .location = TestHarness.bootstrap_location,
+        .created = true,
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+
+    try std.testing.expect(client.model.workspace.findPane(split_pane) == null);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(split_pane, detached.detach_pane.pane_id);
+    const refresh = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(refresh == .request_workspace_snapshot);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location.workspace, refresh.request_workspace_snapshot.workspace);
+}
+
+test "a split reply replaces its target after canonical retirement" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    const split_pane: schema.PaneId = @enumFromInt(21);
+    try client.requests.add(@enumFromInt(4), .{ .split = .{
+        .target_pane = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .axis = .horizontal,
+        .area = client.view.workbench(),
+    } });
+    try std.testing.expect(client.model.workspace.active().?.model.removePane(TestHarness.bootstrap_pane));
+    client.requests.ignorePane(TestHarness.bootstrap_pane);
+    const version_before = client.model.version();
+    var payload: [128]u8 = undefined;
+    const opened = try schema.encodePaneOpened(&payload, .{
+        .request_id = @enumFromInt(4),
+        .pane_id = split_pane,
+        .location = TestHarness.bootstrap_location,
+        .created = true,
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expect(client.model.workspace.findPane(split_pane).?.attached);
+    try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
+}
+
+test "a failed split never resizes the tab selected afterwards" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const first = client.model.workspace.active().?;
+    _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+    workspace_capability.tabs.Model.detachAll(first);
+
+    try client.requests.add(@enumFromInt(4), .{ .split = .{
+        .target_pane = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .axis = .horizontal,
+        .area = client.view.workbench(),
+    } });
+    const version_before = client.model.version();
+    var payload: [128]u8 = undefined;
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = @enumFromInt(4),
+        .code = .internal,
+        .message = "launch failed",
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+
+    try std.testing.expectEqual(@as(u8, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+}
+
+test "a failed split for a retired target is silent" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    try client.requests.add(@enumFromInt(4), .{ .split = .{
+        .target_pane = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .axis = .horizontal,
+        .area = client.view.workbench(),
+    } });
+    try std.testing.expect(client.model.workspace.active().?.model.removePane(TestHarness.bootstrap_pane));
+    client.requests.ignorePane(TestHarness.bootstrap_pane);
+    const pending_updates_before = client.presenter.pending_updates;
+    var payload: [128]u8 = undefined;
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = @enumFromInt(4),
+        .code = .pane_not_found,
+        .message = "target exited",
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+
+    try std.testing.expectEqual(@as(u8, 0), client.outbox.len);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
 
 test "an attach reply marks the discovered pane attached" {

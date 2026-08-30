@@ -23,6 +23,7 @@ const client_mod = @import("client.zig");
 const Client = client_mod;
 const InputHandler = @import("input_handler.zig");
 const pane_attachments = @import("pane_attachments.zig");
+const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
@@ -381,20 +382,19 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
             try bootstrapWorkspace(client, opened);
         },
         .split => |split| {
-            if (!std.meta.eql(split.location, opened.location))
-                return error.UnexpectedPane;
-            const tab = client.model.workspace.tabForPane(split.target_pane) orelse
-                return error.UnexpectedPane;
-            const model = &tab.model;
-            if (model.find(split.target_pane) != null) {
-                try model.split(split.target_pane, opened.pane_id, opened.location, split.axis, client.view.workbench());
-            } else {
-                try model.addDiscovered(opened.pane_id, opened.location, client.view.workbench());
-                try model.markAttached(opened.pane_id);
-            }
-            client.view.invalidate();
-            try client.resizeAttached(model, client.view.workbench());
-            try client.syncPaneFocus(model);
+            var use_case = pane_splits.confirmationHandler(client);
+            _ = try use_case.execute(.{
+                .requested = .{
+                    .target_pane = split.target_pane,
+                    .location = split.location,
+                    .axis = split.axis,
+                    .area = split.area,
+                },
+                .confirmed_pane = opened.pane_id,
+                .confirmed_location = opened.location,
+                .created = opened.created,
+            });
+            return;
         },
         .attach_pane => |attachment| {
             var use_case = pane_attachments.confirmationHandler(client);
@@ -618,11 +618,18 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
 /// A failed request: recover disposable state when needed and tell the user.
 fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
     const continuation = client.requests.take(failure.request_id) orelse return error.UnexpectedRequestFailure;
+    var notify_failure = true;
     switch (continuation) {
         .ignored, .close_pane, .rename_tab, .rename_workspace, .move_tab => {},
-        .split => {
-            if (client.model.workspace.active()) |active|
-                try client.resizeAttached(&active.model, client.view.workbench());
+        .split => |split| {
+            var recovery = pane_splits.recoveryHandler(client);
+            const status = try recovery.execute(.{
+                .target_pane = split.target_pane,
+                .location = split.location,
+                .axis = split.axis,
+                .area = split.area,
+            });
+            notify_failure = status != .stale;
         },
         .attach_pane => |attachment| {
             if (failure.code == .pane_not_found) {
@@ -664,7 +671,7 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
         },
         .workspace_snapshot, .tab_snapshot, .create_tab => return error.RuntimeRequestFailed,
     }
-    if (continuation == .ignored) {
+    if (continuation == .ignored or !notify_failure) {
         return;
     }
 
