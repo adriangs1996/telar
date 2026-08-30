@@ -122,6 +122,10 @@ pub const ResponseQueue = struct {
 
     /// Observation notifications may be dropped under backpressure. State
     /// notifications record the workspace that must be resynchronized.
+    ///
+    /// ```zig
+    /// queue.pushOrDrop(response);
+    /// ```
     pub fn pushOrDrop(queue: *ResponseQueue, response: PendingResponse) void {
         queue.push(response) catch {
             switch (response) {

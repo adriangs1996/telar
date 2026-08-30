@@ -14,6 +14,10 @@ pub const State = struct {
 };
 
 /// Advances projection revision while preserving zero as the unseen sentinel.
+///
+/// ```zig
+/// advanceRevision(&state);
+/// ```
 pub fn advanceRevision(state: *State) void {
     state.revision +%= 1;
 

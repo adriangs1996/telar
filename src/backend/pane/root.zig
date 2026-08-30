@@ -304,6 +304,12 @@ pub const PaneInputQueue = struct {
 
     /// All-or-nothing: partial keystroke sequences would corrupt the child's
     /// input stream, so a message that does not fit is dropped whole.
+    ///
+    /// ```zig
+    /// if (!queue.push(input)) {
+    ///     recordDroppedInput(input.len);
+    /// }
+    /// ```
     pub fn push(queue: *PaneInputQueue, input: []const u8) bool {
         if (input.len > queue.bytes.len - queue.len) {
             queue.dropped_bytes +|= input.len;
@@ -322,6 +328,10 @@ pub const PaneInputQueue = struct {
 
     /// The next contiguous run to hand to the PTY writer. Stays valid until
     /// `consume`: a wrap-around `push` never writes into `[head, head+len)`.
+    ///
+    /// ```zig
+    /// const chunk = queue.nextChunk() orelse return;
+    /// ```
     pub fn nextChunk(queue: *const PaneInputQueue) ?[]const u8 {
         if (queue.len == 0) return null;
         const run = @min(queue.len, queue.bytes.len - queue.head);
@@ -369,6 +379,12 @@ pub const CwdState = struct {
 
     /// Invalid observations and repeated values are ignored. The fixed buffer
     /// makes updates allocation-free and keeps every wire value bounded.
+    ///
+    /// ```zig
+    /// if (cwd.update(path)) {
+    ///     publishCwd(cwd.slice());
+    /// }
+    /// ```
     pub fn update(state: *CwdState, path: []const u8) bool {
         if (!validCwd(path) or std.mem.eql(u8, state.slice(), path)) return false;
         @memcpy(state.bytes[0..path.len], path);
@@ -649,6 +665,10 @@ pub const Pane = struct {
 
     /// Ghostty's page allocator size: the same counter `max_scrollback_bytes`
     /// prunes against, covering the active grid plus retained history.
+    ///
+    /// ```zig
+    /// const retained_bytes = pane.vtScrollbackBytes();
+    /// ```
     pub fn vtScrollbackBytes(pane: *const Pane) usize {
         var total: usize = 0;
         for (std.enums.values(vt.ScreenSet.Key)) |screen_key| {
@@ -675,7 +695,9 @@ pub const Pane = struct {
     /// Borrows the pane allocation until its child-wait actor completes.
     ///
     /// ```zig
-    /// if (!pane.beginExitWait()) return;
+    /// if (!pane.beginExitWait()) {
+    ///     return;
+    /// }
     /// ```
     pub fn beginExitWait(pane: *Pane) bool {
         if (pane.wait_pending or pane.exit != null) {
@@ -857,7 +879,9 @@ pub const Pane = struct {
     /// Acquires the pane allocation for one asynchronous PTY read.
     ///
     /// ```zig
-    /// if (!pane.beginPtyOutputRead()) return;
+    /// if (!pane.beginPtyOutputRead()) {
+    ///     return;
+    /// }
     /// ```
     pub fn beginPtyOutputRead(pane: *Pane) bool {
         if (pane.output_pending or pane.output_done or pane.ingest_pending) {
@@ -1257,6 +1281,12 @@ pub const Pane = struct {
     /// Scheduling owns one count and consuming its `PaneKey` result releases
     /// it, so adding a new actor cannot silently bypass the lifetime proof by
     /// forgetting to extend a list of operation-specific flags.
+    ///
+    /// ```zig
+    /// if (pane.readyToDestroy()) {
+    ///     pane.destroy();
+    /// }
+    /// ```
     pub fn readyToDestroy(pane: *const Pane) bool {
         return pane.exit != null and pane.output_done and
             pane.actor_count == 0 and
@@ -1321,6 +1351,12 @@ pub const Pane = struct {
     /// the cursor wherever the repaint happens to be. The deadline matches
     /// ghostty's and exists so a child that never closes the block cannot
     /// freeze its pane.
+    ///
+    /// ```zig
+    /// if (pane.holdFrames(io)) {
+    ///     return;
+    /// }
+    /// ```
     pub fn holdFrames(pane: *Pane, io: Io) bool {
         if (!pane.terminal.modes.get(.synchronized_output)) {
             pane.sync_hold_started_ns = null;
@@ -1525,6 +1561,12 @@ pub const PaneStore = struct {
     /// Unlike `firstAt`/`countAt`, deliberately counts closing and exited
     /// panes too: `collectFinished` uses it to decide whether a tab is truly
     /// empty, and a pane that is merely not yet reaped still holds its tab.
+    ///
+    /// ```zig
+    /// if (!store.hasAt(location)) {
+    ///     removeTab(location);
+    /// }
+    /// ```
     pub fn hasAt(store: *const PaneStore, location: schema.TabLocation) bool {
         for (store.items) |slot| {
             const pane = slot orelse continue;

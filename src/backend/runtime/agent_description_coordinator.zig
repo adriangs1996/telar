@@ -15,7 +15,9 @@ pub const State = struct {
     /// slot, even if its agent aggregate has already been retired.
     ///
     /// ```zig
-    /// if (state.isPending()) return;
+    /// if (state.isPending()) {
+    ///     return;
+    /// }
     /// ```
     pub fn isPending(state: *const State) bool {
         return state.pending;

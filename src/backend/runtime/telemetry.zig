@@ -45,7 +45,9 @@ pub const State = struct {
     /// Reports whether telemetry can accept another scheduled sample.
     ///
     /// ```zig
-    /// if (!state.available()) return;
+    /// if (!state.available()) {
+    ///     return;
+    /// }
     /// ```
     pub fn available(state: *const State) bool {
         return state.sink.available();
@@ -63,7 +65,9 @@ pub const State = struct {
     /// Reports whether the shared line buffer belongs to a write actor.
     ///
     /// ```zig
-    /// if (state.writePending()) return;
+    /// if (state.writePending()) {
+    ///     return;
+    /// }
     /// ```
     pub fn writePending(state: *const State) bool {
         return state.write_pending;

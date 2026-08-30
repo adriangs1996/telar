@@ -230,6 +230,10 @@ pub const Session = struct {
 
     /// Returns whether the session leader currently owns the terminal. A
     /// foreground job gets a different process group, regardless of shell.
+    ///
+    /// ```zig
+    /// const shell_is_foreground = session.shellForeground() orelse false;
+    /// ```
     pub fn shellForeground(session: *const Session) ?bool {
         if (session.master < 0) return null;
         const foreground = tcgetpgrp(session.master);
@@ -240,6 +244,10 @@ pub const Session = struct {
     /// Returns the foreground process group controlling the slave side. The
     /// observation worker uses this constant-cost signal before inspecting
     /// any native process metadata.
+    ///
+    /// ```zig
+    /// const process_group = session.foregroundProcessGroup() orelse return;
+    /// ```
     pub fn foregroundProcessGroup(session: *const Session) ?std.c.pid_t {
         if (session.master < 0) return null;
         const foreground = tcgetpgrp(session.master);
@@ -247,6 +255,10 @@ pub const Session = struct {
     }
 
     /// Reads the session leader's cwd without asking the shell to publish it.
+    ///
+    /// ```zig
+    /// const path = session.cwd(&buffer) orelse return;
+    /// ```
     pub fn cwd(session: *const Session, buffer: []u8) ?[]const u8 {
         return switch (builtin.os.tag) {
             .macos => cwdMacos(session.pid, buffer),
@@ -257,6 +269,10 @@ pub const Session = struct {
 
     /// Resizing the master updates the kernel's PTY state and sends SIGWINCH
     /// to the foreground process group on the slave side.
+    ///
+    /// ```zig
+    /// try session.resize(size);
+    /// ```
     pub fn resize(session: *Session, next_size: Size) !void {
         const size = next_size.valid();
         var window: std.posix.winsize = .{
@@ -294,6 +310,10 @@ pub const Session = struct {
     /// input queue survives it, and Darwin's close then waits behind that
     /// write forever. The write actor is released by Io cancellation instead,
     /// and the master closes in `deinit` once every actor has been joined.
+    ///
+    /// ```zig
+    /// session.shutdown();
+    /// ```
     pub fn shutdown(session: *Session) void {
         if (!session.reaped.load(.acquire)) _ = std.c.kill(session.pid, .KILL);
     }

@@ -17,7 +17,9 @@ pub const State = struct {
     /// published after the state transition. Later requests are idempotent.
     ///
     /// ```zig
-    /// if (shutdown.request(client)) |event| publish(event);
+    /// if (shutdown.request(client)) |event| {
+    ///     publish(event);
+    /// }
     /// ```
     pub fn request(state: *State, initiator: ClientKey) ?StopRequested {
         if (state.requested) {
@@ -32,7 +34,9 @@ pub const State = struct {
     /// Reports whether the runtime has crossed the shutdown boundary.
     ///
     /// ```zig
-    /// if (shutdown.isRequested()) stop_accepting_clients();
+    /// if (shutdown.isRequested()) {
+    ///     stop_accepting_clients();
+    /// }
     /// ```
     pub fn isRequested(state: *const State) bool {
         return state.requested;

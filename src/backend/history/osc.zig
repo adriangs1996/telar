@@ -94,6 +94,10 @@ pub const Tracker = struct {
     /// Records bytes traveling from the client to the PTY while the shell has
     /// declared an editable command zone. Output is deliberately excluded:
     /// asynchronous prompts and notifications may draw between B and C.
+    ///
+    /// ```zig
+    /// const captured = tracker.input(bytes);
+    /// ```
     pub fn input(tracker: *Tracker, bytes: []const u8) usize {
         const before = tracker.command_len;
         for (bytes) |byte| tracker.captureByte(byte);

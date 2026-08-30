@@ -18,7 +18,9 @@ pub fn State(comptime Connection: type) type {
         /// Reports whether a handshake actor still borrows the connection.
         ///
         /// ```zig
-        /// if (state.isPending()) return;
+        /// if (state.isPending()) {
+        ///     return;
+        /// }
         /// ```
         pub fn isPending(state: *const Self) bool {
             return state.pending;
@@ -28,7 +30,9 @@ pub fn State(comptime Connection: type) type {
         /// Shutdown may use it to unblock the actor but must not deinitialize it.
         ///
         /// ```zig
-        /// if (state.pendingConnection()) |connection| connection.shutdown(io);
+        /// if (state.pendingConnection()) |connection| {
+        ///     connection.shutdown(io);
+        /// }
         /// ```
         pub fn pendingConnection(state: *Self) ?*Connection {
             if (!state.pending) {

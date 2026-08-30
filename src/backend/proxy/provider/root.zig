@@ -107,7 +107,9 @@ pub const ResponseStreams = struct {
     /// only semantic observation; transport forwarding remains unaffected.
     ///
     /// ```zig
-    /// if (streams.feed(stream_id, bytes)) publishCompletion(stream_id);
+    /// if (streams.feed(stream_id, bytes)) {
+    ///     publishCompletion(stream_id);
+    /// }
     /// ```
     pub fn feed(streams: *ResponseStreams, stream_id: u32, input: []const u8) bool {
         if (stream_id == 0 or streams.provider != .claude) {

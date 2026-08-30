@@ -347,7 +347,9 @@ pub const AttachmentStore = struct {
     /// attachment. Missing panes leave every attachment unchanged.
     ///
     /// ```zig
-    /// if (!store.requestCellSnapshot(pane_id)) recordStaleMessage();
+    /// if (!store.requestCellSnapshot(pane_id)) {
+    ///     recordStaleMessage();
+    /// }
     /// ```
     pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: schema.PaneId) bool {
         const attachment = store.find(pane_id) orelse return false;
@@ -360,7 +362,9 @@ pub const AttachmentStore = struct {
     /// repeated requests coalesce and retain transport policy and credit.
     ///
     /// ```zig
-    /// if (!store.requestGraphicsSnapshot(pane_id)) recordStaleMessage();
+    /// if (!store.requestGraphicsSnapshot(pane_id)) {
+    ///     recordStaleMessage();
+    /// }
     /// ```
     pub fn requestGraphicsSnapshot(store: *AttachmentStore, pane_id: schema.PaneId) bool {
         const attachment = store.find(pane_id) orelse return false;
@@ -487,7 +491,9 @@ pub const AttachmentStore = struct {
     ///
     /// ```zig
     /// const detached = store.detach(pane_id) orelse return;
-    /// if (detached.last_attachment) _ = store.leaveWorkspace(detached.workspace);
+    /// if (detached.last_attachment) {
+    ///     _ = store.leaveWorkspace(detached.workspace);
+    /// }
     /// ```
     pub fn detach(store: *AttachmentStore, pane_id: schema.PaneId) ?PaneDetached {
         const position = store.index.get(schema.id.raw(pane_id)) orelse return null;
@@ -513,7 +519,9 @@ pub const AttachmentStore = struct {
     /// left unchanged.
     ///
     /// ```zig
-    /// if (store.leaveWorkspace(workspace)) release(workspace);
+    /// if (store.leaveWorkspace(workspace)) {
+    ///     release(workspace);
+    /// }
     /// ```
     pub fn leaveWorkspace(store: *AttachmentStore, workspace: schema.WorkspaceLocation) bool {
         if (store.count != 0 or store.workspace == null or !std.meta.eql(store.workspace.?, workspace)) {
@@ -606,6 +614,10 @@ pub fn enforceGraphicsCounts(io: Io, pane: *Pane, screen_key: vt.ScreenSet.Key) 
 /// Abandons the in-flight graphics batch after a media failure. The client
 /// keeps whatever graphics it already holds - stale but harmless - and the
 /// revision is marked observed so the send loop cannot spin on the failure.
+///
+/// ```zig
+/// abandonGraphicsBatch(&attachment);
+/// ```
 pub fn abandonGraphicsBatch(attachment: *Attachment) void {
     attachment.freeTransfer();
     attachment.graphics.batch_active = false;
@@ -792,6 +804,10 @@ pub const StageResult = enum {
 /// running. A frozen transfer then crosses the transport at any later moment,
 /// which is what keeps a continuously streaming pane from ceiling out at the
 /// rate of coincidences between "media idle" and "socket ready".
+///
+/// ```zig
+/// const result = try stageNextTransfer(&attachment, global_credit);
+/// ```
 pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageResult {
     if (attachment.graphics.transfer != null) return .staged;
     // The begin branch of the walk resets known state and frees any transfer;

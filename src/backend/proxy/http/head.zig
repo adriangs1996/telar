@@ -40,6 +40,10 @@ pub const AnalyzeOptions = struct {
 /// The function reads one byte at a time because the session has no pushback
 /// buffer. This guarantees that a successful call leaves the first body byte
 /// unread. It returns `null` on EOF, a zero-length read, or an oversized head.
+///
+/// ```zig
+/// const head_len = read(session, .child, &buffer) orelse return;
+/// ```
 pub fn read(session: anytype, side: tls.Session.Side, buffer: []u8) ?usize {
     var len: usize = 0;
     while (len < buffer.len) {

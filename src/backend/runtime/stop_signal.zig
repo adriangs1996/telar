@@ -44,7 +44,9 @@ pub const Coordinator = struct {
     /// action and preserves the exact source error on failure.
     ///
     /// ```zig
-    /// if (try stop_signal.complete(result) == .stop) return;
+    /// if (try stop_signal.complete(result) == .stop) {
+    ///     return;
+    /// }
     /// ```
     pub fn complete(coordinator: Coordinator, result: anyerror!void) !Completion {
         std.debug.assert(coordinator.queue != null);

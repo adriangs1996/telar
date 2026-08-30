@@ -70,7 +70,9 @@ pub fn Coordinator(comptime Context: type, comptime Types: type, comptime port: 
         /// client has received or abandoned its stopping message.
         ///
         /// ```zig
-        /// if (coordinator.handle(event)) return;
+        /// if (coordinator.handle(event)) {
+        ///     return;
+        /// }
         /// ```
         pub fn handle(coordinator: *Self, event: Event) bool {
             const session = port.resolve(coordinator.context, event.client) orelse {

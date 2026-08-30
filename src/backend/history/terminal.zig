@@ -136,6 +136,10 @@ pub const Tracker = struct {
 
     /// Returns the end offset of the first output slice that confirms the
     /// submitted line was committed. The LF itself is included.
+    ///
+    /// ```zig
+    /// const boundary = tracker.commitBoundary(output) orelse return;
+    /// ```
     pub fn commitBoundary(tracker: *const Tracker, bytes: []const u8) ?usize {
         if (tracker.phase != .awaiting_commit) return null;
         const newline = std.mem.indexOfScalar(u8, bytes, '\n') orelse return null;
@@ -149,6 +153,12 @@ pub const Tracker = struct {
     /// that can possibly matter, so the transient allocation cannot grow with
     /// scrollback, and the retained command is cut to `max_command_bytes`
     /// immediately rather than at emit time.
+    ///
+    /// ```zig
+    /// if (try tracker.captureSubmitted(terminal)) {
+    ///     publishCommand();
+    /// }
+    /// ```
     pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
         if (tracker.phase != .awaiting_commit) return false;
         const screen = terminal.screens.active;

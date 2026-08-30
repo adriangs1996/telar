@@ -192,6 +192,10 @@ pub const Service = struct {
 
     /// Credentials are live capabilities, not merely well-formed proxy URL
     /// userinfo. Registration and revocation follow the pane lifecycle.
+    ///
+    /// ```zig
+    /// try service.registerCredential(&credential);
+    /// ```
     pub fn registerCredential(service: *Service, credential: *const identity.Credential) !void {
         return service.credentials.register(service.io, credential);
     }
@@ -206,6 +210,10 @@ pub const Service = struct {
 
     /// Register before `run` starts. The immutable pipeline can later be
     /// backed by a bounded worker without giving it access to tunnel state.
+    ///
+    /// ```zig
+    /// try service.addTransformer(transformer);
+    /// ```
     pub fn addTransformer(service: *Service, transformer: middleware.Transformer) !void {
         service.configuration_mutex.lockUncancelable(service.io);
         defer service.configuration_mutex.unlock(service.io);

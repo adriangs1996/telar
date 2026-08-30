@@ -32,6 +32,12 @@ pub const Capture = struct {
     submitted: bool = false,
 
     /// Returns true exactly once, when the first non-cancelled submit lands.
+    ///
+    /// ```zig
+    /// if (capture.feed(input)) {
+    ///     startGeneration(capture.raw());
+    /// }
+    /// ```
     pub fn feed(capture: *Capture, input: []const u8) bool {
         if (capture.submitted) return false;
         for (input) |byte| {
@@ -185,6 +191,10 @@ pub fn generate(io: std.Io, gpa: std.mem.Allocator, generation: Generation) Resu
 
 /// Applies terminal editing controls and strips transport escape sequences.
 /// The output is one trimmed line suitable for the fixed generator prompt.
+///
+/// ```zig
+/// const query = try normalizeQuery(raw, &storage);
+/// ```
 pub fn normalizeQuery(raw: []const u8, output: *[max_query_bytes]u8) ![]const u8 {
     var output_len: usize = 0;
     var index: usize = 0;
@@ -258,6 +268,10 @@ pub fn normalizeQuery(raw: []const u8, output: *[max_query_bytes]u8) ![]const u8
 /// Accepts exactly one non-empty display line from a generator. Surrounding
 /// whitespace and matching ASCII quotes are removed; controls and extra lines
 /// are rejected rather than silently changing their meaning.
+///
+/// ```zig
+/// const title = try normalizeTitle(raw, &storage);
+/// ```
 pub fn normalizeTitle(raw: []const u8, output: *[schema.max_agent_session_title_bytes]u8) ![]const u8 {
     var trimmed = std.mem.trim(u8, raw, " \t\r\n");
     if (trimmed.len >= 2 and

@@ -29,7 +29,9 @@ pub const Slots = struct {
     /// bound. Rejection records one limit drop.
     ///
     /// ```zig
-    /// if (!slots.acquire()) closeRejectedConnection();
+    /// if (!slots.acquire()) {
+    ///     closeRejectedConnection();
+    /// }
     /// ```
     pub fn acquire(slots: *Slots) bool {
         var current = slots.active.load(.monotonic);

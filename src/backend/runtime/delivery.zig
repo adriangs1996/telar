@@ -176,7 +176,9 @@ pub const Delivery = struct {
     /// bound. Rejected input preserves any clipboard already awaiting delivery.
     ///
     /// ```zig
-    /// if (!delivery.setClipboard(pane_id, bytes)) return error.ClipboardTooLarge;
+    /// if (!delivery.setClipboard(pane_id, bytes)) {
+    ///     return error.ClipboardTooLarge;
+    /// }
     /// ```
     pub fn setClipboard(delivery: *Delivery, pane_id: schema.PaneId, bytes: []const u8) bool {
         if (bytes.len > schema.max_clipboard_bytes) {

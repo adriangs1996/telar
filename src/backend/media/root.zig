@@ -584,6 +584,10 @@ fn parseUniqueU32(current: ?u32, value: []const u8) ?u32 {
 /// Stable identity for a child placement. Anonymous placements use Ghostty's
 /// internal namespace; explicit child IDs use the exterior namespace. Adding
 /// one reserves zero as the invalid value in Telar's wire vocabulary.
+///
+/// ```zig
+/// const virtual_id = placementVirtualId(key);
+/// ```
 pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 {
     const tag: u64 = switch (key.placement_id.tag) {
         .internal => 0,
@@ -598,6 +602,10 @@ pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 
 /// this adapter. Keeping one implementation matters here: a second geometry
 /// conversion in the example could hide the production bug it is meant to
 /// isolate.
+///
+/// ```zig
+/// const placement = placementValue(terminal, source) orelse return;
+/// ```
 pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?core.graphics.Placement {
     const pin = switch (source_value.placement.location) {
         .pin => |value| value,
