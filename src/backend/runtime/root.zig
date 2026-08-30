@@ -9,6 +9,7 @@ const agent_maintenance_coordinator = @import("agent_maintenance_coordinator.zig
 const agent_process = @import("../process/root.zig");
 const history = @import("../history/root.zig");
 const attachment_mod = @import("attachment.zig");
+const client_admission = @import("client_admission.zig");
 const client_request_router = @import("client_request_router.zig");
 const delivery_mod = @import("delivery.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
@@ -104,6 +105,7 @@ const WorkspaceState = workspace_mod.State;
 const max_workspaces = workspace_mod.max_workspaces;
 const RuntimeModel = model_mod.RuntimeModel;
 const AttachmentStore = attachment_mod.AttachmentStore;
+const ClientAdmissionState = client_admission.State(core.transport.SocketChannel);
 const Delivery = delivery_mod.Delivery;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
@@ -245,21 +247,31 @@ const ClientStore = struct {
     next_id: u64 = 1,
     next_generation: u64 = 1,
 
-    fn add(
-        store: *ClientStore,
-        gpa: std.mem.Allocator,
-        connection: core.transport.SocketChannel,
-    ) !*ClientSession {
-        if (store.count == max_clients) return error.ClientLimitReached;
+    fn hasCapacity(store: *const ClientStore) bool {
+        return store.count < store.items.len;
+    }
+
+    fn add(store: *ClientStore, gpa: std.mem.Allocator, connection: core.transport.SocketChannel) !*ClientSession {
+        if (!store.hasCapacity()) {
+            return error.ClientLimitReached;
+        }
+
         if (store.next_id == 0 or store.next_id == std.math.maxInt(u64) or
             store.next_generation == 0 or store.next_generation == std.math.maxInt(u64))
+        {
             return error.ClientIdentityExhausted;
+        }
+
         const key: ClientKey = .{
             .id = store.next_id,
             .generation = store.next_generation,
         };
+
         for (&store.items) |*slot| {
-            if (slot.* != null) continue;
+            if (slot.* != null) {
+                continue;
+            }
+
             const session = try ClientSession.create(gpa, key, connection);
             slot.* = session;
             store.next_id += 1;
@@ -349,8 +361,7 @@ const Server = struct {
     agent_description_state: agent_description_coordinator.State = .{},
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
-    handshake_slot: ?core.transport.SocketChannel = null,
-    handshake_pending: bool = false,
+    client_admission: ClientAdmissionState = .{},
     shutdown: shutdown_mod.State = .{},
     geometry_leases: [max_workspaces]?GeometryLease = @splat(null),
     model: RuntimeModel,
@@ -751,45 +762,14 @@ const Server = struct {
         return coordinator.handle(event);
     }
 
-    fn handleAcceptedEvent(
-        server: *Server,
-        result: anyerror!core.transport.SocketChannel,
-        listener: *transport.local.LocalListener,
-    ) !void {
-        var accepted = result catch {
-            try server.select.concurrent(.accepted, acceptClient, .{ server.io, listener });
-            return;
-        };
-        if (server.shutdown.isRequested()) {
-            accepted.deinit(server.io);
-            return;
-        }
-        try server.select.concurrent(.accepted, acceptClient, .{ server.io, listener });
-        // The handshake runs in its own actor so a connection that never says
-        // hello cannot hold the accept pipeline hostage. One slot, newest
-        // wins: an arriving client evicts a stalled handshake and retries into
-        // the freed slot.
-        if (server.handshake_pending) {
-            if (server.handshake_slot) |*pending| pending.shutdown(server.io);
-            accepted.deinit(server.io);
-            return;
-        }
-        server.handshake_slot = accepted;
-        server.handshake_pending = true;
-        server.select.concurrent(.handshaken, handshakeClient, .{
-            server.io,
-            &server.handshake_slot.?,
-        }) catch {
-            server.handshake_pending = false;
-            server.handshake_slot.?.deinit(server.io);
-            server.handshake_slot = null;
-        };
+    fn handleAcceptedEvent(server: *Server, result: anyerror!core.transport.SocketChannel, listener: *transport.local.LocalListener) !void {
+        var runtime: ClientAdmissionRuntime = .{ .server = server, .listener = listener };
+        var coordinator = acceptedClientCoordinator(&runtime);
+        return coordinator.handle(result);
     }
 
     fn handleHandshakenEvent(server: *Server, result: anyerror!void) void {
-        server.handshake_pending = false;
-        var negotiated = server.handshake_slot.?;
-        server.handshake_slot = null;
+        var negotiated = server.client_admission.takePending();
         result catch {
             negotiated.deinit(server.io);
             return;
@@ -1860,7 +1840,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         listener.shutdown();
         for (&server.clients.items) |*slot|
             if (slot.*) |session| session.connection.shutdown(io);
-        if (server.handshake_slot) |*pending| pending.shutdown(io);
+        if (server.client_admission.pendingConnection()) |pending| pending.shutdown(io);
         // `pane_exit` blocks in libc's waitpid and cannot observe Select
         // cancellation. End the PTY sessions first so their waits can finish;
         // masters stay open here and close in `destroy`, after every actor
@@ -1872,7 +1852,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
             proxy_worker = null;
         }
         listener.deinit(io);
-        if (server.handshake_slot) |*pending| pending.deinit(io);
+        if (server.client_admission.pendingConnection()) |pending| pending.deinit(io);
         for (&server.clients.items) |*slot| if (slot.*) |session| {
             session.read_pending = false;
             session.send_pending = false;
@@ -1985,6 +1965,50 @@ fn sendSession(
 
 fn writeDiagnostics(io: Io, state: *TelemetryState, bytes: []const u8) anyerror!void {
     try state.write(io, bytes);
+}
+
+const ClientAdmissionRuntime = struct {
+    server: *Server,
+    listener: *transport.local.LocalListener,
+};
+
+const client_accept_runtime_port: client_admission.AcceptPort(ClientAdmissionRuntime, core.transport.SocketChannel) = .{
+    .stopping = clientAdmissionStopping,
+    .rearm_accept = rearmClientAccept,
+    .has_capacity = clientAdmissionHasCapacity,
+    .shutdown_connection = shutdownAdmissionConnection,
+    .deinit_connection = deinitAdmissionConnection,
+    .start_handshake = startClientHandshake,
+};
+
+const RuntimeAcceptedClientCoordinator = client_admission.AcceptCoordinator(ClientAdmissionRuntime, core.transport.SocketChannel, client_accept_runtime_port);
+
+fn acceptedClientCoordinator(runtime: *ClientAdmissionRuntime) RuntimeAcceptedClientCoordinator {
+    return RuntimeAcceptedClientCoordinator.init(runtime, &runtime.server.client_admission);
+}
+
+fn clientAdmissionStopping(runtime: *ClientAdmissionRuntime) bool {
+    return runtime.server.shutdown.isRequested();
+}
+
+fn rearmClientAccept(runtime: *ClientAdmissionRuntime) !void {
+    try runtime.server.select.concurrent(.accepted, acceptClient, .{ runtime.server.io, runtime.listener });
+}
+
+fn clientAdmissionHasCapacity(runtime: *ClientAdmissionRuntime) bool {
+    return runtime.server.clients.hasCapacity();
+}
+
+fn shutdownAdmissionConnection(runtime: *ClientAdmissionRuntime, connection: *core.transport.SocketChannel) void {
+    connection.shutdown(runtime.server.io);
+}
+
+fn deinitAdmissionConnection(runtime: *ClientAdmissionRuntime, connection: *core.transport.SocketChannel) void {
+    connection.deinit(runtime.server.io);
+}
+
+fn startClientHandshake(runtime: *ClientAdmissionRuntime, connection: *core.transport.SocketChannel) !void {
+    try runtime.server.select.concurrent(.handshaken, handshakeClient, .{ runtime.server.io, connection });
 }
 
 const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
@@ -2715,6 +2739,7 @@ test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
 test {
     _ = agent_description_coordinator;
     _ = agent_maintenance_coordinator;
+    _ = client_admission;
     _ = system_metrics_coordinator;
     _ = close_tab_commands;
     _ = close_tab_controller;

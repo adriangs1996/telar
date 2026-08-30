@@ -76,7 +76,7 @@ failure and scheduling contract.
 
 | ID | Trigger | Current implementation | Target boundary | Status | Evidence / missing proof |
 | --- | --- | --- | --- | --- | --- |
-| BRE-01 | `accepted` | `Server.handleAcceptedEvent` | Client admission service | Pending | Socket admission, capacity policy, handshake scheduling, and retry are runtime-root methods. |
+| BRE-01 | `accepted` | `runtime/client_admission.zig` | Client socket admission coordinator | Ready | Explicit socket ownership, shutdown/capacity rejection, accept success/failure rearming, rearm leak rollback, single-flight handshake slot, stalled-handshake eviction, scheduler rollback, silent-client transport coverage, `just check`, and 1682 Debug/ReleaseFast tests pass. |
 | BRE-02 | `handshaken` | `Server.handleHandshakenEvent` | Client admission service | Pending | Authentication completion and receive scheduling remain coupled to `Server`. |
 | BRE-03 | `client_message` | `runtime/client_request_router.zig` | Client request router | Ready | Compile-time typed routing covers every client tag exactly once, preserves payloads, classifies connection roles, propagates handler errors, and delegates into request-scoped composition; transport integration and 1591 Debug/ReleaseFast tests pass. |
 | BRE-04 | `client_sent` | `Server.handleClientSentEvent` | Client delivery capability | Pending | Send completion, detach effects, retry, and connection teardown need an isolated state machine. |
