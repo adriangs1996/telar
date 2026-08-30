@@ -127,6 +127,12 @@ pub const Delivery = struct {
         delivery.responses.resync_previous_workspace = previous_workspace;
     }
 
+    /// Enables level-triggered runtime projections for this client. Repeated
+    /// requests retain delivered revision baselines instead of replaying them.
+    ///
+    /// ```zig
+    /// delivery.requestRuntimeState();
+    /// ```
     pub fn requestRuntimeState(delivery: *Delivery) void {
         delivery.runtime_state_requested = true;
     }

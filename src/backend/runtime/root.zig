@@ -8,7 +8,6 @@ const agent_process = @import("../process/root.zig");
 const history = @import("../history/root.zig");
 const attachment_mod = @import("attachment.zig");
 const delivery_mod = @import("delivery.zig");
-const attachment_entrypoints = @import("entrypoints/attachment.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
 const control_entrypoints = @import("entrypoints/control.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
@@ -45,6 +44,7 @@ const request_graphics_snapshot_commands = @import("commands/request_graphics_sn
 const request_graphics_snapshot_controller = @import("controllers/request_graphics_snapshot.zig");
 const request_snapshot_commands = @import("commands/request_snapshot.zig");
 const request_snapshot_controller = @import("controllers/request_snapshot.zig");
+const runtime_state_controller = @import("controllers/runtime_state.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
 const show_notification_commands = @import("commands/show_notification.zig");
@@ -101,6 +101,7 @@ const PaneResizeController = pane_resize_controller.Controller(*pane_resize_comm
 const PaneViewportController = pane_viewport_controller.Controller(*pane_viewport_commands.SetPaneViewportHandler);
 const RequestGraphicsSnapshotController = request_graphics_snapshot_controller.Controller(*request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler);
 const RequestSnapshotController = request_snapshot_controller.Controller(*request_snapshot_commands.RequestCellSnapshotHandler);
+const RuntimeStateController = runtime_state_controller.Controller(*Delivery);
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = 8;
 const PendingResponse = response_queue.PendingResponse;
@@ -1535,7 +1536,11 @@ const Server = struct {
 
                 try controller.configureGraphics(configure);
             },
-            .request_runtime_state => attachment_entrypoints.requestRuntimeState(&session.delivery),
+            .request_runtime_state => {
+                var controller = RuntimeStateController.init(&session.delivery);
+
+                controller.requestRuntimeState();
+            },
             .graphics_credit => |credit| {
                 var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
                     .attachments = attachments,
@@ -2779,6 +2784,7 @@ test {
     _ = request_graphics_snapshot_controller;
     _ = request_snapshot_commands;
     _ = request_snapshot_controller;
+    _ = runtime_state_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
     _ = show_notification_commands;
@@ -2806,6 +2812,7 @@ test {
     _ = @import("pane_viewport_test.zig");
     _ = @import("request_graphics_snapshot_test.zig");
     _ = @import("request_snapshot_test.zig");
+    _ = @import("runtime_state_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
     _ = @import("show_notification_test.zig");
