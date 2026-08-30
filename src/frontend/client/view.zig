@@ -1356,7 +1356,6 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .tab_id = @enumFromInt(4),
     }, .{ .cols = 50, .rows = 22 });
     _ = try tabs.addCreated(.{
-        .request_id = @enumFromInt(2),
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(9) },
         .position = 1,
         .label = "logs",

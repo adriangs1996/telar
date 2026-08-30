@@ -143,7 +143,6 @@ const TestHarness = struct {
         };
 
         _ = try harness.client.model.workspace.addCreated(.{
-            .request_id = @enumFromInt(100),
             .location = location,
             .position = @intCast(harness.client.model.workspace.count),
             .label = "second",
@@ -808,6 +807,8 @@ test "tab lifecycle: created, renamed, moved, closed" {
     var payload: [256]u8 = undefined;
 
     // Created: the new tab becomes active and the old one detaches.
+    const version_before_creation = client.model.version();
+    const pending_updates_before_creation = client.presenter.pending_updates;
     try client.requests.add(@enumFromInt(4), .{ .create_tab = workspace });
     const created = try schema.encodeTabCreated(&payload, .{
         .request_id = @enumFromInt(4),
@@ -817,14 +818,26 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .root_pane_id = @enumFromInt(20),
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(created));
-    try harness.settle();
+
     try std.testing.expect(!client.notification_tick_pending);
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expectEqual(second_location.tab_id, client.model.workspace.active().?.location.tab_id);
+    try std.testing.expectEqual(version_before_creation.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_creation.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
+    try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.model.workspace.findPane(@enumFromInt(20)).?.attached);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_creation + 1, client.presenter.pending_updates);
+    try harness.settle();
     var buffer: [256]u8 = undefined;
     const detached = try harness.nextClientMessage(&buffer);
     try std.testing.expect(detached == .detach_pane);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 
     // Renamed.
     try client.requests.add(@enumFromInt(5), .{ .rename_tab = second_location });
@@ -879,6 +892,39 @@ test "tab lifecycle: created, renamed, moved, closed" {
         error.UnexpectedTabClosed,
         server_messages.handleServerMessage(client, try schema.decodeServer(unexpected)),
     );
+}
+
+test "rejected tab creation leaves the active tab attached" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before_creation = client.model.version();
+    const pending_updates_before_creation = client.presenter.pending_updates;
+    try client.requests.add(@enumFromInt(4), .{
+        .create_tab = TestHarness.bootstrap_location.workspace,
+    });
+    var payload: [256]u8 = undefined;
+    const duplicate = try schema.encodeTabCreated(&payload, .{
+        .request_id = @enumFromInt(4),
+        .location = TestHarness.bootstrap_location,
+        .position = 1,
+        .label = "duplicate",
+        .root_pane_id = @enumFromInt(20),
+    });
+
+    try std.testing.expectError(
+        error.TabAlreadyExists,
+        server_messages.handleServerMessage(client, try schema.decodeServer(duplicate)),
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqualDeep(version_before_creation, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
 
 test "move tab waits for the canonical response and preserves active identity" {

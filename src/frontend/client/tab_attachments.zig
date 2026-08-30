@@ -1,13 +1,32 @@
 //! Synchronizes client-owned pane attachments when the active tab changes.
 
 const std = @import("std");
+const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
+const create_tab = client_application.create_tab;
+const schema = core.schema;
 const select_tab = client_application.select_tab;
 const tabs_mod = workspace_capability.tabs;
+
+/// Wires the tab-creation use case to this client's attachment port.
+///
+/// ```zig
+/// var handler = creationHandler(client);
+/// _ = try handler.execute(command);
+/// ```
+pub fn creationHandler(client: *Client) create_tab.CreateTabHandler {
+    return .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .apply = applyCreation,
+        },
+    };
+}
 
 /// Wires the tab-selection use case to this client's snapshot and attachment ports.
 ///
@@ -57,22 +76,27 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return client.requests.has(.tab_snapshot);
 }
 
+fn applyCreation(context: *anyopaque, creation: client_model.TabCreation) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    const workspace = &client.model.workspace;
+    const previous = findTab(workspace, creation.previous) orelse
+        return error.UnexpectedTabCreation;
+    const created = findTab(workspace, creation.created) orelse
+        return error.UnexpectedTabCreation;
+
+    try detach(client, previous);
+    try client.syncPaneFocus(&created.model);
+}
+
 fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const workspace = &client.model.workspace;
-    const previous = workspace.find(selection.previous.tab_id) orelse
+    const previous = findTab(workspace, selection.previous) orelse
         return error.UnexpectedTabSelection;
-    if (!std.meta.eql(previous.location, selection.previous)) {
+    const selected = findTab(workspace, selection.selected) orelse
         return error.UnexpectedTabSelection;
-    }
 
     try detach(client, previous);
-
-    const selected = workspace.find(selection.selected.tab_id) orelse
-        return error.UnexpectedTabSelection;
-    if (!std.meta.eql(selected.location, selection.selected)) {
-        return error.UnexpectedTabSelection;
-    }
 
     var visible = selected.model.paneIterator();
     while (visible.next()) |pane| {
@@ -81,4 +105,13 @@ fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !vo
 
     try client.syncPaneFocus(&selected.model);
     try client.requestTabSnapshot(selected.location);
+}
+
+fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
+    const tab = workspace.find(location.tab_id) orelse return null;
+    if (!std.meta.eql(tab.location, location)) {
+        return null;
+    }
+
+    return tab;
 }

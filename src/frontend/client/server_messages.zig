@@ -514,16 +514,17 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
     if (continuation != .create_tab or
         !std.meta.eql(continuation.create_tab, created.location.workspace))
         return error.UnexpectedTabCreated;
-    if (client.model.workspace.active()) |current| {
-        try tab_attachments.detach(client, current);
-    }
-    _ = try client.model.workspace.addCreated(
-        created,
-        rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-    );
-    try client.syncPaneFocus(&client.model.workspace.active().?.model);
-    client.view.invalidate();
-    try client.presenter.requestDraw();
+
+    var use_case = tab_attachments.creationHandler(client);
+    _ = try use_case.execute(.{
+        .created = .{
+            .location = created.location,
+            .position = created.position,
+            .label = created.label,
+            .root_pane_id = created.root_pane_id,
+        },
+        .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+    });
 }
 
 /// A confirmed tab rename.

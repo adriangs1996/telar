@@ -15,6 +15,13 @@ pub const PositionChange = enum {
     changed,
 };
 
+pub const CreatedTab = struct {
+    location: schema.TabLocation,
+    position: u16,
+    label: []const u8,
+    root_pane_id: schema.PaneId,
+};
+
 const PendingLayoutRestore = struct {
     location: schema.TabLocation,
     layout: layout_mod.Layout,
@@ -285,23 +292,43 @@ pub const Model = struct {
         model.active_index = model.indexOf(active_id) orelse 0;
     }
 
-    pub fn addCreated(
-        model: *Model,
-        created: schema.TabCreated,
-        size: schema.TerminalSize,
-    ) !*Tab {
-        if (model.count == max_tabs or created.position > model.count)
+    /// Adds a runtime-confirmed tab and makes it active.
+    ///
+    /// ```zig
+    /// const tab = try model.addCreated(created, size);
+    /// ```
+    pub fn addCreated(model: *Model, created: CreatedTab, size: schema.TerminalSize) !*Tab {
+        const workspace = model.workspace orelse return error.UnexpectedWorkspace;
+        if (!std.meta.eql(workspace, created.location.workspace)) {
+            return error.UnexpectedWorkspace;
+        }
+        if (model.indexOf(created.location.tab_id) != null) {
+            return error.TabAlreadyExists;
+        }
+        if (model.findPane(created.root_pane_id) != null) {
+            return error.PaneAlreadyExists;
+        }
+        if (model.count == max_tabs) {
             return error.TabLimitReached;
-        var cursor = model.count;
-        while (cursor > created.position) : (cursor -= 1)
-            model.items[cursor] = model.items[cursor - 1];
+        }
+        if (created.position > model.count) {
+            return error.InvalidTabPosition;
+        }
+
         var tab = Tab.init(model.gpa, created.location, created.label, model.pane_gaps);
         errdefer tab.deinit();
         try tab.model.addRoot(created.root_pane_id, created.location, size);
         tab.snapshot_loaded = true;
+
+        var cursor = model.count;
+        while (cursor > created.position) : (cursor -= 1) {
+            model.items[cursor] = model.items[cursor - 1];
+        }
+
         model.items[created.position] = tab;
         model.count += 1;
         model.active_index = created.position;
+
         return &model.items[created.position].?;
     }
 
@@ -394,7 +421,6 @@ test "selection wraps and moving tabs preserves the active identity" {
         .tab_id = @enumFromInt(1),
     }, .{ .cols = 20, .rows = 5 });
     _ = try model.addCreated(.{
-        .request_id = @enumFromInt(2),
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
         .position = 1,
         .label = "logs",
@@ -407,6 +433,30 @@ test "selection wraps and moving tabs preserves the active identity" {
     try std.testing.expectEqual(PositionChange.unchanged, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectError(error.TabNotFound, model.applyPosition(@enumFromInt(9), 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyPosition(@enumFromInt(1), 2));
+}
+
+test "failed tab construction does not publish a shifted slot" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    try model.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
+    model.gpa = failing.allocator();
+
+    try std.testing.expectError(error.OutOfMemory, model.addCreated(.{
+        .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
+        .position = 0,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 }));
+
+    try std.testing.expectEqual(@as(usize, 1), model.count);
+    try std.testing.expectEqualDeep(first, model.activeConst().?.location);
+    try std.testing.expect(model.items[1] == null);
 }
 
 test "displayed workspace name stays canonical when pane cwd changes" {
@@ -449,7 +499,6 @@ test "pane gap configuration reaches current and future tabs" {
     try std.testing.expect(!model.active().?.model.layout.pane_gaps);
 
     const created = try model.addCreated(.{
-        .request_id = @enumFromInt(2),
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
         .position = 1,
         .label = "logs",

@@ -22,6 +22,16 @@ pub const TabSelection = struct {
     selected: schema.TabLocation,
 };
 
+pub const NewTab = struct {
+    created: tabs_mod.CreatedTab,
+    size: schema.TerminalSize,
+};
+
+pub const TabCreation = struct {
+    previous: schema.TabLocation,
+    created: schema.TabLocation,
+};
+
 pub const Model = struct {
     workspace: tabs_mod.Model,
     tabs_revision: u64 = 0,
@@ -91,6 +101,24 @@ pub const Model = struct {
         return .changed;
     }
 
+    /// Commits a runtime-confirmed tab and makes its identity active.
+    ///
+    /// ```zig
+    /// const creation = try model.createTab(command);
+    /// ```
+    pub fn createTab(model: *Model, command: NewTab) !TabCreation {
+        const previous = (model.workspace.activeConst() orelse return error.NoActiveTab).location;
+
+        _ = try model.workspace.addCreated(command.created, command.size);
+        model.tabs_revision +%= 1;
+        model.active_tab_revision +%= 1;
+
+        return .{
+            .previous = previous,
+            .created = command.created.location,
+        };
+    }
+
     /// Selects one existing tab and returns the committed identity change.
     ///
     /// ```zig
@@ -129,7 +157,6 @@ test "tab position commits version semantic changes only" {
     };
     try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
     _ = try model.workspace.addCreated(.{
-        .request_id = @enumFromInt(2),
         .location = second,
         .position = 1,
         .label = "logs",
@@ -170,6 +197,96 @@ test "rejected tab positions do not advance the model" {
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
+test "tab creation advances collection and active identity revisions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    const second: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+
+    const creation = try model.createTab(.{
+        .created = .{
+            .location = second,
+            .position = 0,
+            .label = "logs",
+            .root_pane_id = @enumFromInt(2),
+        },
+        .size = .{ .cols = 20, .rows = 5 },
+    });
+
+    try std.testing.expectEqualDeep(first, creation.previous);
+    try std.testing.expectEqualDeep(second, creation.created);
+    try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(usize, 2), model.workspace.count);
+    try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
+    try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+}
+
+test "rejected tab creations preserve state and revisions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    const size: schema.TerminalSize = .{ .cols = 20, .rows = 5 };
+
+    try std.testing.expectError(error.UnexpectedWorkspace, model.createTab(.{
+        .created = .{
+            .location = .{
+                .workspace = .{ .workspace = @enumFromInt(2) },
+                .tab_id = @enumFromInt(2),
+            },
+            .position = 1,
+            .label = "wrong workspace",
+            .root_pane_id = @enumFromInt(2),
+        },
+        .size = size,
+    }));
+    try std.testing.expectError(error.TabAlreadyExists, model.createTab(.{
+        .created = .{
+            .location = first,
+            .position = 1,
+            .label = "duplicate tab",
+            .root_pane_id = @enumFromInt(2),
+        },
+        .size = size,
+    }));
+    try std.testing.expectError(error.PaneAlreadyExists, model.createTab(.{
+        .created = .{
+            .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
+            .position = 1,
+            .label = "duplicate pane",
+            .root_pane_id = @enumFromInt(1),
+        },
+        .size = size,
+    }));
+    try std.testing.expectError(error.InvalidTabPosition, model.createTab(.{
+        .created = .{
+            .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
+            .position = 2,
+            .label = "bad position",
+            .root_pane_id = @enumFromInt(2),
+        },
+        .size = size,
+    }));
+
+    try std.testing.expectEqualDeep(first, model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
 test "tab selection advances only the active identity revision" {
     var model = Model.init(std.testing.allocator, true);
     defer model.deinit();
@@ -185,7 +302,6 @@ test "tab selection advances only the active identity revision" {
     };
     try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
     _ = try model.workspace.addCreated(.{
-        .request_id = @enumFromInt(2),
         .location = second,
         .position = 1,
         .label = "logs",

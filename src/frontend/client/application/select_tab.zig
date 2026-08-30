@@ -103,7 +103,6 @@ const TestingModel = struct {
         };
         try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
         _ = try model.workspace.addCreated(.{
-            .request_id = @enumFromInt(2),
             .location = second,
             .position = 1,
             .label = "logs",
