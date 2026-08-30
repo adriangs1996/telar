@@ -37,6 +37,8 @@ const pane_resize_commands = @import("commands/pane_resize.zig");
 const pane_resize_controller = @import("controllers/pane_resize.zig");
 const pane_viewport_commands = @import("commands/pane_viewport.zig");
 const pane_viewport_controller = @import("controllers/pane_viewport.zig");
+const request_graphics_snapshot_commands = @import("commands/request_graphics_snapshot.zig");
+const request_graphics_snapshot_controller = @import("controllers/request_graphics_snapshot.zig");
 const request_snapshot_commands = @import("commands/request_snapshot.zig");
 const request_snapshot_controller = @import("controllers/request_snapshot.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
@@ -91,6 +93,7 @@ const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.F
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
 const PaneViewportController = pane_viewport_controller.Controller(*pane_viewport_commands.SetPaneViewportHandler);
+const RequestGraphicsSnapshotController = request_graphics_snapshot_controller.Controller(*request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler);
 const RequestSnapshotController = request_snapshot_controller.Controller(*request_snapshot_commands.RequestCellSnapshotHandler);
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = 8;
@@ -1241,7 +1244,7 @@ const Server = struct {
         if (event.stats.reset) {
             for (&server.clients.items) |*slot| {
                 const client = slot.* orelse continue;
-                if (client.attachments.find(active.id)) |attachment| attachment.resetGraphics();
+                _ = client.attachments.requestGraphicsSnapshot(active.id);
             }
         }
         // Freeze the next transfer while the media actor is idle so the send
@@ -1514,11 +1517,14 @@ const Server = struct {
 
                 controller.copySelection(request);
             },
-            .request_graphics_snapshot => |request| attachment_entrypoints.requestGraphicsSnapshot(
-                attachments,
-                metrics,
-                request,
-            ),
+            .request_graphics_snapshot => |request| {
+                var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
+                    .attachments = attachments,
+                };
+                var controller = RequestGraphicsSnapshotController.init(metrics, &handler);
+
+                try controller.requestGraphicsSnapshot(request);
+            },
             .configure_graphics => |configure| attachment_entrypoints.configureGraphics(
                 attachments,
                 &session.shared_graphics,
@@ -2761,6 +2767,8 @@ test {
     _ = pane_resize_controller;
     _ = pane_viewport_commands;
     _ = pane_viewport_controller;
+    _ = request_graphics_snapshot_commands;
+    _ = request_graphics_snapshot_controller;
     _ = request_snapshot_commands;
     _ = request_snapshot_controller;
     _ = rename_workspace_commands;
@@ -2786,6 +2794,7 @@ test {
     _ = @import("pane_input_test.zig");
     _ = @import("pane_resize_test.zig");
     _ = @import("pane_viewport_test.zig");
+    _ = @import("request_graphics_snapshot_test.zig");
     _ = @import("request_snapshot_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");

@@ -11,18 +11,6 @@ const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const schema = core.schema;
 
-pub fn requestGraphicsSnapshot(
-    attachments: *AttachmentStore,
-    metrics: *RuntimeMetrics,
-    request: schema.RequestGraphicsSnapshot,
-) void {
-    const active = attachments.find(request.pane_id) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    active.resetGraphics();
-}
-
 pub fn configureGraphics(
     attachments: *AttachmentStore,
     shared_graphics: *bool,

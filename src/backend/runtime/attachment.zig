@@ -162,7 +162,7 @@ pub const Attachment = struct {
         };
     }
 
-    pub fn resetGraphics(attachment: *Attachment) void {
+    fn requestGraphicsSnapshot(attachment: *Attachment) void {
         attachment.graphics.reset();
     }
 
@@ -316,6 +316,19 @@ pub const AttachmentStore = struct {
     pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: schema.PaneId) bool {
         const attachment = store.find(pane_id) orelse return false;
         attachment.requestCellSnapshot();
+        return true;
+    }
+
+    /// Replaces one client's graphics baseline with a complete snapshot. Any
+    /// frozen transfer is released before the recovery mark becomes visible;
+    /// repeated requests coalesce and retain transport policy and credit.
+    ///
+    /// ```zig
+    /// if (!store.requestGraphicsSnapshot(pane_id)) recordStaleMessage();
+    /// ```
+    pub fn requestGraphicsSnapshot(store: *AttachmentStore, pane_id: schema.PaneId) bool {
+        const attachment = store.find(pane_id) orelse return false;
+        attachment.requestGraphicsSnapshot();
         return true;
     }
 
