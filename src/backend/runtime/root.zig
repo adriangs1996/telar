@@ -38,6 +38,7 @@ const open_pane_commands = @import("commands/open_pane.zig");
 const open_pane_controller = @import("controllers/open_pane.zig");
 const pane_input_commands = @import("commands/pane_input.zig");
 const pane_input_controller = @import("controllers/pane_input.zig");
+const pane_input_pump = @import("pane_input_pump.zig");
 const pane_resize_commands = @import("commands/pane_resize.zig");
 const pane_resize_controller = @import("controllers/pane_resize.zig");
 const pane_viewport_commands = @import("commands/pane_viewport.zig");
@@ -179,12 +180,7 @@ const PaneMediaEvent = struct {
     stats: media_mod.Stats,
 };
 
-const PaneInputEvent = struct {
-    pane: PaneKey,
-    len: usize,
-    started_ns: u64,
-    result: anyerror!void,
-};
+const PaneInputEvent = pane_input_pump.Completion;
 
 const PaneExitEvent = pane_launcher_mod.PaneExitEvent;
 
@@ -1105,25 +1101,8 @@ const Server = struct {
     }
 
     fn handlePaneInputWrittenEvent(server: *Server, event: PaneInputEvent) !void {
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-        active.actorFinished();
-        active.input_write_pending = false;
-        if (comptime diagnostics.enabled)
-            server.metrics.input_write.observe(
-                diagnostics.elapsed(event.started_ns, diagnostics.now(server.io)),
-            );
-        if (event.result) |_| {
-            active.input_queue.consume(event.len);
-            try schedulePaneInput(server.io, server.select, active);
-        } else |_| {
-            // The PTY is gone or refusing writes; the exit path owns the
-            // pane's lifecycle, this queue only stops feeding it.
-            active.input_queue.clear();
-        }
-        server.collect();
+        var input_pump = paneInputPump(server);
+        return input_pump.complete(event);
     }
 
     fn handlePaneResponseWrittenEvent(server: *Server, event: PaneResponseEvent) !void {
@@ -1873,7 +1852,8 @@ fn entrypointScheduleResponse(context: *anyopaque, pane: *Pane) !void {
 
 fn entrypointScheduleInput(context: *anyopaque, pane: *Pane) !void {
     const server: *Server = @ptrCast(@alignCast(context));
-    return schedulePaneInput(server.io, server.select, pane);
+    var input_pump = paneInputPump(server);
+    return input_pump.schedule(pane);
 }
 
 const ClientLaunchContext = struct {
@@ -2457,40 +2437,40 @@ fn writeDiagnostics(
     try sink.write(io, bytes);
 }
 
-fn writePaneInput(io: Io, pane: *Pane, bytes: []const u8, started_ns: u64) PaneInputEvent {
-    const path = diagnostics.enter(.interactive);
-    defer path.restore();
-    pane.pty_write_mutex.lockUncancelable(io);
-    defer pane.pty_write_mutex.unlock(io);
-    return .{
-        .pane = pane.key(),
-        .len = bytes.len,
-        .started_ns = started_ns,
-        .result = pane.session.file().writeStreamingAll(io, bytes),
-    };
+const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
+    .start = startPaneInputWrite,
+    .collect = collectAfterPaneInput,
+};
+
+const RuntimePaneInputPump = pane_input_pump.Pump(Server, pane_input_runtime_port);
+
+fn paneInputPump(server: *Server) RuntimePaneInputPump {
+    return RuntimePaneInputPump.init(server, .{
+        .io = server.io,
+        .panes = &server.model.panes,
+        .metrics = &server.metrics,
+    });
 }
 
-/// Feeds the pane's bounded input queue to its PTY, one in-flight write at a
-/// time. A blocked write stalls only this pane: the client socket, every
-/// other pane, and the event loop keep going.
-fn schedulePaneInput(
-    io: Io,
-    select: *Io.Select(RuntimeEvent),
-    pane: *Pane,
-) !void {
-    if (pane.input_write_pending) return;
-    const chunk = pane.input_queue.nextChunk() orelse return;
-    pane.input_write_pending = true;
-    pane.actorStarted();
-    select.concurrent(.pane_input_written, writePaneInput, .{
-        io,
-        pane,
-        chunk,
-        if (comptime diagnostics.enabled) diagnostics.now(io) else 0,
-    }) catch |err| {
-        pane.actorFinished();
-        pane.input_write_pending = false;
-        return err;
+fn startPaneInputWrite(server: *Server, write: pane_input_pump.Write) !void {
+    try server.select.concurrent(.pane_input_written, writePaneInput, .{write});
+}
+
+fn collectAfterPaneInput(server: *Server) void {
+    server.collect();
+}
+
+fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {
+    const path = diagnostics.enter(.interactive);
+    defer path.restore();
+
+    write.pane.pty_write_mutex.lockUncancelable(write.io);
+    defer write.pane.pty_write_mutex.unlock(write.io);
+
+    return .{
+        .pane = write.pane.key(),
+        .started_ns = write.started_ns,
+        .result = write.pane.session.file().writeStreamingAll(write.io, write.bytes),
     };
 }
 
@@ -2859,6 +2839,7 @@ test {
     _ = open_pane_controller;
     _ = pane_input_commands;
     _ = pane_input_controller;
+    _ = pane_input_pump;
     _ = pane_resize_commands;
     _ = pane_resize_controller;
     _ = pane_viewport_commands;

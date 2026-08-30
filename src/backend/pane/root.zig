@@ -341,6 +341,11 @@ pub const PaneInputQueue = struct {
     }
 };
 
+pub const PtyInputWriteResult = enum {
+    succeeded,
+    failed,
+};
+
 pub const KittyFramingCounter = escape.KittyFramingCounter;
 
 pub const CwdState = struct {
@@ -401,6 +406,7 @@ pub const Pane = struct {
     response_pending: bool = false,
     input_queue: PaneInputQueue = .{},
     input_write_pending: bool = false,
+    input_write_len: usize = 0,
     size: schema.TerminalSize,
     render_state: vt.RenderState = .empty,
     screen: core.ui.Buffer,
@@ -730,6 +736,60 @@ pub const Pane = struct {
     /// ```
     pub fn queuePtyInput(pane: *Pane, bytes: []const u8) bool {
         return pane.input_queue.push(bytes);
+    }
+
+    /// Borrows the next stable queue chunk for one asynchronous PTY write.
+    /// Repeated calls return null until that write completes or is cancelled.
+    ///
+    /// ```zig
+    /// const bytes = pane.beginPtyInputWrite() orelse return;
+    /// ```
+    pub fn beginPtyInputWrite(pane: *Pane) ?[]const u8 {
+        if (pane.input_write_pending) {
+            return null;
+        }
+
+        const bytes = pane.input_queue.nextChunk() orelse return null;
+        pane.input_write_pending = true;
+        pane.input_write_len = bytes.len;
+        pane.actorStarted();
+        return bytes;
+    }
+
+    /// Releases the in-flight write borrow, consuming its exact queue prefix
+    /// on success or stopping and clearing the input pump on PTY failure.
+    ///
+    /// ```zig
+    /// pane.completePtyInputWrite(.succeeded);
+    /// ```
+    pub fn completePtyInputWrite(pane: *Pane, result: PtyInputWriteResult) void {
+        std.debug.assert(pane.input_write_pending);
+        std.debug.assert(pane.input_write_len != 0);
+
+        const written = pane.input_write_len;
+        pane.input_write_pending = false;
+        pane.input_write_len = 0;
+        pane.actorFinished();
+
+        switch (result) {
+            .succeeded => pane.input_queue.consume(written),
+            .failed => pane.input_queue.clear(),
+        }
+    }
+
+    /// Rolls back a write that could not be scheduled without consuming the
+    /// bytes, allowing a later scheduling attempt to retry the same prefix.
+    ///
+    /// ```zig
+    /// pane.cancelPtyInputWrite();
+    /// ```
+    pub fn cancelPtyInputWrite(pane: *Pane) void {
+        std.debug.assert(pane.input_write_pending);
+        std.debug.assert(pane.input_write_len != 0);
+
+        pane.input_write_pending = false;
+        pane.input_write_len = 0;
+        pane.actorFinished();
     }
 
     pub fn queueHistoryOutput(
