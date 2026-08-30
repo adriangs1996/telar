@@ -8,7 +8,8 @@ const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
 
 pub const Version = struct {
-    generation: u64 = 0,
+    tabs: u64 = 0,
+    active_tab: u64 = 0,
 };
 
 pub const Change = enum {
@@ -16,9 +17,15 @@ pub const Change = enum {
     changed,
 };
 
+pub const TabSelection = struct {
+    previous: schema.TabLocation,
+    selected: schema.TabLocation,
+};
+
 pub const Model = struct {
     workspace: tabs_mod.Model,
-    generation: u64 = 0,
+    tabs_revision: u64 = 0,
+    active_tab_revision: u64 = 0,
 
     /// Creates the semantic model with the configured pane appearance.
     ///
@@ -47,7 +54,10 @@ pub const Model = struct {
     /// const before = model.version();
     /// ```
     pub fn version(model: *const Model) Version {
-        return .{ .generation = model.generation };
+        return .{
+            .tabs = model.tabs_revision,
+            .active_tab = model.active_tab_revision,
+        };
     }
 
     /// Returns the active tab identity without exposing workspace storage.
@@ -77,8 +87,30 @@ pub const Model = struct {
             return .unchanged;
         }
 
-        model.generation +%= 1;
+        model.tabs_revision +%= 1;
         return .changed;
+    }
+
+    /// Selects one existing tab and returns the committed identity change.
+    ///
+    /// ```zig
+    /// const selection = try model.selectTab(tab_id) orelse return;
+    /// ```
+    pub fn selectTab(model: *Model, tab_id: schema.TabId) !?TabSelection {
+        const previous = model.workspace.activeConst() orelse return error.NoActiveTab;
+        const selected_index = model.workspace.indexOf(tab_id) orelse return error.TabNotFound;
+        if (selected_index == model.workspace.active_index) {
+            return null;
+        }
+
+        const selection: TabSelection = .{
+            .previous = previous.location,
+            .selected = model.workspace.items[selected_index].?.location,
+        };
+        std.debug.assert(model.workspace.select(tab_id));
+        model.active_tab_revision +%= 1;
+
+        return selection;
     }
 };
 
@@ -106,11 +138,12 @@ test "tab position commits version semantic changes only" {
     try std.testing.expect(model.workspace.select(first.tab_id));
 
     try std.testing.expectEqual(Change.changed, try model.applyTabPosition(first, 1));
-    try std.testing.expectEqual(@as(u64, 1), model.version().generation);
+    try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
+    try std.testing.expectEqual(@as(u64, 0), model.version().active_tab);
     try std.testing.expectEqual(first, model.activeTabLocation().?);
 
     try std.testing.expectEqual(Change.unchanged, try model.applyTabPosition(first, 1));
-    try std.testing.expectEqual(@as(u64, 1), model.version().generation);
+    try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
 }
 
 test "rejected tab positions do not advance the model" {
@@ -134,5 +167,41 @@ test "rejected tab positions do not advance the model" {
         .tab_id = @enumFromInt(9),
     }, 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyTabPosition(location, 1));
-    try std.testing.expectEqual(@as(u64, 0), model.version().generation);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "tab selection advances only the active identity revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    const second: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    _ = try model.workspace.addCreated(.{
+        .request_id = @enumFromInt(2),
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.workspace.select(first.tab_id));
+
+    const selection = (try model.selectTab(second.tab_id)).?;
+
+    try std.testing.expectEqualDeep(first, selection.previous);
+    try std.testing.expectEqualDeep(second, selection.selected);
+    try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(u64, 0), model.version().tabs);
+    try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+
+    try std.testing.expect((try model.selectTab(second.tab_id)) == null);
+    try std.testing.expectError(error.TabNotFound, model.selectTab(@enumFromInt(9)));
+    try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
 }

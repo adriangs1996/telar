@@ -24,6 +24,7 @@ const diagnostics = core.diagnostics;
 const client_mod = @import("client.zig");
 const Client = client_mod;
 const InputHandler = @import("input_handler.zig");
+const tab_attachments = @import("tab_attachments.zig");
 const monotonic = client_mod.monotonic;
 const rectSize = multiplexer.rectSize;
 
@@ -514,8 +515,7 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
         !std.meta.eql(continuation.create_tab, created.location.workspace))
         return error.UnexpectedTabCreated;
     if (client.model.workspace.active()) |current| {
-        var handler: InputHandler = .{ .client = client };
-        try handler.detachTab(current);
+        try tab_attachments.detach(client, current);
     }
     _ = try client.model.workspace.addCreated(
         created,

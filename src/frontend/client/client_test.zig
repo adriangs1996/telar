@@ -152,6 +152,22 @@ const TestHarness = struct {
 
         return location;
     }
+
+    fn addInactiveTab(harness: *TestHarness, tab_id: schema.TabId, pane_id: schema.PaneId) !schema.TabLocation {
+        const location = try harness.addTab(tab_id, pane_id);
+        const tab = harness.client.model.workspace.find(tab_id).?;
+        workspace_capability.tabs.Model.detachAll(tab);
+        try harness.client.graphics_store.setPaneVisible(pane_id, false);
+        try std.testing.expect(harness.client.model.workspace.select(bootstrap_location.tab_id));
+
+        return location;
+    }
+
+    fn allowTabSelection(harness: *TestHarness) !void {
+        const continuation = harness.client.requests.take(@enumFromInt(3)) orelse
+            return error.MissingBootstrapTabSnapshot;
+        try std.testing.expect(continuation == .tab_snapshot);
+    }
 };
 
 test "host input arriving while no tab exists is dropped, not a crash" {
@@ -898,7 +914,8 @@ test "move tab waits for the canonical response and preserves active identity" {
 
     try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(second.tab_id));
     try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, client.model.workspace.activeConst().?.location.tab_id);
-    try std.testing.expectEqual(version_before_response.generation + 1, client.model.version().generation);
+    try std.testing.expectEqual(version_before_response.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_response.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_response, client.presenter.pending_updates);
 
     try client.observeModel();
@@ -958,6 +975,73 @@ test "canonical tab move at an edge does not advance or schedule the model" {
     try std.testing.expectEqualDeep(version_before_response, client.model.version());
     try std.testing.expectEqual(pending_updates_before_response, client.presenter.pending_updates);
     try std.testing.expect(!client.requests.has(.tab_operation));
+}
+
+test "select tab detaches the current tab before requesting the target snapshot" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    try harness.allowTabSelection();
+    const client = harness.client;
+    const second_pane: schema.PaneId = @enumFromInt(20);
+    const second = try harness.addInactiveTab(@enumFromInt(2), second_pane);
+    const selected_model = &client.model.workspace.find(second.tab_id).?.model;
+    selected_model.composition_invalidated = false;
+    const version_before_selection = client.model.version();
+    const pending_updates_before_selection = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.{ .select_tab = 1 });
+
+    try std.testing.expectEqual(second, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(version_before_selection.tabs, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before_selection, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expect(!selected_model.composition_invalidated);
+    try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(!client.model.workspace.findPane(second_pane).?.attached);
+    try std.testing.expect(!client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
+    try std.testing.expect(client.graphics_store.paneVisible(second_pane));
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_selection + 1, client.presenter.pending_updates);
+    try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
+    const snapshot = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(snapshot == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(second, snapshot.request_tab_snapshot.location);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "pending tab snapshot suppresses tab selection without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const second_pane: schema.PaneId = @enumFromInt(20);
+    _ = try harness.addInactiveTab(@enumFromInt(2), second_pane);
+    const version_before_selection = client.model.version();
+    const next_request_id = client.next_request_id;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.{ .select_tab = 1 });
+
+    try std.testing.expectEqual(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(!client.model.workspace.findPane(second_pane).?.attached);
+    try std.testing.expectEqualDeep(version_before_selection, client.model.version());
+    try std.testing.expectEqual(next_request_id, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expect(!handler.redraw);
 }
 
 test "closing the last workspace exits the client" {

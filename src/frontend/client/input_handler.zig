@@ -10,6 +10,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const widgets = @import("../widgets/root.zig");
+const tab_attachments = @import("tab_attachments.zig");
 const action_mod = input_capability.action;
 const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
@@ -17,7 +18,6 @@ const keybind = input_capability.keybind;
 const mouse_protocol = input_capability.mouse_protocol;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
-const tabs_mod = workspace_capability.tabs;
 const term = presentation.screen;
 
 const Io = std.Io;
@@ -51,38 +51,10 @@ pub fn capturesKeys(handler: *const InputHandler) bool {
     return handler.client.mode == .prompt or handler.client.view.hasAttachmentModal();
 }
 
-pub fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
-    // Detaching always invalidates the reported focus, and the focus-out
-    // byte must leave before the pane detaches — owning the pairing here
-    // deletes the ordering rule every caller used to maintain by hand.
-    try handler.client.clearPaneFocus();
-    var panes = tab.model.paneIterator();
-    while (panes.next()) |pane| {
-        if (!pane.attached) continue;
-        try handler.client.enqueue(.{ .detach_pane = .{
-            .pane_id = pane.id,
-        } });
-        try handler.client.graphics_store.setPaneVisible(pane.id, false);
-    }
-    tabs_mod.Model.detachAll(tab);
-}
-
 fn selectTab(handler: *InputHandler, tab_id: schema.TabId) !void {
-    if (handler.client.requests.has(.tab_snapshot)) return;
-    const current = handler.client.model.workspace.active() orelse return;
-    if (current.location.tab_id == tab_id) return;
-    if (handler.client.model.workspace.indexOf(tab_id) == null) return;
-    try handler.detachTab(current);
-    std.debug.assert(handler.client.model.workspace.select(tab_id));
-    const active = handler.client.model.workspace.active().?;
-    var visible = active.model.paneIterator();
-    while (visible.next()) |pane|
-        try handler.client.graphics_store.setPaneVisible(pane.id, true);
-    active.model.composition_invalidated = true;
-    try handler.client.syncPaneFocus(&active.model);
-    try handler.client.requestTabSnapshot(active.location);
-    handler.client.view.invalidate();
-    handler.redraw = true;
+    var use_case = tab_attachments.selectionHandler(handler.client);
+
+    _ = try use_case.execute(.{ .tab_id = tab_id });
 }
 
 /// Switching targets the runtime identity, not its path. Multiple explicit
@@ -119,7 +91,7 @@ fn beginWorkspaceHandoff(
     const client = handler.client;
     client.rememberCurrentNavigation();
     var tabs = client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| try handler.detachTab(tab);
+    while (tabs.next()) |tab| try tab_attachments.detach(client, tab);
     client.model.workspace.deinit();
     const request_id = try client.nextId();
     try client.enqueueRequest(
@@ -689,7 +661,7 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
         }),
         .detach => {
             var tabs = handler.client.model.workspace.tabIterator();
-            while (tabs.next()) |tab| try handler.detachTab(tab);
+            while (tabs.next()) |tab| try tab_attachments.detach(handler.client, tab);
             return .stop;
         },
         .enter_copy_mode => try handler.enterCopyMode(),
@@ -927,7 +899,7 @@ fn closeTab(handler: *InputHandler) !void {
     if (handler.client.requests.has(.tab_operation)) return;
     const tab = handler.client.model.workspace.active() orelse return;
     const request_id = try handler.client.nextId();
-    try handler.detachTab(tab);
+    try tab_attachments.detach(handler.client, tab);
     try handler.client.enqueueRequest(
         request_id,
         .{ .close_tab = tab.location },
