@@ -10,6 +10,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const widgets = @import("../widgets/root.zig");
+const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_renames = @import("tab_renames.zig");
@@ -747,20 +748,8 @@ fn togglePaneFullscreen(handler: *InputHandler) !void {
 }
 
 fn closeFocused(handler: *InputHandler) !void {
-    if (handler.client.requests.has(.pane_operation)) return;
-    const tab = handler.client.model.workspace.active() orelse return;
-    const pane = tab.model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    const location = tab.location;
-    const request_id = try handler.client.nextId();
-    try handler.client.enqueueRequest(
-        request_id,
-        .{ .close_pane = .{ .pane_id = pane.id, .location = location } },
-        .{ .close_pane = .{
-            .request_id = request_id,
-            .pane_id = pane.id,
-        } },
-    );
+    var use_case = pane_closures.requestHandler(handler.client);
+    _ = try use_case.execute();
 }
 
 fn createTab(handler: *InputHandler) !void {

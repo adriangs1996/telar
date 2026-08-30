@@ -36,6 +36,8 @@ test {
     _ = @import("config_reload.zig");
     _ = @import("model.zig");
     _ = @import("pane_attachments.zig");
+    _ = @import("pane_closures.zig");
+    _ = @import("pane_resources.zig");
     _ = @import("pane_splits.zig");
     _ = @import("presenter.zig");
     _ = @import("server_messages.zig");

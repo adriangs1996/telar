@@ -1974,6 +1974,92 @@ test "a foreground report renames the pane" {
     );
 }
 
+test "close pane request waits for the authoritative exit before committing" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const closing_pane: schema.PaneId = @enumFromInt(11);
+    const split = try client.model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = TestHarness.bootstrap_pane,
+            .location = TestHarness.bootstrap_location,
+            .axis = .horizontal,
+            .area = client.view.workbench(),
+        },
+        .new_pane = closing_pane,
+    });
+    try std.testing.expect(split.change == .changed);
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    client.reported_focus = closing_pane;
+    client.paste_pane = closing_pane;
+    try client.graphics_store.applyImage(.{
+        .pane_id = closing_pane,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    const version_before_request = client.model.version();
+    const pending_updates_before_request = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.close_pane);
+
+    try std.testing.expect(client.model.workspace.findPane(closing_pane) != null);
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(@as(usize, 1), client.requests.count);
+
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const requested = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(requested == .close_pane);
+    try std.testing.expectEqual(closing_pane, requested.close_pane.pane_id);
+    try std.testing.expect(requested.close_pane.request_id != .none);
+    client.mode = .{ .copy = .init(closing_pane, .{ .x = 0, .y = 0 }, 0) };
+
+    var payload: [128]u8 = undefined;
+    const exited = try schema.encodePaneExited(&payload, .{
+        .pane_id = closing_pane,
+        .kind = .exited,
+        .value = 0,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
+
+    try std.testing.expect(client.model.workspace.findPane(closing_pane) == null);
+    try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(client.paste_pane == null);
+    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
+    try std.testing.expect(!client.notification_tick_pending);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    const committed_version = client.model.version();
+    const pending_updates_after_commit = client.presenter.pending_updates;
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
+    try client.observeModel();
+
+    try std.testing.expectEqualDeep(committed_version, client.model.version());
+    try std.testing.expectEqual(pending_updates_after_commit, client.presenter.pending_updates);
+}
+
 test "an unrequested pane exit removes the pane silently" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -1981,6 +2067,20 @@ test "an unrequested pane exit removes the pane silently" {
     try harness.bootstrap();
     const client = harness.client;
     client.mode = .{ .copy = .init(TestHarness.bootstrap_pane, .{ .x = 0, .y = 0 }, 0) };
+    client.paste_pane = TestHarness.bootstrap_pane;
+    try client.graphics_store.applyImage(.{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    const version_before_exit = client.model.version();
+    const pending_updates_before_exit = client.presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
     const exited = try schema.encodePaneExited(&payload, .{
@@ -1992,9 +2092,76 @@ test "an unrequested pane exit removes the pane silently" {
     try harness.settle();
 
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
     try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(client.paste_pane == null);
     try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(!client.notification_tick_pending);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "an inactive pane exit retires only inactive state" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const inactive_pane: schema.PaneId = @enumFromInt(20);
+    const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
+    client.paste_pane = inactive_pane;
+    try client.graphics_store.applyImage(.{
+        .pane_id = inactive_pane,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    try client.requests.add(@enumFromInt(4), .{ .close_pane = .{
+        .pane_id = inactive_pane,
+        .location = inactive,
+    } });
+    try client.requests.add(@enumFromInt(5), .{ .attach_pane = .{
+        .pane_id = inactive_pane,
+        .location = inactive,
+    } });
+    const version_before_exit = client.model.version();
+    const pending_updates_before_exit = client.presenter.pending_updates;
+
+    var payload: [128]u8 = undefined;
+    const exited = try schema.encodePaneExited(&payload, .{
+        .pane_id = inactive_pane,
+        .kind = .signaled,
+        .value = 15,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
+
+    try std.testing.expect(client.model.workspace.findPane(inactive_pane) == null);
+    try std.testing.expectEqualDeep(version_before_exit, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
+    try std.testing.expect(client.paste_pane == null);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(inactive_pane));
+    try std.testing.expect(client.requests.take(@enumFromInt(4)) == null);
+    try std.testing.expect(client.requests.take(@enumFromInt(5)).? == .ignored);
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
 }
 
 test "a failed request surfaces as a notification" {

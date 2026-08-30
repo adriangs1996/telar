@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
 const close_tab = client_application.close_tab;
@@ -173,7 +174,7 @@ fn applyClosure(context: *anyopaque, removal: client_model.TabRemoval) !void {
     client.requests.ignoreTab(removal.removed.tab_id);
 
     for (removal.panes.slice()) |pane_id| {
-        releasePaneState(client, pane_id);
+        pane_resources.release(client, pane_id);
     }
 
     if (!removal.was_active) {
@@ -193,27 +194,6 @@ fn applyClosure(context: *anyopaque, removal: client_model.TabRemoval) !void {
     if (!client.requests.has(.tab_snapshot)) {
         try client.requestTabSnapshot(active.location);
     }
-}
-
-/// Releases every disposable client resource associated with one retired pane.
-///
-/// ```zig
-/// releasePaneState(client, pane_id);
-/// ```
-pub fn releasePaneState(client: *Client, pane_id: schema.PaneId) void {
-    if (client.mode == .copy and client.mode.copy.pane_id == pane_id) {
-        client.mode = .normal;
-    }
-
-    if (client.paste_pane == pane_id) {
-        client.paste_pane = null;
-    }
-
-    if (client.reported_focus == pane_id) {
-        client.forgetPaneFocus();
-    }
-
-    client.graphics_store.clearPane(pane_id);
 }
 
 fn applyCreation(context: *anyopaque, creation: client_model.TabCreation) !void {

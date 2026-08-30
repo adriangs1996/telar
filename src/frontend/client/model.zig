@@ -103,6 +103,23 @@ pub const PaneSplitRecovery = union(enum) {
     stale,
 };
 
+pub const PaneClosure = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+};
+
+pub const PaneRetirement = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    active: bool,
+    tab_empty: bool,
+};
+
+pub const PaneExit = union(enum) {
+    retired: PaneRetirement,
+    stale: schema.PaneId,
+};
+
 pub const CloseTab = struct {
     location: schema.TabLocation,
     workspace_closed: bool,
@@ -578,6 +595,53 @@ pub const Model = struct {
         const size = tab.model.contentSize(command.split.target_pane, command.area) orelse
             return .not_required;
         return .{ .resize = .{ .pane_id = command.split.target_pane, .size = size } };
+    }
+
+    /// Resolves the active attached pane that an explicit close request may
+    /// target without changing client state.
+    ///
+    /// ```zig
+    /// const closure = model.planPaneClosure() orelse return;
+    /// ```
+    pub fn planPaneClosure(model: *const Model) ?PaneClosure {
+        const active = model.workspace.activeConst() orelse return null;
+        const focused = active.model.focusedPaneConst() orelse return null;
+        if (!focused.attached or !std.meta.eql(focused.location, active.location)) {
+            return null;
+        }
+
+        return .{ .pane_id = focused.id, .location = active.location };
+    }
+
+    /// Applies one authoritative pane exit. Missing identities are stale
+    /// lifecycle traffic and leave every presentation revision unchanged.
+    ///
+    /// ```zig
+    /// const transition = model.retirePane(pane_id);
+    /// ```
+    pub fn retirePane(model: *Model, pane_id: schema.PaneId) PaneExit {
+        const tab = model.workspace.tabForPane(pane_id) orelse return .{ .stale = pane_id };
+        const pane = tab.model.find(pane_id) orelse return .{ .stale = pane_id };
+        if (!std.meta.eql(pane.location, tab.location)) {
+            return .{ .stale = pane_id };
+        }
+
+        const active = if (model.workspace.activeConst()) |current|
+            std.meta.eql(current.location, tab.location)
+        else
+            false;
+        const location = tab.location;
+        std.debug.assert(tab.model.removePane(pane_id));
+        if (active) {
+            model.panes_revision +%= 1;
+        }
+
+        return .{ .retired = .{
+            .pane_id = pane_id,
+            .location = location,
+            .active = active,
+            .tab_empty = tab.model.pane_count == 0,
+        } };
     }
 
     /// Commits a runtime-confirmed tab position and advances the model once.
@@ -1367,6 +1431,93 @@ test "tab selection advances only the active identity revision" {
     try std.testing.expect((try model.selectTab(second.tab_id)) == null);
     try std.testing.expectError(error.TabNotFound, model.selectTab(@enumFromInt(9)));
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+}
+
+test "pane closure planning requires the active attached pane without mutation" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+
+    const closure = model.planPaneClosure().?;
+
+    try std.testing.expectEqual(pane_id, closure.pane_id);
+    try std.testing.expectEqualDeep(location, closure.location);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+
+    model.workspace.findPane(pane_id).?.attached = false;
+
+    try std.testing.expect(model.planPaneClosure() == null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "active pane retirement advances the visible pane revision once" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    try model.workspace.bootstrap(first, location, .{ .cols = 40, .rows = 10 });
+    try model.workspace.active().?.model.split(
+        first,
+        second,
+        location,
+        .horizontal,
+        .{ .w = 40, .h = 10 },
+    );
+
+    const retirement = model.retirePane(second);
+
+    try std.testing.expect(retirement == .retired);
+    try std.testing.expectEqual(second, retirement.retired.pane_id);
+    try std.testing.expectEqualDeep(location, retirement.retired.location);
+    try std.testing.expect(retirement.retired.active);
+    try std.testing.expect(!retirement.retired.tab_empty);
+    try std.testing.expect(model.workspace.findPane(second) == null);
+    try std.testing.expectEqual(first, model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
+
+    const repeated = model.retirePane(second);
+
+    try std.testing.expect(repeated == .stale);
+    try std.testing.expectEqual(second, repeated.stale);
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
+}
+
+test "inactive pane retirement changes membership without a visible revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const active: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const inactive: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const inactive_pane: schema.PaneId = @enumFromInt(2);
+    try model.workspace.bootstrap(@enumFromInt(1), active, .{ .cols = 20, .rows = 5 });
+    _ = try model.workspace.addCreated(.{
+        .location = inactive,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = inactive_pane,
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.workspace.select(active.tab_id));
+
+    const retirement = model.retirePane(inactive_pane);
+
+    try std.testing.expect(retirement == .retired);
+    try std.testing.expect(!retirement.retired.active);
+    try std.testing.expect(retirement.retired.tab_empty);
+    try std.testing.expect(model.workspace.findPane(inactive_pane) == null);
+    try std.testing.expectEqualDeep(active, model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "split confirmation replaces a target retired during pane creation" {

@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const tab_attachments = @import("tab_attachments.zig");
+const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
@@ -33,7 +33,7 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
     const client: *Client = @ptrCast(@alignCast(context));
     for (reconciliation.removed_panes.slice()) |pane_id| {
         client.requests.ignorePane(pane_id);
-        tab_attachments.releasePaneState(client, pane_id);
+        pane_resources.release(client, pane_id);
     }
 
     const tab = findTab(client, reconciliation.location) orelse

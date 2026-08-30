@@ -23,6 +23,7 @@ const client_mod = @import("client.zig");
 const Client = client_mod;
 const InputHandler = @import("input_handler.zig");
 const pane_attachments = @import("pane_attachments.zig");
+const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
@@ -598,21 +599,8 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
 
 /// A pane's child ended: drop the pane and every piece of client state on it.
 fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
-    if (client.mode == .copy and client.mode.copy.pane_id == exited.pane_id)
-        client.mode = .normal;
-    client.graphics_store.clearPane(exited.pane_id);
-    const tab = client.model.workspace.tabForPane(exited.pane_id);
-    if (client.reported_focus == exited.pane_id) client.forgetPaneFocus();
-    if (tab) |value| _ = value.model.removePane(exited.pane_id);
-    client.view.invalidate();
-    _ = client.requests.ignoreAttachment(exited.pane_id);
-    _ = client.requests.completePaneClose(exited.pane_id);
-    if (client.model.workspace.active()) |active| {
-        try client.syncPaneFocus(&active.model);
-        if (active.model.pane_count != 0)
-            try client.resizeAttached(&active.model, client.view.workbench());
-    }
-    try client.presenter.requestDraw();
+    var use_case = pane_closures.exitHandler(client);
+    _ = try use_case.execute(exited.pane_id);
 }
 
 /// A failed request: recover disposable state when needed and tell the user.
