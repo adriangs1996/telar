@@ -14,6 +14,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_renames = @import("tab_renames.zig");
+const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_renames = @import("workspace_renames.zig");
 const action_mod = input_capability.action;
@@ -746,36 +747,17 @@ fn createTab(handler: *InputHandler) !void {
 fn beginWorkspaceCreate(handler: *InputHandler) !void {
     const client = handler.client;
     if (client.requests.count != 0) return;
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
+    if (client.model.planWorkspaceCreation() == null) return;
     client.beginWorkspaceCreatePrompt();
     handler.redraw = true;
 }
 
 fn submitWorkspaceCreate(handler: *InputHandler, name: []const u8) !void {
     const client = handler.client;
-    if (client.requests.count != 0 or !client.view.creatingWorkspace()) return;
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    @memcpy(client.workspace_create_name[0..name.len], name);
-    client.workspace_create_name_len = @intCast(name.len);
-    const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .create_workspace,
-        .{ .create_workspace = .{
-            .request_id = request_id,
-            .size = rectSize(client.view.workbench()) orelse return,
-            .name = client.workspace_create_name[0..client.workspace_create_name_len],
-            .launch = .{
-                .cwd = client.options.cwd,
-                .cwd_source = pane.id,
-                .arguments = client.options.arguments,
-            },
-        } },
-    );
+    if (!client.view.creatingWorkspace()) return;
+    var use_case = workspace_creations.requestHandler(client);
+    if (!try use_case.execute(.{ .name = name })) return;
+
     client.finishNamePrompt();
 }
 

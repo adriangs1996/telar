@@ -43,6 +43,12 @@ pub const CreatedTab = struct {
     root_pane_id: schema.PaneId,
 };
 
+pub const RootTab = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    size: schema.TerminalSize,
+};
+
 const PendingLayoutRestore = struct {
     location: schema.TabLocation,
     layout: layout_mod.Layout,
@@ -126,14 +132,31 @@ pub const Model = struct {
         size: schema.TerminalSize,
     ) !void {
         if (model.count != 0) return error.ModelNotEmpty;
-        var tab = Tab.init(model.gpa, location, "main", model.pane_gaps);
+
+        try model.replaceWithRoot(.{
+            .pane_id = pane_id,
+            .location = location,
+            .size = size,
+        });
+    }
+
+    /// Constructs a root tab before retiring the current workspace. Failure
+    /// preserves every existing tab and pane.
+    ///
+    /// ```zig
+    /// try model.replaceWithRoot(root);
+    /// ```
+    pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
+        var tab = Tab.init(model.gpa, root.location, "main", model.pane_gaps);
         errdefer tab.deinit();
-        try tab.model.addRoot(pane_id, location, size);
+        try tab.model.addRoot(root.pane_id, root.location, root.size);
         tab.restore_display_order = true;
+
+        model.deinit();
         model.items[0] = tab;
         model.count = 1;
         model.active_index = 0;
-        model.workspace = location.workspace;
+        model.workspace = root.location.workspace;
     }
 
     pub fn restoreLayoutOnNextSnapshot(
@@ -616,6 +639,46 @@ test "failed tab construction does not publish a shifted slot" {
     try std.testing.expectEqual(@as(usize, 1), model.count);
     try std.testing.expectEqualDeep(first, model.activeConst().?.location);
     try std.testing.expect(model.items[1] == null);
+}
+
+test "root replacement constructs before retiring the current workspace" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const previous: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const replacement: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .tab_id = @enumFromInt(2),
+    };
+    const previous_pane: schema.PaneId = @enumFromInt(1);
+    const replacement_pane: schema.PaneId = @enumFromInt(2);
+    try model.bootstrap(previous_pane, previous, .{ .cols = 20, .rows = 5 });
+    var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
+    model.gpa = failing.allocator();
+
+    try std.testing.expectError(error.OutOfMemory, model.replaceWithRoot(.{
+        .pane_id = replacement_pane,
+        .location = replacement,
+        .size = .{ .cols = 30, .rows = 8 },
+    }));
+
+    try std.testing.expectEqualDeep(previous, model.activeConst().?.location);
+    try std.testing.expect(model.findPane(previous_pane) != null);
+    try std.testing.expect(model.findPane(replacement_pane) == null);
+
+    model.gpa = std.testing.allocator;
+    try model.replaceWithRoot(.{
+        .pane_id = replacement_pane,
+        .location = replacement,
+        .size = .{ .cols = 30, .rows = 8 },
+    });
+
+    try std.testing.expectEqual(@as(usize, 1), model.count);
+    try std.testing.expectEqualDeep(replacement, model.activeConst().?.location);
+    try std.testing.expect(model.findPane(previous_pane) == null);
+    try std.testing.expect(model.findPane(replacement_pane) != null);
 }
 
 test "displayed workspace name stays canonical when pane cwd changes" {

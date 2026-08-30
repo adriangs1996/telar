@@ -1,13 +1,12 @@
 //! Wires workspace handoff use cases to one client's protocol and resources.
 
-const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const client_outbox = @import("outbox.zig");
-const pane_resources = @import("pane_resources.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const workspace_transitions = @import("workspace_transitions.zig");
 
 const Client = @import("client.zig");
 const multiplexer = workspace_capability.multiplexer;
@@ -62,7 +61,7 @@ fn requestHandler(client: *Client) workspace_handoff.RequestWorkspaceHandoffHand
             .detach = detachCurrent,
             .send = sendHandoff,
             .restore = restoreCurrent,
-            .apply = applyDeparture,
+            .apply = releaseDeparture,
         },
     };
 }
@@ -74,17 +73,11 @@ fn requestHandler(client: *Client) workspace_handoff.RequestWorkspaceHandoffHand
 /// try confirmationHandler(client).execute(try arrival(client, opened));
 /// ```
 pub fn arrival(client: *Client, opened: schema.PaneOpened) !client_model.WorkspaceArrival {
-    const saved_layout = if (client.navigation_history.find(opened.location.workspace)) |bookmark|
-        if (std.meta.eql(bookmark.location, opened.location)) bookmark.tab_layout else null
-    else
-        null;
-
-    return .{
-        .pane_id = opened.pane_id,
-        .location = opened.location,
-        .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-        .saved_layout = saved_layout,
-    };
+    return workspace_transitions.arrival(
+        client,
+        opened,
+        multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+    );
 }
 
 /// Wires a correlated `pane_opened` response to atomic model arrival and
@@ -99,7 +92,7 @@ pub fn confirmationHandler(client: *Client) workspace_handoff.ConfirmWorkspaceHa
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = applyArrival,
+            .apply = activateArrival,
         },
     };
 }
@@ -175,34 +168,17 @@ fn restoreCurrent(context: *anyopaque) !void {
     }
 }
 
-fn applyDeparture(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {
+fn releaseDeparture(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {
     const client: *Client = @ptrCast(@alignCast(context));
-    if (departure.bookmark) |bookmark| {
-        client.navigation_history.remember(.{
-            .location = bookmark.location,
-            .pane_id = bookmark.pane_id,
-            .tab_layout = bookmark.tab_layout,
-        });
-    }
-
-    for (departure.panes.slice()) |pane_id| {
-        pane_resources.release(client, pane_id);
-    }
+    workspace_transitions.release(client, departure);
 }
 
-fn applyArrival(context: *anyopaque, command: client_model.WorkspaceArrival) !void {
+fn activateArrival(context: *anyopaque, command: client_model.WorkspaceArrival) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const active = client.model.workspace.active() orelse return error.UnexpectedRequest;
-    if (!std.meta.eql(active.location, command.location) or
-        active.model.find(command.pane_id) == null)
-    {
-        return error.UnexpectedRequest;
-    }
-
-    try client.syncPaneFocus(&active.model);
-    try client.scheduleInputRead();
-    try client.requestWorkspaceSnapshot(command.location.workspace);
-    try client.requestTabSnapshot(command.location);
+    try workspace_transitions.activate(client, .{
+        .pane_id = command.pane_id,
+        .location = command.location,
+    });
 }
 
 fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) void {

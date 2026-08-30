@@ -31,7 +31,7 @@ pub const InitialOpen = struct {
 
 pub const Continuation = union(enum) {
     initial_open: InitialOpen,
-    create_workspace,
+    create_workspace: schema.TerminalSize,
     rename_workspace: schema.WorkspaceLocation,
     workspace_snapshot: schema.WorkspaceLocation,
     tab_snapshot: schema.TabLocation,

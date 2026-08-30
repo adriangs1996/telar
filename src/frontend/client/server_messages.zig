@@ -26,6 +26,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
+const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
@@ -370,19 +371,10 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
             try use_case.execute(try workspace_handoffs.arrival(client, opened));
             return;
         },
-        .create_workspace => {
-            if (!opened.created) return error.UnexpectedRequest;
-            client.rememberCurrentNavigation();
-            try client.clearPaneFocus();
-            var tabs = client.model.workspace.tabIterator();
-            while (tabs.next()) |tab| {
-                var panes = tab.model.paneIterator();
-                while (panes.next()) |pane| {
-                    try client.graphics_store.setPaneVisible(pane.id, false);
-                }
-            }
-            client.model.workspace.deinit();
-            try bootstrapCreatedWorkspace(client, opened);
+        .create_workspace => |requested_size| {
+            var use_case = workspace_creations.confirmationHandler(client);
+            _ = try use_case.execute(workspace_creations.confirmation(client, opened, requested_size));
+            return;
         },
         .split => |split| {
             var use_case = pane_splits.confirmationHandler(client);
@@ -417,28 +409,6 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
         .ignored => return,
         else => return error.UnexpectedRequest,
     }
-    try client.presenter.requestDraw();
-}
-
-/// Temporary legacy bootstrap owned by the create-workspace slice.
-fn bootstrapCreatedWorkspace(client: *Client, opened: schema.PaneOpened) !void {
-    if (client.model.workspace.count != 0) return error.UnexpectedRequest;
-    try client.model.workspace.bootstrap(
-        opened.pane_id,
-        opened.location,
-        rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-    );
-    if (client.navigation_history.find(opened.location.workspace)) |bookmark| {
-        if (bookmark.tab_layout) |saved| {
-            if (std.meta.eql(bookmark.location, opened.location))
-                std.debug.assert(client.model.workspace.restoreLayoutOnNextSnapshot(opened.location, saved));
-        }
-    }
-    try client.syncPaneFocus(&client.model.workspace.active().?.model);
-    client.view.invalidate();
-    try client.scheduleInputRead();
-    try client.requestWorkspaceSnapshot(opened.location.workspace);
-    try client.requestTabSnapshot(opened.location);
 }
 
 /// Applies one correlated canonical tab snapshot.

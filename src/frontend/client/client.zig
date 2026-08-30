@@ -209,8 +209,6 @@ plugin_pending: bool = false,
 attachment_capture: attachments.CaptureState = .{},
 paste_pane: ?schema.PaneId = null,
 mode: Mode = .normal,
-workspace_create_name: [schema.max_tab_label_bytes]u8 = undefined,
-workspace_create_name_len: u8 = 0,
 
 input_read_pending: bool = false,
 next_request_id: u64 = 2,
@@ -343,18 +341,6 @@ pub fn observeModel(client: *Client) !void {
     try client.presenter.observeModel(client.model.version());
 }
 
-/// Bookmarks the active tab before a workspace transition destroys its
-/// disposable client model.
-pub fn rememberCurrentNavigation(client: *Client) void {
-    const tab = client.model.workspace.activeConst() orelse return;
-    const pane = tab.model.focusedPaneConst() orelse return;
-    client.navigation_history.remember(.{
-        .location = tab.location,
-        .pane_id = pane.id,
-        .tab_layout = tab.model.layout,
-    });
-}
-
 pub fn enqueue(client: *Client, message: client_outbox.Message) !void {
     try client.outbox.push(message);
     try client.pumpOutbox();
@@ -403,6 +389,13 @@ pub fn enqueueWorkspaceRenameRequest(
     try client.requests.add(rename.request_id, .{ .rename_workspace = rename.workspace });
     errdefer _ = client.requests.take(rename.request_id);
     try client.enqueueWorkspaceRename(rename);
+}
+
+pub fn enqueueCreateWorkspaceRequest(client: *Client, request: schema.CreateWorkspace) !void {
+    try client.requests.add(request.request_id, .{ .create_workspace = request.size });
+    errdefer _ = client.requests.take(request.request_id);
+    try client.outbox.pushCreateWorkspace(request);
+    try client.pumpOutbox();
 }
 
 pub fn enqueueNotificationRequest(
