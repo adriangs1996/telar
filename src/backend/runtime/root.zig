@@ -83,6 +83,7 @@ const response_queue = @import("response_queue.zig");
 const shutdown_mod = @import("shutdown.zig");
 const proxy_mod = @import("../proxy/root.zig");
 const proxy_observation_adapter = @import("proxy_observation_adapter.zig");
+const proxy_runtime_mod = @import("proxy_runtime.zig");
 const runtime_encoder = @import("encoder.zig");
 pub const system_metrics = @import("system_metrics.zig");
 const system_metrics_mod = system_metrics;
@@ -150,12 +151,7 @@ pub const AgentDescriptionOptions = struct {
     timeout_ms: u32,
 };
 
-pub const ProxyOptions = struct {
-    key_path: []const u8,
-    certificate_path: []const u8,
-    bundle_path: []const u8,
-    passthrough_hosts: []const []const u8 = &.{},
-};
+pub const ProxyOptions = proxy_runtime_mod.Config;
 
 pub const ClientKey = history.model.ClientKey;
 
@@ -359,7 +355,7 @@ const Server = struct {
     history_service: *history.Service,
     child_environment: *const pty.Environment,
     inherited_environment: std.process.Environ,
-    proxy: ?*proxy_mod.Proxy,
+    proxy_runtime: *proxy_runtime_mod.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
     agent_description_state: agent_description_coordinator.State = .{},
     launch_fault: ?*LaunchTestFault,
@@ -376,7 +372,9 @@ const Server = struct {
     }
 
     fn revokePaneCredential(server: *Server, pane: *Pane) void {
-        if (server.proxy) |proxy| proxy.revokePane(pane.key());
+        if (server.proxy_runtime.capability()) |proxy| {
+            proxy.revokePane(pane.key());
+        }
     }
 
     fn workspaceRepository(server: *Server) WorkspaceRepository {
@@ -397,7 +395,7 @@ const Server = struct {
             .history_service = server.history_service,
             .child_environment = server.child_environment,
             .inherited_environment = server.inherited_environment,
-            .proxy = server.proxy,
+            .proxy = server.proxy_runtime.capability(),
             .panes = &server.model.panes,
             .launch_fault = server.launch_fault,
         };
@@ -687,7 +685,7 @@ const Server = struct {
                 .workspaces = server.workspaceReader(),
                 .agents = &server.model.agents,
                 .system_metrics = &server.system_metrics,
-                .proxy_active = server.proxy != null,
+                .proxy_active = server.proxy_runtime.active(),
                 .home = server.inherited_environment.getPosix("HOME"),
             },
             &server.metrics,
@@ -1690,20 +1688,8 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
     const ingest_gate = options.ingest_gate;
     var child_environment = try pty.Environment.init(gpa, options.environment, "telar");
     defer child_environment.deinit();
-    var proxy = if (options.proxy) |proxy_options|
-        try proxy_mod.Proxy.create(io, gpa, .{
-            .key_path = proxy_options.key_path,
-            .certificate_path = proxy_options.certificate_path,
-            .bundle_path = proxy_options.bundle_path,
-            .passthrough_hosts = proxy_options.passthrough_hosts,
-        })
-    else
-        null;
-    defer {
-        if (proxy) |capability| {
-            capability.destroy();
-        }
-    }
+    var proxy_runtime = try proxy_runtime_mod.Runtime.init(io, gpa, options.proxy);
+    defer proxy_runtime.deinit();
 
     var listener = try transport.local.LocalListener.listen(io, endpoint);
     var telemetry_suffix_buffer: [64]u8 = undefined;
@@ -1734,8 +1720,8 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
     try select.concurrent(.history_response, history.receiveResponse, .{ io, history_service });
-    if (proxy) |service|
-        try select.concurrent(.proxy_event, proxy_mod.Proxy.receive, .{ service, io });
+    var proxy_schedule_context: ProxyScheduleContext = .{ .io = io, .select = &select };
+    try proxy_runtime.schedule(proxy_schedule_context.scheduler());
     try select.concurrent(.agent_tick, waitForAgentTick, .{io});
     try select.concurrent(.metrics_tick, waitForMetricsTick, .{io});
     if (comptime diagnostics.enabled) {
@@ -1751,7 +1737,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         .history_service = history_service,
         .child_environment = &child_environment,
         .inherited_environment = options.environment,
-        .proxy = proxy,
+        .proxy_runtime = &proxy_runtime,
         .agent_description_options = options.agent_descriptions,
         .launch_fault = options.launch_fault,
         .clients = clients,
@@ -1774,11 +1760,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         // has been joined, because Darwin's close waits behind blocked writes.
         server.model.panes.shutdown();
         select.cancelDiscard();
-        if (proxy) |capability| {
-            capability.destroy();
-            proxy = null;
-            server.proxy = null;
-        }
+        proxy_runtime.deinit();
         listener.deinit(io);
         if (server.client_admission.pendingConnection()) |pending| pending.deinit(io);
         for (&server.clients.items) |*slot| if (slot.*) |session| {
@@ -2468,10 +2450,23 @@ fn proxyObservationAdapter(server: *Server) RuntimeProxyObservationAdapter {
     });
 }
 
-fn rearmProxyObservation(server: *Server) !void {
-    if (server.proxy) |proxy| {
-        try server.select.concurrent(.proxy_event, proxy_mod.Proxy.receive, .{ proxy, server.io });
+const ProxyScheduleContext = struct {
+    io: Io,
+    select: *Io.Select(RuntimeEvent),
+
+    fn scheduler(context: *ProxyScheduleContext) proxy_runtime_mod.ObservationScheduler {
+        return .{ .context = context, .schedule_fn = schedule };
     }
+
+    fn schedule(context_value: *anyopaque, proxy: *proxy_mod.Proxy) !void {
+        const context: *ProxyScheduleContext = @ptrCast(@alignCast(context_value));
+        try context.select.concurrent(.proxy_event, proxy_mod.Proxy.receive, .{ proxy, context.io });
+    }
+};
+
+fn rearmProxyObservation(server: *Server) !void {
+    var context: ProxyScheduleContext = .{ .io = server.io, .select = server.select };
+    try server.proxy_runtime.schedule(context.scheduler());
 }
 
 const telemetry_tick_runtime_port: telemetry_tick_coordinator.RuntimePort(Server) = .{
@@ -2516,10 +2511,7 @@ fn formatTelemetrySample(server: *Server, buffer: []u8) ![]const u8 {
 
     clients.attachment_stores = attachment_stores[0..attachment_count];
 
-    const proxy_metrics = if (server.proxy) |proxy|
-        proxy.metrics()
-    else
-        proxy_mod.MetricsSnapshot{};
+    const proxy_metrics = server.proxy_runtime.metrics();
     const workspaces = server.workspaceReader();
 
     return formatRuntimeTelemetry(buffer, .{
@@ -2531,7 +2523,7 @@ fn formatTelemetrySample(server: *Server, buffer: []u8) ![]const u8 {
         .panes = &server.model.panes,
         .history_service = server.history_service,
         .proxy = .{
-            .active = server.proxy != null,
+            .active = server.proxy_runtime.active(),
             .active_connections = proxy_metrics.active_connections,
             .event_queue_depth = proxy_metrics.queued_events,
             .event_queue_high_water = proxy_metrics.event_queue_high_water,
@@ -2865,6 +2857,7 @@ test {
     _ = pane_observation_coordinator;
     _ = telemetry_tick_coordinator;
     _ = proxy_observation_adapter;
+    _ = proxy_runtime_mod;
     _ = pane_output_pipeline;
     _ = pane_response_pump;
     _ = pane_resize_commands;

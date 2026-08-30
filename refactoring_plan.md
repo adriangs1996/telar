@@ -122,7 +122,7 @@ themselves.
 | BRL-01 | `runtime.serve` startup | `runtime/root.zig::serveInternal` | Runtime composition root | Pending | Allocation, history, listener, proxy, actors, telemetry, and model construction are monolithic. |
 | BRL-02 | Pane launch | `runtime/pane_launcher.zig` plus runtime adapters | Pane-launch transaction | Ready | ADR 0001 and fault-injection tests cover ownership transfer and rollback. |
 | BRL-03 | History worker lifecycle | `runtime/history_runtime.zig` | History runtime adapter | Ready | One owner gives the service a stable address, transfers it transactionally to the worker lifecycle, and enforces close-join-destroy teardown. Unit tests prove worker-start rollback, exact shutdown order, every allocator failure, and a queryable database-open degradation; 1814 Debug/ReleaseFast tests, three repeated transport runs per mode, and `just check` pass. |
-| BRL-04 | Proxy worker lifecycle | `serveInternal` | Proxy runtime adapter | Pending | Startup, event scheduling, cancellation, and teardown are composed inline. |
+| BRL-04 | Proxy worker lifecycle | `runtime/proxy_runtime.zig` | Proxy runtime adapter | Ready | One optional owner centralizes configured startup, inactive behavior, receive scheduling, active/inactive metrics, and idempotent teardown after `Select` cancellation. Unit tests cover disabled state, scheduler failure without ownership loss, exact-once destruction, and a real configured proxy boundary; 1818 Debug/ReleaseFast tests, three repeated transport runs per mode, and `just check` pass. |
 | BRL-05 | Runtime shutdown | `serveInternal` defer block | Ordered shutdown coordinator | Pending | Ordering is documented inline but not represented or tested as a capability. |
 
 ## Refactoring order
