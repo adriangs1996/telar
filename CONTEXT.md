@@ -27,6 +27,12 @@ located and retained in the runtime model, without defining their behavior or
 durable representation.
 _Avoid_: Workspace manager, Workspace database
 
+**Tab removal**:
+The committed disappearance of a tab from its workspace aggregate, whether
+requested directly or caused by the loss of its final pane. It also removes an
+aggregate left with no tabs.
+_Avoid_: Tab close (for the committed fact), Pane close
+
 **Pane launch**:
 The act of starting a new runtime-owned pane from a requested command and
 terminal size. It ends when the runtime owns a usable pane, independently of

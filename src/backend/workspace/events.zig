@@ -55,6 +55,42 @@ pub const TabCreated = struct {
     }
 };
 
+/// Committed disappearance of a tab from its workspace aggregate.
+pub const TabRemoved = struct {
+    location: schema.TabLocation,
+    workspace_removed: bool,
+    previous_workspace: ?schema.WorkspaceId = null,
+
+    /// Creates a removal fact and rejects an impossible workspace handoff.
+    /// A predecessor exists only when the removal also removed its workspace.
+    ///
+    /// ```zig
+    /// const event = try TabRemoved.init(location, true, previous_workspace);
+    /// ```
+    pub fn init(location: schema.TabLocation, workspace_removed: bool, previous_workspace: ?schema.WorkspaceId) !TabRemoved {
+        if (!workspace_removed and previous_workspace != null) {
+            return error.UnexpectedPreviousWorkspace;
+        }
+
+        if (previous_workspace) |previous| {
+            const removed_workspace = switch (location.workspace) {
+                .workspace => |workspace_id| workspace_id,
+                .worktree => return error.InvalidPreviousWorkspace,
+            };
+
+            if (previous == removed_workspace) {
+                return error.InvalidPreviousWorkspace;
+            }
+        }
+
+        return .{
+            .location = location,
+            .workspace_removed = workspace_removed,
+            .previous_workspace = previous_workspace,
+        };
+    }
+};
+
 pub const TabRenamed = struct {
     location: schema.TabLocation,
     label: OwnedTabLabel,
@@ -108,6 +144,45 @@ test "TabCreated rejects labels it cannot own" {
 
     const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidTabLabel, TabCreated.init(location, 1, &oversized));
+}
+
+test "TabRemoved represents tab-only and whole-workspace removals" {
+    const location = try testingLocation();
+    const previous = try schema.id.workspace(2);
+    const tab_only = try TabRemoved.init(location, false, null);
+    const whole_workspace = try TabRemoved.init(location, true, previous);
+
+    try std.testing.expectEqualDeep(location, tab_only.location);
+    try std.testing.expect(!tab_only.workspace_removed);
+    try std.testing.expect(tab_only.previous_workspace == null);
+    try std.testing.expect(whole_workspace.workspace_removed);
+    try std.testing.expectEqual(previous, whole_workspace.previous_workspace.?);
+}
+
+test "TabRemoved rejects impossible workspace handoffs" {
+    const location = try testingLocation();
+    const removed_workspace = switch (location.workspace) {
+        .workspace => |workspace_id| workspace_id,
+        .worktree => unreachable,
+    };
+
+    try std.testing.expectError(
+        error.UnexpectedPreviousWorkspace,
+        TabRemoved.init(location, false, try schema.id.workspace(2)),
+    );
+    try std.testing.expectError(
+        error.InvalidPreviousWorkspace,
+        TabRemoved.init(location, true, removed_workspace),
+    );
+
+    const worktree_location: schema.TabLocation = .{
+        .workspace = .{ .worktree = try schema.id.worktree(4) },
+        .tab_id = location.tab_id,
+    };
+    try std.testing.expectError(
+        error.InvalidPreviousWorkspace,
+        TabRemoved.init(worktree_location, true, try schema.id.workspace(2)),
+    );
 }
 
 test "TabRenamed owns its label independently of the source buffer" {

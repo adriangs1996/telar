@@ -11,6 +11,8 @@ const delivery_mod = @import("delivery.zig");
 const attachment_entrypoints = @import("entrypoints/attachment.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
 const control_entrypoints = @import("entrypoints/control.zig");
+const close_tab_commands = @import("commands/close_tab.zig");
+const close_tab_controller = @import("controllers/close_tab.zig");
 const create_tab_commands = @import("commands/create_tab.zig");
 const create_tab_controller = @import("controllers/create_tab.zig");
 const tab_commands = @import("commands/tab.zig");
@@ -407,21 +409,8 @@ const Server = struct {
                     continue;
                 }
 
-                const removal = workspace_mod.removeTab(&workspaces, location).?;
-
-                for (&server.clients.items) |*client_slot| {
-                    const client = client_slot.* orelse continue;
-                    if (!client.active() or !client.attachments.observes(location.workspace)) {
-                        continue;
-                    }
-
-                    client.delivery.responses.pushOrDrop(.{ .tab_closed = .{
-                        .request_id = .none,
-                        .location = location,
-                        .workspace_closed = removal.workspace_closed,
-                        .previous_workspace = removal.previous_workspace,
-                    } });
-                }
+                const removed = workspace_mod.removeTab(&workspaces, location).?;
+                server.publishLifecycleTabRemoved(removed);
             }
         }
     }
@@ -506,6 +495,25 @@ const Server = struct {
                 session.delivery.responses.resync_workspace = workspace;
                 session.delivery.responses.resync_previous_workspace = previous_workspace;
             }
+        }
+    }
+
+    /// Delivers an automatic tab-removal fact to every client that still
+    /// observes its workspace. Queue saturation records snapshot recovery.
+    fn publishLifecycleTabRemoved(server: *Server, removed: workspace_mod.TabRemoved) void {
+        for (&server.clients.items) |*client_slot| {
+            const client = client_slot.* orelse continue;
+
+            if (!client.active() or !client.attachments.observes(removed.location.workspace)) {
+                continue;
+            }
+
+            client.delivery.responses.pushOrDrop(.{ .tab_closed = .{
+                .request_id = .none,
+                .location = removed.location,
+                .workspace_closed = removed.workspace_removed,
+                .previous_workspace = removed.previous_workspace,
+            } });
         }
     }
 
@@ -1463,13 +1471,24 @@ const Server = struct {
                 try controller.renameTab(rename);
             },
             .close_tab => |close| {
-                try tab_entrypoints.closeTab(.{
-                    .panes = panes,
+                var event_context: WorkspaceEventContext = .{
+                    .server = server,
+                    .origin = session.key,
+                };
+                var handler: close_tab_commands.CloseTabHandler = .{
                     .workspaces = workspaces,
-                    .responses = responses,
-                    .client = session.key,
-                    .events = entrypointWorkspaceEvents(server),
-                }, close);
+                    .panes = .{
+                        .context = panes,
+                        .close_all = closeTabPanes,
+                    },
+                    .events = .{
+                        .context = &event_context,
+                        .publish = publishTabRemoved,
+                    },
+                };
+                var controller = close_tab_controller.Controller.init(responses, handler.executor());
+
+                try controller.closeTab(close);
             },
             .move_tab => |move| {
                 try tab_entrypoints.moveTab(.{
@@ -1557,7 +1576,6 @@ fn entrypointWorkspaceEvents(server: *Server) entrypoint_common.WorkspaceEvents 
     return .{
         .context = server,
         .changed = entrypointWorkspaceChanged,
-        .closed = entrypointWorkspaceClosed,
     };
 }
 
@@ -1618,14 +1636,28 @@ fn publishTabRenamed(context: *anyopaque, event: workspace_mod.TabRenamed) void 
     publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
 }
 
+fn closeTabPanes(context: *anyopaque, location: schema.TabLocation) void {
+    const panes: *PaneStore = @ptrCast(@alignCast(context));
+    panes.closeAt(location);
+}
+
+fn publishTabRemoved(context: *anyopaque, event: workspace_mod.TabRemoved) void {
+    const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+
+    if (event.workspace_removed) {
+        publication.server.notifyWorkspaceClosed(
+            publication.origin,
+            event.location.workspace,
+            event.previous_workspace,
+        );
+    } else {
+        publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
+    }
+}
+
 fn entrypointWorkspaceChanged(context: *anyopaque, except: ClientKey, workspace: schema.WorkspaceLocation) void {
     const server: *Server = @ptrCast(@alignCast(context));
     server.notifyWorkspaceChanged(except, workspace);
-}
-
-fn entrypointWorkspaceClosed(context: *anyopaque, except: ClientKey, workspace: schema.WorkspaceLocation, previous: ?schema.WorkspaceId) void {
-    const server: *Server = @ptrCast(@alignCast(context));
-    server.notifyWorkspaceClosed(except, workspace, previous);
 }
 
 fn entrypointHoldsGeometry(context: *anyopaque, client: ClientKey, workspace: schema.WorkspaceLocation) bool {
@@ -2267,10 +2299,13 @@ test "agent sounds require exact working transitions" {
 }
 
 test {
+    _ = close_tab_commands;
+    _ = close_tab_controller;
     _ = create_tab_commands;
     _ = create_tab_controller;
     _ = tab_commands;
     _ = tab_controller;
+    _ = @import("close_tab_test.zig");
     _ = @import("create_tab_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = model_mod;

@@ -15,14 +15,6 @@ pub const RequestTabSnapshotContext = struct {
     responses: *common.ResponseQueue,
 };
 
-pub const CloseTabContext = struct {
-    panes: *PaneStore,
-    workspaces: *WorkspaceRepository,
-    responses: *common.ResponseQueue,
-    client: common.ClientKey,
-    events: common.WorkspaceEvents,
-};
-
 pub const MoveTabContext = struct {
     workspaces: *WorkspaceRepository,
     responses: *common.ResponseQueue,
@@ -40,39 +32,6 @@ pub fn requestTabSnapshot(context: RequestTabSnapshotContext, request: schema.Re
         .request_id = request.request_id,
         .location = request.location,
     } });
-}
-
-/// Closes every pane in a tab, removes the tab aggregate and reports which
-/// workspace clients should focus if the final tab closed its workspace.
-///
-/// ```zig
-/// try closeTab(context, request);
-/// ```
-pub fn closeTab(context: CloseTabContext, close: schema.CloseTab) !void {
-    if (!context.workspaces.reader().contains(close.location)) {
-        try common.queueFailure(context.responses, close.request_id, .tab_not_found, "tab not found");
-        return;
-    }
-
-    context.panes.closeAt(close.location);
-    const removal = workspace_mod.removeTab(context.workspaces, close.location).?;
-    try context.responses.push(.{ .tab_closed = .{
-        .request_id = close.request_id,
-        .location = close.location,
-        .workspace_closed = removal.workspace_closed,
-        .previous_workspace = removal.previous_workspace,
-    } });
-
-    if (removal.workspace_closed) {
-        context.events.closed(
-            context.events.context,
-            context.client,
-            close.location.workspace,
-            removal.previous_workspace,
-        );
-    } else {
-        context.events.changed(context.events.context, context.client, close.location.workspace);
-    }
 }
 
 /// Reorders one tab and publishes its new canonical position.

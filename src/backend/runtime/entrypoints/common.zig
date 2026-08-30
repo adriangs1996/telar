@@ -40,12 +40,6 @@ pub const Launcher = struct {
 pub const WorkspaceEvents = struct {
     context: *anyopaque,
     changed: *const fn (*anyopaque, ClientKey, schema.WorkspaceLocation) void,
-    closed: *const fn (
-        *anyopaque,
-        ClientKey,
-        schema.WorkspaceLocation,
-        ?schema.WorkspaceId,
-    ) void,
 };
 
 pub fn queueFailure(

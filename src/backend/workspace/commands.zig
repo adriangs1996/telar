@@ -2,16 +2,12 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const events = @import("events.zig");
 const repository_mod = @import("repository.zig");
 const state_mod = @import("state.zig");
 
 const schema = core.schema;
 const Repository = repository_mod.Repository;
-
-pub const TabRemoval = struct {
-    workspace_closed: bool,
-    previous_workspace: ?schema.WorkspaceId = null,
-};
 
 /// Renames an existing aggregate and advances the workspace-list projection.
 ///
@@ -34,13 +30,13 @@ pub fn moveTab(repository: *Repository, location: schema.TabLocation, direction:
     return workspace.moveTab(location.tab_id, direction) orelse error.TabNotFound;
 }
 
-/// Removes a tab and removes its workspace aggregate when no tabs remain.
-/// The result carries the stable predecessor clients should focus next.
+/// Removes a tab and its now-empty workspace as one domain operation. The
+/// returned event contains the stable predecessor of a removed workspace.
 ///
 /// ```zig
-/// const removal = removeTab(&repository, location) orelse return;
+/// const removed = removeTab(&repository, location) orelse return;
 /// ```
-pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?TabRemoval {
+pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?events.TabRemoved {
     const workspace = repository.find(location.workspace) orelse return null;
 
     if (!workspace.removeTab(location.tab_id)) {
@@ -48,10 +44,10 @@ pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?TabRemo
     }
 
     repository.recordListChange();
-    const workspace_closed = workspace.tabCount() == 0;
+    const workspace_removed = workspace.tabCount() == 0;
     var previous_workspace: ?schema.WorkspaceId = null;
 
-    if (workspace_closed) {
+    if (workspace_removed) {
         const workspace_id = switch (location.workspace) {
             .workspace => |id| id,
             .worktree => unreachable,
@@ -61,10 +57,7 @@ pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?TabRemo
         std.debug.assert(removed);
     }
 
-    return .{
-        .workspace_closed = workspace_closed,
-        .previous_workspace = previous_workspace,
-    };
+    return events.TabRemoved.init(location, workspace_removed, previous_workspace) catch unreachable;
 }
 
 fn insertWorkspace(repository: *Repository, path: []const u8) !schema.TabLocation {
@@ -94,10 +87,14 @@ test "workspace commands move and remove tabs around repository state" {
 
     const before_remove = repository.reader().revision();
     const first_removal = removeTab(&repository, initial).?;
-    try std.testing.expect(!first_removal.workspace_closed);
-    try std.testing.expect(repository.reader().revision() != before_remove);
+    try std.testing.expect(!first_removal.workspace_removed);
+    try std.testing.expectEqualDeep(initial, first_removal.location);
+    try std.testing.expectEqual(before_remove + 1, repository.reader().revision());
+    const before_final_remove = repository.reader().revision();
     const final_removal = removeTab(&repository, logs).?;
-    try std.testing.expect(final_removal.workspace_closed);
+    try std.testing.expect(final_removal.workspace_removed);
+    try std.testing.expectEqualDeep(logs, final_removal.location);
+    try std.testing.expect(repository.reader().revision() != before_final_remove);
     try std.testing.expectEqual(@as(usize, 0), repository.reader().count());
 }
 
@@ -118,16 +115,32 @@ test "closing workspaces returns the predecessor from repository order" {
     };
 
     const middle = removeTab(&repository, second).?;
-    try std.testing.expect(middle.workspace_closed);
+    try std.testing.expect(middle.workspace_removed);
     try std.testing.expectEqual(first_id, middle.previous_workspace.?);
 
     const wrapped = removeTab(&repository, first).?;
-    try std.testing.expect(wrapped.workspace_closed);
+    try std.testing.expect(wrapped.workspace_removed);
     try std.testing.expectEqual(third_id, wrapped.previous_workspace.?);
 
     const last = removeTab(&repository, third).?;
-    try std.testing.expect(last.workspace_closed);
+    try std.testing.expect(last.workspace_removed);
     try std.testing.expect(last.previous_workspace == null);
+}
+
+test "removing a missing tab leaves repository state unchanged" {
+    var state: state_mod.State = .{};
+    var repository = Repository.init(&state, std.testing.allocator);
+    defer repository.deinit();
+    const existing = try insertWorkspace(&repository, "/work/project");
+    const revision = repository.reader().revision();
+    const missing: schema.TabLocation = .{
+        .workspace = existing.workspace,
+        .tab_id = try schema.id.tab(999),
+    };
+
+    try std.testing.expect(removeTab(&repository, missing) == null);
+    try std.testing.expect(repository.reader().contains(existing));
+    try std.testing.expectEqual(revision, repository.reader().revision());
 }
 
 test "workspace rename is aggregate behavior recorded by the repository" {

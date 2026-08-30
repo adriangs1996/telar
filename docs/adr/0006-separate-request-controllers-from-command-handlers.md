@@ -10,7 +10,8 @@ That makes a protocol boundary depend on every participant in the use case and
 makes the domain transaction difficult to test without runtime infrastructure.
 The tab rename flow is the first vertical slice to separate those concerns;
 tab creation extends the design to a transaction spanning an aggregate, pane
-launch, client attachment and response delivery.
+launch, client attachment and response delivery; tab removal applies it to a
+fact that can have either a client request or a runtime lifecycle trigger.
 
 ## Decision
 
@@ -61,12 +62,22 @@ requesting client. Attachment and response-queue failures are post-commit and
 therefore never remove the pane or tab. The workspace capability exposes no
 shortcut that can commit a production tab without this runtime transaction.
 
+For `closeTab`, the workspace repository operation is the commit point and
+returns an owned `TabRemoved` event. The handler then invokes infallible ports
+that start closing the tab's panes and publish that event before the controller
+queues `TabClosed` for the requesting client. Response backpressure cannot
+restore the removed tab or suppress its published effects. When the last pane
+exits without a close request, lifecycle cleanup uses the same workspace
+operation and the same `TabRemoved` fact; only the protocol adapter differs by
+emitting `TabClosed` with no request ID.
+
 Controllers live only for the request call. They may borrow decoded request
 slices during that call. Anything retained by an aggregate, event, queue or
-asynchronous boundary owns its bytes. The `renameTab` and `createTab` slices
-are the reference implementations for single-aggregate and wider runtime
-transactions respectively; other entrypoints migrate when their transaction
-and failure contracts are understood and covered by tests.
+asynchronous boundary owns its bytes. The `renameTab`, `createTab` and
+`closeTab` slices are the reference implementations for an aggregate mutation,
+a wider launch transaction and a destructive transaction with two external
+triggers. Other entrypoints migrate when their transaction and failure
+contracts are understood and covered by tests.
 
 This decision refines
 [ADR 0002](0002-organize-capabilities-around-explicit-entrypoints.md). The
@@ -84,6 +95,8 @@ assigning both responsibilities to one function.
 - Publishing events from aggregates would make domain objects depend on
   infrastructure callbacks. Returning owned events preserves aggregate
   authority without giving it infrastructure knowledge.
+- Naming the domain event `TabClosed` would encode the explicit request as its
+  cause and misdescribe automatic removal after the final pane exits.
 - Adding a process-wide event bus would add queueing, copying and failure modes
   where bounded typed calls are sufficient.
 - Putting the originating client in a domain event would make a committed tab

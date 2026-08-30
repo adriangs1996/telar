@@ -16,7 +16,7 @@ pub const Ensured = repository.Ensured;
 pub const Insert = repository.Insert;
 pub const DescriptorSnapshot = repository.DescriptorSnapshot;
 pub const TabCreated = events.TabCreated;
-pub const TabRemoval = commands.TabRemoval;
+pub const TabRemoved = events.TabRemoved;
 pub const TabRenamed = events.TabRenamed;
 
 pub const max_workspaces = state.max_workspaces;
