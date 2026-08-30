@@ -938,6 +938,8 @@ test "pane keeps running while its client is disconnected" {
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/persistent.sock", .{directory});
     var release_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const release_path = try std.fmt.bufPrint(&release_buffer, "{s}/release-persistent-pane", .{directory});
+    var finish_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const finish_path = try std.fmt.bufPrint(&finish_buffer, "{s}/finish-persistent-pane", .{directory});
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
@@ -956,9 +958,11 @@ test "pane keeps running while its client is disconnected" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "while [ ! -e \"$1\" ]; do sleep 0.01; done; printf TELAR_PERSISTED",
+        "while [ ! -e \"$1\" ]; do sleep 0.01; done; printf TELAR_PERSISTED; " ++
+            "while [ ! -e \"$2\" ]; do sleep 0.01; done",
         "telar-test",
         release_path,
+        finish_path,
     };
     var send_buffer: [512]u8 = undefined;
     try first.send(io, try schema.encodeOpenPane(&send_buffer, .{
@@ -993,6 +997,7 @@ test "pane keeps running while its client is disconnected" {
     var cells: [40 * 8]core.ui.Cell = @splat(.{});
     var saw_output = false;
     var attached = false;
+    var finish_released = false;
     for (0..64) |_| {
         const payload = second.receive(io, receive_buffer) catch |err| {
             std.debug.print("reconnected client receive failed: {s}\n", .{@errorName(err)});
@@ -1015,11 +1020,17 @@ test "pane keeps running while its client is disconnected" {
                     var index: usize = span.start;
                     while (try frame_cells.next()) |cell| : (index += 1) cells[index] = cell;
                 }
-                saw_output = rowContains(cells[0..40], "TELAR_PERSISTED");
+                saw_output = saw_output or rowContains(cells[0..40], "TELAR_PERSISTED");
                 try second.send(io, try schema.encodeFrameAck(&send_buffer, .{
                     .pane_id = original_pane_id,
                     .frame_id = frame.frame_id,
                 }));
+
+                if (saw_output and !finish_released) {
+                    var finish = try temp.dir.createFile(io, "finish-persistent-pane", .{});
+                    finish.close(io);
+                    finish_released = true;
+                }
             },
             .pane_exited => |exited| {
                 try std.testing.expect(attached);
@@ -2046,7 +2057,7 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
             "(sleep 2; kill -TERM 0) & watchdog=$!; " ++
             "if dd bs=1 count=1 of=/dev/null 2>/dev/null; then " ++
             "kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; " ++
-            ": > '{s}'; printf 'INPUT_FORWARDED\\n'; sleep 1; " ++
+            ": > '{s}'; " ++
             "else kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; exit 1; fi",
         .{sentinel_path},
     );
@@ -2077,16 +2088,7 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         .bytes = "x",
     }));
 
-    var forwarded = false;
-    for (0..1000) |_| {
-        if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
-            forwarded = true;
-            break;
-        } else |err| switch (err) {
-            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
-            else => return err,
-        }
-    }
+    const forwarded = try waitForFile(io, sentinel_path, 1000);
     const elapsed: u64 = @intCast(std.Io.Timestamp.now(io, .awake).toNanoseconds() - started);
     release.putOneUncancelable(io, 0) catch unreachable;
     gate_released = true;
