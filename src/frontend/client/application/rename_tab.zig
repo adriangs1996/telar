@@ -1,4 +1,4 @@
-//! Application use case for requesting one tab rename.
+//! Application use cases for requesting and confirming a tab rename.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -11,7 +11,7 @@ pub const RequestRenameTab = struct {
     label: []const u8,
 };
 
-pub const RequestedRename = struct {
+pub const TabRenameIntent = struct {
     location: schema.TabLocation,
     /// Borrowed only for the synchronous send callback.
     label: []const u8,
@@ -24,7 +24,7 @@ pub const TabOperationGate = struct {
 
 pub const RenameRequestEffects = struct {
     context: *anyopaque,
-    send: *const fn (*anyopaque, RequestedRename) anyerror!void,
+    send: *const fn (*anyopaque, TabRenameIntent) anyerror!void,
 };
 
 pub const RequestRenameTabHandler = struct {
@@ -32,26 +32,59 @@ pub const RequestRenameTabHandler = struct {
     gate: TabOperationGate,
     effects: RenameRequestEffects,
 
-    /// Resolves the prompt's tab identity and sends its rename intent.
-    /// Pending operations and vanished targets return null without effects.
+    /// Validates the label, resolves the prompt's tab identity and sends one
+    /// rename intent. Blocked or vanished targets return false without effects.
     ///
     /// ```zig
-    /// const location = try handler.execute(command) orelse return;
+    /// if (!try handler.execute(command)) {
+    ///     return;
+    /// }
     /// ```
-    pub fn execute(handler: *RequestRenameTabHandler, command: RequestRenameTab) !?schema.TabLocation {
+    pub fn execute(handler: *RequestRenameTabHandler, command: RequestRenameTab) !bool {
         if (handler.gate.pending(handler.gate.context)) {
-            return null;
+            return false;
         }
 
-        const location = handler.model.tabLocation(command.tab_id) orelse return null;
+        try validateLabel(command.label);
+        const location = handler.model.tabLocation(command.tab_id) orelse return false;
         try handler.effects.send(handler.effects.context, .{
             .location = location,
             .label = command.label,
         });
 
-        return location;
+        return true;
     }
 };
+
+pub const ConfirmTabRename = client_model.RenameTab;
+
+pub const ConfirmTabRenameHandler = struct {
+    model: *client_model.Model,
+
+    /// Commits the canonical runtime label. Repeating the current label leaves
+    /// the model version unchanged.
+    ///
+    /// ```zig
+    /// const change = try handler.execute(command);
+    /// ```
+    pub fn execute(handler: *ConfirmTabRenameHandler, command: ConfirmTabRename) !client_model.Change {
+        return handler.model.renameTab(command);
+    }
+};
+
+fn validateLabel(label: []const u8) !void {
+    if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
+        return error.InvalidTabLabel;
+    }
+    if (!std.unicode.utf8ValidateSlice(label)) {
+        return error.InvalidUtf8;
+    }
+    for (label) |byte| {
+        if (byte < 0x20 or byte == 0x7f) {
+            return error.InvalidTabLabel;
+        }
+    }
+}
 
 const RequestCapture = struct {
     blocked: bool = false,
@@ -74,7 +107,7 @@ const RequestCapture = struct {
         return capture.blocked;
     }
 
-    fn send(context: *anyopaque, requested: RequestedRename) !void {
+    fn send(context: *anyopaque, requested: TabRenameIntent) !void {
         const capture: *RequestCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.location = requested.location;
@@ -129,7 +162,7 @@ const TestingModel = struct {
     }
 };
 
-test "RequestRenameTabHandler resolves an inactive target without mutating the model" {
+test "tab rename request resolves an inactive target without mutation" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: RequestCapture = .{};
@@ -139,12 +172,11 @@ test "RequestRenameTabHandler resolves an inactive target without mutating the m
         .effects = capture.effects(),
     };
 
-    const location = (try handler.execute(.{
+    try std.testing.expect(try handler.execute(.{
         .tab_id = testing.second.tab_id,
         .label = "server",
-    })).?;
+    }));
 
-    try std.testing.expectEqualDeep(testing.second, location);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualDeep(testing.second, capture.location.?);
     try std.testing.expectEqualStrings("server", capture.labelSlice());
@@ -152,7 +184,7 @@ test "RequestRenameTabHandler resolves an inactive target without mutating the m
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "RequestRenameTabHandler suppresses blocked and missing requests" {
+test "tab rename request suppresses blocked and missing targets" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: RequestCapture = .{ .blocked = true };
@@ -162,21 +194,54 @@ test "RequestRenameTabHandler suppresses blocked and missing requests" {
         .effects = capture.effects(),
     };
 
-    try std.testing.expect((try handler.execute(.{
+    try std.testing.expect(!try handler.execute(.{
         .tab_id = testing.second.tab_id,
         .label = "blocked",
-    })) == null);
+    }));
     capture.blocked = false;
-    try std.testing.expect((try handler.execute(.{
+    try std.testing.expect(!try handler.execute(.{
         .tab_id = @enumFromInt(9),
         .label = "missing",
-    })) == null);
+    }));
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "RequestRenameTabHandler propagates delivery failure without mutation" {
+test "tab rename request rejects invalid labels before delivery" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var capture: RequestCapture = .{};
+    var handler: RequestRenameTabHandler = .{
+        .model = testing.model,
+        .gate = capture.gate(),
+        .effects = capture.effects(),
+    };
+    const invalid_utf8 = [_]u8{0xff};
+    const too_long = [_]u8{'x'} ** (schema.max_tab_label_bytes + 1);
+
+    try std.testing.expectError(error.InvalidTabLabel, handler.execute(.{
+        .tab_id = testing.first.tab_id,
+        .label = "",
+    }));
+    try std.testing.expectError(error.InvalidTabLabel, handler.execute(.{
+        .tab_id = testing.first.tab_id,
+        .label = "bad\nlabel",
+    }));
+    try std.testing.expectError(error.InvalidTabLabel, handler.execute(.{
+        .tab_id = testing.first.tab_id,
+        .label = &too_long,
+    }));
+    try std.testing.expectError(error.InvalidUtf8, handler.execute(.{
+        .tab_id = testing.first.tab_id,
+        .label = &invalid_utf8,
+    }));
+
+    try std.testing.expectEqual(@as(usize, 0), capture.calls);
+    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+}
+
+test "tab rename request propagates delivery failure without mutation" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: RequestCapture = .{ .failure = error.DeliveryFailed };
@@ -193,5 +258,66 @@ test "RequestRenameTabHandler propagates delivery failure without mutation" {
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualStrings("main", testing.model.workspace.find(testing.first.tab_id).?.labelSlice());
+    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+}
+
+test "tab rename confirmation commits the canonical label without changing active identity" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var handler: ConfirmTabRenameHandler = .{ .model = testing.model };
+
+    const change = try handler.execute(.{
+        .location = testing.second,
+        .label = "canonical",
+    });
+
+    try std.testing.expectEqual(client_model.Change.changed, change);
+    try std.testing.expectEqualStrings("canonical", testing.model.workspace.find(testing.second.tab_id).?.labelSlice());
+    try std.testing.expectEqualDeep(testing.first, testing.model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(u64, 1), testing.model.version().tabs);
+    try std.testing.expectEqual(@as(u64, 0), testing.model.version().active_tab);
+}
+
+test "tab rename confirmation preserves the version for a canonical no-op" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var handler: ConfirmTabRenameHandler = .{ .model = testing.model };
+
+    const change = try handler.execute(.{
+        .location = testing.second,
+        .label = "logs",
+    });
+
+    try std.testing.expectEqual(client_model.Change.unchanged, change);
+    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+}
+
+test "tab rename confirmation rejects invalid canonical state without mutation" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var handler: ConfirmTabRenameHandler = .{ .model = testing.model };
+    const other_workspace: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(9) },
+        .tab_id = testing.second.tab_id,
+    };
+    const missing_tab: schema.TabLocation = .{
+        .workspace = testing.first.workspace,
+        .tab_id = @enumFromInt(9),
+    };
+
+    try std.testing.expectError(error.UnexpectedWorkspace, handler.execute(.{
+        .location = other_workspace,
+        .label = "canonical",
+    }));
+    try std.testing.expectError(error.TabNotFound, handler.execute(.{
+        .location = missing_tab,
+        .label = "canonical",
+    }));
+    try std.testing.expectError(error.InvalidTabLabel, handler.execute(.{
+        .location = testing.second,
+        .label = "",
+    }));
+
+    try std.testing.expectEqualStrings("logs", testing.model.workspace.find(testing.second.tab_id).?.labelSlice());
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }

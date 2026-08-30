@@ -25,6 +25,7 @@ const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
+const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
@@ -461,10 +462,8 @@ fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
         return error.UnexpectedTabRenamed;
     }
 
-    _ = client.model.renameTab(.{
-        .location = renamed.location,
-        .label = renamed.label,
-    }) catch return error.UnexpectedTabRenamed;
+    var use_case = tab_renames.confirmationHandler(client);
+    _ = use_case.execute(tab_renames.confirmation(renamed)) catch return error.UnexpectedTabRenamed;
 }
 
 /// A closed tab: lifecycle event or reply, possibly ending the workspace.

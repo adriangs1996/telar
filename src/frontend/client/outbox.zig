@@ -214,8 +214,10 @@ pub const Outbox = struct {
     }
 
     pub fn pushRename(outbox: *Outbox, rename: schema.RenameTab) !void {
-        if (rename.label.len == 0 or rename.label.len > schema.max_tab_label_bytes)
+        if (rename.label.len == 0 or rename.label.len > schema.max_tab_label_bytes) {
             return error.InvalidTabLabel;
+        }
+
         var owned: OwnedRename = .{
             .request_id = rename.request_id,
             .location = rename.location,
@@ -524,6 +526,45 @@ test "queued launches own cwd bytes until encoding" {
     const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("/work/first", decoded.create_pane.launch.cwd);
     try std.testing.expectEqual(pane_id, decoded.create_pane.launch.cwd_source.?);
+}
+
+test "queued tab rename owns bounded label bytes until encoding" {
+    var outbox: Outbox = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .tab_id = @enumFromInt(4),
+    };
+    const too_long = [_]u8{'x'} ** (schema.max_tab_label_bytes + 1);
+
+    try std.testing.expectError(error.InvalidTabLabel, outbox.pushRename(.{
+        .request_id = @enumFromInt(1),
+        .location = location,
+        .label = "",
+    }));
+    try std.testing.expectError(error.InvalidTabLabel, outbox.pushRename(.{
+        .request_id = @enumFromInt(1),
+        .location = location,
+        .label = &too_long,
+    }));
+
+    try outbox.push(.{ .pane_resize = .{
+        .pane_id = @enumFromInt(1),
+        .size = .{ .cols = 20, .rows = 10 },
+    } });
+    var buffer: [256]u8 = undefined;
+    _ = (try outbox.beginSend(&buffer)).?;
+    var label = "agents".*;
+    try outbox.pushRename(.{
+        .request_id = @enumFromInt(2),
+        .location = location,
+        .label = &label,
+    });
+    @memset(&label, 'x');
+
+    outbox.popSent();
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqualStrings("agents", decoded.rename_tab.label);
+    try std.testing.expectEqualDeep(location, decoded.rename_tab.location);
 }
 
 test "queued workspace creation owns name and cwd bytes until encoding" {

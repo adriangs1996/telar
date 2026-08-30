@@ -791,7 +791,7 @@ fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
 fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
     const tab_id = handler.client.view.renamedTab() orelse return;
     var use_case = tab_renames.requestHandler(handler.client);
-    if (try use_case.execute(.{ .tab_id = tab_id, .label = label }) == null) {
+    if (!try use_case.execute(.{ .tab_id = tab_id, .label = label })) {
         return;
     }
 
