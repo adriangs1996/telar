@@ -427,7 +427,7 @@ test {
     std.testing.refAllDecls(@import("ca.zig"));
     std.testing.refAllDecls(@import("connection_admission.zig"));
     std.testing.refAllDecls(@import("connect_authentication.zig"));
-    std.testing.refAllDecls(@import("h2.zig"));
+    std.testing.refAllDecls(@import("h2/root.zig"));
     std.testing.refAllDecls(@import("http/root.zig"));
     std.testing.refAllDecls(identity);
     std.testing.refAllDecls(lifecycle_mod);

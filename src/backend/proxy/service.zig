@@ -6,7 +6,7 @@ const diagnostics = core.diagnostics;
 const ca = @import("ca.zig");
 const connection_admission = @import("connection_admission.zig");
 const connect_authentication = @import("connect_authentication.zig");
-const h2 = @import("h2.zig");
+const h2 = @import("h2/root.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
 const middleware = @import("middleware.zig");
@@ -507,6 +507,23 @@ const http1_connection_port: http.ConnectionPort(Http1Context) = .{
 
 const RelayHttp1Connection = http.Connection(Http1Context, http1_connection_port);
 
+const H2Context = struct {
+    service: *Service,
+    session: *tls.Session,
+    tunnel: *TunnelContext,
+    responses: ?*provider.ResponseStreams,
+};
+
+const h2_connection_port: h2.ConnectionPort(H2Context) = .{
+    .io = h2Io,
+    .relay_request = relayH2Request,
+    .relay_response = relayH2Response,
+    .record_decode_failure = recordH2DecodeFailure,
+    .settle = settleH2Connection,
+};
+
+const RelayH2Connection = h2.Connection(H2Context, h2_connection_port);
+
 const H2EventObserver = struct {
     context: *TunnelContext,
     responses: ?*provider.ResponseStreams = null,
@@ -604,53 +621,14 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     if (negotiated_h2) {
         var response_streams = provider.ResponseStreams.init(service.gpa, context.provider);
         defer response_streams.deinit();
-        var response_observer: H2EventObserver = .{
-            .context = &context,
+        var h2_context: H2Context = .{
+            .service = service,
+            .session = session,
+            .tunnel = &context,
             .responses = if (context.provider == .claude) &response_streams else null,
         };
-        var child_settings: h2.PeerSettings = .{};
-        var origin_settings: h2.PeerSettings = .{};
-        var outbound = if (service.transforms.len == 0)
-            service.io.concurrent(relayH2Request, .{ session, &context }) catch return
-        else
-            service.io.concurrent(relayH2RequestTransformed, .{
-                session,
-                &context,
-                &child_settings,
-                &origin_settings,
-            }) catch return;
-        const response_stats = if (service.transforms.len == 0)
-            h2.relay(
-                session,
-                .origin,
-                .child,
-                .response,
-                &response_observer,
-                H2EventObserver.emit,
-            )
-        else
-            h2.relayTransformed(
-                session,
-                .origin,
-                .child,
-                .response,
-                &origin_settings,
-                &child_settings,
-                &service.transforms,
-                service.io,
-                context.transformContext(.response, .response, 0),
-                &response_observer,
-                H2EventObserver.emit,
-            );
-        const request_stats = outbound.cancel(service.io);
-        if (response_stats.decode_failed)
-            _ = service.h2_decode_failures.fetchAdd(1, .monotonic);
-        if (request_stats.decode_failed)
-            _ = service.h2_decode_failures.fetchAdd(1, .monotonic);
-        // The agent store ignores this connection-level sentinel after every
-        // observed stream has settled. If the transport disappears first, it
-        // clears the remaining streams and prevents a permanent working state.
-        context.publish(.request_failed, 0);
+
+        RelayH2Connection.run(&h2_context);
         return;
     }
 
@@ -711,40 +689,50 @@ fn publishTlsTunnelFailure(context: *TlsTunnelContext) void {
     context.tunnel.publish(.request_failed, 0);
 }
 
-fn relayH2Request(session: *tls.Session, context: *TunnelContext) h2.Stats {
-    var observer: H2EventObserver = .{ .context = context };
-
-    return h2.relay(
-        session,
-        .child,
-        .origin,
-        .request,
-        &observer,
-        H2EventObserver.emit,
-    );
+fn h2Io(context: *H2Context) Io {
+    return context.service.io;
 }
 
-fn relayH2RequestTransformed(
-    session: *tls.Session,
-    context: *TunnelContext,
-    child_settings: *h2.PeerSettings,
-    origin_settings: *h2.PeerSettings,
-) h2.Stats {
-    var observer: H2EventObserver = .{ .context = context };
+fn relayH2Request(context: *H2Context, settings: *h2.Settings) h2.Stats {
+    var observer: H2EventObserver = .{ .context = context.tunnel };
 
-    return h2.relayTransformed(
-        session,
-        .child,
-        .origin,
-        .request,
-        child_settings,
-        origin_settings,
-        &context.service.transforms,
-        context.service.io,
-        context.transformContext(.request, .request, 0),
-        &observer,
-        H2EventObserver.emit,
-    );
+    return h2.relay(context.session, h2RelayOptions(context, settings, .request), &observer);
+}
+
+fn relayH2Response(context: *H2Context, settings: *h2.Settings) h2.Stats {
+    var observer: H2EventObserver = .{
+        .context = context.tunnel,
+        .responses = context.responses,
+    };
+
+    return h2.relay(context.session, h2RelayOptions(context, settings, .response), &observer);
+}
+
+fn h2RelayOptions(context: *H2Context, settings: *h2.Settings, direction: h2.Direction) h2.RelayOptions {
+    const kind: middleware.HeaderKind = switch (direction) {
+        .request => .request,
+        .response => .response,
+    };
+    const transform_direction: middleware.Direction = switch (direction) {
+        .request => .request,
+        .response => .response,
+    };
+
+    return h2.relayOptions(direction, settings, if (context.service.transforms.len == 0) null else .{
+        .pipeline = &context.service.transforms,
+        .io = context.service.io,
+        .context = context.tunnel.transformContext(transform_direction, kind, 0),
+    });
+}
+
+fn recordH2DecodeFailure(context: *H2Context, _: h2.Direction) void {
+    _ = context.service.h2_decode_failures.fetchAdd(1, .monotonic);
+}
+
+fn settleH2Connection(context: *H2Context) void {
+    // A stream-zero failure settles any exchange left open when the transport
+    // disappeared. The agent model ignores it after every stream settled.
+    context.tunnel.publish(.request_failed, 0);
 }
 
 const IgnoreBodyObserver = struct {

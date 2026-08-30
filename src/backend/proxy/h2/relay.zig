@@ -6,8 +6,9 @@
 //! remain end to end in both modes.
 
 const std = @import("std");
-const middleware = @import("middleware.zig");
-const tls = @import("tls.zig");
+const stream_state = @import("streams.zig");
+const middleware = @import("../middleware.zig");
+const tls = @import("../tls.zig");
 
 const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
@@ -16,7 +17,7 @@ const c = @cImport({
 pub const frame_header_len = 9;
 pub const client_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 pub const max_header_block_bytes = 128 * 1024;
-pub const max_tracked_streams = 128;
+pub const max_tracked_streams = stream_state.max_tracked_streams;
 
 const frame_data: u8 = 0x0;
 const frame_headers: u8 = 0x1;
@@ -82,12 +83,6 @@ const Decoded = struct {
     }
 };
 
-const StreamStatus = struct {
-    stream_id: u32 = 0,
-    status_code: u16 = 0,
-    sse_body: bool = false,
-};
-
 pub const Observer = struct {
     inflater: ?*c.nghttp2_hd_inflater = null,
     failed: bool = false,
@@ -108,8 +103,7 @@ pub const Observer = struct {
     block_end_stream: bool = false,
     block: [max_header_block_bytes]u8 = undefined,
     block_len: usize = 0,
-    statuses: [max_tracked_streams]StreamStatus = @splat(.{}),
-    started_streams: [max_tracked_streams]u32 = @splat(0),
+    streams: stream_state.Tracker = .{},
 
     pub fn init() Observer {
         var observer: Observer = .{};
@@ -213,14 +207,14 @@ pub const Observer = struct {
             emit(context, .{ .lifecycle = .{
                 .phase = .response_activity,
                 .stream_id = observer.stream_id,
-                .status_code = observer.status(observer.stream_id),
+                .status_code = observer.streams.status(observer.stream_id),
             } });
 
             if (observer.responseBodyFragment(payload)) |fragment| {
                 if (fragment.len != 0) {
                     emit(context, .{ .response_body = .{
                         .stream_id = observer.stream_id,
-                        .status_code = observer.status(observer.stream_id),
+                        .status_code = observer.streams.status(observer.stream_id),
                         .sse_body = observer.hasObservableSseBody(observer.stream_id),
                         .bytes = fragment,
                     } });
@@ -273,7 +267,7 @@ pub const Observer = struct {
                 const decoded = if (observer.failed) Decoded{} else observer.decodeBlock();
                 if (observer.block_kind == .headers) switch (direction) {
                     .request => {
-                        if (decoded.request and observer.markStarted(observer.block_stream))
+                        if (decoded.request and observer.streams.startRequest(observer.block_stream))
                             emit(context, .{ .lifecycle = .{
                                 .phase = if (decoded.isInference())
                                     .request_started
@@ -283,24 +277,24 @@ pub const Observer = struct {
                                 .status_code = 0,
                             } });
                         if (observer.block_end_stream)
-                            observer.removeStarted(observer.block_stream);
+                            observer.streams.finishRequest(observer.block_stream);
                     },
                     .response => {
                         if (decoded.status_code >= 200) {
-                            observer.setResponse(.{
+                            _ = observer.streams.setResponse(.{
                                 .stream_id = observer.block_stream,
                                 .status_code = decoded.status_code,
                                 .sse_body = decoded.hasObservableSseBody(),
                             });
                         }
                         if (observer.block_end_stream) {
-                            const status_code = observer.status(observer.block_stream);
+                            const status_code = observer.streams.status(observer.block_stream);
                             emit(context, .{ .lifecycle = .{
                                 .phase = if (status_code >= 400) .request_failed else .response_finished,
                                 .stream_id = observer.block_stream,
                                 .status_code = status_code,
                             } });
-                            observer.removeStatus(observer.block_stream);
+                            observer.streams.finishResponse(observer.block_stream);
                         }
                     },
                 };
@@ -316,12 +310,12 @@ pub const Observer = struct {
             emit(context, .{ .lifecycle = .{
                 .phase = .request_failed,
                 .stream_id = completed_stream,
-                .status_code = observer.status(completed_stream),
+                .status_code = observer.streams.status(completed_stream),
             } });
-            observer.removeStatus(completed_stream);
-            if (direction == .request) observer.removeStarted(completed_stream);
+            observer.streams.finishResponse(completed_stream);
+            if (direction == .request) observer.streams.finishRequest(completed_stream);
         } else if (direction == .response and completed_type == frame_goaway and
-            observer.hasActiveResponses())
+            observer.streams.hasActiveResponses())
         {
             emit(context, .{ .lifecycle = .{
                 .phase = .request_failed,
@@ -332,18 +326,18 @@ pub const Observer = struct {
             completed_stream != 0 and
             completed_flags & flag_end_stream != 0)
         {
-            const status_code = observer.status(completed_stream);
+            const status_code = observer.streams.status(completed_stream);
             emit(context, .{ .lifecycle = .{
                 .phase = if (status_code >= 400) .request_failed else .response_finished,
                 .stream_id = completed_stream,
                 .status_code = status_code,
             } });
-            observer.removeStatus(completed_stream);
+            observer.streams.finishResponse(completed_stream);
         }
         if (direction == .request and completed_type == frame_data and
             completed_stream != 0 and
             completed_flags & flag_end_stream != 0)
-            observer.removeStarted(completed_stream);
+            observer.streams.finishRequest(completed_stream);
 
         observer.header_len = 0;
         observer.payload_len = 0;
@@ -450,63 +444,8 @@ pub const Observer = struct {
         }
     }
 
-    fn markStarted(observer: *Observer, stream_id: u32) bool {
-        var free: ?*u32 = null;
-        for (&observer.started_streams) |*slot| {
-            if (slot.* == stream_id) return false;
-            if (slot.* == 0 and free == null) free = slot;
-        }
-        if (free) |slot| slot.* = stream_id;
-        return true;
-    }
-
-    fn removeStarted(observer: *Observer, stream_id: u32) void {
-        for (&observer.started_streams) |*slot| {
-            if (slot.* != stream_id) continue;
-            slot.* = 0;
-            return;
-        }
-    }
-
-    fn status(observer: *const Observer, stream_id: u32) u16 {
-        for (observer.statuses) |entry|
-            if (entry.stream_id == stream_id) return entry.status_code;
-        return 0;
-    }
-
-    fn setResponse(observer: *Observer, response: StreamStatus) void {
-        var free: ?*StreamStatus = null;
-        for (&observer.statuses) |*entry| {
-            if (entry.stream_id == response.stream_id) {
-                entry.* = response;
-                return;
-            }
-            if (entry.stream_id == 0 and free == null) free = entry;
-        }
-        if (free) |entry| entry.* = response;
-    }
-
     fn hasObservableSseBody(observer: *const Observer, stream_id: u32) bool {
-        for (observer.statuses) |entry| {
-            if (entry.stream_id == stream_id) {
-                return entry.sse_body;
-            }
-        }
-
-        return false;
-    }
-
-    fn hasActiveResponses(observer: *const Observer) bool {
-        for (observer.statuses) |entry| if (entry.stream_id != 0) return true;
-        return false;
-    }
-
-    fn removeStatus(observer: *Observer, stream_id: u32) void {
-        for (&observer.statuses) |*entry| {
-            if (entry.stream_id != stream_id) continue;
-            entry.* = .{};
-            return;
-        }
+        return observer.streams.hasObservableSseBody(stream_id);
     }
 
     fn fail(observer: *Observer) void {
@@ -550,8 +489,7 @@ pub const Transcoder = struct {
     encoded: [2 * max_header_block_bytes]u8 = undefined,
     setting: [6]u8 = undefined,
     setting_len: u8 = 0,
-    statuses: [max_tracked_streams]StreamStatus = @splat(.{}),
-    started_streams: [max_tracked_streams]u32 = @splat(0),
+    streams: stream_state.Tracker = .{},
 
     pub fn init() Transcoder {
         var transcoder: Transcoder = .{};
@@ -721,14 +659,14 @@ pub const Transcoder = struct {
                 emit(event_context, .{ .lifecycle = .{
                     .phase = .response_activity,
                     .stream_id = transcoder.stream_id,
-                    .status_code = transcoder.status(transcoder.stream_id),
+                    .status_code = transcoder.streams.status(transcoder.stream_id),
                 } });
 
                 if (transcoder.responseBodyFragment(payload)) |fragment| {
                     if (fragment.len != 0) {
                         emit(event_context, .{ .response_body = .{
                             .stream_id = transcoder.stream_id,
-                            .status_code = transcoder.status(transcoder.stream_id),
+                            .status_code = transcoder.streams.status(transcoder.stream_id),
                             .sse_body = transcoder.hasObservableSseBody(transcoder.stream_id),
                             .bytes = fragment,
                         } });
@@ -887,7 +825,7 @@ pub const Transcoder = struct {
             transformed.copyFrom(&original);
 
         if (direction == .request and context.kind == .request and
-            transcoder.markStarted(transcoder.block_stream))
+            transcoder.streams.startRequest(transcoder.block_stream))
         {
             emit(event_context, .{ .lifecycle = .{
                 .phase = if (middleware.isInferenceRequest(
@@ -940,7 +878,7 @@ pub const Transcoder = struct {
 
         const status_code = parseStatusHeader(&transformed);
         if (direction == .response and status_code >= 200) {
-            transcoder.setResponse(.{
+            _ = transcoder.streams.setResponse(.{
                 .stream_id = transcoder.block_stream,
                 .status_code = status_code,
                 .sse_body = middleware.hasObservableSseBody(&original),
@@ -948,15 +886,15 @@ pub const Transcoder = struct {
         }
 
         if (transcoder.block_flags & flag_end_stream != 0) switch (direction) {
-            .request => transcoder.removeStarted(transcoder.block_stream),
+            .request => transcoder.streams.finishRequest(transcoder.block_stream),
             .response => {
-                const final_status = transcoder.status(transcoder.block_stream);
+                const final_status = transcoder.streams.status(transcoder.block_stream);
                 emit(event_context, .{ .lifecycle = .{
                     .phase = if (final_status >= 400) .request_failed else .response_finished,
                     .stream_id = transcoder.block_stream,
                     .status_code = final_status,
                 } });
-                transcoder.removeStatus(transcoder.block_stream);
+                transcoder.streams.finishResponse(transcoder.block_stream);
             },
         };
         return true;
@@ -1073,12 +1011,12 @@ pub const Transcoder = struct {
             emit(event_context, .{ .lifecycle = .{
                 .phase = .request_failed,
                 .stream_id = frame_stream,
-                .status_code = transcoder.status(frame_stream),
+                .status_code = transcoder.streams.status(frame_stream),
             } });
-            transcoder.removeStatus(frame_stream);
-            if (direction == .request) transcoder.removeStarted(frame_stream);
+            transcoder.streams.finishResponse(frame_stream);
+            if (direction == .request) transcoder.streams.finishRequest(frame_stream);
         } else if (direction == .response and frame_type == frame_goaway and
-            transcoder.hasActiveResponses())
+            transcoder.streams.hasActiveResponses())
         {
             emit(event_context, .{ .lifecycle = .{
                 .phase = .request_failed,
@@ -1088,17 +1026,17 @@ pub const Transcoder = struct {
         } else if (direction == .response and frame_type == frame_data and
             frame_stream != 0 and frame_flags & flag_end_stream != 0)
         {
-            const status_code = transcoder.status(frame_stream);
+            const status_code = transcoder.streams.status(frame_stream);
             emit(event_context, .{ .lifecycle = .{
                 .phase = if (status_code >= 400) .request_failed else .response_finished,
                 .stream_id = frame_stream,
                 .status_code = status_code,
             } });
-            transcoder.removeStatus(frame_stream);
+            transcoder.streams.finishResponse(frame_stream);
         }
         if (direction == .request and frame_type == frame_data and
             frame_stream != 0 and frame_flags & flag_end_stream != 0)
-            transcoder.removeStarted(frame_stream);
+            transcoder.streams.finishRequest(frame_stream);
     }
 
     fn responseBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
@@ -1135,66 +1073,13 @@ pub const Transcoder = struct {
             @intFromBool(transcoder.block_flags & flag_padded != 0);
     }
 
-    fn markStarted(transcoder: *Transcoder, stream_id: u32) bool {
-        var free: ?*u32 = null;
-        for (&transcoder.started_streams) |*slot| {
-            if (slot.* == stream_id) return false;
-            if (slot.* == 0 and free == null) free = slot;
-        }
-        if (free) |slot| slot.* = stream_id;
-        return true;
-    }
-
-    fn removeStarted(transcoder: *Transcoder, stream_id: u32) void {
-        for (&transcoder.started_streams) |*slot| if (slot.* == stream_id) {
-            slot.* = 0;
-            return;
-        };
-    }
-
-    fn status(transcoder: *const Transcoder, stream_id: u32) u16 {
-        for (transcoder.statuses) |entry|
-            if (entry.stream_id == stream_id) return entry.status_code;
-        return 0;
-    }
-
-    fn setResponse(transcoder: *Transcoder, response: StreamStatus) void {
-        var free: ?*StreamStatus = null;
-        for (&transcoder.statuses) |*entry| {
-            if (entry.stream_id == response.stream_id) {
-                entry.* = response;
-                return;
-            }
-            if (entry.stream_id == 0 and free == null) free = entry;
-        }
-        if (free) |entry| entry.* = response;
-    }
-
     fn hasObservableSseBody(transcoder: *const Transcoder, stream_id: u32) bool {
-        for (transcoder.statuses) |entry| {
-            if (entry.stream_id == stream_id) {
-                return entry.sse_body;
-            }
-        }
-
-        return false;
-    }
-
-    fn hasActiveResponses(transcoder: *const Transcoder) bool {
-        for (transcoder.statuses) |entry| if (entry.stream_id != 0) return true;
-        return false;
-    }
-
-    fn removeStatus(transcoder: *Transcoder, stream_id: u32) void {
-        for (&transcoder.statuses) |*entry| if (entry.stream_id == stream_id) {
-            entry.* = .{};
-            return;
-        };
+        return transcoder.streams.hasObservableSseBody(stream_id);
     }
 };
 
 pub fn relay(
-    session: *tls.Session,
+    session: anytype,
     from: tls.Session.Side,
     to: tls.Session.Side,
     direction: Direction,
@@ -1239,7 +1124,7 @@ pub fn relay(
 }
 
 pub fn relayTransformed(
-    session: *tls.Session,
+    session: anytype,
     from: tls.Session.Side,
     to: tls.Session.Side,
     direction: Direction,
