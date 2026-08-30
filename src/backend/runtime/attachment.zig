@@ -70,7 +70,7 @@ pub const Attachment = struct {
         return attachment.cells.resizeIfNeeded(attachment.pane);
     }
 
-    pub fn setViewport(attachment: *Attachment, requested: u32) !void {
+    fn setViewport(attachment: *Attachment, requested: u32) !bool {
         return attachment.cells.setViewport(attachment.pane, requested);
     }
 
@@ -262,6 +262,11 @@ pub const PaneDetached = struct {
     last_attachment: bool,
 };
 
+pub const ViewportUpdate = enum {
+    changed,
+    unchanged,
+};
+
 pub const AttachmentStore = struct {
     pub const capacity = max_panes;
     pub const Iterator = struct {
@@ -310,6 +315,18 @@ pub const AttachmentStore = struct {
     pub fn acknowledgeFrame(store: *AttachmentStore, ack: schema.FrameAck, received_at_ns: u64) ?u64 {
         const attachment = store.find(ack.pane_id) orelse return null;
         return attachment.acknowledgeFrame(ack.frame_id, received_at_ns);
+    }
+
+    /// Applies a bounded viewport offset to one client attachment. Missing
+    /// panes return null; allocation failure preserves the previous projection.
+    ///
+    /// ```zig
+    /// const update = try store.setPaneViewport(viewport) orelse return;
+    /// ```
+    pub fn setPaneViewport(store: *AttachmentStore, viewport: schema.SetPaneViewport) !?ViewportUpdate {
+        const attachment = store.find(viewport.pane_id) orelse return null;
+        const changed = try attachment.setViewport(viewport.offset);
+        return if (changed) .changed else .unchanged;
     }
 
     pub fn at(store: *AttachmentStore, index: usize) ?*Attachment {
@@ -928,7 +945,7 @@ test "attachments keep independent scrollback viewports" {
     var second = try Attachment.init(gpa, pane);
     defer second.deinit();
 
-    try first.setViewport(0);
+    _ = try first.setViewport(0);
     const first_projection = try first.cells.project(pane, true);
     const second_projection = try second.cells.project(pane, true);
     try std.testing.expectEqual(@as(u32, 0), first_projection.scroll.offset);

@@ -33,6 +33,8 @@ const pane_input_commands = @import("commands/pane_input.zig");
 const pane_input_controller = @import("controllers/pane_input.zig");
 const pane_resize_commands = @import("commands/pane_resize.zig");
 const pane_resize_controller = @import("controllers/pane_resize.zig");
+const pane_viewport_commands = @import("commands/pane_viewport.zig");
+const pane_viewport_controller = @import("controllers/pane_viewport.zig");
 const request_snapshot_commands = @import("commands/request_snapshot.zig");
 const request_snapshot_controller = @import("controllers/request_snapshot.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
@@ -83,6 +85,7 @@ const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
+const PaneViewportController = pane_viewport_controller.Controller(*pane_viewport_commands.SetPaneViewportHandler);
 const RequestSnapshotController = request_snapshot_controller.Controller(*request_snapshot_commands.RequestCellSnapshotHandler);
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = 8;
@@ -1490,11 +1493,14 @@ const Server = struct {
 
                 try controller.paneResize(resize);
             },
-            .set_pane_viewport => |viewport| try attachment_entrypoints.setPaneViewport(
-                attachments,
-                metrics,
-                viewport,
-            ),
+            .set_pane_viewport => |viewport| {
+                var handler: pane_viewport_commands.SetPaneViewportHandler = .{
+                    .attachments = attachments,
+                };
+                var controller = PaneViewportController.init(metrics, &handler);
+
+                try controller.setPaneViewport(viewport);
+            },
             .copy_selection => |request| attachment_entrypoints.copySelection(
                 attachments,
                 &session.delivery,
@@ -2733,6 +2739,8 @@ test {
     _ = pane_input_controller;
     _ = pane_resize_commands;
     _ = pane_resize_controller;
+    _ = pane_viewport_commands;
+    _ = pane_viewport_controller;
     _ = request_snapshot_commands;
     _ = request_snapshot_controller;
     _ = rename_workspace_commands;
@@ -2754,6 +2762,7 @@ test {
     _ = @import("open_pane_test.zig");
     _ = @import("pane_input_test.zig");
     _ = @import("pane_resize_test.zig");
+    _ = @import("pane_viewport_test.zig");
     _ = @import("request_snapshot_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");

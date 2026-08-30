@@ -12,18 +12,6 @@ const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const schema = core.schema;
 
-pub fn setPaneViewport(
-    attachments: *AttachmentStore,
-    metrics: *RuntimeMetrics,
-    viewport: schema.SetPaneViewport,
-) !void {
-    const active = attachments.find(viewport.pane_id) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    try active.setViewport(viewport.offset);
-}
-
 pub fn copySelection(
     attachments: *AttachmentStore,
     delivery: *Delivery,

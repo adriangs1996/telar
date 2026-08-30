@@ -95,29 +95,47 @@ pub const Sync = struct {
         sync.viewport_pin = null;
     }
 
-    pub fn setViewport(sync: *Sync, pane: *Pane, requested: u32) !void {
+    /// Moves this client's viewport without leaving the shared terminal
+    /// scrolled. Returns whether the effective offset changed. On allocation
+    /// failure, the previous client viewport and snapshot state are preserved.
+    ///
+    /// ```zig
+    /// const changed = try sync.setViewport(pane, requested_offset);
+    /// ```
+    pub fn setViewport(sync: *Sync, pane: *Pane, requested: u32) !bool {
         const terminal_allocations = diagnostics.enterTerminalAllocations();
         defer terminal_allocations.restore();
+
         sync.syncViewportScreen(pane);
         const screen = pane.terminal.screens.active;
-        if (sync.viewport_pin) |pin|
-            screen.scroll(.{ .pin = pin.* })
-        else
-            screen.scroll(.{ .active = {} });
-        screen.scroll(.{ .row = requested });
-        const scrollbar = screen.pages.scrollbar();
-        if (scrollbar.offset + scrollbar.len >= scrollbar.total) {
-            screen.scroll(.{ .active = {} });
-            sync.clearViewport(pane);
+        if (sync.viewport_pin) |pin| {
+            screen.scroll(.{ .pin = pin.* });
         } else {
-            const top = screen.pages.pin(.{ .viewport = .{} }).?;
-            if (sync.viewport_pin) |pin|
-                pin.* = top
-            else
-                sync.viewport_pin = try screen.pages.trackPin(top);
             screen.scroll(.{ .active = {} });
         }
+
+        const current_offset = screen.pages.scrollbar().offset;
+        screen.scroll(.{ .row = requested });
+        defer screen.scroll(.{ .active = {} });
+
+        const scrollbar = screen.pages.scrollbar();
+        if (scrollbar.offset == current_offset) {
+            return false;
+        }
+
+        if (scrollbar.offset + scrollbar.len >= scrollbar.total) {
+            sync.clearViewport(pane);
+        } else {
+            const top = screen.pages.pin(.{ .viewport = .{} }) orelse return error.ViewportUnavailable;
+            if (sync.viewport_pin) |pin| {
+                pin.* = top;
+            } else {
+                sync.viewport_pin = try screen.pages.trackPin(top);
+            }
+        }
+
         sync.snapshot_pending = true;
+        return true;
     }
 
     pub fn requestSnapshot(sync: *Sync) void {
