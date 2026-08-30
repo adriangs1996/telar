@@ -155,7 +155,13 @@ pub const Workspace = struct {
         return true;
     }
 
-    pub fn moveTab(workspace: *Workspace, tab_id: schema.TabId, direction: schema.TabMoveDirection) ?u16 {
+    /// Reorders a tab and returns the committed position as a domain event.
+    /// Moving beyond either edge succeeds at the existing edge position.
+    ///
+    /// ```zig
+    /// const moved = workspace.moveTab(tab_id, .previous) orelse return;
+    /// ```
+    pub fn moveTab(workspace: *Workspace, tab_id: schema.TabId, direction: schema.TabMoveDirection) ?events.TabMoved {
         const index = workspace.tabIndex(tab_id) orelse return null;
         const target = switch (direction) {
             .previous => if (index == 0) index else index - 1,
@@ -166,7 +172,13 @@ pub const Workspace = struct {
             std.mem.swap(?Tab, &workspace.tabs[index], &workspace.tabs[target]);
         }
 
-        return @intCast(target);
+        return .{
+            .location = .{
+                .workspace = .{ .workspace = workspace.id },
+                .tab_id = tab_id,
+            },
+            .position = @intCast(target),
+        };
     }
 
     pub fn tabLabel(workspace: *const Workspace, tab_id: schema.TabId) ?[]const u8 {
@@ -308,7 +320,9 @@ test "tabs are created moved described and removed through the aggregate" {
     try std.testing.expectEqualStrings("tab 3", generated.labelSlice());
     try std.testing.expectEqualStrings("tab 3", workspace.tabLabel(generated_id).?);
 
-    try std.testing.expectEqual(@as(u16, 0), workspace.moveTab(logs_id, .previous).?);
+    const moved = workspace.moveTab(logs_id, .previous).?;
+    try std.testing.expectEqual(@as(u16, 0), moved.position);
+    try std.testing.expectEqual(logs_id, moved.location.tab_id);
     try std.testing.expectEqual(logs_id, workspace.defaultTab());
 
     var descriptors: [max_tabs_per_workspace]schema.TabDescriptor = undefined;

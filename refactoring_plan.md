@@ -57,7 +57,7 @@ protocol request necessarily extends this inventory.
 | BCR-13 | `create_tab` | `runtime/controllers/create_tab.zig` | `CreateTabHandler` and workspace aggregate | Ready | Commits `e002c34`, `dc5f8ce`; command, controller, rollback, backpressure, and vertical tests exist. |
 | BCR-14 | `rename_tab` | `runtime/controllers/tab.zig` | `RenameTabHandler` and workspace aggregate | Ready | Commits `a35fe64`, `dc5f8ce`; owned `TabRenamed`, command/controller tests, and vertical backpressure test exist. |
 | BCR-15 | `close_tab` | `runtime/controllers/close_tab.zig` | `CloseTabHandler` and workspace aggregate | Ready | Commit `278a9de`; typed `TabRemoved`, effect-order tests, and vertical backpressure test exist. |
-| BCR-16 | `move_tab` | `runtime/entrypoints/tab.zig` | Move-tab controller, command handler, and workspace aggregate | In progress | Legacy entrypoint maps protocol, commits state, replies, and publishes an untyped change callback. |
+| BCR-16 | `move_tab` | `runtime/controllers/move_tab.zig` | Move-tab controller, command handler, and workspace aggregate | Ready | Typed `TabMoved`; aggregate, handler, controller, edge, error, ordering, and vertical backpressure tests pass. |
 | BCR-17 | `request_graphics_snapshot` | `runtime/entrypoints/attachment.zig` | Graphics snapshot query controller | Pending | Media synchronization and protocol failure mapping need focused tests. |
 | BCR-18 | `graphics_credit` | `runtime/entrypoints/attachment.zig` | Graphics flow-control capability | Pending | Credit mutation and scheduler effects need explicit invariants and tests. |
 | BCR-19 | `configure_graphics` | `runtime/entrypoints/attachment.zig` | Client graphics configuration controller | Pending | Session policy and existing attachment updates are coupled. |

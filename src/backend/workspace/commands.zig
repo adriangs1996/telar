@@ -23,9 +23,9 @@ pub fn renameWorkspace(repository: *Repository, location: schema.WorkspaceLocati
 /// Reorders one tab inside its aggregate without changing list revision.
 ///
 /// ```zig
-/// const position = try moveTab(&repository, location, .previous);
+/// const moved = try moveTab(&repository, location, .previous);
 /// ```
-pub fn moveTab(repository: *Repository, location: schema.TabLocation, direction: schema.TabMoveDirection) !u16 {
+pub fn moveTab(repository: *Repository, location: schema.TabLocation, direction: schema.TabMoveDirection) !events.TabMoved {
     const workspace = repository.find(location.workspace) orelse return error.WorkspaceNotFound;
     return workspace.moveTab(location.tab_id, direction) orelse error.TabNotFound;
 }
@@ -81,7 +81,9 @@ test "workspace commands move and remove tabs around repository state" {
     try std.testing.expectEqualStrings("logs", repository.reader().tabLabel(logs).?);
 
     const before_move = repository.reader().revision();
-    try std.testing.expectEqual(@as(u16, 0), try moveTab(&repository, logs, .previous));
+    const moved = try moveTab(&repository, logs, .previous);
+    try std.testing.expectEqual(@as(u16, 0), moved.position);
+    try std.testing.expectEqualDeep(logs, moved.location);
     try std.testing.expectEqual(logs.tab_id, repository.reader().defaultTab(initial.workspace).?);
     try std.testing.expectEqual(before_move, repository.reader().revision());
 

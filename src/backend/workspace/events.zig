@@ -118,6 +118,12 @@ pub const TabRenamed = struct {
     }
 };
 
+/// Committed position of a tab after a move request.
+pub const TabMoved = struct {
+    location: schema.TabLocation,
+    position: u16,
+};
+
 fn testingLocation() !schema.TabLocation {
     return .{
         .workspace = .{ .workspace = try schema.id.workspace(3) },
@@ -203,4 +209,12 @@ test "TabRenamed rejects labels it cannot own" {
 
     const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidTabLabel, TabRenamed.init(location, &oversized));
+}
+
+test "TabMoved identifies the committed tab and canonical position" {
+    const location = try testingLocation();
+    const event: TabMoved = .{ .location = location, .position = 2 };
+
+    try std.testing.expectEqualDeep(location, event.location);
+    try std.testing.expectEqual(@as(u16, 2), event.position);
 }

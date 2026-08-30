@@ -15,6 +15,8 @@ const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("controllers/close_tab.zig");
 const create_tab_commands = @import("commands/create_tab.zig");
 const create_tab_controller = @import("controllers/create_tab.zig");
+const move_tab_commands = @import("commands/move_tab.zig");
+const move_tab_controller = @import("controllers/move_tab.zig");
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const history_entrypoints = @import("entrypoints/history.zig");
@@ -1491,12 +1493,20 @@ const Server = struct {
                 try controller.closeTab(close);
             },
             .move_tab => |move| {
-                try tab_entrypoints.moveTab(.{
+                var event_context: WorkspaceEventContext = .{
+                    .server = server,
+                    .origin = session.key,
+                };
+                var handler: move_tab_commands.MoveTabHandler = .{
                     .workspaces = workspaces,
-                    .responses = responses,
-                    .client = session.key,
-                    .events = entrypointWorkspaceEvents(server),
-                }, move);
+                    .events = .{
+                        .context = &event_context,
+                        .publish = publishTabMoved,
+                    },
+                };
+                var controller = move_tab_controller.Controller.init(responses, handler.executor());
+
+                try controller.moveTab(move);
             },
             .query_history => |request| {
                 try history_entrypoints.queryHistory(
@@ -1633,6 +1643,11 @@ fn publishTabRenamed(context: *anyopaque, event: workspace_mod.TabRenamed) void 
     const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
 
     publication.server.model.agents.touch();
+    publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
+}
+
+fn publishTabMoved(context: *anyopaque, event: workspace_mod.TabMoved) void {
+    const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
     publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
 }
 
@@ -2307,10 +2322,13 @@ test {
     _ = close_tab_controller;
     _ = create_tab_commands;
     _ = create_tab_controller;
+    _ = move_tab_commands;
+    _ = move_tab_controller;
     _ = tab_commands;
     _ = tab_controller;
     _ = @import("close_tab_test.zig");
     _ = @import("create_tab_test.zig");
+    _ = @import("move_tab_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = model_mod;
     _ = pane_mod;
