@@ -2030,9 +2030,8 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     const command = try std.fmt.bufPrint(
         &command_buffer,
         "stty raw -echo; printf 'MEDIA_READY\\n'; " ++
-            "dd bs=1 count=1 of=/dev/null 2>/dev/null & reader=$!; " ++
-            "(sleep 2; kill \"$reader\" 2>/dev/null) & watchdog=$!; " ++
-            "if wait \"$reader\"; then " ++
+            "(sleep 2; kill -TERM 0) & watchdog=$!; " ++
+            "if dd bs=1 count=1 of=/dev/null 2>/dev/null; then " ++
             "kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; " ++
             ": > '{s}'; printf 'INPUT_FORWARDED\\n'; sleep 1; " ++
             "else kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; exit 1; fi",
@@ -2126,9 +2125,13 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
         "stty raw -echo; " ++
         "printf '\\033_Ga=T,f=32,o=z,s=1,v=1,t=d,i=7,q=2,C=1,c=2,r=2;eAFjZGL+DwABEwEG\\033\\\\'; " ++
         "printf '\\033_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\\033\\\\'; " ++
-        "reply=$(dd bs=1 count=12 2>/dev/null); " ++
+        "trap 'printf \"KGP_CHILD_TIMEOUT\\n\"; exit 1' TERM; " ++
+        "(sleep 4; kill -TERM 0) & watchdog=$!; " ++
+        "reply=$(dd bs=1 count=12 2>/dev/null); status=$?; " ++
+        "kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; " ++
+        "if [ \"$status\" -eq 0 ]; then " ++
         "case \"$reply\" in *'Gi=31;OK'*) printf 'KGP_CHILD_OK\\n';; *) printf 'KGP_CHILD_BAD\\n';; esac; " ++
-        "sleep 2";
+        "else printf 'KGP_CHILD_BAD\\n'; fi; sleep 2";
     const arguments = [_][]const u8{ "/bin/sh", "-c", script };
     var send_buffer: [2048]u8 = undefined;
     try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
@@ -2162,7 +2165,12 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
             .pane_frame => |frame| {
                 try applyFrameCells(&cells, frame);
                 saw_child_reply = rowContains(&cells, "KGP_CHILD_OK");
-                if (rowContains(&cells, "KGP_CHILD_BAD")) return error.KittyQueryReplyMissing;
+                if (rowContains(&cells, "KGP_CHILD_BAD")) {
+                    return error.KittyQueryReplyMissing;
+                }
+                if (rowContains(&cells, "KGP_CHILD_TIMEOUT")) {
+                    return error.KittyQueryReplyTimedOut;
+                }
                 try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
                     .pane_id = frame.pane_id,
                     .frame_id = frame.frame_id,
