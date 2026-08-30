@@ -5,67 +5,11 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
-const close_tab = client_application.close_tab;
 const schema = core.schema;
 const select_tab = client_application.select_tab;
 const tabs_mod = workspace_capability.tabs;
-
-/// Wires the close request to delivery and provisional-detach recovery.
-///
-/// ```zig
-/// var handler = closeRequestHandler(client);
-/// _ = try handler.execute();
-/// ```
-pub fn closeRequestHandler(client: *Client) close_tab.RequestCloseTabHandler {
-    return .{
-        .model = &client.model,
-        .gate = .{
-            .context = client,
-            .pending = tabOperationPending,
-        },
-        .effects = .{
-            .context = client,
-            .detach = detachForClose,
-            .send = sendClose,
-            .restore = restoreClose,
-        },
-    };
-}
-
-/// Wires close-request rejection to attachment recovery.
-///
-/// ```zig
-/// var handler = closeRecoveryHandler(client);
-/// _ = try handler.execute(location);
-/// ```
-pub fn closeRecoveryHandler(client: *Client) close_tab.RecoverCloseTabHandler {
-    return .{
-        .model = &client.model,
-        .effects = .{
-            .context = client,
-            .restore = restoreClose,
-        },
-    };
-}
-
-/// Wires canonical tab removal to graphics, focus and snapshot effects.
-///
-/// ```zig
-/// var handler = closureHandler(client);
-/// _ = try handler.execute(command);
-/// ```
-pub fn closureHandler(client: *Client) close_tab.CloseTabHandler {
-    return .{
-        .model = &client.model,
-        .effects = .{
-            .context = client,
-            .apply = applyClosure,
-        },
-    };
-}
 
 /// Wires the tab-selection use case to this client's snapshot and attachment ports.
 ///
@@ -115,68 +59,6 @@ pub fn detach(client: *Client, tab: *tabs_mod.Tab) !void {
 fn tabSnapshotPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
     return client.requests.has(.tab_snapshot);
-}
-
-fn tabOperationPending(context: *anyopaque) bool {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.tab_operation);
-}
-
-fn detachForClose(context: *anyopaque, location: schema.TabLocation) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    const tab = findTab(&client.model.workspace, location) orelse
-        return error.UnexpectedTabClosure;
-
-    try detach(client, tab);
-}
-
-fn sendClose(context: *anyopaque, location: schema.TabLocation) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .close_tab = location },
-        .{ .close_tab = .{
-            .request_id = request_id,
-            .location = location,
-        } },
-    );
-}
-
-fn restoreClose(context: *anyopaque, location: schema.TabLocation) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    if (client.requests.has(.tab_snapshot)) {
-        return;
-    }
-
-    try client.requestTabSnapshot(location);
-}
-
-fn applyClosure(context: *anyopaque, removal: client_model.TabRemoval) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    client.requests.ignoreTab(removal.removed.tab_id);
-
-    for (removal.panes.slice()) |pane_id| {
-        pane_resources.release(client, pane_id);
-    }
-
-    if (!removal.was_active) {
-        return;
-    }
-
-    client.forgetPaneFocus();
-    const active_location = removal.active orelse return;
-    const active = findTab(&client.model.workspace, active_location) orelse
-        return error.UnexpectedTabClosure;
-    var panes = active.model.paneIterator();
-    while (panes.next()) |pane| {
-        try client.graphics_store.setPaneVisible(pane.id, true);
-    }
-
-    try client.syncPaneFocus(&active.model);
-    if (!client.requests.has(.tab_snapshot)) {
-        try client.requestTabSnapshot(active.location);
-    }
 }
 
 fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !void {

@@ -22,7 +22,7 @@ const Client = client_mod;
 const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
-const tab_attachments = @import("tab_attachments.zig");
+const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
 const tab_renames = @import("tab_renames.zig");
@@ -466,43 +466,30 @@ fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
     _ = use_case.execute(tab_renames.confirmation(renamed)) catch return error.UnexpectedTabRenamed;
 }
 
-/// A closed tab: lifecycle event or reply, possibly ending the workspace.
+/// A canonical tab-removal response or lifecycle fact.
 fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
-    const lifecycle_event = closed.request_id == .none;
-    if (!lifecycle_event) {
+    const trigger: tab_closures.RemovalTrigger = if (closed.request_id == .none)
+        .lifecycle
+    else requested: {
         const continuation = client.requests.take(closed.request_id) orelse
             return error.UnexpectedTabClosed;
-        if (continuation != .close_tab or
-            !std.meta.eql(continuation.close_tab, closed.location))
-            return error.UnexpectedTabClosed;
-    }
-
-    var use_case = tab_attachments.closureHandler(client);
-    const removal = try use_case.execute(.{
-        .location = closed.location,
-        .workspace_closed = closed.workspace_closed,
-    });
-    if (removal == null) {
-        if (lifecycle_event) {
-            client.requests.ignoreTab(closed.location.tab_id);
+        if (continuation == .ignored) {
             return null;
         }
+        if (continuation != .close_tab or
+            !std.meta.eql(continuation.close_tab, closed.location))
+        {
+            return error.UnexpectedTabClosed;
+        }
 
-        return error.UnexpectedTab;
-    }
+        break :requested .requested;
+    };
 
-    const committed = removal.?;
-    if (committed.workspace_closed)
-        client.navigation_history.forget(closed.location.workspace);
-    switch (workspaceClosureAction(committed.workspace_closed, closed.previous_workspace)) {
-        .stay => {},
-        .exit => return 0,
-        .switch_to => |previous| {
-            _ = try workspace_handoffs.requestWorkspace(client, previous);
-            return null;
-        },
-    }
-    return null;
+    var use_case = tab_closures.removalHandler(client);
+    return switch (try use_case.execute(tab_closures.removal(closed, trigger))) {
+        .continue_running => null,
+        .exit => 0,
+    };
 }
 
 /// A confirmed tab reorder.
@@ -592,7 +579,7 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
             }
         },
         .close_tab => |location| {
-            var recovery = tab_attachments.closeRecoveryHandler(client);
+            var recovery = tab_closures.recoveryHandler(client);
             _ = try recovery.execute(location);
         },
         .create_workspace, .notification => {},

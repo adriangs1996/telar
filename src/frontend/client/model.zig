@@ -150,9 +150,9 @@ pub const PaneExit = union(enum) {
     stale: schema.PaneId,
 };
 
-pub const CloseTab = struct {
+pub const RemoveTab = struct {
     location: schema.TabLocation,
-    workspace_closed: bool,
+    workspace_removed: bool,
 };
 
 pub const RemovedPanes = struct {
@@ -180,7 +180,7 @@ pub const TabRemoval = struct {
     panes: RemovedPanes,
     was_active: bool,
     active: ?schema.TabLocation,
-    workspace_closed: bool,
+    workspace_removed: bool,
 };
 
 pub const TabReconciliation = struct {
@@ -852,9 +852,9 @@ pub const Model = struct {
     /// Missing tabs return null so lifecycle adapters can remain idempotent.
     ///
     /// ```zig
-    /// const removal = try model.closeTab(command) orelse return;
+    /// const removal = try model.removeTab(command) orelse return;
     /// ```
-    pub fn closeTab(model: *Model, command: CloseTab) !?TabRemoval {
+    pub fn removeTab(model: *Model, command: RemoveTab) !?TabRemoval {
         const workspace = model.workspace.workspace orelse return null;
         if (!std.meta.eql(workspace, command.location.workspace)) {
             return error.UnexpectedWorkspace;
@@ -865,9 +865,9 @@ pub const Model = struct {
             return error.UnexpectedTab;
         }
 
-        const workspace_closed = model.workspace.count == 1;
-        if (workspace_closed != command.workspace_closed) {
-            return error.UnexpectedWorkspaceClosure;
+        const workspace_removed = model.workspace.count == 1;
+        if (workspace_removed != command.workspace_removed) {
+            return error.UnexpectedWorkspaceRemoval;
         }
 
         const was_active = model.workspace.active_index ==
@@ -890,7 +890,7 @@ pub const Model = struct {
             .panes = panes,
             .was_active = was_active,
             .active = active,
-            .workspace_closed = workspace_closed,
+            .workspace_removed = workspace_removed,
         };
     }
 
@@ -1785,9 +1785,9 @@ test "active tab removal advances collection and active identity revisions" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(first.tab_id));
 
-    const removal = (try model.closeTab(.{
+    const removal = (try model.removeTab(.{
         .location = first,
-        .workspace_closed = false,
+        .workspace_removed = false,
     })).?;
 
     try std.testing.expectEqualDeep(first, removal.removed);
@@ -1820,9 +1820,9 @@ test "inactive tab removal preserves the active identity revision" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(first.tab_id));
 
-    const removal = (try model.closeTab(.{
+    const removal = (try model.removeTab(.{
         .location = second,
-        .workspace_closed = false,
+        .workspace_removed = false,
     })).?;
 
     try std.testing.expect(!removal.was_active);
@@ -1841,19 +1841,19 @@ test "workspace closure is validated before the last tab is removed" {
     };
     try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
 
-    try std.testing.expectError(error.UnexpectedWorkspaceClosure, model.closeTab(.{
+    try std.testing.expectError(error.UnexpectedWorkspaceRemoval, model.removeTab(.{
         .location = location,
-        .workspace_closed = false,
+        .workspace_removed = false,
     }));
     try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
     try std.testing.expectEqualDeep(Version{}, model.version());
 
-    const removal = (try model.closeTab(.{
+    const removal = (try model.removeTab(.{
         .location = location,
-        .workspace_closed = true,
+        .workspace_removed = true,
     })).?;
 
-    try std.testing.expect(removal.workspace_closed);
+    try std.testing.expect(removal.workspace_removed);
     try std.testing.expect(removal.was_active);
     try std.testing.expect(removal.active == null);
     try std.testing.expectEqual(@as(usize, 0), model.workspace.count);

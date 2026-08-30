@@ -1994,6 +1994,95 @@ test "close tab request detaches before delivery and rejection requests restorat
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
 }
 
+test "close tab capacity failure preserves attachment and request state" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    while (client.outbox.len < client_outbox.capacity - 1) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version_before = client.model.version();
+    const focus_before = client.reported_focus;
+    const next_request_id = client.next_request_id;
+    var handler: InputHandler = .{ .client = client };
+
+    try std.testing.expectError(error.ClientOutboxFull, handler.applyNativeAction(.close_tab));
+
+    try std.testing.expectEqual(client_outbox.capacity - 1, @as(usize, client.outbox.len));
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqual(focus_before, client.reported_focus);
+    try std.testing.expectEqual(next_request_id, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+}
+
+test "tab close response must match the requested identity" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
+    const request_id: schema.RequestId = @enumFromInt(7);
+    try client.requests.add(request_id, .{ .close_tab = TestHarness.bootstrap_location });
+    const version_before = client.model.version();
+
+    var payload: [128]u8 = undefined;
+    const closed = try schema.encodeTabClosed(&payload, .{
+        .request_id = request_id,
+        .location = second,
+        .workspace_closed = false,
+    });
+
+    try std.testing.expectError(
+        error.UnexpectedTabClosed,
+        server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
+    );
+    try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+}
+
+test "late correlated close after lifecycle removal is ignored" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
+    const request_id: schema.RequestId = @enumFromInt(7);
+    try client.requests.add(request_id, .{ .close_tab = second });
+
+    var payload: [128]u8 = undefined;
+    const lifecycle = try schema.encodeTabClosed(&payload, .{
+        .request_id = .none,
+        .location = second,
+        .workspace_closed = false,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(lifecycle));
+    const version_after_lifecycle = client.model.version();
+
+    const response = try schema.encodeTabClosed(&payload, .{
+        .request_id = request_id,
+        .location = second,
+        .workspace_closed = false,
+    });
+    try std.testing.expectEqual(
+        @as(?u8, null),
+        try server_messages.handleServerMessage(client, try schema.decodeServer(response)),
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
+    try std.testing.expectEqualDeep(version_after_lifecycle, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+}
+
 test "inactive tab lifecycle closure changes only the tab collection" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -2066,7 +2155,7 @@ test "invalid last tab closure has no semantic or cleanup effects" {
         .workspace_closed = false,
     });
     try std.testing.expectError(
-        error.UnexpectedWorkspaceClosure,
+        error.UnexpectedWorkspaceRemoval,
         server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
     );
 
@@ -2114,7 +2203,50 @@ test "closing the last workspace exits the client" {
     try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
 }
 
-test "a closed workspace with a survivor starts a handoff to it" {
+test "tab removal follows the runtime predecessor after its workspace disappears" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    client.navigation_history.remember(.{
+        .location = TestHarness.bootstrap_location,
+        .pane_id = TestHarness.bootstrap_pane,
+    });
+    const close_request_id: schema.RequestId = @enumFromInt(7);
+    try client.requests.add(close_request_id, .{ .close_tab = TestHarness.bootstrap_location });
+
+    var payload: [128]u8 = undefined;
+    const closed = try schema.encodeTabClosed(&payload, .{
+        .request_id = .none,
+        .location = TestHarness.bootstrap_location,
+        .workspace_closed = true,
+        .previous_workspace = @enumFromInt(2),
+    });
+    try std.testing.expectEqual(
+        @as(?u8, null),
+        try server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
+    );
+
+    try std.testing.expect(client.model.workspaceLocation() == null);
+    try std.testing.expect(client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .open_pane);
+    try std.testing.expectEqualDeep(
+        schema.PaneTarget{ .workspace = @enumFromInt(2) },
+        message.open_pane.target,
+    );
+    const continuation = client.requests.take(message.open_pane.request_id).?;
+    try std.testing.expect(continuation == .initial_open);
+    try std.testing.expectEqual(@as(?schema.WorkspaceId, @enumFromInt(2)), continuation.initial_open.fallback_workspace);
+    try std.testing.expect(client.requests.take(close_request_id).? == .ignored);
+}
+
+test "resync follows the runtime predecessor after a workspace disappears" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();

@@ -13,6 +13,7 @@ const widgets = @import("../widgets/root.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
 const tab_renames = @import("tab_renames.zig");
@@ -778,7 +779,7 @@ fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
 }
 
 fn closeTab(handler: *InputHandler) !void {
-    var use_case = tab_attachments.closeRequestHandler(handler.client);
+    var use_case = tab_closures.requestHandler(handler.client);
 
     _ = try use_case.execute();
 }

@@ -1,106 +1,166 @@
 # Tab removal
 
-A tab disappears for either of two reasons. A client can request its closure,
-or the runtime can reap its final pane. Both triggers commit the same
-`TabRemoved` domain fact. Only an explicit request has a request ID.
+The runtime workspace aggregate owns whether a tab exists. A client may ask to
+close its active tab, but it does not remove the tab from its model until the
+runtime returns the canonical result. The runtime can produce the same removal
+when a tab loses its final pane.
 
-## Explicit request
+This flow runs on the interactive path. Its protocol values have fixed size.
+Each client stores outbound messages in an outbox bounded to
+`schema.max_panes_per_tab + 16` entries and continuations in a tracker bounded
+to `schema.max_panes_per_tab + 8` entries. Only one tab operation may be
+pending per client.
+
+## Close request
 
 ```text
-InputHandler.closeTab
+close-tab action
         |
-RequestCloseTabHandler -> CloseRequestEffects.detach / send
+RequestCloseTabHandler
         |
-schema.close_tab -> runtime socket
+capacity check -> provisional detach -> TabCloseIntent
         |
-Server.handleClientMessageEvent -> Server.dispatchClientMessage
+close_tab request and typed continuation
         |
-close_tab.Controller -> CloseTabHandler
-        |
-workspace.removeTab -> PaneStore.closeAt -> TabRemoved publication
-        |
-schema.tab_closed -> runtime socket
-        |
-handleTabClosed -> client CloseTabHandler -> ClientModel.closeTab
-        |
-ClosureEffects -> continuations / graphics / focus / successor snapshot
+runtime socket
 ```
 
-`InputHandler.closeTab` only translates the action into a client application
-request. `RequestCloseTabHandler` rejects overlapping tab operations, captures
-the active identity, detaches its pane views, and then sends `schema.CloseTab`.
-If either local effect fails, it requests restoration through the attachment
-adapter. If the runtime rejects the request while that tab is still active,
-`RecoverCloseTabHandler` requests its canonical snapshot.
+`RequestCloseTabHandler` resolves the active tab identity without changing the
+semantic model. Its adapter checks request identity, continuation and outbox
+capacity before the first provisional effect. The check accounts for focus
+output, every required pane detach and the close request itself.
 
-The runtime event loop classifies the message and creates a request-scoped
-`close_tab.Controller`. The controller removes protocol metadata and calls the
-runtime `CloseTabHandler` with only the tab location.
+After that check, the handler detaches the active tab and asks the adapter to
+send one `close_tab` message. The adapter allocates the request ID, records the
+exact `TabLocation` in the continuation tracker and queues the message. The
+request does not advance a model version.
 
-`CloseTabHandler` commits through `workspace.removeTab`. The operation removes
-an empty workspace as part of the same command and includes its stable
-predecessor in `TabRemoved`. After commit, the handler starts closing every pane
-in that tab and publishes the event. The controller then queues
-`schema.TabClosed` with the original request ID.
+A detach or send failure asks for a canonical tab snapshot. A capacity failure
+happens before focus or attachment state changes. A runtime `request_failed`
+also requests a snapshot when the same tab remains active. If navigation has
+already selected another tab, selecting the rejected tab later requests its
+snapshot through the normal attachment flow.
 
-A missing tab produces `tab_not_found` and no pane or event effects. A full
-response queue cannot roll back a committed removal. The request fails at its
-connection boundary and snapshot reconciliation recovers the disposable
-client.
+## Runtime transaction
 
-On the return path, `handleTabClosed` validates request correlation and passes
-the canonical fact to the client `CloseTabHandler`. `ClientModel.closeTab`
-validates the workspace-closure flag before mutation, captures the removed pane
-identities, removes the tab, and advances the tab revision plus the active-tab
-revision when its identity changed. Only after that commit do client effects
-discard stale continuations, graphics, copy/paste/focus state, and request a
-snapshot for the successor. Rendering is not an effect of this use case: the
-presenter schedules it when it observes the new model version.
+```text
+Server.dispatchClientMessage
+        |
+close_tab.Controller
+        |
+CloseTabHandler
+        |
+workspace.removeTab
+        |
+close tab panes -> publish TabRemoved
+        |
+tab_closed response
+```
 
-## Final-pane exit
+The request-scoped controller removes the request ID and translates
+`schema.CloseTab` into the application command. `CloseTabHandler` commits
+through the workspace repository. The repository returns an owned
+`TabRemoved` fact containing the removed location, whether the workspace also
+disappeared and its canonical predecessor when another workspace survives.
+
+After the commit, the handler starts closing the tab's panes and publishes
+`TabRemoved`. Both ports are infallible. The controller then queues
+`schema.TabClosed` for the requesting client. A missing target returns
+`tab_not_found` without pane or publication effects. Response backpressure
+cannot undo the committed removal.
+
+The runtime marks other clients that observe the workspace for snapshot
+reconciliation. They do not receive the requesting client's correlation ID.
+
+## Final-pane lifecycle
 
 ```text
 pane child exit
-      |
+        |
 Server.collectFinished
-      |
-destroy final pane -> workspace.removeTab
-      |
-TabRemoved -> schema.tab_closed(request_id = none)
-      |
-handleTabClosed
+        |
+workspace.removeTab
+        |
+TabRemoved
+        |
+tab_closed(request_id = none)
 ```
 
-`Server.collectFinished` destroys a pane only after no actor or client
-attachment still borrows it. If no pane remains at that location, it invokes
-the same workspace operation used by the explicit handler. Active clients that
-still observe the workspace receive `schema.TabClosed` with `RequestId.none`.
-If a client queue is full, `ResponseQueue.pushOrDrop` records the workspace and
-predecessor needed for resynchronization.
+The runtime destroys an exited pane only after no actor or client attachment
+still borrows it. When that pane was the tab's last pane, lifecycle cleanup
+uses the same repository operation and publishes the same `TabRemoved` fact.
+Every client still observing the workspace receives `tab_closed` with
+`RequestId.none`. A saturated response queue records a resynchronization
+requirement instead of blocking PTY work.
 
-The client applies this lifecycle event through the same canonical close use
-case. A repeated lifecycle event is idempotent; an explicit response for an
-unknown tab remains a protocol error.
+## Client application
+
+```text
+tab_closed
+        |
+correlate explicit response or classify lifecycle event
+        |
+ApplyTabRemovalHandler
+        |
+ClientModel.removeTab
+        |
+retire requests -> release pane resources
+        |
+stay, hand off to predecessor, or exit
+        |
+Presenter.observeModel
+```
+
+The dispatcher consumes an explicit close continuation and requires its exact
+tab identity. A lifecycle message has no continuation. A terminal response for
+a request already retired by canonical reconciliation is consumed and ignored.
+The dispatcher then removes protocol-only fields and calls
+`ApplyTabRemovalHandler`.
+
+The application handler owns the client policy. It validates the workspace
+transition and commits the canonical fact through `ClientModel.removeTab`.
+Requested removals must still exist. Repeated or stale lifecycle facts are
+idempotent and only retire obsolete continuations.
+
+After a commit, the handler retires requests for the removed tab and releases
+its copy, paste, focus and graphics state. Removing an inactive tab leaves the
+active identity untouched. Removing the active tab exposes its successor,
+synchronizes focus and requests that tab's canonical snapshot.
+
+If the last tab removed the workspace, the handler forgets its navigation
+bookmark. It starts a workspace handoff when the runtime supplied a canonical
+predecessor. The projection is already empty, so continuations retired by the
+removal cannot block this runtime-directed handoff. With no surviving
+predecessor the handler returns an exit directive to the client loop. The
+dispatcher only maps that directive to process status `0`.
+
+The handler never requests a draw. `ClientModel.removeTab` advances the tab
+version and advances the active-tab version only when the active identity
+changed. The client loop passes that version to `Presenter`, which coalesces
+presentation onto its paced frame deadline. A repeated lifecycle fact leaves
+the version unchanged and schedules no frame.
+
+Client death needs no rollback. Runtime tabs and panes remain canonical, and a
+new client rebuilds its disposable model through workspace and tab snapshots.
 
 ## Proof
 
-- Unit tests in `workspace/events.zig` and `workspace/commands.zig` cover event
-  invariants, repository mutation, missing targets and workspace predecessor
-  selection.
-- Unit tests in `runtime/commands/close_tab.zig` cover commit ordering, pane
-  effects, event publication, final-workspace removal and repeated commands.
-- Unit tests in `runtime/controllers/close_tab.zig` cover protocol translation,
-  expected failure mapping and unexpected errors.
-- `runtime/close_tab_test.zig` proves that response backpressure does not undo
-  a committed removal or suppress its event.
-- `runtime owns the complete tab lifecycle`, `runtime destroys a pane after its
-  shell exits` and `the last pane closes only its tab when the workspace has
-  another tab` in `transport_integration_test.zig` cover both triggers across
-  the runtime socket.
-- `application/close_tab.zig` proves request ordering, recovery boundaries,
-  commit-before-effects, rejection, idempotence, and committed-effect failure.
-- `client/model.zig` proves closure validation and revision semantics for
-  active, inactive, and last-tab removals.
-- `client/client_test.zig` proves request delivery and rejection recovery,
-  active and inactive lifecycle cleanup, presenter observation, and last-tab
-  closure through the real client adapters.
+- `src/frontend/client/application/close_tab.zig` proves request ordering,
+  failure recovery, commit-before-effects, lifecycle idempotence, workspace
+  transition policy and post-commit failures.
+- `src/frontend/client/model.zig` proves exact location and workspace-removal
+  validation, captured pane identities and model version changes.
+- `src/frontend/client/client_test.zig` proves bounded request delivery,
+  correlation, late responses, resource cleanup, predecessor handoff, exit and
+  presenter observation through the real client adapters.
+- `src/backend/workspace/commands.zig` and
+  `src/backend/workspace/events.zig` prove aggregate removal and owned event
+  invariants.
+- `src/backend/runtime/commands/close_tab.zig` proves commit ordering, pane
+  closure, publication and missing-target behavior.
+- `src/backend/runtime/controllers/close_tab.zig` proves protocol translation
+  and expected failure mapping.
+- `src/backend/runtime/close_tab_test.zig` proves response backpressure does
+  not undo the runtime commit or suppress publication.
+- `src/transport_integration_test.zig` proves requested and final-pane removal
+  across the runtime socket.
