@@ -5,6 +5,7 @@ pub const create_tab = @import("create_tab.zig");
 pub const rename_tab = @import("rename_tab.zig");
 pub const rename_workspace = @import("rename_workspace.zig");
 pub const select_tab = @import("select_tab.zig");
+pub const tab_snapshot = @import("tab_snapshot.zig");
 pub const workspace_snapshot = @import("workspace_snapshot.zig");
 
 test {
@@ -13,5 +14,6 @@ test {
     _ = rename_tab;
     _ = rename_workspace;
     _ = select_tab;
+    _ = tab_snapshot;
     _ = workspace_snapshot;
 }

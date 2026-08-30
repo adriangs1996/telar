@@ -132,10 +132,12 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.tabs;
     const active_tab_changed = presenter.presented_model_version.active_tab !=
         presenter.observed_model_version.active_tab;
-    if (workspace_changed or tabs_changed or active_tab_changed) {
+    const panes_changed = presenter.presented_model_version.panes !=
+        presenter.observed_model_version.panes;
+    if (workspace_changed or tabs_changed or active_tab_changed or panes_changed) {
         client.view.invalidate();
     }
-    if (active_tab_changed) {
+    if (active_tab_changed or panes_changed) {
         model.composition_invalidated = true;
     }
 

@@ -217,13 +217,18 @@ pub const Model = struct {
         }
     }
 
-    pub fn reconcileTab(
-        model: *Model,
-        snapshot: schema.TabSnapshotView,
-        area: ui.Rect,
-    ) !*Tab {
+    /// Reconciles canonical pane membership while retaining matching pane
+    /// buffers and client layout state.
+    ///
+    /// ```zig
+    /// const tab = try model.reconcileTab(snapshot, workbench);
+    /// ```
+    pub fn reconcileTab(model: *Model, snapshot: schema.TabSnapshotView, area: ui.Rect) !*Tab {
         const tab = model.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
-        if (!std.meta.eql(tab.location, snapshot.location)) return error.UnexpectedTab;
+        if (!std.meta.eql(tab.location, snapshot.location)) {
+            return error.UnexpectedTab;
+        }
+
         const focused_before = tab.model.layout.focused();
         var seen: [multiplexer.max_panes]schema.PaneId = undefined;
         var seen_count: usize = 0;
@@ -231,9 +236,8 @@ pub const Model = struct {
         while (try iterator.next()) |descriptor| {
             seen[seen_count] = descriptor.pane_id;
             seen_count += 1;
-            if (tab.model.find(descriptor.pane_id) == null)
-                try tab.model.addDiscovered(descriptor.pane_id, snapshot.location, area);
         }
+
         var removed: [multiplexer.max_panes]schema.PaneId = undefined;
         var removed_count: usize = 0;
         for (&tab.model.panes) |*slot| {
@@ -243,27 +247,47 @@ pub const Model = struct {
                 removed_count += 1;
             }
         }
-        for (removed[0..removed_count]) |pane_id| _ = tab.model.removePane(pane_id);
+
+        for (removed[0..removed_count]) |pane_id| {
+            _ = tab.model.removePane(pane_id);
+        }
+
+        for (seen[0..seen_count]) |pane_id| {
+            if (tab.model.find(pane_id) == null) {
+                try tab.model.addDiscovered(pane_id, snapshot.location, area);
+            }
+        }
+
+        var focus_after = tab.model.layout.focused();
         if (focused_before) |pane_id| {
+            if (std.mem.findScalar(schema.PaneId, seen[0..seen_count], pane_id) != null) {
+                focus_after = pane_id;
+            }
+        }
+
+        if (focus_after) |pane_id| {
             const restored_layout = if (model.pending_layout_restore) |pending|
                 std.meta.eql(pending.location, snapshot.location) and
                     tab.model.restoreSavedLayout(pending.layout, seen[0..seen_count], pane_id)
             else
                 false;
             if (model.pending_layout_restore) |pending| {
-                if (std.meta.eql(pending.location, snapshot.location))
+                if (std.meta.eql(pending.location, snapshot.location)) {
                     model.pending_layout_restore = null;
+                }
             }
+
             if (!restored_layout) {
-                if (tab.restore_display_order)
-                    try tab.model.restoreDisplayOrder(seen[0..seen_count], pane_id)
-                else
+                if (tab.restore_display_order) {
+                    try tab.model.restoreDisplayOrder(seen[0..seen_count], pane_id);
+                } else {
                     _ = tab.model.focusPane(pane_id);
+                }
             }
         }
+
         tab.restore_display_order = false;
         tab.snapshot_loaded = true;
-        tab.model.composition_invalidated = true;
         return tab;
     }
 
@@ -746,6 +770,30 @@ test "tab reconciliation preserves the pane selected for workspace restoration" 
     try std.testing.expectEqual(@as(u16, 1), restored_model.displayIndex(@enumFromInt(10)).?);
     try std.testing.expectEqual(@as(u16, 2), restored_model.displayIndex(restored).?);
     try std.testing.expectEqual(@as(u16, 3), restored_model.displayIndex(@enumFromInt(77)).?);
+}
+
+test "initial tab reconciliation replaces a vanished focused pane" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const vanished: schema.PaneId = @enumFromInt(10);
+    const replacement: schema.PaneId = @enumFromInt(42);
+    try model.bootstrap(vanished, location, .{ .cols = 30, .rows = 8 });
+    var buffer: [256]u8 = undefined;
+    const snapshot = (try schema.decodeServer(try schema.encodeTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .location = location,
+        .panes = &.{.{ .pane_id = replacement, .lifecycle = .running }},
+    }))).tab_snapshot;
+
+    const reconciled = try model.reconcileTab(snapshot, .{ .w = 60, .h = 12 });
+
+    try std.testing.expect(reconciled.model.find(vanished) == null);
+    try std.testing.expect(reconciled.model.find(replacement) != null);
+    try std.testing.expectEqual(replacement, reconciled.model.layout.focused().?);
 }
 
 test "tab reconciliation restores a bookmarked nested split tree" {

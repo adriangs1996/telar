@@ -66,6 +66,14 @@ pub const Continuation = union(enum) {
             .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .create_tab, .notification, .ignored => null,
         };
     }
+
+    fn paneId(continuation: Continuation) ?schema.PaneId {
+        return switch (continuation) {
+            .split => |split| split.target_pane,
+            .close_pane, .attach_pane => |operation| operation.pane_id,
+            .initial_open, .create_workspace, .rename_workspace, .workspace_snapshot, .tab_snapshot, .create_tab, .rename_tab, .close_tab, .move_tab, .notification, .ignored => null,
+        };
+    }
 };
 
 pub const Group = enum {
@@ -118,6 +126,22 @@ pub const Tracker = struct {
         return false;
     }
 
+    /// Reports whether one pane already owns a pending request in a group.
+    ///
+    /// ```zig
+    /// if (tracker.hasPane(.attachment, pane_id)) return;
+    /// ```
+    pub fn hasPane(tracker: *const Tracker, group: Group, pane_id: schema.PaneId) bool {
+        for (tracker.entries) |slot| {
+            const entry = slot orelse continue;
+            if (entry.continuation.group() == group and entry.continuation.paneId() == pane_id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     pub fn take(tracker: *Tracker, request_id: schema.RequestId) ?Continuation {
         for (&tracker.entries) |*slot| {
             const entry = slot.* orelse continue;
@@ -137,6 +161,21 @@ pub const Tracker = struct {
             const entry = if (slot.*) |*value| value else continue;
             if (entry.continuation.tabId() == tab_id)
                 entry.continuation = .ignored;
+        }
+    }
+
+    /// Suppresses rollback and notification from late failures after a
+    /// canonical snapshot retires a pane.
+    ///
+    /// ```zig
+    /// tracker.ignorePane(pane_id);
+    /// ```
+    pub fn ignorePane(tracker: *Tracker, pane_id: schema.PaneId) void {
+        for (&tracker.entries) |*slot| {
+            const entry = if (slot.*) |*value| value else continue;
+            if (entry.continuation.paneId() == pane_id) {
+                entry.continuation = .ignored;
+            }
         }
     }
 
@@ -190,6 +229,32 @@ test "tab lifecycle makes every related continuation explicitly ignored" {
 
     tracker.ignoreTab(location.tab_id);
 
+    try std.testing.expect(tracker.take(@enumFromInt(7)).? == .ignored);
+    try std.testing.expect(tracker.take(@enumFromInt(8)).? == .ignored);
+}
+
+test "pane reconciliation finds attachments and retires pane operations" {
+    var tracker: Tracker = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(3);
+    try tracker.add(@enumFromInt(7), .{ .attach_pane = .{
+        .pane_id = pane_id,
+        .location = location,
+    } });
+    try tracker.add(@enumFromInt(8), .{ .close_pane = .{
+        .pane_id = pane_id,
+        .location = location,
+    } });
+
+    try std.testing.expect(tracker.hasPane(.attachment, pane_id));
+    try std.testing.expect(tracker.hasPane(.pane_operation, pane_id));
+    tracker.ignorePane(pane_id);
+
+    try std.testing.expect(!tracker.hasPane(.attachment, pane_id));
+    try std.testing.expect(!tracker.hasPane(.pane_operation, pane_id));
     try std.testing.expect(tracker.take(@enumFromInt(7)).? == .ignored);
     try std.testing.expect(tracker.take(@enumFromInt(8)).? == .ignored);
 }

@@ -23,6 +23,7 @@ const client_mod = @import("client.zig");
 const Client = client_mod;
 const InputHandler = @import("input_handler.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
 const rectSize = multiplexer.rectSize;
@@ -428,39 +429,18 @@ fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
     try client.requestTabSnapshot(opened.location);
 }
 
-/// Reconciles one tab against the runtime and attaches every pane it lacks.
+/// Applies one correlated canonical tab snapshot.
 fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
     const continuation = client.requests.take(snapshot.request_id) orelse
         return error.UnexpectedTabSnapshot;
     if (continuation != .tab_snapshot or
         !std.meta.eql(continuation.tab_snapshot, snapshot.location))
+    {
         return error.UnexpectedTabSnapshot;
-    const tab = try client.model.workspace.reconcileTab(snapshot, client.view.workbench());
-    const model = &tab.model;
-    if (client.model.workspace.active()) |active| try client.syncPaneFocus(&active.model);
-    client.view.invalidate();
-    try client.resizeAttached(model, client.view.workbench());
-    var panes = model.paneIterator();
-    while (panes.next()) |pane| {
-        if (pane.attached) continue;
-        const size = model.contentSize(pane.id, client.view.workbench()) orelse
-            return error.PaneTooSmall;
-        const request_id = try client.nextId();
-        try client.enqueueRequest(
-            request_id,
-            .{ .attach_pane = .{
-                .pane_id = pane.id,
-                .location = snapshot.location,
-            } },
-            .{ .open_pane = .{
-                .request_id = request_id,
-                .target = .{ .pane = pane.id },
-                .size = size,
-                .launch = null,
-            } },
-        );
     }
-    try client.presenter.requestDraw();
+
+    var use_case = tab_snapshots.reconciliationHandler(client);
+    try use_case.execute(snapshot);
 }
 
 /// Applies one correlated canonical workspace snapshot.

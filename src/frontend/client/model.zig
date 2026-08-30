@@ -6,11 +6,13 @@ const workspace_capability = @import("../workspace/root.zig");
 
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
+const ui = core.ui;
 
 pub const Version = struct {
     workspace: u64 = 0,
     tabs: u64 = 0,
     active_tab: u64 = 0,
+    panes: u64 = 0,
 };
 
 pub const Change = enum {
@@ -44,32 +46,39 @@ pub const CloseTab = struct {
     workspace_closed: bool,
 };
 
-pub const ClosedPanes = struct {
+pub const RemovedPanes = struct {
     items: [schema.max_panes_per_tab]schema.PaneId = undefined,
     count: u8 = 0,
 
-    fn append(panes: *ClosedPanes, pane_id: schema.PaneId) void {
+    fn append(panes: *RemovedPanes, pane_id: schema.PaneId) void {
         std.debug.assert(panes.count < panes.items.len);
         panes.items[panes.count] = pane_id;
         panes.count += 1;
     }
 
-    /// Returns the pane identities captured before their tab was removed.
+    /// Returns pane identities retired by a canonical model transition.
     ///
     /// ```zig
     /// for (removal.panes.slice()) |pane_id| release(pane_id);
     /// ```
-    pub fn slice(panes: *const ClosedPanes) []const schema.PaneId {
+    pub fn slice(panes: *const RemovedPanes) []const schema.PaneId {
         return panes.items[0..panes.count];
     }
 };
 
 pub const TabRemoval = struct {
     removed: schema.TabLocation,
-    panes: ClosedPanes,
+    panes: RemovedPanes,
     was_active: bool,
     active: ?schema.TabLocation,
     workspace_closed: bool,
+};
+
+pub const TabReconciliation = struct {
+    location: schema.TabLocation,
+    removed_panes: RemovedPanes = .{},
+    active: bool,
+    panes_changed: bool,
 };
 
 pub const RemovedWorkspaceTabs = struct {
@@ -129,6 +138,7 @@ pub const Model = struct {
     workspace_revision: u64 = 0,
     tabs_revision: u64 = 0,
     active_tab_revision: u64 = 0,
+    panes_revision: u64 = 0,
 
     /// Creates the semantic model with the configured pane appearance.
     ///
@@ -161,6 +171,7 @@ pub const Model = struct {
             .workspace = model.workspace_revision,
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
+            .panes = model.panes_revision,
         };
     }
 
@@ -279,6 +290,63 @@ pub const Model = struct {
         return reconciliation;
     }
 
+    /// Commits one canonical pane list while preserving retained pane state.
+    /// Only visible active-tab changes advance the pane revision.
+    ///
+    /// ```zig
+    /// const reconciliation = try model.reconcileTab(snapshot, workbench);
+    /// ```
+    pub fn reconcileTab(model: *Model, snapshot: schema.TabSnapshotView, area: ui.Rect) !TabReconciliation {
+        const tab = model.workspace.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
+        if (!std.meta.eql(tab.location, snapshot.location)) {
+            return error.UnexpectedTab;
+        }
+
+        if (snapshot.pane_count > schema.max_panes_per_tab) {
+            return error.TooManyPanes;
+        }
+
+        var canonical_panes: [schema.max_panes_per_tab]schema.PaneId = undefined;
+        var canonical_count: usize = 0;
+        var descriptors = snapshot.panes();
+        while (try descriptors.next()) |descriptor| {
+            if (std.mem.findScalar(schema.PaneId, canonical_panes[0..canonical_count], descriptor.pane_id) != null) {
+                return error.DuplicatePane;
+            }
+
+            const existing = model.workspace.findPane(descriptor.pane_id);
+            if (existing != null and !std.meta.eql(existing.?.location, snapshot.location)) {
+                return error.PaneAlreadyExists;
+            }
+
+            canonical_panes[canonical_count] = descriptor.pane_id;
+            canonical_count += 1;
+        }
+
+        const active_location = model.activeTabLocation() orelse return error.NoActiveTab;
+        const active = std.meta.eql(active_location, snapshot.location);
+        const previous_layout_revision = tab.model.layout.currentRevision();
+        var reconciliation: TabReconciliation = .{
+            .location = snapshot.location,
+            .active = active,
+            .panes_changed = false,
+        };
+        var panes = tab.model.paneIterator();
+        while (panes.next()) |pane| {
+            if (std.mem.findScalar(schema.PaneId, canonical_panes[0..canonical_count], pane.id) == null) {
+                reconciliation.removed_panes.append(pane.id);
+            }
+        }
+
+        const reconciled = try model.workspace.reconcileTab(snapshot, area);
+        reconciliation.panes_changed = reconciled.model.layout.currentRevision() != previous_layout_revision;
+        if (reconciliation.active and reconciliation.panes_changed) {
+            model.panes_revision +%= 1;
+        }
+
+        return reconciliation;
+    }
+
     /// Commits a runtime-confirmed tab position and advances the model once.
     ///
     /// ```zig
@@ -361,7 +429,7 @@ pub const Model = struct {
 
         const was_active = model.workspace.active_index ==
             model.workspace.indexOf(command.location.tab_id).?;
-        var panes: ClosedPanes = .{};
+        var panes: RemovedPanes = .{};
         var iterator = closing.model.paneIterator();
         while (iterator.next()) |pane| {
             panes.append(pane.id);
@@ -408,6 +476,10 @@ pub const Model = struct {
 
 fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !schema.WorkspaceSnapshotView {
     return (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(buffer, snapshot))).workspace_snapshot;
+}
+
+fn testingTabSnapshot(buffer: []u8, snapshot: schema.TabSnapshot) !schema.TabSnapshotView {
+    return (try schema.decodeServer(try schema.encodeTabSnapshot(buffer, snapshot))).tab_snapshot;
 }
 
 test "workspace reconciliation versions semantic dimensions independently" {
@@ -515,6 +587,129 @@ test "rejected workspace snapshots preserve state and revisions" {
 
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
     try std.testing.expectEqualStrings("", model.workspace.workspaceName());
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "active tab reconciliation versions pane changes and reports retired panes" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    try model.workspace.bootstrap(first, location, .{ .cols = 20, .rows = 5 });
+    var buffer: [256]u8 = undefined;
+    const discovered = try testingTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(1),
+        .location = location,
+        .panes = &.{
+            .{ .pane_id = first, .lifecycle = .running },
+            .{ .pane_id = second, .lifecycle = .running },
+        },
+    });
+
+    const addition = try model.reconcileTab(discovered, .{ .w = 40, .h = 10 });
+
+    try std.testing.expect(addition.active);
+    try std.testing.expect(addition.panes_changed);
+    try std.testing.expectEqual(@as(usize, 0), addition.removed_panes.slice().len);
+    try std.testing.expect(model.workspace.findPane(second) != null);
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
+
+    const unchanged = try model.reconcileTab(discovered, .{ .w = 40, .h = 10 });
+
+    try std.testing.expect(!unchanged.panes_changed);
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
+
+    const removed = try testingTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(2),
+        .location = location,
+        .panes = &.{.{ .pane_id = second, .lifecycle = .running }},
+    });
+    const removal = try model.reconcileTab(removed, .{ .w = 40, .h = 10 });
+
+    try std.testing.expect(removal.panes_changed);
+    try std.testing.expectEqualSlices(schema.PaneId, &.{first}, removal.removed_panes.slice());
+    try std.testing.expect(model.workspace.findPane(first) == null);
+    try std.testing.expectEqualDeep(Version{ .panes = 2 }, model.version());
+}
+
+test "inactive tab reconciliation does not advance the visible pane revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const active: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    const inactive: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), active, .{ .cols = 20, .rows = 5 });
+    _ = try model.workspace.addCreated(.{
+        .location = inactive,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.workspace.select(active.tab_id));
+    var buffer: [256]u8 = undefined;
+    const snapshot = try testingTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(1),
+        .location = inactive,
+        .panes = &.{
+            .{ .pane_id = @enumFromInt(2), .lifecycle = .running },
+            .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
+        },
+    });
+
+    const reconciliation = try model.reconcileTab(snapshot, .{ .w = 40, .h = 10 });
+
+    try std.testing.expect(!reconciliation.active);
+    try std.testing.expect(reconciliation.panes_changed);
+    try std.testing.expect(model.workspace.findPane(@enumFromInt(3)) != null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "tab reconciliation rejects pane identities owned by another tab" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    const second: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    var buffer: [256]u8 = undefined;
+    const snapshot = try testingTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(1),
+        .location = first,
+        .panes = &.{
+            .{ .pane_id = @enumFromInt(1), .lifecycle = .running },
+            .{ .pane_id = @enumFromInt(2), .lifecycle = .running },
+        },
+    });
+
+    try std.testing.expectError(error.PaneAlreadyExists, model.reconcileTab(snapshot, .{ .w = 40, .h = 10 }));
+
+    try std.testing.expectEqual(@as(usize, 1), model.workspace.find(first.tab_id).?.model.pane_count);
+    try std.testing.expectEqual(@as(usize, 1), model.workspace.find(second.tab_id).?.model.pane_count);
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 

@@ -412,11 +412,14 @@ test "clicking a sidebar agent hands off directly to its pane" {
         );
 }
 
-test "a tab snapshot attaches every pane the client does not hold" {
+test "tab snapshots commit pane revisions before attaching and presenting" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
 
     const discovered: schema.PaneId = @enumFromInt(11);
     var payload: [256]u8 = undefined;
@@ -430,11 +433,36 @@ test "a tab snapshot attaches every pane the client does not hold" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot)),
+        try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot)),
     );
+
+    try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(version_before.workspace, client.model.version().workspace);
+    try std.testing.expectEqual(version_before.tabs, client.model.version().tabs);
+    try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    const committed_version = client.model.version();
+    try client.requests.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
+    const repeated = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(90),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{
+            .{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running },
+            .{ .pane_id = discovered, .lifecycle = .running },
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(repeated));
+
+    try std.testing.expectEqualDeep(committed_version, client.model.version());
+    try std.testing.expect(client.requests.hasPane(.attachment, discovered));
+    try std.testing.expectEqual(@as(usize, 2), client.requests.count);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settle();
 
-    const pane = harness.client.model.workspace.findPane(discovered).?;
+    const pane = client.model.workspace.findPane(discovered).?;
     try std.testing.expect(!pane.attached);
     var buffer: [256]u8 = undefined;
     var attach_requested = false;
@@ -451,6 +479,109 @@ test "a tab snapshot attaches every pane the client does not hold" {
             else => return error.UnexpectedClientMessage,
         }
     }
+
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "an identical tab snapshot repairs resources without scheduling a frame" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    var payload: [256]u8 = undefined;
+    const initial = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(3),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(initial));
+    try client.observeModel();
+    try harness.settle();
+    try harness.settleModelPresentation();
+    const committed_version = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    try client.requests.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
+    const unchanged = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(90),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
+    try client.observeModel();
+
+    try std.testing.expectEqualDeep(committed_version, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+}
+
+test "tab reconciliation retires removed pane resources and continuations" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    var payload: [256]u8 = undefined;
+    const initial = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(3),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(initial));
+    try harness.settle();
+
+    const retired: schema.PaneId = @enumFromInt(11);
+    const model = &client.model.workspace.active().?.model;
+    try model.split(
+        TestHarness.bootstrap_pane,
+        retired,
+        TestHarness.bootstrap_location,
+        .horizontal,
+        client.view.workbench(),
+    );
+    try client.syncPaneFocus(model);
+    client.mode = .{ .copy = .init(retired, .{ .x = 0, .y = 0 }, 0) };
+    client.paste_pane = retired;
+    try client.graphics_store.applyImage(.{
+        .pane_id = retired,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    try client.requests.add(@enumFromInt(91), .{ .close_pane = .{
+        .pane_id = retired,
+        .location = TestHarness.bootstrap_location,
+    } });
+    try client.requests.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    const reconciled = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(90),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(reconciled));
+
+    try std.testing.expect(client.model.workspace.findPane(retired) == null);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(retired));
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(client.paste_pane == null);
+    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
+    try std.testing.expect(client.requests.take(@enumFromInt(91)).? == .ignored);
+    try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
 }
 
 test "an unexpected tab snapshot is rejected instead of adopted" {
