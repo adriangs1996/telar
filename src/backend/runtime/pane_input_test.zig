@@ -3,78 +3,20 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agent_mod = @import("../agent/root.zig");
-const history = @import("../history/root.zig");
 const pane_mod = @import("../pane/root.zig");
-const pty = @import("../pty/root.zig");
 const attachment_mod = @import("attachment.zig");
 const pane_input_commands = @import("commands/pane_input.zig");
 const pane_input_controller = @import("controllers/pane_input.zig");
+const test_support = @import("test_support.zig");
 const telemetry_mod = @import("telemetry.zig");
 
-const Io = std.Io;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
 const Pane = pane_mod.Pane;
-const GraphicsBudget = pane_mod.GraphicsBudget;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const InputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
-
-const PaneFixture = struct {
-    history_service: history.Service = undefined,
-    budget: GraphicsBudget = undefined,
-    pane: *Pane = undefined,
-    attachments: AttachmentStore = .{},
-    agents: agent_mod.Tracker = .{},
-    metrics: RuntimeMetrics = .{ .started_ns = 0 },
-
-    fn init(fixture: *PaneFixture) !void {
-        const io = std.testing.io;
-        const gpa = std.testing.allocator;
-        fixture.* = .{};
-        fixture.history_service = try history.Service.init(gpa, ":memory:");
-        errdefer {
-            fixture.history_service.closeQueues(io);
-            fixture.history_service.deinit(io);
-        }
-
-        fixture.budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
-        const arguments = [_][*:0]const u8{ "/bin/sleep", "600" };
-        const command = try pty.Command.fromArgv(&arguments);
-        fixture.pane = try Pane.create(
-            io,
-            gpa,
-            .{ .id = try schema.id.pane(7), .generation = 3 },
-            .{
-                .workspace = .{ .workspace = try schema.id.workspace(2) },
-                .tab_id = try schema.id.tab(5),
-            },
-            &command,
-            "/",
-            "/work/telar",
-            &fixture.history_service,
-            .{ .cols = 20, .rows = 5 },
-            .{},
-            &fixture.budget,
-        );
-        errdefer {
-            fixture.pane.session.shutdown();
-            fixture.pane.destroy();
-        }
-
-        fixture.pane.commitLaunch("/bin/sleep");
-        _ = try fixture.attachments.attach(gpa, fixture.pane);
-    }
-
-    fn deinit(fixture: *PaneFixture) void {
-        const io = std.testing.io;
-        fixture.attachments.deinit();
-        fixture.pane.session.shutdown();
-        fixture.pane.destroy();
-        fixture.history_service.closeQueues(io);
-        fixture.history_service.deinit(io);
-    }
-};
+const PaneFixture = test_support.PaneFixture;
 
 const ScheduleStep = enum { observation, input };
 

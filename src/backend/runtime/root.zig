@@ -29,6 +29,8 @@ const open_pane_commands = @import("commands/open_pane.zig");
 const open_pane_controller = @import("controllers/open_pane.zig");
 const pane_input_commands = @import("commands/pane_input.zig");
 const pane_input_controller = @import("controllers/pane_input.zig");
+const pane_resize_commands = @import("commands/pane_resize.zig");
+const pane_resize_controller = @import("controllers/pane_resize.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
 const tab_snapshot_query = @import("queries/tab_snapshot.zig");
@@ -75,6 +77,7 @@ const Delivery = delivery_mod.Delivery;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
+const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = 8;
 const PendingResponse = response_queue.PendingResponse;
@@ -1464,14 +1467,22 @@ const Server = struct {
                 try controller.paneInput(input);
             },
             .pane_resize => |resize| {
-                try attachment_entrypoints.paneResize(
-                    attachments,
-                    metrics,
-                    session.key,
-                    entrypointGeometry(server),
-                    entrypointScheduler(server),
-                    resize,
-                );
+                var resize_context: ClientAttachmentContext = .{
+                    .server = server,
+                    .session = session,
+                };
+                var handler: pane_resize_commands.PaneResizeHandler = .{
+                    .attachments = attachments,
+                    .geometry = .{
+                        .context = &resize_context,
+                        .holds = clientHoldsWorkspaceGeometry,
+                        .release = releaseClientWorkspaceGeometry,
+                    },
+                    .scheduler = paneResizeScheduler(server),
+                };
+                var controller = PaneResizeController.init(metrics, &handler);
+
+                try controller.paneResize(resize);
             },
             .set_pane_viewport => |viewport| try attachment_entrypoints.setPaneViewport(
                 attachments,
@@ -1507,7 +1518,7 @@ const Server = struct {
                 request,
             ),
             .detach_pane => |detach| {
-                var detach_context: DetachPaneContext = .{
+                var detach_context: ClientAttachmentContext = .{
                     .server = server,
                     .session = session,
                 };
@@ -1519,7 +1530,7 @@ const Server = struct {
                     },
                     .geometry = .{
                         .context = &detach_context,
-                        .release = releaseDetachedWorkspaceGeometry,
+                        .release = releaseClientWorkspaceGeometry,
                     },
                 };
                 var controller = detach_pane_controller.Controller.init(handler.executor(), .{
@@ -1711,21 +1722,20 @@ const Server = struct {
     }
 };
 
-fn entrypointScheduler(server: *Server) entrypoint_common.Scheduler {
-    return .{
-        .context = server,
-        .observation = entrypointScheduleObservation,
-        .media = entrypointScheduleMedia,
-        .response = entrypointScheduleResponse,
-        .input = entrypointScheduleInput,
-    };
-}
-
 fn paneInputScheduler(server: *Server) pane_input_commands.Scheduler {
     return .{
         .context = server,
         .observation = entrypointScheduleObservation,
         .input = entrypointScheduleInput,
+    };
+}
+
+fn paneResizeScheduler(server: *Server) pane_resize_commands.Scheduler {
+    return .{
+        .context = server,
+        .observation = entrypointScheduleObservation,
+        .media = entrypointScheduleMedia,
+        .response = entrypointScheduleResponse,
     };
 }
 
@@ -1749,20 +1759,12 @@ fn entrypointScheduleInput(context: *anyopaque, pane: *Pane) !void {
     return schedulePaneInput(server.io, server.select, pane);
 }
 
-fn entrypointGeometry(server: *Server) entrypoint_common.Geometry {
-    return .{
-        .context = server,
-        .holds = entrypointHoldsGeometry,
-        .release = entrypointReleaseGeometry,
-    };
-}
-
 const ClientLaunchContext = struct {
     server: *Server,
     session: *ClientSession,
 };
 
-const DetachPaneContext = struct {
+const ClientAttachmentContext = struct {
     server: *Server,
     session: *ClientSession,
 };
@@ -1799,18 +1801,23 @@ fn createPaneHasRunning(context: *anyopaque, location: schema.TabLocation) bool 
 }
 
 fn detachClientAttachment(context: *anyopaque, pane_id: schema.PaneId) ?attachment_mod.PaneDetached {
-    const detach: *DetachPaneContext = @ptrCast(@alignCast(context));
-    return detach.session.attachments.detach(pane_id);
+    const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
+    return client.session.attachments.detach(pane_id);
 }
 
 fn leaveClientWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) bool {
-    const detach: *DetachPaneContext = @ptrCast(@alignCast(context));
-    return detach.session.attachments.leaveWorkspace(workspace);
+    const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
+    return client.session.attachments.leaveWorkspace(workspace);
 }
 
-fn releaseDetachedWorkspaceGeometry(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
-    const detach: *DetachPaneContext = @ptrCast(@alignCast(context));
-    detach.server.releaseGeometryFor(detach.session.key, workspace);
+fn clientHoldsWorkspaceGeometry(context: *anyopaque, workspace: schema.WorkspaceLocation) bool {
+    const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
+    return client.server.holdsGeometry(client.session.key, workspace);
+}
+
+fn releaseClientWorkspaceGeometry(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
+    const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
+    client.server.releaseGeometryFor(client.session.key, workspace);
 }
 
 fn recordStaleClientMessage(context: *anyopaque) void {
@@ -2054,16 +2061,6 @@ fn publishTabRemoved(context: *anyopaque, event: workspace_mod.TabRemoved) void 
     } else {
         publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
     }
-}
-
-fn entrypointHoldsGeometry(context: *anyopaque, client: ClientKey, workspace: schema.WorkspaceLocation) bool {
-    const server: *Server = @ptrCast(@alignCast(context));
-    return server.holdsGeometry(client, workspace);
-}
-
-fn entrypointReleaseGeometry(context: *anyopaque, client: ClientKey, workspace: schema.WorkspaceLocation) void {
-    const server: *Server = @ptrCast(@alignCast(context));
-    server.releaseGeometryFor(client, workspace);
 }
 
 fn entrypointControl(server: *Server) control_entrypoints.Actions {
@@ -2716,6 +2713,8 @@ test {
     _ = open_pane_controller;
     _ = pane_input_commands;
     _ = pane_input_controller;
+    _ = pane_resize_commands;
+    _ = pane_resize_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
     _ = tab_snapshot_query;
@@ -2733,6 +2732,7 @@ test {
     _ = @import("move_tab_test.zig");
     _ = @import("open_pane_test.zig");
     _ = @import("pane_input_test.zig");
+    _ = @import("pane_resize_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
     _ = @import("tab_snapshot_test.zig");

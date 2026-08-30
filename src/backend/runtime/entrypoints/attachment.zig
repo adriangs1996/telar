@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const attachment_mod = @import("../attachment.zig");
 const delivery_mod = @import("../delivery.zig");
 const telemetry_mod = @import("../telemetry.zig");
-const common = @import("common.zig");
 
 const Io = std.Io;
 const AttachmentStore = attachment_mod.AttachmentStore;
@@ -14,51 +13,6 @@ const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
-
-pub fn paneResize(
-    attachments: *AttachmentStore,
-    metrics: *RuntimeMetrics,
-    client: common.ClientKey,
-    geometry: common.Geometry,
-    scheduler: common.Scheduler,
-    resize: schema.PaneResize,
-) !void {
-    const active = attachments.find(resize.pane_id) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    if (!geometry.holds(geometry.context, client, active.pane.location.workspace)) {
-        metrics.geometry_rejections += 1;
-        return;
-    }
-    try active.pane.requestResize(resize.size);
-    if (!active.pane.ingest_pending) {
-        active.pane.applyPendingResize() catch {
-            _ = active.pane.requestClose();
-            return;
-        };
-        try scheduler.observation(scheduler.context, active.pane);
-        try scheduler.media(scheduler.context, active.pane);
-        _ = active.resizeIfNeeded() catch {
-            if (attachments.detach(resize.pane_id)) |detached| {
-                if (detached.last_attachment) {
-                    const left_workspace = attachments.leaveWorkspace(detached.workspace);
-                    std.debug.assert(left_workspace);
-
-                    if (!left_workspace) {
-                        return;
-                    }
-
-                    geometry.release(geometry.context, client, detached.workspace);
-                }
-            }
-
-            return;
-        };
-    }
-    if (!active.pane.ingest_pending)
-        try scheduler.response(scheduler.context, active.pane);
-}
 
 pub fn setPaneViewport(
     attachments: *AttachmentStore,

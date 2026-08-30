@@ -2,28 +2,12 @@
 
 const core = @import("telar-core");
 const history = @import("../../history/root.zig");
-const pane_mod = @import("../../pane/root.zig");
 const response_queue = @import("../response_queue.zig");
 
 const schema = core.schema;
 
 pub const ClientKey = history.model.ClientKey;
-pub const Pane = pane_mod.Pane;
 pub const ResponseQueue = response_queue.ResponseQueue;
-
-pub const Scheduler = struct {
-    context: *anyopaque,
-    observation: *const fn (*anyopaque, *Pane) anyerror!void,
-    media: *const fn (*anyopaque, *Pane) anyerror!void,
-    response: *const fn (*anyopaque, *Pane) anyerror!void,
-    input: *const fn (*anyopaque, *Pane) anyerror!void,
-};
-
-pub const Geometry = struct {
-    context: *anyopaque,
-    holds: *const fn (*anyopaque, ClientKey, schema.WorkspaceLocation) bool,
-    release: *const fn (*anyopaque, ClientKey, schema.WorkspaceLocation) void,
-};
 
 pub fn queueFailure(
     responses: *ResponseQueue,
