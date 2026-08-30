@@ -31,6 +31,8 @@ const pane_input_commands = @import("commands/pane_input.zig");
 const pane_input_controller = @import("controllers/pane_input.zig");
 const pane_resize_commands = @import("commands/pane_resize.zig");
 const pane_resize_controller = @import("controllers/pane_resize.zig");
+const request_snapshot_commands = @import("commands/request_snapshot.zig");
+const request_snapshot_controller = @import("controllers/request_snapshot.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
 const tab_snapshot_query = @import("queries/tab_snapshot.zig");
@@ -78,6 +80,7 @@ const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
+const RequestSnapshotController = request_snapshot_controller.Controller(*request_snapshot_commands.RequestCellSnapshotHandler);
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = 8;
 const PendingResponse = response_queue.PendingResponse;
@@ -1512,11 +1515,14 @@ const Server = struct {
                 credit,
             ),
             .frame_ack => |ack| attachment_entrypoints.frameAck(io, attachments, metrics, ack),
-            .request_snapshot => |request| attachment_entrypoints.requestSnapshot(
-                attachments,
-                metrics,
-                request,
-            ),
+            .request_snapshot => |request| {
+                var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
+                    .attachments = attachments,
+                };
+                var controller = RequestSnapshotController.init(metrics, &handler);
+
+                try controller.requestSnapshot(request);
+            },
             .detach_pane => |detach| {
                 var detach_context: ClientAttachmentContext = .{
                     .server = server,
@@ -2715,6 +2721,8 @@ test {
     _ = pane_input_controller;
     _ = pane_resize_commands;
     _ = pane_resize_controller;
+    _ = request_snapshot_commands;
+    _ = request_snapshot_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
     _ = tab_snapshot_query;
@@ -2733,6 +2741,7 @@ test {
     _ = @import("open_pane_test.zig");
     _ = @import("pane_input_test.zig");
     _ = @import("pane_resize_test.zig");
+    _ = @import("request_snapshot_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
     _ = @import("tab_snapshot_test.zig");

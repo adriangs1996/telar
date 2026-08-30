@@ -74,7 +74,7 @@ pub const Attachment = struct {
         return attachment.cells.setViewport(attachment.pane, requested);
     }
 
-    pub fn requestCellSnapshot(attachment: *Attachment) void {
+    fn requestCellSnapshot(attachment: *Attachment) void {
         attachment.cells.requestSnapshot();
     }
 
@@ -287,6 +287,18 @@ pub const AttachmentStore = struct {
         const attachment = &store.items[slot].?;
         std.debug.assert(attachment.pane.id == pane_id);
         return attachment;
+    }
+
+    /// Coalesces a full cell-snapshot request into the selected client
+    /// attachment. Missing panes leave every attachment unchanged.
+    ///
+    /// ```zig
+    /// if (!store.requestCellSnapshot(pane_id)) recordStaleMessage();
+    /// ```
+    pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: schema.PaneId) bool {
+        const attachment = store.find(pane_id) orelse return false;
+        attachment.requestCellSnapshot();
+        return true;
     }
 
     pub fn at(store: *AttachmentStore, index: usize) ?*Attachment {

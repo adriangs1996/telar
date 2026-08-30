@@ -123,15 +123,3 @@ pub fn frameAck(
     };
     if (comptime diagnostics.enabled) metrics.ack.observe(elapsed);
 }
-
-pub fn requestSnapshot(
-    attachments: *AttachmentStore,
-    metrics: *RuntimeMetrics,
-    request: schema.RequestSnapshot,
-) void {
-    const active = attachments.find(request.pane_id) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    active.requestCellSnapshot();
-}
