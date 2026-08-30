@@ -63,7 +63,7 @@ protocol request necessarily extends this inventory.
 | BCR-19 | `configure_graphics` | `runtime/entrypoints/attachment.zig` | Client graphics configuration controller | Pending | Session policy and existing attachment updates are coupled. |
 | BCR-20 | `request_runtime_state` | `runtime/entrypoints/attachment.zig` | Runtime-state query controller | Pending | Currently a one-line protocol side effect with no focused contract test. |
 | BCR-21 | `create_workspace` | `runtime/entrypoints/workspace.zig` | Create-workspace controller and launch command | Pending | Eight-field context; aggregate creation, geometry, launch, attachment, rollback, and response are mixed. |
-| BCR-22 | `rename_workspace` | `runtime/entrypoints/workspace.zig` | Rename-workspace controller and command handler | Pending | Tracker projection, reply, and generic callback are mixed with mutation. |
+| BCR-22 | `rename_workspace` | `runtime/controllers/rename_workspace.zig` | Rename-workspace controller and command handler | Ready | Owned `WorkspaceRenamed`; aggregate, handler, controller, error, ordering, ownership, and vertical backpressure tests pass. |
 | BCR-23 | `set_pane_viewport` | `runtime/entrypoints/attachment.zig` | Viewport command on attachment synchronization | Pending | Needs a narrow controller and boundary/unchanged-state unit tests. |
 | BCR-24 | `copy_selection` | `runtime/entrypoints/attachment.zig` | Selection query controller | Pending | Read, encoding/delivery, and failure mapping are coupled. |
 | BCR-25 | `show_notification` | `runtime/entrypoints/control.zig` | Notification controller and delivery port | Pending | Broadcast policy and requester acknowledgement need isolated tests. |

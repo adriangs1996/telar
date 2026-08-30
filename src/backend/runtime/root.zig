@@ -17,6 +17,8 @@ const create_tab_commands = @import("commands/create_tab.zig");
 const create_tab_controller = @import("controllers/create_tab.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
+const rename_workspace_commands = @import("commands/rename_workspace.zig");
+const rename_workspace_controller = @import("controllers/rename_workspace.zig");
 const tab_snapshot_query = @import("queries/tab_snapshot.zig");
 const tab_snapshot_controller = @import("controllers/tab_snapshot.zig");
 const tab_commands = @import("commands/tab.zig");
@@ -1323,13 +1325,20 @@ const Server = struct {
                 }, create);
             },
             .rename_workspace => |rename| {
-                try workspace_entrypoints.renameWorkspace(.{
+                var event_context: WorkspaceEventContext = .{
+                    .server = server,
+                    .origin = session.key,
+                };
+                var handler: rename_workspace_commands.RenameWorkspaceHandler = .{
                     .workspaces = workspaces,
-                    .responses = responses,
-                    .agents = &server.model.agents,
-                    .client = session.key,
-                    .events = entrypointWorkspaceEvents(server),
-                }, rename);
+                    .events = .{
+                        .context = &event_context,
+                        .publish = publishWorkspaceRenamed,
+                    },
+                };
+                var controller = rename_workspace_controller.Controller.init(responses, handler.executor());
+
+                try controller.renameWorkspace(rename);
             },
             .pane_input => |input| {
                 try attachment_entrypoints.paneInput(
@@ -1674,6 +1683,13 @@ fn publishTabRenamed(context: *anyopaque, event: workspace_mod.TabRenamed) void 
 fn publishTabMoved(context: *anyopaque, event: workspace_mod.TabMoved) void {
     const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
     publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
+}
+
+fn publishWorkspaceRenamed(context: *anyopaque, event: workspace_mod.WorkspaceRenamed) void {
+    const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+
+    publication.server.model.agents.touch();
+    publication.server.notifyWorkspaceChanged(publication.origin, event.location);
 }
 
 fn closeTabPanes(context: *anyopaque, location: schema.TabLocation) void {
@@ -2349,6 +2365,8 @@ test {
     _ = create_tab_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
+    _ = rename_workspace_commands;
+    _ = rename_workspace_controller;
     _ = tab_snapshot_query;
     _ = tab_snapshot_controller;
     _ = tab_commands;
@@ -2357,6 +2375,7 @@ test {
     _ = @import("create_tab_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("rename_tab_test.zig");
+    _ = @import("rename_workspace_test.zig");
     _ = @import("tab_snapshot_test.zig");
     _ = model_mod;
     _ = pane_mod;

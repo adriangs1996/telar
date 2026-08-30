@@ -55,7 +55,7 @@ pub const Workspace = struct {
         };
 
         if (options.explicit_name) |name_value| {
-            try workspace.rename(name_value);
+            _ = try workspace.rename(name_value);
         }
 
         _ = try workspace.appendTab(try Tab.init(options.default_tab_id, "main"));
@@ -78,13 +78,24 @@ pub const Workspace = struct {
         return workspace.path;
     }
 
-    pub fn rename(workspace: *Workspace, name_value: []const u8) !void {
+    /// Renames the aggregate and returns an event that owns its canonical
+    /// name. Repository revision and publication remain outside the aggregate.
+    ///
+    /// ```zig
+    /// const renamed = try workspace.rename("backend");
+    /// ```
+    pub fn rename(workspace: *Workspace, name_value: []const u8) !events.WorkspaceRenamed {
         if (name_value.len == 0 or name_value.len > workspace.explicit_name.len) {
             return error.InvalidWorkspaceName;
         }
 
         @memcpy(workspace.explicit_name[0..name_value.len], name_value);
         workspace.explicit_name_len = @intCast(name_value.len);
+
+        return events.WorkspaceRenamed.init(
+            .{ .workspace = workspace.id },
+            workspace.name(),
+        ) catch unreachable;
     }
 
     pub fn defaultTab(workspace: *const Workspace) schema.TabId {
@@ -273,8 +284,9 @@ test "workspace derives its name from its path until explicitly renamed" {
     defer workspace.deinit(std.testing.allocator);
 
     try std.testing.expectEqualStrings("telar", workspace.name());
-    try workspace.rename("agents");
+    const renamed = try workspace.rename("agents");
     try std.testing.expectEqualStrings("agents", workspace.name());
+    try std.testing.expectEqualStrings("agents", renamed.nameSlice());
 
     try std.testing.expectError(error.InvalidWorkspaceName, workspace.rename(""));
     try std.testing.expectEqualStrings("agents", workspace.name());

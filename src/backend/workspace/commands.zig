@@ -14,10 +14,11 @@ const Repository = repository_mod.Repository;
 /// ```zig
 /// try renameWorkspace(&repository, location, "backend");
 /// ```
-pub fn renameWorkspace(repository: *Repository, location: schema.WorkspaceLocation, name: []const u8) !void {
+pub fn renameWorkspace(repository: *Repository, location: schema.WorkspaceLocation, name: []const u8) !events.WorkspaceRenamed {
     const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
-    try workspace.rename(name);
+    const renamed = try workspace.rename(name);
     repository.recordListChange();
+    return renamed;
 }
 
 /// Reorders one tab inside its aggregate without changing list revision.
@@ -152,8 +153,10 @@ test "workspace rename is aggregate behavior recorded by the repository" {
     const location = try insertWorkspace(&repository, "/work/project");
     const before = repository.reader().revision();
 
-    try renameWorkspace(&repository, location.workspace, "agents");
+    const renamed = try renameWorkspace(&repository, location.workspace, "agents");
 
     try std.testing.expectEqualStrings("agents", repository.reader().workspaceName(location.workspace).?);
     try std.testing.expect(repository.reader().revision() != before);
+    try std.testing.expectEqualDeep(location.workspace, renamed.location);
+    try std.testing.expectEqualStrings("agents", renamed.nameSlice());
 }

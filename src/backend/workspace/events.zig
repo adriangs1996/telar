@@ -27,6 +27,25 @@ const OwnedTabLabel = struct {
     }
 };
 
+const OwnedWorkspaceName = struct {
+    bytes: [schema.max_tab_label_bytes]u8 = undefined,
+    len: u8,
+
+    fn init(name: []const u8) !OwnedWorkspaceName {
+        if (name.len == 0 or name.len > schema.max_tab_label_bytes) {
+            return error.InvalidWorkspaceName;
+        }
+
+        var owned: OwnedWorkspaceName = .{ .len = @intCast(name.len) };
+        @memcpy(owned.bytes[0..name.len], name);
+        return owned;
+    }
+
+    fn slice(name: *const OwnedWorkspaceName) []const u8 {
+        return name.bytes[0..name.len];
+    }
+};
+
 pub const TabCreated = struct {
     location: schema.TabLocation,
     position: u16,
@@ -124,6 +143,29 @@ pub const TabMoved = struct {
     position: u16,
 };
 
+pub const WorkspaceRenamed = struct {
+    location: schema.WorkspaceLocation,
+    name: OwnedWorkspaceName,
+
+    /// Validates and owns the canonical name of a renamed workspace.
+    ///
+    /// ```zig
+    /// const event = try WorkspaceRenamed.init(location, "backend");
+    /// ```
+    pub fn init(location: schema.WorkspaceLocation, name: []const u8) !WorkspaceRenamed {
+        return .{ .location = location, .name = try .init(name) };
+    }
+
+    /// Returns the event-owned canonical workspace name.
+    ///
+    /// ```zig
+    /// const name = event.nameSlice();
+    /// ```
+    pub fn nameSlice(event: *const WorkspaceRenamed) []const u8 {
+        return event.name.slice();
+    }
+};
+
 fn testingLocation() !schema.TabLocation {
     return .{
         .workspace = .{ .workspace = try schema.id.workspace(3) },
@@ -217,4 +259,24 @@ test "TabMoved identifies the committed tab and canonical position" {
 
     try std.testing.expectEqualDeep(location, event.location);
     try std.testing.expectEqual(@as(u16, 2), event.position);
+}
+
+test "WorkspaceRenamed owns its canonical name" {
+    const location: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(3) };
+    var source = [_]u8{ 'b', 'a', 'c', 'k', 'e', 'n', 'd' };
+    const event = try WorkspaceRenamed.init(location, &source);
+
+    @memset(&source, 'x');
+
+    try std.testing.expectEqualDeep(location, event.location);
+    try std.testing.expectEqualStrings("backend", event.nameSlice());
+}
+
+test "WorkspaceRenamed rejects names the aggregate cannot store" {
+    const location: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(3) };
+
+    try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceRenamed.init(location, ""));
+
+    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceRenamed.init(location, &oversized));
 }

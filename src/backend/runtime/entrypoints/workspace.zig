@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agent_mod = @import("../../agent/root.zig");
 const attachment_mod = @import("../attachment.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 const common = @import("common.zig");
@@ -20,14 +19,6 @@ pub const CreateWorkspaceContext = struct {
     shared_graphics: bool,
     geometry: common.Geometry,
     launcher: common.Launcher,
-};
-
-pub const RenameWorkspaceContext = struct {
-    workspaces: *WorkspaceRepository,
-    responses: *common.ResponseQueue,
-    agents: *agent_mod.Tracker,
-    client: common.ClientKey,
-    events: common.WorkspaceEvents,
 };
 
 /// Creates the workspace aggregate and its root pane as one rollback-safe
@@ -109,39 +100,6 @@ pub fn createWorkspace(context: CreateWorkspaceContext, create: schema.CreateWor
         .location = fresh.location,
         .created = true,
     } });
-}
-
-/// Applies a workspace rename and publishes client and agent projections only
-/// after the aggregate accepts it.
-///
-/// ```zig
-/// try renameWorkspace(context, request);
-/// ```
-pub fn renameWorkspace(context: RenameWorkspaceContext, rename: schema.RenameWorkspace) !void {
-    workspace_mod.renameWorkspace(context.workspaces, rename.workspace, rename.name) catch |err| {
-        switch (err) {
-            error.WorkspaceNotFound => try common.queueFailure(
-                context.responses,
-                rename.request_id,
-                .workspace_not_found,
-                "workspace not found",
-            ),
-            else => try common.queueFailure(
-                context.responses,
-                rename.request_id,
-                .internal,
-                "could not rename workspace",
-            ),
-        }
-        return;
-    };
-
-    context.agents.touch();
-    try context.responses.push(.{ .workspace_snapshot = .{
-        .request_id = rename.request_id,
-        .workspace = rename.workspace,
-    } });
-    context.events.changed(context.events.context, context.client, rename.workspace);
 }
 
 pub fn requestWorkspaceSnapshot(workspaces: *WorkspaceRepository, responses: *common.ResponseQueue, request: schema.RequestWorkspaceSnapshot) !void {

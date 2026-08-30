@@ -19,6 +19,7 @@ pub const TabCreated = events.TabCreated;
 pub const TabRemoved = events.TabRemoved;
 pub const TabRenamed = events.TabRenamed;
 pub const TabMoved = events.TabMoved;
+pub const WorkspaceRenamed = events.WorkspaceRenamed;
 
 pub const max_workspaces = state.max_workspaces;
 pub const max_tabs_per_workspace = workspace.max_tabs_per_workspace;
