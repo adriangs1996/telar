@@ -19,6 +19,7 @@ const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_mod = @import("../pane/root.zig");
 const blit = pane_mod.blit;
 const media_mod = @import("../media/root.zig");
+const model_mod = @import("model/root.zig");
 const pty = @import("../pty/root.zig");
 const response_queue = @import("response_queue.zig");
 const proxy_mod = @import("../proxy/root.zig");
@@ -27,7 +28,7 @@ pub const system_metrics = @import("system_metrics.zig");
 const system_metrics_mod = system_metrics;
 const telemetry_mod = @import("telemetry.zig");
 const transport = @import("../transport/root.zig");
-const workspace_mod = @import("workspace.zig");
+const workspace_mod = @import("../workspace/root.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -42,8 +43,10 @@ const PaneStore = pane_mod.PaneStore;
 const PaneLauncher = pane_launcher_mod.PaneLauncher;
 const historyClock = pane_mod.historyClock;
 const max_panes = pane_mod.max_panes;
-const WorkspaceStore = workspace_mod.WorkspaceStore;
+const WorkspaceRepository = workspace_mod.Repository;
+const WorkspaceState = workspace_mod.State;
 const max_workspaces = workspace_mod.max_workspaces;
+const RuntimeModel = model_mod.RuntimeModel;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
@@ -55,10 +58,7 @@ const PendingNotification = response_queue.PendingNotification;
 const ResponseQueue = response_queue.ResponseQueue;
 const encodeResponse = runtime_encoder.encodeResponse;
 
-fn agentSoundForTransition(
-    previous: ?schema.AgentStatus,
-    current: ?schema.AgentStatus,
-) ?schema.AgentSound {
+fn agentSoundForTransition(previous: ?schema.AgentStatus, current: ?schema.AgentStatus) ?schema.AgentSound {
     if (previous != .working) return null;
     return switch (current orelse return null) {
         .ready => .ready,
@@ -176,11 +176,7 @@ const ClientSession = struct {
     /// panes; attachments created afterwards inherit it.
     shared_graphics: bool = false,
 
-    fn create(
-        gpa: std.mem.Allocator,
-        key: ClientKey,
-        connection: core.transport.SocketChannel,
-    ) !*ClientSession {
+    fn create(gpa: std.mem.Allocator, key: ClientKey, connection: core.transport.SocketChannel) !*ClientSession {
         const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
         errdefer gpa.free(receive_buffer);
         var delivery = try Delivery.init(gpa);
@@ -307,9 +303,9 @@ pub const IngestTestGate = struct {
 
 pub const LaunchTestFault = pane_launcher_mod.LaunchTestFault;
 
-/// Everything one running runtime instance owns: the wire endpoints, the
-/// stores, and the send state. Event arms and helpers used to thread a dozen
-/// pointers each; they now share this struct.
+/// Infrastructure and orchestration state for one running runtime instance.
+/// Authoritative semantic state lives in `model`; clients, event machinery,
+/// workers and external resources remain server infrastructure.
 const Server = struct {
     io: Io,
     gpa: std.mem.Allocator,
@@ -327,9 +323,7 @@ const Server = struct {
     handshake_pending: bool = false,
     shutdown: ShutdownState = .{},
     geometry_leases: [max_workspaces]?GeometryLease = @splat(null),
-    workspaces: WorkspaceStore,
-    panes: PaneStore,
-    agents: agent_mod.Tracker = .{},
+    model: RuntimeModel,
     system_metrics: system_metrics_mod.Sampler = .{},
     metrics: RuntimeMetrics,
 
@@ -341,16 +335,17 @@ const Server = struct {
         if (server.proxy) |proxy| proxy.revokePane(pane.key());
     }
 
+    fn workspaceRepository(server: *Server) WorkspaceRepository {
+        return WorkspaceRepository.init(&server.model.workspaces, server.gpa);
+    }
+
+    fn workspaceReader(server: *const Server) workspace_mod.Reader {
+        return workspace_mod.Reader.init(&server.model.workspaces);
+    }
+
     /// Starts a pane and returns only after the runtime can observe both its
     /// output and exit. Client attachment and response delivery happen later.
-    fn launchPane(
-        server: *Server,
-        location: schema.TabLocation,
-        size: schema.TerminalSize,
-        launch: schema.LaunchView,
-        launch_cwd: []const u8,
-        workspace_path: []const u8,
-    ) !*Pane {
+    fn launchPane(server: *Server, location: schema.TabLocation, size: schema.TerminalSize, launch: schema.LaunchView, launch_cwd: []const u8, workspace_path: []const u8) !*Pane {
         var launcher: PaneLauncher(RuntimeEvent) = .{
             .io = server.io,
             .gpa = server.gpa,
@@ -359,11 +354,11 @@ const Server = struct {
             .child_environment = server.child_environment,
             .inherited_environment = server.inherited_environment,
             .proxy = server.proxy,
-            .panes = &server.panes,
+            .panes = &server.model.panes,
             .launch_fault = server.launch_fault,
         };
         const fresh = try launcher.launch(location, size, launch, launch_cwd, workspace_path);
-        server.agents.touch();
+        server.model.agents.touch();
         return fresh;
     }
 
@@ -371,29 +366,51 @@ const Server = struct {
     /// closes tabs that ran out of panes. Spans three stores, which is why it
     /// lives on the server rather than on any one of them.
     fn collectFinished(server: *Server) void {
-        const store = &server.panes;
-        if (store.exited_count == 0) return;
+        const store = &server.model.panes;
+        var workspaces = server.workspaceRepository();
+
+        if (store.exited_count == 0) {
+            return;
+        }
+
         for (&store.items) |*slot| {
             const pane = slot.* orelse continue;
-            if (!pane.readyToDestroy()) continue;
+
+            if (!pane.readyToDestroy()) {
+                continue;
+            }
+
             for (&server.clients.items) |*client_slot| {
                 const client = client_slot.* orelse continue;
-                if (client.attachments.find(pane.id) != null) break;
+                if (client.attachments.find(pane.id) != null) {
+                    break;
+                }
             } else {
                 const location = pane.location;
                 store.index.remove(schema.id.raw(pane.id));
                 store.exited_count -= 1;
                 slot.* = null;
                 store.count -= 1;
-                if (!server.agents.remove(pane.key())) server.agents.touch();
+
+                if (!server.model.agents.remove(pane.key())) {
+                    server.model.agents.touch();
+                }
+
                 server.revokePaneCredential(pane);
                 pane.destroy();
-                if (store.hasAt(location) or server.workspaces.findTab(location) == null) continue;
 
-                const removal = server.workspaces.removeTab(location).?;
+                if (store.hasAt(location) or !workspaces.reader().contains(location)) {
+                    continue;
+                }
+
+                const removal = workspace_mod.removeTab(&workspaces, location).?;
+
                 for (&server.clients.items) |*client_slot| {
                     const client = client_slot.* orelse continue;
-                    if (!client.active() or !client.attachments.observes(location.workspace)) continue;
+                    if (!client.active() or !client.attachments.observes(location.workspace)) {
+                        continue;
+                    }
+
                     client.delivery.responses.pushOrDrop(.{ .tab_closed = .{
                         .request_id = .none,
                         .location = location,
@@ -428,11 +445,7 @@ const Server = struct {
         _ = server.clients.remove(server.io, server.gpa, key);
     }
 
-    fn holdsGeometry(
-        server: *Server,
-        key: ClientKey,
-        workspace: schema.WorkspaceLocation,
-    ) bool {
+    fn holdsGeometry(server: *Server, key: ClientKey, workspace: schema.WorkspaceLocation) bool {
         for (&server.geometry_leases) |*slot| {
             const lease = slot.* orelse continue;
             if (!std.meta.eql(lease.workspace, workspace)) continue;
@@ -459,11 +472,7 @@ const Server = struct {
         }
     }
 
-    fn releaseGeometryFor(
-        server: *Server,
-        key: ClientKey,
-        workspace: schema.WorkspaceLocation,
-    ) void {
+    fn releaseGeometryFor(server: *Server, key: ClientKey, workspace: schema.WorkspaceLocation) void {
         for (&server.geometry_leases) |*slot| {
             const lease = slot.* orelse continue;
             if (std.meta.eql(lease.owner, key) and std.meta.eql(lease.workspace, workspace)) {
@@ -473,32 +482,22 @@ const Server = struct {
         }
     }
 
-    fn notifyWorkspaceChanged(
-        server: *Server,
-        origin: ClientKey,
-        workspace: schema.WorkspaceLocation,
-    ) void {
+    fn notifyWorkspaceChanged(server: *Server, origin: ClientKey, workspace: schema.WorkspaceLocation) void {
         server.notifyWorkspaceChangedWithFallback(origin, workspace, null);
     }
 
-    fn notifyWorkspaceClosed(
-        server: *Server,
-        origin: ClientKey,
-        workspace: schema.WorkspaceLocation,
-        previous_workspace: ?schema.WorkspaceId,
-    ) void {
+    fn notifyWorkspaceClosed(server: *Server, origin: ClientKey, workspace: schema.WorkspaceLocation, previous_workspace: ?schema.WorkspaceId) void {
         server.notifyWorkspaceChangedWithFallback(origin, workspace, previous_workspace);
     }
 
-    fn notifyWorkspaceChangedWithFallback(
-        server: *Server,
-        origin: ClientKey,
-        workspace: schema.WorkspaceLocation,
-        previous_workspace: ?schema.WorkspaceId,
-    ) void {
+    fn notifyWorkspaceChangedWithFallback(server: *Server, origin: ClientKey, workspace: schema.WorkspaceLocation, previous_workspace: ?schema.WorkspaceId) void {
         for (&server.clients.items) |*slot| {
             const session = slot.* orelse continue;
-            if (std.meta.eql(session.key, origin) or !session.active()) continue;
+
+            if (std.meta.eql(session.key, origin) or !session.active()) {
+                continue;
+            }
+
             if (session.attachments.observes(workspace)) {
                 session.delivery.responses.resync_workspace = workspace;
                 session.delivery.responses.resync_previous_workspace = previous_workspace;
@@ -506,17 +505,16 @@ const Server = struct {
         }
     }
 
-    fn publishNotification(
-        server: *Server,
-        notification: schema.Notification,
-    ) u8 {
+    fn publishNotification(server: *Server, notification: schema.Notification) u8 {
         const pending = PendingNotification.init(notification);
         var delivered: u8 = 0;
+
         for (&server.clients.items) |*slot| {
             const recipient = slot.* orelse continue;
             if (!recipient.active() or recipient.role != .ui) continue;
             if (recipient.delivery.responses.pushNotification(pending)) delivered += 1;
         }
+
         return delivered;
     }
 
@@ -531,7 +529,7 @@ const Server = struct {
     fn scheduleAgentDescription(server: *Server) void {
         const options = server.agent_description_options orelse return;
         if (server.agent_description_pending) return;
-        var job = server.agents.nextDescriptionJob() orelse return;
+        var job = server.model.agents.nextDescriptionJob() orelse return;
         defer std.crypto.secureZero(u8, &job.query);
         server.select.concurrent(
             .agent_description,
@@ -551,7 +549,7 @@ const Server = struct {
                 .session_id = job.session_id,
                 .status = .failed,
             };
-            if (server.agents.finishDescription(&failed))
+            if (server.model.agents.finishDescription(&failed))
                 _ = server.history_service.setSessionTitle(
                     server.io,
                     failed.session_id,
@@ -570,7 +568,7 @@ const Server = struct {
         result: agent_mod.description.Result,
     ) void {
         server.agent_description_pending = false;
-        if (server.agents.finishDescription(&result)) {
+        if (server.model.agents.finishDescription(&result)) {
             _ = server.history_service.setSessionTitle(
                 server.io,
                 result.session_id,
@@ -589,7 +587,7 @@ const Server = struct {
             const key = session.key;
             server.pump(session) catch server.dropClient(key);
         }
-        for (server.panes.items) |slot| {
+        for (server.model.panes.items) |slot| {
             const pane = slot orelse continue;
             server.settlePaneDamage(pane);
         }
@@ -631,9 +629,9 @@ const Server = struct {
             server.io,
             &session.attachments,
             .{
-                .panes = &server.panes,
-                .workspaces = &server.workspaces,
-                .agents = &server.agents,
+                .panes = &server.model.panes,
+                .workspaces = server.workspaceReader(),
+                .agents = &server.model.agents,
                 .system_metrics = &server.system_metrics,
                 .proxy_active = server.proxy != null,
                 .home = server.inherited_environment.getPosix("HOME"),
@@ -706,7 +704,7 @@ const Server = struct {
         event: PaneOutputEvent,
         ingest_gate: ?*IngestTestGate,
     ) !void {
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
@@ -770,7 +768,7 @@ const Server = struct {
     /// Entrypoint for completed VT ingestion. It exposes the new cell/media
     /// state to attached clients and schedules the pane's next PTY read.
     fn handlePaneIngestedEvent(server: *Server, event: PaneIngestEvent) !void {
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
@@ -945,7 +943,7 @@ const Server = struct {
                 .{ proxy, server.io },
             );
 
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
@@ -954,7 +952,7 @@ const Server = struct {
             server.metrics.proxy_observations +|= 1;
         }
 
-        _ = server.agents.observeProxy(.{
+        _ = server.model.agents.observeProxy(.{
             .identity = agent_mod.Identity.fromPane(active),
             .provider = event.provider,
             .phase = switch (event.phase) {
@@ -984,7 +982,7 @@ const Server = struct {
     fn handleAgentTickEvent(server: *Server, result: anyerror!void) !void {
         result catch return;
         try server.select.concurrent(.agent_tick, waitForAgentTick, .{server.io});
-        _ = server.agents.expire(Io.Timestamp.now(server.io, .real).toMilliseconds());
+        _ = server.model.agents.expire(Io.Timestamp.now(server.io, .real).toMilliseconds());
         server.pumpAll();
     }
 
@@ -996,7 +994,7 @@ const Server = struct {
     }
 
     fn handlePaneInputWrittenEvent(server: *Server, event: PaneInputEvent) !void {
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
@@ -1018,7 +1016,7 @@ const Server = struct {
     }
 
     fn handlePaneResponseWrittenEvent(server: *Server, event: PaneResponseEvent) !void {
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
@@ -1034,13 +1032,13 @@ const Server = struct {
     }
 
     fn handlePaneObservedEvent(server: *Server, event: PaneObservationEvent) !void {
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
         active.actorFinished();
         active.history_observer.finishSealed();
-        if (active.updateObservedCwd()) server.agents.touch();
+        if (active.updateObservedCwd()) server.model.agents.touch();
         if (comptime diagnostics.enabled) {
             if (event.process_probe.inspected) {
                 server.metrics.agent_process_inspections +|= 1;
@@ -1061,7 +1059,7 @@ const Server = struct {
         if (event.process_probe.changed) {
             const observed_at_ms = Io.Timestamp.now(server.io, .real).toMilliseconds();
             if (event.process_probe.cache.provider != .unknown) {
-                _ = server.agents.observeProcess(.{
+                _ = server.model.agents.observeProcess(.{
                     .identity = agent_mod.Identity.fromPane(active),
                     .provider = event.process_probe.cache.provider,
                     .process_id = event.process_probe.cache.process_group_id.?,
@@ -1071,9 +1069,9 @@ const Server = struct {
                 event.process_probe.cache,
                 active.session.pid,
             )) {
-                _ = server.agents.remove(active.key());
+                _ = server.model.agents.remove(active.key());
             } else if (previous_process.provider != .unknown) {
-                _ = server.agents.clearProcess(active.key());
+                _ = server.model.agents.clearProcess(active.key());
             }
         }
         if (comptime diagnostics.enabled) {
@@ -1088,8 +1086,8 @@ const Server = struct {
             active.session.pid,
         )) {
             const identity = agent_mod.Identity.fromPane(active);
-            const previous_status = server.agents.projectedStatus(identity.key);
-            const changed = server.agents.observeScreen(.{
+            const previous_status = server.model.agents.projectedStatus(identity.key);
+            const changed = server.model.agents.observeScreen(.{
                 .identity = identity,
                 .signal = .{
                     .provider = signal.provider,
@@ -1106,7 +1104,7 @@ const Server = struct {
             });
             if (changed) if (agentSoundForTransition(
                 previous_status,
-                server.agents.projectedStatus(identity.key),
+                server.model.agents.projectedStatus(identity.key),
             )) |sound| server.publishAgentSound(.{
                 .pane_id = identity.key.id,
                 .pane_generation = identity.key.generation,
@@ -1120,7 +1118,7 @@ const Server = struct {
     }
 
     fn handlePaneMediaEvent(server: *Server, event: PaneMediaEvent) !void {
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
@@ -1171,16 +1169,16 @@ const Server = struct {
     }
 
     fn handlePaneExitEvent(server: *Server, event: PaneExitEvent) !void {
-        const active = server.panes.resolve(event.pane) orelse {
+        const active = server.model.panes.resolve(event.pane) orelse {
             server.metrics.stale_pane_events += 1;
             return;
         };
         active.actorFinished();
         active.wait_pending = false;
         active.exit = pane_launcher_mod.exitOrSynthetic(event.result);
-        _ = server.agents.remove(active.key());
+        _ = server.model.agents.remove(active.key());
         server.revokePaneCredential(active);
-        server.panes.exited_count += 1;
+        server.model.panes.exited_count += 1;
         if (active.launch_state == .aborting) {
             server.collect();
             server.pumpAll();
@@ -1223,6 +1221,7 @@ const Server = struct {
             proxy.metrics()
         else
             proxy_mod.MetricsSnapshot{};
+        const workspaces = server.workspaceReader();
 
         const line = formatRuntimeTelemetry(
             buffer,
@@ -1230,9 +1229,9 @@ const Server = struct {
             &server.metrics,
             attachment_stores[0..attachment_store_count],
             server.clients.count,
-            server.workspaces.count,
-            server.workspaces.totalTabs(),
-            &server.panes,
+            workspaces.count(),
+            workspaces.totalTabs(),
+            &server.model.panes,
             server.history_service,
             response_queue_depth,
             response_queue_high_water,
@@ -1274,57 +1273,55 @@ const Server = struct {
     fn dispatchClientMessage(server: *Server, session: *ClientSession, message: schema.ClientMessage) !void {
         const io = server.io;
         const gpa = server.gpa;
-        const panes = &server.panes;
-        const workspaces = &server.workspaces;
+        const panes = &server.model.panes;
+        var workspace_repository = server.workspaceRepository();
+        const workspaces = &workspace_repository;
         const attachments = &session.attachments;
         const responses = &session.delivery.responses;
         const metrics = &server.metrics;
         const history_service = server.history_service;
         switch (message) {
             .open_pane => |open| {
-                try pane_entrypoints.openPane(
-                    gpa,
-                    panes,
-                    workspaces,
-                    attachments,
-                    responses,
-                    session.key,
-                    session.shared_graphics,
-                    entrypointGeometry(server),
-                    entrypointLauncher(server),
-                    entrypointScheduler(server),
-                    open,
-                );
+                try pane_entrypoints.openPane(.{
+                    .gpa = gpa,
+                    .panes = panes,
+                    .workspaces = workspaces,
+                    .attachments = attachments,
+                    .responses = responses,
+                    .client = session.key,
+                    .shared_graphics = session.shared_graphics,
+                    .geometry = entrypointGeometry(server),
+                    .launcher = entrypointLauncher(server),
+                    .scheduler = entrypointScheduler(server),
+                }, open);
             },
             .create_workspace => |create| {
-                try workspace_entrypoints.createWorkspace(
-                    gpa,
-                    workspaces,
-                    attachments,
-                    responses,
-                    session.key,
-                    session.shared_graphics,
-                    entrypointGeometry(server),
-                    entrypointLauncher(server),
-                    create,
-                );
+                try workspace_entrypoints.createWorkspace(.{
+                    .gpa = gpa,
+                    .workspaces = workspaces,
+                    .attachments = attachments,
+                    .responses = responses,
+                    .client = session.key,
+                    .shared_graphics = session.shared_graphics,
+                    .geometry = entrypointGeometry(server),
+                    .launcher = entrypointLauncher(server),
+                }, create);
             },
             .rename_workspace => |rename| {
-                try workspace_entrypoints.renameWorkspace(
-                    workspaces,
-                    responses,
-                    &server.agents,
-                    session.key,
-                    entrypointWorkspaceEvents(server),
-                    rename,
-                );
+                try workspace_entrypoints.renameWorkspace(.{
+                    .workspaces = workspaces,
+                    .responses = responses,
+                    .agents = &server.model.agents,
+                    .client = session.key,
+                    .events = entrypointWorkspaceEvents(server),
+                }, rename);
             },
             .pane_input => |input| {
                 try attachment_entrypoints.paneInput(
                     io,
                     attachments,
                     metrics,
-                    &server.agents,
+                    &server.model.agents,
                     server.agent_description_options != null,
                     entrypointScheduler(server),
                     input,
@@ -1383,27 +1380,25 @@ const Server = struct {
                 );
             },
             .request_tab_snapshot => |request| {
-                try tab_entrypoints.requestTabSnapshot(
-                    panes,
-                    workspaces,
-                    responses,
-                    request,
-                );
+                try tab_entrypoints.requestTabSnapshot(.{
+                    .panes = panes,
+                    .workspaces = workspaces,
+                    .responses = responses,
+                }, request);
             },
             .create_pane => |create| {
-                try pane_entrypoints.createPane(
-                    gpa,
-                    panes,
-                    workspaces,
-                    attachments,
-                    responses,
-                    session.key,
-                    session.shared_graphics,
-                    entrypointGeometry(server),
-                    entrypointLauncher(server),
-                    entrypointWorkspaceEvents(server),
-                    create,
-                );
+                try pane_entrypoints.createPane(.{
+                    .gpa = gpa,
+                    .panes = panes,
+                    .workspaces = workspaces,
+                    .attachments = attachments,
+                    .responses = responses,
+                    .client = session.key,
+                    .shared_graphics = session.shared_graphics,
+                    .geometry = entrypointGeometry(server),
+                    .launcher = entrypointLauncher(server),
+                    .events = entrypointWorkspaceEvents(server),
+                }, create);
             },
             .close_pane => |close| {
                 try pane_entrypoints.closePane(attachments, responses, close);
@@ -1416,47 +1411,43 @@ const Server = struct {
                 );
             },
             .create_tab => |create| {
-                try tab_entrypoints.createTab(
-                    gpa,
-                    workspaces,
-                    attachments,
-                    responses,
-                    session.key,
-                    session.shared_graphics,
-                    entrypointGeometry(server),
-                    entrypointLauncher(server),
-                    entrypointWorkspaceEvents(server),
-                    create,
-                );
+                try tab_entrypoints.createTab(.{
+                    .gpa = gpa,
+                    .workspaces = workspaces,
+                    .attachments = attachments,
+                    .responses = responses,
+                    .client = session.key,
+                    .shared_graphics = session.shared_graphics,
+                    .geometry = entrypointGeometry(server),
+                    .launcher = entrypointLauncher(server),
+                    .events = entrypointWorkspaceEvents(server),
+                }, create);
             },
             .rename_tab => |rename| {
-                try tab_entrypoints.renameTab(
-                    workspaces,
-                    responses,
-                    &server.agents,
-                    session.key,
-                    entrypointWorkspaceEvents(server),
-                    rename,
-                );
+                try tab_entrypoints.renameTab(.{
+                    .workspaces = workspaces,
+                    .responses = responses,
+                    .agents = &server.model.agents,
+                    .client = session.key,
+                    .events = entrypointWorkspaceEvents(server),
+                }, rename);
             },
             .close_tab => |close| {
-                try tab_entrypoints.closeTab(
-                    panes,
-                    workspaces,
-                    responses,
-                    session.key,
-                    entrypointWorkspaceEvents(server),
-                    close,
-                );
+                try tab_entrypoints.closeTab(.{
+                    .panes = panes,
+                    .workspaces = workspaces,
+                    .responses = responses,
+                    .client = session.key,
+                    .events = entrypointWorkspaceEvents(server),
+                }, close);
             },
             .move_tab => |move| {
-                try tab_entrypoints.moveTab(
-                    workspaces,
-                    responses,
-                    session.key,
-                    entrypointWorkspaceEvents(server),
-                    move,
-                );
+                try tab_entrypoints.moveTab(.{
+                    .workspaces = workspaces,
+                    .responses = responses,
+                    .client = session.key,
+                    .events = entrypointWorkspaceEvents(server),
+                }, move);
             },
             .query_history => |request| {
                 try history_entrypoints.queryHistory(
@@ -1665,10 +1656,11 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         .agent_description_options = options.agent_descriptions,
         .launch_fault = options.launch_fault,
         .clients = clients,
-        .workspaces = WorkspaceStore.init(gpa),
-        .panes = .{
-            .graphics_limits = options.graphics,
-            .graphics_budget = .init(options.graphics.global_bytes),
+        .model = .{
+            .panes = .{
+                .graphics_limits = options.graphics,
+                .graphics_budget = .init(options.graphics.global_bytes),
+            },
         },
         .metrics = .{ .started_ns = diagnostics.now(io) },
     };
@@ -1683,7 +1675,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         // cancellation. End the PTY sessions first so their waits can finish;
         // masters stay open here and close in `destroy`, after every actor
         // has been joined, because Darwin's close waits behind blocked writes.
-        server.panes.shutdown();
+        server.model.panes.shutdown();
         select.cancelDiscard();
         if (proxy_worker) |*worker| {
             worker.cancel(io) catch {};
@@ -1696,8 +1688,9 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
             session.send_pending = false;
         };
         server.clients.deinit(io, gpa);
-        server.panes.deinit();
-        server.workspaces.deinit();
+        server.model.panes.deinit();
+        var workspace_repository = server.workspaceRepository();
+        workspace_repository.deinit();
         history_service.closeQueues(io);
         _ = history_worker.await(io) catch {};
         history_service.deinit(io);
@@ -2086,8 +2079,7 @@ test "management responses overtake queued observation work" {
 }
 
 test "a workspace snapshot for a vanished workspace degrades to a failure reply" {
-    var workspaces = WorkspaceStore.init(std.testing.allocator);
-    defer workspaces.deinit();
+    var workspaces: WorkspaceState = .{};
     var panes: PaneStore = .{};
     var response: PendingResponse = .{ .workspace_snapshot = .{
         .request_id = @enumFromInt(9),
@@ -2095,7 +2087,12 @@ test "a workspace snapshot for a vanished workspace degrades to a failure reply"
     } };
     var buffer: [1024]u8 = undefined;
     var history_result: ?*history.model.QueryResult = null;
-    const payload = try encodeResponse(&buffer, &response, &panes, &workspaces, &history_result);
+    const payload = try encodeResponse(.{
+        .buffer = &buffer,
+        .panes = &panes,
+        .workspaces = workspace_mod.Reader.init(&workspaces),
+        .history_result = &history_result,
+    }, &response);
     const decoded = try schema.decodeServer(payload);
     try std.testing.expect(decoded == .request_failed);
     try std.testing.expectEqual(
@@ -2183,6 +2180,7 @@ test "agent sounds require exact working transitions" {
 }
 
 test {
+    _ = model_mod;
     _ = pane_mod;
     _ = workspace_mod;
     _ = attachment_mod;

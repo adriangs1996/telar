@@ -4,24 +4,48 @@ const std = @import("std");
 const core = @import("telar-core");
 const agent_mod = @import("../../agent/root.zig");
 const attachment_mod = @import("../attachment.zig");
-const workspace_mod = @import("../workspace.zig");
+const workspace_mod = @import("../../workspace/root.zig");
 const common = @import("common.zig");
 
 const AttachmentStore = attachment_mod.AttachmentStore;
-const WorkspaceStore = workspace_mod.WorkspaceStore;
+const WorkspaceRepository = workspace_mod.Repository;
 const schema = core.schema;
 
-pub fn createWorkspace(
+pub const CreateWorkspaceContext = struct {
     gpa: std.mem.Allocator,
-    workspaces: *WorkspaceStore,
+    workspaces: *WorkspaceRepository,
     attachments: *AttachmentStore,
     responses: *common.ResponseQueue,
     client: common.ClientKey,
     shared_graphics: bool,
     geometry: common.Geometry,
     launcher: common.Launcher,
-    create: schema.CreateWorkspaceView,
-) !void {
+};
+
+pub const RenameWorkspaceContext = struct {
+    workspaces: *WorkspaceRepository,
+    responses: *common.ResponseQueue,
+    agents: *agent_mod.Tracker,
+    client: common.ClientKey,
+    events: common.WorkspaceEvents,
+};
+
+/// Creates the workspace aggregate and its root pane as one rollback-safe
+/// runtime transaction, then attaches the requesting client.
+///
+/// ```zig
+/// try createWorkspace(context, request);
+/// ```
+pub fn createWorkspace(context: CreateWorkspaceContext, create: schema.CreateWorkspaceView) !void {
+    const gpa = context.gpa;
+    const workspaces = context.workspaces;
+    const attachments = context.attachments;
+    const responses = context.responses;
+    const client = context.client;
+    const shared_graphics = context.shared_graphics;
+    const geometry = context.geometry;
+    const launcher = context.launcher;
+
     const launch_cwd = (try common.requestLaunchCwd(
         attachments,
         responses,
@@ -29,7 +53,10 @@ pub fn createWorkspace(
         create.launch,
         .any,
     )) orelse return;
-    const location = workspaces.create(launch_cwd, create.name) catch {
+    const location = workspaces.insert(.{
+        .path = launch_cwd,
+        .explicit_name = create.name,
+    }) catch {
         try common.queueFailure(
             responses,
             create.request_id,
@@ -44,7 +71,8 @@ pub fn createWorkspace(
     };
     var workspace_committed = false;
     defer if (!workspace_committed) {
-        workspaces.remove(workspace_id);
+        const removed = workspaces.remove(workspace_id);
+        std.debug.assert(removed);
         geometry.release(geometry.context, client, location.workspace);
     };
     if (!geometry.holds(geometry.context, client, location.workspace)) {
@@ -83,17 +111,23 @@ pub fn createWorkspace(
     } });
 }
 
-pub fn renameWorkspace(workspaces: *WorkspaceStore, responses: *common.ResponseQueue, agents: *agent_mod.Tracker, client: common.ClientKey, events: common.WorkspaceEvents, rename: schema.RenameWorkspace) !void {
-    workspaces.rename(rename.workspace, rename.name) catch |err| {
+/// Applies a workspace rename and publishes client and agent projections only
+/// after the aggregate accepts it.
+///
+/// ```zig
+/// try renameWorkspace(context, request);
+/// ```
+pub fn renameWorkspace(context: RenameWorkspaceContext, rename: schema.RenameWorkspace) !void {
+    workspace_mod.renameWorkspace(context.workspaces, rename.workspace, rename.name) catch |err| {
         switch (err) {
             error.WorkspaceNotFound => try common.queueFailure(
-                responses,
+                context.responses,
                 rename.request_id,
                 .workspace_not_found,
                 "workspace not found",
             ),
             else => try common.queueFailure(
-                responses,
+                context.responses,
                 rename.request_id,
                 .internal,
                 "could not rename workspace",
@@ -101,20 +135,17 @@ pub fn renameWorkspace(workspaces: *WorkspaceStore, responses: *common.ResponseQ
         }
         return;
     };
-    agents.touch();
-    try responses.push(.{ .workspace_snapshot = .{
+
+    context.agents.touch();
+    try context.responses.push(.{ .workspace_snapshot = .{
         .request_id = rename.request_id,
         .workspace = rename.workspace,
     } });
-    events.changed(events.context, client, rename.workspace);
+    context.events.changed(context.events.context, context.client, rename.workspace);
 }
 
-pub fn requestWorkspaceSnapshot(
-    workspaces: *WorkspaceStore,
-    responses: *common.ResponseQueue,
-    request: schema.RequestWorkspaceSnapshot,
-) !void {
-    if (workspaces.find(request.workspace) == null) {
+pub fn requestWorkspaceSnapshot(workspaces: *WorkspaceRepository, responses: *common.ResponseQueue, request: schema.RequestWorkspaceSnapshot) !void {
+    if (!workspaces.reader().containsWorkspace(request.workspace)) {
         try common.queueFailure(
             responses,
             request.request_id,

@@ -1,0 +1,34 @@
+//! Public namespace for runtime-owned workspace state and behavior.
+//!
+//! `RuntimeModel` owns `State`. Callers use `Repository` for collection access
+//! and the command functions below for aggregate mutations.
+
+const commands = @import("commands.zig");
+const repository = @import("repository.zig");
+const state = @import("state.zig");
+const workspace = @import("workspace.zig");
+
+pub const State = state.State;
+pub const Repository = repository.Repository;
+pub const Reader = repository.Reader;
+pub const Ensured = repository.Ensured;
+pub const Insert = repository.Insert;
+pub const DescriptorSnapshot = repository.DescriptorSnapshot;
+pub const TabCreated = commands.TabCreated;
+pub const TabRemoval = commands.TabRemoval;
+
+pub const max_workspaces = state.max_workspaces;
+pub const max_tabs_per_workspace = workspace.max_tabs_per_workspace;
+
+pub const renameWorkspace = commands.renameWorkspace;
+pub const createTab = commands.createTab;
+pub const renameTab = commands.renameTab;
+pub const moveTab = commands.moveTab;
+pub const removeTab = commands.removeTab;
+
+test {
+    _ = @import("commands.zig");
+    _ = @import("repository.zig");
+    _ = @import("state.zig");
+    _ = @import("workspace.zig");
+}

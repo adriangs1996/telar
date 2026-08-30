@@ -5,6 +5,28 @@ controlled by disposable clients.
 
 ## Language
 
+**Runtime model**:
+The authoritative semantic state owned by one running runtime. Client
+projections and durable checkpoints derive from it; infrastructure resources
+support it without becoming its authority.
+_Avoid_: Public state, Server state, AppState
+
+**Runtime checkpoint**:
+A durable data-only representation of the restorable parts of a runtime model.
+It excludes live resources and does not promise child-process or PTY continuity.
+_Avoid_: Runtime snapshot, Process snapshot
+
+**Workspace aggregate**:
+The runtime-owned workspace identity, path, name and ordered tabs whose rules
+change as one unit.
+_Avoid_: Workspace store, Workspace record
+
+**Workspace repository**:
+The in-memory collection boundary through which workspace aggregates are
+located and retained in the runtime model, without defining their behavior or
+durable representation.
+_Avoid_: Workspace manager, Workspace database
+
 **Pane launch**:
 The act of starting a new runtime-owned pane from a requested command and
 terminal size. It ends when the runtime owns a usable pane, independently of

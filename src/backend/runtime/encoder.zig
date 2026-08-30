@@ -4,27 +4,36 @@ const std = @import("std");
 const core = @import("telar-core");
 const history = @import("../history/root.zig");
 const pane_mod = @import("../pane/root.zig");
+const workspace = @import("../workspace/root.zig");
 const response_queue = @import("response_queue.zig");
-const workspace = @import("workspace.zig");
 
 const schema = core.schema;
 const PaneStore = pane_mod.PaneStore;
 const PendingResponse = response_queue.PendingResponse;
-const WorkspaceStore = workspace.WorkspaceStore;
 const max_panes = pane_mod.max_panes;
 const max_tabs_per_workspace = workspace.max_tabs_per_workspace;
+
+pub const EncodeContext = struct {
+    buffer: []u8,
+    panes: *const PaneStore,
+    workspaces: workspace.Reader,
+    history_result: *?*history.model.QueryResult,
+};
 
 /// Encodes one queued response against the *current* stores. A response can
 /// outlive what it describes - the workspace of a queued snapshot may close
 /// before the send slot frees up - and encoding must then degrade to a
 /// `request_failed` reply, never to an error that tears the client down.
-pub fn encodeResponse(
-    buffer: []u8,
-    response: *PendingResponse,
-    panes: *const PaneStore,
-    workspaces: *const WorkspaceStore,
-    history_result: *?*history.model.QueryResult,
-) ![]const u8 {
+///
+/// ```zig
+/// const payload = try encodeResponse(context, &response);
+/// ```
+pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]const u8 {
+    const buffer = context.buffer;
+    const panes = context.panes;
+    const workspaces = context.workspaces;
+    const history_result = context.history_result;
+
     var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
     var tab_storage: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
     var history_storage: [history.model.max_results]schema.HistoryEntry = undefined;
@@ -43,7 +52,6 @@ pub fn encodeResponse(
         .workspace_snapshot => |snapshot| payload: {
             const descriptor_snapshot = workspaces.descriptors(
                 snapshot.workspace,
-                panes,
                 &tab_storage,
             ) orelse
                 break :payload try schema.encodeRequestFailed(buffer, .{
@@ -51,6 +59,12 @@ pub fn encodeResponse(
                     .code = .workspace_not_found,
                     .message = "workspace closed before its snapshot was sent",
                 });
+            for (descriptor_snapshot.tabs) |*tab| {
+                tab.pane_count = panes.countAt(.{
+                    .workspace = snapshot.workspace,
+                    .tab_id = tab.tab_id,
+                });
+            }
             break :payload try schema.encodeWorkspaceSnapshot(buffer, .{
                 .request_id = snapshot.request_id,
                 .workspace = snapshot.workspace,

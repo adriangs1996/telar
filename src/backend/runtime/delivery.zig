@@ -5,12 +5,12 @@ const core = @import("telar-core");
 const agent_mod = @import("../agent/root.zig");
 const history = @import("../history/root.zig");
 const pane_mod = @import("../pane/root.zig");
+const workspace_mod = @import("../workspace/root.zig");
 const attachment_mod = @import("attachment.zig");
 const response_queue = @import("response_queue.zig");
 const runtime_encoder = @import("encoder.zig");
 const system_metrics_mod = @import("system_metrics.zig");
 const telemetry_mod = @import("telemetry.zig");
-const workspace_mod = @import("workspace.zig");
 
 const Io = std.Io;
 const schema = core.schema;
@@ -19,11 +19,10 @@ const AttachmentStore = attachment_mod.AttachmentStore;
 const PaneStore = pane_mod.PaneStore;
 const ResponseQueue = response_queue.ResponseQueue;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-const WorkspaceStore = workspace_mod.WorkspaceStore;
 
 pub const Sources = struct {
     panes: *const PaneStore,
-    workspaces: *const WorkspaceStore,
+    workspaces: workspace_mod.Reader,
     agents: *const agent_mod.Tracker,
     system_metrics: *const system_metrics_mod.Sampler,
     proxy_active: bool,
@@ -186,6 +185,7 @@ pub const Delivery = struct {
     ) !?Prepared {
         std.debug.assert(delivery.phase == .ready);
         const buffer = delivery.send_buffer;
+        const workspaces = sources.workspaces;
 
         if (delivery.stopping_pending) return delivery.stage(
             try schema.encodeRuntimeStopping(buffer),
@@ -194,13 +194,12 @@ pub const Delivery = struct {
 
         if (delivery.responses.peekManagement()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
-            const payload = try runtime_encoder.encodeResponse(
-                buffer,
-                entry.response,
-                sources.panes,
-                sources.workspaces,
-                &history_result,
-            );
+            const payload = try runtime_encoder.encodeResponse(.{
+                .buffer = buffer,
+                .panes = sources.panes,
+                .workspaces = workspaces,
+                .history_result = &history_result,
+            }, entry.response);
             return delivery.stage(payload, .{ .response = .{
                 .offset = entry.offset,
                 .history_result = history_result,
@@ -210,7 +209,7 @@ pub const Delivery = struct {
         if (delivery.responses.resync_workspace) |workspace| return delivery.stage(
             try schema.encodeResyncRequired(buffer, .{
                 .workspace = workspace,
-                .workspace_closed = sources.workspaces.findConst(workspace) == null,
+                .workspace_closed = !workspaces.containsWorkspace(workspace),
                 .previous_workspace = delivery.responses.resync_previous_workspace,
             }),
             .resync,
@@ -246,13 +245,13 @@ pub const Delivery = struct {
                 entry_storage[enriched_count] = entry;
                 entry_storage[enriched_count].location = pane.location;
                 entry_storage[enriched_count].pane_index = pane_index;
-                if (sources.workspaces.findConst(pane.location.workspace)) |workspace|
+                if (workspaces.workspaceName(pane.location.workspace)) |workspace_name|
                     entry_storage[enriched_count].workspace_label = copyDisplayPrefix(
                         &display_storage[enriched_count].workspace,
-                        workspace.name(),
+                        workspace_name,
                     );
-                if (sources.workspaces.findTabConst(pane.location)) |tab|
-                    entry_storage[enriched_count].tab_label = tab.labelSlice();
+                if (workspaces.tabLabel(pane.location)) |tab_label|
+                    entry_storage[enriched_count].tab_label = tab_label;
                 entry_storage[enriched_count].cwd_label = shortenCwd(
                     &display_storage[enriched_count].cwd,
                     pane.cwd.slice(),
@@ -288,14 +287,14 @@ pub const Delivery = struct {
         }
 
         if (delivery.runtime_state_requested and
-            delivery.workspace_list_revision_sent < sources.workspaces.revision)
+            delivery.workspace_list_revision_sent < workspaces.revision())
         {
             var entries: [workspace_mod.max_workspaces]schema.WorkspaceListEntry = undefined;
-            const revision = sources.workspaces.revision;
+            const revision = workspaces.revision();
             return delivery.stage(
                 try schema.encodeWorkspaceList(buffer, .{
                     .revision = revision,
-                    .entries = sources.workspaces.listEntries(&entries),
+                    .entries = workspaces.listEntries(&entries),
                 }),
                 .{ .workspace_list_revision = revision },
             );
@@ -314,13 +313,12 @@ pub const Delivery = struct {
 
         if (delivery.responses.peekObservation()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
-            const payload = try runtime_encoder.encodeResponse(
-                buffer,
-                entry.response,
-                sources.panes,
-                sources.workspaces,
-                &history_result,
-            );
+            const payload = try runtime_encoder.encodeResponse(.{
+                .buffer = buffer,
+                .panes = sources.panes,
+                .workspaces = workspaces,
+                .history_result = &history_result,
+            }, entry.response);
             return delivery.stage(payload, .{ .response = .{
                 .offset = entry.offset,
                 .history_result = history_result,
@@ -567,8 +565,7 @@ test "delivery preserves management before resync wire order" {
     var attachments: AttachmentStore = .{};
     defer attachments.deinit();
     var panes: PaneStore = .{};
-    var workspaces = WorkspaceStore.init(std.testing.allocator);
-    defer workspaces.deinit();
+    var workspaces: workspace_mod.State = .{};
     var agents: agent_mod.Tracker = .{};
     var system_metrics: system_metrics_mod.Sampler = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
@@ -583,7 +580,7 @@ test "delivery preserves management before resync wire order" {
     delivery.requestWorkspaceResync(workspace, null);
     const sources: Sources = .{
         .panes = &panes,
-        .workspaces = &workspaces,
+        .workspaces = workspace_mod.Reader.init(&workspaces),
         .agents = &agents,
         .system_metrics = &system_metrics,
         .proxy_active = false,

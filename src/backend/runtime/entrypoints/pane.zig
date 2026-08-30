@@ -4,18 +4,18 @@ const std = @import("std");
 const core = @import("telar-core");
 const attachment_mod = @import("../attachment.zig");
 const pane_mod = @import("../../pane/root.zig");
-const workspace_mod = @import("../workspace.zig");
+const workspace_mod = @import("../../workspace/root.zig");
 const common = @import("common.zig");
 
 const AttachmentStore = attachment_mod.AttachmentStore;
 const PaneStore = pane_mod.PaneStore;
-const WorkspaceStore = workspace_mod.WorkspaceStore;
+const WorkspaceRepository = workspace_mod.Repository;
 const schema = core.schema;
 
-pub fn openPane(
+pub const OpenPaneContext = struct {
     gpa: std.mem.Allocator,
     panes: *PaneStore,
-    workspaces: *WorkspaceStore,
+    workspaces: *WorkspaceRepository,
     attachments: *AttachmentStore,
     responses: *common.ResponseQueue,
     client: common.ClientKey,
@@ -23,8 +23,39 @@ pub fn openPane(
     geometry: common.Geometry,
     launcher: common.Launcher,
     scheduler: common.Scheduler,
-    open: schema.OpenPaneView,
-) !void {
+};
+
+pub const CreatePaneContext = struct {
+    gpa: std.mem.Allocator,
+    panes: *PaneStore,
+    workspaces: *WorkspaceRepository,
+    attachments: *AttachmentStore,
+    responses: *common.ResponseQueue,
+    client: common.ClientKey,
+    shared_graphics: bool,
+    geometry: common.Geometry,
+    launcher: common.Launcher,
+    events: common.WorkspaceEvents,
+};
+
+/// Resolves an existing target or launches the default pane, then attaches it
+/// to the requesting client only after runtime ownership succeeds.
+///
+/// ```zig
+/// try openPane(context, request);
+/// ```
+pub fn openPane(context: OpenPaneContext, open: schema.OpenPaneView) !void {
+    const gpa = context.gpa;
+    const panes = context.panes;
+    const workspaces = context.workspaces;
+    const attachments = context.attachments;
+    const responses = context.responses;
+    const client = context.client;
+    const shared_graphics = context.shared_graphics;
+    const geometry = context.geometry;
+    const launcher = context.launcher;
+    const scheduler = context.scheduler;
+
     var created = false;
     const active = switch (open.target) {
         .pane => |wanted| pane: {
@@ -39,7 +70,8 @@ pub fn openPane(
             break :pane existing;
         },
         .workspace => |wanted| pane: {
-            const workspace = workspaces.find(.{ .workspace = wanted }) orelse {
+            const workspace_location: schema.WorkspaceLocation = .{ .workspace = wanted };
+            const default_tab = workspaces.reader().defaultTab(workspace_location) orelse {
                 try common.queueFailure(
                     responses,
                     open.request_id,
@@ -49,8 +81,8 @@ pub fn openPane(
                 return;
             };
             const location: schema.TabLocation = .{
-                .workspace = .{ .workspace = wanted },
-                .tab_id = workspace.defaultTab(),
+                .workspace = workspace_location,
+                .tab_id = default_tab,
             };
             const existing = panes.firstAt(location) orelse {
                 try common.queueFailure(
@@ -87,7 +119,8 @@ pub fn openPane(
                 .worktree => unreachable,
             };
             defer if (!workspace_committed) {
-                workspaces.remove(workspace_id);
+                const removed = workspaces.remove(workspace_id);
+                std.debug.assert(removed);
                 geometry.release(geometry.context, client, ensured.location.workspace);
             };
             const location = ensured.location;
@@ -101,7 +134,7 @@ pub fn openPane(
                 );
                 return;
             }
-            const workspace_path = workspaces.find(location.workspace).?.path;
+            const workspace_path = workspaces.reader().workspacePath(location.workspace).?;
             const fresh = launcher.launch(
                 launcher.context,
                 location,
@@ -142,20 +175,25 @@ pub fn openPane(
     } });
 }
 
-pub fn createPane(
-    gpa: std.mem.Allocator,
-    panes: *PaneStore,
-    workspaces: *WorkspaceStore,
-    attachments: *AttachmentStore,
-    responses: *common.ResponseQueue,
-    client: common.ClientKey,
-    shared_graphics: bool,
-    geometry: common.Geometry,
-    launcher: common.Launcher,
-    events: common.WorkspaceEvents,
-    create: schema.CreatePaneView,
-) !void {
-    if (!workspaces.contains(create.location) or panes.countAt(create.location) == 0) {
+/// Launches a sibling pane inside an existing tab and publishes the committed
+/// workspace change after the requesting client is attached.
+///
+/// ```zig
+/// try createPane(context, request);
+/// ```
+pub fn createPane(context: CreatePaneContext, create: schema.CreatePaneView) !void {
+    const gpa = context.gpa;
+    const panes = context.panes;
+    const workspaces = context.workspaces;
+    const attachments = context.attachments;
+    const responses = context.responses;
+    const client = context.client;
+    const shared_graphics = context.shared_graphics;
+    const geometry = context.geometry;
+    const launcher = context.launcher;
+    const events = context.events;
+
+    if (!workspaces.reader().contains(create.location) or panes.countAt(create.location) == 0) {
         try common.queueFailure(responses, create.request_id, .pane_not_found, "tab not found");
         return;
     }
@@ -175,7 +213,7 @@ pub fn createPane(
         create.launch,
         .{ .tab = create.location },
     )) orelse return;
-    const workspace_path = workspaces.find(create.location.workspace).?.path;
+    const workspace_path = workspaces.reader().workspacePath(create.location.workspace).?;
     const fresh = launcher.launch(
         launcher.context,
         create.location,
@@ -198,11 +236,7 @@ pub fn createPane(
     events.changed(events.context, client, create.location.workspace);
 }
 
-pub fn closePane(
-    attachments: *AttachmentStore,
-    responses: *common.ResponseQueue,
-    close: schema.ClosePane,
-) !void {
+pub fn closePane(attachments: *AttachmentStore, responses: *common.ResponseQueue, close: schema.ClosePane) !void {
     const active = attachments.find(close.pane_id) orelse {
         try common.queueFailure(responses, close.request_id, .pane_not_found, "pane not attached");
         return;
