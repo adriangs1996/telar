@@ -205,11 +205,13 @@ pub const Proxy = struct {
     pub fn metrics(proxy: *const Proxy) MetricsSnapshot {
         const service = proxy.lifecycle.service;
         const connections = service.connection_slots.snapshot();
+        const observations = service.observations.metrics();
+
         return .{
             .active_connections = connections.active,
-            .queued_events = service.queued_events.load(.monotonic),
-            .event_queue_high_water = service.event_queue_high_water.load(.monotonic),
-            .dropped_events = service.dropped_events.load(.monotonic),
+            .queued_events = observations.queued,
+            .event_queue_high_water = observations.high_water,
+            .dropped_events = observations.dropped,
             .rejected_connections = service.rejected_connections.load(.monotonic),
             .invalid_authorization_rejections = service.invalid_authorization_rejections.load(.monotonic),
             .unknown_credential_rejections = service.unknown_credential_rejections.load(.monotonic),
@@ -234,7 +236,7 @@ fn cancelService(service: *service_mod.Service, worker: *ProxyWorker) void {
 }
 
 fn closeServiceObservations(service: *service_mod.Service) void {
-    service.events.close(service.io);
+    service.observations.close(service.io);
 }
 
 fn destroyService(service: *service_mod.Service) void {
@@ -432,6 +434,7 @@ test {
     std.testing.refAllDecls(identity);
     std.testing.refAllDecls(lifecycle_mod);
     std.testing.refAllDecls(middleware);
+    std.testing.refAllDecls(@import("observation_queue.zig"));
     std.testing.refAllDecls(@import("provider/root.zig"));
     std.testing.refAllDecls(service_mod);
     std.testing.refAllDecls(@import("sse.zig"));

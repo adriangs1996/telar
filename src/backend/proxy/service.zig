@@ -10,6 +10,7 @@ const h2 = @import("h2/root.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
 const middleware = @import("middleware.zig");
+const observation_queue = @import("observation_queue.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
 const tls_tunnel = @import("tls_tunnel.zig");
@@ -21,7 +22,7 @@ const schema = core.schema;
 pub const first_port: u16 = 45100;
 pub const port_attempts: u16 = 128;
 pub const max_connections: u32 = 64;
-pub const event_capacity = 256;
+pub const event_capacity = observation_queue.capacity;
 pub const max_credentials = schema.max_agent_snapshot_entries;
 pub const max_configured_passthrough_hosts = core.proxy.max_passthrough_hosts;
 pub const default_passthrough_hosts = [_][]const u8{
@@ -111,11 +112,7 @@ pub const Service = struct {
     transforms: middleware.TransformPipeline = .{},
     configuration_mutex: Io.Mutex = .init,
     started: bool = false,
-    event_storage: [event_capacity]middleware.Event = undefined,
-    events: Io.Queue(middleware.Event),
-    queued_events: std.atomic.Value(u64) = .init(0),
-    event_queue_high_water: std.atomic.Value(u64) = .init(0),
-    dropped_events: std.atomic.Value(u64) = .init(0),
+    observations: observation_queue.Channel = undefined,
     rejected_connections: std.atomic.Value(u64) = .init(0),
     invalid_authorization_rejections: std.atomic.Value(u64) = .init(0),
     unknown_credential_rejections: std.atomic.Value(u64) = .init(0),
@@ -154,10 +151,13 @@ pub const Service = struct {
             .certificate_path = paths.certificate,
             .bundle_path = paths.bundle,
             .passthrough_hosts = try .init(paths.passthrough_hosts),
-            .events = undefined,
+            .observations = undefined,
         };
-        service.events = .init(&service.event_storage);
-        try service.pipeline.add(.{ .context = service, .observe = enqueueEvent });
+        service.observations.init(.{
+            .context = service,
+            .is_live = observationCredentialIsLive,
+        });
+        try service.pipeline.add(service.observations.observer());
         return service;
     }
 
@@ -184,14 +184,7 @@ pub const Service = struct {
     }
 
     pub fn receive(service: *Service, io: Io) anyerror!middleware.Event {
-        while (true) {
-            var event = try service.events.getOne(io);
-            defer std.crypto.secureZero(u8, &event.credential.token);
-            releaseEventSlot(&service.queued_events);
-            if (service.credentials.contains(service.io, &event.credential)) {
-                return event;
-            }
-        }
+        return service.observations.receive(io);
     }
 
     pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const identity.Credential) ![]const u8 {
@@ -222,27 +215,6 @@ pub const Service = struct {
         }
 
         return service.transforms.add(transformer);
-    }
-
-    fn enqueueEvent(context: *anyopaque, io: Io, event: middleware.Event) void {
-        const service: *Service = @ptrCast(@alignCast(context));
-        if (!service.credentials.contains(service.io, &event.credential)) {
-            return;
-        }
-
-        // A waiting getter may consume the queue's direct handoff before
-        // `put` returns, so the matching depth must exist before publication.
-        const depth = reserveEventSlot(&service.queued_events) orelse {
-            _ = service.dropped_events.fetchAdd(1, .monotonic);
-            return;
-        };
-        const queued = service.events.put(io, &.{event}, 0) catch 0;
-        if (queued == 0) {
-            releaseEventSlot(&service.queued_events);
-            _ = service.dropped_events.fetchAdd(1, .monotonic);
-            return;
-        }
-        _ = service.event_queue_high_water.fetchMax(depth, .monotonic);
     }
 };
 
@@ -291,26 +263,9 @@ fn containsCredential(service: *Service, credential: *const identity.Credential)
     return service.credentials.contains(service.io, credential);
 }
 
-fn reserveEventSlot(queued_events: *std.atomic.Value(u64)) ?u64 {
-    var current = queued_events.load(.monotonic);
-    while (current < event_capacity) {
-        if (queued_events.cmpxchgWeak(
-            current,
-            current + 1,
-            .monotonic,
-            .monotonic,
-        )) |observed| {
-            current = observed;
-            continue;
-        }
-        return current + 1;
-    }
-    return null;
-}
-
-fn releaseEventSlot(queued_events: *std.atomic.Value(u64)) void {
-    const previous = queued_events.fetchSub(1, .monotonic);
-    std.debug.assert(previous != 0);
+fn observationCredentialIsLive(context: *anyopaque, credential: *const identity.Credential) bool {
+    const service: *Service = @ptrCast(@alignCast(context));
+    return service.credentials.contains(service.io, credential);
 }
 
 const CredentialRegistry = struct {
@@ -1119,21 +1074,6 @@ fn listenTestOrigin(io: Io) !Bound {
     return error.TestOriginPortUnavailable;
 }
 
-test "observation event reservations stay bounded and balanced" {
-    var queued_events: std.atomic.Value(u64) = .init(0);
-
-    for (1..event_capacity + 1) |expected_depth| {
-        try std.testing.expectEqual(
-            @as(?u64, @intCast(expected_depth)),
-            reserveEventSlot(&queued_events),
-        );
-    }
-    try std.testing.expect(reserveEventSlot(&queued_events) == null);
-
-    for (0..event_capacity) |_| releaseEventSlot(&queued_events);
-    try std.testing.expectEqual(@as(u64, 0), queued_events.load(.monotonic));
-}
-
 test "passthrough CONNECT relays bytes with a saturated observation queue" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
@@ -1174,15 +1114,17 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
     };
     for (0..event_capacity) |_| service.pipeline.publish(io, observation);
     service.pipeline.publish(io, observation);
+    const observation_metrics = service.observations.metrics();
+
     try std.testing.expectEqual(
         @as(u64, event_capacity),
-        service.queued_events.load(.monotonic),
+        observation_metrics.queued,
     );
     try std.testing.expectEqual(
         @as(u64, event_capacity),
-        service.event_queue_high_water.load(.monotonic),
+        observation_metrics.high_water,
     );
-    try std.testing.expectEqual(@as(u64, 1), service.dropped_events.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), observation_metrics.dropped);
     var worker = try io.concurrent(Service.run, .{service});
     defer worker.cancel(io) catch {};
 
@@ -1390,7 +1332,7 @@ test "receive discards observations queued before pane revocation" {
     var received = try service.receive(io);
     defer std.crypto.secureZero(u8, &received.credential.token);
     try std.testing.expect(std.meta.eql(next, received.credential));
-    try std.testing.expectEqual(@as(u64, 0), service.queued_events.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.observations.metrics().queued);
 }
 
 test "loopback service maps CONNECT authentication and target rejections" {

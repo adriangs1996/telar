@@ -162,12 +162,18 @@ identity prevent a late event from attaching to a reused pane.
 These are sidebar hints, not agent authority. A heuristic never approves a
 command, resumes a session, kills a process, or generates terminal input.
 Observation values contain only connection, stream, protocol, provider, phase,
-status code, pane identity, and timestamps. Queue saturation drops
-observations, never traffic.
+status code, pane identity, and timestamps. One fixed 256-event channel checks
+the pane credential both before publication and before delivery. Revocation
+therefore removes queued authority as well as rejecting later observations.
+Saturation or closure drops publication, never traffic; a normal close drains
+already-buffered observations before receivers see `error.Closed`.
 
 Bounded counters distinguish rejected authentication, upstream connection
 failures, each TLS interception stage, HTTP/2 decode failures, and passthrough
-connections. They never retain the destination hostname or payload.
+connections. Observation metrics expose reserved delivery depth, its high-water
+mark, and publications lost to capacity or closure. Rejected and subsequently
+revoked credentials do not increment the loss counter because they were never
+eligible for delivery. No metric retains the destination hostname or payload.
 
 ## Lua middleware boundary
 
