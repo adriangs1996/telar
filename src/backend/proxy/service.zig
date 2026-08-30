@@ -582,7 +582,7 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     var context: TunnelContext = .{
         .service = service,
         .credential = authenticated.credential,
-        .provider = providerForHost(target.host.bytes),
+        .provider = provider.identify(target.host.bytes),
         .connection_id = service.next_connection_id.fetchAdd(1, .monotonic),
         .protocol = .http11,
     };
@@ -718,10 +718,13 @@ fn h2RelayOptions(context: *H2Context, settings: *h2.Settings, direction: h2.Dir
         .response => .response,
     };
 
-    return h2.relayOptions(direction, settings, if (context.service.transforms.len == 0) null else .{
-        .pipeline = &context.service.transforms,
-        .io = context.service.io,
-        .context = context.tunnel.transformContext(transform_direction, kind, 0),
+    return h2.relayOptions(direction, settings, .{
+        .provider = context.tunnel.provider,
+        .transformation = if (context.service.transforms.len == 0) null else .{
+            .pipeline = &context.service.transforms,
+            .io = context.service.io,
+            .context = context.tunnel.transformContext(transform_direction, kind, 0),
+        },
     });
 }
 
@@ -750,6 +753,7 @@ fn relayHttpRequestHead(context: *Http1Context) ?http.RequestHead {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
+            .provider = context.tunnel.provider,
         },
         .pipeline = &context.service.transforms,
         .io = context.service.io,
@@ -757,7 +761,7 @@ fn relayHttpRequestHead(context: *Http1Context) ?http.RequestHead {
     }) orelse return null;
 
     return .{
-        .classification = if (parsed.inference_request) .inference else .auxiliary,
+        .classification = parsed.classification,
         .body = parsed.framing,
         .response_context = if (parsed.message.head_request) .head_request else .normal,
     };
@@ -896,7 +900,7 @@ test "provider payload inspection requires a successful inference stream" {
     const successful: http.Head = .{
         .message = .{ .status_code = 200 },
         .framing = .none,
-        .inference_request = false,
+        .classification = .auxiliary,
         .sse_body = true,
     };
 
@@ -944,7 +948,7 @@ test "HTTP response metadata preserves final routing semantics" {
     const informational = semanticResponseHead(.{
         .message = .{ .status_code = 100, .informational = true },
         .framing = .none,
-        .inference_request = false,
+        .classification = .auxiliary,
         .sse_body = false,
     });
     try std.testing.expectEqual(http.ResponseKind.informational, informational.kind);
@@ -953,7 +957,7 @@ test "HTTP response metadata preserves final routing semantics" {
     const upgrade = semanticResponseHead(.{
         .message = .{ .status_code = 101, .upgrade = true },
         .framing = .none,
-        .inference_request = false,
+        .classification = .auxiliary,
         .sse_body = false,
     });
     try std.testing.expectEqual(http.ResponseKind.upgrade, upgrade.kind);
@@ -961,7 +965,7 @@ test "HTTP response metadata preserves final routing semantics" {
     const closing = semanticResponseHead(.{
         .message = .{ .status_code = 200, .closes = true },
         .framing = .until_close,
-        .inference_request = false,
+        .classification = .auxiliary,
         .sse_body = false,
     });
     try std.testing.expectEqual(http.ResponseKind.final, closing.kind);
@@ -1043,18 +1047,6 @@ fn reply(io: Io, stream: net.Stream, bytes: []const u8) void {
     writer.interface.flush() catch {};
 }
 
-fn providerForHost(host: []const u8) schema.AgentProvider {
-    if (hostMatches(host, "anthropic.com")) return .claude;
-    if (hostMatches(host, "openai.com") or hostMatches(host, "chatgpt.com")) return .codex;
-    return .unknown;
-}
-
-fn hostMatches(host: []const u8, domain: []const u8) bool {
-    if (std.ascii.eqlIgnoreCase(host, domain)) return true;
-    if (host.len <= domain.len or host[host.len - domain.len - 1] != '.') return false;
-    return std.ascii.eqlIgnoreCase(host[host.len - domain.len ..], domain);
-}
-
 // Resolve asynchronously but connect sequentially. This avoids a Zig 0.16
 // Darwin race where concurrent connect attempts can report EISCONN.
 fn connectUpstream(host: net.HostName, io: Io, port: u16) !net.Stream {
@@ -1075,12 +1067,6 @@ fn connectUpstream(host: net.HostName, io: Io, port: u16) !net.Stream {
             return last_error orelse error.UnknownHostName;
         },
     }
-}
-
-test "provider domains require a label boundary" {
-    try std.testing.expectEqual(schema.AgentProvider.claude, providerForHost("api.anthropic.com"));
-    try std.testing.expectEqual(schema.AgentProvider.codex, providerForHost("ab.chatgpt.com"));
-    try std.testing.expectEqual(schema.AgentProvider.unknown, providerForHost("evilopenai.com"));
 }
 
 test "passthrough policy sorts, deduplicates, and binary searches exact hostnames" {

@@ -4,6 +4,7 @@
 //! scratch storage used to parse or transform an HTTP message head.
 
 const std = @import("std");
+const provider = @import("../provider/request.zig");
 
 /// How an HTTP message body is delimited on the wire.
 pub const BodyPlan = union(enum) {
@@ -25,10 +26,7 @@ pub const BodyPlan = union(enum) {
 ///
 /// Classification refers to the request received from the child, before any
 /// configured header transformation changes the forwarded method or target.
-pub const RequestClass = enum {
-    inference,
-    auxiliary,
-};
+pub const RequestClass = provider.RequestClass;
 
 /// Information from the forwarded request needed to parse its response.
 pub const ResponseContext = enum {

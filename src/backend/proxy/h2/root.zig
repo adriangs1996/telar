@@ -4,6 +4,7 @@ const std = @import("std");
 const connection = @import("connection.zig");
 const relay_mod = @import("relay.zig");
 const middleware = @import("../middleware.zig");
+const provider = @import("../provider/request.zig");
 const tls = @import("../tls.zig");
 
 pub const Direction = relay_mod.Direction;
@@ -39,15 +40,21 @@ pub const Transform = struct {
 
 pub const RelayOptions = struct {
     route: Route,
+    provider: provider.AgentProvider,
     transformation: ?Transformation = null,
+};
+
+pub const RelayConfiguration = struct {
+    provider: provider.AgentProvider,
+    transformation: ?Transform = null,
 };
 
 /// Builds the route and crossed peer settings for one relay direction.
 ///
 /// ```zig
-/// const request = relayOptions(.request, &settings, null);
+/// const request = relayOptions(.request, &settings, .{ .provider = .claude });
 /// ```
-pub fn relayOptions(direction: Direction, settings: *Settings, transform: ?Transform) RelayOptions {
+pub fn relayOptions(direction: Direction, settings: *Settings, configuration: RelayConfiguration) RelayOptions {
     const route: Route = switch (direction) {
         .request => .{ .from = .child, .to = .origin, .direction = .request },
         .response => .{ .from = .origin, .to = .child, .direction = .response },
@@ -59,7 +66,8 @@ pub fn relayOptions(direction: Direction, settings: *Settings, transform: ?Trans
 
     return .{
         .route = route,
-        .transformation = if (transform) |selected| .{
+        .provider = configuration.provider,
+        .transformation = if (configuration.transformation) |selected| .{
             .source_settings = source_settings,
             .target_settings = target_settings,
             .pipeline = selected.pipeline,
@@ -76,6 +84,7 @@ pub fn relayOptions(direction: Direction, settings: *Settings, transform: ?Trans
 /// ```zig
 /// const stats = relay(session, .{
 ///     .route = .{ .from = .child, .to = .origin, .direction = .request },
+///     .provider = .claude,
 /// }, &sink);
 /// ```
 pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
@@ -85,6 +94,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
         route.from,
         route.to,
         route.direction,
+        options.provider,
         sink,
         Emitter(@TypeOf(sink)).emit,
     );
@@ -94,6 +104,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
         route.from,
         route.to,
         route.direction,
+        options.provider,
         transformation.source_settings,
         transformation.target_settings,
         transformation.pipeline,
@@ -117,28 +128,37 @@ test "relay options map direction and peer settings" {
     var pipeline: middleware.TransformPipeline = .{};
     const context: middleware.TransformContext = undefined;
 
-    const observed_request = relayOptions(.request, &settings, null);
+    const observed_request = relayOptions(.request, &settings, .{ .provider = .unknown });
     try std.testing.expectEqual(tls.Session.Side.child, observed_request.route.from);
     try std.testing.expectEqual(tls.Session.Side.origin, observed_request.route.to);
+    try std.testing.expectEqual(provider.AgentProvider.unknown, observed_request.provider);
     try std.testing.expect(observed_request.transformation == null);
 
     const request = relayOptions(.request, &settings, .{
-        .pipeline = &pipeline,
-        .io = std.testing.io,
-        .context = context,
+        .provider = .claude,
+        .transformation = .{
+            .pipeline = &pipeline,
+            .io = std.testing.io,
+            .context = context,
+        },
     });
     try std.testing.expectEqual(tls.Session.Side.child, request.route.from);
     try std.testing.expectEqual(tls.Session.Side.origin, request.route.to);
+    try std.testing.expectEqual(provider.AgentProvider.claude, request.provider);
     try std.testing.expect(request.transformation.?.source_settings == &settings.child);
     try std.testing.expect(request.transformation.?.target_settings == &settings.origin);
 
     const response = relayOptions(.response, &settings, .{
-        .pipeline = &pipeline,
-        .io = std.testing.io,
-        .context = context,
+        .provider = .codex,
+        .transformation = .{
+            .pipeline = &pipeline,
+            .io = std.testing.io,
+            .context = context,
+        },
     });
     try std.testing.expectEqual(tls.Session.Side.origin, response.route.from);
     try std.testing.expectEqual(tls.Session.Side.child, response.route.to);
+    try std.testing.expectEqual(provider.AgentProvider.codex, response.provider);
     try std.testing.expect(response.transformation.?.source_settings == &settings.origin);
     try std.testing.expect(response.transformation.?.target_settings == &settings.child);
 }
@@ -206,6 +226,7 @@ const IntegrationContext = struct {
     session: FakeSession,
     request_done: *std.Io.Queue(u8),
     event_count: std.atomic.Value(u32) = .init(0),
+    request_phase: ?middleware.Phase = null,
     decode_failures: u8 = 0,
     settlements: u8 = 0,
 
@@ -214,14 +235,14 @@ const IntegrationContext = struct {
     }
 
     fn relayRequest(context: *IntegrationContext, settings: *Settings) Stats {
-        const stats = relay(&context.session, relayOptions(.request, settings, null), context);
+        const stats = relay(&context.session, relayOptions(.request, settings, .{ .provider = .claude }), context);
         context.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;
         return stats;
     }
 
     fn relayResponse(context: *IntegrationContext, settings: *Settings) Stats {
         _ = context.request_done.getOne(std.testing.io) catch return .{ .decode_failed = true };
-        return relay(&context.session, relayOptions(.response, settings, null), context);
+        return relay(&context.session, relayOptions(.response, settings, .{ .provider = .claude }), context);
     }
 
     fn recordDecodeFailure(context: *IntegrationContext, _: Direction) void {
@@ -232,8 +253,15 @@ const IntegrationContext = struct {
         context.settlements += 1;
     }
 
-    pub fn emit(context: *IntegrationContext, _: Event) void {
+    pub fn emit(context: *IntegrationContext, event: Event) void {
         _ = context.event_count.fetchAdd(1, .monotonic);
+
+        switch (event) {
+            .lifecycle => |observed| if (observed.stream_id == 1) {
+                context.request_phase = observed.phase;
+            },
+            .response_body => {},
+        }
     }
 };
 
@@ -249,7 +277,9 @@ const IntegrationConnection = Connection(IntegrationContext, integration_port);
 
 test "HTTP2 connection composition relays both directions before settlement" {
     const settings_frame = "\x00\x00\x00\x04\x00\x00\x00\x00\x00";
-    const request_wire = client_preface ++ settings_frame;
+    const request_header = "\x00\x00\x0f\x01\x04\x00\x00\x00\x01";
+    const request_block = "\x83\x04\x0c/v1/messages";
+    const request_wire = client_preface ++ settings_frame ++ request_header ++ request_block;
     var done_storage: [1]u8 = undefined;
     var done: std.Io.Queue(u8) = .init(&done_storage);
     var context: IntegrationContext = .{
@@ -266,7 +296,8 @@ test "HTTP2 connection composition relays both directions before settlement" {
     try std.testing.expectEqualStrings(settings_frame, context.session.childOutput());
     try std.testing.expect(context.session.origin_half_closed);
     try std.testing.expect(context.session.child_half_closed);
-    try std.testing.expectEqual(@as(u32, 0), context.event_count.load(.monotonic));
+    try std.testing.expectEqual(@as(u32, 1), context.event_count.load(.monotonic));
+    try std.testing.expectEqual(middleware.Phase.request_started, context.request_phase.?);
     try std.testing.expectEqual(@as(u8, 0), context.decode_failures);
     try std.testing.expectEqual(@as(u8, 1), context.settlements);
 }

@@ -126,13 +126,17 @@ capability.
 ## Agent state
 
 Hosts below `anthropic.com` identify Claude Code and hosts below `openai.com`
-or `chatgpt.com` identify Codex. A request start, response data, or successful
-response completion means `working`: one completed model exchange may be
-followed by local tool execution and another model request within the same
-agent turn. HTTP/1.1 error responses, HTTP/2 stream resets, and failures while
-connecting or establishing TLS mean `failed`. HTTP/2 response status is decoded
-from HPACK, so a completed response with status 400 or greater also means
-`failed`.
+or `chatgpt.com` identify Codex. Only `POST /v1/messages` belongs to Claude;
+only `POST /v1/responses` and `POST /backend-api/codex/responses` belong to
+Codex. Queries do not change route ownership. Cross-provider routes, unknown
+hosts, and other requests are auxiliary and do not drive agent lifecycle.
+
+An inference request start, response data, or successful response completion
+means `working`: one completed model exchange may be followed by local tool
+execution and another model request within the same agent turn. HTTP/1.1 error
+responses, HTTP/2 stream resets, and failures while connecting or establishing
+TLS mean `failed`. HTTP/2 response status is decoded from HPACK, so a completed
+response with status 400 or greater also means `failed`.
 
 HTTP/2 lifecycle state is keyed by protocol, connection ID, and stream ID.
 Completing every active stream still does not prove that the agent turn ended.

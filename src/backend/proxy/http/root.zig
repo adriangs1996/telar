@@ -11,6 +11,7 @@ const head = @import("head.zig");
 const transform = @import("transform.zig");
 const types = @import("types.zig");
 const middleware = @import("../middleware.zig");
+const provider = @import("../provider/request.zig");
 const tls = @import("../tls.zig");
 
 pub const max_head_bytes = head.max_bytes;
@@ -38,6 +39,7 @@ pub const MessageRoute = struct {
     to: tls.Session.Side,
     is_response: bool,
     response_to_head: bool,
+    provider: provider.AgentProvider = .unknown,
 };
 
 pub const HeadTransform = struct {
@@ -82,7 +84,11 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
         return null;
     }
 
-    return head.analyze(buffer[0..len], route.is_response, route.response_to_head);
+    return head.analyze(buffer[0..len], .{
+        .is_response = route.is_response,
+        .response_to_head = route.response_to_head,
+        .provider = route.provider,
+    });
 }
 
 /// Relays one HTTP head after applying the configured transformation pipeline.
@@ -101,11 +107,11 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?He
 
     var original: [max_head_bytes]u8 = undefined;
     const original_len = head.read(session, transformation.route.from, &original) orelse return null;
-    const original_head = head.analyze(
-        original[0..original_len],
-        transformation.route.is_response,
-        transformation.route.response_to_head,
-    ) orelse return null;
+    const original_head = head.analyze(original[0..original_len], .{
+        .is_response = transformation.route.is_response,
+        .response_to_head = transformation.route.response_to_head,
+        .provider = transformation.route.provider,
+    }) orelse return null;
 
     var encoded: [max_head_bytes]u8 = undefined;
     var selected_head = original_head;
@@ -285,10 +291,11 @@ const ConnectionIntegration = struct {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
+            .provider = .claude,
         }) orelse return null;
 
         return .{
-            .classification = if (parsed.inference_request) .inference else .auxiliary,
+            .classification = parsed.classification,
             .body = parsed.framing,
             .response_context = if (parsed.message.head_request) .head_request else .normal,
         };

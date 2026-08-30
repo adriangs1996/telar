@@ -35,11 +35,13 @@ pub fn decide(
     if (!pipeline.apply(io, context, &headers)) return .preserve;
 
     const len = encodeHead(output, start_line, is_response, &headers) orelse return .preserve;
-    var transformed = head.analyze(output[0..len], is_response, response_to_head) orelse
-        return .preserve;
+    var transformed = head.analyze(output[0..len], .{
+        .is_response = is_response,
+        .response_to_head = response_to_head,
+    }) orelse return .preserve;
     if (!compatible(original_head, transformed)) return .preserve;
 
-    transformed.inference_request = original_head.inference_request;
+    transformed.classification = original_head.classification;
     return .{ .replace = .{ .head = transformed, .len = len } };
 }
 
@@ -159,7 +161,11 @@ fn testDecision(
 ) Decision {
     return decide(
         original,
-        head.analyze(original, is_response, false).?,
+        head.analyze(original, .{
+            .is_response = is_response,
+            .response_to_head = false,
+            .provider = if (is_response) .unknown else .claude,
+        }).?,
         is_response,
         false,
         pipeline,
@@ -325,7 +331,7 @@ test "request classification remains tied to the original route" {
         .preserve => return error.ExpectedReplacement,
         .replace => |value| value,
     };
-    try std.testing.expect(replacement.head.inference_request);
+    try std.testing.expectEqual(@import("../provider/request.zig").RequestClass.inference, replacement.head.classification);
     try std.testing.expect(std.mem.startsWith(
         u8,
         output[0..replacement.len],

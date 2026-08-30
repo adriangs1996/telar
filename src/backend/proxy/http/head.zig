@@ -6,6 +6,7 @@
 
 const std = @import("std");
 const middleware = @import("../middleware.zig");
+const provider = @import("../provider/request.zig");
 const tls = @import("../tls.zig");
 const types = @import("types.zig");
 
@@ -24,8 +25,14 @@ pub const Framing = types.BodyPlan;
 pub const Head = struct {
     message: Message,
     framing: Framing,
-    inference_request: bool,
+    classification: provider.RequestClass,
     sse_body: bool,
+};
+
+pub const AnalyzeOptions = struct {
+    is_response: bool,
+    response_to_head: bool,
+    provider: provider.AgentProvider = .unknown,
 };
 
 /// Reads one complete head into `buffer` and returns its byte length.
@@ -46,33 +53,46 @@ pub fn read(session: anytype, side: tls.Session.Side, buffer: []u8) ?usize {
 
 /// Derives message and framing metadata from one complete HTTP/1.1 head.
 ///
-/// `response_to_head` identifies a response to a `HEAD` request. Such a
-/// response has no body even when its headers describe the body a `GET` would
-/// have returned. Invalid or ambiguous framing returns `null`.
-pub fn analyze(bytes: []const u8, is_response: bool, response_to_head: bool) ?Head {
+/// `options.response_to_head` identifies a response to a `HEAD` request. Such
+/// a response has no body even when its headers describe the body a `GET`
+/// would have returned. Request classification uses the provider that owns the
+/// connection and always describes the original, untransformed start line.
+/// Invalid or ambiguous framing returns `null`.
+///
+/// ```zig
+/// const parsed = analyze(bytes, .{
+///     .is_response = false,
+///     .response_to_head = false,
+///     .provider = .claude,
+/// });
+/// ```
+pub fn analyze(bytes: []const u8, options: AnalyzeOptions) ?Head {
     const first_line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return null;
     const start_line = bytes[0..first_line_end];
-    const status_code: u16 = if (is_response) parseStatus(start_line) orelse return null else 0;
-    const bodyless = is_response and (response_to_head or
+    const status_code: u16 = if (options.is_response) parseStatus(start_line) orelse return null else 0;
+    const bodyless = options.is_response and (options.response_to_head or
         (status_code >= 100 and status_code < 200) or
         status_code == 204 or status_code == 205 or status_code == 304);
-    const framing = framingOf(bytes, is_response, bodyless) orelse return null;
+    const framing = framingOf(bytes, options.is_response, bodyless) orelse return null;
 
     return .{
         .message = .{
             .status_code = status_code,
-            .head_request = !is_response and isHeadRequest(start_line),
-            .informational = is_response and status_code >= 100 and status_code < 200 and
+            .head_request = !options.is_response and isHeadRequest(start_line),
+            .informational = options.is_response and status_code >= 100 and status_code < 200 and
                 status_code != 101,
-            .upgrade = is_response and status_code == 101,
+            .upgrade = options.is_response and status_code == 101,
             .closes = switch (framing) {
                 .until_close => true,
                 else => connectionCloses(bytes),
             },
         },
         .framing = framing,
-        .inference_request = !is_response and inferenceRequest(start_line),
-        .sse_body = is_response and hasObservableSseBody(bytes),
+        .classification = if (options.is_response)
+            .auxiliary
+        else
+            classifyRequest(start_line, options.provider),
+        .sse_body = options.is_response and hasObservableSseBody(bytes),
     };
 }
 
@@ -116,14 +136,17 @@ fn onlyChunkedCoding(value: []const u8) bool {
     return coding.len != 0 and std.ascii.eqlIgnoreCase(coding, "chunked") and tokens.next() == null;
 }
 
-fn inferenceRequest(start_line: []const u8) bool {
-    const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return false;
-    const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return false;
-    if (method_end == version_start) return false;
-    return middleware.isInferenceRequest(
-        start_line[0..method_end],
-        start_line[method_end + 1 .. version_start],
-    );
+fn classifyRequest(start_line: []const u8, agent_provider: provider.AgentProvider) provider.RequestClass {
+    const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
+    const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
+    if (method_end == version_start) {
+        return .auxiliary;
+    }
+
+    return provider.classify(agent_provider, .{
+        .method = start_line[0..method_end],
+        .target = start_line[method_end + 1 .. version_start],
+    });
 }
 
 fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?Framing {
@@ -218,6 +241,21 @@ fn parseStatus(line: []const u8) ?u16 {
     return if (status >= 100 and status <= 599) status else null;
 }
 
+fn analyzeRequest(bytes: []const u8, agent_provider: provider.AgentProvider) ?Head {
+    return analyze(bytes, .{
+        .is_response = false,
+        .response_to_head = false,
+        .provider = agent_provider,
+    });
+}
+
+fn analyzeResponse(bytes: []const u8, response_to_head: bool) ?Head {
+    return analyze(bytes, .{
+        .is_response = true,
+        .response_to_head = response_to_head,
+    });
+}
+
 test "head reader stops before the first body byte" {
     const FakeSession = @import("test_support.zig").FakeSession;
     const input = "POST / HTTP/1.1\r\nContent-Length: 4\r\n\r\ndata";
@@ -255,44 +293,38 @@ test "head reader rejects a head that fills its bound" {
 test "analyze recognizes fixed and chunked body framing" {
     try std.testing.expectEqualDeep(Framing{ .content_length = 42 }, analyze(
         "POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n",
-        false,
-        false,
+        .{ .is_response = false, .response_to_head = false },
     ).?.framing);
     try std.testing.expectEqual(Framing.chunked, analyze(
         "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n",
-        true,
-        false,
+        .{ .is_response = true, .response_to_head = false },
     ).?.framing);
 }
 
 test "analyze accepts repeated identical content lengths" {
     try std.testing.expectEqualDeep(Framing{ .content_length = 4 }, analyze(
         "POST / HTTP/1.1\r\nContent-Length: 4, 4\r\nContent-Length: 4\r\n\r\n",
-        false,
-        false,
+        .{ .is_response = false, .response_to_head = false },
     ).?.framing);
 }
 
 test "analyze rejects ambiguous body framing" {
     try std.testing.expect(analyze(
         "POST / HTTP/1.1\r\nContent-Length: 4\r\nContent-Length: 5\r\n\r\n",
-        false,
-        false,
+        .{ .is_response = false, .response_to_head = false },
     ) == null);
     try std.testing.expect(analyze(
         "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\nContent-Length: 4\r\n\r\n",
-        false,
-        false,
+        .{ .is_response = false, .response_to_head = false },
     ) == null);
     try std.testing.expect(analyze(
         "POST / HTTP/1.1\r\nTransfer-Encoding: gzip\r\n\r\n",
-        false,
-        false,
+        .{ .is_response = false, .response_to_head = false },
     ) == null);
 }
 
 test "responses without an explicit length close the connection" {
-    const parsed = analyze("HTTP/1.1 200 OK\r\n\r\n", true, false).?;
+    const parsed = analyzeResponse("HTTP/1.1 200 OK\r\n\r\n", false).?;
     try std.testing.expectEqual(Framing.until_close, parsed.framing);
     try std.testing.expect(parsed.message.closes);
 }
@@ -305,7 +337,7 @@ test "SSE response metadata accepts identity payloads across HTTP framing modes"
     };
 
     for (cases) |bytes| {
-        try std.testing.expect(analyze(bytes, true, false).?.sse_body);
+        try std.testing.expect(analyzeResponse(bytes, false).?.sse_body);
     }
 }
 
@@ -320,15 +352,14 @@ test "SSE response metadata rejects ambiguous non-SSE and encoded payloads" {
     };
 
     for (cases) |bytes| {
-        try std.testing.expect(!analyze(bytes, true, false).?.sse_body);
+        try std.testing.expect(!analyzeResponse(bytes, false).?.sse_body);
     }
 }
 
 test "request content type never assigns response SSE metadata" {
-    const parsed = analyze(
+    const parsed = analyzeRequest(
         "POST /v1/messages HTTP/1.1\r\nContent-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n",
-        false,
-        false,
+        .claude,
     ).?;
 
     try std.testing.expect(!parsed.sse_body);
@@ -342,19 +373,17 @@ test "bodyless responses ignore declared framing" {
             "HTTP/1.1 {d} Status\r\nContent-Length: 42\r\n\r\n",
             .{status},
         );
-        try std.testing.expectEqual(Framing.none, analyze(bytes, true, false).?.framing);
+        try std.testing.expectEqual(Framing.none, analyzeResponse(bytes, false).?.framing);
     }
-    try std.testing.expectEqual(Framing.none, analyze(
+    try std.testing.expectEqual(Framing.none, analyzeResponse(
         "HTTP/1.1 200 OK\r\nContent-Length: 42\r\n\r\n",
-        true,
         true,
     ).?.framing);
 }
 
 test "status and connection tokens are case insensitive" {
-    const parsed = analyze(
+    const parsed = analyzeResponse(
         "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: keep-alive, Close\r\n\r\n",
-        true,
         false,
     ).?;
     try std.testing.expectEqual(@as(u16, 429), parsed.message.status_code);
@@ -371,33 +400,33 @@ test "response status must be exactly three digits in the HTTP range" {
     };
 
     for (invalid) |bytes| {
-        try std.testing.expect(analyze(bytes, true, false) == null);
+        try std.testing.expect(analyzeResponse(bytes, false) == null);
     }
 }
 
-test "inference classification excludes auxiliary provider routes" {
-    try std.testing.expect(analyze(
+test "request classification uses the provider that owns the connection" {
+    try std.testing.expectEqual(provider.RequestClass.inference, analyzeRequest(
         "POST /v1/messages?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        false,
-        false,
-    ).?.inference_request);
-    try std.testing.expect(!analyze(
+        .claude,
+    ).?.classification);
+    try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
+        "POST /v1/messages HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
+        .codex,
+    ).?.classification);
+    try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
         "POST /v1/messages/count_tokens?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        false,
-        false,
-    ).?.inference_request);
-    try std.testing.expect(!analyze(
+        .claude,
+    ).?.classification);
+    try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
         "POST /api/event_logging/v2/batch HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        false,
-        false,
-    ).?.inference_request);
+        .claude,
+    ).?.classification);
 }
 
 test "a HEAD request is identified without assigning response metadata" {
-    const parsed = analyze(
+    const parsed = analyzeRequest(
         "HEAD /v1/messages HTTP/1.1\r\nHost: example.test\r\n\r\n",
-        false,
-        false,
+        .claude,
     ).?;
     try std.testing.expect(parsed.message.head_request);
     try std.testing.expectEqual(@as(u16, 0), parsed.message.status_code);

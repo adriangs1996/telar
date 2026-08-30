@@ -7,9 +7,15 @@
 const std = @import("std");
 const core = @import("telar-core");
 const claude = @import("claude.zig");
+const request = @import("request.zig");
 const sse = @import("../sse.zig");
 
-const AgentProvider = core.schema.AgentProvider;
+pub const AgentProvider = core.schema.AgentProvider;
+
+pub const Request = request.Request;
+pub const RequestClass = request.RequestClass;
+pub const identify = request.identify;
+pub const classify = request.classify;
 
 pub const max_concurrent_responses = 128;
 
@@ -283,4 +289,5 @@ test "response streams degrade locally at their fixed concurrency bound" {
 
 test {
     std.testing.refAllDecls(claude);
+    std.testing.refAllDecls(request);
 }
