@@ -268,7 +268,7 @@ fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !voi
         .agents = agents[0..count],
     });
     if (replaced) {
-        if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
+        if (client.model.workspace.active()) |active| try client.syncPaneFocus(&active.model);
         if (alert_count == 0) {
             try client.presenter.requestDraw();
         } else for (alerts[0..alert_count]) |agent| {
@@ -319,16 +319,16 @@ fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
 
 /// A pane's observed working directory changed.
 fn handlePaneCwd(client: *Client, message: schema.PaneCwd) !void {
-    const pane = client.tabs.findPane(message.pane_id) orelse return;
+    const pane = client.model.workspace.findPane(message.pane_id) orelse return;
     if (!try pane.setCwd(message.cwd)) return;
     client.view.invalidate();
     try client.presenter.requestDraw();
 }
 
 fn handlePaneForeground(client: *Client, message: schema.PaneForeground) !void {
-    const pane = client.tabs.findPane(message.pane_id) orelse return;
+    const pane = client.model.workspace.findPane(message.pane_id) orelse return;
     if (!pane.setForegroundName(message.name)) return;
-    if (client.tabs.tabForPane(message.pane_id)) |tab|
+    if (client.model.workspace.tabForPane(message.pane_id)) |tab|
         tab.model.composition_invalidated = true;
     client.view.invalidate();
     try client.presenter.requestDraw();
@@ -368,20 +368,20 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
             if (!opened.created) return error.UnexpectedRequest;
             client.rememberCurrentNavigation();
             try client.clearPaneFocus();
-            var tabs = client.tabs.tabIterator();
+            var tabs = client.model.workspace.tabIterator();
             while (tabs.next()) |tab| {
                 var panes = tab.model.paneIterator();
                 while (panes.next()) |pane| {
                     try client.graphics_store.setPaneVisible(pane.id, false);
                 }
             }
-            client.tabs.deinit();
+            client.model.workspace.deinit();
             try bootstrapWorkspace(client, opened);
         },
         .split => |split| {
             if (!std.meta.eql(split.location, opened.location))
                 return error.UnexpectedPane;
-            const tab = client.tabs.tabForPane(split.target_pane) orelse
+            const tab = client.model.workspace.tabForPane(split.target_pane) orelse
                 return error.UnexpectedPane;
             const model = &tab.model;
             if (model.find(split.target_pane) != null) {
@@ -398,7 +398,7 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
             if (attachment.pane_id != opened.pane_id or
                 !std.meta.eql(attachment.location, opened.location))
                 return error.UnexpectedPane;
-            const tab = client.tabs.tabForPane(opened.pane_id) orelse
+            const tab = client.model.workspace.tabForPane(opened.pane_id) orelse
                 return error.UnexpectedPane;
             try tab.model.markAttached(opened.pane_id);
         },
@@ -409,8 +409,8 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
 
 /// First pane of a workspace: builds the tab model and asks for both snapshots.
 fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
-    if (client.tabs.count != 0) return error.UnexpectedRequest;
-    try client.tabs.bootstrap(
+    if (client.model.workspace.count != 0) return error.UnexpectedRequest;
+    try client.model.workspace.bootstrap(
         opened.pane_id,
         opened.location,
         rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
@@ -418,10 +418,10 @@ fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
     if (client.navigation_history.find(opened.location.workspace)) |bookmark| {
         if (bookmark.tab_layout) |saved| {
             if (std.meta.eql(bookmark.location, opened.location))
-                std.debug.assert(client.tabs.restoreLayoutOnNextSnapshot(opened.location, saved));
+                std.debug.assert(client.model.workspace.restoreLayoutOnNextSnapshot(opened.location, saved));
         }
     }
-    try client.syncPaneFocus(&client.tabs.active().?.model);
+    try client.syncPaneFocus(&client.model.workspace.active().?.model);
     client.view.invalidate();
     try client.scheduleInputRead();
     try client.requestWorkspaceSnapshot(opened.location.workspace);
@@ -435,9 +435,9 @@ fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
     if (continuation != .tab_snapshot or
         !std.meta.eql(continuation.tab_snapshot, snapshot.location))
         return error.UnexpectedTabSnapshot;
-    const tab = try client.tabs.reconcileTab(snapshot, client.view.workbench());
+    const tab = try client.model.workspace.reconcileTab(snapshot, client.view.workbench());
     const model = &tab.model;
-    if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
+    if (client.model.workspace.active()) |active| try client.syncPaneFocus(&active.model);
     client.view.invalidate();
     try client.resizeAttached(model, client.view.workbench());
     var panes = model.paneIterator();
@@ -481,7 +481,7 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
         canonical_tabs[canonical_count] = descriptor.tab_id;
         canonical_count += 1;
     }
-    var tabs = client.tabs.tabIterator();
+    var tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         if (std.mem.findScalar(
             schema.TabId,
@@ -489,9 +489,9 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
             tab.location.tab_id,
         ) == null) releaseTabGraphics(&client.graphics_store, tab);
     }
-    try client.tabs.reconcileWorkspace(snapshot);
+    try client.model.workspace.reconcileWorkspace(snapshot);
     if (!client.requests.has(.tab_snapshot)) {
-        if (client.tabs.active()) |active| {
+        if (client.model.workspace.active()) |active| {
             if (!active.snapshot_loaded) {
                 try client.requestTabSnapshot(active.location);
             } else {
@@ -513,15 +513,15 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
     if (continuation != .create_tab or
         !std.meta.eql(continuation.create_tab, created.location.workspace))
         return error.UnexpectedTabCreated;
-    if (client.tabs.active()) |current| {
+    if (client.model.workspace.active()) |current| {
         var handler: InputHandler = .{ .client = client };
         try handler.detachTab(current);
     }
-    _ = try client.tabs.addCreated(
+    _ = try client.model.workspace.addCreated(
         created,
         rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
     );
-    try client.syncPaneFocus(&client.tabs.active().?.model);
+    try client.syncPaneFocus(&client.model.workspace.active().?.model);
     client.view.invalidate();
     try client.presenter.requestDraw();
 }
@@ -533,7 +533,7 @@ fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
     if (continuation != .rename_tab or
         !std.meta.eql(continuation.rename_tab, renamed.location))
         return error.UnexpectedTabRenamed;
-    if (!client.tabs.rename(renamed.location.tab_id, renamed.label))
+    if (!client.model.workspace.rename(renamed.location.tab_id, renamed.label))
         return error.UnexpectedTab;
     client.view.invalidate();
     try client.presenter.requestDraw();
@@ -551,14 +551,14 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
             !std.meta.eql(continuation.close_tab, closed.location))
             return error.UnexpectedTabClosed;
     }
-    const was_active = client.tabs.activeConst() != null and
-        client.tabs.activeConst().?.location.tab_id == closed.location.tab_id;
+    const was_active = client.model.workspace.activeConst() != null and
+        client.model.workspace.activeConst().?.location.tab_id == closed.location.tab_id;
     if (was_active) client.forgetPaneFocus();
     // The runtime sends no per-pane exit for a closed tab, so its
     // graphics would stay resident forever without this.
-    if (client.tabs.find(closed.location.tab_id)) |closing|
+    if (client.model.workspace.find(closed.location.tab_id)) |closing|
         releaseTabGraphics(&client.graphics_store, closing);
-    if (!client.tabs.remove(closed.location.tab_id)) {
+    if (!client.model.workspace.remove(closed.location.tab_id)) {
         if (lifecycle_event) return null;
         return error.UnexpectedTab;
     }
@@ -574,9 +574,9 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
             return null;
         },
     }
-    if (client.tabs.count == 0) return error.WorkspaceHasNoTabs;
+    if (client.model.workspace.count == 0) return error.WorkspaceHasNoTabs;
     if (was_active) {
-        const active = client.tabs.active().?;
+        const active = client.model.workspace.active().?;
         try client.syncPaneFocus(&active.model);
         try client.requestTabSnapshot(active.location);
     }
@@ -592,14 +592,13 @@ fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
     if (continuation != .move_tab or
         !std.meta.eql(continuation.move_tab, moved.location))
         return error.UnexpectedTabMoved;
-    _ = client.tabs.move(moved.location.tab_id, moved.position);
-    client.view.invalidate();
-    try client.presenter.requestDraw();
+    _ = client.model.applyTabPosition(moved.location, moved.position) catch
+        return error.UnexpectedTabMoved;
 }
 
 /// One pane frame: apply the patch or ask for a snapshot on a broken base.
 fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
-    const pane = client.tabs.findPane(frame.pane_id) orelse return error.UnexpectedPane;
+    const pane = client.model.workspace.findPane(frame.pane_id) orelse return error.UnexpectedPane;
     if (!pane.attached) return;
     if (frame.base_frame_id != 0 and
         frame.base_frame_id != pane.applied_frame_id)
@@ -612,12 +611,12 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
     }
     const apply_started = diagnostics.now(client.io);
     const previous_scroll_offset = pane.scroll.offset;
-    const tab = client.tabs.tabForPane(frame.pane_id) orelse
+    const tab = client.model.workspace.tabForPane(frame.pane_id) orelse
         return error.UnexpectedPane;
     const applied = try tab.model.applyFrame(frame);
     const should_show_graphics = frame.scroll.atBottom(frame.rows) and
-        client.tabs.active() != null and
-        std.meta.eql(client.tabs.active().?.location, tab.location);
+        client.model.workspace.active() != null and
+        std.meta.eql(client.model.workspace.active().?.location, tab.location);
     if (client.graphics_store.paneVisible(frame.pane_id) != should_show_graphics)
         try client.graphics_store.setPaneVisible(frame.pane_id, should_show_graphics);
     if (client.mode == .copy) {
@@ -634,7 +633,7 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
         if (frame.base_frame_id == 0) client.metrics.snapshots += 1;
         client.metrics.apply.observe(diagnostics.elapsed(apply_started, diagnostics.now(client.io)));
     }
-    if (client.tabs.active()) |active| try client.syncPaneFocus(&active.model);
+    if (client.model.workspace.active()) |active| try client.syncPaneFocus(&active.model);
     try client.presenter.requestDraw();
 }
 
@@ -643,12 +642,12 @@ fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
     if (client.mode == .copy and client.mode.copy.pane_id == exited.pane_id)
         client.mode = .normal;
     client.graphics_store.clearPane(exited.pane_id);
-    const tab = client.tabs.tabForPane(exited.pane_id);
+    const tab = client.model.workspace.tabForPane(exited.pane_id);
     if (client.reported_focus == exited.pane_id) client.forgetPaneFocus();
     if (tab) |value| _ = value.model.removePane(exited.pane_id);
     client.view.invalidate();
     _ = client.requests.completePaneClose(exited.pane_id);
-    if (client.tabs.active()) |active| {
+    if (client.model.workspace.active()) |active| {
         try client.syncPaneFocus(&active.model);
         if (active.model.pane_count != 0)
             try client.resizeAttached(&active.model, client.view.workbench());
@@ -662,18 +661,18 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
     switch (continuation) {
         .ignored, .close_pane, .rename_tab, .rename_workspace, .move_tab => {},
         .split => {
-            if (client.tabs.active()) |active|
+            if (client.model.workspace.active()) |active|
                 try client.resizeAttached(&active.model, client.view.workbench());
         },
         .attach_pane => |attachment| {
-            if (client.tabs.tabForPane(attachment.pane_id)) |tab|
+            if (client.model.workspace.tabForPane(attachment.pane_id)) |tab|
                 _ = tab.model.removePane(attachment.pane_id);
             client.view.invalidate();
-            if (client.tabs.active()) |active|
+            if (client.model.workspace.active()) |active|
                 try client.resizeAttached(&active.model, client.view.workbench());
         },
         .close_tab => {
-            const active = client.tabs.active().?;
+            const active = client.model.workspace.active().?;
             try client.requestTabSnapshot(active.location);
         },
         .create_workspace, .notification => {},
@@ -717,7 +716,7 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
 }
 
 pub fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !void {
-    const workspace = client.tabs.workspace orelse return error.UnexpectedResync;
+    const workspace = client.model.workspace.workspace orelse return error.UnexpectedResync;
     if (!std.meta.eql(workspace, required.workspace)) return error.UnexpectedResync;
     if (client.requests.has(.workspace_snapshot)) return;
     try client.requestWorkspaceSnapshot(workspace);
@@ -739,7 +738,7 @@ fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
                 error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, image.pane_id),
                 else => return err,
             };
-            if (client.tabs.tabForPane(image.pane_id)) |tab|
+            if (client.model.workspace.tabForPane(image.pane_id)) |tab|
                 tab.model.setGraphicsPlaceholder(image.pane_id, client.capabilities.kitty_graphics != .supported);
         },
         .graphics_shared_image => |image| {
@@ -755,7 +754,7 @@ fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
                 },
                 else => return err,
             };
-            if (client.tabs.tabForPane(image.pane_id)) |tab|
+            if (client.model.workspace.tabForPane(image.pane_id)) |tab|
                 tab.model.setGraphicsPlaceholder(image.pane_id, client.capabilities.kitty_graphics != .supported);
         },
         .graphics_image_chunk => |chunk| client.graphics_store.applyChunk(chunk) catch |err| switch (err) {
@@ -771,7 +770,7 @@ fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
                 error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, deleted.pane_id),
                 else => return err,
             };
-            if (client.tabs.tabForPane(deleted.pane_id)) |tab|
+            if (client.model.workspace.tabForPane(deleted.pane_id)) |tab|
                 tab.model.setGraphicsPlaceholder(deleted.pane_id, client.capabilities.kitty_graphics != .supported and
                     client.graphics_store.hasPaneGraphics(deleted.pane_id));
         },

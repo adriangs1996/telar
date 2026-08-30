@@ -44,7 +44,7 @@ redraw: bool = false,
 /// arriving in that window is dropped, mirroring presentableModel on
 /// the draw path.
 fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
-    return presentableModel(&handler.client.tabs);
+    return presentableModel(&handler.client.model.workspace);
 }
 
 pub fn capturesKeys(handler: *const InputHandler) bool {
@@ -69,12 +69,12 @@ pub fn detachTab(handler: *InputHandler, tab: *tabs_mod.Tab) !void {
 
 fn selectTab(handler: *InputHandler, tab_id: schema.TabId) !void {
     if (handler.client.requests.has(.tab_snapshot)) return;
-    const current = handler.client.tabs.active() orelse return;
+    const current = handler.client.model.workspace.active() orelse return;
     if (current.location.tab_id == tab_id) return;
-    if (handler.client.tabs.indexOf(tab_id) == null) return;
+    if (handler.client.model.workspace.indexOf(tab_id) == null) return;
     try handler.detachTab(current);
-    std.debug.assert(handler.client.tabs.select(tab_id));
-    const active = handler.client.tabs.active().?;
+    std.debug.assert(handler.client.model.workspace.select(tab_id));
+    const active = handler.client.model.workspace.active().?;
     var visible = active.model.paneIterator();
     while (visible.next()) |pane|
         try handler.client.graphics_store.setPaneVisible(pane.id, true);
@@ -91,7 +91,7 @@ fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void 
     const client = handler.client;
     if (client.requests.count != 0) return;
     if (client.view.workspace_list.indexOf(workspace) == null) return;
-    if (client.tabs.workspace) |current| switch (current) {
+    if (client.model.workspace.workspace) |current| switch (current) {
         .workspace => |id| if (id == workspace) return,
         .worktree => {},
     };
@@ -118,9 +118,9 @@ fn beginWorkspaceHandoff(
 ) !void {
     const client = handler.client;
     client.rememberCurrentNavigation();
-    var tabs = client.tabs.tabIterator();
+    var tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| try handler.detachTab(tab);
-    client.tabs.deinit();
+    client.model.workspace.deinit();
     const request_id = try client.nextId();
     try client.enqueueRequest(
         request_id,
@@ -141,10 +141,10 @@ fn focusSidebarAgent(
     agent_key: widgets.sidebar.AgentKey,
 ) !bool {
     const agent = handler.client.view.sidebar_snapshot.find(agent_key) orelse return false;
-    if (handler.client.tabs.tabForPane(agent_key.pane_id)) |tab| {
-        if (handler.client.tabs.activeConst().?.location.tab_id != tab.location.tab_id)
+    if (handler.client.model.workspace.tabForPane(agent_key.pane_id)) |tab| {
+        if (handler.client.model.workspace.activeConst().?.location.tab_id != tab.location.tab_id)
             try handler.selectTab(tab.location.tab_id);
-        const active = handler.client.tabs.active() orelse return false;
+        const active = handler.client.model.workspace.active() orelse return false;
         const shift = active.model.focusPaneShift(agent_key.pane_id);
         if (!shift.focused) return false;
         if (shift.layout_changed) {
@@ -263,7 +263,7 @@ pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
         .copy => {},
         .normal => {
             const pane_id = handler.client.paste_pane orelse return;
-            const pane = handler.client.tabs.findPane(pane_id) orelse return;
+            const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
             if (pane.attached) try handler.sendPaneBytes(pane, text);
         },
     }
@@ -277,7 +277,7 @@ pub fn pasteEnd(handler: *InputHandler) !void {
         .normal => {
             const pane_id = handler.client.paste_pane orelse return;
             handler.client.paste_pane = null;
-            const pane = handler.client.tabs.findPane(pane_id) orelse return;
+            const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
             if (pane.attached and pane.input_modes.bracketed_paste)
                 try handler.sendPaneBytes(pane, "\x1b[201~");
         },
@@ -405,7 +405,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     }
     const model = handler.activeModel() orelse return;
     var interaction = handler.client.view.handleMouse(
-        &handler.client.tabs,
+        &handler.client.model.workspace,
         model,
         cell_event,
         monotonic(handler.client.io),
@@ -417,7 +417,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     if (interaction.select_tab) |tab_id| try handler.selectTab(tab_id);
     if (interaction.rename_tab) |tab_id| {
         if (handler.client.mode == .normal) {
-            if (handler.client.tabs.find(tab_id)) |tab| {
+            if (handler.client.model.workspace.find(tab_id)) |tab| {
                 handler.client.beginTabRenamePrompt(tab_id, tab.labelSlice());
                 handler.redraw = true;
             }
@@ -438,7 +438,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     };
     if (interaction.notification_target != null)
         try handler.client.scheduleNotificationTick();
-    if (handler.client.tabs.active()) |active|
+    if (handler.client.model.workspace.active()) |active|
         try handler.client.syncPaneFocus(&active.model);
     if (interaction.layout_changed) {
         handler.client.graphics_store.invalidatePlacements();
@@ -519,7 +519,7 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
         handler.client.view.scratch.w,
         handler.client.view.scratch.h,
     );
-    var tabs = handler.client.tabs.tabIterator();
+    var tabs = handler.client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         tab.model.setCellSize(cell_size.width, cell_size.height);
         var panes = tab.model.paneIterator();
@@ -535,7 +535,7 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
         cell_size.width,
         cell_size.height,
     );
-    if (handler.client.tabs.active()) |active|
+    if (handler.client.model.workspace.active()) |active|
         try handler.client.resizeAttached(&active.model, handler.client.view.workbench());
     handler.client.view.invalidate();
     handler.redraw = true;
@@ -666,10 +666,10 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
             handler.redraw = true;
         },
         .new_workspace => try handler.beginWorkspaceCreate(),
-        .rename_workspace => if (handler.client.tabs.workspace) |workspace| {
+        .rename_workspace => if (handler.client.model.workspace.workspace) |workspace| {
             handler.client.beginWorkspaceRenamePrompt(
                 workspace,
-                handler.client.tabs.workspaceName(),
+                handler.client.model.workspace.workspaceName(),
             );
             handler.redraw = true;
         },
@@ -678,7 +678,7 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
         .new_tab => try handler.createTab(),
         .select_tab_offset => |offset| try handler.selectTabOffset(offset),
         .select_tab => |position| try handler.selectTabPosition(position),
-        .rename_tab => if (handler.client.tabs.active()) |tab| {
+        .rename_tab => if (handler.client.model.workspace.active()) |tab| {
             handler.client.beginTabRenamePrompt(tab.location.tab_id, tab.labelSlice());
             handler.redraw = true;
         },
@@ -688,7 +688,7 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
             .next => .next,
         }),
         .detach => {
-            var tabs = handler.client.tabs.tabIterator();
+            var tabs = handler.client.model.workspace.tabIterator();
             while (tabs.next()) |tab| try handler.detachTab(tab);
             return .stop;
         },
@@ -722,8 +722,8 @@ fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
     const focused = model.focusedPane();
     return .{
         .sidebar_visible = handler.client.view.sidebar_requested,
-        .tab_count = @intCast(handler.client.tabs.count),
-        .active_tab_index = @intCast(handler.client.tabs.activeIndex() orelse 0),
+        .tab_count = @intCast(handler.client.model.workspace.count),
+        .active_tab_index = @intCast(handler.client.model.workspace.activeIndex() orelse 0),
         .pane_count = @intCast(model.pane_count),
         .focused_pane_id = if (focused) |pane| schema.id.raw(pane.id) else 0,
     };
@@ -817,7 +817,7 @@ fn togglePaneFullscreen(handler: *InputHandler) !void {
 
 fn closeFocused(handler: *InputHandler) !void {
     if (handler.client.requests.has(.pane_operation)) return;
-    const tab = handler.client.tabs.active() orelse return;
+    const tab = handler.client.model.workspace.active() orelse return;
     const pane = tab.model.focusedPane() orelse return;
     if (!pane.attached) return;
     const location = tab.location;
@@ -837,7 +837,7 @@ fn createTab(handler: *InputHandler) !void {
     const model = handler.activeModel() orelse return;
     const pane = model.focusedPane() orelse return;
     if (!pane.attached) return;
-    const workspace = handler.client.tabs.workspace orelse return;
+    const workspace = handler.client.model.workspace.workspace orelse return;
     const request_id = try handler.client.nextId();
     try handler.client.enqueueRequest(
         request_id,
@@ -905,16 +905,16 @@ fn submitWorkspaceRename(handler: *InputHandler, name: []const u8) !void {
 }
 
 fn selectTabOffset(handler: *InputHandler, offset: isize) !void {
-    if (handler.client.tabs.count < 2) return;
-    const count: isize = @intCast(handler.client.tabs.count);
-    const current: isize = @intCast(handler.client.tabs.active_index);
+    if (handler.client.model.workspace.count < 2) return;
+    const count: isize = @intCast(handler.client.model.workspace.count);
+    const current: isize = @intCast(handler.client.model.workspace.active_index);
     const position: usize = @intCast(@mod(current + offset, count));
-    try handler.selectTab(handler.client.tabs.items[position].?.location.tab_id);
+    try handler.selectTab(handler.client.model.workspace.items[position].?.location.tab_id);
 }
 
 fn selectTabPosition(handler: *InputHandler, position: usize) !void {
-    if (position >= handler.client.tabs.count) return;
-    try handler.selectTab(handler.client.tabs.items[position].?.location.tab_id);
+    if (position >= handler.client.model.workspace.count) return;
+    try handler.selectTab(handler.client.model.workspace.items[position].?.location.tab_id);
 }
 
 fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
@@ -925,7 +925,7 @@ fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
 
 fn closeTab(handler: *InputHandler) !void {
     if (handler.client.requests.has(.tab_operation)) return;
-    const tab = handler.client.tabs.active() orelse return;
+    const tab = handler.client.model.workspace.active() orelse return;
     const request_id = try handler.client.nextId();
     try handler.detachTab(tab);
     try handler.client.enqueueRequest(
@@ -940,14 +940,14 @@ fn closeTab(handler: *InputHandler) !void {
 
 fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
     if (handler.client.requests.has(.tab_operation)) return;
-    const tab = handler.client.tabs.active() orelse return;
+    const location = handler.client.model.activeTabLocation() orelse return;
     const request_id = try handler.client.nextId();
     try handler.client.enqueueRequest(
         request_id,
-        .{ .move_tab = tab.location },
+        .{ .move_tab = location },
         .{ .move_tab = .{
             .request_id = request_id,
-            .location = tab.location,
+            .location = location,
             .direction = direction,
         } },
     );
@@ -956,7 +956,7 @@ fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
 fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
     if (handler.client.requests.has(.tab_operation)) return;
     const tab_id = handler.client.view.renamedTab() orelse return;
-    const tab = handler.client.tabs.find(tab_id) orelse return;
+    const tab = handler.client.model.workspace.find(tab_id) orelse return;
     const request_id = try handler.client.nextId();
     try handler.client.enqueueRenameRequest(
         .{

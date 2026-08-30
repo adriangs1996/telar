@@ -14,6 +14,7 @@ const client_outbox = @import("outbox.zig");
 const client_requests = @import("requests.zig");
 const client_telemetry = @import("telemetry.zig");
 const client_view = @import("view.zig");
+const client_model = @import("model.zig");
 const lua_config = @import("../config/root.zig");
 const sound_mod = @import("../sound.zig");
 const copy_mode = input_capability.copy_mode;
@@ -186,7 +187,7 @@ options: Options,
 metrics: ClientMetrics,
 presenter: presenter_mod,
 view: client_view.State,
-tabs: tabs_mod.Model,
+model: client_model.Model,
 navigation_history: navigation.History = .{},
 graphics_store: kitty.Store,
 capabilities: kitty.TerminalCapabilities,
@@ -256,9 +257,8 @@ pub fn init(params: Params) !*Client {
         cell_size.width,
         cell_size.height,
     );
-    var tabs = tabs_mod.Model.init(gpa);
-    errdefer tabs.deinit();
-    tabs.setPaneGaps(params.options.pane_gaps);
+    var model = client_model.Model.init(gpa, params.options.pane_gaps);
+    errdefer model.deinit();
     var graphics_store = if (params.options.host_shared_memory)
         kitty.Store.initSharedMemory(gpa)
     else
@@ -283,7 +283,7 @@ pub fn init(params: Params) !*Client {
         .metrics = .{ .started_ns = diagnostics.now(params.io) },
         .presenter = undefined,
         .view = view,
-        .tabs = tabs,
+        .model = model,
         .graphics_store = graphics_store,
         .capabilities = capabilities,
         .host_size = host_size,
@@ -322,7 +322,7 @@ pub fn deinit(client: *Client) void {
     if (client.plugin_registry) |registry| gpa.destroy(registry);
     if (client.trust_store) |store| gpa.destroy(store);
     client.graphics_store.deinit();
-    client.tabs.deinit();
+    client.model.deinit();
     client.view.deinit();
     client.presenter.deinit();
     gpa.free(client.send_buffer);
@@ -334,10 +334,19 @@ pub fn nextId(client: *Client) !schema.RequestId {
     return nextRequestId(&client.next_request_id);
 }
 
+/// Publishes the semantic version after one client event has committed.
+///
+/// ```zig
+/// try client.observeModel();
+/// ```
+pub fn observeModel(client: *Client) !void {
+    try client.presenter.observeModel(client.model.version());
+}
+
 /// Bookmarks the active tab before a workspace transition destroys its
 /// disposable client model.
 pub fn rememberCurrentNavigation(client: *Client) void {
-    const tab = client.tabs.activeConst() orelse return;
+    const tab = client.model.workspace.activeConst() orelse return;
     const pane = tab.model.focusedPaneConst() orelse return;
     client.navigation_history.remember(.{
         .location = tab.location,
@@ -494,7 +503,7 @@ pub fn clearPaneFocus(client: *Client) !void {
     client.forgetPaneFocus();
     if (!reports) return;
     const pane_id = previous orelse return;
-    const pane = client.tabs.findPane(pane_id) orelse return;
+    const pane = client.model.workspace.findPane(pane_id) orelse return;
     if (pane.attached) try client.enqueueInput(pane_id, "\x1b[O");
 }
 
@@ -590,7 +599,7 @@ pub fn handleClipboardImageEvent(
         return;
     };
     const capture = client.attachment_capture.take(completed);
-    const active = client.tabs.active() orelse {
+    const active = client.model.workspace.active() orelse {
         capture.deinit(client.gpa);
         return;
     };
@@ -719,7 +728,7 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
         cell_size.width,
         cell_size.height,
     );
-    var tabs = client.tabs.tabIterator();
+    var tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         var panes = tab.model.paneIterator();
         while (panes.next()) |pane| {
@@ -758,7 +767,7 @@ pub fn handleResizeEvent(
     );
     try client.presenter.resize(client.host_size.cols, client.host_size.rows);
     try client.view.resize(client.host_size.cols, client.host_size.rows);
-    if (client.tabs.active()) |active| {
+    if (client.model.workspace.active()) |active| {
         active.model.setCellSize(cell_size.width, cell_size.height);
         client.graphics_store.invalidatePlacements();
         try client.resizeAttached(&active.model, client.view.workbench());
@@ -845,7 +854,7 @@ pub fn handleTelemetryTickEvent(
     };
     if (client.telemetry_write_pending) return;
     // Ticks can fire before the first tab exists; report nothing.
-    const active = client.tabs.active() orelse return;
+    const active = client.model.workspace.active() orelse return;
     const focused = active.model.layout.focused() orelse .invalid;
     const line = client_telemetry.format(
         &client.telemetry_buffer,
@@ -856,7 +865,7 @@ pub fn handleTelemetryTickEvent(
             .theme_name = client.view.theme.base.canonicalName(),
             .icon_theme_name = client.view.icon_theme.canonicalName(),
             .active_tab = active.location.tab_id,
-            .tab_count = client.tabs.count,
+            .tab_count = client.model.workspace.count,
             .focused_pane = focused,
             .pane_count = active.model.pane_count,
             .pending_updates = client.presenter.pending_updates,
@@ -978,7 +987,7 @@ pub fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
     client.view.setIconTheme(snapshot.icon_theme);
     client.sidebar_rendering = adoption.sidebar_rendering;
     client.view.setSidebarVisible(snapshot.sidebar_visible);
-    client.tabs.setPaneGaps(snapshot.pane_gaps);
+    client.model.workspace.setPaneGaps(snapshot.pane_gaps);
     client.sound_config = snapshot.sound;
     if (!client.sound_config.enabled) client.queued_sound = null;
     const cell_size = client.capabilities.cellSize(
@@ -991,7 +1000,7 @@ pub fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
         cell_size.width,
         cell_size.height,
     );
-    if (client.tabs.active()) |active|
+    if (client.model.workspace.active()) |active|
         try client.resizeAttached(&active.model, client.view.workbench());
 
     const previous = client.lua_generation;

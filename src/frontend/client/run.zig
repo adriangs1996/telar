@@ -144,6 +144,8 @@ pub fn run(
             .plugin_result => |result| if (try client.handlePluginResultEvent(result)) return 0,
             .clipboard_image => |result| try client.handleClipboardImageEvent(result),
         }
+
+        try client.observeModel();
     }
 }
 

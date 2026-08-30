@@ -33,6 +33,7 @@ test {
     _ = @import("client.zig");
     _ = @import("client_test.zig");
     _ = @import("config_reload.zig");
+    _ = @import("model.zig");
     _ = @import("presenter.zig");
     _ = @import("server_messages.zig");
     _ = @import("input_handler.zig");

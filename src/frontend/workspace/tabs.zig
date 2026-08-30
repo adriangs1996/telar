@@ -10,6 +10,11 @@ const schema = core.schema;
 
 pub const max_tabs = schema.max_tabs_per_workspace;
 
+pub const PositionChange = enum {
+    unchanged,
+    changed,
+};
+
 const PendingLayoutRestore = struct {
     location: schema.TabLocation,
     layout: layout_mod.Layout,
@@ -327,21 +332,37 @@ pub const Model = struct {
         return true;
     }
 
-    pub fn move(model: *Model, tab_id: schema.TabId, position: usize) bool {
-        const from = model.indexOf(tab_id) orelse return false;
-        if (position >= model.count) return false;
+    /// Applies a canonical runtime position while preserving the active tab.
+    ///
+    /// ```zig
+    /// const change = try model.applyPosition(tab_id, 1);
+    /// ```
+    pub fn applyPosition(model: *Model, tab_id: schema.TabId, position: u16) !PositionChange {
+        const from = model.indexOf(tab_id) orelse return error.TabNotFound;
+        const target: usize = position;
+        if (target >= model.count) {
+            return error.InvalidTabPosition;
+        }
+
+        if (from == target) {
+            return .unchanged;
+        }
+
         const active_id = model.activeConst().?.location.tab_id;
-        if (from < position) {
+        if (from < target) {
             var index = from;
-            while (index < position) : (index += 1)
+            while (index < target) : (index += 1) {
                 std.mem.swap(?Tab, &model.items[index], &model.items[index + 1]);
+            }
         } else {
             var index = from;
-            while (index > position) : (index -= 1)
+            while (index > target) : (index -= 1) {
                 std.mem.swap(?Tab, &model.items[index], &model.items[index - 1]);
+            }
         }
+
         model.active_index = model.indexOf(active_id).?;
-        return from != position;
+        return .changed;
     }
 
     pub fn remove(model: *Model, tab_id: schema.TabId) bool {
@@ -381,8 +402,11 @@ test "selection wraps and moving tabs preserves the active identity" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.selectOffset(1));
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
-    try std.testing.expect(model.move(@enumFromInt(1), 1));
+    try std.testing.expectEqual(PositionChange.changed, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(PositionChange.unchanged, try model.applyPosition(@enumFromInt(1), 1));
+    try std.testing.expectError(error.TabNotFound, model.applyPosition(@enumFromInt(9), 0));
+    try std.testing.expectError(error.InvalidTabPosition, model.applyPosition(@enumFromInt(1), 2));
 }
 
 test "displayed workspace name stays canonical when pane cwd changes" {

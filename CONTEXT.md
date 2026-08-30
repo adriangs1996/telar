@@ -11,6 +11,12 @@ projections and durable checkpoints derive from it; infrastructure resources
 support it without becoming its authority.
 _Avoid_: Public state, Server state, AppState
 
+**Client model**:
+The disposable semantic state owned by one client. It combines that client's
+interaction and navigation choices with bounded projections of authoritative
+runtime state needed to present and control its session.
+_Avoid_: AppState, Client runtime, UI state
+
 **Runtime checkpoint**:
 A durable data-only representation of the restorable parts of a runtime model.
 It excludes live resources and does not promise child-process or PTY continuity.

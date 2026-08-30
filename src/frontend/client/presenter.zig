@@ -10,6 +10,7 @@ const attachments = @import("../attachments/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const client_telemetry = @import("telemetry.zig");
+const client_model = @import("model.zig");
 const kitty = graphics.kitty;
 const modal_graphics = graphics.modal;
 const toast_graphics = graphics.toast;
@@ -37,6 +38,8 @@ select: *Io.Select(ClientEvent),
 metrics: *ClientMetrics,
 screen: term.Screen,
 pacer: pace.Pacer = .{},
+observed_model_version: client_model.Version = .{},
+presented_model_version: client_model.Version = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
 media_tick_pending: bool = false,
@@ -56,6 +59,25 @@ pub fn resize(presenter: *Presenter, cols: u16, rows: u16) !void {
 
 pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
     presenter.last_input_ns = now_ns;
+}
+
+/// Observes a committed semantic version and schedules presentation once.
+///
+/// ```zig
+/// try presenter.observeModel(model.version());
+/// ```
+pub fn observeModel(presenter: *Presenter, version: client_model.Version) !void {
+    const newly_observed = !std.meta.eql(presenter.observed_model_version, version);
+    if (newly_observed) {
+        presenter.observed_model_version = version;
+        try presenter.requestDraw();
+        return;
+    }
+
+    const presentation_stale = !std.meta.eql(presenter.presented_model_version, version);
+    if (presentation_stale and !presenter.draw_pending) {
+        try presenter.requestDraw();
+    }
 }
 
 /// Registers one pending update and arms the paced draw timer if none is
@@ -103,8 +125,17 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     // A draw can be scheduled before the first `pane_opened` bootstraps a
     // tab - a resize or the capability timeout does exactly that. The
     // updates stay queued for the draw that follows the bootstrap.
-    const model = presentableModel(&client.tabs) orelse return;
+    const model = presentableModel(&client.model.workspace) orelse return;
+    const model_changed = !std.meta.eql(
+        presenter.presented_model_version,
+        presenter.observed_model_version,
+    );
+    if (model_changed) {
+        client.view.invalidate();
+    }
+
     const presented = try presenter.present(client, model);
+    presenter.presented_model_version = presenter.observed_model_version;
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
     presenter.pending_updates = 0;
@@ -129,7 +160,7 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         try presenter.requestMedia();
         return;
     }
-    const model = presentableModel(&client.tabs) orelse return;
+    const model = presentableModel(&client.model.workspace) orelse return;
     const media_idle = monotonic(presenter.io) -| presenter.last_input_ns >=
         toast_graphics.idle_after_ns;
     client.view.kittyAttachments().reapRetired();
@@ -240,7 +271,7 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
     );
     const chrome = try client.view.renderWithStatus(
         &presenter.screen,
-        &client.tabs,
+        &client.model.workspace,
         model,
         client.statusMode(),
         composed.full,
