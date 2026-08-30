@@ -8,6 +8,7 @@ const agent_description_coordinator = @import("agent_description_coordinator.zig
 const agent_maintenance_coordinator = @import("agent_maintenance_coordinator.zig");
 const agent_process = @import("../process/root.zig");
 const history = @import("../history/root.zig");
+const history_runtime_mod = @import("history_runtime.zig");
 const attachment_mod = @import("attachment.zig");
 const client_admission = @import("client_admission.zig");
 const client_request_router = @import("client_request_router.zig");
@@ -1718,14 +1719,9 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
     clients.* = .{};
     defer gpa.destroy(clients);
 
-    var history_service = try history.Service.init(gpa, history_path);
-    var history_worker = try io.concurrent(history.runWorker, .{ io, &history_service });
-    var history_owned = true;
-    errdefer if (history_owned) {
-        history_service.closeQueues(io);
-        _ = history_worker.await(io) catch {};
-        history_service.deinit(io);
-    };
+    var history_runtime = try history_runtime_mod.Runtime.init(io, gpa, history_path);
+    defer history_runtime.deinit();
+    const history_service = history_runtime.service();
 
     var select_storage: [16 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
@@ -1737,7 +1733,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
     }
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
-    try select.concurrent(.history_response, history.receiveResponse, .{ io, &history_service });
+    try select.concurrent(.history_response, history.receiveResponse, .{ io, history_service });
     if (proxy) |service|
         try select.concurrent(.proxy_event, proxy_mod.Proxy.receive, .{ service, io });
     try select.concurrent(.agent_tick, waitForAgentTick, .{io});
@@ -1752,7 +1748,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         .gpa = gpa,
         .heap = &heap,
         .select = &select,
-        .history_service = &history_service,
+        .history_service = history_service,
         .child_environment = &child_environment,
         .inherited_environment = options.environment,
         .proxy = proxy,
@@ -1793,10 +1789,6 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         server.model.panes.deinit();
         var workspace_repository = server.workspaceRepository();
         workspace_repository.deinit();
-        history_service.closeQueues(io);
-        _ = history_worker.await(io) catch {};
-        history_service.deinit(io);
-        history_owned = false;
     }
     select_owned = false;
 
@@ -2858,6 +2850,7 @@ test {
     _ = history_query;
     _ = history_query_controller;
     _ = history_response_controller;
+    _ = history_runtime_mod;
     _ = move_tab_commands;
     _ = move_tab_controller;
     _ = media_projection;
