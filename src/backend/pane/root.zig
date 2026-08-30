@@ -239,6 +239,17 @@ pub const PaneIngestStats = struct {
     elapsed_ns: u64 = 0,
 };
 
+pub const HistoryObservationBorrow = struct {
+    current_size: schema.TerminalSize,
+    process_cache: agent_process.Cache,
+};
+
+pub const HistoryObservationCompletion = struct {
+    previous_process: agent_process.Cache,
+    cwd_changed: bool,
+    shell_foreground: bool,
+};
+
 pub const PtyResponseQueue = struct {
     mutex: ParkingMutex = .{},
     bytes: [max_pty_responses][max_pty_response_bytes]u8 = undefined,
@@ -946,6 +957,63 @@ pub const Pane = struct {
         pane.history_observer.queueOutput(bytes, shell_foreground, clock);
     }
 
+    /// Seals pending history work and borrows the pane allocation for one
+    /// observation actor. Empty observers return null without changing state.
+    ///
+    /// ```zig
+    /// const observation = pane.beginHistoryObservation() orelse return;
+    /// ```
+    pub fn beginHistoryObservation(pane: *Pane) ?HistoryObservationBorrow {
+        if (!pane.history_observer.seal()) {
+            return null;
+        }
+
+        pane.actorStarted();
+        return .{
+            .current_size = pane.size,
+            .process_cache = pane.agent_process_cache,
+        };
+    }
+
+    /// Releases a completed observer actor, commits its CWD and process-cache
+    /// projection, and reports the previous process evidence to the caller.
+    ///
+    /// ```zig
+    /// const transition = pane.completeHistoryObservation(probe.cache);
+    /// ```
+    pub fn completeHistoryObservation(pane: *Pane, process_cache: agent_process.Cache) HistoryObservationCompletion {
+        pane.actorFinished();
+        pane.history_observer.finishSealed();
+
+        const cwd_changed = pane.updateObservedCwd();
+        const previous_process = pane.agent_process_cache;
+        pane.agent_process_cache = process_cache;
+
+        if (!std.mem.eql(u8, previous_process.name(), process_cache.name())) {
+            pane.foreground_revision +%= 1;
+
+            if (pane.foreground_revision == 0) {
+                pane.foreground_revision = 1;
+            }
+        }
+
+        return .{
+            .previous_process = previous_process,
+            .cwd_changed = cwd_changed,
+            .shell_foreground = agent_process.shellForeground(process_cache, pane.session.pid),
+        };
+    }
+
+    /// Rolls back an observation actor that could not be scheduled.
+    ///
+    /// ```zig
+    /// pane.cancelHistoryObservation();
+    /// ```
+    pub fn cancelHistoryObservation(pane: *Pane) void {
+        pane.actorFinished();
+        pane.history_observer.finishSealed();
+    }
+
     pub fn processHistoryObservation(
         pane: *Pane,
         current_size: schema.TerminalSize,
@@ -963,7 +1031,7 @@ pub const Pane = struct {
         );
     }
 
-    pub fn updateObservedCwd(pane: *Pane) bool {
+    fn updateObservedCwd(pane: *Pane) bool {
         return pane.cwd.update(pane.history_observer.currentCwd());
     }
 

@@ -63,6 +63,7 @@ const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_ingest_coordinator = @import("pane_ingest_coordinator.zig");
+const pane_observation_coordinator = @import("pane_observation_coordinator.zig");
 const pane_output_pipeline = @import("pane_output_pipeline.zig");
 const pane_mod = @import("../pane/root.zig");
 const blit = pane_mod.blit;
@@ -115,15 +116,6 @@ const PendingNotification = response_queue.PendingNotification;
 const ResponseQueue = response_queue.ResponseQueue;
 const encodeResponse = runtime_encoder.encodeResponse;
 
-fn agentSoundForTransition(previous: ?schema.AgentStatus, current: ?schema.AgentStatus) ?schema.AgentSound {
-    if (previous != .working) return null;
-    return switch (current orelse return null) {
-        .ready => .ready,
-        .blocked => .needs_input,
-        .unknown, .working, .failed => null,
-    };
-}
-
 pub const ServeOptions = struct {
     graphics: GraphicsLimits = .{},
     environment: std.process.Environ,
@@ -166,11 +158,7 @@ const ClientSentEvent = struct {
 const PaneOutputEvent = pane_launcher_mod.PaneOutputEvent;
 const PaneIngestEvent = pane_ingest_coordinator.Completion;
 
-const PaneObservationEvent = struct {
-    pane: PaneKey,
-    stats: history.observer.Stats,
-    process_probe: agent_process.Probe,
-};
+const PaneObservationEvent = pane_observation_coordinator.Completion;
 
 const PaneMediaEvent = struct {
     pane: PaneKey,
@@ -1007,89 +995,8 @@ const Server = struct {
     }
 
     fn handlePaneObservedEvent(server: *Server, event: PaneObservationEvent) !void {
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-        active.actorFinished();
-        active.history_observer.finishSealed();
-        if (active.updateObservedCwd()) server.model.agents.touch();
-        if (comptime diagnostics.enabled) {
-            if (event.process_probe.inspected) {
-                server.metrics.agent_process_inspections +|= 1;
-                if (event.process_probe.cache.provider == .unknown)
-                    server.metrics.agent_process_misses +|= 1;
-            }
-        }
-        const previous_process = active.agent_process_cache;
-        active.agent_process_cache = event.process_probe.cache;
-        if (!std.mem.eql(
-            u8,
-            previous_process.name(),
-            active.agent_process_cache.name(),
-        )) {
-            active.foreground_revision +%= 1;
-            if (active.foreground_revision == 0) active.foreground_revision = 1;
-        }
-        if (event.process_probe.changed) {
-            const observed_at_ms = Io.Timestamp.now(server.io, .real).toMilliseconds();
-            if (event.process_probe.cache.provider != .unknown) {
-                _ = server.model.agents.observeProcess(.{
-                    .identity = agent_mod.Identity.fromPane(active),
-                    .provider = event.process_probe.cache.provider,
-                    .process_id = event.process_probe.cache.process_group_id.?,
-                    .observed_at_ms = observed_at_ms,
-                });
-            } else if (agent_process.shellForeground(
-                event.process_probe.cache,
-                active.session.pid,
-            )) {
-                _ = server.model.agents.remove(active.key());
-            } else if (previous_process.provider != .unknown) {
-                _ = server.model.agents.clearProcess(active.key());
-            }
-        }
-        if (comptime diagnostics.enabled) {
-            server.metrics.history_candidate_input_bytes +|= event.stats.input_bytes;
-            server.metrics.history_captured +|= event.stats.captured;
-            server.metrics.history_dropped +|= event.stats.dropped;
-            if (event.stats.failed) server.metrics.history_observation_failures +|= 1;
-            if (event.stats.reset) server.metrics.history_observation_resets +|= 1;
-        }
-        if (event.stats.agent_signal) |signal| if (!agent_process.shellForeground(
-            active.agent_process_cache,
-            active.session.pid,
-        )) {
-            const identity = agent_mod.Identity.fromPane(active);
-            const previous_status = server.model.agents.projectedStatus(identity.key);
-            const changed = server.model.agents.observeScreen(.{
-                .identity = identity,
-                .signal = .{
-                    .provider = signal.provider,
-                    .status = switch (signal.status) {
-                        .working => .working,
-                        .blocked => .blocked,
-                        .ready => .ready,
-                    },
-                    .confidence = signal.confidence,
-                    .identity_confirmed = signal.identity_confirmed,
-                    .ready_confirmed = signal.ready_confirmed,
-                },
-                .observed_at_ms = Io.Timestamp.now(server.io, .real).toMilliseconds(),
-            });
-            if (changed) if (agentSoundForTransition(
-                previous_status,
-                server.model.agents.projectedStatus(identity.key),
-            )) |sound| server.publishAgentSound(.{
-                .pane_id = identity.key.id,
-                .pane_generation = identity.key.generation,
-                .sound = sound,
-            });
-        };
-        server.scheduleAgentDescription();
-        try schedulePaneObservation(server.select, active);
-        server.collect();
-        server.pumpAll();
+        var coordinator = paneObservationCoordinator(server);
+        return coordinator.handle(event);
     }
 
     fn handlePaneMediaEvent(server: *Server, event: PaneMediaEvent) !void {
@@ -1161,7 +1068,7 @@ const Server = struct {
         }
         if (active.output_done) {
             active.queueExitedHistory(active.exit.?);
-            try schedulePaneObservation(server.select, active);
+            try schedulePaneObservation(server, active);
         }
         server.collect();
         server.pumpAll();
@@ -1722,7 +1629,7 @@ fn paneResizeScheduler(server: *Server) pane_resize_commands.Scheduler {
 
 fn entrypointScheduleObservation(context: *anyopaque, pane: *Pane) !void {
     const server: *Server = @ptrCast(@alignCast(context));
-    return schedulePaneObservation(server.select, pane);
+    return schedulePaneObservation(server, pane);
 }
 
 fn entrypointScheduleMedia(context: *anyopaque, pane: *Pane) !void {
@@ -1865,7 +1772,7 @@ fn prepareOpenPaneView(context: *anyopaque, request: open_pane_commands.PrepareV
         pane.resize(request.size);
     resize_result catch return error.PaneResizeFailed;
 
-    try schedulePaneObservation(client.server.select, pane);
+    try schedulePaneObservation(client.server, pane);
     try schedulePaneMedia(client.server.select, pane);
 }
 
@@ -2471,7 +2378,7 @@ fn paneOutputPipeline(context: *PaneOutputRuntime) RuntimePaneOutputPipeline {
 }
 
 fn scheduleOutputObservation(context: *PaneOutputRuntime, pane: *Pane) !void {
-    return schedulePaneObservation(context.server.select, pane);
+    return schedulePaneObservation(context.server, pane);
 }
 
 fn scheduleOutputMedia(context: *PaneOutputRuntime, pane: *Pane) !void {
@@ -2536,7 +2443,7 @@ const pane_ingest_runtime_port: pane_ingest_coordinator.RuntimePort(Server) = .{
     .schedule_response = schedulePaneResponse,
     .start_read = startNextPaneRead,
     .collect = collectPaneLifecycle,
-    .pump_clients = pumpAfterIngest,
+    .pump_clients = pumpPaneClients,
 };
 
 const RuntimePaneIngestCoordinator = pane_ingest_coordinator.Coordinator(Server, pane_ingest_runtime_port);
@@ -2550,7 +2457,7 @@ fn paneIngestCoordinator(server: *Server) RuntimePaneIngestCoordinator {
 }
 
 fn scheduleIngestObservation(server: *Server, pane: *Pane) !void {
-    return schedulePaneObservation(server.select, pane);
+    return schedulePaneObservation(server, pane);
 }
 
 fn scheduleIngestMedia(server: *Server, pane: *Pane) !void {
@@ -2572,42 +2479,58 @@ fn startNextPaneRead(server: *Server, read: pane_ingest_coordinator.Read) !void 
     try server.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
 }
 
-fn pumpAfterIngest(server: *Server) void {
+fn pumpPaneClients(server: *Server) void {
     server.pumpAll();
 }
 
-fn schedulePaneObservation(
-    select: *Io.Select(RuntimeEvent),
-    pane: *Pane,
-) !void {
-    if (!pane.history_observer.seal()) return;
-    pane.actorStarted();
-    select.concurrent(.pane_observed, observePane, .{
-        pane,
-        pane.size,
-        pane.agent_process_cache,
-    }) catch |err| {
-        pane.actorFinished();
-        pane.history_observer.finishSealed();
-        return err;
-    };
+const pane_observation_runtime_port: pane_observation_coordinator.RuntimePort(Server) = .{
+    .start = startPaneObservation,
+    .publish_sound = publishObservedAgentSound,
+    .schedule_description = scheduleObservedAgentDescription,
+    .collect = collectPaneLifecycle,
+    .pump_clients = pumpPaneClients,
+};
+
+const RuntimePaneObservationCoordinator = pane_observation_coordinator.Coordinator(Server, pane_observation_runtime_port);
+
+fn paneObservationCoordinator(server: *Server) RuntimePaneObservationCoordinator {
+    return RuntimePaneObservationCoordinator.init(server, .{
+        .io = server.io,
+        .panes = &server.model.panes,
+        .agents = &server.model.agents,
+        .metrics = &server.metrics,
+    });
 }
 
-fn observePane(
-    pane: *Pane,
-    current_size: schema.TerminalSize,
-    process_cache: agent_process.Cache,
-) PaneObservationEvent {
+fn schedulePaneObservation(server: *Server, pane: *Pane) !void {
+    var coordinator = paneObservationCoordinator(server);
+    return coordinator.schedule(pane);
+}
+
+fn startPaneObservation(server: *Server, work: pane_observation_coordinator.Work) !void {
+    try server.select.concurrent(.pane_observed, observePane, .{work});
+}
+
+fn observePane(work: pane_observation_coordinator.Work) PaneObservationEvent {
     const path = diagnostics.enter(.observation);
     defer path.restore();
+
     var stats: history.observer.Stats = .{};
     const process_probe = agent_process.probe(
-        pane.session.foregroundProcessGroup(),
-        pane.session.pid,
-        process_cache,
+        work.pane.session.foregroundProcessGroup(),
+        work.pane.session.pid,
+        work.process_cache,
     );
-    pane.processHistoryObservation(current_size, &stats);
-    return .{ .pane = pane.key(), .stats = stats, .process_probe = process_probe };
+    work.pane.processHistoryObservation(work.current_size, &stats);
+    return .{ .pane = work.pane.key(), .stats = stats, .process_probe = process_probe };
+}
+
+fn publishObservedAgentSound(server: *Server, notification: schema.AgentSoundNotification) void {
+    server.publishAgentSound(notification);
+}
+
+fn scheduleObservedAgentDescription(server: *Server) void {
+    server.scheduleAgentDescription();
 }
 
 fn schedulePaneMedia(
@@ -2791,21 +2714,6 @@ test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
     ) != null);
 }
 
-test "agent sounds require exact working transitions" {
-    try std.testing.expectEqual(
-        schema.AgentSound.ready,
-        agentSoundForTransition(.working, .ready).?,
-    );
-    try std.testing.expectEqual(
-        schema.AgentSound.needs_input,
-        agentSoundForTransition(.working, .blocked).?,
-    );
-    try std.testing.expect(agentSoundForTransition(null, .ready) == null);
-    try std.testing.expect(agentSoundForTransition(.ready, .ready) == null);
-    try std.testing.expect(agentSoundForTransition(.blocked, .ready) == null);
-    try std.testing.expect(agentSoundForTransition(.working, .failed) == null);
-}
-
 test {
     _ = close_tab_commands;
     _ = close_tab_controller;
@@ -2838,6 +2746,7 @@ test {
     _ = pane_input_controller;
     _ = pane_input_pump;
     _ = pane_ingest_coordinator;
+    _ = pane_observation_coordinator;
     _ = pane_output_pipeline;
     _ = pane_response_pump;
     _ = pane_resize_commands;
