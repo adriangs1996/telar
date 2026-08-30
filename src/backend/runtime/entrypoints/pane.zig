@@ -25,19 +25,6 @@ pub const OpenPaneContext = struct {
     scheduler: common.Scheduler,
 };
 
-pub const CreatePaneContext = struct {
-    gpa: std.mem.Allocator,
-    panes: *PaneStore,
-    workspaces: *WorkspaceRepository,
-    attachments: *AttachmentStore,
-    responses: *common.ResponseQueue,
-    client: common.ClientKey,
-    shared_graphics: bool,
-    geometry: common.Geometry,
-    launcher: common.Launcher,
-    events: common.WorkspaceEvents,
-};
-
 /// Resolves an existing target or launches the default pane, then attaches it
 /// to the requesting client only after runtime ownership succeeds.
 ///
@@ -173,65 +160,4 @@ pub fn openPane(context: OpenPaneContext, open: schema.OpenPaneView) !void {
         .location = active.location,
         .created = created,
     } });
-}
-
-/// Launches a sibling pane inside an existing tab and publishes the committed
-/// workspace change after the requesting client is attached.
-///
-/// ```zig
-/// try createPane(context, request);
-/// ```
-pub fn createPane(context: CreatePaneContext, create: schema.CreatePaneView) !void {
-    const gpa = context.gpa;
-    const panes = context.panes;
-    const workspaces = context.workspaces;
-    const attachments = context.attachments;
-    const responses = context.responses;
-    const client = context.client;
-    const shared_graphics = context.shared_graphics;
-    const geometry = context.geometry;
-    const launcher = context.launcher;
-    const events = context.events;
-
-    if (!workspaces.reader().contains(create.location) or panes.countAt(create.location) == 0) {
-        try common.queueFailure(responses, create.request_id, .pane_not_found, "tab not found");
-        return;
-    }
-    if (!geometry.holds(geometry.context, client, create.location.workspace)) {
-        try common.queueFailure(
-            responses,
-            create.request_id,
-            .resource_limit,
-            "workspace geometry is leased by another client",
-        );
-        return;
-    }
-    const launch_cwd = (try common.requestLaunchCwd(
-        attachments,
-        responses,
-        create.request_id,
-        create.launch,
-        .{ .tab = create.location },
-    )) orelse return;
-    const workspace_path = workspaces.reader().workspacePath(create.location.workspace).?;
-    const fresh = launcher.launch(
-        launcher.context,
-        create.location,
-        create.size,
-        create.launch,
-        launch_cwd,
-        workspace_path,
-    ) catch |err| {
-        try common.queueSpawnFailure(responses, create.request_id, err);
-        return;
-    };
-    const attachment = try attachments.attach(gpa, fresh);
-    attachment.configureGraphics(shared_graphics);
-    try responses.push(.{ .pane_opened = .{
-        .request_id = create.request_id,
-        .pane_id = fresh.id,
-        .location = fresh.location,
-        .created = true,
-    } });
-    events.changed(events.context, client, create.location.workspace);
 }

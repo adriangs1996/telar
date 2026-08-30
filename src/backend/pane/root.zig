@@ -43,6 +43,12 @@ pub const PaneKey = struct {
     generation: u64,
 };
 
+/// Fact produced when the runtime owns a discoverable pane and its actors.
+pub const PaneLaunched = struct {
+    key: PaneKey,
+    location: schema.TabLocation,
+};
+
 pub const LaunchState = enum {
     starting,
     running,

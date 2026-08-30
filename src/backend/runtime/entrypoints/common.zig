@@ -37,11 +37,6 @@ pub const Launcher = struct {
     ) anyerror!*Pane,
 };
 
-pub const WorkspaceEvents = struct {
-    context: *anyopaque,
-    changed: *const fn (*anyopaque, ClientKey, schema.WorkspaceLocation) void,
-};
-
 pub fn queueFailure(
     responses: *ResponseQueue,
     request_id: schema.RequestId,
