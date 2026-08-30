@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const diagnostics = core.diagnostics;
 const ca = @import("ca.zig");
 const connection_admission = @import("connection_admission.zig");
+const connect_authentication = @import("connect_authentication.zig");
 const h2 = @import("h2.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
@@ -27,12 +28,6 @@ pub const default_passthrough_hosts = [_][]const u8{
     "ab.chatgpt.com",
 };
 const max_passthrough_hosts = max_configured_passthrough_hosts + default_passthrough_hosts.len;
-
-const proxy_authentication_required =
-    "HTTP/1.1 407 Proxy Authentication Required\r\n" ++
-    "Proxy-Authenticate: Basic realm=\"telar\"\r\n" ++
-    "Content-Length: 0\r\n" ++
-    "Connection: close\r\n\r\n";
 
 pub const Paths = struct {
     key: []const u8,
@@ -190,36 +185,30 @@ pub const Service = struct {
     pub fn receive(service: *Service, io: Io) anyerror!middleware.Event {
         while (true) {
             var event = try service.events.getOne(io);
+            defer std.crypto.secureZero(u8, &event.credential.token);
             releaseEventSlot(&service.queued_events);
-            if (service.credentials.contains(service.io, event.credential)) return event;
-            std.crypto.secureZero(u8, &event.credential.token);
+            if (service.credentials.contains(service.io, &event.credential)) {
+                return event;
+            }
         }
     }
 
-    pub fn credentialUrl(
-        service: *const Service,
-        buffer: []u8,
-        credential: identity.Credential,
-    ) ![]const u8 {
+    pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const identity.Credential) ![]const u8 {
         return identity.formatUrl(buffer, service.port, credential);
     }
 
     /// Credentials are live capabilities, not merely well-formed proxy URL
     /// userinfo. Registration and revocation follow the pane lifecycle.
-    pub fn registerCredential(service: *Service, credential: identity.Credential) !void {
+    pub fn registerCredential(service: *Service, credential: *const identity.Credential) !void {
         return service.credentials.register(service.io, credential);
     }
 
-    pub fn unregisterCredential(service: *Service, credential: identity.Credential) void {
+    pub fn unregisterCredential(service: *Service, credential: *const identity.Credential) void {
         service.credentials.remove(service.io, credential);
     }
 
-    pub fn unregisterPane(
-        service: *Service,
-        pane_id: schema.PaneId,
-        pane_generation: u64,
-    ) void {
-        service.credentials.removePane(service.io, pane_id, pane_generation);
+    pub fn unregisterPane(service: *Service, pane_id: schema.PaneId, pane_generation: u64) void {
+        service.credentials.removePane(service.io, .{ .id = pane_id, .generation = pane_generation });
     }
 
     /// Register before `run` starts. The immutable pipeline can later be
@@ -227,13 +216,19 @@ pub const Service = struct {
     pub fn addTransformer(service: *Service, transformer: middleware.Transformer) !void {
         service.configuration_mutex.lockUncancelable(service.io);
         defer service.configuration_mutex.unlock(service.io);
-        if (service.started) return error.ProxyAlreadyRunning;
+        if (service.started) {
+            return error.ProxyAlreadyRunning;
+        }
+
         return service.transforms.add(transformer);
     }
 
     fn enqueueEvent(context: *anyopaque, io: Io, event: middleware.Event) void {
         const service: *Service = @ptrCast(@alignCast(context));
-        if (!service.credentials.contains(service.io, event.credential)) return;
+        if (!service.credentials.contains(service.io, &event.credential)) {
+            return;
+        }
+
         // A waiting getter may consume the queue's direct handoff before
         // `put` returns, so the matching depth must exist before publication.
         const depth = reserveEventSlot(&service.queued_events) orelse {
@@ -261,6 +256,12 @@ const connection_admission_port: connection_admission.Port(Service, net.Stream) 
 
 const ConnectionAdmission = connection_admission.Runner(Service, net.Stream, connection_admission_port);
 
+const connect_credential_port: connect_authentication.CredentialPort(Service) = .{
+    .contains = containsCredential,
+};
+
+const ConnectAuthentication = connect_authentication.Command(Service, connect_credential_port);
+
 fn acceptConnection(service: *Service) !net.Stream {
     return service.listener.accept(service.io);
 }
@@ -283,6 +284,10 @@ fn closeConnection(service: *Service, stream: net.Stream) void {
 
 fn cancelConnections(service: *Service, connections: *Io.Group) void {
     connections.cancel(service.io);
+}
+
+fn containsCredential(service: *Service, credential: *const identity.Credential) bool {
+    return service.credentials.contains(service.io, credential);
 }
 
 fn reserveEventSlot(queued_events: *std.atomic.Value(u64)) ?u64 {
@@ -311,65 +316,77 @@ const CredentialRegistry = struct {
     mutex: Io.Mutex = .init,
     slots: [max_credentials]?identity.Credential = @splat(null),
 
-    fn register(registry: *CredentialRegistry, io: Io, credential: identity.Credential) !void {
+    fn register(registry: *CredentialRegistry, io: Io, credential: *const identity.Credential) !void {
         registry.mutex.lockUncancelable(io);
         defer registry.mutex.unlock(io);
         var free: ?*?identity.Credential = null;
         for (&registry.slots) |*slot| {
-            if (slot.*) |existing| {
-                if (sameCredential(existing, credential)) return error.DuplicateProxyCredential;
+            if (slot.*) |*existing| {
+                if (sameCredential(existing, credential)) {
+                    return error.DuplicateProxyCredential;
+                }
             } else if (free == null) {
                 free = slot;
             }
         }
         const destination = free orelse return error.TooManyProxyCredentials;
-        destination.* = credential;
+        destination.* = credential.*;
     }
 
-    fn remove(registry: *CredentialRegistry, io: Io, credential: identity.Credential) void {
+    fn remove(registry: *CredentialRegistry, io: Io, credential: *const identity.Credential) void {
         registry.mutex.lockUncancelable(io);
         defer registry.mutex.unlock(io);
         for (&registry.slots) |*slot| {
             const existing = if (slot.*) |*value| value else continue;
-            if (!sameCredential(existing.*, credential)) continue;
-            std.crypto.secureZero(u8, &existing.token);
-            slot.* = null;
-            return;
-        }
-    }
-
-    fn removePane(
-        registry: *CredentialRegistry,
-        io: Io,
-        pane_id: schema.PaneId,
-        pane_generation: u64,
-    ) void {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-        for (&registry.slots) |*slot| {
-            const existing = if (slot.*) |*value| value else continue;
-            if (existing.pane_id != pane_id or existing.pane_generation != pane_generation)
+            if (!sameCredential(existing, credential)) {
                 continue;
+            }
+
             std.crypto.secureZero(u8, &existing.token);
             slot.* = null;
             return;
         }
     }
 
-    fn contains(registry: *CredentialRegistry, io: Io, credential: identity.Credential) bool {
+    fn removePane(registry: *CredentialRegistry, io: Io, pane: PaneGeneration) void {
         registry.mutex.lockUncancelable(io);
         defer registry.mutex.unlock(io);
-        for (registry.slots) |slot| {
-            const existing = slot orelse continue;
-            if (sameCredential(existing, credential)) return true;
+        for (&registry.slots) |*slot| {
+            const existing = if (slot.*) |*value| value else continue;
+
+            if (existing.pane_id != pane.id or existing.pane_generation != pane.generation) {
+                continue;
+            }
+
+            std.crypto.secureZero(u8, &existing.token);
+            slot.* = null;
+            return;
+        }
+    }
+
+    fn contains(registry: *CredentialRegistry, io: Io, credential: *const identity.Credential) bool {
+        registry.mutex.lockUncancelable(io);
+        defer registry.mutex.unlock(io);
+        for (&registry.slots) |*slot| {
+            const existing = if (slot.*) |*value| value else continue;
+            if (sameCredential(existing, credential)) {
+                return true;
+            }
         }
         return false;
     }
 };
 
-fn sameCredential(left: identity.Credential, right: identity.Credential) bool {
-    if (left.pane_id != right.pane_id or left.pane_generation != right.pane_generation)
+const PaneGeneration = struct {
+    id: schema.PaneId,
+    generation: u64,
+};
+
+fn sameCredential(left: *const identity.Credential, right: *const identity.Credential) bool {
+    if (left.pane_id != right.pane_id or left.pane_generation != right.pane_generation) {
         return false;
+    }
+
     return std.crypto.timing_safe.eql(
         [identity.token_bytes]u8,
         left.token,
@@ -488,38 +505,31 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
         stream.close(service.io);
         service.connection_slots.release();
     }
-    var head: [32 * 1024]u8 = undefined;
+    var head: [http.max_head_bytes]u8 = undefined;
+    defer std.crypto.secureZero(u8, &head);
     const head_len = readConnectHead(service.io, stream, &head) orelse return;
-    defer std.crypto.secureZero(u8, head[0..head_len]);
-    var credential = identity.parseProxyAuthorization(head[0..head_len]) orelse {
-        recordRejection(service, .invalid_authorization);
-        reply(service.io, stream, proxy_authentication_required);
-        return;
+    var authenticated = switch (ConnectAuthentication.execute(service, head[0..head_len])) {
+        .authenticated => |value| value,
+        .rejected => |rejection| {
+            if (rejection.metric) |metric| {
+                recordAuthenticationRejection(service, metric);
+            }
+
+            reply(service.io, stream, rejection.response);
+            return;
+        },
     };
-    defer std.crypto.secureZero(u8, &credential.token);
-    if (!service.credentials.contains(service.io, credential)) {
-        recordRejection(service, .unknown_credential);
-        reply(service.io, stream, proxy_authentication_required);
-        return;
-    }
-    const target = connectTarget(head[0..head_len]) orelse {
-        reply(service.io, stream, "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
-        return;
-    };
+    defer std.crypto.secureZero(u8, &authenticated.credential.token);
+    const target = authenticated.target;
     var context: TunnelContext = .{
         .service = service,
-        .credential = credential,
-        .provider = providerForHost(target.host),
+        .credential = authenticated.credential,
+        .provider = providerForHost(target.host.bytes),
         .connection_id = service.next_connection_id.fetchAdd(1, .monotonic),
         .protocol = .http11,
     };
     defer std.crypto.secureZero(u8, &context.credential.token);
-    const host_name = net.HostName.init(target.host) catch {
-        context.publish(.request_failed, 0);
-        reply(service.io, stream, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
-        return;
-    };
-    const upstream = connectUpstream(host_name, service.io, target.port) catch {
+    const upstream = connectUpstream(target.host, service.io, target.port) catch {
         _ = service.upstream_connect_failures.fetchAdd(1, .monotonic);
         context.publish(.request_failed, 0);
         reply(service.io, stream, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
@@ -528,7 +538,7 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     defer upstream.close(service.io);
     reply(service.io, stream, "HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    if (service.passthrough_hosts.contains(target.host)) {
+    if (service.passthrough_hosts.contains(target.host.bytes)) {
         _ = service.passthrough_connections.fetchAdd(1, .monotonic);
         relayPassthrough(service.io, stream, upstream);
         return;
@@ -540,7 +550,7 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
         service.gpa,
         &service.authority,
         &service.roots,
-        target.host,
+        target.host.bytes,
         stream,
         upstream,
         &cause,
@@ -690,12 +700,7 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     }
 }
 
-const Rejection = enum {
-    invalid_authorization,
-    unknown_credential,
-};
-
-fn recordRejection(service: *Service, rejection: Rejection) void {
+fn recordAuthenticationRejection(service: *Service, rejection: connect_authentication.RejectionMetric) void {
     _ = service.rejected_connections.fetchAdd(1, .monotonic);
     switch (rejection) {
         .invalid_authorization => _ = service.invalid_authorization_rejections.fetchAdd(1, .monotonic),
@@ -937,23 +942,9 @@ fn pumpUpgrade(
     session.halfClose(to);
 }
 
-const Target = struct { host: []const u8, port: u16 };
-
-fn connectTarget(head: []const u8) ?Target {
-    const line_end = std.mem.indexOf(u8, head, "\r\n") orelse return null;
-    var parts = std.mem.splitScalar(u8, head[0..line_end], ' ');
-    if (!std.mem.eql(u8, parts.next() orelse return null, "CONNECT")) return null;
-    const target = parts.next() orelse return null;
-    const colon = std.mem.lastIndexOfScalar(u8, target, ':') orelse return null;
-    if (colon == 0) return null;
-    return .{
-        .host = target[0..colon],
-        .port = std.fmt.parseInt(u16, target[colon + 1 ..], 10) catch return null,
-    };
-}
-
 fn readConnectHead(io: Io, stream: net.Stream, buffer: []u8) ?usize {
     var read_buffer: [8 * 1024]u8 = undefined;
+    defer std.crypto.secureZero(u8, &read_buffer);
     var reader = stream.reader(io, &read_buffer);
     var len: usize = 0;
     while (len < buffer.len) {
@@ -1096,7 +1087,7 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
         .pane_generation = 12,
         .token = .{0x11} ** identity.token_bytes,
     };
-    try service.registerCredential(credential);
+    try service.registerCredential(&credential);
     const observation: middleware.Event = .{
         .credential = credential,
         .provider = .codex,
@@ -1157,13 +1148,6 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
     );
 }
 
-test "CONNECT target parser rejects non-CONNECT requests" {
-    try std.testing.expectEqualStrings("api.openai.com", connectTarget(
-        "CONNECT api.openai.com:443 HTTP/1.1\r\n\r\n",
-    ).?.host);
-    try std.testing.expect(connectTarget("GET / HTTP/1.1\r\n\r\n") == null);
-}
-
 test "proxy credentials are revoked with their pane" {
     const io = std.testing.io;
     var registry: CredentialRegistry = .{};
@@ -1172,11 +1156,11 @@ test "proxy credentials are revoked with their pane" {
         .pane_generation = 2,
         .token = .{0x5a} ** identity.token_bytes,
     };
-    try registry.register(io, credential);
-    try std.testing.expect(registry.contains(io, credential));
-    try std.testing.expectError(error.DuplicateProxyCredential, registry.register(io, credential));
-    registry.remove(io, credential);
-    try std.testing.expect(!registry.contains(io, credential));
+    try registry.register(io, &credential);
+    try std.testing.expect(registry.contains(io, &credential));
+    try std.testing.expectError(error.DuplicateProxyCredential, registry.register(io, &credential));
+    registry.remove(io, &credential);
+    try std.testing.expect(!registry.contains(io, &credential));
 }
 
 test "pane revocation removes only that generation" {
@@ -1192,11 +1176,11 @@ test "pane revocation removes only that generation" {
         .pane_generation = 3,
         .token = .{0x6b} ** identity.token_bytes,
     };
-    try registry.register(io, current);
-    try registry.register(io, next);
-    registry.removePane(io, current.pane_id, current.pane_generation);
-    try std.testing.expect(!registry.contains(io, current));
-    try std.testing.expect(registry.contains(io, next));
+    try registry.register(io, &current);
+    try registry.register(io, &next);
+    registry.removePane(io, .{ .id = current.pane_id, .generation = current.pane_generation });
+    try std.testing.expect(!registry.contains(io, &current));
+    try std.testing.expect(registry.contains(io, &next));
 }
 
 test "receive discards observations queued before pane revocation" {
@@ -1227,7 +1211,7 @@ test "receive discards observations queued before pane revocation" {
         .pane_generation = 3,
         .token = .{0x6b} ** identity.token_bytes,
     };
-    try service.registerCredential(current);
+    try service.registerCredential(&current);
     service.pipeline.publish(io, .{
         .credential = current,
         .provider = .codex,
@@ -1237,7 +1221,7 @@ test "receive discards observations queued before pane revocation" {
         .observed_at_ms = 1,
     });
     service.unregisterPane(current.pane_id, current.pane_generation);
-    try service.registerCredential(next);
+    try service.registerCredential(&next);
     service.pipeline.publish(io, .{
         .credential = next,
         .provider = .codex,
@@ -1247,12 +1231,13 @@ test "receive discards observations queued before pane revocation" {
         .observed_at_ms = 2,
     });
 
-    const received = try service.receive(io);
-    try std.testing.expectEqual(next.pane_generation, received.credential.pane_generation);
+    var received = try service.receive(io);
+    defer std.crypto.secureZero(u8, &received.credential.token);
+    try std.testing.expect(std.meta.eql(next, received.credential));
     try std.testing.expectEqual(@as(u64, 0), service.queued_events.load(.monotonic));
 }
 
-test "loopback service rejects a CONNECT without a live pane capability" {
+test "loopback service maps CONNECT authentication and target rejections" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     var temp = std.testing.tmpDir(.{});
@@ -1330,6 +1315,35 @@ test "loopback service rejects a CONNECT without a live pane capability" {
         @as(u64, 1),
         service.unknown_credential_rejections.load(.monotonic),
     );
+    try std.testing.expectEqual(
+        @as(u64, 2),
+        service.rejected_connections.load(.monotonic),
+    );
+
+    var credential = identity.parseProxyAuthorization(request).?;
+    defer std.crypto.secureZero(u8, &credential.token);
+    try service.registerCredential(&credential);
+    const invalid_target_client = try address.connect(io, .{ .mode = .stream });
+    defer invalid_target_client.close(io);
+    var invalid_target_write_buffer: [512]u8 = undefined;
+    var invalid_target_writer = invalid_target_client.writer(io, &invalid_target_write_buffer);
+    var invalid_target_request_buffer: [256]u8 = undefined;
+    const invalid_target_request = try std.fmt.bufPrint(
+        &invalid_target_request_buffer,
+        "GET / HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n",
+        .{basic},
+    );
+    try invalid_target_writer.interface.writeAll(invalid_target_request);
+    try invalid_target_writer.interface.flush();
+    var invalid_target_read_buffer: [256]u8 = undefined;
+    var invalid_target_reader = invalid_target_client.reader(io, &invalid_target_read_buffer);
+    var invalid_target_response: [256]u8 = undefined;
+    const invalid_target_response_len = try invalid_target_reader.interface.readSliceShort(&invalid_target_response);
+    try std.testing.expect(std.mem.startsWith(
+        u8,
+        invalid_target_response[0..invalid_target_response_len],
+        "HTTP/1.1 400 Bad Request\r\n",
+    ));
     try std.testing.expectEqual(
         @as(u64, 2),
         service.rejected_connections.load(.monotonic),

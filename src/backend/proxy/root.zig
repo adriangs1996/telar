@@ -145,12 +145,12 @@ pub const Proxy = struct {
             .token = identity.randomToken(service.io),
         };
         defer std.crypto.secureZero(u8, &credential.token);
-        try service.registerCredential(credential);
-        errdefer service.unregisterCredential(credential);
+        try service.registerCredential(&credential);
+        errdefer service.unregisterCredential(&credential);
 
         var url_buffer: [256]u8 = undefined;
         defer std.crypto.secureZero(u8, &url_buffer);
-        const proxy_url = try service.credentialUrl(&url_buffer, credential);
+        const proxy_url = try service.credentialUrl(&url_buffer, &credential);
         const overrides = environmentOverrides(
             proxy_url,
             service.certificate_path,
@@ -426,6 +426,7 @@ test "proxy connection admission enforces the real worker limit" {
 test {
     std.testing.refAllDecls(@import("ca.zig"));
     std.testing.refAllDecls(@import("connection_admission.zig"));
+    std.testing.refAllDecls(@import("connect_authentication.zig"));
     std.testing.refAllDecls(@import("h2.zig"));
     std.testing.refAllDecls(@import("http/root.zig"));
     std.testing.refAllDecls(identity);
