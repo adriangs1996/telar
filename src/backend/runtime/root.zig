@@ -62,6 +62,7 @@ const workspace_snapshot_controller = @import("controllers/workspace_snapshot.zi
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
+const pane_ingest_coordinator = @import("pane_ingest_coordinator.zig");
 const pane_output_pipeline = @import("pane_output_pipeline.zig");
 const pane_mod = @import("../pane/root.zig");
 const blit = pane_mod.blit;
@@ -86,7 +87,6 @@ const diagnostics = core.diagnostics;
 pub const GraphicsLimits = pane_mod.GraphicsLimits;
 const Pane = pane_mod.Pane;
 const PaneKey = pane_mod.PaneKey;
-const PaneIngestStats = pane_mod.PaneIngestStats;
 const PaneStore = pane_mod.PaneStore;
 const PaneLauncher = pane_launcher_mod.PaneLauncher;
 const max_panes = pane_mod.max_panes;
@@ -164,11 +164,7 @@ const ClientSentEvent = struct {
 };
 
 const PaneOutputEvent = pane_launcher_mod.PaneOutputEvent;
-
-const PaneIngestEvent = struct {
-    pane: PaneKey,
-    result: anyerror!PaneIngestStats,
-};
+const PaneIngestEvent = pane_ingest_coordinator.Completion;
 
 const PaneObservationEvent = struct {
     pane: PaneKey,
@@ -806,43 +802,9 @@ const Server = struct {
         return pipeline.handle(event);
     }
 
-    /// Entrypoint for completed VT ingestion. It exposes the new cell/media
-    /// state to attached clients and schedules the pane's next PTY read.
     fn handlePaneIngestedEvent(server: *Server, event: PaneIngestEvent) !void {
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-        active.completeOutputIngest();
-        const stats = event.result catch {
-            _ = active.requestClose();
-            active.finishPtyOutput();
-            server.collect();
-            return;
-        };
-        if (comptime diagnostics.enabled) {
-            server.metrics.ingest.observe(stats.elapsed_ns);
-        }
-        retirePaneOnFailure(active, active.applyPendingResize()) catch {};
-        try schedulePaneObservation(server.select, active);
-        try schedulePaneMedia(server.select, active);
-        for (&server.clients.items) |*slot| {
-            const client = slot.* orelse continue;
-            if (client.attachments.find(active.id)) |attachment| {
-                _ = attachment.resizeIfNeeded() catch {
-                    _ = server.detachSessionPane(client, active.id);
-                };
-            }
-        }
-        try schedulePaneResponse(server, active);
-        const output_started = active.beginPtyOutputRead();
-        std.debug.assert(output_started);
-        server.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ server.io, active }) catch |err| {
-            active.cancelPtyOutputRead();
-            return err;
-        };
-        server.collect();
-        server.pumpAll();
+        var coordinator = paneIngestCoordinator(server);
+        return coordinator.handle(event);
     }
 
     fn handleAcceptedEvent(
@@ -2362,7 +2324,7 @@ fn writeDiagnostics(
 
 const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
     .start = startPaneInputWrite,
-    .collect = collectAfterPaneWrite,
+    .collect = collectPaneLifecycle,
 };
 
 const RuntimePaneInputPump = pane_input_pump.Pump(Server, pane_input_runtime_port);
@@ -2379,7 +2341,7 @@ fn startPaneInputWrite(server: *Server, write: pane_input_pump.Write) !void {
     try server.select.concurrent(.pane_input_written, writePaneInput, .{write});
 }
 
-fn collectAfterPaneWrite(server: *Server) void {
+fn collectPaneLifecycle(server: *Server) void {
     server.collect();
 }
 
@@ -2399,7 +2361,7 @@ fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {
 
 const pane_response_runtime_port: pane_response_pump.RuntimePort(Server) = .{
     .start = startPaneResponseWrite,
-    .collect = collectAfterPaneWrite,
+    .collect = collectPaneLifecycle,
 };
 
 const RuntimePaneResponsePump = pane_response_pump.Pump(Server, pane_response_runtime_port);
@@ -2559,12 +2521,59 @@ fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
         };
     }
 
-    var stats: PaneIngestStats = .{};
+    var stats: pane_ingest_coordinator.Stats = .{};
     stats.elapsed_ns = task.ingest.pane.ingest(task.ingest.io, task.ingest.bytes) catch |err| {
         return .{ .pane = task.ingest.pane.key(), .result = err };
     };
 
     return .{ .pane = task.ingest.pane.key(), .result = stats };
+}
+
+const pane_ingest_runtime_port: pane_ingest_coordinator.RuntimePort(Server) = .{
+    .schedule_observation = scheduleIngestObservation,
+    .schedule_media = scheduleIngestMedia,
+    .refresh_clients = refreshPaneClients,
+    .schedule_response = schedulePaneResponse,
+    .start_read = startNextPaneRead,
+    .collect = collectPaneLifecycle,
+    .pump_clients = pumpAfterIngest,
+};
+
+const RuntimePaneIngestCoordinator = pane_ingest_coordinator.Coordinator(Server, pane_ingest_runtime_port);
+
+fn paneIngestCoordinator(server: *Server) RuntimePaneIngestCoordinator {
+    return RuntimePaneIngestCoordinator.init(server, .{
+        .io = server.io,
+        .panes = &server.model.panes,
+        .metrics = &server.metrics,
+    });
+}
+
+fn scheduleIngestObservation(server: *Server, pane: *Pane) !void {
+    return schedulePaneObservation(server.select, pane);
+}
+
+fn scheduleIngestMedia(server: *Server, pane: *Pane) !void {
+    return schedulePaneMedia(server.select, pane);
+}
+
+fn refreshPaneClients(server: *Server, pane: *Pane) void {
+    for (&server.clients.items) |*slot| {
+        const client = slot.* orelse continue;
+        const attachment = client.attachments.find(pane.id) orelse continue;
+
+        _ = attachment.resizeIfNeeded() catch {
+            _ = server.detachSessionPane(client, pane.id);
+        };
+    }
+}
+
+fn startNextPaneRead(server: *Server, read: pane_ingest_coordinator.Read) !void {
+    try server.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
+}
+
+fn pumpAfterIngest(server: *Server) void {
+    server.pumpAll();
 }
 
 fn schedulePaneObservation(
@@ -2620,16 +2629,6 @@ fn processPaneMedia(pane: *Pane, current_size: schema.TerminalSize) PaneMediaEve
     var stats: media_mod.Stats = .{};
     pane.processMedia(current_size, &stats);
     return .{ .pane = pane.key(), .stats = stats };
-}
-
-/// A resize that cannot get storage retires the affected pane - its state is
-/// still coherent because the resize is transactional, but it can no longer
-/// follow the client's geometry - and leaves every other pane running.
-fn retirePaneOnFailure(pane: *Pane, result: anyerror!void) anyerror!void {
-    result catch |err| {
-        _ = pane.requestClose();
-        return err;
-    };
 }
 
 test "client session storage stays off the runtime stack" {
@@ -2838,6 +2837,7 @@ test {
     _ = pane_input_commands;
     _ = pane_input_controller;
     _ = pane_input_pump;
+    _ = pane_ingest_coordinator;
     _ = pane_output_pipeline;
     _ = pane_response_pump;
     _ = pane_resize_commands;
