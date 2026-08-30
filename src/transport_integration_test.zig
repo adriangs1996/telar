@@ -2072,11 +2072,24 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         }
     }
     const elapsed: u64 = @intCast(std.Io.Timestamp.now(io, .awake).toNanoseconds() - started);
-    try std.testing.expect(forwarded);
-    try std.testing.expect(elapsed < std.time.ns_per_s);
-
     release.putOneUncancelable(io, 0) catch unreachable;
     gate_released = true;
+
+    if (!forwarded) {
+        std.debug.print(
+            "\nPTY input did not reach the child while the ingest actor was blocked.\n",
+            .{},
+        );
+        return error.PtyInputForwardingDeadlineExceeded;
+    }
+
+    if (elapsed >= std.time.ns_per_s) {
+        std.debug.print(
+            "\nPTY input forwarding exceeded its 1 s test budget: {d} ns.\n",
+            .{elapsed},
+        );
+        return error.PtyInputForwardingDeadlineExceeded;
+    }
 }
 
 test "runtime terminates KGP, replies to the child, and resynchronizes graphics" {
