@@ -80,6 +80,7 @@ const media_mod = @import("../media/root.zig");
 const model_mod = @import("model/root.zig");
 const pty = @import("../pty/root.zig");
 const response_queue = @import("response_queue.zig");
+const runtime_shutdown_mod = @import("runtime_shutdown.zig");
 const shutdown_mod = @import("shutdown.zig");
 const stop_signal_mod = @import("stop_signal.zig");
 const proxy_mod = @import("../proxy/root.zig");
@@ -1731,6 +1732,7 @@ const Runtime = struct {
     select: Io.Select(RuntimeEvent),
     server: Server,
     ingest_gate: ?*IngestTestGate,
+    teardown_state: runtime_shutdown_mod.State,
 
     fn init(runtime: *Runtime, startup: RuntimeStartup) !void {
         runtime.io = startup.io;
@@ -1738,6 +1740,7 @@ const Runtime = struct {
         runtime.gpa = runtime.heap.allocator();
         runtime.ingest_gate = startup.options.ingest_gate;
         runtime.stop_signal = .init(startup.options.stop);
+        runtime.teardown_state = .running;
 
         try startup.options.graphics.validate();
         attachment_mod.initSharedFreezeNonce(runtime.io);
@@ -1848,45 +1851,79 @@ const Runtime = struct {
     }
 
     fn deinit(runtime: *Runtime) void {
-        runtime.listener.shutdown();
-        for (&runtime.server.clients.items) |*slot| {
-            if (slot.*) |session| {
-                session.connection.shutdown(runtime.io);
-            }
-        }
-        if (runtime.server.client_admission.pendingConnection()) |pending| {
-            pending.shutdown(runtime.io);
-        }
-
-        // `pane_exit` blocks in libc's waitpid and cannot observe Select
-        // cancellation. End the PTY sessions first so their waits can finish;
-        // masters stay open here and close in `destroy`, after every actor
-        // has been joined, because Darwin's close waits behind blocked writes.
-        runtime.server.model.panes.shutdown();
-        runtime.select.cancelDiscard();
-        runtime.proxy_runtime.deinit();
-        runtime.listener.deinit(runtime.io);
-
-        if (runtime.server.client_admission.pendingConnection()) |pending| {
-            pending.deinit(runtime.io);
-        }
-        for (&runtime.server.clients.items) |*slot| {
-            if (slot.*) |session| {
-                session.read_pending = false;
-                session.send_pending = false;
-            }
-        }
-
-        runtime.server.clients.deinit(runtime.io, runtime.gpa);
-        runtime.server.model.panes.deinit();
-        var workspace_repository = runtime.server.workspaceRepository();
-        workspace_repository.deinit();
-        runtime.history_runtime.deinit();
-        runtime.gpa.destroy(runtime.clients);
-        runtime.telemetry.deinit(runtime.io);
-        runtime.child_environment.deinit();
+        var shutdown = runtimeShutdownCoordinator(runtime);
+        shutdown.run();
     }
 };
+
+const RuntimeShutdownCoordinator = runtime_shutdown_mod.Coordinator(Runtime);
+
+fn runtimeShutdownCoordinator(runtime: *Runtime) RuntimeShutdownCoordinator {
+    return RuntimeShutdownCoordinator.init(runtime, &runtime.teardown_state, executeRuntimeShutdownStep);
+}
+
+fn executeRuntimeShutdownStep(runtime: *Runtime, step: runtime_shutdown_mod.Step) void {
+    switch (step) {
+        .stop_listener => runtime.listener.shutdown(),
+        .stop_client_connections => stopRuntimeClientConnections(runtime),
+        .stop_pending_admission => stopRuntimePendingAdmission(runtime),
+        .stop_panes => stopRuntimePanes(runtime),
+        .cancel_actors => runtime.select.cancelDiscard(),
+        .destroy_proxy => runtime.proxy_runtime.deinit(),
+        .destroy_listener => runtime.listener.deinit(runtime.io),
+        .destroy_pending_admission => destroyRuntimePendingAdmission(runtime),
+        .release_client_actor_claims => releaseRuntimeClientActorClaims(runtime),
+        .destroy_client_sessions => runtime.server.clients.deinit(runtime.io, runtime.gpa),
+        .destroy_panes => runtime.server.model.panes.deinit(),
+        .destroy_workspaces => destroyRuntimeWorkspaces(runtime),
+        .destroy_history => runtime.history_runtime.deinit(),
+        .destroy_client_store => runtime.gpa.destroy(runtime.clients),
+        .destroy_telemetry => runtime.telemetry.deinit(runtime.io),
+        .destroy_child_environment => runtime.child_environment.deinit(),
+    }
+}
+
+fn stopRuntimeClientConnections(runtime: *Runtime) void {
+    for (&runtime.server.clients.items) |*slot| {
+        if (slot.*) |session| {
+            session.connection.shutdown(runtime.io);
+        }
+    }
+}
+
+fn stopRuntimePendingAdmission(runtime: *Runtime) void {
+    if (runtime.server.client_admission.pendingConnection()) |pending| {
+        pending.shutdown(runtime.io);
+    }
+}
+
+fn stopRuntimePanes(runtime: *Runtime) void {
+    // `pane_exit` blocks in libc's waitpid and cannot observe Select
+    // cancellation. End the PTY sessions first so their waits can finish;
+    // masters stay open here and close in `destroy`, after every actor
+    // has been joined, because Darwin's close waits behind blocked writes.
+    runtime.server.model.panes.shutdown();
+}
+
+fn destroyRuntimePendingAdmission(runtime: *Runtime) void {
+    if (runtime.server.client_admission.pendingConnection()) |pending| {
+        pending.deinit(runtime.io);
+    }
+}
+
+fn releaseRuntimeClientActorClaims(runtime: *Runtime) void {
+    for (&runtime.server.clients.items) |*slot| {
+        if (slot.*) |session| {
+            session.read_pending = false;
+            session.send_pending = false;
+        }
+    }
+}
+
+fn destroyRuntimeWorkspaces(runtime: *Runtime) void {
+    var workspace_repository = runtime.server.workspaceRepository();
+    workspace_repository.deinit();
+}
 
 fn initRuntimeTelemetry(io: Io, endpoint: []const u8) TelemetryState {
     var telemetry_suffix_buffer: [64]u8 = undefined;
@@ -2842,6 +2879,7 @@ test "runtime composition keeps every borrowed capability at a stable address" {
     try std.testing.expect(runtime.server.clients == runtime.clients);
 
     runtime.deinit();
+    runtime.deinit();
     try expectRuntimeEndpointRemoved(io, endpoint);
 }
 
@@ -3064,6 +3102,7 @@ test {
     _ = request_snapshot_controller;
     _ = runtime_stop_commands;
     _ = runtime_stop_controller;
+    _ = runtime_shutdown_mod;
     _ = runtime_state_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
