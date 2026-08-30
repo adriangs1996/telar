@@ -76,6 +76,7 @@ const pty = @import("../pty/root.zig");
 const response_queue = @import("response_queue.zig");
 const shutdown_mod = @import("shutdown.zig");
 const proxy_mod = @import("../proxy/root.zig");
+const proxy_observation_adapter = @import("proxy_observation_adapter.zig");
 const runtime_encoder = @import("encoder.zig");
 pub const system_metrics = @import("system_metrics.zig");
 const system_metrics_mod = system_metrics;
@@ -919,57 +920,9 @@ const Server = struct {
         server.pumpAll();
     }
 
-    /// Applies one proxy observation as agent-lifecycle evidence for the live pane
-    /// generation that authorized the intercepted connection.
-    ///
-    /// Successful receives are rearmed before processing. Receive failures,
-    /// observations for retired panes, and auxiliary requests do not alter agent
-    /// state. Accepted observations may update the projected agent state, schedule
-    /// description work, and make a new snapshot available for client delivery.
     fn handleProxyEvent(server: *Server, event_result: anyerror!proxy_mod.Observation) !void {
-        const event = event_result catch return;
-
-        if (server.proxy) |proxy|
-            try server.select.concurrent(
-                .proxy_event,
-                proxy_mod.Proxy.receive,
-                .{ proxy, server.io },
-            );
-
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-
-        if (comptime diagnostics.enabled) {
-            server.metrics.proxy_observations +|= 1;
-        }
-
-        _ = server.model.agents.observeProxy(.{
-            .identity = agent_mod.Identity.fromPane(active),
-            .provider = event.provider,
-            .phase = switch (event.phase) {
-                .request_started => .request_started,
-                .auxiliary_request_started => return,
-                .response_activity => .response_activity,
-                .provider_turn_completed => .provider_turn_completed,
-                .response_finished => .response_finished,
-                .request_failed => .request_failed,
-            },
-            .exchange = .{
-                .protocol = switch (event.protocol) {
-                    .http11 => .http11,
-                    .h2 => .h2,
-                    .upgraded => .upgraded,
-                },
-                .connection_id = event.connection_id,
-                .stream_id = event.stream_id,
-            },
-            .observed_at_ms = event.observed_at_ms,
-        });
-
-        server.scheduleAgentDescription();
-        server.pumpAll();
+        var adapter = proxyObservationAdapter(server);
+        return adapter.handle(event_result);
     }
 
     fn handleAgentTickEvent(server: *Server, result: anyerror!void) !void {
@@ -2299,7 +2252,7 @@ const pane_ingest_runtime_port: pane_ingest_coordinator.RuntimePort(Server) = .{
     .schedule_response = schedulePaneResponse,
     .start_read = startNextPaneRead,
     .collect = collectPaneLifecycle,
-    .pump_clients = pumpPaneClients,
+    .pump_clients = pumpRuntimeClients,
 };
 
 const RuntimePaneIngestCoordinator = pane_ingest_coordinator.Coordinator(Server, pane_ingest_runtime_port);
@@ -2335,7 +2288,7 @@ fn startNextPaneRead(server: *Server, read: pane_ingest_coordinator.Read) !void 
     try server.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
 }
 
-fn pumpPaneClients(server: *Server) void {
+fn pumpRuntimeClients(server: *Server) void {
     server.pumpAll();
 }
 
@@ -2343,7 +2296,7 @@ const pane_exit_runtime_port: pane_exit_coordinator.RuntimePort(Server) = .{
     .revoke_credential = revokeExitedPaneCredential,
     .schedule_observation = schedulePaneObservation,
     .collect = collectPaneLifecycle,
-    .pump_clients = pumpPaneClients,
+    .pump_clients = pumpRuntimeClients,
 };
 
 const RuntimePaneExitCoordinator = pane_exit_coordinator.Coordinator(Server, pane_exit_runtime_port);
@@ -2358,6 +2311,28 @@ fn paneExitCoordinator(server: *Server) RuntimePaneExitCoordinator {
 
 fn revokeExitedPaneCredential(server: *Server, pane: *Pane) void {
     server.revokePaneCredential(pane);
+}
+
+const proxy_observation_runtime_port: proxy_observation_adapter.RuntimePort(Server) = .{
+    .rearm_receive = rearmProxyObservation,
+    .schedule_description = scheduleAgentDescriptionWork,
+    .pump_clients = pumpRuntimeClients,
+};
+
+const RuntimeProxyObservationAdapter = proxy_observation_adapter.Adapter(Server, proxy_observation_runtime_port);
+
+fn proxyObservationAdapter(server: *Server) RuntimeProxyObservationAdapter {
+    return RuntimeProxyObservationAdapter.init(server, .{
+        .panes = &server.model.panes,
+        .agents = &server.model.agents,
+        .metrics = &server.metrics,
+    });
+}
+
+fn rearmProxyObservation(server: *Server) !void {
+    if (server.proxy) |proxy| {
+        try server.select.concurrent(.proxy_event, proxy_mod.Proxy.receive, .{ proxy, server.io });
+    }
 }
 
 const telemetry_tick_runtime_port: telemetry_tick_coordinator.RuntimePort(Server) = .{
@@ -2445,9 +2420,9 @@ fn scheduleTelemetryWrite(server: *Server, state: *TelemetryState, line: []const
 const pane_observation_runtime_port: pane_observation_coordinator.RuntimePort(Server) = .{
     .start = startPaneObservation,
     .publish_sound = publishObservedAgentSound,
-    .schedule_description = scheduleObservedAgentDescription,
+    .schedule_description = scheduleAgentDescriptionWork,
     .collect = collectPaneLifecycle,
-    .pump_clients = pumpPaneClients,
+    .pump_clients = pumpRuntimeClients,
 };
 
 const RuntimePaneObservationCoordinator = pane_observation_coordinator.Coordinator(Server, pane_observation_runtime_port);
@@ -2488,7 +2463,7 @@ fn publishObservedAgentSound(server: *Server, notification: schema.AgentSoundNot
     server.publishAgentSound(notification);
 }
 
-fn scheduleObservedAgentDescription(server: *Server) void {
+fn scheduleAgentDescriptionWork(server: *Server) void {
     server.scheduleAgentDescription();
 }
 
@@ -2497,7 +2472,7 @@ const pane_media_runtime_port: pane_media_coordinator.RuntimePort(Server) = .{
     .enforce_quotas = enforcePaneGraphicsQuotas,
     .synchronize_clients = synchronizeMediaClients,
     .schedule_response = schedulePaneResponse,
-    .pump_clients = pumpPaneClients,
+    .pump_clients = pumpRuntimeClients,
     .collect = collectPaneLifecycle,
 };
 
@@ -2742,6 +2717,7 @@ test {
     _ = pane_media_coordinator;
     _ = pane_observation_coordinator;
     _ = telemetry_tick_coordinator;
+    _ = proxy_observation_adapter;
     _ = pane_output_pipeline;
     _ = pane_response_pump;
     _ = pane_resize_commands;
