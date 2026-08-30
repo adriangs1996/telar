@@ -1017,10 +1017,10 @@ const Server = struct {
     }
 
     fn handleTelemetryWrittenEvent(server: *Server, result: anyerror!void, state: *TelemetryState) void {
-        state.completeWrite();
-        result catch {
-            state.deinit(server.io);
-        };
+        switch (state.finishWrite(result)) {
+            .ready => {},
+            .disable_sink => state.deinit(server.io),
+        }
     }
 
     fn dispatchClientMessage(server: *Server, session: *ClientSession, message: schema.ClientMessage) !void {

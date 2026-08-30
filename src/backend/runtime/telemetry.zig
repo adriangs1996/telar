@@ -14,6 +14,11 @@ const PaneStore = pane_mod.PaneStore;
 
 pub const max_line_bytes = 12288;
 
+pub const WriteCompletion = enum {
+    ready,
+    disable_sink,
+};
+
 pub const State = struct {
     sink: diagnostics.Sink = .{},
     line: [max_line_bytes]u8 = undefined,
@@ -84,14 +89,19 @@ pub const State = struct {
         state.write_pending = false;
     }
 
-    /// Releases the shared line buffer after its write actor completes.
+    /// Releases the shared line buffer and decides whether a failed actor must
+    /// retire the sink. The buffer becomes reusable before either action is
+    /// returned to the runtime.
     ///
     /// ```zig
-    /// state.completeWrite();
+    /// const action = state.finishWrite(result);
     /// ```
-    pub fn completeWrite(state: *State) void {
+    pub fn finishWrite(state: *State, result: anyerror!void) WriteCompletion {
         std.debug.assert(state.write_pending);
         state.write_pending = false;
+
+        result catch return .disable_sink;
+        return .ready;
     }
 
     /// Writes the borrowed line through the development diagnostics sink.
@@ -567,11 +577,22 @@ test "telemetry state lends its line buffer to exactly one write" {
     state.beginWrite();
     try std.testing.expect(state.writePending());
 
-    state.completeWrite();
+    try std.testing.expectEqual(WriteCompletion.ready, state.finishWrite({}));
     try std.testing.expect(!state.writePending());
 
     state.beginWrite();
     state.cancelWrite();
+    try std.testing.expect(!state.writePending());
+}
+
+test "a failed telemetry write releases the buffer before retiring its sink" {
+    var state: State = .{};
+    state.beginWrite();
+
+    try std.testing.expectEqual(
+        WriteCompletion.disable_sink,
+        state.finishWrite(error.WriteFailed),
+    );
     try std.testing.expect(!state.writePending());
 }
 
