@@ -56,6 +56,19 @@ fn waitForTestReceiveDeadline(io: std.Io) anyerror!void {
     return test_receive_timeout.sleep(io);
 }
 
+fn waitForFile(io: std.Io, path: []const u8, attempts: usize) !bool {
+    for (0..attempts) |_| {
+        if (std.Io.Dir.cwd().statFile(io, path, .{})) |_| {
+            return true;
+        } else |err| switch (err) {
+            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
+            else => return err,
+        }
+    }
+
+    return false;
+}
+
 const HandshakeWorker = struct {
     io: std.Io,
     connection: *core.transport.SocketChannel,
@@ -2284,6 +2297,8 @@ test "input to one pane flows while another pane's PTY is wedged" {
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/wedged.sock", .{directory});
     var sentinel_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const sentinel_path = try std.fmt.bufPrint(&sentinel_buffer, "{s}/b-input", .{directory});
+    var ready_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const ready_path = try std.fmt.bufPrint(&ready_buffer, "{s}/b-ready", .{directory});
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
@@ -2333,11 +2348,11 @@ test "input to one pane flows while another pane's PTY is wedged" {
     };
 
     // Pane B: acknowledges one byte of input through the filesystem.
-    var command_buffer: [2 * std.fs.max_path_bytes]u8 = undefined;
+    var command_buffer: [3 * std.fs.max_path_bytes]u8 = undefined;
     const command = try std.fmt.bufPrint(
         &command_buffer,
-        "stty raw -echo; dd bs=1 count=1 of=/dev/null 2>/dev/null; : > '{s}'; sleep 600",
-        .{sentinel_path},
+        "stty raw -echo; : > '{s}'; dd bs=1 count=1 of=/dev/null 2>/dev/null; : > '{s}'; sleep 600",
+        .{ ready_path, sentinel_path },
     );
     try connection.send(io, try schema.encodeCreatePane(&send_buffer, .{
         .request_id = @enumFromInt(2),
@@ -2357,8 +2372,10 @@ test "input to one pane flows while another pane's PTY is wedged" {
         .request_failed => return error.RuntimeRequestFailed,
         else => {},
     };
-    // Give pane B's shell a moment to reach its read.
-    try io.sleep(.fromMilliseconds(100), .awake);
+    if (!try waitForFile(io, ready_path, 3000)) {
+        std.debug.print("\nLive pane did not become ready to consume PTY input.\n", .{});
+        return error.LivePaneInputReadinessDeadlineExceeded;
+    }
 
     // Flood the wedged pane far past any kernel PTY buffer.
     const flood = [_]u8{'x'} ** (16 * 1024);
@@ -2373,17 +2390,10 @@ test "input to one pane flows while another pane's PTY is wedged" {
         .bytes = "y",
     }));
 
-    var forwarded = false;
-    for (0..3000) |_| {
-        if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
-            forwarded = true;
-            break;
-        } else |err| switch (err) {
-            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
-            else => return err,
-        }
+    if (!try waitForFile(io, sentinel_path, 3000)) {
+        std.debug.print("\nInput did not reach the live pane while the other PTY was wedged.\n", .{});
+        return error.LivePaneInputForwardingDeadlineExceeded;
     }
-    try std.testing.expect(forwarded);
 }
 
 test "two clients observe one pane with independent frame acknowledgement" {
