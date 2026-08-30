@@ -156,6 +156,17 @@ pub const QueryOrigin = struct {
 };
 
 pub const Query = struct {
+    pub const Input = struct {
+        request_id: schema.RequestId,
+        origin: QueryOrigin,
+        text: []const u8 = "",
+        scope: Scope = .global,
+        scope_value: []const u8 = "",
+        pane_id: schema.PaneId = .invalid,
+        failed_only: bool = false,
+        limit: u16 = 20,
+    };
+
     request_id: schema.RequestId,
     origin: QueryOrigin,
     text: [max_query_bytes]u8 = undefined,
@@ -167,45 +178,140 @@ pub const Query = struct {
     failed_only: bool = false,
     limit: u16 = 20,
 
-    pub fn init(
-        request_id: schema.RequestId,
-        origin: QueryOrigin,
-        text_value: []const u8,
-        scope: Scope,
-        scope_value: []const u8,
-        pane_id: schema.PaneId,
-        failed_only: bool,
-        limit: u16,
-    ) !Query {
-        if (text_value.len > max_query_bytes) return error.QueryTooLong;
-        if (scope_value.len > schema.max_cwd_bytes) return error.ScopeTooLong;
-        if (limit == 0 or limit > max_results) return error.InvalidLimit;
-        if (scope == .pane and pane_id == .invalid) return error.InvalidPaneId;
-        if (scope != .pane and pane_id != .invalid) return error.UnexpectedPaneId;
+    /// Copies a validated query into fixed storage so it can cross the
+    /// asynchronous history queue without borrowing request-buffer bytes.
+    ///
+    /// ```zig
+    /// const query = try Query.init(.{
+    ///     .request_id = request_id,
+    ///     .origin = origin,
+    ///     .text = "git",
+    /// });
+    /// ```
+    pub fn init(input: Input) !Query {
+        if (input.text.len > max_query_bytes) {
+            return error.QueryTooLong;
+        }
+
+        if (input.scope_value.len > schema.max_cwd_bytes) {
+            return error.ScopeTooLong;
+        }
+
+        if (input.limit == 0 or input.limit > max_results) {
+            return error.InvalidLimit;
+        }
+
+        if (input.scope == .pane and input.pane_id == .invalid) {
+            return error.InvalidPaneId;
+        }
+
+        if (input.scope != .pane and input.pane_id != .invalid) {
+            return error.UnexpectedPaneId;
+        }
 
         var query: Query = .{
-            .request_id = request_id,
-            .origin = origin,
-            .scope = scope,
-            .pane_id = pane_id,
-            .failed_only = failed_only,
-            .limit = limit,
+            .request_id = input.request_id,
+            .origin = input.origin,
+            .scope = input.scope,
+            .pane_id = input.pane_id,
+            .failed_only = input.failed_only,
+            .limit = input.limit,
         };
-        @memcpy(query.text[0..text_value.len], text_value);
-        query.text_len = @intCast(text_value.len);
-        @memcpy(query.scope_text[0..scope_value.len], scope_value);
-        query.scope_text_len = @intCast(scope_value.len);
+        @memcpy(query.text[0..input.text.len], input.text);
+        query.text_len = @intCast(input.text.len);
+        @memcpy(query.scope_text[0..input.scope_value.len], input.scope_value);
+        query.scope_text_len = @intCast(input.scope_value.len);
         return query;
     }
 
+    /// Returns the query text owned by this value.
+    ///
+    /// ```zig
+    /// const text = query.textSlice();
+    /// ```
     pub fn textSlice(query: *const Query) []const u8 {
         return query.text[0..query.text_len];
     }
 
+    /// Returns the cwd or workspace scope text owned by this value.
+    ///
+    /// ```zig
+    /// const scope = query.scopeSlice();
+    /// ```
     pub fn scopeSlice(query: *const Query) []const u8 {
         return query.scope_text[0..query.scope_text_len];
     }
 };
+
+test "history queries own request text and scope bytes" {
+    var text = [_]u8{ 'g', 'i', 't' };
+    var scope = [_]u8{ '/', 'w', 'o', 'r', 'k' };
+    const query = try Query.init(.{
+        .request_id = @enumFromInt(7),
+        .origin = .{
+            .client = .{ .id = 3, .generation = 4 },
+            .close_after_reply = true,
+        },
+        .text = &text,
+        .scope = .workspace,
+        .scope_value = &scope,
+        .failed_only = true,
+        .limit = 9,
+    });
+
+    @memset(&text, 'x');
+    @memset(&scope, 'y');
+
+    try std.testing.expectEqualStrings("git", query.textSlice());
+    try std.testing.expectEqualStrings("/work", query.scopeSlice());
+    try std.testing.expectEqual(@as(schema.RequestId, @enumFromInt(7)), query.request_id);
+    try std.testing.expectEqual(@as(u64, 3), query.origin.client.id);
+    try std.testing.expectEqual(@as(u64, 4), query.origin.client.generation);
+    try std.testing.expect(query.origin.close_after_reply);
+    try std.testing.expectEqual(Scope.workspace, query.scope);
+    try std.testing.expect(query.failed_only);
+    try std.testing.expectEqual(@as(u16, 9), query.limit);
+}
+
+test "history query validation rejects values that cannot enter the worker" {
+    const origin: QueryOrigin = .{
+        .client = .{ .id = 1, .generation = 2 },
+        .close_after_reply = false,
+    };
+    const long_text = [_]u8{'q'} ** (max_query_bytes + 1);
+    const long_scope = [_]u8{'s'} ** (schema.max_cwd_bytes + 1);
+
+    try std.testing.expectError(error.QueryTooLong, Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .text = &long_text,
+    }));
+    try std.testing.expectError(error.ScopeTooLong, Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .scope_value = &long_scope,
+    }));
+    try std.testing.expectError(error.InvalidLimit, Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .limit = 0,
+    }));
+    try std.testing.expectError(error.InvalidLimit, Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .limit = max_results + 1,
+    }));
+    try std.testing.expectError(error.InvalidPaneId, Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .scope = .pane,
+    }));
+    try std.testing.expectError(error.UnexpectedPaneId, Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .pane_id = @enumFromInt(2),
+    }));
+}
 
 pub const Request = union(enum) {
     launch_attempt: *LaunchAttempt,

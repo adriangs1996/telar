@@ -30,6 +30,8 @@ const graphics_configuration_commands = @import("commands/graphics_configuration
 const graphics_configuration_controller = @import("controllers/graphics_configuration.zig");
 const graphics_credit_commands = @import("commands/graphics_credit.zig");
 const graphics_credit_controller = @import("controllers/graphics_credit.zig");
+const history_query = @import("queries/history.zig");
+const history_query_controller = @import("controllers/history_query.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
 const open_pane_commands = @import("commands/open_pane.zig");
@@ -55,7 +57,6 @@ const workspace_snapshot_query = @import("queries/workspace_snapshot.zig");
 const workspace_snapshot_controller = @import("controllers/workspace_snapshot.zig");
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
-const history_entrypoints = @import("entrypoints/history.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_mod = @import("../pane/root.zig");
 const blit = pane_mod.blit;
@@ -1386,7 +1387,6 @@ const Server = struct {
         const attachments = &session.attachments;
         const responses = &session.delivery.responses;
         const metrics = &server.metrics;
-        const history_service = server.history_service;
         switch (message) {
             .open_pane => |open| {
                 var client_context: ClientLaunchContext = .{
@@ -1744,17 +1744,26 @@ const Server = struct {
                 try controller.moveTab(move);
             },
             .query_history => |request| {
-                try history_entrypoints.queryHistory(
-                    io,
-                    history_service,
+                var service_context: HistoryQueryServiceContext = .{
+                    .io = io,
+                    .service = server.history_service,
+                };
+                var handler: history_query.Handler = .{
+                    .service = .{
+                        .context = &service_context,
+                        .submit_fn = submitHistoryQuery,
+                    },
+                };
+                var controller = history_query_controller.Controller.init(
                     responses,
                     metrics,
-                    .{
-                        .client = session.key,
-                        .close_after_reply = session.role == .control,
-                    },
-                    request,
+                    handler.executor(),
                 );
+
+                try controller.queryHistory(.{
+                    .client = session.key,
+                    .close_after_reply = session.role == .control,
+                }, request);
             },
             .show_notification => |request| {
                 var handler: show_notification_commands.ShowNotificationHandler = .{
@@ -1831,6 +1840,16 @@ const TabSnapshotSourceContext = struct {
     panes: *PaneStore,
     workspaces: *WorkspaceRepository,
 };
+
+const HistoryQueryServiceContext = struct {
+    io: Io,
+    service: *history.Service,
+};
+
+fn submitHistoryQuery(context: *anyopaque, query: history.Query) bool {
+    const service: *HistoryQueryServiceContext = @ptrCast(@alignCast(context));
+    return service.service.query(service.io, query);
+}
 
 fn tabSnapshotContainsTab(context: *anyopaque, location: schema.TabLocation) bool {
     const source: *TabSnapshotSourceContext = @ptrCast(@alignCast(context));
@@ -2770,6 +2789,8 @@ test {
     _ = graphics_configuration_controller;
     _ = graphics_credit_commands;
     _ = graphics_credit_controller;
+    _ = history_query;
+    _ = history_query_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
     _ = open_pane_commands;
@@ -2805,6 +2826,7 @@ test {
     _ = @import("frame_ack_test.zig");
     _ = @import("graphics_configuration_test.zig");
     _ = @import("graphics_credit_test.zig");
+    _ = @import("history_query_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("open_pane_test.zig");
     _ = @import("pane_input_test.zig");

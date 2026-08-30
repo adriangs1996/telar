@@ -638,16 +638,18 @@ test "persists sessions and filters command history" {
     try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(tab_stmt));
     try std.testing.expectEqual(@as(c_longlong, 2), c.sqlite3_column_int64(tab_stmt, 0));
 
-    const request = try model.Query.init(
-        @enumFromInt(1),
-        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
-        "git",
-        .cwd,
-        "/work",
-        .invalid,
-        true,
-        20,
-    );
+    const request = try model.Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = .{
+            .client = .{ .id = 1, .generation = 1 },
+            .close_after_reply = false,
+        },
+        .text = "git",
+        .scope = .cwd,
+        .scope_value = "/work",
+        .failed_only = true,
+        .limit = 20,
+    });
     const result = try store.query(gpa, &request);
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.entries.len);
@@ -659,32 +661,28 @@ test "persists sessions and filters command history" {
     try std.testing.expect(store.fts_available);
 
     // Index path: case-insensitive and substring-capable.
-    const indexed = try model.Query.init(
-        @enumFromInt(2),
-        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
-        "IT COM",
-        .global,
-        "",
-        .invalid,
-        false,
-        20,
-    );
+    const indexed = try model.Query.init(.{
+        .request_id = @enumFromInt(2),
+        .origin = .{
+            .client = .{ .id = 1, .generation = 1 },
+            .close_after_reply = false,
+        },
+        .text = "IT COM",
+    });
     const indexed_result = try store.query(gpa, &indexed);
     defer indexed_result.deinit();
     try std.testing.expectEqual(@as(usize, 1), indexed_result.entries.len);
     try std.testing.expectEqualStrings("git commit", indexed_result.entries[0].command);
 
     // Below three characters the query takes the scan fallback.
-    const short = try model.Query.init(
-        @enumFromInt(3),
-        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
-        "gi",
-        .global,
-        "",
-        .invalid,
-        false,
-        20,
-    );
+    const short = try model.Query.init(.{
+        .request_id = @enumFromInt(3),
+        .origin = .{
+            .client = .{ .id = 1, .generation = 1 },
+            .close_after_reply = false,
+        },
+        .text = "gi",
+    });
     const short_result = try store.query(gpa, &short);
     defer short_result.deinit();
     try std.testing.expectEqual(@as(usize, 2), short_result.entries.len);
