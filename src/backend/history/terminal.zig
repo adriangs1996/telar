@@ -11,6 +11,30 @@ pub const Clock = osc.Clock;
 pub const Status = osc.Status;
 pub const Command = osc.Command;
 
+pub const InputObservation = struct {
+    terminal: *vt.Terminal,
+    bytes: []const u8,
+    shell_foreground: bool,
+    clock: Clock,
+};
+
+pub const OutputObservation = struct {
+    bytes: []const u8,
+    clock: Clock,
+    shell_foreground: ?bool,
+};
+
+pub const ExitObservation = struct {
+    clock: Clock,
+    exit_code: i32,
+};
+
+const Completion = struct {
+    clock: Clock,
+    exit_code: ?i32,
+    status: Status,
+};
+
 pub const Tracker = struct {
     gpa: std.mem.Allocator,
     aux: osc.Tracker,
@@ -42,11 +66,7 @@ pub const Tracker = struct {
         running,
     };
 
-    pub fn init(
-        gpa: std.mem.Allocator,
-        cwd: []const u8,
-        terminal: *vt.Terminal,
-    ) !Tracker {
+    pub fn init(gpa: std.mem.Allocator, cwd: []const u8, terminal: *vt.Terminal) !Tracker {
         const screen = terminal.screens.active;
         const anchor = try screen.pages.trackPin(screen.cursor.page_pin.*);
         errdefer screen.pages.untrackPin(anchor);
@@ -66,15 +86,18 @@ pub const Tracker = struct {
         terminal.screens.active.pages.untrackPin(tracker.anchor);
     }
 
-    pub fn observeInput(
-        tracker: *Tracker,
-        terminal: *vt.Terminal,
-        bytes: []const u8,
-        shell_foreground: bool,
-        clock: Clock,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) usize {
+    /// Observes one client-to-PTY slice and emits any command whose prior run
+    /// is proven complete by the new edit.
+    ///
+    /// ```zig
+    /// _ = tracker.observeInput(.{ .terminal = terminal, .bytes = bytes, .shell_foreground = true, .clock = clock }, &sink);
+    /// ```
+    pub fn observeInput(tracker: *Tracker, observation: InputObservation, sink: anytype) usize {
+        const terminal = observation.terminal;
+        const bytes = observation.bytes;
+        const shell_foreground = observation.shell_foreground;
+        const clock = observation.clock;
+
         _ = tracker.aux.input(bytes);
         if (!shell_foreground or bytes.len == 0) return 0;
 
@@ -86,7 +109,7 @@ pub const Tracker = struct {
             var finished = clock;
             if (tracker.last_output_awake_ns >= tracker.started_awake_ns)
                 finished.awake_ns = tracker.last_output_awake_ns;
-            tracker.finish(finished, null, .completed, context, on_command);
+            tracker.finish(.{ .clock = finished, .exit_code = null, .status = .completed }, sink);
         }
         if (tracker.phase == .awaiting_commit) return bytes.len;
 
@@ -180,36 +203,37 @@ pub const Tracker = struct {
         return true;
     }
 
-    pub fn observeOutput(
-        tracker: *Tracker,
-        bytes: []const u8,
-        clock: Clock,
-        shell_foreground: ?bool,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
+    /// Observes one PTY output slice and completes commands from OSC markers or
+    /// foreground-process transitions.
+    ///
+    /// ```zig
+    /// tracker.observeOutput(.{ .bytes = bytes, .clock = clock, .shell_foreground = foreground }, &sink);
+    /// ```
+    pub fn observeOutput(tracker: *Tracker, observation: OutputObservation, sink: anytype) void {
+        const bytes = observation.bytes;
+        const clock = observation.clock;
+        const shell_foreground = observation.shell_foreground;
+
         if (bytes.len != 0) tracker.last_output_awake_ns = clock.awake_ns;
 
         const Relay = struct {
             tracker: *Tracker,
             clock: Clock,
-            context: @TypeOf(context),
+            sink: @TypeOf(sink),
 
-            fn command(relay: *@This(), value: osc.Command) void {
+            pub fn emit(relay: *@This(), value: osc.Command) void {
                 if (relay.tracker.phase != .running) return;
                 if (comptime builtin.mode == .Debug)
                     relay.tracker.auxiliary_completions += 1;
-                relay.tracker.finish(
-                    relay.clock,
-                    value.exit_code,
-                    value.status,
-                    relay.context,
-                    on_command,
-                );
+                relay.tracker.finish(.{
+                    .clock = relay.clock,
+                    .exit_code = value.exit_code,
+                    .status = value.status,
+                }, relay.sink);
             }
         };
-        var relay: Relay = .{ .tracker = tracker, .clock = clock, .context = context };
-        tracker.aux.feed(bytes, clock, &relay, Relay.command);
+        var relay: Relay = .{ .tracker = tracker, .clock = clock, .sink = sink };
+        tracker.aux.feed(.{ .bytes = bytes, .clock = clock }, &relay);
 
         if (tracker.phase != .running) return;
         if (shell_foreground) |is_shell| {
@@ -218,32 +242,32 @@ pub const Tracker = struct {
             } else if (tracker.saw_foreground_child) {
                 if (comptime builtin.mode == .Debug)
                     tracker.foreground_completions += 1;
-                tracker.finish(clock, null, .completed, context, on_command);
+                tracker.finish(.{ .clock = clock, .exit_code = null, .status = .completed }, sink);
             }
         }
     }
 
-    pub fn shellExited(
-        tracker: *Tracker,
-        clock: Clock,
-        exit_code: i32,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
+    /// Completes a running command with the shell's exit code, or resets an
+    /// incomplete edit when no command reached the running phase.
+    ///
+    /// ```zig
+    /// tracker.shellExited(.{ .clock = clock, .exit_code = code }, &sink);
+    /// ```
+    pub fn shellExited(tracker: *Tracker, observation: ExitObservation, sink: anytype) void {
         if (tracker.phase == .running)
-            tracker.finish(clock, exit_code, .completed, context, on_command)
+            tracker.finish(.{ .clock = observation.clock, .exit_code = observation.exit_code, .status = .completed }, sink)
         else
             tracker.reset(.idle);
     }
 
-    pub fn interrupt(
-        tracker: *Tracker,
-        clock: Clock,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
+    /// Completes a running command as interrupted, or clears an incomplete edit.
+    ///
+    /// ```zig
+    /// tracker.interrupt(clock, &sink);
+    /// ```
+    pub fn interrupt(tracker: *Tracker, clock: Clock, sink: anytype) void {
         if (tracker.phase == .running)
-            tracker.finish(clock, null, .interrupted, context, on_command)
+            tracker.finish(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink)
         else
             tracker.reset(.idle);
     }
@@ -300,27 +324,20 @@ pub const Tracker = struct {
         return right_prompt.left(1);
     }
 
-    fn finish(
-        tracker: *Tracker,
-        clock: Clock,
-        exit_code: ?i32,
-        status: Status,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
+    fn finish(tracker: *Tracker, completion: Completion, sink: anytype) void {
         const owned = tracker.command orelse {
             tracker.reset(.idle);
             return;
         };
         const command_len = validPrefixLength(owned, max_command_bytes);
-        const duration = @max(@as(i64, 0), clock.awake_ns - tracker.started_awake_ns);
-        on_command(context, .{
+        const duration = @max(@as(i64, 0), completion.clock.awake_ns - tracker.started_awake_ns);
+        sink.emit(.{
             .bytes = owned[0..command_len],
             .cwd = tracker.command_cwd[0..tracker.command_cwd_len],
             .started_at_ms = tracker.started_at_ms,
             .duration_ns = duration,
-            .exit_code = exit_code,
-            .status = status,
+            .exit_code = completion.exit_code,
+            .status = completion.status,
             .truncated = tracker.command_truncated,
         });
         tracker.reset(.idle);
@@ -389,7 +406,7 @@ const Collected = struct {
     cwd_len: usize = 0,
     exit_code: ?i32 = null,
 
-    fn collect(collected: *Collected, command: Command) void {
+    pub fn emit(collected: *Collected, command: Command) void {
         collected.len = @min(command.bytes.len, collected.bytes.len);
         @memcpy(collected.bytes[0..collected.len], command.bytes[0..collected.len]);
         collected.cwd_len = @min(command.cwd.len, collected.cwd.len);
@@ -409,26 +426,22 @@ test "captures the rendered line even when the edit cursor is not at its end" {
     var tracker = try Tracker.init(gpa, "/work", &terminal);
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
-    _ = tracker.observeInput(
-        &terminal,
-        "edited with arrows\r",
-        true,
-        .{ .real_ms = 10, .awake_ns = 100 },
-        &collected,
-        Collected.collect,
-    );
+    _ = tracker.observeInput(.{
+        .terminal = &terminal,
+        .bytes = "edited with arrows\r",
+        .shell_foreground = true,
+        .clock = .{ .real_ms = 10, .awake_ns = 100 },
+    }, &collected);
     tracker.updateCwd("/after-submission");
 
     const output = "echo persisted\x1b[5D\r\n";
     try std.testing.expectEqual(output.len, tracker.commitBoundary(output).?);
     stream.nextSlice(output);
     try std.testing.expect(try tracker.captureSubmitted(&terminal));
-    tracker.shellExited(
-        .{ .real_ms = 20, .awake_ns = 500 },
-        7,
-        &collected,
-        Collected.collect,
-    );
+    tracker.shellExited(.{
+        .clock = .{ .real_ms = 20, .awake_ns = 500 },
+        .exit_code = 7,
+    }, &collected);
 
     try std.testing.expectEqualStrings("echo persisted", collected.bytes[0..collected.len]);
     try std.testing.expectEqualStrings("/work", collected.cwd[0..collected.cwd_len]);
@@ -446,24 +459,20 @@ test "excludes an unchanged right prompt from the submitted command" {
     var tracker = try Tracker.init(gpa, "/work", &terminal);
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
-    _ = tracker.observeInput(
-        &terminal,
-        "echo ok\r",
-        true,
-        .{ .real_ms = 10, .awake_ns = 100 },
-        &collected,
-        Collected.collect,
-    );
+    _ = tracker.observeInput(.{
+        .terminal = &terminal,
+        .bytes = "echo ok\r",
+        .shell_foreground = true,
+        .clock = .{ .real_ms = 10, .awake_ns = 100 },
+    }, &collected);
 
     const output = "echo ok\r\n";
     stream.nextSlice(output);
     try std.testing.expect(try tracker.captureSubmitted(&terminal));
-    tracker.shellExited(
-        .{ .real_ms = 20, .awake_ns = 500 },
-        0,
-        &collected,
-        Collected.collect,
-    );
+    tracker.shellExited(.{
+        .clock = .{ .real_ms = 20, .awake_ns = 500 },
+        .exit_code = 0,
+    }, &collected);
 
     try std.testing.expectEqualStrings("echo ok", collected.bytes[0..collected.len]);
 }
@@ -485,14 +494,12 @@ test "a captured command is bounded in bytes while resident" {
     var tracker = try Tracker.init(gpa, "/work", &terminal);
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
-    _ = tracker.observeInput(
-        &terminal,
-        "huge\r",
-        true,
-        .{ .real_ms = 1, .awake_ns = 1 },
-        &collected,
-        Collected.collect,
-    );
+    _ = tracker.observeInput(.{
+        .terminal = &terminal,
+        .bytes = "huge\r",
+        .shell_foreground = true,
+        .clock = .{ .real_ms = 1, .awake_ns = 1 },
+    }, &collected);
 
     // The echoed "command" is a paste far past the storable bound.
     const chunk = "x" ** 1024;
@@ -514,22 +521,18 @@ test "Kitty graphics commands do not enter shell history" {
     var tracker = try Tracker.init(gpa, "/work", &terminal);
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
-    _ = tracker.observeInput(
-        &terminal,
-        "echo safe\r",
-        true,
-        .{ .real_ms = 10, .awake_ns = 100 },
-        &collected,
-        Collected.collect,
-    );
+    _ = tracker.observeInput(.{
+        .terminal = &terminal,
+        .bytes = "echo safe\r",
+        .shell_foreground = true,
+        .clock = .{ .real_ms = 10, .awake_ns = 100 },
+    }, &collected);
     const output = "echo safe\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\r\n";
     stream.nextSlice(output);
     try std.testing.expect(try tracker.captureSubmitted(&terminal));
-    tracker.shellExited(
-        .{ .real_ms = 20, .awake_ns = 500 },
-        0,
-        &collected,
-        Collected.collect,
-    );
+    tracker.shellExited(.{
+        .clock = .{ .real_ms = 20, .awake_ns = 500 },
+        .exit_code = 0,
+    }, &collected);
     try std.testing.expectEqualStrings("echo safe", collected.bytes[0..collected.len]);
 }

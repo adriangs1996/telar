@@ -163,17 +163,16 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             phase: history.LaunchPhase,
             cause: anyerror,
         ) void {
-            _ = launcher.history_service.recordLaunchAttempt(
-                launcher.io,
-                pane.id,
-                pane.generation,
-                pane.location,
-                pane.workspace_path,
-                shell,
-                pane.started_at_ms,
-                phase,
-                @errorName(cause),
-            );
+            _ = launcher.history_service.recordLaunchAttempt(launcher.io, .{
+                .pane_id = pane.id,
+                .pane_generation = pane.generation,
+                .location = pane.location,
+                .workspace_path = pane.workspace_path,
+                .shell = shell,
+                .started_at_ms = pane.started_at_ms,
+                .phase = phase,
+                .cause = @errorName(cause),
+            });
         }
 
         fn abort(

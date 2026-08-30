@@ -50,18 +50,30 @@ pub const SessionFinished = struct {
 };
 
 pub const SessionTitle = struct {
+    pub const Definition = struct {
+        id: SessionId,
+        title: []const u8,
+        source: schema.AgentTitleSource,
+        state: schema.AgentTitleState,
+    };
+
     id: SessionId,
     title: [schema.max_agent_session_title_bytes]u8 = undefined,
     title_len: u8 = 0,
     source: schema.AgentTitleSource,
     state: schema.AgentTitleState,
 
-    pub fn init(
-        id: SessionId,
-        title_value: []const u8,
-        source: schema.AgentTitleSource,
-        state: schema.AgentTitleState,
-    ) !SessionTitle {
+    /// Validates and owns the fixed-size representation persisted by history.
+    ///
+    /// ```zig
+    /// const title = try SessionTitle.init(.{ .id = id, .title = "Fix tests", .source = .generated, .state = .ready });
+    /// ```
+    pub fn init(definition: Definition) !SessionTitle {
+        const id = definition.id;
+        const title_value = definition.title;
+        const source = definition.source;
+        const state = definition.state;
+
         if (title_value.len > schema.max_agent_session_title_bytes)
             return error.AgentTitleTooLong;
         if (!std.unicode.utf8ValidateSlice(title_value)) return error.InvalidAgentTitle;
@@ -89,19 +101,19 @@ pub const SessionTitle = struct {
 
 test "session titles validate text and source authority before persistence" {
     const session_id = [_]u8{1} ** 16;
-    _ = try SessionTitle.init(session_id, "Improve sidebar", .generated, .ready);
-    _ = try SessionTitle.init(session_id, "", .telar, .failed);
+    _ = try SessionTitle.init(.{ .id = session_id, .title = "Improve sidebar", .source = .generated, .state = .ready });
+    _ = try SessionTitle.init(.{ .id = session_id, .title = "", .source = .telar, .state = .failed });
     try std.testing.expectError(
         error.InvalidAgentTitle,
-        SessionTitle.init(session_id, "bad\ntitle", .generated, .ready),
+        SessionTitle.init(.{ .id = session_id, .title = "bad\ntitle", .source = .generated, .state = .ready }),
     );
     try std.testing.expectError(
         error.InvalidAgentTitle,
-        SessionTitle.init(session_id, "", .generated, .ready),
+        SessionTitle.init(.{ .id = session_id, .title = "", .source = .generated, .state = .ready }),
     );
     try std.testing.expectError(
         error.InvalidAgentTitle,
-        SessionTitle.init(session_id, "manual", .manual, .pending),
+        SessionTitle.init(.{ .id = session_id, .title = "manual", .source = .manual, .state = .pending }),
     );
 }
 

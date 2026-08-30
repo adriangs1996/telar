@@ -28,6 +28,31 @@ pub const Stats = struct {
     agent_signal: ?agent_detection.Signal = null,
 };
 
+pub const Initialization = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+    cwd: []const u8,
+    size: schema.TerminalSize,
+};
+
+pub const InputObservation = struct {
+    bytes: []const u8,
+    shell_foreground: bool,
+    clock: terminal_history.Clock,
+};
+
+pub const OutputObservation = struct {
+    bytes: []const u8,
+    shell_foreground: ?bool,
+    clock: terminal_history.Clock,
+};
+
+pub const Processing = struct {
+    cwd: ?[]const u8,
+    current_size: schema.TerminalSize,
+    stats: *Stats,
+};
+
 const Input = struct {
     offset: u32,
     len: u32,
@@ -98,13 +123,18 @@ pub const Observer = struct {
     failures: u64 = 0,
     detector: agent_detection.Detector = .{},
 
-    pub fn init(
-        observer: *Observer,
-        io: Io,
-        gpa: std.mem.Allocator,
-        cwd: []const u8,
-        size: schema.TerminalSize,
-    ) !void {
+    /// Initializes the disposable history emulator and its bounded event
+    /// buffers for one pane.
+    ///
+    /// ```zig
+    /// try observer.init(.{ .io = io, .gpa = gpa, .cwd = cwd, .size = size });
+    /// ```
+    pub fn init(observer: *Observer, initialization: Initialization) !void {
+        const io = initialization.io;
+        const gpa = initialization.gpa;
+        const cwd = initialization.cwd;
+        const size = initialization.size;
+
         observer.gpa = gpa;
         observer.terminal = try .init(io, gpa, .{ .cols = size.cols, .rows = size.rows });
         errdefer observer.terminal.deinit(gpa);
@@ -136,35 +166,35 @@ pub const Observer = struct {
         observer.terminal.deinit(observer.gpa);
     }
 
-    pub fn queueInput(
-        observer: *Observer,
-        bytes: []const u8,
-        shell_foreground: bool,
-        clock: terminal_history.Clock,
-    ) void {
-        const batch = observer.prepareBytes(bytes) orelse return;
-        const offset = batch.pushBytes(bytes) orelse unreachable;
+    /// Copies one input event into the active bounded observation batch.
+    ///
+    /// ```zig
+    /// observer.queueInput(.{ .bytes = bytes, .shell_foreground = true, .clock = clock });
+    /// ```
+    pub fn queueInput(observer: *Observer, observation: InputObservation) void {
+        const batch = observer.prepareBytes(observation.bytes) orelse return;
+        const offset = batch.pushBytes(observation.bytes) orelse unreachable;
         _ = batch.pushEvent(.{ .input = .{
             .offset = offset,
-            .len = @intCast(bytes.len),
-            .shell_foreground = shell_foreground,
-            .clock = clock,
+            .len = @intCast(observation.bytes.len),
+            .shell_foreground = observation.shell_foreground,
+            .clock = observation.clock,
         } });
     }
 
-    pub fn queueOutput(
-        observer: *Observer,
-        bytes: []const u8,
-        shell_foreground: ?bool,
-        clock: terminal_history.Clock,
-    ) void {
-        const batch = observer.prepareBytes(bytes) orelse return;
-        const offset = batch.pushBytes(bytes) orelse unreachable;
+    /// Copies one output event into the active bounded observation batch.
+    ///
+    /// ```zig
+    /// observer.queueOutput(.{ .bytes = bytes, .shell_foreground = foreground, .clock = clock });
+    /// ```
+    pub fn queueOutput(observer: *Observer, observation: OutputObservation) void {
+        const batch = observer.prepareBytes(observation.bytes) orelse return;
+        const offset = batch.pushBytes(observation.bytes) orelse unreachable;
         _ = batch.pushEvent(.{ .output = .{
             .offset = offset,
-            .len = @intCast(bytes.len),
-            .shell_foreground = shell_foreground,
-            .clock = clock,
+            .len = @intCast(observation.bytes.len),
+            .shell_foreground = observation.shell_foreground,
+            .clock = observation.clock,
         } });
     }
 
@@ -172,11 +202,7 @@ pub const Observer = struct {
         observer.pushControl(.{ .resize = size });
     }
 
-    pub fn queueShellExit(
-        observer: *Observer,
-        clock: terminal_history.Clock,
-        exit_code: i32,
-    ) void {
+    pub fn queueShellExit(observer: *Observer, clock: terminal_history.Clock, exit_code: i32) void {
         observer.pushControl(.{ .shell_exit = .{ .clock = clock, .exit_code = exit_code } });
     }
 
@@ -208,14 +234,17 @@ pub const Observer = struct {
         observer.worker = null;
     }
 
-    pub fn processSealed(
-        observer: *Observer,
-        cwd: ?[]const u8,
-        current_size: schema.TerminalSize,
-        stats: *Stats,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), terminal_history.Command) void,
-    ) void {
+    /// Replays one sealed batch through the history emulator and emits complete
+    /// commands to a statically dispatched sink exposing `emit(Command)`.
+    ///
+    /// ```zig
+    /// observer.processSealed(.{ .cwd = cwd, .current_size = size, .stats = stats }, &sink);
+    /// ```
+    pub fn processSealed(observer: *Observer, processing: Processing, sink: anytype) void {
+        const cwd = processing.cwd;
+        const current_size = processing.current_size;
+        const stats = processing.stats;
+
         const index = observer.worker orelse return;
         const batch = &observer.batches[index];
         observer.detector.resetSample();
@@ -241,36 +270,30 @@ pub const Observer = struct {
         for (batch.events[0..batch.event_count]) |event| switch (event) {
             .input => |input| {
                 const start: usize = input.offset;
-                stats.input_bytes +|= observer.tracker.observeInput(
-                    &observer.terminal,
-                    batch.bytes[start..][0..input.len],
-                    input.shell_foreground,
-                    input.clock,
-                    context,
-                    on_command,
-                );
+                stats.input_bytes +|= observer.tracker.observeInput(.{
+                    .terminal = &observer.terminal,
+                    .bytes = batch.bytes[start..][0..input.len],
+                    .shell_foreground = input.shell_foreground,
+                    .clock = input.clock,
+                }, sink);
             },
             .output => |output| {
                 const start: usize = output.offset;
-                observer.observeOutput(
-                    batch.bytes[start..][0..output.len],
-                    output.clock,
-                    output.shell_foreground,
-                    context,
-                    on_command,
-                );
+                observer.observeOutput(.{
+                    .bytes = batch.bytes[start..][0..output.len],
+                    .clock = output.clock,
+                    .shell_foreground = output.shell_foreground,
+                }, sink);
             },
             .resize => |size| observer.stream.handler.resize(vtResize(size)) catch {
                 observer.failures +|= 1;
                 stats.failed = true;
             },
-            .shell_exit => |exit| observer.tracker.shellExited(
-                exit.clock,
-                exit.exit_code,
-                context,
-                on_command,
-            ),
-            .interrupt => |clock| observer.tracker.interrupt(clock, context, on_command),
+            .shell_exit => |exit| observer.tracker.shellExited(.{
+                .clock = exit.clock,
+                .exit_code = exit.exit_code,
+            }, sink),
+            .interrupt => |clock| observer.tracker.interrupt(clock, sink),
         };
         const stream_signal = observer.detector.signal();
         const screen_signal = claudeReadyPrompt(&observer.terminal);
@@ -287,18 +310,11 @@ pub const Observer = struct {
             screen_signal;
     }
 
-    fn observeOutput(
-        observer: *Observer,
-        bytes: []const u8,
-        clock: terminal_history.Clock,
-        shell_foreground: ?bool,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), terminal_history.Command) void,
-    ) void {
-        observer.detector.observe(bytes);
+    fn observeOutput(observer: *Observer, observation: OutputObservation, sink: anytype) void {
+        observer.detector.observe(observation.bytes);
         var offset: usize = 0;
-        while (offset < bytes.len) {
-            const remaining = bytes[offset..];
+        while (offset < observation.bytes.len) {
+            const remaining = observation.bytes[offset..];
             const boundary = observer.tracker.commitBoundary(remaining);
             const slice = if (boundary) |len| remaining[0..len] else remaining;
             observer.stream.nextSlice(slice);
@@ -306,13 +322,11 @@ pub const Observer = struct {
                 _ = observer.tracker.captureSubmitted(&observer.terminal) catch {
                     observer.failures +|= 1;
                 };
-            observer.tracker.observeOutput(
-                slice,
-                clock,
-                shell_foreground,
-                context,
-                on_command,
-            );
+            observer.tracker.observeOutput(.{
+                .bytes = slice,
+                .clock = observation.clock,
+                .shell_foreground = observation.shell_foreground,
+            }, sink);
             offset += slice.len;
         }
     }
@@ -347,11 +361,7 @@ pub const Observer = struct {
         batch.reset_before = true;
     }
 
-    fn resetState(
-        observer: *Observer,
-        cwd: []const u8,
-        size: schema.TerminalSize,
-    ) !void {
+    fn resetState(observer: *Observer, cwd: []const u8, size: schema.TerminalSize) !void {
         observer.tracker.deinit(&observer.terminal);
         observer.stream.deinit();
         observer.enabled = false;
@@ -459,27 +469,27 @@ test "input and output are observed in enqueue order" {
         .cell_width_px = 0,
         .cell_height_px = 0,
     };
-    try observer.init(std.testing.io, std.testing.allocator, "/work", size);
+    try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = size });
     defer observer.deinit();
 
     const Collector = struct {
         bytes: [64]u8 = undefined,
         len: usize = 0,
 
-        fn capture(collector: *@This(), command: terminal_history.Command) void {
+        pub fn emit(collector: *@This(), command: terminal_history.Command) void {
             collector.len = @min(command.bytes.len, collector.bytes.len);
             @memcpy(collector.bytes[0..collector.len], command.bytes[0..collector.len]);
         }
     };
     var collector: Collector = .{};
     const started: terminal_history.Clock = .{ .real_ms = 10, .awake_ns = 100 };
-    observer.queueOutput("$ ", true, started);
-    observer.queueInput("echo isolated\r", true, started);
-    observer.queueOutput("echo isolated\r\n", false, started);
+    observer.queueOutput(.{ .bytes = "$ ", .shell_foreground = true, .clock = started });
+    observer.queueInput(.{ .bytes = "echo isolated\r", .shell_foreground = true, .clock = started });
+    observer.queueOutput(.{ .bytes = "echo isolated\r\n", .shell_foreground = false, .clock = started });
     observer.queueShellExit(.{ .real_ms = 20, .awake_ns = 500 }, 0);
     try std.testing.expect(observer.seal());
     var stats: Stats = .{};
-    observer.processSealed(null, size, &stats, &collector, Collector.capture);
+    observer.processSealed(.{ .cwd = null, .current_size = size, .stats = &stats }, &collector);
     observer.finishSealed();
 
     try std.testing.expectEqualStrings("echo isolated", collector.bytes[0..collector.len]);
@@ -488,16 +498,21 @@ test "input and output are observed in enqueue order" {
 
 test "overflow marks the observer for a counted reset" {
     var observer: Observer = undefined;
-    try observer.init(std.testing.io, std.testing.allocator, "/work", .{
-        .cols = 40,
-        .rows = 8,
-        .cell_width_px = 0,
-        .cell_height_px = 0,
+    try observer.init(.{
+        .io = std.testing.io,
+        .gpa = std.testing.allocator,
+        .cwd = "/work",
+        .size = .{
+            .cols = 40,
+            .rows = 8,
+            .cell_width_px = 0,
+            .cell_height_px = 0,
+        },
     });
     defer observer.deinit();
     const bytes: [batch_bytes]u8 = @splat('x');
-    observer.queueOutput(&bytes, true, .{ .real_ms = 1, .awake_ns = 1 });
-    observer.queueOutput("overflow", true, .{ .real_ms = 2, .awake_ns = 2 });
+    observer.queueOutput(.{ .bytes = &bytes, .shell_foreground = true, .clock = .{ .real_ms = 1, .awake_ns = 1 } });
+    observer.queueOutput(.{ .bytes = "overflow", .shell_foreground = true, .clock = .{ .real_ms = 2, .awake_ns = 2 } });
     try std.testing.expect(observer.seal());
     try std.testing.expect(observer.dropped_events != 0);
     observer.finishSealed();
@@ -564,17 +579,17 @@ fn agentSignalForOutput(
     size: schema.TerminalSize,
 ) !?agent_detection.Signal {
     var observer: Observer = undefined;
-    try observer.init(std.testing.io, std.testing.allocator, "/work", size);
+    try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = size });
     defer observer.deinit();
 
     const Noop = struct {
-        fn capture(_: *@This(), _: terminal_history.Command) void {}
+        pub fn emit(_: *@This(), _: terminal_history.Command) void {}
     };
     var noop: Noop = .{};
-    observer.queueOutput(output, false, .{ .real_ms = 1, .awake_ns = 1 });
+    observer.queueOutput(.{ .bytes = output, .shell_foreground = false, .clock = .{ .real_ms = 1, .awake_ns = 1 } });
     try std.testing.expect(observer.seal());
     var stats: Stats = .{};
-    observer.processSealed(null, size, &stats, &noop, Noop.capture);
+    observer.processSealed(.{ .cwd = null, .current_size = size, .stats = &stats }, &noop);
     observer.finishSealed();
     return stats.agent_signal;
 }

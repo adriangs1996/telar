@@ -316,12 +316,12 @@ fn testCoordinator(capture: *Capture, fixture: *test_support.PaneFixture, panes:
 
 fn beginFixtureObservation(fixture: *test_support.PaneFixture, panes: *PaneStore) !void {
     try panes.insert(fixture.pane);
-    fixture.pane.queueHistoryOutput("observed", false, pane_mod.historyClock(std.testing.io));
+    fixture.pane.queueHistoryOutput(.{ .bytes = "observed", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
     try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
 }
 
 fn queueFollowUp(fixture: *test_support.PaneFixture) void {
-    fixture.pane.queueHistoryOutput("follow-up", false, pane_mod.historyClock(std.testing.io));
+    fixture.pane.queueHistoryOutput(.{ .bytes = "follow-up", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
 }
 
 fn processCache(provider: schema.AgentProvider, process_id: u32, executable: []const u8) agent_process.Cache {
@@ -488,7 +488,7 @@ test "an unknown non-shell process clears previous process evidence" {
     try std.testing.expect(fixture.agents.projectedStatus(fixture.pane.key()) != null);
 
     capture = .{};
-    fixture.pane.queueHistoryOutput("next", false, pane_mod.historyClock(std.testing.io));
+    fixture.pane.queueHistoryOutput(.{ .bytes = "next", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
     try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
     const unknown_id = if (process_id == std.math.maxInt(u32)) process_id - 1 else process_id + 1;
     try coordinator.handle(.{

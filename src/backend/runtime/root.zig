@@ -2530,13 +2530,12 @@ fn startAgentDescription(server: *Server, command: agent_mod.description.Command
 }
 
 fn persistAgentDescription(server: *Server, finished: agent_mod.DescriptionFinished) void {
-    _ = server.history_service.setSessionTitle(
-        server.io,
-        finished.session_id,
-        finished.titleSlice(),
-        finished.source,
-        finished.state,
-    );
+    _ = server.history_service.setSessionTitle(server.io, .{
+        .id = finished.session_id,
+        .title = finished.titleSlice(),
+        .source = finished.source,
+        .state = finished.state,
+    });
 }
 
 const agent_maintenance_runtime_port: agent_maintenance_coordinator.RuntimePort(Server) = .{

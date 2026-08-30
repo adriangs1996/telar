@@ -249,11 +249,13 @@ pub const Store = struct {
         try stepDone(stmt);
     }
 
-    pub fn query(
-        store: *Store,
-        gpa: std.mem.Allocator,
-        request: *const model.Query,
-    ) !*model.QueryResult {
+    /// Executes one bounded history query and returns an owned result that the
+    /// caller must deinitialize.
+    ///
+    /// ```zig
+    /// const result = try store.query(gpa, &request);
+    /// ```
+    pub fn query(store: *Store, gpa: std.mem.Allocator, request: *const model.Query) !*model.QueryResult {
         var sql_buffer: [1024]u8 = undefined;
         var sql = std.Io.Writer.fixed(&sql_buffer);
         try sql.writeAll(
@@ -582,12 +584,12 @@ test "persists sessions and filters command history" {
         .shell = @constCast("/bin/zsh"),
     };
     try store.startSession(&session);
-    const session_title = try model.SessionTitle.init(
-        session_id,
-        "Improve agent sidebar",
-        .generated,
-        .ready,
-    );
+    const session_title = try model.SessionTitle.init(.{
+        .id = session_id,
+        .title = "Improve agent sidebar",
+        .source = .generated,
+        .state = .ready,
+    });
     try store.setSessionTitle(&session_title);
     const title_stmt = try prepare(
         store.db,

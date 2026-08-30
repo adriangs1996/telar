@@ -104,11 +104,11 @@ pub fn Pipeline(comptime Context: type, comptime port: RuntimePort(Context)) typ
             }
 
             const bytes = pane.output_buffer[0..output_len];
-            pane.queueHistoryOutput(
-                bytes,
-                pane.session.shellForeground(),
-                pane_mod.historyClock(pipeline.resources.io),
-            );
+            pane.queueHistoryOutput(.{
+                .bytes = bytes,
+                .shell_foreground = pane.session.shellForeground(),
+                .clock = pane_mod.historyClock(pipeline.resources.io),
+            });
             try port.schedule_observation(pipeline.context, pane);
 
             pane.queueMediaOutput(bytes);

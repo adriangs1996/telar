@@ -64,11 +64,11 @@ pub const PaneInputHandler = struct {
             _ = tracker.observeInput(pane.key(), command.bytes);
         }
 
-        pane.queueHistoryInput(
-            command.bytes,
-            pane.session.shellForeground() orelse false,
-            pane_mod.historyClock(handler.io),
-        );
+        pane.queueHistoryInput(.{
+            .bytes = command.bytes,
+            .shell_foreground = pane.session.shellForeground() orelse false,
+            .clock = pane_mod.historyClock(handler.io),
+        });
         try handler.scheduler.observation(handler.scheduler.context, pane);
 
         _ = pane.queuePtyInput(command.bytes);

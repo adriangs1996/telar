@@ -27,6 +27,22 @@ pub const Command = struct {
     truncated: bool,
 };
 
+pub const Observation = struct {
+    bytes: []const u8,
+    clock: Clock,
+};
+
+const SemanticObservation = struct {
+    body: []const u8,
+    clock: Clock,
+};
+
+const Completion = struct {
+    clock: Clock,
+    exit_code: ?i32,
+    status: Status,
+};
+
 pub const Tracker = struct {
     scanner: escape.OscScanner = .{},
     zone: Zone = .unknown,
@@ -56,14 +72,14 @@ pub const Tracker = struct {
         return tracker;
     }
 
-    pub fn feed(
-        tracker: *Tracker,
-        bytes: []const u8,
-        clock: Clock,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
-        for (bytes) |byte| switch (tracker.scanner.next(byte)) {
+    /// Consumes one output slice and emits completed OSC 133 commands to a
+    /// statically dispatched sink exposing `emit(Command)`.
+    ///
+    /// ```zig
+    /// tracker.feed(.{ .bytes = output, .clock = clock }, &sink);
+    /// ```
+    pub fn feed(tracker: *Tracker, observation: Observation, sink: anytype) void {
+        for (observation.bytes) |byte| switch (tracker.scanner.next(byte)) {
             .none => {},
             .start => {
                 if (comptime builtin.mode == .Debug) tracker.osc_started += 1;
@@ -71,7 +87,7 @@ pub const Tracker = struct {
                 tracker.osc_overflow = false;
             },
             .byte => |value| tracker.appendOsc(value),
-            .end => tracker.finishOsc(clock, context, on_command),
+            .end => tracker.finishOsc(observation.clock, sink),
         };
     }
 
@@ -84,14 +100,14 @@ pub const Tracker = struct {
         return tracker.command_len - before;
     }
 
-    pub fn interrupt(
-        tracker: *Tracker,
-        clock: Clock,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
+    /// Emits the running command as interrupted, if one exists.
+    ///
+    /// ```zig
+    /// tracker.interrupt(clock, &sink);
+    /// ```
+    pub fn interrupt(tracker: *Tracker, clock: Clock, sink: anytype) void {
         if (!tracker.running) return;
-        tracker.emit(clock, null, .interrupted, context, on_command);
+        tracker.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
     }
 
     pub fn currentCwd(tracker: *const Tracker) []const u8 {
@@ -121,12 +137,7 @@ pub const Tracker = struct {
         tracker.osc_len += 1;
     }
 
-    fn finishOsc(
-        tracker: *Tracker,
-        clock: Clock,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
+    fn finishOsc(tracker: *Tracker, clock: Clock, sink: anytype) void {
         if (comptime builtin.mode == .Debug) tracker.osc_finished += 1;
         defer {
             tracker.osc_len = 0;
@@ -138,26 +149,23 @@ pub const Tracker = struct {
         const code = payload[0..separator];
         const body = if (separator == payload.len) "" else payload[separator + 1 ..];
         if (std.mem.eql(u8, code, "133")) {
-            tracker.semantic(body, clock, context, on_command);
+            tracker.semantic(.{ .body = body, .clock = clock }, sink);
         } else if (std.mem.eql(u8, code, "7")) {
             tracker.cwdReport(body);
         }
     }
 
-    fn semantic(
-        tracker: *Tracker,
-        body: []const u8,
-        clock: Clock,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
+    fn semantic(tracker: *Tracker, observation: SemanticObservation, sink: anytype) void {
+        const body = observation.body;
+        const clock = observation.clock;
+
         const separator = std.mem.indexOfScalar(u8, body, ';') orelse body.len;
         const action = body[0..separator];
         const options = if (separator == body.len) "" else body[separator + 1 ..];
         if (std.mem.eql(u8, action, "A") or std.mem.eql(u8, action, "P")) {
             if (comptime builtin.mode == .Debug) tracker.prompt_markers += 1;
             if (tracker.running)
-                tracker.emit(clock, null, .interrupted, context, on_command);
+                tracker.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
             tracker.zone = .prompt;
             tracker.resetCommand();
         } else if (std.mem.eql(u8, action, "B")) {
@@ -174,26 +182,19 @@ pub const Tracker = struct {
             if (comptime builtin.mode == .Debug) tracker.finished_markers += 1;
             tracker.zone = .prompt;
             if (tracker.running)
-                tracker.emit(clock, parseExitCode(options), .completed, context, on_command);
+                tracker.emit(.{ .clock = clock, .exit_code = parseExitCode(options), .status = .completed }, sink);
         }
     }
 
-    fn emit(
-        tracker: *Tracker,
-        clock: Clock,
-        exit_code: ?i32,
-        status: Status,
-        context: anytype,
-        comptime on_command: fn (@TypeOf(context), Command) void,
-    ) void {
-        const duration = @max(@as(i64, 0), clock.awake_ns - tracker.started_awake_ns);
-        on_command(context, .{
+    fn emit(tracker: *Tracker, completion: Completion, sink: anytype) void {
+        const duration = @max(@as(i64, 0), completion.clock.awake_ns - tracker.started_awake_ns);
+        sink.emit(.{
             .bytes = tracker.command[0..tracker.command_len],
             .cwd = tracker.currentCwd(),
             .started_at_ms = tracker.started_at_ms,
             .duration_ns = duration,
-            .exit_code = exit_code,
-            .status = status,
+            .exit_code = completion.exit_code,
+            .status = completion.status,
             .truncated = tracker.command_truncated,
         });
         tracker.running = false;
@@ -255,7 +256,7 @@ const Collected = struct {
     count: usize = 0,
     last: ?Command = null,
 
-    fn collect(self: *Collected, command: Command) void {
+    pub fn emit(self: *Collected, command: Command) void {
         self.count += 1;
         self.last = command;
     }
@@ -264,19 +265,19 @@ const Collected = struct {
 test "tracks command lifecycle across chunk boundaries" {
     var tracker = Tracker.init("/work");
     var collected: Collected = .{};
-    tracker.feed("\x1b]133;A\x07$ \x1b]133;B\x07", .{
-        .real_ms = 100,
-        .awake_ns = 1000,
-    }, &collected, Collected.collect);
+    tracker.feed(.{
+        .bytes = "\x1b]133;A\x07$ \x1b]133;B\x07",
+        .clock = .{ .real_ms = 100, .awake_ns = 1000 },
+    }, &collected);
     _ = tracker.input("echo hi\r\n");
-    tracker.feed("\x1b]133;C\x07", .{
-        .real_ms = 150,
-        .awake_ns = 1000,
-    }, &collected, Collected.collect);
-    tracker.feed("hi\r\n\x1b]133;D;0\x07", .{
-        .real_ms = 200,
-        .awake_ns = 51_000,
-    }, &collected, Collected.collect);
+    tracker.feed(.{
+        .bytes = "\x1b]133;C\x07",
+        .clock = .{ .real_ms = 150, .awake_ns = 1000 },
+    }, &collected);
+    tracker.feed(.{
+        .bytes = "hi\r\n\x1b]133;D;0\x07",
+        .clock = .{ .real_ms = 200, .awake_ns = 51_000 },
+    }, &collected);
 
     try std.testing.expectEqual(@as(usize, 1), collected.count);
     try std.testing.expectEqualStrings("echo hi\r\n", collected.last.?.bytes);
@@ -288,24 +289,16 @@ test "tracks command lifecycle across chunk boundaries" {
 test "updates cwd from OSC 7 and reports interrupted commands" {
     var tracker = Tracker.init("/old");
     var collected: Collected = .{};
-    tracker.feed(
-        "\x1b]7;file://host/tmp/a%20b\x07\x1b]133;B\x07",
-        .{ .real_ms = 20, .awake_ns = 100 },
-        &collected,
-        Collected.collect,
-    );
+    tracker.feed(.{
+        .bytes = "\x1b]7;file://host/tmp/a%20b\x07\x1b]133;B\x07",
+        .clock = .{ .real_ms = 20, .awake_ns = 100 },
+    }, &collected);
     _ = tracker.input("make\r\n");
-    tracker.feed(
-        "\x1b]133;C\x07",
-        .{ .real_ms = 20, .awake_ns = 100 },
-        &collected,
-        Collected.collect,
-    );
-    tracker.interrupt(
-        .{ .real_ms = 25, .awake_ns = 500 },
-        &collected,
-        Collected.collect,
-    );
+    tracker.feed(.{
+        .bytes = "\x1b]133;C\x07",
+        .clock = .{ .real_ms = 20, .awake_ns = 100 },
+    }, &collected);
+    tracker.interrupt(.{ .real_ms = 25, .awake_ns = 500 }, &collected);
 
     try std.testing.expectEqual(@as(usize, 1), collected.count);
     try std.testing.expectEqualStrings("/tmp/a b", collected.last.?.cwd);
@@ -317,21 +310,17 @@ test "an oversized OSC does not prevent later markers" {
     var tracker = Tracker.init("/");
     var collected: Collected = .{};
     var oversized: [max_osc_bytes + 64]u8 = @splat('x');
-    tracker.feed("\x1b]", .{ .real_ms = 0, .awake_ns = 0 }, &collected, Collected.collect);
-    tracker.feed(&oversized, .{ .real_ms = 0, .awake_ns = 0 }, &collected, Collected.collect);
-    tracker.feed(
-        "\x07\x1b]133;B\x07",
-        .{ .real_ms = 1, .awake_ns = 10 },
-        &collected,
-        Collected.collect,
-    );
+    tracker.feed(.{ .bytes = "\x1b]", .clock = .{ .real_ms = 0, .awake_ns = 0 } }, &collected);
+    tracker.feed(.{ .bytes = &oversized, .clock = .{ .real_ms = 0, .awake_ns = 0 } }, &collected);
+    tracker.feed(.{
+        .bytes = "\x07\x1b]133;B\x07",
+        .clock = .{ .real_ms = 1, .awake_ns = 10 },
+    }, &collected);
     _ = tracker.input("pwd\r\n");
-    tracker.feed(
-        "\x1b]133;C\x07\x1b]133;D;7\x07",
-        .{ .real_ms = 1, .awake_ns = 10 },
-        &collected,
-        Collected.collect,
-    );
+    tracker.feed(.{
+        .bytes = "\x1b]133;C\x07\x1b]133;D;7\x07",
+        .clock = .{ .real_ms = 1, .awake_ns = 10 },
+    }, &collected);
     try std.testing.expectEqual(@as(usize, 1), collected.count);
     try std.testing.expectEqual(@as(?i32, 7), collected.last.?.exit_code);
 }

@@ -552,7 +552,7 @@ pub const Pane = struct {
             Pane.writeMediaPty,
         );
         errdefer pane.media.deinit();
-        try pane.history_observer.init(io, gpa, launch_cwd, size);
+        try pane.history_observer.init(.{ .io = io, .gpa = gpa, .cwd = launch_cwd, .size = size });
         errdefer pane.history_observer.deinit();
         pane.screen = try .init(gpa, size.cols, size.rows);
         errdefer pane.screen.deinit();
@@ -579,15 +579,14 @@ pub const Pane = struct {
 
     pub fn commitLaunch(pane: *Pane, shell: []const u8) void {
         pane.launch_state.commit();
-        pane.history_session_started = pane.history_service.startSession(
-            pane.io,
-            pane.history_session_id,
-            pane.id,
-            pane.location,
-            pane.workspace_path,
-            shell,
-            pane.started_at_ms,
-        );
+        pane.history_session_started = pane.history_service.startSession(pane.io, .{
+            .session_id = pane.history_session_id,
+            .pane_id = pane.id,
+            .location = pane.location,
+            .workspace_path = pane.workspace_path,
+            .shell = shell,
+            .started_at_ms = pane.started_at_ms,
+        });
     }
 
     pub fn abortLaunch(pane: *Pane) void {
@@ -819,13 +818,8 @@ pub const Pane = struct {
         pane.enforceIncompleteGraphics(pane.io, loading_id, kitty_commands);
     }
 
-    pub fn queueHistoryInput(
-        pane: *Pane,
-        bytes: []const u8,
-        shell_foreground: bool,
-        clock: history.Clock,
-    ) void {
-        pane.history_observer.queueInput(bytes, shell_foreground, clock);
+    pub fn queueHistoryInput(pane: *Pane, observation: history.observer.InputObservation) void {
+        pane.history_observer.queueInput(observation);
     }
 
     /// Enqueues one complete client message for the PTY writer or records the
@@ -1032,13 +1026,8 @@ pub const Pane = struct {
         pane.actorFinished();
     }
 
-    pub fn queueHistoryOutput(
-        pane: *Pane,
-        bytes: []const u8,
-        shell_foreground: ?bool,
-        clock: history.Clock,
-    ) void {
-        pane.history_observer.queueOutput(bytes, shell_foreground, clock);
+    pub fn queueHistoryOutput(pane: *Pane, observation: history.observer.OutputObservation) void {
+        pane.history_observer.queueOutput(observation);
     }
 
     /// Seals pending history work and borrows the pane allocation for one
@@ -1106,13 +1095,11 @@ pub const Pane = struct {
         var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const cwd = pane.session.cwd(&cwd_buffer);
         var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
-        pane.history_observer.processSealed(
-            cwd,
-            current_size,
-            stats,
-            &capture_context,
-            captureCommand,
-        );
+        pane.history_observer.processSealed(.{
+            .cwd = cwd,
+            .current_size = current_size,
+            .stats = stats,
+        }, &capture_context);
     }
 
     fn updateObservedCwd(pane: *Pane) bool {
@@ -1200,41 +1187,39 @@ pub const Pane = struct {
     pub const CaptureContext = struct {
         pane: *Pane,
         observation_stats: ?*history.observer.Stats = null,
-    };
 
-    pub fn captureCommand(context: *CaptureContext, command: history.Command) void {
-        const pane = context.pane;
-        if (!pane.history_session_started) return;
-        pane.history_sequence += 1;
-        const submitted = pane.history_service.recordCommand(pane.io, .{
-            .session_id = pane.history_session_id,
-            .pane_id = pane.id,
-            .location = pane.location,
-            .sequence = pane.history_sequence,
-            .workspace_path = pane.workspace_path,
-            .cols = pane.history_observer.terminal.cols,
-            .rows = pane.history_observer.terminal.rows,
-        }, command);
-        if (context.observation_stats) |stats| {
-            if (submitted) stats.captured += 1 else stats.dropped += 1;
+        pub fn emit(context: *CaptureContext, command: history.Command) void {
+            const pane = context.pane;
+            if (!pane.history_session_started) return;
+            pane.history_sequence += 1;
+            const submitted = pane.history_service.recordCommand(pane.io, .{
+                .context = .{
+                    .session_id = pane.history_session_id,
+                    .pane_id = pane.id,
+                    .location = pane.location,
+                    .sequence = pane.history_sequence,
+                    .workspace_path = pane.workspace_path,
+                    .cols = pane.history_observer.terminal.cols,
+                    .rows = pane.history_observer.terminal.rows,
+                },
+                .command = command,
+            });
+            if (context.observation_stats) |stats| {
+                if (submitted) stats.captured += 1 else stats.dropped += 1;
+            }
         }
-    }
+    };
 
     pub fn finishHistory(pane: *Pane) void {
         if (pane.history_session_finished) return;
         var capture_context: CaptureContext = .{ .pane = pane };
         if (pane.history_observer.enabled)
-            pane.history_observer.tracker.interrupt(
-                historyClock(pane.io),
-                &capture_context,
-                captureCommand,
-            );
+            pane.history_observer.tracker.interrupt(historyClock(pane.io), &capture_context);
         if (pane.history_session_started) {
-            _ = pane.history_service.finishSession(
-                pane.io,
-                pane.history_session_id,
-                Io.Timestamp.now(pane.io, .real).toMilliseconds(),
-            );
+            _ = pane.history_service.finishSession(pane.io, .{
+                .id = pane.history_session_id,
+                .finished_at_ms = Io.Timestamp.now(pane.io, .real).toMilliseconds(),
+            });
         }
         pane.history_session_finished = true;
     }
