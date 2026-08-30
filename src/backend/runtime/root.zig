@@ -23,6 +23,8 @@ const create_workspace_commands = @import("commands/create_workspace.zig");
 const create_workspace_controller = @import("controllers/create_workspace.zig");
 const detach_pane_commands = @import("commands/detach_pane.zig");
 const detach_pane_controller = @import("controllers/detach_pane.zig");
+const frame_ack_commands = @import("commands/frame_ack.zig");
+const frame_ack_controller = @import("controllers/frame_ack.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
 const open_pane_commands = @import("commands/open_pane.zig");
@@ -78,6 +80,7 @@ const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
 const RequestSnapshotController = request_snapshot_controller.Controller(*request_snapshot_commands.RequestCellSnapshotHandler);
@@ -1514,7 +1517,14 @@ const Server = struct {
                 metrics,
                 credit,
             ),
-            .frame_ack => |ack| attachment_entrypoints.frameAck(io, attachments, metrics, ack),
+            .frame_ack => |ack| {
+                var handler: frame_ack_commands.FrameAckHandler = .{
+                    .attachments = attachments,
+                };
+                var controller = FrameAckController.init(io, metrics, &handler);
+
+                try controller.frameAck(ack);
+            },
             .request_snapshot => |request| {
                 var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
                     .attachments = attachments,
@@ -2713,6 +2723,8 @@ test {
     _ = create_workspace_controller;
     _ = detach_pane_commands;
     _ = detach_pane_controller;
+    _ = frame_ack_commands;
+    _ = frame_ack_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
     _ = open_pane_commands;
@@ -2737,6 +2749,7 @@ test {
     _ = @import("create_pane_test.zig");
     _ = @import("create_workspace_test.zig");
     _ = @import("detach_pane_test.zig");
+    _ = @import("frame_ack_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("open_pane_test.zig");
     _ = @import("pane_input_test.zig");

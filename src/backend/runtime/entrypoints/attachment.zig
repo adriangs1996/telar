@@ -7,12 +7,10 @@ const attachment_mod = @import("../attachment.zig");
 const delivery_mod = @import("../delivery.zig");
 const telemetry_mod = @import("../telemetry.zig");
 
-const Io = std.Io;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const schema = core.schema;
-const diagnostics = core.diagnostics;
 
 pub fn setPaneViewport(
     attachments: *AttachmentStore,
@@ -102,24 +100,4 @@ pub fn graphicsCredit(
         return;
     };
     if (!active.grantGraphicsCredit(bytes)) metrics.stale_client_messages += 1;
-}
-
-pub fn frameAck(
-    io: Io,
-    attachments: *AttachmentStore,
-    metrics: *RuntimeMetrics,
-    ack: schema.FrameAck,
-) void {
-    const active = attachments.find(ack.pane_id) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    const elapsed = active.acknowledgeFrame(
-        ack.frame_id,
-        diagnostics.now(io),
-    ) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    if (comptime diagnostics.enabled) metrics.ack.observe(elapsed);
 }

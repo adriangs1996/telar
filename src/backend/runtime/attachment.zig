@@ -86,7 +86,7 @@ pub const Attachment = struct {
         return attachment.cells.observed_revision;
     }
 
-    pub fn acknowledgeFrame(attachment: *Attachment, frame_id: u64, now_ns: u64) ?u64 {
+    fn acknowledgeFrame(attachment: *Attachment, frame_id: u64, now_ns: u64) ?u64 {
         return attachment.cells.acknowledge(frame_id, now_ns);
     }
 
@@ -299,6 +299,17 @@ pub const AttachmentStore = struct {
         const attachment = store.find(pane_id) orelse return false;
         attachment.requestCellSnapshot();
         return true;
+    }
+
+    /// Accepts only the frame currently outstanding for the selected client
+    /// attachment. A null result leaves every synchronization baseline intact.
+    ///
+    /// ```zig
+    /// const elapsed = store.acknowledgeFrame(ack, received_at_ns) orelse return;
+    /// ```
+    pub fn acknowledgeFrame(store: *AttachmentStore, ack: schema.FrameAck, received_at_ns: u64) ?u64 {
+        const attachment = store.find(ack.pane_id) orelse return null;
+        return attachment.acknowledgeFrame(ack.frame_id, received_at_ns);
     }
 
     pub fn at(store: *AttachmentStore, index: usize) ?*Attachment {
