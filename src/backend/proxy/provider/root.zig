@@ -51,7 +51,15 @@ pub const ResponseObserver = struct {
             return false;
         }
 
-        observer.decoder.feed(input, observer, inspectEvent);
+        const EventSink = struct {
+            observer: *ResponseObserver,
+
+            pub fn emit(sink: *@This(), event: sse.Event) void {
+                sink.observer.inspectEvent(event);
+            }
+        };
+        var sink: EventSink = .{ .observer = observer };
+        observer.decoder.feed(input, &sink);
         return observer.completed;
     }
 

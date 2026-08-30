@@ -91,36 +91,32 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
     const route = options.route;
     const transformation = options.transformation orelse return relay_mod.relay(
         session,
-        route.from,
-        route.to,
-        route.direction,
-        options.provider,
+        .{
+            .from = route.from,
+            .to = route.to,
+            .direction = route.direction,
+            .agent_provider = options.provider,
+        },
         sink,
-        Emitter(@TypeOf(sink)).emit,
     );
 
     return relay_mod.relayTransformed(
         session,
-        route.from,
-        route.to,
-        route.direction,
-        options.provider,
-        transformation.source_settings,
-        transformation.target_settings,
-        transformation.pipeline,
-        transformation.io,
-        transformation.context,
+        .{
+            .route = .{
+                .from = route.from,
+                .to = route.to,
+                .direction = route.direction,
+                .agent_provider = options.provider,
+            },
+            .source_settings = transformation.source_settings,
+            .target_settings = transformation.target_settings,
+            .pipeline = transformation.pipeline,
+            .io = transformation.io,
+            .transform_context = transformation.context,
+        },
         sink,
-        Emitter(@TypeOf(sink)).emit,
     );
-}
-
-fn Emitter(comptime Sink: type) type {
-    return struct {
-        fn emit(sink: Sink, event: Event) void {
-            sink.emit(event);
-        }
-    };
 }
 
 test "relay options map direction and peer settings" {

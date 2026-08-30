@@ -62,6 +62,22 @@ pub const PeerSettings = struct {
     max_frame_size: std.atomic.Value(u32) = .init(16 * 1024),
 };
 
+pub const Route = struct {
+    from: tls.Session.Side,
+    to: tls.Session.Side,
+    direction: Direction,
+    agent_provider: provider.AgentProvider,
+};
+
+pub const TransformedRoute = struct {
+    route: Route,
+    source_settings: *PeerSettings,
+    target_settings: *PeerSettings,
+    pipeline: *const middleware.TransformPipeline,
+    io: std.Io,
+    transform_context: middleware.TransformContext,
+};
+
 const HeaderKind = enum { none, headers, push_promise };
 
 const Decoded = struct {
@@ -84,10 +100,11 @@ const Decoded = struct {
     }
 };
 
-pub const Observer = struct {
+const Observer = struct {
     inflater: ?*c.nghttp2_hd_inflater = null,
     failed: bool = false,
     agent_provider: provider.AgentProvider,
+    direction: Direction,
 
     header: [frame_header_len]u8 = undefined,
     header_len: u8 = 0,
@@ -107,8 +124,8 @@ pub const Observer = struct {
     block_len: usize = 0,
     streams: stream_state.Tracker = .{},
 
-    pub fn init(agent_provider: provider.AgentProvider) Observer {
-        var observer: Observer = .{ .agent_provider = agent_provider };
+    fn init(agent_provider: provider.AgentProvider, direction: Direction) Observer {
+        var observer: Observer = .{ .agent_provider = agent_provider, .direction = direction };
         if (c.nghttp2_hd_inflate_new(&observer.inflater) != 0 or
             c.nghttp2_hd_inflate_change_table_size(
                 observer.inflater,
@@ -118,19 +135,13 @@ pub const Observer = struct {
         return observer;
     }
 
-    pub fn deinit(observer: *Observer) void {
+    fn deinit(observer: *Observer) void {
         if (observer.inflater) |inflater| c.nghttp2_hd_inflate_del(inflater);
         observer.inflater = null;
         std.crypto.secureZero(u8, &observer.block);
     }
 
-    pub fn observe(
-        observer: *Observer,
-        input: []const u8,
-        direction: Direction,
-        context: anytype,
-        comptime emit: fn (@TypeOf(context), Event) void,
-    ) void {
+    fn observe(observer: *Observer, input: []const u8, sink: anytype) void {
         var offset: usize = 0;
         while (offset < input.len) {
             if (observer.header_len < frame_header_len) {
@@ -140,19 +151,21 @@ pub const Observer = struct {
                 offset += take;
                 if (observer.header_len != frame_header_len) continue;
                 observer.beginFrame();
-                if (observer.payload_left == 0)
-                    observer.finishFrame(direction, context, emit);
+                if (observer.payload_left == 0) {
+                    observer.finishFrame(sink);
+                }
                 continue;
             }
 
             const take = @min(observer.payload_left, input.len - offset);
             const payload = input[offset..][0..take];
-            observer.observePayload(payload, direction, context, emit);
+            observer.observePayload(payload, sink);
             observer.payload_offset += take;
             observer.payload_left -= take;
             offset += take;
-            if (observer.payload_left == 0)
-                observer.finishFrame(direction, context, emit);
+            if (observer.payload_left == 0) {
+                observer.finishFrame(sink);
+            }
         }
     }
 
@@ -198,15 +211,9 @@ pub const Observer = struct {
         }
     }
 
-    fn observePayload(
-        observer: *Observer,
-        payload: []const u8,
-        direction: Direction,
-        context: anytype,
-        comptime emit: fn (@TypeOf(context), Event) void,
-    ) void {
-        if (direction == .response and observer.frame_type == frame_data and payload.len != 0) {
-            emit(context, .{ .lifecycle = .{
+    fn observePayload(observer: *Observer, payload: []const u8, sink: anytype) void {
+        if (observer.direction == .response and observer.frame_type == frame_data and payload.len != 0) {
+            sink.emit(.{ .lifecycle = .{
                 .phase = .response_activity,
                 .stream_id = observer.stream_id,
                 .status_code = observer.streams.status(observer.stream_id),
@@ -214,7 +221,7 @@ pub const Observer = struct {
 
             if (observer.responseBodyFragment(payload)) |fragment| {
                 if (fragment.len != 0) {
-                    emit(context, .{ .response_body = .{
+                    sink.emit(.{ .response_body = .{
                         .stream_id = observer.stream_id,
                         .status_code = observer.streams.status(observer.stream_id),
                         .sse_body = observer.hasObservableSseBody(observer.stream_id),
@@ -253,12 +260,7 @@ pub const Observer = struct {
         observer.block_len += source.len;
     }
 
-    fn finishFrame(
-        observer: *Observer,
-        direction: Direction,
-        context: anytype,
-        comptime emit: fn (@TypeOf(context), Event) void,
-    ) void {
+    fn finishFrame(observer: *Observer, sink: anytype) void {
         const completed_type = observer.frame_type;
         const completed_flags = observer.flags;
         const completed_stream = observer.stream_id;
@@ -267,39 +269,45 @@ pub const Observer = struct {
             if (completed_flags & flag_end_headers != 0) {
                 observer.continuation_stream = 0;
                 const decoded = if (observer.failed) Decoded{} else observer.decodeBlock();
-                if (observer.block_kind == .headers) switch (direction) {
-                    .request => {
-                        if (decoded.request and observer.streams.startRequest(observer.block_stream))
-                            emit(context, .{ .lifecycle = .{
-                                .phase = if (decoded.isInference())
-                                    .request_started
-                                else
-                                    .auxiliary_request_started,
-                                .stream_id = observer.block_stream,
-                                .status_code = 0,
-                            } });
-                        if (observer.block_end_stream)
-                            observer.streams.finishRequest(observer.block_stream);
-                    },
-                    .response => {
-                        if (decoded.status_code >= 200) {
-                            _ = observer.streams.setResponse(.{
-                                .stream_id = observer.block_stream,
-                                .status_code = decoded.status_code,
-                                .sse_body = decoded.hasObservableSseBody(),
-                            });
-                        }
-                        if (observer.block_end_stream) {
-                            const status_code = observer.streams.status(observer.block_stream);
-                            emit(context, .{ .lifecycle = .{
-                                .phase = if (status_code >= 400) .request_failed else .response_finished,
-                                .stream_id = observer.block_stream,
-                                .status_code = status_code,
-                            } });
-                            observer.streams.finishResponse(observer.block_stream);
-                        }
-                    },
-                };
+                if (observer.block_kind == .headers) {
+                    switch (observer.direction) {
+                        .request => {
+                            if (decoded.request and observer.streams.startRequest(observer.block_stream)) {
+                                sink.emit(.{ .lifecycle = .{
+                                    .phase = if (decoded.isInference())
+                                        .request_started
+                                    else
+                                        .auxiliary_request_started,
+                                    .stream_id = observer.block_stream,
+                                    .status_code = 0,
+                                } });
+                            }
+
+                            if (observer.block_end_stream) {
+                                observer.streams.finishRequest(observer.block_stream);
+                            }
+                        },
+                        .response => {
+                            if (decoded.status_code >= 200) {
+                                _ = observer.streams.setResponse(.{
+                                    .stream_id = observer.block_stream,
+                                    .status_code = decoded.status_code,
+                                    .sse_body = decoded.hasObservableSseBody(),
+                                });
+                            }
+
+                            if (observer.block_end_stream) {
+                                const status_code = observer.streams.status(observer.block_stream);
+                                sink.emit(.{ .lifecycle = .{
+                                    .phase = if (status_code >= 400) .request_failed else .response_finished,
+                                    .stream_id = observer.block_stream,
+                                    .status_code = status_code,
+                                } });
+                                observer.streams.finishResponse(observer.block_stream);
+                            }
+                        },
+                    }
+                }
                 observer.block_kind = .none;
                 observer.block_end_stream = false;
                 observer.block_len = 0;
@@ -309,37 +317,41 @@ pub const Observer = struct {
         }
 
         if (completed_type == frame_rst_stream and completed_stream != 0) {
-            emit(context, .{ .lifecycle = .{
+            sink.emit(.{ .lifecycle = .{
                 .phase = .request_failed,
                 .stream_id = completed_stream,
                 .status_code = observer.streams.status(completed_stream),
             } });
             observer.streams.finishResponse(completed_stream);
-            if (direction == .request) observer.streams.finishRequest(completed_stream);
-        } else if (direction == .response and completed_type == frame_goaway and
+            if (observer.direction == .request) {
+                observer.streams.finishRequest(completed_stream);
+            }
+        } else if (observer.direction == .response and completed_type == frame_goaway and
             observer.streams.hasActiveResponses())
         {
-            emit(context, .{ .lifecycle = .{
+            sink.emit(.{ .lifecycle = .{
                 .phase = .request_failed,
                 .stream_id = 0,
                 .status_code = 0,
             } });
-        } else if (direction == .response and completed_type == frame_data and
+        } else if (observer.direction == .response and completed_type == frame_data and
             completed_stream != 0 and
             completed_flags & flag_end_stream != 0)
         {
             const status_code = observer.streams.status(completed_stream);
-            emit(context, .{ .lifecycle = .{
+            sink.emit(.{ .lifecycle = .{
                 .phase = if (status_code >= 400) .request_failed else .response_finished,
                 .stream_id = completed_stream,
                 .status_code = status_code,
             } });
             observer.streams.finishResponse(completed_stream);
         }
-        if (direction == .request and completed_type == frame_data and
+        if (observer.direction == .request and completed_type == frame_data and
             completed_stream != 0 and
             completed_flags & flag_end_stream != 0)
+        {
             observer.streams.finishRequest(completed_stream);
+        }
 
         observer.header_len = 0;
         observer.payload_len = 0;
@@ -465,11 +477,54 @@ pub const Observer = struct {
 /// SETTINGS, and flow control end to end. A direction owns its inflater and
 /// deflater; the reverse direction only publishes the peer SETTINGS that bound
 /// its output encoding.
-pub const Transcoder = struct {
+const TranscodeConfiguration = struct {
+    direction: Direction,
+    to: tls.Session.Side,
+    source_settings: *PeerSettings,
+    target_settings: *PeerSettings,
+    pipeline: *const middleware.TransformPipeline,
+    io: std.Io,
+    transform_context: middleware.TransformContext,
+};
+
+const CompletedFrame = struct {
+    frame_type: u8,
+    flags: u8,
+    stream_id: u32,
+};
+
+const FrameHeader = struct {
+    length: usize,
+    frame_type: u8,
+    flags: u8,
+    stream_id: u32,
+};
+
+fn TranscodePort(comptime Session: type, comptime Sink: type) type {
+    return struct {
+        session: Session,
+        sink: Sink,
+
+        fn writeAll(port: @This(), to: tls.Session.Side, bytes: []const u8) bool {
+            return port.session.writeAll(to, bytes);
+        }
+
+        fn emit(port: @This(), event: Event) void {
+            port.sink.emit(event);
+        }
+    };
+}
+
+fn transcodePort(session: anytype, sink: anytype) TranscodePort(@TypeOf(session), @TypeOf(sink)) {
+    return .{ .session = session, .sink = sink };
+}
+
+const Transcoder = struct {
     inflater: ?*c.nghttp2_hd_inflater = null,
     deflater: ?*c.nghttp2_hd_deflater = null,
     failed: bool = false,
     agent_provider: provider.AgentProvider,
+    configuration: TranscodeConfiguration,
     applied_table_size: u32 = 4096,
     applied_inflate_table_size: u32 = max_header_block_bytes,
 
@@ -497,8 +552,8 @@ pub const Transcoder = struct {
     setting_len: u8 = 0,
     streams: stream_state.Tracker = .{},
 
-    pub fn init(agent_provider: provider.AgentProvider) Transcoder {
-        var transcoder: Transcoder = .{ .agent_provider = agent_provider };
+    fn init(agent_provider: provider.AgentProvider, configuration: TranscodeConfiguration) Transcoder {
+        var transcoder: Transcoder = .{ .agent_provider = agent_provider, .configuration = configuration };
         if (c.nghttp2_hd_inflate_new(&transcoder.inflater) != 0 or
             c.nghttp2_hd_inflate_change_table_size(
                 transcoder.inflater,
@@ -510,7 +565,7 @@ pub const Transcoder = struct {
         return transcoder;
     }
 
-    pub fn deinit(transcoder: *Transcoder) void {
+    fn deinit(transcoder: *Transcoder) void {
         if (transcoder.inflater) |inflater| c.nghttp2_hd_inflate_del(inflater);
         if (transcoder.deflater) |deflater| c.nghttp2_hd_deflate_del(deflater);
         transcoder.inflater = null;
@@ -519,20 +574,7 @@ pub const Transcoder = struct {
         std.crypto.secureZero(u8, &transcoder.encoded);
     }
 
-    pub fn process(
-        transcoder: *Transcoder,
-        input: []const u8,
-        direction: Direction,
-        session: anytype,
-        to: tls.Session.Side,
-        source_settings: *PeerSettings,
-        target_settings: *PeerSettings,
-        pipeline: *const middleware.TransformPipeline,
-        io: std.Io,
-        transform_context: middleware.TransformContext,
-        event_context: anytype,
-        comptime emit: fn (@TypeOf(event_context), Event) void,
-    ) bool {
+    fn process(transcoder: *Transcoder, input: []const u8, port: anytype) bool {
         var offset: usize = 0;
         while (offset < input.len and !transcoder.failed) {
             if (transcoder.header_len < frame_header_len) {
@@ -543,54 +585,39 @@ pub const Transcoder = struct {
                 );
                 transcoder.header_len += @intCast(take);
                 offset += take;
-                if (transcoder.header_len != frame_header_len) continue;
-                if (!transcoder.beginFrame(session, to)) return false;
-                if (transcoder.payload_left == 0 and !transcoder.finishFrame(
-                    direction,
-                    session,
-                    to,
-                    source_settings,
-                    target_settings,
-                    pipeline,
-                    io,
-                    transform_context,
-                    event_context,
-                    emit,
-                )) return false;
+                if (transcoder.header_len != frame_header_len) {
+                    continue;
+                }
+
+                if (!transcoder.beginFrame(port)) {
+                    return false;
+                }
+
+                if (transcoder.payload_left == 0 and !transcoder.finishFrame(port)) {
+                    return false;
+                }
+
                 continue;
             }
 
             const take = @min(transcoder.payload_left, input.len - offset);
             const payload = input[offset..][0..take];
-            if (!transcoder.processPayload(
-                payload,
-                direction,
-                session,
-                to,
-                source_settings,
-                event_context,
-                emit,
-            )) return false;
+            if (!transcoder.processPayload(payload, port)) {
+                return false;
+            }
+
             transcoder.payload_offset += take;
             transcoder.payload_left -= take;
             offset += take;
-            if (transcoder.payload_left == 0 and !transcoder.finishFrame(
-                direction,
-                session,
-                to,
-                source_settings,
-                target_settings,
-                pipeline,
-                io,
-                transform_context,
-                event_context,
-                emit,
-            )) return false;
+
+            if (transcoder.payload_left == 0 and !transcoder.finishFrame(port)) {
+                return false;
+            }
         }
         return !transcoder.failed;
     }
 
-    fn beginFrame(transcoder: *Transcoder, session: anytype, to: tls.Session.Side) bool {
+    fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
         transcoder.payload_len = (@as(usize, transcoder.header[0]) << 16) |
             (@as(usize, transcoder.header[1]) << 8) | transcoder.header[2];
         transcoder.payload_left = transcoder.payload_len;
@@ -633,36 +660,29 @@ pub const Transcoder = struct {
             transcoder.compressed_len = 0;
             return true;
         }
-        if (!session.writeAll(to, &transcoder.header)) {
+        if (!port.writeAll(transcoder.configuration.to, &transcoder.header)) {
             transcoder.failed = true;
             return false;
         }
         return true;
     }
 
-    fn processPayload(
-        transcoder: *Transcoder,
-        payload: []const u8,
-        direction: Direction,
-        session: anytype,
-        to: tls.Session.Side,
-        source_settings: *PeerSettings,
-        event_context: anytype,
-        comptime emit: fn (@TypeOf(event_context), Event) void,
-    ) bool {
+    fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) bool {
         if (!isHeaderFrame(transcoder.frame_type)) {
             // Publish peer limits before the last SETTINGS byte reaches the
             // peer. Its next header block may use the newly advertised HPACK
             // table or frame size immediately.
             if (transcoder.frame_type == c.NGHTTP2_SETTINGS and
                 transcoder.flags & c.NGHTTP2_FLAG_ACK == 0)
-                transcoder.observeSettings(payload, source_settings);
-            if (!session.writeAll(to, payload)) {
+            {
+                transcoder.observeSettings(payload, transcoder.configuration.source_settings);
+            }
+            if (!port.writeAll(transcoder.configuration.to, payload)) {
                 transcoder.failed = true;
                 return false;
             }
-            if (direction == .response and transcoder.frame_type == frame_data and payload.len != 0) {
-                emit(event_context, .{ .lifecycle = .{
+            if (transcoder.configuration.direction == .response and transcoder.frame_type == frame_data and payload.len != 0) {
+                port.emit(.{ .lifecycle = .{
                     .phase = .response_activity,
                     .stream_id = transcoder.stream_id,
                     .status_code = transcoder.streams.status(transcoder.stream_id),
@@ -670,7 +690,7 @@ pub const Transcoder = struct {
 
                 if (transcoder.responseBodyFragment(payload)) |fragment| {
                     if (fragment.len != 0) {
-                        emit(event_context, .{ .response_body = .{
+                        port.emit(.{ .response_body = .{
                             .stream_id = transcoder.stream_id,
                             .status_code = transcoder.streams.status(transcoder.stream_id),
                             .sse_body = transcoder.hasObservableSseBody(transcoder.stream_id),
@@ -730,20 +750,7 @@ pub const Transcoder = struct {
         return true;
     }
 
-    fn finishFrame(
-        transcoder: *Transcoder,
-        direction: Direction,
-        session: anytype,
-        to: tls.Session.Side,
-        source_settings: *PeerSettings,
-        target_settings: *PeerSettings,
-        pipeline: *const middleware.TransformPipeline,
-        io: std.Io,
-        base_context: middleware.TransformContext,
-        event_context: anytype,
-        comptime emit: fn (@TypeOf(event_context), Event) void,
-    ) bool {
-        _ = source_settings;
+    fn finishFrame(transcoder: *Transcoder, port: anytype) bool {
         const completed_type = transcoder.frame_type;
         const completed_flags = transcoder.flags;
         const completed_stream = transcoder.stream_id;
@@ -754,31 +761,18 @@ pub const Transcoder = struct {
             } else {
                 transcoder.continuation_stream = 0;
                 if (transcoder.block_prefix_seen != transcoder.block_prefix_len or
-                    !transcoder.finishHeaderBlock(
-                        direction,
-                        session,
-                        to,
-                        target_settings,
-                        pipeline,
-                        io,
-                        base_context,
-                        event_context,
-                        emit,
-                    ))
+                    !transcoder.finishHeaderBlock(port))
                 {
                     transcoder.failed = true;
                     return false;
                 }
             }
         } else {
-            transcoder.observeCompletedFrame(
-                direction,
-                completed_type,
-                completed_flags,
-                completed_stream,
-                event_context,
-                emit,
-            );
+            transcoder.observeCompletedFrame(.{
+                .frame_type = completed_type,
+                .flags = completed_flags,
+                .stream_id = completed_stream,
+            }, port);
         }
 
         transcoder.header_len = 0;
@@ -788,18 +782,11 @@ pub const Transcoder = struct {
         return true;
     }
 
-    fn finishHeaderBlock(
-        transcoder: *Transcoder,
-        direction: Direction,
-        session: anytype,
-        to: tls.Session.Side,
-        target_settings: *PeerSettings,
-        pipeline: *const middleware.TransformPipeline,
-        io: std.Io,
-        base_context: middleware.TransformContext,
-        event_context: anytype,
-        comptime emit: fn (@TypeOf(event_context), Event) void,
-    ) bool {
+    fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
+        const configuration = transcoder.configuration;
+        const direction = configuration.direction;
+        const target_settings = configuration.target_settings;
+
         const inflate_table_size = @min(
             target_settings.header_table_size.load(.seq_cst),
             max_header_block_bytes,
@@ -820,20 +807,20 @@ pub const Transcoder = struct {
                 promisedStreamId(transcoder) & 1 != 0)) return false;
         var transformed: middleware.Headers = undefined;
         transformed.copyFrom(&original);
-        var context = base_context;
+        var context = configuration.transform_context;
         context.stream_id = if (transcoder.block_type == frame_push_promise)
             promisedStreamId(transcoder)
         else
             transcoder.block_stream;
         context.kind = kind;
-        _ = pipeline.apply(io, context, &transformed);
+        _ = configuration.pipeline.apply(.{ .io = configuration.io, .context = context, .headers = &transformed });
         if (!compatibleH2Headers(&original, &transformed, context.kind))
             transformed.copyFrom(&original);
 
         if (direction == .request and context.kind == .request and
             transcoder.streams.startRequest(transcoder.block_stream))
         {
-            emit(event_context, .{ .lifecycle = .{
+            port.emit(.{ .lifecycle = .{
                 .phase = if (provider.classify(transcoder.agent_provider, .{
                     .method = original.find(":method") orelse "",
                     .target = original.find(":path") orelse "",
@@ -875,12 +862,9 @@ pub const Transcoder = struct {
             transformed.len,
         );
         if (encoded_len < 0) return false;
-        if (!transcoder.writeHeaderBlock(
-            session,
-            to,
-            target_settings.max_frame_size.load(.seq_cst),
-            @intCast(encoded_len),
-        )) return false;
+        if (!transcoder.writeHeaderBlock(port, @intCast(encoded_len))) {
+            return false;
+        }
 
         const status_code = parseStatusHeader(&transformed);
         if (direction == .response and status_code >= 200) {
@@ -895,7 +879,7 @@ pub const Transcoder = struct {
             .request => transcoder.streams.finishRequest(transcoder.block_stream),
             .response => {
                 const final_status = transcoder.streams.status(transcoder.block_stream);
-                emit(event_context, .{ .lifecycle = .{
+                port.emit(.{ .lifecycle = .{
                     .phase = if (final_status >= 400) .request_failed else .response_finished,
                     .stream_id = transcoder.block_stream,
                     .status_code = final_status,
@@ -924,11 +908,13 @@ pub const Transcoder = struct {
             if (consumed < 0 or @as(usize, @intCast(consumed)) > input.len)
                 return null;
             input = input[@intCast(consumed)..];
-            if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) headers.append(
-                field.name[0..field.namelen],
-                field.value[0..field.valuelen],
-                field.flags & c.NGHTTP2_NV_FLAG_NO_INDEX != 0,
-            ) catch return null;
+            if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) {
+                headers.append(.{
+                    .name = field.name[0..field.namelen],
+                    .value = field.value[0..field.valuelen],
+                    .sensitive = field.flags & c.NGHTTP2_NV_FLAG_NO_INDEX != 0,
+                }) catch return null;
+            }
             if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
                 if (c.nghttp2_hd_inflate_end_headers(inflater) != 0) return null;
                 return headers;
@@ -938,13 +924,8 @@ pub const Transcoder = struct {
         }
     }
 
-    fn writeHeaderBlock(
-        transcoder: *Transcoder,
-        session: anytype,
-        to: tls.Session.Side,
-        advertised_frame_size: u32,
-        encoded_len: usize,
-    ) bool {
+    fn writeHeaderBlock(transcoder: *Transcoder, port: anytype, encoded_len: usize) bool {
+        const advertised_frame_size = transcoder.configuration.target_settings.max_frame_size.load(.seq_cst);
         const max_frame_size: usize = if (advertised_frame_size >= 16 * 1024 and
             advertised_frame_size <= 0x00ff_ffff)
             advertised_frame_size
@@ -966,20 +947,31 @@ pub const Transcoder = struct {
             if (final) flags |= flag_end_headers;
             writeFrameHeader(
                 &header,
-                prefix_len + fragment_len,
-                kind,
-                flags,
-                transcoder.block_stream,
+                .{
+                    .length = prefix_len + fragment_len,
+                    .frame_type = kind,
+                    .flags = flags,
+                    .stream_id = transcoder.block_stream,
+                },
             );
-            if (!session.writeAll(to, &header)) return false;
-            if (prefix_len != 0 and !session.writeAll(
-                to,
+            if (!port.writeAll(transcoder.configuration.to, &header)) {
+                return false;
+            }
+
+            if (prefix_len != 0 and !port.writeAll(
+                transcoder.configuration.to,
                 transcoder.block_prefix[0..prefix_len],
-            )) return false;
-            if (fragment_len != 0 and !session.writeAll(
-                to,
+            )) {
+                return false;
+            }
+
+            if (fragment_len != 0 and !port.writeAll(
+                transcoder.configuration.to,
                 transcoder.encoded[offset..][0..fragment_len],
-            )) return false;
+            )) {
+                return false;
+            }
+
             offset += fragment_len;
             first = false;
         }
@@ -1004,17 +996,14 @@ pub const Transcoder = struct {
         }
     }
 
-    fn observeCompletedFrame(
-        transcoder: *Transcoder,
-        direction: Direction,
-        frame_type: u8,
-        frame_flags: u8,
-        frame_stream: u32,
-        event_context: anytype,
-        comptime emit: fn (@TypeOf(event_context), Event) void,
-    ) void {
+    fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, port: anytype) void {
+        const direction = transcoder.configuration.direction;
+        const frame_type = completed.frame_type;
+        const frame_flags = completed.flags;
+        const frame_stream = completed.stream_id;
+
         if (frame_type == frame_rst_stream and frame_stream != 0) {
-            emit(event_context, .{ .lifecycle = .{
+            port.emit(.{ .lifecycle = .{
                 .phase = .request_failed,
                 .stream_id = frame_stream,
                 .status_code = transcoder.streams.status(frame_stream),
@@ -1024,7 +1013,7 @@ pub const Transcoder = struct {
         } else if (direction == .response and frame_type == frame_goaway and
             transcoder.streams.hasActiveResponses())
         {
-            emit(event_context, .{ .lifecycle = .{
+            port.emit(.{ .lifecycle = .{
                 .phase = .request_failed,
                 .stream_id = 0,
                 .status_code = 0,
@@ -1033,7 +1022,7 @@ pub const Transcoder = struct {
             frame_stream != 0 and frame_flags & flag_end_stream != 0)
         {
             const status_code = transcoder.streams.status(frame_stream);
-            emit(event_context, .{ .lifecycle = .{
+            port.emit(.{ .lifecycle = .{
                 .phase = if (status_code >= 400) .request_failed else .response_finished,
                 .stream_id = frame_stream,
                 .status_code = status_code,
@@ -1084,23 +1073,20 @@ pub const Transcoder = struct {
     }
 };
 
-pub fn relay(
-    session: anytype,
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    direction: Direction,
-    agent_provider: provider.AgentProvider,
-    context: anytype,
-    comptime emit: fn (@TypeOf(context), Event) void,
-) Stats {
-    var observer = Observer.init(agent_provider);
+/// Relays one HTTP/2 direction byte for byte while publishing decoded events.
+///
+/// ```zig
+/// const stats = relay(session, route, &sink);
+/// ```
+pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
+    var observer = Observer.init(route.agent_provider, route.direction);
     defer observer.deinit();
     var preface_offset: usize = 0;
     var buffer: [32 * 1024]u8 = undefined;
     while (true) {
-        const len = session.read(from, &buffer) orelse break;
+        const len = session.read(route.from, &buffer) orelse break;
         var input = buffer[0..len];
-        if (direction == .request and preface_offset < client_preface.len) {
+        if (route.direction == .request and preface_offset < client_preface.len) {
             const take = @min(client_preface.len - preface_offset, input.len);
             if (!std.mem.eql(
                 u8,
@@ -1111,77 +1097,78 @@ pub fn relay(
             input = input[take..];
         }
 
-        if (direction == .request) {
-            observer.observe(input, direction, context, emit);
+        if (route.direction == .request) {
+            observer.observe(input, sink);
         }
 
-        if (!session.writeAll(to, buffer[0..len])) {
+        if (!session.writeAll(route.to, buffer[0..len])) {
             break;
         }
 
-        if (direction == .response) {
-            observer.observe(input, direction, context, emit);
+        if (route.direction == .response) {
+            observer.observe(input, sink);
         }
     }
-    if ((direction == .request and preface_offset != client_preface.len) or
+    if ((route.direction == .request and preface_offset != client_preface.len) or
         observer.header_len != 0 or observer.payload_left != 0 or
-        observer.continuation_stream != 0) observer.fail();
-    session.halfClose(to);
+        observer.continuation_stream != 0)
+    {
+        observer.fail();
+    }
+
+    session.halfClose(route.to);
     return .{ .decode_failed = observer.failed };
 }
 
-pub fn relayTransformed(
-    session: anytype,
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    direction: Direction,
-    agent_provider: provider.AgentProvider,
-    source_settings: *PeerSettings,
-    target_settings: *PeerSettings,
-    pipeline: *const middleware.TransformPipeline,
-    io: std.Io,
-    transform_context: middleware.TransformContext,
-    event_context: anytype,
-    comptime emit: fn (@TypeOf(event_context), Event) void,
-) Stats {
-    var transcoder = Transcoder.init(agent_provider);
+/// Relays one direction while transcoding only its bounded header blocks.
+///
+/// ```zig
+/// const stats = relayTransformed(session, route, &sink);
+/// ```
+pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, sink: anytype) Stats {
+    const route = transformed_route.route;
+    const configuration: TranscodeConfiguration = .{
+        .direction = route.direction,
+        .to = route.to,
+        .source_settings = transformed_route.source_settings,
+        .target_settings = transformed_route.target_settings,
+        .pipeline = transformed_route.pipeline,
+        .io = transformed_route.io,
+        .transform_context = transformed_route.transform_context,
+    };
+    var transcoder = Transcoder.init(route.agent_provider, configuration);
     defer transcoder.deinit();
+    const port = transcodePort(session, sink);
     var preface_offset: usize = 0;
     var buffer: [32 * 1024]u8 = undefined;
     while (true) {
-        const len = session.read(from, &buffer) orelse break;
+        const len = session.read(route.from, &buffer) orelse break;
         var input = buffer[0..len];
-        if (direction == .request and preface_offset < client_preface.len) {
+        if (route.direction == .request and preface_offset < client_preface.len) {
             const take = @min(client_preface.len - preface_offset, input.len);
             if (!std.mem.eql(
                 u8,
                 client_preface[preface_offset..][0..take],
                 input[0..take],
-            ) or !session.writeAll(to, input[0..take])) {
+            ) or !session.writeAll(route.to, input[0..take])) {
                 transcoder.failed = true;
                 break;
             }
             preface_offset += take;
             input = input[take..];
         }
-        if (!transcoder.process(
-            input,
-            direction,
-            session,
-            to,
-            source_settings,
-            target_settings,
-            pipeline,
-            io,
-            transform_context,
-            event_context,
-            emit,
-        )) break;
+        if (!transcoder.process(input, port)) {
+            break;
+        }
     }
-    if ((direction == .request and preface_offset != client_preface.len) or
+    if ((route.direction == .request and preface_offset != client_preface.len) or
         transcoder.header_len != 0 or transcoder.payload_left != 0 or
-        transcoder.continuation_stream != 0) transcoder.failed = true;
-    session.halfClose(to);
+        transcoder.continuation_stream != 0)
+    {
+        transcoder.failed = true;
+    }
+
+    session.halfClose(route.to);
     return .{ .decode_failed = transcoder.failed };
 }
 
@@ -1307,11 +1294,7 @@ fn validStatus(value: []const u8) bool {
     return status >= 100 and status <= 599 and status != 101;
 }
 
-fn compatibleH2Headers(
-    original: *const middleware.Headers,
-    transformed: *const middleware.Headers,
-    kind: middleware.HeaderKind,
-) bool {
+fn compatibleH2Headers(original: *const middleware.Headers, transformed: *const middleware.Headers, kind: middleware.HeaderKind) bool {
     if (!validH2Headers(transformed, kind) or
         !sameHeaderValues(original, transformed, "content-length")) return false;
     if (kind != .response) return true;
@@ -1328,11 +1311,7 @@ fn statusSemantics(status: u16) StatusSemantics {
     return .invalid;
 }
 
-fn sameHeaderValues(
-    left: *const middleware.Headers,
-    right: *const middleware.Headers,
-    wanted: []const u8,
-) bool {
+fn sameHeaderValues(left: *const middleware.Headers, right: *const middleware.Headers, wanted: []const u8) bool {
     var left_index: usize = 0;
     var right_index: usize = 0;
     while (true) {
@@ -1344,11 +1323,7 @@ fn sameHeaderValues(
     }
 }
 
-fn nextHeaderValue(
-    headers: *const middleware.Headers,
-    wanted: []const u8,
-    index: *usize,
-) ?[]const u8 {
+fn nextHeaderValue(headers: *const middleware.Headers, wanted: []const u8, index: *usize) ?[]const u8 {
     while (index.* < headers.len) {
         const field = headers.fields[index.*];
         index.* += 1;
@@ -1377,17 +1352,17 @@ fn streamId(header: *const [frame_header_len]u8) u32 {
         header[8];
 }
 
-fn writeFrameHeader(buffer: *[frame_header_len]u8, length: usize, kind: u8, flags: u8, stream_id: u32) void {
+fn writeFrameHeader(buffer: *[frame_header_len]u8, header: FrameHeader) void {
     buffer.* = .{
-        @truncate(length >> 16),
-        @truncate(length >> 8),
-        @truncate(length),
-        kind,
-        flags,
-        @truncate(stream_id >> 24),
-        @truncate(stream_id >> 16),
-        @truncate(stream_id >> 8),
-        @truncate(stream_id),
+        @truncate(header.length >> 16),
+        @truncate(header.length >> 8),
+        @truncate(header.length),
+        header.frame_type,
+        header.flags,
+        @truncate(header.stream_id >> 24),
+        @truncate(header.stream_id >> 16),
+        @truncate(header.stream_id >> 8),
+        @truncate(header.stream_id),
     };
 }
 
@@ -1433,16 +1408,16 @@ const BodyCollector = struct {
 test "HTTP2 observer exposes DATA payload across every two-chunk split" {
     const payload = "event: message_delta\ndata: payload\n\n";
     var wire: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(wire[0..frame_header_len], payload.len, frame_data, flag_end_stream, 7);
+    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 7 });
     @memcpy(wire[frame_header_len..], payload);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(.claude);
+        var observer = Observer.init(.claude, .response);
         defer observer.deinit();
 
-        observer.observe(wire[0..split], .response, &collector, BodyCollector.emit);
-        observer.observe(wire[split..], .response, &collector, BodyCollector.emit);
+        observer.observe(wire[0..split], &collector);
+        observer.observe(wire[split..], &collector);
 
         try std.testing.expect(!observer.failed);
         try std.testing.expectEqualStrings(payload, collector.payloadSlice());
@@ -1480,18 +1455,18 @@ test "HTTP2 observer attaches the decoded final status to response DATA" {
     try std.testing.expect(encoded > 0);
 
     var header: [frame_header_len]u8 = undefined;
-    writeFrameHeader(&header, @intCast(encoded), frame_headers, flag_end_headers, 17);
+    writeFrameHeader(&header, .{ .length = @intCast(encoded), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 17 });
     const payload = "payload";
     var data: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(data[0..frame_header_len], payload.len, frame_data, flag_end_stream, 17);
+    writeFrameHeader(data[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 17 });
     @memcpy(data[frame_header_len..], payload);
     var collector: BodyCollector = .{};
-    var observer = Observer.init(.claude);
+    var observer = Observer.init(.claude, .response);
     defer observer.deinit();
 
-    observer.observe(&header, .response, &collector, BodyCollector.emit);
-    observer.observe(block[0..@intCast(encoded)], .response, &collector, BodyCollector.emit);
-    observer.observe(&data, .response, &collector, BodyCollector.emit);
+    observer.observe(&header, &collector);
+    observer.observe(block[0..@intCast(encoded)], &collector);
+    observer.observe(&data, &collector);
 
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqualStrings(payload, collector.payloadSlice());
@@ -1506,21 +1481,18 @@ test "HTTP2 observer excludes the pad length and padding from DATA payload" {
     var wire: [frame_header_len + 1 + payload.len + padding_len]u8 = @splat(0);
     writeFrameHeader(
         wire[0..frame_header_len],
-        wire.len - frame_header_len,
-        frame_data,
-        flag_padded | flag_end_stream,
-        9,
+        .{ .length = wire.len - frame_header_len, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 9 },
     );
     wire[frame_header_len] = padding_len;
     @memcpy(wire[frame_header_len + 1 ..][0..payload.len], payload);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(.claude);
+        var observer = Observer.init(.claude, .response);
         defer observer.deinit();
 
-        observer.observe(wire[0..split], .response, &collector, BodyCollector.emit);
-        observer.observe(wire[split..], .response, &collector, BodyCollector.emit);
+        observer.observe(wire[0..split], &collector);
+        observer.observe(wire[split..], &collector);
 
         try std.testing.expect(!observer.failed);
         try std.testing.expectEqualStrings(payload, collector.payloadSlice());
@@ -1530,13 +1502,13 @@ test "HTTP2 observer excludes the pad length and padding from DATA payload" {
 
 test "HTTP2 observer drops invalid DATA padding from observation only" {
     var wire: [frame_header_len + 2]u8 = @splat(0);
-    writeFrameHeader(wire[0..frame_header_len], 2, frame_data, flag_padded | flag_end_stream, 11);
+    writeFrameHeader(wire[0..frame_header_len], .{ .length = 2, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 11 });
     wire[frame_header_len] = 2;
     var collector: BodyCollector = .{};
-    var observer = Observer.init(.claude);
+    var observer = Observer.init(.claude, .response);
     defer observer.deinit();
 
-    observer.observe(&wire, .response, &collector, BodyCollector.emit);
+    observer.observe(&wire, &collector);
 
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqualStrings("", collector.payloadSlice());
@@ -1566,15 +1538,12 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
     const first_len = encoded_len / 2;
     const second_len = encoded_len - first_len;
     var frames: [2 * frame_header_len + block.len]u8 = undefined;
-    writeFrameHeader(frames[0..frame_header_len], first_len, frame_headers, flag_end_stream, 1);
+    writeFrameHeader(frames[0..frame_header_len], .{ .length = first_len, .frame_type = frame_headers, .flags = flag_end_stream, .stream_id = 1 });
     @memcpy(frames[frame_header_len..][0..first_len], block[0..first_len]);
     const second_header = frame_header_len + first_len;
     writeFrameHeader(
         frames[second_header..][0..frame_header_len],
-        second_len,
-        frame_continuation,
-        flag_end_headers,
-        1,
+        .{ .length = second_len, .frame_type = frame_continuation, .flags = flag_end_headers, .stream_id = 1 },
     );
     @memcpy(
         frames[second_header + frame_header_len ..][0..second_len],
@@ -1593,10 +1562,10 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.claude);
+    var observer = Observer.init(.claude, .response);
     defer observer.deinit();
     for (frames[0 .. 2 * frame_header_len + encoded_len]) |byte|
-        observer.observe(&.{byte}, .response, &collector, Collector.emit);
+        observer.observe(&.{byte}, &collector);
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqual(middleware.Phase.request_failed, collector.phase);
     try std.testing.expectEqual(@as(u32, 1), collector.stream_id);
@@ -1617,7 +1586,7 @@ test "request trailers do not emit a second request start" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.claude);
+    var observer = Observer.init(.claude, .request);
     defer observer.deinit();
     var request_fields = [_]c.nghttp2_nv{
         .{ .name = @constCast(":method"), .value = @constCast("POST"), .namelen = 7, .valuelen = 4, .flags = 0 },
@@ -1633,9 +1602,9 @@ test "request trailers do not emit a second request start" {
     );
     try std.testing.expect(request_len > 0);
     var request_header: [frame_header_len]u8 = undefined;
-    writeFrameHeader(&request_header, @intCast(request_len), frame_headers, flag_end_headers, 1);
-    observer.observe(&request_header, .request, &collector, Collector.emit);
-    observer.observe(request_block[0..@intCast(request_len)], .request, &collector, Collector.emit);
+    writeFrameHeader(&request_header, .{ .length = @intCast(request_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 });
+    observer.observe(&request_header, &collector);
+    observer.observe(request_block[0..@intCast(request_len)], &collector);
 
     var trailer_fields = [_]c.nghttp2_nv{.{
         .name = @constCast("grpc-status"),
@@ -1654,9 +1623,9 @@ test "request trailers do not emit a second request start" {
     );
     try std.testing.expect(trailer_len > 0);
     var trailer_header: [frame_header_len]u8 = undefined;
-    writeFrameHeader(&trailer_header, @intCast(trailer_len), frame_headers, flag_end_headers, 1);
-    observer.observe(&trailer_header, .request, &collector, Collector.emit);
-    observer.observe(trailer_block[0..@intCast(trailer_len)], .request, &collector, Collector.emit);
+    writeFrameHeader(&trailer_header, .{ .length = @intCast(trailer_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 });
+    observer.observe(&trailer_header, &collector);
+    observer.observe(trailer_block[0..@intCast(trailer_len)], &collector);
 
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqual(@as(usize, 1), collector.starts);
@@ -1675,7 +1644,7 @@ test "cross-provider HTTP2 requests are classified as auxiliary" {
     const block_len = c.nghttp2_hd_deflate_hd(deflater, &block, block.len, &fields, fields.len);
     try std.testing.expect(block_len > 0);
     var header: [frame_header_len]u8 = undefined;
-    writeFrameHeader(&header, @intCast(block_len), frame_headers, flag_end_headers, 1);
+    writeFrameHeader(&header, .{ .length = @intCast(block_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 });
 
     const Collector = struct {
         starts: usize = 0,
@@ -1688,10 +1657,10 @@ test "cross-provider HTTP2 requests are classified as auxiliary" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.codex);
+    var observer = Observer.init(.codex, .request);
     defer observer.deinit();
-    observer.observe(&header, .request, &collector, Collector.emit);
-    observer.observe(block[0..@intCast(block_len)], .request, &collector, Collector.emit);
+    observer.observe(&header, &collector);
+    observer.observe(block[0..@intCast(block_len)], &collector);
 
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqual(@as(usize, 0), collector.starts);
@@ -1712,7 +1681,7 @@ test "HPACK dynamic table survives padded response blocks" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.claude);
+    var observer = Observer.init(.claude, .response);
     defer observer.deinit();
     for (1..3) |stream_id| {
         var fields = [_]c.nghttp2_nv{
@@ -1726,15 +1695,12 @@ test "HPACK dynamic table survives padded response blocks" {
         var header: [frame_header_len]u8 = undefined;
         writeFrameHeader(
             &header,
-            1 + encoded_len + 2,
-            frame_headers,
-            flag_padded | flag_end_headers | flag_end_stream,
-            @intCast(stream_id),
+            .{ .length = 1 + encoded_len + 2, .frame_type = frame_headers, .flags = flag_padded | flag_end_headers | flag_end_stream, .stream_id = @intCast(stream_id) },
         );
-        observer.observe(&header, .response, &collector, Collector.emit);
-        observer.observe(&.{2}, .response, &collector, Collector.emit);
-        observer.observe(block[0..encoded_len], .response, &collector, Collector.emit);
-        observer.observe(&.{ 0, 0 }, .response, &collector, Collector.emit);
+        observer.observe(&header, &collector);
+        observer.observe(&.{2}, &collector);
+        observer.observe(block[0..encoded_len], &collector);
+        observer.observe(&.{ 0, 0 }, &collector);
     }
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqual(@as(usize, 2), collector.completed);
@@ -1752,10 +1718,7 @@ const FakeWriteSession = struct {
     }
 };
 
-fn decodeTestHeaderBlock(
-    inflater: *c.nghttp2_hd_inflater,
-    block: []const u8,
-) !middleware.Headers {
+fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !middleware.Headers {
     var headers: middleware.Headers = .{};
     var input = block;
     while (true) {
@@ -1771,17 +1734,40 @@ fn decodeTestHeaderBlock(
         );
         try std.testing.expect(consumed >= 0);
         input = input[@intCast(consumed)..];
-        if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) try headers.append(
-            field.name[0..field.namelen],
-            field.value[0..field.valuelen],
-            field.flags & c.NGHTTP2_NV_FLAG_NO_INDEX != 0,
-        );
+        if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) {
+            try headers.append(.{
+                .name = field.name[0..field.namelen],
+                .value = field.value[0..field.valuelen],
+                .sensitive = field.flags & c.NGHTTP2_NV_FLAG_NO_INDEX != 0,
+            });
+        }
         if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
             try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_inflate_end_headers(inflater));
             return headers;
         }
         try std.testing.expect(consumed != 0 or flags & c.NGHTTP2_HD_INFLATE_EMIT != 0);
     }
+}
+
+const TestTranscodeSetup = struct {
+    provider: provider.AgentProvider,
+    direction: Direction,
+    to: tls.Session.Side,
+    source_settings: *PeerSettings,
+    target_settings: *PeerSettings,
+    pipeline: *const middleware.TransformPipeline,
+};
+
+fn initTestTranscoder(setup: TestTranscodeSetup) Transcoder {
+    return Transcoder.init(setup.provider, .{
+        .direction = setup.direction,
+        .to = setup.to,
+        .source_settings = setup.source_settings,
+        .target_settings = setup.target_settings,
+        .pipeline = setup.pipeline,
+        .io = std.testing.io,
+        .transform_context = undefined,
+    });
 }
 
 test "HTTP2 transcoder applies a header transform across arbitrary input splits" {
@@ -1810,10 +1796,7 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     var frame: [frame_header_len + compressed.len]u8 = undefined;
     writeFrameHeader(
         frame[0..frame_header_len],
-        @intCast(compressed_len),
-        frame_headers,
-        flag_end_headers | flag_end_stream,
-        1,
+        .{ .length = @intCast(compressed_len), .frame_type = frame_headers, .flags = flag_end_headers | flag_end_stream, .stream_id = 1 },
     );
     @memcpy(
         frame[frame_header_len..][0..@intCast(compressed_len)],
@@ -1821,13 +1804,8 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     );
 
     const AddHeader = struct {
-        fn transform(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set("x-telar", "enabled", false) catch return .preserve;
+        fn transform(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
@@ -1856,21 +1834,12 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
     target_settings.header_table_size.store(8192, .seq_cst);
-    var transcoder = Transcoder.init(.codex);
+    var transcoder = initTestTranscoder(.{ .provider = .codex, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     for (frame[0 .. frame_header_len + @as(usize, @intCast(compressed_len))]) |byte|
         try std.testing.expect(transcoder.process(
             &.{byte},
-            .request,
-            &session,
-            .origin,
-            &source_settings,
-            &target_settings,
-            &pipeline,
-            std.testing.io,
-            undefined,
-            &collector,
-            Collector.emit,
+            transcodePort(&session, &collector),
         ));
 
     try std.testing.expectEqual(@as(usize, 1), collector.starts);
@@ -1916,10 +1885,7 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     var auxiliary_frame: [frame_header_len + auxiliary_compressed.len]u8 = undefined;
     writeFrameHeader(
         auxiliary_frame[0..frame_header_len],
-        @intCast(auxiliary_len),
-        frame_headers,
-        flag_end_headers | flag_end_stream,
-        3,
+        .{ .length = @intCast(auxiliary_len), .frame_type = frame_headers, .flags = flag_end_headers | flag_end_stream, .stream_id = 3 },
     );
     @memcpy(
         auxiliary_frame[frame_header_len..][0..@intCast(auxiliary_len)],
@@ -1928,16 +1894,7 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     for (auxiliary_frame[0 .. frame_header_len + @as(usize, @intCast(auxiliary_len))]) |byte|
         try std.testing.expect(transcoder.process(
             &.{byte},
-            .request,
-            &session,
-            .origin,
-            &source_settings,
-            &target_settings,
-            &pipeline,
-            std.testing.io,
-            undefined,
-            &collector,
-            Collector.emit,
+            transcodePort(&session, &collector),
         ));
     try std.testing.expectEqual(@as(usize, 1), collector.starts);
     try std.testing.expectEqual(@as(usize, 1), collector.auxiliary_starts);
@@ -1952,12 +1909,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     defer c.nghttp2_hd_inflate_del(output_inflater);
 
     const Identity = struct {
-        fn transform(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -1976,7 +1928,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     for (1..3) |stream_id| {
@@ -2000,10 +1952,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         const first_payload_len = 1 + 5 + first_len + 2;
         writeFrameHeader(
             wire[0..frame_header_len],
-            first_payload_len,
-            frame_headers,
-            flag_padded | flag_priority | flag_end_stream,
-            @intCast(stream_id),
+            .{ .length = first_payload_len, .frame_type = frame_headers, .flags = flag_padded | flag_priority | flag_end_stream, .stream_id = @intCast(stream_id) },
         );
         var cursor: usize = frame_header_len;
         wire[cursor] = 2;
@@ -2017,10 +1966,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         cursor += 2;
         writeFrameHeader(
             wire[cursor..][0..frame_header_len],
-            second_len,
-            frame_continuation,
-            flag_end_headers,
-            @intCast(stream_id),
+            .{ .length = second_len, .frame_type = frame_continuation, .flags = flag_end_headers, .stream_id = @intCast(stream_id) },
         );
         cursor += frame_header_len;
         @memcpy(wire[cursor..][0..second_len], compressed[first_len..encoded_len]);
@@ -2029,16 +1975,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         const output_start = session.len;
         for (wire[0..cursor]) |byte| try std.testing.expect(transcoder.process(
             &.{byte},
-            .response,
-            &session,
-            .child,
-            &source_settings,
-            &target_settings,
-            &pipeline,
-            std.testing.io,
-            undefined,
-            &collector,
-            Collector.emit,
+            transcodePort(&session, &collector),
         ));
         const output = session.output[output_start..session.len];
         try std.testing.expectEqual(frame_headers, output[3]);
@@ -2090,10 +2027,7 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
         const final = encoded_offset + fragment_len == compressed_len;
         writeFrameHeader(
             input_wire[input_len..][0..frame_header_len],
-            fragment_len,
-            if (first) frame_headers else frame_continuation,
-            if (final) flag_end_headers else 0,
-            test_stream_id,
+            .{ .length = fragment_len, .frame_type = if (first) frame_headers else frame_continuation, .flags = if (final) flag_end_headers else 0, .stream_id = test_stream_id },
         );
         input_len += frame_header_len;
         @memcpy(
@@ -2106,12 +2040,7 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     }
 
     const Identity = struct {
-        fn transform(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -2125,23 +2054,14 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     var input_offset: usize = 0;
     while (input_offset < input_len) {
         const take = @min(@as(usize, 137), input_len - input_offset);
         try std.testing.expect(transcoder.process(
             input_wire[input_offset..][0..take],
-            .request,
-            &session,
-            .origin,
-            &source_settings,
-            &target_settings,
-            &pipeline,
-            std.testing.io,
-            undefined,
-            &collector,
-            Collector.emit,
+            transcodePort(&session, &collector),
         ));
         input_offset += take;
     }
@@ -2188,12 +2108,7 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
 
 test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire bytes" {
     const Identity = struct {
-        fn transform(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -2207,27 +2122,18 @@ test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire by
     var session: FakeWriteSession = .{};
     var child_settings: PeerSettings = .{};
     var origin_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &child_settings, .target_settings = &origin_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     var settings_frame: [frame_header_len + 12]u8 = undefined;
-    writeFrameHeader(settings_frame[0..frame_header_len], 12, c.NGHTTP2_SETTINGS, 0, 0);
+    writeFrameHeader(settings_frame[0..frame_header_len], .{ .length = 12, .frame_type = c.NGHTTP2_SETTINGS, .flags = 0, .stream_id = 0 });
     std.mem.writeInt(u16, settings_frame[9..11], c.NGHTTP2_SETTINGS_HEADER_TABLE_SIZE, .big);
     std.mem.writeInt(u32, settings_frame[11..15], 0, .big);
     std.mem.writeInt(u16, settings_frame[15..17], c.NGHTTP2_SETTINGS_MAX_FRAME_SIZE, .big);
     std.mem.writeInt(u32, settings_frame[17..21], 32 * 1024, .big);
     try std.testing.expect(transcoder.process(
         &settings_frame,
-        .request,
-        &session,
-        .origin,
-        &child_settings,
-        &origin_settings,
-        &pipeline,
-        std.testing.io,
-        undefined,
-        &collector,
-        Collector.emit,
+        transcodePort(&session, &collector),
     ));
     try std.testing.expectEqualSlices(u8, &settings_frame, session.output[0..session.len]);
     try std.testing.expectEqual(@as(u32, 0), child_settings.header_table_size.load(.monotonic));
@@ -2252,15 +2158,15 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
     );
     try std.testing.expect(compressed_len > 0);
     var header: [frame_header_len]u8 = undefined;
-    writeFrameHeader(&header, @intCast(compressed_len), frame_headers, flag_end_headers, 19);
+    writeFrameHeader(&header, .{ .length = @intCast(compressed_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 19 });
 
     const payload = "payload";
     var data: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(data[0..frame_header_len], payload.len, frame_data, flag_end_stream, 19);
+    writeFrameHeader(data[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 19 });
     @memcpy(data[frame_header_len..], payload);
 
     const Identity = struct {
-        fn transform(_: *anyopaque, _: std.Io, _: middleware.HeaderSnapshot, _: *middleware.EffectBatch) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -2271,47 +2177,20 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     try std.testing.expect(transcoder.process(
         &header,
-        .response,
-        &session,
-        .child,
-        &source_settings,
-        &target_settings,
-        &pipeline,
-        std.testing.io,
-        undefined,
-        &collector,
-        BodyCollector.emit,
+        transcodePort(&session, &collector),
     ));
     try std.testing.expect(transcoder.process(
         compressed[0..@intCast(compressed_len)],
-        .response,
-        &session,
-        .child,
-        &source_settings,
-        &target_settings,
-        &pipeline,
-        std.testing.io,
-        undefined,
-        &collector,
-        BodyCollector.emit,
+        transcodePort(&session, &collector),
     ));
     try std.testing.expect(transcoder.process(
         &data,
-        .response,
-        &session,
-        .child,
-        &source_settings,
-        &target_settings,
-        &pipeline,
-        std.testing.io,
-        undefined,
-        &collector,
-        BodyCollector.emit,
+        transcodePort(&session, &collector),
     ));
 
     try std.testing.expectEqualStrings(payload, collector.payloadSlice());
@@ -2322,7 +2201,7 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
 
 test "HTTP2 transform mode exposes unpadded response DATA without changing wire bytes" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: std.Io, _: middleware.HeaderSnapshot, _: *middleware.EffectBatch) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -2332,7 +2211,7 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
 
     const payload = "event: message_delta\ndata: transformed\n\n";
     var wire: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(wire[0..frame_header_len], payload.len, frame_data, flag_end_stream, 13);
+    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 13 });
     @memcpy(wire[frame_header_len..], payload);
 
     for (0..wire.len + 1) |split| {
@@ -2340,34 +2219,16 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
         var session: FakeWriteSession = .{};
         var source_settings: PeerSettings = .{};
         var target_settings: PeerSettings = .{};
-        var transcoder = Transcoder.init(.claude);
+        var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
         defer transcoder.deinit();
 
         try std.testing.expect(transcoder.process(
             wire[0..split],
-            .response,
-            &session,
-            .child,
-            &source_settings,
-            &target_settings,
-            &pipeline,
-            std.testing.io,
-            undefined,
-            &collector,
-            BodyCollector.emit,
+            transcodePort(&session, &collector),
         ));
         try std.testing.expect(transcoder.process(
             wire[split..],
-            .response,
-            &session,
-            .child,
-            &source_settings,
-            &target_settings,
-            &pipeline,
-            std.testing.io,
-            undefined,
-            &collector,
-            BodyCollector.emit,
+            transcodePort(&session, &collector),
         ));
 
         try std.testing.expectEqualSlices(u8, &wire, session.output[0..session.len]);
@@ -2379,7 +2240,7 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
 
 test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: std.Io, _: middleware.HeaderSnapshot, _: *middleware.EffectBatch) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -2392,10 +2253,7 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
     var wire: [frame_header_len + 1 + payload.len + padding_len]u8 = @splat(0);
     writeFrameHeader(
         wire[0..frame_header_len],
-        wire.len - frame_header_len,
-        frame_data,
-        flag_padded | flag_end_stream,
-        15,
+        .{ .length = wire.len - frame_header_len, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 15 },
     );
     wire[frame_header_len] = padding_len;
     @memcpy(wire[frame_header_len + 1 ..][0..payload.len], payload);
@@ -2404,22 +2262,13 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     for (wire) |byte| {
         try std.testing.expect(transcoder.process(
             &.{byte},
-            .response,
-            &session,
-            .child,
-            &source_settings,
-            &target_settings,
-            &pipeline,
-            std.testing.io,
-            undefined,
-            &collector,
-            BodyCollector.emit,
+            transcodePort(&session, &collector),
         ));
     }
 
@@ -2430,12 +2279,7 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
 
 test "HTTP2 transform mode relays DATA and control frames byte for byte" {
     const Identity = struct {
-        fn transform(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -2449,36 +2293,27 @@ test "HTTP2 transform mode relays DATA and control frames byte for byte" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     var wire: [3 * frame_header_len + 17]u8 = undefined;
     var cursor: usize = 0;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], 5, frame_data, 0, 1);
+    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 5, .frame_type = frame_data, .flags = 0, .stream_id = 1 });
     cursor += frame_header_len;
     @memcpy(wire[cursor..][0..5], "hello");
     cursor += 5;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], 4, 0x8, 0, 1);
+    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 4, .frame_type = 0x8, .flags = 0, .stream_id = 1 });
     cursor += frame_header_len;
     std.mem.writeInt(u32, wire[cursor..][0..4], 1024, .big);
     cursor += 4;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], 8, 0x6, 0, 0);
+    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 8, .frame_type = 0x6, .flags = 0, .stream_id = 0 });
     cursor += frame_header_len;
     @memcpy(wire[cursor..][0..8], "12345678");
     cursor += 8;
 
     for (wire[0..cursor]) |byte| try std.testing.expect(transcoder.process(
         &.{byte},
-        .request,
-        &session,
-        .origin,
-        &source_settings,
-        &target_settings,
-        &pipeline,
-        std.testing.io,
-        undefined,
-        &collector,
-        Collector.emit,
+        transcodePort(&session, &collector),
     ));
     try std.testing.expectEqualSlices(u8, wire[0..cursor], session.output[0..session.len]);
 }
@@ -2506,10 +2341,7 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     var frame: [frame_header_len + compressed.len]u8 = undefined;
     writeFrameHeader(
         frame[0..frame_header_len],
-        @intCast(compressed_len),
-        frame_headers,
-        flag_end_headers,
-        1,
+        .{ .length = @intCast(compressed_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 },
     );
     @memcpy(
         frame[frame_header_len..][0..@intCast(compressed_len)],
@@ -2517,14 +2349,9 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     );
 
     const Invalid = struct {
-        fn transform(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.remove(":scheme") catch return .preserve;
-            effects.set("content-length", "9", false) catch return .preserve;
+        fn transform(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.remove(":scheme") catch return .preserve;
+            transformation.effects.set(.{ .name = "content-length", .value = "9" }) catch return .preserve;
             return .apply;
         }
     };
@@ -2538,20 +2365,11 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
         frame[0 .. frame_header_len + @as(usize, @intCast(compressed_len))],
-        .request,
-        &session,
-        .origin,
-        &source_settings,
-        &target_settings,
-        &pipeline,
-        std.testing.io,
-        undefined,
-        &collector,
-        Collector.emit,
+        transcodePort(&session, &collector),
     ));
 
     const output_len = (@as(usize, session.output[0]) << 16) |
@@ -2589,10 +2407,7 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
     var frame: [frame_header_len + 4 + compressed.len]u8 = undefined;
     writeFrameHeader(
         frame[0..frame_header_len],
-        4 + @as(usize, @intCast(compressed_len)),
-        frame_push_promise,
-        flag_end_headers,
-        1,
+        .{ .length = 4 + @as(usize, @intCast(compressed_len)), .frame_type = frame_push_promise, .flags = flag_end_headers, .stream_id = 1 },
     );
     std.mem.writeInt(u32, frame[frame_header_len..][0..4], 2, .big);
     @memcpy(
@@ -2603,15 +2418,10 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
     const Capture = struct {
         stream_id: u32 = 0,
         kind: middleware.HeaderKind = .trailers,
-        fn transform(
-            raw: *anyopaque,
-            _: std.Io,
-            snapshot: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn transform(raw: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
             const self: *@This() = @ptrCast(@alignCast(raw));
-            self.stream_id = snapshot.context.stream_id;
-            self.kind = snapshot.context.kind;
+            self.stream_id = transformation.snapshot.context.stream_id;
+            self.kind = transformation.snapshot.context.kind;
             return .preserve;
         }
     };
@@ -2625,20 +2435,11 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = Transcoder.init(.claude);
+    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
         frame[0 .. frame_header_len + 4 + @as(usize, @intCast(compressed_len))],
-        .response,
-        &session,
-        .child,
-        &source_settings,
-        &target_settings,
-        &pipeline,
-        std.testing.io,
-        undefined,
-        &collector,
-        Collector.emit,
+        transcodePort(&session, &collector),
     ));
     try std.testing.expectEqual(@as(u32, 2), capture.stream_id);
     try std.testing.expectEqual(middleware.HeaderKind.push_promise, capture.kind);

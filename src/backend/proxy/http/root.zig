@@ -115,16 +115,16 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?He
 
     var encoded: [max_head_bytes]u8 = undefined;
     var selected_head = original_head;
-    const selected_bytes = switch (transform.decide(
-        original[0..original_len],
-        original_head,
-        transformation.route.is_response,
-        transformation.route.response_to_head,
-        transformation.pipeline,
-        transformation.io,
-        transformation.context,
-        &encoded,
-    )) {
+    const selected_bytes = switch (transform.decide(.{
+        .original = original[0..original_len],
+        .original_head = original_head,
+        .is_response = transformation.route.is_response,
+        .response_to_head = transformation.route.response_to_head,
+        .pipeline = transformation.pipeline,
+        .io = transformation.io,
+        .context = transformation.context,
+        .output = &encoded,
+    })) {
         .preserve => original[0..original_len],
         .replace => |replacement| select: {
             selected_head = replacement.head;
@@ -188,13 +188,8 @@ test "request head is forwarded before its body is consumed" {
 
 test "transformed head selection is the only head written" {
     const AddHeader = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set("x-telar", "enabled", false) catch return .preserve;
+        fn apply(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
@@ -223,12 +218,7 @@ test "transformed head selection is the only head written" {
 
 test "a preserved transformation forwards the original head exactly" {
     const NoEffects = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn apply(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };

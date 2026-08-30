@@ -127,14 +127,13 @@ pub const Service = struct {
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
     pub fn create(io: Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
-        var authority = try ca.Authority.loadOrCreate(
-            io,
-            gpa,
-            paths.key,
-            paths.certificate,
-        );
+        const ca_resources: ca.Resources = .{ .io = io, .allocator = gpa };
+        var authority = try ca.Authority.loadOrCreate(ca_resources, .{
+            .key = paths.key,
+            .certificate = paths.certificate,
+        });
         defer std.crypto.secureZero(u8, std.mem.asBytes(&authority));
-        try authority.writeBundle(io, gpa, paths.bundle);
+        try authority.writeBundle(ca_resources, paths.bundle);
         var roots = try tls.Roots.load(io, gpa);
         errdefer roots.deinit(gpa);
         var bound = try listen(io);
@@ -374,6 +373,23 @@ test "proxy listeners own distinct loopback ports" {
     try std.testing.expect(first.port != second.port);
 }
 
+const StatusObservation = struct {
+    phase: middleware.Phase,
+    stream_id: u32,
+    status_code: u16,
+};
+
+const TransformTarget = struct {
+    direction: middleware.Direction,
+    kind: middleware.HeaderKind,
+    stream_id: u32,
+};
+
+const UpgradeRoute = struct {
+    from: tls.Session.Side,
+    to: tls.Session.Side,
+};
+
 const TunnelContext = struct {
     service: *Service,
     credential: identity.Credential,
@@ -383,41 +399,36 @@ const TunnelContext = struct {
     status_code: u16 = 0,
 
     fn publish(context: *TunnelContext, phase: middleware.Phase, stream_id: u32) void {
-        context.publishStatus(phase, stream_id, context.status_code);
+        context.publishStatus(.{ .phase = phase, .stream_id = stream_id, .status_code = context.status_code });
     }
 
     fn publishH2(context: *TunnelContext, lifecycle: h2.Lifecycle) void {
-        context.publishStatus(lifecycle.phase, lifecycle.stream_id, lifecycle.status_code);
+        context.publishStatus(.{ .phase = lifecycle.phase, .stream_id = lifecycle.stream_id, .status_code = lifecycle.status_code });
     }
 
-    fn publishStatus(context: *TunnelContext, phase: middleware.Phase, stream_id: u32, status_code: u16) void {
+    fn publishStatus(context: *TunnelContext, observation: StatusObservation) void {
         context.service.pipeline.publish(context.service.io, .{
             .credential = context.credential,
             .provider = context.provider,
-            .phase = phase,
+            .phase = observation.phase,
             .protocol = context.protocol,
             .connection_id = context.connection_id,
-            .stream_id = stream_id,
-            .status_code = status_code,
+            .stream_id = observation.stream_id,
+            .status_code = observation.status_code,
             .observed_at_ms = Io.Timestamp.now(context.service.io, .real).toMilliseconds(),
         });
     }
 
-    fn transformContext(
-        context: *const TunnelContext,
-        direction: middleware.Direction,
-        kind: middleware.HeaderKind,
-        stream_id: u32,
-    ) middleware.TransformContext {
+    fn transformContext(context: *const TunnelContext, target: TransformTarget) middleware.TransformContext {
         return .{
             .pane_id = context.credential.pane_id,
             .pane_generation = context.credential.pane_generation,
             .provider = context.provider,
             .protocol = context.protocol,
-            .direction = direction,
-            .kind = kind,
+            .direction = target.direction,
+            .kind = target.kind,
             .connection_id = context.connection_id,
-            .stream_id = stream_id,
+            .stream_id = target.stream_id,
         };
     }
 };
@@ -500,7 +511,7 @@ const H2EventObserver = struct {
                 const responses = observer.responses orelse return;
 
                 if (shouldInspectH2Body(body) and responses.feed(body.stream_id, body.bytes)) {
-                    observer.context.publishStatus(.provider_turn_completed, body.stream_id, 0);
+                    observer.context.publishStatus(.{ .phase = .provider_turn_completed, .stream_id = body.stream_id, .status_code = 0 });
                 }
             },
         }
@@ -678,7 +689,7 @@ fn h2RelayOptions(context: *H2Context, settings: *h2.Settings, direction: h2.Dir
         .transformation = if (context.service.transforms.len == 0) null else .{
             .pipeline = &context.service.transforms,
             .io = context.service.io,
-            .context = context.tunnel.transformContext(transform_direction, kind, 0),
+            .context = context.tunnel.transformContext(.{ .direction = transform_direction, .kind = kind, .stream_id = 0 }),
         },
     });
 }
@@ -712,7 +723,7 @@ fn relayHttpRequestHead(context: *Http1Context) ?http.RequestHead {
         },
         .pipeline = &context.service.transforms,
         .io = context.service.io,
-        .context = context.tunnel.transformContext(.request, .request, 0),
+        .context = context.tunnel.transformContext(.{ .direction = .request, .kind = .request, .stream_id = 0 }),
     }) orelse return null;
 
     return .{
@@ -745,7 +756,7 @@ fn relayHttpResponse(context: *Http1Context, request: http.RequestHead) ?http.Re
             },
             .pipeline = &context.service.transforms,
             .io = context.service.io,
-            .context = context.tunnel.transformContext(.response, .response, 0),
+            .context = context.tunnel.transformContext(.{ .direction = .response, .kind = .response, .stream_id = 0 }),
         }) orelse return null;
 
         var observer: HttpResponseObserver = .init(
@@ -942,8 +953,8 @@ test "HTTP observations map request class and final status" {
 }
 
 fn relayUpgrade(io: Io, session: *tls.Session, context: *TunnelContext) void {
-    var outbound = io.concurrent(pumpUpgrade, .{ session, tls.Session.Side.child, tls.Session.Side.origin, context }) catch return;
-    pumpUpgrade(session, .origin, .child, context);
+    var outbound = io.concurrent(pumpUpgrade, .{ session, UpgradeRoute{ .from = .child, .to = .origin }, context }) catch return;
+    pumpUpgrade(session, .{ .from = .origin, .to = .child }, context);
     outbound.await(io);
     context.publish(.response_finished, 0);
 }
@@ -967,18 +978,19 @@ fn pumpPassthrough(io: Io, source: net.Stream, destination: net.Stream) void {
     destination.shutdown(io, .send) catch {};
 }
 
-fn pumpUpgrade(
-    session: *tls.Session,
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    context: *TunnelContext,
-) void {
+fn pumpUpgrade(session: *tls.Session, route: UpgradeRoute, context: *TunnelContext) void {
     var buffer: [16 * 1024]u8 = undefined;
-    while (session.read(from, &buffer)) |len| {
-        if (!session.writeAll(to, buffer[0..len])) break;
-        if (from == .origin) context.publish(.response_activity, 0);
+    while (session.read(route.from, &buffer)) |len| {
+        if (!session.writeAll(route.to, buffer[0..len])) {
+            break;
+        }
+
+        if (route.from == .origin) {
+            context.publish(.response_activity, 0);
+        }
     }
-    session.halfClose(to);
+
+    session.halfClose(route.to);
 }
 
 fn readConnectHead(io: Io, stream: net.Stream, buffer: []u8) ?usize {

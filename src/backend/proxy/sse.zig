@@ -86,15 +86,15 @@ pub const Decoder = struct {
     ///
     /// `input` may contain part of a line, several complete events, or nothing.
     /// The method retains incomplete state for the next call. Every blank-line
-    /// terminated event with at least one `data` field invokes `emit` exactly
-    /// once. One call may therefore invoke `emit` zero, one, or many times.
+    /// terminated event with at least one `data` field invokes `sink.emit`
+    /// exactly once. One call may therefore emit zero, one, or many events.
     ///
-    /// The callback receives borrowed slices into this decoder. It must copy
-    /// them if it needs to retain them. `feed` returns no value because events
-    /// are its output. It must not allocate, parse JSON, or report malformed
-    /// input as a transport failure. An oversized line contributes the prefix
-    /// that fits, marks the current event as truncated, and discards its tail
-    /// until the next line boundary.
+    /// `sink.emit` receives borrowed slices into this decoder. The sink must
+    /// copy them if it needs to retain them. `feed` returns no value because
+    /// events are its output. It must not allocate, parse JSON, or report
+    /// malformed input as a transport failure. An oversized line contributes
+    /// the prefix that fits, marks the current event as truncated, and discards
+    /// its tail until the next line boundary.
     ///
     /// At the start of the stream, this method must ignore one leading UTF-8
     /// BOM when present, including when its three bytes arrive in separate
@@ -107,23 +107,25 @@ pub const Decoder = struct {
     /// const sse = @import("sse.zig");
     ///
     /// const Sink = struct {
-    ///     fn emit(count: *usize, event: sse.Event) void {
+    ///     count: usize = 0,
+    ///
+    ///     pub fn emit(sink: *Sink, event: sse.Event) void {
     ///         std.debug.assert(std.mem.eql(u8, event.name, "message_stop"));
     ///         std.debug.assert(std.mem.eql(u8, event.data, "{}"));
-    ///         count.* += 1;
+    ///         sink.count += 1;
     ///     }
     /// };
     ///
     /// pub fn main() void {
     ///     var decoder: sse.Decoder = .{};
     ///     defer decoder.deinit();
-    ///     var count: usize = 0;
+    ///     var sink: Sink = .{};
     ///
-    ///     decoder.feed("event: message_stop\ndata: {}\n\n", &count, Sink.emit);
-    ///     std.debug.assert(count == 1);
+    ///     decoder.feed("event: message_stop\ndata: {}\n\n", &sink);
+    ///     std.debug.assert(sink.count == 1);
     /// }
     /// ```
-    pub fn feed(decoder: *Decoder, input: []const u8, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
+    pub fn feed(decoder: *Decoder, input: []const u8, sink: anytype) void {
         for (input) |byte| {
             if (!decoder.bom_checked) {
                 if (byte == utf8_bom[decoder.bom_prefix_len]) {
@@ -141,10 +143,10 @@ pub const Decoder = struct {
                 decoder.bom_checked = true;
                 decoder.bom_prefix_len = 0;
                 for (utf8_bom[0..prefix_len]) |prefix_byte| {
-                    decoder.consumeByte(prefix_byte, context, emit);
+                    decoder.consumeByte(prefix_byte, sink);
                 }
             }
-            decoder.consumeByte(byte, context, emit);
+            decoder.consumeByte(byte, sink);
         }
     }
 
@@ -175,7 +177,7 @@ pub const Decoder = struct {
     /// of oversized lines, and appends ordinary bytes to the current line. It
     /// may emit an event when the byte completes a blank line. It never handles
     /// BOM state; `feed` owns that stream-level decision.
-    fn consumeByte(decoder: *Decoder, byte: u8, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
+    fn consumeByte(decoder: *Decoder, byte: u8, sink: anytype) void {
         const byte_is_lf = byte == '\n';
         const byte_is_cr = byte == '\r';
 
@@ -197,10 +199,10 @@ pub const Decoder = struct {
 
         switch (byte) {
             '\r' => {
-                decoder.finishLine(context, emit);
+                decoder.finishLine(sink);
                 decoder.swallow_lf = true;
             },
-            '\n' => decoder.finishLine(context, emit),
+            '\n' => decoder.finishLine(sink),
             else => decoder.pushByte(byte),
         }
     }
@@ -215,7 +217,7 @@ pub const Decoder = struct {
     ///
     /// `feed` must not call this method for a discarded oversized line because
     /// that line has no valid field to process.
-    fn finishLine(decoder: *Decoder, context: anytype, comptime emit: fn (@TypeOf(context), Event) void) void {
+    fn finishLine(decoder: *Decoder, sink: anytype) void {
         defer decoder.resetLine();
 
         if (!decoder.isLineEmpty()) {
@@ -229,14 +231,11 @@ pub const Decoder = struct {
             else
                 decoder.getEventName();
 
-            emit(
-                context,
-                Event{
-                    .data = decoder.getEventData(),
-                    .name = event_name,
-                    .truncated = decoder.event_truncated,
-                },
-            );
+            sink.emit(.{
+                .data = decoder.getEventData(),
+                .name = event_name,
+                .truncated = decoder.event_truncated,
+            });
         }
         decoder.resetEvent();
     }
@@ -379,7 +378,7 @@ const Capture = struct {
     events: [max_captured_events]CapturedEvent = @splat(.{}),
     len: usize = 0,
 
-    fn emit(capture: *Capture, event: Event) void {
+    pub fn emit(capture: *Capture, event: Event) void {
         std.debug.assert(capture.len < capture.events.len);
         std.debug.assert(event.name.len <= max_event_name_bytes);
         std.debug.assert(event.data.len <= max_data_bytes);
@@ -394,24 +393,37 @@ const Capture = struct {
     }
 };
 
-fn expectCaptured(capture: *const Capture, index: usize, expected_name: []const u8, expected_data: []const u8, expected_truncated: bool) !void {
+const CapturedExpectation = struct {
+    name: []const u8,
+    data: []const u8,
+    truncated: bool,
+};
+
+const CountExpectation = struct {
+    count: usize,
+    hint: []const u8,
+};
+
+fn expectCaptured(capture: *const Capture, index: usize, expected: CapturedExpectation) !void {
     if (index >= capture.len) {
         std.debug.print("\nMissing SSE event at index {d}. Only {d} event(s) were emitted.\n", .{ index, capture.len });
         return error.MissingSseEvent;
     }
-    try std.testing.expectEqualStrings(expected_name, capture.events[index].nameSlice());
-    try std.testing.expectEqualStrings(expected_data, capture.events[index].dataSlice());
-    if (capture.events[index].truncated != expected_truncated) {
+    try std.testing.expectEqualStrings(expected.name, capture.events[index].nameSlice());
+    try std.testing.expectEqualStrings(expected.data, capture.events[index].dataSlice());
+    if (capture.events[index].truncated != expected.truncated) {
         std.debug.print(
             "\nSSE event {d} has the wrong truncation state. Expected {}, found {}.\n",
-            .{ index, expected_truncated, capture.events[index].truncated },
+            .{ index, expected.truncated, capture.events[index].truncated },
         );
         return error.UnexpectedSseTruncation;
     }
 }
 
-fn expectEventCount(decoder: *const Decoder, capture: *const Capture, expected: usize, hint: []const u8) !void {
-    if (capture.len == expected) return;
+fn expectEventCount(decoder: *const Decoder, capture: *const Capture, expected: CountExpectation) !void {
+    if (capture.len == expected.count) {
+        return;
+    }
 
     std.debug.print(
         "\nSSE event count mismatch\n" ++
@@ -429,9 +441,9 @@ fn expectEventCount(decoder: *const Decoder, capture: *const Capture, expected: 
             "    BOM prefix bytes:    {d}\n" ++
             "    truncated:           {}\n",
         .{
-            expected,
+            expected.count,
             capture.len,
-            hint,
+            expected.hint,
             decoder.line_len,
             decoder.event_name_len,
             decoder.event_data_len,
@@ -462,21 +474,10 @@ test "a complete SSE event is emitted at its blank line" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(end_turn_event, &capture, Capture.emit);
+    decoder.feed(end_turn_event, &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "A complete event ended with a blank line, so feed must call emit exactly once.",
-    );
-    try expectCaptured(
-        &capture,
-        0,
-        "message_delta",
-        "{\"delta\":{\"stop_reason\":\"end_turn\"}}",
-        false,
-    );
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "A complete event ended with a blank line, so feed must call emit exactly once." });
+    try expectCaptured(&capture, 0, .{ .name = "message_delta", .data = "{\"delta\":{\"stop_reason\":\"end_turn\"}}", .truncated = false });
 }
 
 test "an event is not emitted before its blank line" {
@@ -488,23 +489,12 @@ test "an event is not emitted before its blank line" {
         "event: message_stop\n" ++
             "data: {}\n",
         &capture,
-        Capture.emit,
     );
-    try expectEventCount(
-        &decoder,
-        &capture,
-        0,
-        "The event has no terminating blank line yet and must remain pending.",
-    );
+    try expectEventCount(&decoder, &capture, .{ .count = 0, .hint = "The event has no terminating blank line yet and must remain pending." });
 
-    decoder.feed("\n", &capture, Capture.emit);
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "The second feed supplied the blank line. Pending fields must survive between feed calls.",
-    );
-    try expectCaptured(&capture, 0, "message_stop", "{}", false);
+    decoder.feed("\n", &capture);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "The second feed supplied the blank line. Pending fields must survive between feed calls." });
+    try expectCaptured(&capture, 0, .{ .name = "message_stop", .data = "{}", .truncated = false });
 }
 
 test "an SSE event survives every possible two-chunk split" {
@@ -513,8 +503,8 @@ test "an SSE event survives every possible two-chunk split" {
         defer decoder.deinit();
         var capture: Capture = .{};
 
-        decoder.feed(end_turn_event[0..split], &capture, Capture.emit);
-        decoder.feed(end_turn_event[split..], &capture, Capture.emit);
+        decoder.feed(end_turn_event[0..split], &capture);
+        decoder.feed(end_turn_event[split..], &capture);
 
         var hint_buffer: [192]u8 = undefined;
         const hint = try std.fmt.bufPrint(
@@ -522,14 +512,8 @@ test "an SSE event survives every possible two-chunk split" {
             "The valid stream was split at byte {d} of {d}. Unfinished state must survive both feed calls.",
             .{ split, end_turn_event.len },
         );
-        try expectEventCount(&decoder, &capture, 1, hint);
-        try expectCaptured(
-            &capture,
-            0,
-            "message_delta",
-            "{\"delta\":{\"stop_reason\":\"end_turn\"}}",
-            false,
-        );
+        try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = hint });
+        try expectCaptured(&capture, 0, .{ .name = "message_delta", .data = "{\"delta\":{\"stop_reason\":\"end_turn\"}}", .truncated = false });
     }
 }
 
@@ -539,21 +523,10 @@ test "an SSE event survives one-byte input chunks" {
     var capture: Capture = .{};
 
     for (0..end_turn_event.len) |index|
-        decoder.feed(end_turn_event[index..][0..1], &capture, Capture.emit);
+        decoder.feed(end_turn_event[index..][0..1], &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "Every feed contained one byte. State must survive until the final blank line arrives.",
-    );
-    try expectCaptured(
-        &capture,
-        0,
-        "message_delta",
-        "{\"delta\":{\"stop_reason\":\"end_turn\"}}",
-        false,
-    );
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "Every feed contained one byte. State must survive until the final blank line arrives." });
+    try expectCaptured(&capture, 0, .{ .name = "message_delta", .data = "{\"delta\":{\"stop_reason\":\"end_turn\"}}", .truncated = false });
 }
 
 test "CRLF line endings do not become part of event fields" {
@@ -565,21 +538,10 @@ test "CRLF line endings do not become part of event fields" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "CRLF must terminate one line, and the CR must not become part of either field.",
-    );
-    try expectCaptured(
-        &capture,
-        0,
-        "message_stop",
-        "{\"type\":\"message_stop\"}",
-        false,
-    );
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "CRLF must terminate one line, and the CR must not become part of either field." });
+    try expectCaptured(&capture, 0, .{ .name = "message_stop", .data = "{\"type\":\"message_stop\"}", .truncated = false });
 }
 
 test "multiple data fields are joined with one LF" {
@@ -592,21 +554,10 @@ test "multiple data fields are joined with one LF" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "Multiple data fields still form one event and are emitted at the following blank line.",
-    );
-    try expectCaptured(
-        &capture,
-        0,
-        "response.output_text.delta",
-        "first\nsecond",
-        false,
-    );
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "Multiple data fields still form one event and are emitted at the following blank line." });
+    try expectCaptured(&capture, 0, .{ .name = "response.output_text.delta", .data = "first\nsecond", .truncated = false });
 }
 
 test "comment lines do not alter the event" {
@@ -620,15 +571,10 @@ test "comment lines do not alter the event" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "Comment lines begin with ':' and must not clear or emit the pending event.",
-    );
-    try expectCaptured(&capture, 0, "message_stop", "{}", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "Comment lines begin with ':' and must not clear or emit the pending event." });
+    try expectCaptured(&capture, 0, .{ .name = "message_stop", .data = "{}", .truncated = false });
 }
 
 test "an absent event field uses the SSE default name" {
@@ -636,15 +582,10 @@ test "an absent event field uses the SSE default name" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed("data: payload\n\n", &capture, Capture.emit);
+    decoder.feed("data: payload\n\n", &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "An event containing data must be emitted even when its event field is absent.",
-    );
-    try expectCaptured(&capture, 0, "message", "payload", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "An event containing data must be emitted even when its event field is absent." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "payload", .truncated = false });
 }
 
 test "an event without data is not emitted" {
@@ -652,14 +593,9 @@ test "an event without data is not emitted" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed("event: message_stop\n\n", &capture, Capture.emit);
+    decoder.feed("event: message_stop\n\n", &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        0,
-        "An event field without any data field must be discarded at the blank line.",
-    );
+    try expectEventCount(&decoder, &capture, .{ .count = 0, .hint = "An event field without any data field must be discarded at the blank line." });
 }
 
 test "an oversized event is marked truncated and the next event still parses" {
@@ -673,28 +609,21 @@ test "an oversized event is marked truncated and the next event still parses" {
             "data: kept\n" ++
             "ignored: ",
         &capture,
-        Capture.emit,
     );
-    decoder.feed(&oversized, &capture, Capture.emit);
-    decoder.feed("\n", &capture, Capture.emit);
-    try expectEventCount(&decoder, &capture, 0, "The newline terminating a discarded line must not terminate the event");
+    decoder.feed(&oversized, &capture);
+    decoder.feed("\n", &capture);
+    try expectEventCount(&decoder, &capture, .{ .count = 0, .hint = "The newline terminating a discarded line must not terminate the event" });
     decoder.feed(
         "\n" ++
             "event: message_stop\n" ++
             "data: {}\n" ++
             "\n",
         &capture,
-        Capture.emit,
     );
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        2,
-        "After an oversized line, the decoder must emit one truncated event and resynchronize for the next valid event.",
-    );
-    try expectCaptured(&capture, 0, "oversized", "kept", true);
-    try expectCaptured(&capture, 1, "message_stop", "{}", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 2, .hint = "After an oversized line, the decoder must emit one truncated event and resynchronize for the next valid event." });
+    try expectCaptured(&capture, 0, .{ .name = "oversized", .data = "kept", .truncated = true });
+    try expectCaptured(&capture, 1, .{ .name = "message_stop", .data = "{}", .truncated = false });
 }
 
 test "a data line at max_line_bytes is retained completely" {
@@ -705,17 +634,12 @@ test "a data line at max_line_bytes is retained completely" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(field, &capture, Capture.emit);
-    decoder.feed(&payload, &capture, Capture.emit);
-    decoder.feed("\n\n", &capture, Capture.emit);
+    decoder.feed(field, &capture);
+    decoder.feed(&payload, &capture);
+    decoder.feed("\n\n", &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "A line exactly at the byte limit must be processed without truncation.",
-    );
-    try expectCaptured(&capture, 0, "message", &payload, false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "A line exactly at the byte limit must be processed without truncation." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = &payload, .truncated = false });
 }
 
 test "an oversized data line retains its bounded prefix" {
@@ -726,23 +650,12 @@ test "an oversized data line retains its bounded prefix" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(field, &capture, Capture.emit);
-    decoder.feed(&payload, &capture, Capture.emit);
-    decoder.feed("\n\n", &capture, Capture.emit);
+    decoder.feed(field, &capture);
+    decoder.feed(&payload, &capture);
+    decoder.feed("\n\n", &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "An oversized data field still counts as data and must dispatch a truncated event.",
-    );
-    try expectCaptured(
-        &capture,
-        0,
-        "message",
-        payload[0..retained_payload_len],
-        true,
-    );
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "An oversized data field still counts as data and must dispatch a truncated event." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = payload[0..retained_payload_len], .truncated = true });
 }
 
 test "a later event field replaces previous event name" {
@@ -756,10 +669,10 @@ test "a later event field replaces previous event name" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(&decoder, &capture, 1, "A later event field must replace the previous event name.");
-    try expectCaptured(&capture, 0, "second", "payload", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "A later event field must replace the previous event name." });
+    try expectCaptured(&capture, 0, .{ .name = "second", .data = "payload", .truncated = false });
 }
 
 test "an event without data does not leak its name into the next event" {
@@ -772,15 +685,10 @@ test "an event without data does not leak its name into the next event" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "A discarded event must not affect the following event.",
-    );
-    try expectCaptured(&capture, 0, "message", "payload", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "A discarded event must not affect the following event." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "payload", .truncated = false });
 }
 
 // These cases project the WHATWG EventSource parsing algorithm onto Telar's
@@ -798,8 +706,8 @@ test "one leading UTF-8 BOM is ignored across every two-chunk split" {
         defer decoder.deinit();
         var capture: Capture = .{};
 
-        decoder.feed(input[0..split], &capture, Capture.emit);
-        decoder.feed(input[split..], &capture, Capture.emit);
+        decoder.feed(input[0..split], &capture);
+        decoder.feed(input[split..], &capture);
 
         var hint_buffer: [192]u8 = undefined;
         const hint = try std.fmt.bufPrint(
@@ -807,8 +715,8 @@ test "one leading UTF-8 BOM is ignored across every two-chunk split" {
             "The leading UTF-8 BOM or the CRLF stream was split at byte {d} of {d}.",
             .{ split, input.len },
         );
-        try expectEventCount(&decoder, &capture, 1, hint);
-        try expectCaptured(&capture, 0, "named", "payload", false);
+        try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = hint });
+        try expectCaptured(&capture, 0, .{ .name = "named", .data = "payload", .truncated = false });
     }
 }
 
@@ -824,15 +732,10 @@ test "a BOM-like UTF-8 prefix is replayed when it diverges" {
             defer decoder.deinit();
             var capture: Capture = .{};
 
-            decoder.feed(input[0..split], &capture, Capture.emit);
-            decoder.feed(input[split..], &capture, Capture.emit);
+            decoder.feed(input[0..split], &capture);
+            decoder.feed(input[split..], &capture);
 
-            try expectEventCount(
-                &decoder,
-                &capture,
-                0,
-                "An unterminated line must remain pending while its BOM-like prefix is replayed.",
-            );
+            try expectEventCount(&decoder, &capture, .{ .count = 0, .hint = "An unterminated line must remain pending while its BOM-like prefix is replayed." });
             try std.testing.expectEqualStrings(input, decoder.getLine());
         }
     }
@@ -850,15 +753,10 @@ test "only the first UTF-8 BOM is ignored" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        1,
-        "Only one BOM at the start of the stream is stripped. A second BOM becomes part of the field name.",
-    );
-    try expectCaptured(&capture, 0, "message", "visible", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "Only one BOM at the start of the stream is stripped. A second BOM becomes part of the field name." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "visible", .truncated = false });
 }
 
 test "LF CRLF and lone CR line endings survive every two-chunk split" {
@@ -873,8 +771,8 @@ test "LF CRLF and lone CR line endings survive every two-chunk split" {
         defer decoder.deinit();
         var capture: Capture = .{};
 
-        decoder.feed(input[0..split], &capture, Capture.emit);
-        decoder.feed(input[split..], &capture, Capture.emit);
+        decoder.feed(input[0..split], &capture);
+        decoder.feed(input[split..], &capture);
 
         var hint_buffer: [192]u8 = undefined;
         const hint = try std.fmt.bufPrint(
@@ -882,8 +780,8 @@ test "LF CRLF and lone CR line endings survive every two-chunk split" {
             "A mixed-newline SSE stream was split at byte {d} of {d}.",
             .{ split, input.len },
         );
-        try expectEventCount(&decoder, &capture, 1, hint);
-        try expectCaptured(&capture, 0, "mixed", "first\nsecond", false);
+        try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = hint });
+        try expectCaptured(&capture, 0, .{ .name = "mixed", .data = "first\nsecond", .truncated = false });
     }
 }
 
@@ -892,17 +790,12 @@ test "a CRLF pair is one line ending rather than two" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed("data: payload\r\n", &capture, Capture.emit);
-    try expectEventCount(
-        &decoder,
-        &capture,
-        0,
-        "The LF following a CR must be swallowed instead of becoming a blank line.",
-    );
+    decoder.feed("data: payload\r\n", &capture);
+    try expectEventCount(&decoder, &capture, .{ .count = 0, .hint = "The LF following a CR must be swallowed instead of becoming a blank line." });
 
-    decoder.feed("\r\n", &capture, Capture.emit);
-    try expectEventCount(&decoder, &capture, 1, "The second CRLF is the blank line that dispatches the event.");
-    try expectCaptured(&capture, 0, "message", "payload", false);
+    decoder.feed("\r\n", &capture);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "The second CRLF is the blank line that dispatches the event." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "payload", .truncated = false });
 }
 
 test "fields without a colon have an empty value" {
@@ -918,16 +811,11 @@ test "fields without a colon have an empty value" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        2,
-        "A colonless event field clears the name and every colonless data field contributes an empty value.",
-    );
-    try expectCaptured(&capture, 0, "message", "", false);
-    try expectCaptured(&capture, 1, "message", "\n", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 2, .hint = "A colonless event field clears the name and every colonless data field contributes an empty value." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "", .truncated = false });
+    try expectCaptured(&capture, 1, .{ .name = "message", .data = "\n", .truncated = false });
 }
 
 test "field parsing uses the first colon and removes exactly one leading space" {
@@ -940,10 +828,10 @@ test "field parsing uses the first colon and removes exactly one leading space" 
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(&decoder, &capture, 1, "Field parsing must split once and remove one ASCII space, never a tab.");
-    try expectCaptured(&capture, 0, "message", "\ttab\n spaced\nvalue:with:colons", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "Field parsing must split once and remove one ASCII space, never a tab." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "\ttab\n spaced\nvalue:with:colons", .truncated = false });
 }
 
 test "field names are case-sensitive and unknown fields are ignored" {
@@ -958,10 +846,10 @@ test "field names are case-sensitive and unknown fields are ignored" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(&decoder, &capture, 1, "Only the exact lowercase data field has protocol meaning.");
-    try expectCaptured(&capture, 0, "message", "kept", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "Only the exact lowercase data field has protocol meaning." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "kept", .truncated = false });
 }
 
 test "valid UTF-8 bytes are preserved in event names and data" {
@@ -973,10 +861,10 @@ test "valid UTF-8 bytes are preserved in event names and data" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(&decoder, &capture, 1, "SSE is UTF-8 and non-ASCII bytes must survive framing unchanged.");
-    try expectCaptured(&capture, 0, "r\xC3\xA9ponse", "ok\xE2\x80\xA6", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 1, .hint = "SSE is UTF-8 and non-ASCII bytes must survive framing unchanged." });
+    try expectCaptured(&capture, 0, .{ .name = "r\xC3\xA9ponse", .data = "ok\xE2\x80\xA6", .truncated = false });
 }
 
 test "empty data fields and NUL bytes are preserved" {
@@ -990,11 +878,11 @@ test "empty data fields and NUL bytes are preserved" {
     defer decoder.deinit();
     var capture: Capture = .{};
 
-    decoder.feed(input, &capture, Capture.emit);
+    decoder.feed(input, &capture);
 
-    try expectEventCount(&decoder, &capture, 2, "An empty data field still dispatches, and NUL is valid event data.");
-    try expectCaptured(&capture, 0, "message", "", false);
-    try expectCaptured(&capture, 1, "message", "\x00\n", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 2, .hint = "An empty data field still dispatches, and NUL is valid event data." });
+    try expectCaptured(&capture, 0, .{ .name = "message", .data = "", .truncated = false });
+    try expectCaptured(&capture, 1, .{ .name = "message", .data = "\x00\n", .truncated = false });
 }
 
 test "an oversized line resynchronizes at a lone CR" {
@@ -1008,16 +896,10 @@ test "an oversized line resynchronizes at a lone CR" {
             "data: kept\n" ++
             "ignored: ",
         &capture,
-        Capture.emit,
     );
-    decoder.feed(&oversized, &capture, Capture.emit);
-    decoder.feed("\r", &capture, Capture.emit);
-    try expectEventCount(
-        &decoder,
-        &capture,
-        0,
-        "The CR terminates only the discarded oversized line, not the pending event.",
-    );
+    decoder.feed(&oversized, &capture);
+    decoder.feed("\r", &capture);
+    try expectEventCount(&decoder, &capture, .{ .count = 0, .hint = "The CR terminates only the discarded oversized line, not the pending event." });
 
     decoder.feed(
         "\r" ++
@@ -1025,15 +907,9 @@ test "an oversized line resynchronizes at a lone CR" {
             "data: ok\r" ++
             "\r",
         &capture,
-        Capture.emit,
     );
 
-    try expectEventCount(
-        &decoder,
-        &capture,
-        2,
-        "After a discarded line ends with CR, both the pending and following events must parse.",
-    );
-    try expectCaptured(&capture, 0, "oversized", "kept", true);
-    try expectCaptured(&capture, 1, "next", "ok", false);
+    try expectEventCount(&decoder, &capture, .{ .count = 2, .hint = "After a discarded line ends with CR, both the pending and following events must parse." });
+    try expectCaptured(&capture, 0, .{ .name = "oversized", .data = "kept", .truncated = true });
+    try expectCaptured(&capture, 1, .{ .name = "next", .data = "ok", .truncated = false });
 }
