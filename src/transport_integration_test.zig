@@ -923,6 +923,8 @@ test "pane keeps running while its client is disconnected" {
     const directory = directory_buffer[0..directory_len];
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/persistent.sock", .{directory});
+    var release_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const release_path = try std.fmt.bufPrint(&release_buffer, "{s}/release-persistent-pane", .{directory});
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
@@ -936,10 +938,14 @@ test "pane keeps running while its client is disconnected" {
     }
 
     var first = try connectRuntimeForTest(io, path);
+    // Hold the child at a barrier until the reconnecting client owns an
+    // attachment. A timed child exit makes this test depend on scheduler load.
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "sleep 1; printf TELAR_PERSISTED; exit 0",
+        "while [ ! -e \"$1\" ]; do sleep 0.01; done; printf TELAR_PERSISTED",
+        "telar-test",
+        release_path,
     };
     var send_buffer: [512]u8 = undefined;
     try first.send(io, try schema.encodeOpenPane(&send_buffer, .{
@@ -985,6 +991,9 @@ test "pane keeps running while its client is disconnected" {
                 try std.testing.expectEqual(original_pane_id, opened.pane_id);
                 try std.testing.expect(!opened.created);
                 attached = true;
+
+                var release = try temp.dir.createFile(io, "release-persistent-pane", .{});
+                release.close(io);
             },
             .pane_frame => |frame| {
                 var spans = frame.spans();
