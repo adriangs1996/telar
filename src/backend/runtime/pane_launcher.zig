@@ -8,13 +8,13 @@ const std = @import("std");
 const core = @import("telar-core");
 const history = @import("../history/root.zig");
 const pane_mod = @import("../pane/root.zig");
+const pane_exit_coordinator = @import("pane_exit_coordinator.zig");
 const pane_output_pipeline = @import("pane_output_pipeline.zig");
 const proxy_mod = @import("../proxy/root.zig");
 const pty = @import("../pty/root.zig");
 
 const Io = std.Io;
 const Pane = pane_mod.Pane;
-const PaneKey = pane_mod.PaneKey;
 const PaneStore = pane_mod.PaneStore;
 const schema = core.schema;
 
@@ -24,10 +24,7 @@ comptime {
 
 pub const PaneOutputEvent = pane_output_pipeline.Completion;
 
-pub const PaneExitEvent = struct {
-    pane: PaneKey,
-    result: anyerror!pty.Exit,
-};
+pub const PaneExitEvent = pane_exit_coordinator.Completion;
 
 /// One-shot integration seam for post-spawn launch recovery.
 pub const LaunchTestFault = struct {
@@ -113,18 +110,16 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             };
 
             // The wait actor owns reaping if output actor scheduling fails.
-            fresh.wait_pending = true;
-            fresh.actorStarted();
+            const wait_started = fresh.beginExitWait();
+            std.debug.assert(wait_started);
             launcher.injectFault(.wait_actor) catch |err| {
-                fresh.actorFinished();
-                fresh.wait_pending = false;
+                fresh.cancelExitWait();
                 launcher.abort(fresh, shell, .wait_actor, err);
                 launcher.panes.removeAndDestroy(fresh);
                 return err;
             };
             launcher.select.concurrent(.pane_exit, waitPane, .{fresh}) catch |err| {
-                fresh.actorFinished();
-                fresh.wait_pending = false;
+                fresh.cancelExitWait();
                 launcher.abort(fresh, shell, .wait_actor, err);
                 launcher.panes.removeAndDestroy(fresh);
                 return err;
@@ -239,19 +234,4 @@ pub fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
 
 fn waitPane(pane: *Pane) PaneExitEvent {
     return .{ .pane = pane.key(), .result = pane.session.wait() };
-}
-
-pub fn exitOrSynthetic(result: anyerror!pty.Exit) pty.Exit {
-    return result catch .{ .signaled = .KILL };
-}
-
-test "a wait failure becomes a synthetic exit instead of a runtime error" {
-    try std.testing.expectEqual(
-        pty.Exit{ .signaled = .KILL },
-        exitOrSynthetic(error.WaitpidFailed),
-    );
-    try std.testing.expectEqual(
-        pty.Exit{ .exited = 7 },
-        exitOrSynthetic(pty.Exit{ .exited = 7 }),
-    );
 }

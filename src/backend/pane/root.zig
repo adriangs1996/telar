@@ -660,6 +660,41 @@ pub const Pane = struct {
         pane.actor_count -= 1;
     }
 
+    /// Borrows the pane allocation until its child-wait actor completes.
+    ///
+    /// ```zig
+    /// if (!pane.beginExitWait()) return;
+    /// ```
+    pub fn beginExitWait(pane: *Pane) bool {
+        if (pane.wait_pending or pane.exit != null) {
+            return false;
+        }
+
+        pane.wait_pending = true;
+        pane.actorStarted();
+        return true;
+    }
+
+    /// Rolls back a child-wait actor that could not be scheduled.
+    ///
+    /// ```zig
+    /// pane.cancelExitWait();
+    /// ```
+    pub fn cancelExitWait(pane: *Pane) void {
+        std.debug.assert(pane.wait_pending);
+
+        pane.wait_pending = false;
+        pane.actorFinished();
+    }
+
+    fn completeExitWait(pane: *Pane, exit: pty.Exit) void {
+        std.debug.assert(pane.wait_pending);
+
+        pane.wait_pending = false;
+        pane.exit = exit;
+        pane.actorFinished();
+    }
+
     pub fn inputModeState(pane: *const Pane) schema.frame.InputModes {
         const modes = &pane.terminal.modes;
         return .{
@@ -1344,6 +1379,13 @@ pub fn resizeScreenStorage(
 /// `maxInt`, which the empty and tombstone markers rely on.
 pub const SlotIndex = core.fixed_index.SlotIndex;
 
+pub const PaneExitTransition = struct {
+    pane: *Pane,
+    exit: pty.Exit,
+    launch_aborting: bool,
+    output_done: bool,
+};
+
 pub const PaneStore = struct {
     items: [max_panes]?*Pane = [_]?*Pane{null} ** max_panes,
     count: usize = 0,
@@ -1381,6 +1423,24 @@ pub const PaneStore = struct {
         std.debug.assert(pane.id == key.id);
         if (pane.generation != key.generation) return null;
         return pane;
+    }
+
+    /// Commits one generation-matched child exit together with the repository
+    /// counter that enables later collection. Stale completions return null.
+    ///
+    /// ```zig
+    /// const exited = store.completeExit(key, exit) orelse return;
+    /// ```
+    pub fn completeExit(store: *PaneStore, key: PaneKey, exit: pty.Exit) ?PaneExitTransition {
+        const pane = store.resolve(key) orelse return null;
+        pane.completeExitWait(exit);
+        store.exited_count += 1;
+        return .{
+            .pane = pane,
+            .exit = exit,
+            .launch_aborting = pane.launch_state == .aborting,
+            .output_done = pane.output_done,
+        };
     }
 
     pub fn firstAt(store: *PaneStore, location: schema.TabLocation) ?*Pane {

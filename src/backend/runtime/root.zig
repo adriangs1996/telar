@@ -63,6 +63,7 @@ const media_projection = @import("media_projection.zig");
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
+const pane_exit_coordinator = @import("pane_exit_coordinator.zig");
 const pane_ingest_coordinator = @import("pane_ingest_coordinator.zig");
 const pane_media_coordinator = @import("pane_media_coordinator.zig");
 const pane_observation_coordinator = @import("pane_observation_coordinator.zig");
@@ -1004,27 +1005,8 @@ const Server = struct {
     }
 
     fn handlePaneExitEvent(server: *Server, event: PaneExitEvent) !void {
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-        active.actorFinished();
-        active.wait_pending = false;
-        active.exit = pane_launcher_mod.exitOrSynthetic(event.result);
-        _ = server.model.agents.remove(active.key());
-        server.revokePaneCredential(active);
-        server.model.panes.exited_count += 1;
-        if (active.launch_state == .aborting) {
-            server.collect();
-            server.pumpAll();
-            return;
-        }
-        if (active.output_done) {
-            active.queueExitedHistory(active.exit.?);
-            try schedulePaneObservation(server, active);
-        }
-        server.collect();
-        server.pumpAll();
+        var coordinator = paneExitCoordinator(server);
+        return coordinator.handle(event);
     }
 
     fn handleTelemetryTickEvent(server: *Server, result: anyerror!void, telemetry: *diagnostics.Sink, buffer: *[12288]u8, write_pending: *bool) void {
@@ -2436,6 +2418,27 @@ fn pumpPaneClients(server: *Server) void {
     server.pumpAll();
 }
 
+const pane_exit_runtime_port: pane_exit_coordinator.RuntimePort(Server) = .{
+    .revoke_credential = revokeExitedPaneCredential,
+    .schedule_observation = schedulePaneObservation,
+    .collect = collectPaneLifecycle,
+    .pump_clients = pumpPaneClients,
+};
+
+const RuntimePaneExitCoordinator = pane_exit_coordinator.Coordinator(Server, pane_exit_runtime_port);
+
+fn paneExitCoordinator(server: *Server) RuntimePaneExitCoordinator {
+    return RuntimePaneExitCoordinator.init(server, .{
+        .panes = &server.model.panes,
+        .agents = &server.model.agents,
+        .metrics = &server.metrics,
+    });
+}
+
+fn revokeExitedPaneCredential(server: *Server, pane: *Pane) void {
+    server.revokePaneCredential(pane);
+}
+
 const pane_observation_runtime_port: pane_observation_coordinator.RuntimePort(Server) = .{
     .start = startPaneObservation,
     .publish_sound = publishObservedAgentSound,
@@ -2731,6 +2734,7 @@ test {
     _ = pane_input_commands;
     _ = pane_input_controller;
     _ = pane_input_pump;
+    _ = pane_exit_coordinator;
     _ = pane_ingest_coordinator;
     _ = pane_media_coordinator;
     _ = pane_observation_coordinator;
