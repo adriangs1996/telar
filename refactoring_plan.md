@@ -104,7 +104,7 @@ themselves.
 
 | ID | External trigger | Current boundary | Target owner | Status | Evidence / missing proof |
 | --- | --- | --- | --- | --- | --- |
-| BPO-01 | Runtime creates/destroys proxy | `proxy.Proxy.create/destroy/run` | Proxy lifecycle capability | Pending | Root API exists; lifecycle composition and cancellation require audit and focused tests. |
+| BPO-01 | Runtime creates/destroys proxy | `proxy/lifecycle.zig` through `proxy.Proxy.create/destroy` | Proxy lifecycle capability | Ready | `Proxy` owns service startup and its worker; failed startup destroys the transferred service, shutdown orders worker join before observation closure and service destruction, runtime startup rollback cancels registered receives before releasing the proxy, and callers no longer manage its future or queue. A real listener/active-tunnel lifecycle test, 217 proxy tests, `just check`, transport coverage, and 1708 Debug/ReleaseFast tests pass. |
 | BPO-02 | Pane launch/revoke | `Proxy.registerPane/revokePane` | Credential capability | Ready | ADR 0004, scoped credential ownership, secure zeroing, environment tests, and revocation tests exist. |
 | BPO-03 | TCP proxy connection | `proxy/service.zig` | Bounded connection admission | Pending | Accept, connection quota, worker ownership, and rejection metrics need extraction from `Service`. |
 | BPO-04 | HTTP CONNECT authentication | `proxy/service.zig` | Tunnel authentication command | Pending | Parsing, credential lookup, target policy, and response mapping are mixed. |

@@ -1689,7 +1689,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
     const ingest_gate = options.ingest_gate;
     var child_environment = try pty.Environment.init(gpa, options.environment, "telar");
     defer child_environment.deinit();
-    const proxy = if (options.proxy) |proxy_options|
+    var proxy = if (options.proxy) |proxy_options|
         try proxy_mod.Proxy.create(io, gpa, .{
             .key_path = proxy_options.key_path,
             .certificate_path = proxy_options.certificate_path,
@@ -1698,18 +1698,11 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         })
     else
         null;
-    var proxy_owned = proxy != null;
-    errdefer if (proxy_owned) if (proxy) |service| service.destroy();
-    var proxy_worker = if (proxy) |service|
-        try io.concurrent(proxy_mod.Proxy.run, .{service})
-    else
-        null;
-    defer if (proxy) |service| {
-        if (proxy_worker) |*worker| worker.cancel(io) catch {};
-        service.closeObservations(io);
-        service.destroy();
-        proxy_owned = false;
-    };
+    defer {
+        if (proxy) |capability| {
+            capability.destroy();
+        }
+    }
 
     var listener = try transport.local.LocalListener.listen(io, endpoint);
     var telemetry_suffix_buffer: [64]u8 = undefined;
@@ -1736,6 +1729,12 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
 
     var select_storage: [16 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
     var select = Io.Select(RuntimeEvent).init(io, &select_storage);
+    var select_owned = true;
+    errdefer {
+        if (select_owned) {
+            select.cancelDiscard();
+        }
+    }
     try select.concurrent(.accepted, acceptClient, .{ io, &listener });
     if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
     try select.concurrent(.history_response, history.receiveResponse, .{ io, &history_service });
@@ -1779,9 +1778,10 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         // has been joined, because Darwin's close waits behind blocked writes.
         server.model.panes.shutdown();
         select.cancelDiscard();
-        if (proxy_worker) |*worker| {
-            worker.cancel(io) catch {};
-            proxy_worker = null;
+        if (proxy) |capability| {
+            capability.destroy();
+            proxy = null;
+            server.proxy = null;
         }
         listener.deinit(io);
         if (server.client_admission.pendingConnection()) |pending| pending.deinit(io);
@@ -1798,6 +1798,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         history_service.deinit(io);
         history_owned = false;
     }
+    select_owned = false;
 
     while (true) {
         const event = try select.await();

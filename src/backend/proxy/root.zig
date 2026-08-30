@@ -8,6 +8,7 @@ const core = @import("telar-core");
 const pane_mod = @import("../pane/root.zig");
 const pty = @import("../pty/root.zig");
 const identity = @import("identity.zig");
+const lifecycle_mod = @import("lifecycle.zig");
 const middleware = @import("middleware.zig");
 const service_mod = @import("service.zig");
 
@@ -58,63 +59,102 @@ pub const MetricsSnapshot = struct {
 pub const PaneEnvironment = struct {
     value: pty.Environment,
 
+    /// Borrows the environment while this owner remains alive.
+    ///
+    /// ```zig
+    /// const child_environment = pane_environment.environment();
+    /// ```
     pub fn environment(pane_environment: *const PaneEnvironment) *const pty.Environment {
         return &pane_environment.value;
     }
 
+    /// Scrubs and releases the ephemeral child environment.
+    ///
+    /// ```zig
+    /// pane_environment.deinit();
+    /// ```
     pub fn deinit(pane_environment: *PaneEnvironment) void {
         pane_environment.value.deinit();
     }
 };
 
+const ProxyWorker = Io.Future(anyerror!void);
+
+const lifecycle_port: lifecycle_mod.Port(service_mod.Service, ProxyWorker) = .{
+    .start = startService,
+    .cancel = cancelService,
+    .close = closeServiceObservations,
+    .destroy = destroyService,
+};
+
+const ServiceLifecycle = lifecycle_mod.Lifecycle(service_mod.Service, ProxyWorker, lifecycle_port);
+
 pub const Proxy = struct {
     gpa: std.mem.Allocator,
-    service: *service_mod.Service,
+    lifecycle: ServiceLifecycle,
 
+    /// Creates and starts the complete proxy capability.
+    ///
+    /// ```zig
+    /// const proxy = try Proxy.create(io, gpa, config);
+    /// defer proxy.destroy();
+    /// ```
     pub fn create(io: Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
+        const proxy = try gpa.create(Proxy);
+        errdefer gpa.destroy(proxy);
+
         const service = try service_mod.Service.create(io, gpa, .{
             .key = config.key_path,
             .certificate = config.certificate_path,
             .bundle = config.bundle_path,
             .passthrough_hosts = config.passthrough_hosts,
         });
-        errdefer service.destroy();
-        const proxy = try gpa.create(Proxy);
-        proxy.* = .{ .gpa = gpa, .service = service };
+
+        proxy.* = .{
+            .gpa = gpa,
+            .lifecycle = try ServiceLifecycle.start(service),
+        };
+
         return proxy;
     }
 
+    /// Cancels proxy traffic, closes observation delivery, and releases the
+    /// capability. The caller must first cancel its outstanding `receive`
+    /// operations.
+    ///
+    /// ```zig
+    /// proxy.destroy();
+    /// ```
     pub fn destroy(proxy: *Proxy) void {
         const gpa = proxy.gpa;
-        proxy.service.destroy();
+        proxy.lifecycle.deinit();
         gpa.destroy(proxy);
     }
 
-    pub fn run(proxy: *Proxy) anyerror!void {
-        return proxy.service.run();
-    }
-
-    pub fn closeObservations(proxy: *Proxy, io: Io) void {
-        proxy.service.events.close(io);
-    }
-
+    /// Registers one pane generation and returns its owned child environment.
+    ///
+    /// ```zig
+    /// var pane_environment = try proxy.registerPane(key, inherited);
+    /// defer pane_environment.deinit();
+    /// ```
     pub fn registerPane(proxy: *Proxy, key: PaneKey, inherited: std.process.Environ) !PaneEnvironment {
+        const service = proxy.lifecycle.service;
         var credential: identity.Credential = .{
             .pane_id = key.id,
             .pane_generation = key.generation,
-            .token = identity.randomToken(proxy.service.io),
+            .token = identity.randomToken(service.io),
         };
         defer std.crypto.secureZero(u8, &credential.token);
-        try proxy.service.registerCredential(credential);
-        errdefer proxy.service.unregisterCredential(credential);
+        try service.registerCredential(credential);
+        errdefer service.unregisterCredential(credential);
 
         var url_buffer: [256]u8 = undefined;
         defer std.crypto.secureZero(u8, &url_buffer);
-        const proxy_url = try proxy.service.credentialUrl(&url_buffer, credential);
+        const proxy_url = try service.credentialUrl(&url_buffer, credential);
         const overrides = environmentOverrides(
             proxy_url,
-            proxy.service.certificate_path,
-            proxy.service.bundle_path,
+            service.certificate_path,
+            service.bundle_path,
         );
         return .{ .value = try pty.Environment.initWithOverrides(
             proxy.gpa,
@@ -124,14 +164,23 @@ pub const Proxy = struct {
         ) };
     }
 
+    /// Revokes new tunnels and observations for one exact pane generation.
+    ///
+    /// ```zig
+    /// proxy.revokePane(key);
+    /// ```
     pub fn revokePane(proxy: *Proxy, key: PaneKey) void {
-        proxy.service.unregisterPane(key.id, key.generation);
+        proxy.lifecycle.service.unregisterPane(key.id, key.generation);
     }
 
     /// Revocation rejects new tunnels and filters both queued and subsequent
     /// observations. A tunnel already authenticated keeps forwarding bytes.
+    ///
+    /// ```zig
+    /// const observation = try proxy.receive(io);
+    /// ```
     pub fn receive(proxy: *Proxy, io: Io) anyerror!Observation {
-        var event = try proxy.service.receive(io);
+        var event = try proxy.lifecycle.service.receive(io);
         defer std.crypto.secureZero(u8, &event.credential.token);
         return .{
             .pane = .{
@@ -148,8 +197,13 @@ pub const Proxy = struct {
         };
     }
 
+    /// Returns a lock-free snapshot of proxy counters.
+    ///
+    /// ```zig
+    /// const snapshot = proxy.metrics();
+    /// ```
     pub fn metrics(proxy: *const Proxy) MetricsSnapshot {
-        const service = proxy.service;
+        const service = proxy.lifecycle.service;
         return .{
             .active_connections = service.active_connections.load(.monotonic),
             .queued_events = service.queued_events.load(.monotonic),
@@ -170,13 +224,25 @@ pub const Proxy = struct {
     }
 };
 
+fn startService(service: *service_mod.Service) !ProxyWorker {
+    return service.io.concurrent(service_mod.Service.run, .{service});
+}
+
+fn cancelService(service: *service_mod.Service, worker: *ProxyWorker) void {
+    _ = worker.cancel(service.io) catch {};
+}
+
+fn closeServiceObservations(service: *service_mod.Service) void {
+    service.events.close(service.io);
+}
+
+fn destroyService(service: *service_mod.Service) void {
+    service.destroy();
+}
+
 const environment_override_count = 11;
 
-fn environmentOverrides(
-    proxy_url: []const u8,
-    certificate_path: []const u8,
-    bundle_path: []const u8,
-) [environment_override_count]pty.Environment.Override {
+fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]pty.Environment.Override {
     return .{
         .{ .name = "HTTPS_PROXY", .value = proxy_url },
         .{ .name = "https_proxy", .value = proxy_url },
@@ -190,6 +256,54 @@ fn environmentOverrides(
         .{ .name = "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE", .value = bundle_path },
         .{ .name = "TELAR_PROXY_TLS", .value = "1" },
     };
+}
+
+const ProxyTestFiles = struct {
+    temp: std.testing.TmpDir,
+    key: [std.fs.max_path_bytes]u8 = undefined,
+    key_len: usize = 0,
+    certificate: [std.fs.max_path_bytes]u8 = undefined,
+    certificate_len: usize = 0,
+    bundle: [std.fs.max_path_bytes]u8 = undefined,
+    bundle_len: usize = 0,
+
+    fn init(io: Io) !ProxyTestFiles {
+        var files: ProxyTestFiles = .{ .temp = std.testing.tmpDir(.{}) };
+        errdefer files.temp.cleanup();
+
+        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const directory_len = try files.temp.dir.realPath(io, &directory_buffer);
+        const directory = directory_buffer[0..directory_len];
+        files.key_len = (try std.fmt.bufPrint(&files.key, "{s}/ca-key.pem", .{directory})).len;
+        files.certificate_len = (try std.fmt.bufPrint(&files.certificate, "{s}/ca-cert.pem", .{directory})).len;
+        files.bundle_len = (try std.fmt.bufPrint(&files.bundle, "{s}/ca-bundle.pem", .{directory})).len;
+
+        return files;
+    }
+
+    fn deinit(files: *ProxyTestFiles) void {
+        files.temp.cleanup();
+    }
+
+    fn config(files: *const ProxyTestFiles) Config {
+        return .{
+            .key_path = files.key[0..files.key_len],
+            .certificate_path = files.certificate[0..files.certificate_len],
+            .bundle_path = files.bundle[0..files.bundle_len],
+        };
+    }
+};
+
+fn waitForActiveConnection(proxy: *const Proxy) !void {
+    for (0..1000) |_| {
+        if (proxy.metrics().active_connections != 0) {
+            return;
+        }
+
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+
+    return error.ProxyConnectionNotAccepted;
 }
 
 test "proxy environment covers Git and Google Cloud trust stores" {
@@ -207,19 +321,9 @@ test "proxy environment covers Git and Google Cloud trust stores" {
 test "pane registration owns and disposes its ephemeral environment" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var cert_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const proxy = try Proxy.create(io, gpa, .{
-        .key_path = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
-        .certificate_path = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
-        .bundle_path = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-    });
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    const proxy = try Proxy.create(io, gpa, files.config());
     defer proxy.destroy();
 
     var inherited_map = std.process.Environ.Map.init(gpa);
@@ -239,11 +343,54 @@ test "pane registration owns and disposes its ephemeral environment" {
     proxy.revokePane(key);
 }
 
+test "proxy lifecycle accepts traffic and cancels an active tunnel during destruction" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    var proxy: ?*Proxy = try Proxy.create(io, gpa, files.config());
+    defer {
+        if (proxy) |owned| {
+            owned.destroy();
+        }
+    }
+
+    const address = try Io.net.IpAddress.parse("127.0.0.1", proxy.?.lifecycle.service.port);
+    const rejected = try address.connect(io, .{ .mode = .stream });
+    defer rejected.close(io);
+    var rejected_write_buffer: [64]u8 = undefined;
+    var rejected_writer = rejected.writer(io, &rejected_write_buffer);
+    try rejected_writer.interface.writeAll("GET / HTTP/1.1\r\n\r\n");
+    try rejected_writer.interface.flush();
+    var rejected_read_buffer: [128]u8 = undefined;
+    var rejected_reader = rejected.reader(io, &rejected_read_buffer);
+    const expected =
+        "HTTP/1.1 407 Proxy Authentication Required\r\n" ++
+        "Proxy-Authenticate: Basic realm=\"telar\"\r\n" ++
+        "Content-Length: 0\r\n" ++
+        "Connection: close\r\n\r\n";
+    var response: [expected.len]u8 = undefined;
+    try rejected_reader.interface.readSliceAll(&response);
+    try std.testing.expectEqualStrings(expected, &response);
+
+    const idle = try address.connect(io, .{ .mode = .stream });
+    defer idle.close(io);
+    var idle_write_buffer: [64]u8 = undefined;
+    var idle_writer = idle.writer(io, &idle_write_buffer);
+    try idle_writer.interface.writeAll("CONNECT unfinished");
+    try idle_writer.interface.flush();
+    try waitForActiveConnection(proxy.?);
+
+    proxy.?.destroy();
+    proxy = null;
+}
+
 test {
     std.testing.refAllDecls(@import("ca.zig"));
     std.testing.refAllDecls(@import("h2.zig"));
     std.testing.refAllDecls(@import("http/root.zig"));
     std.testing.refAllDecls(identity);
+    std.testing.refAllDecls(lifecycle_mod);
     std.testing.refAllDecls(middleware);
     std.testing.refAllDecls(@import("provider/root.zig"));
     std.testing.refAllDecls(service_mod);
