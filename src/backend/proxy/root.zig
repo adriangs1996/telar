@@ -204,15 +204,16 @@ pub const Proxy = struct {
     /// ```
     pub fn metrics(proxy: *const Proxy) MetricsSnapshot {
         const service = proxy.lifecycle.service;
+        const connections = service.connection_slots.snapshot();
         return .{
-            .active_connections = service.active_connections.load(.monotonic),
+            .active_connections = connections.active,
             .queued_events = service.queued_events.load(.monotonic),
             .event_queue_high_water = service.event_queue_high_water.load(.monotonic),
             .dropped_events = service.dropped_events.load(.monotonic),
             .rejected_connections = service.rejected_connections.load(.monotonic),
             .invalid_authorization_rejections = service.invalid_authorization_rejections.load(.monotonic),
             .unknown_credential_rejections = service.unknown_credential_rejections.load(.monotonic),
-            .connection_limit_drops = service.connection_limit_drops.load(.monotonic),
+            .connection_limit_drops = connections.limit_drops,
             .h2_decode_failures = service.h2_decode_failures.load(.monotonic),
             .passthrough_connections = service.passthrough_connections.load(.monotonic),
             .upstream_connect_failures = service.upstream_connect_failures.load(.monotonic),
@@ -294,16 +295,18 @@ const ProxyTestFiles = struct {
     }
 };
 
-fn waitForActiveConnection(proxy: *const Proxy) !void {
+fn waitForConnectionMetrics(proxy: *const Proxy, expected_active: u32, expected_limit_drops: u64) !void {
     for (0..1000) |_| {
-        if (proxy.metrics().active_connections != 0) {
+        const metrics_snapshot = proxy.metrics();
+
+        if (metrics_snapshot.active_connections == expected_active and metrics_snapshot.connection_limit_drops == expected_limit_drops) {
             return;
         }
 
         try std.testing.io.sleep(.fromMilliseconds(1), .awake);
     }
 
-    return error.ProxyConnectionNotAccepted;
+    return error.ProxyConnectionMetricsNotObserved;
 }
 
 test "proxy environment covers Git and Google Cloud trust stores" {
@@ -379,14 +382,50 @@ test "proxy lifecycle accepts traffic and cancels an active tunnel during destru
     var idle_writer = idle.writer(io, &idle_write_buffer);
     try idle_writer.interface.writeAll("CONNECT unfinished");
     try idle_writer.interface.flush();
-    try waitForActiveConnection(proxy.?);
+    try waitForConnectionMetrics(proxy.?, 1, 0);
 
     proxy.?.destroy();
     proxy = null;
 }
 
+test "proxy connection admission enforces the real worker limit" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    const proxy = try Proxy.create(io, gpa, files.config());
+    defer proxy.destroy();
+
+    const address = try Io.net.IpAddress.parse("127.0.0.1", proxy.lifecycle.service.port);
+    const connection_limit: usize = service_mod.max_connections;
+    const client_count = connection_limit + 1;
+    var clients: [client_count]?Io.net.Stream = @splat(null);
+    defer {
+        for (clients) |client| {
+            if (client) |stream| {
+                stream.close(io);
+            }
+        }
+    }
+
+    for (clients[0..connection_limit]) |*client| {
+        const stream = try address.connect(io, .{ .mode = .stream });
+        client.* = stream;
+        var write_buffer: [32]u8 = undefined;
+        var writer = stream.writer(io, &write_buffer);
+        try writer.interface.writeAll("CONNECT unfinished");
+        try writer.interface.flush();
+    }
+
+    try waitForConnectionMetrics(proxy, service_mod.max_connections, 0);
+
+    clients[connection_limit] = try address.connect(io, .{ .mode = .stream });
+    try waitForConnectionMetrics(proxy, service_mod.max_connections, 1);
+}
+
 test {
     std.testing.refAllDecls(@import("ca.zig"));
+    std.testing.refAllDecls(@import("connection_admission.zig"));
     std.testing.refAllDecls(@import("h2.zig"));
     std.testing.refAllDecls(@import("http/root.zig"));
     std.testing.refAllDecls(identity);

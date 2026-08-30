@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const diagnostics = core.diagnostics;
 const ca = @import("ca.zig");
+const connection_admission = @import("connection_admission.zig");
 const h2 = @import("h2.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
@@ -122,7 +123,7 @@ pub const Service = struct {
     rejected_connections: std.atomic.Value(u64) = .init(0),
     invalid_authorization_rejections: std.atomic.Value(u64) = .init(0),
     unknown_credential_rejections: std.atomic.Value(u64) = .init(0),
-    connection_limit_drops: std.atomic.Value(u64) = .init(0),
+    connection_slots: connection_admission.Slots = .init(max_connections),
     h2_decode_failures: std.atomic.Value(u64) = .init(0),
     passthrough_connections: std.atomic.Value(u64) = .init(0),
     upstream_connect_failures: std.atomic.Value(u64) = .init(0),
@@ -130,7 +131,6 @@ pub const Service = struct {
     tls_upstream_handshake_failures: std.atomic.Value(u64) = .init(0),
     tls_downstream_handshake_failures: std.atomic.Value(u64) = .init(0),
     tls_mint_failures: std.atomic.Value(u64) = .init(0),
-    active_connections: std.atomic.Value(u32) = .init(0),
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
     pub fn create(io: Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
@@ -184,27 +184,7 @@ pub const Service = struct {
         service.started = true;
         service.configuration_mutex.unlock(service.io);
 
-        var connections: Io.Group = .init;
-        defer connections.cancel(service.io);
-
-        while (true) {
-            const stream = service.listener.accept(service.io) catch |err| switch (err) {
-                error.Canceled => |cancelled| return cancelled,
-                error.SocketNotListening => return,
-                else => continue,
-            };
-            const previous = service.active_connections.fetchAdd(1, .acq_rel);
-            if (previous >= max_connections) {
-                _ = service.active_connections.fetchSub(1, .acq_rel);
-                stream.close(service.io);
-                _ = service.connection_limit_drops.fetchAdd(1, .monotonic);
-                continue;
-            }
-            connections.concurrent(service.io, tunnel, .{ service, stream }) catch {
-                _ = service.active_connections.fetchSub(1, .acq_rel);
-                stream.close(service.io);
-            };
-        }
+        return ConnectionAdmission.run(service);
     }
 
     pub fn receive(service: *Service, io: Io) anyerror!middleware.Event {
@@ -269,6 +249,41 @@ pub const Service = struct {
         _ = service.event_queue_high_water.fetchMax(depth, .monotonic);
     }
 };
+
+const connection_admission_port: connection_admission.Port(Service, net.Stream) = .{
+    .accept = acceptConnection,
+    .acquire = acquireConnection,
+    .start = startConnection,
+    .release = releaseConnection,
+    .close = closeConnection,
+    .cancel = cancelConnections,
+};
+
+const ConnectionAdmission = connection_admission.Runner(Service, net.Stream, connection_admission_port);
+
+fn acceptConnection(service: *Service) !net.Stream {
+    return service.listener.accept(service.io);
+}
+
+fn acquireConnection(service: *Service) bool {
+    return service.connection_slots.acquire();
+}
+
+fn startConnection(service: *Service, connections: *Io.Group, stream: net.Stream) !void {
+    try connections.concurrent(service.io, tunnel, .{ service, stream });
+}
+
+fn releaseConnection(service: *Service) void {
+    service.connection_slots.release();
+}
+
+fn closeConnection(service: *Service, stream: net.Stream) void {
+    stream.close(service.io);
+}
+
+fn cancelConnections(service: *Service, connections: *Io.Group) void {
+    connections.cancel(service.io);
+}
 
 fn reserveEventSlot(queued_events: *std.atomic.Value(u64)) ?u64 {
     var current = queued_events.load(.monotonic);
@@ -471,7 +486,7 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     defer path.restore();
     defer {
         stream.close(service.io);
-        _ = service.active_connections.fetchSub(1, .acq_rel);
+        service.connection_slots.release();
     }
     var head: [32 * 1024]u8 = undefined;
     const head_len = readConnectHead(service.io, stream, &head) orelse return;
