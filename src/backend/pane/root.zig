@@ -346,6 +346,11 @@ pub const PtyWriteResult = enum {
     failed,
 };
 
+pub const PtyOutputReadResult = enum {
+    data,
+    finished,
+};
+
 pub const KittyFramingCounter = escape.KittyFramingCounter;
 
 pub const CwdState = struct {
@@ -736,6 +741,98 @@ pub const Pane = struct {
     /// ```
     pub fn queuePtyInput(pane: *Pane, bytes: []const u8) bool {
         return pane.input_queue.push(bytes);
+    }
+
+    /// Acquires the pane allocation for one asynchronous PTY read.
+    ///
+    /// ```zig
+    /// if (!pane.beginPtyOutputRead()) return;
+    /// ```
+    pub fn beginPtyOutputRead(pane: *Pane) bool {
+        if (pane.output_pending or pane.output_done or pane.ingest_pending) {
+            return false;
+        }
+
+        pane.output_pending = true;
+        pane.actorStarted();
+        return true;
+    }
+
+    /// Releases a completed read and records whether the output stream ended.
+    ///
+    /// ```zig
+    /// pane.completePtyOutputRead(.data);
+    /// ```
+    pub fn completePtyOutputRead(pane: *Pane, result: PtyOutputReadResult) void {
+        std.debug.assert(pane.output_pending);
+        std.debug.assert(!pane.ingest_pending);
+
+        pane.output_pending = false;
+        pane.actorFinished();
+
+        if (result == .finished) {
+            pane.output_done = true;
+        }
+    }
+
+    /// Rolls back a read actor that could not be scheduled.
+    ///
+    /// ```zig
+    /// pane.cancelPtyOutputRead();
+    /// ```
+    pub fn cancelPtyOutputRead(pane: *Pane) void {
+        std.debug.assert(pane.output_pending);
+
+        pane.output_pending = false;
+        pane.actorFinished();
+    }
+
+    /// Permanently closes the output stream after a failure outside a read.
+    ///
+    /// ```zig
+    /// pane.finishPtyOutput();
+    /// ```
+    pub fn finishPtyOutput(pane: *Pane) void {
+        std.debug.assert(!pane.output_pending);
+        std.debug.assert(!pane.ingest_pending);
+        pane.output_done = true;
+    }
+
+    /// Borrows the freshly read bytes while one VT ingest actor owns them.
+    ///
+    /// ```zig
+    /// const bytes = pane.beginOutputIngest(output_len);
+    /// ```
+    pub fn beginOutputIngest(pane: *Pane, output_len: u16) []const u8 {
+        std.debug.assert(!pane.ingest_pending);
+        std.debug.assert(!pane.output_pending);
+        std.debug.assert(output_len != 0);
+        std.debug.assert(output_len <= pane.output_buffer.len);
+
+        pane.ingest_pending = true;
+        pane.actorStarted();
+        return pane.output_buffer[0..output_len];
+    }
+
+    /// Releases the output buffer after VT ingestion completes.
+    ///
+    /// ```zig
+    /// pane.completeOutputIngest();
+    /// ```
+    pub fn completeOutputIngest(pane: *Pane) void {
+        std.debug.assert(pane.ingest_pending);
+
+        pane.ingest_pending = false;
+        pane.actorFinished();
+    }
+
+    /// Rolls back an ingest actor that could not be scheduled.
+    ///
+    /// ```zig
+    /// pane.cancelOutputIngest();
+    /// ```
+    pub fn cancelOutputIngest(pane: *Pane) void {
+        pane.completeOutputIngest();
     }
 
     /// Borrows the head response until one asynchronous write settles.

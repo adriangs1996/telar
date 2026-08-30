@@ -62,6 +62,7 @@ const workspace_snapshot_controller = @import("controllers/workspace_snapshot.zi
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
+const pane_output_pipeline = @import("pane_output_pipeline.zig");
 const pane_mod = @import("../pane/root.zig");
 const blit = pane_mod.blit;
 const media_mod = @import("../media/root.zig");
@@ -88,7 +89,6 @@ const PaneKey = pane_mod.PaneKey;
 const PaneIngestStats = pane_mod.PaneIngestStats;
 const PaneStore = pane_mod.PaneStore;
 const PaneLauncher = pane_launcher_mod.PaneLauncher;
-const historyClock = pane_mod.historyClock;
 const max_panes = pane_mod.max_panes;
 const WorkspaceRepository = workspace_mod.Repository;
 const WorkspaceState = workspace_mod.State;
@@ -800,72 +800,10 @@ const Server = struct {
         return server.shutdownDelivered();
     }
 
-    /// Entrypoint for one completed PTY read. It records the raw output for
-    /// observation and media, then hands terminal mutation to the ingest actor.
-    fn handlePaneOutputEvent(
-        server: *Server,
-        event: PaneOutputEvent,
-        ingest_gate: ?*IngestTestGate,
-    ) !void {
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-        active.actorFinished();
-        active.output_pending = false;
-        const output_len = event.result catch {
-            active.output_done = true;
-            if (active.exit) |exit| {
-                active.queueExitedHistory(exit);
-                try schedulePaneObservation(server.select, active);
-            }
-            server.collect();
-            server.pumpAll();
-            return;
-        };
-        if (output_len == 0) {
-            active.output_done = true;
-            if (active.exit) |exit| {
-                active.queueExitedHistory(exit);
-                try schedulePaneObservation(server.select, active);
-            }
-        } else {
-            if (comptime diagnostics.enabled) {
-                server.metrics.pty_events += 1;
-                server.metrics.pty_bytes += output_len;
-                for (&server.clients.items) |*slot| {
-                    const client = slot.* orelse continue;
-                    const attachment = client.attachments.find(active.id) orelse continue;
-                    if (attachment.outstandingFrameId() != 0) {
-                        server.metrics.folded_pty_events += 1;
-                        break;
-                    }
-                }
-            }
-            active.queueHistoryOutput(
-                active.output_buffer[0..output_len],
-                active.session.shellForeground(),
-                historyClock(server.io),
-            );
-            try schedulePaneObservation(server.select, active);
-            active.queueMediaOutput(active.output_buffer[0..output_len]);
-            try schedulePaneMedia(server.select, active);
-            active.ingest_pending = true;
-            active.actorStarted();
-            server.select.concurrent(.pane_ingested, ingestPane, .{
-                server.io,
-                active,
-                output_len,
-                ingest_gate,
-            }) catch |err| {
-                active.actorFinished();
-                active.ingest_pending = false;
-                return err;
-            };
-            return;
-        }
-        server.collect();
-        server.pumpAll();
+    fn handlePaneOutputEvent(server: *Server, event: PaneOutputEvent, ingest_gate: ?*IngestTestGate) !void {
+        var context: PaneOutputRuntime = .{ .server = server, .ingest_gate = ingest_gate };
+        var pipeline = paneOutputPipeline(&context);
+        return pipeline.handle(event);
     }
 
     /// Entrypoint for completed VT ingestion. It exposes the new cell/media
@@ -875,11 +813,10 @@ const Server = struct {
             server.metrics.stale_pane_events += 1;
             return;
         };
-        active.actorFinished();
-        active.ingest_pending = false;
+        active.completeOutputIngest();
         const stats = event.result catch {
             _ = active.requestClose();
-            active.output_done = true;
+            active.finishPtyOutput();
             server.collect();
             return;
         };
@@ -898,11 +835,10 @@ const Server = struct {
             }
         }
         try schedulePaneResponse(server, active);
-        active.output_pending = true;
-        active.actorStarted();
+        const output_started = active.beginPtyOutputRead();
+        std.debug.assert(output_started);
         server.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ server.io, active }) catch |err| {
-            active.actorFinished();
-            active.output_pending = false;
+            active.cancelPtyOutputRead();
             return err;
         };
         server.collect();
@@ -2548,20 +2484,87 @@ fn receiveSession(
     return .{ .client = key, .result = connection.receive(io, buffer) };
 }
 
-fn ingestPane(
-    io: Io,
-    pane: *Pane,
-    output_len: u16,
+const PaneOutputRuntime = struct {
+    server: *Server,
     ingest_gate: ?*IngestTestGate,
-) PaneIngestEvent {
+};
+
+const pane_output_runtime_port: pane_output_pipeline.RuntimePort(PaneOutputRuntime) = .{
+    .schedule_observation = scheduleOutputObservation,
+    .schedule_media = scheduleOutputMedia,
+    .start_ingest = startOutputIngest,
+    .has_outstanding_frame = paneHasOutstandingFrame,
+    .collect = collectAfterOutput,
+    .pump_clients = pumpAfterOutput,
+};
+
+const RuntimePaneOutputPipeline = pane_output_pipeline.Pipeline(PaneOutputRuntime, pane_output_runtime_port);
+
+fn paneOutputPipeline(context: *PaneOutputRuntime) RuntimePaneOutputPipeline {
+    return RuntimePaneOutputPipeline.init(context, .{
+        .io = context.server.io,
+        .panes = &context.server.model.panes,
+        .metrics = &context.server.metrics,
+    });
+}
+
+fn scheduleOutputObservation(context: *PaneOutputRuntime, pane: *Pane) !void {
+    return schedulePaneObservation(context.server.select, pane);
+}
+
+fn scheduleOutputMedia(context: *PaneOutputRuntime, pane: *Pane) !void {
+    return schedulePaneMedia(context.server.select, pane);
+}
+
+const PaneIngestTask = struct {
+    ingest: pane_output_pipeline.Ingest,
+    gate: ?*IngestTestGate,
+};
+
+fn startOutputIngest(context: *PaneOutputRuntime, ingest: pane_output_pipeline.Ingest) !void {
+    try context.server.select.concurrent(.pane_ingested, ingestPane, .{PaneIngestTask{
+        .ingest = ingest,
+        .gate = context.ingest_gate,
+    }});
+}
+
+fn paneHasOutstandingFrame(context: *PaneOutputRuntime, pane_id: schema.PaneId) bool {
+    for (&context.server.clients.items) |*slot| {
+        const client = slot.* orelse continue;
+        const attachment = client.attachments.find(pane_id) orelse continue;
+
+        if (attachment.outstandingFrameId() != 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+fn collectAfterOutput(context: *PaneOutputRuntime) void {
+    context.server.collect();
+}
+
+fn pumpAfterOutput(context: *PaneOutputRuntime) void {
+    context.server.pumpAll();
+}
+
+fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
     const path = diagnostics.enter(.interactive);
     defer path.restore();
-    if (ingest_gate) |gate| gate.wait(io) catch |err|
-        return .{ .pane = pane.key(), .result = err };
+
+    if (task.gate) |gate| {
+        gate.wait(task.ingest.io) catch |err| {
+            return .{ .pane = task.ingest.pane.key(), .result = err };
+        };
+    }
+
     var stats: PaneIngestStats = .{};
-    stats.elapsed_ns = pane.ingest(io, pane.output_buffer[0..output_len]) catch |err|
-        return .{ .pane = pane.key(), .result = err };
-    return .{ .pane = pane.key(), .result = stats };
+    stats.elapsed_ns = task.ingest.pane.ingest(task.ingest.io, task.ingest.bytes) catch |err| {
+        return .{ .pane = task.ingest.pane.key(), .result = err };
+    };
+
+    return .{ .pane = task.ingest.pane.key(), .result = stats };
 }
 
 fn schedulePaneObservation(
@@ -2835,6 +2838,7 @@ test {
     _ = pane_input_commands;
     _ = pane_input_controller;
     _ = pane_input_pump;
+    _ = pane_output_pipeline;
     _ = pane_response_pump;
     _ = pane_resize_commands;
     _ = pane_resize_controller;

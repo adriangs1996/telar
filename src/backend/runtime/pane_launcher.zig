@@ -8,6 +8,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const history = @import("../history/root.zig");
 const pane_mod = @import("../pane/root.zig");
+const pane_output_pipeline = @import("pane_output_pipeline.zig");
 const proxy_mod = @import("../proxy/root.zig");
 const pty = @import("../pty/root.zig");
 
@@ -21,10 +22,7 @@ comptime {
     std.debug.assert(schema.max_argument_count <= pty.max_args);
 }
 
-pub const PaneOutputEvent = struct {
-    pane: PaneKey,
-    result: anyerror!u16,
-};
+pub const PaneOutputEvent = pane_output_pipeline.Completion;
 
 pub const PaneExitEvent = struct {
     pane: PaneKey,
@@ -132,19 +130,17 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 return err;
             };
 
-            fresh.output_pending = true;
-            fresh.actorStarted();
+            const output_started = fresh.beginPtyOutputRead();
+            std.debug.assert(output_started);
             launcher.injectFault(.output_actor) catch |err| {
-                fresh.actorFinished();
-                fresh.output_pending = false;
-                fresh.output_done = true;
+                fresh.cancelPtyOutputRead();
+                fresh.finishPtyOutput();
                 launcher.abort(fresh, shell, .output_actor, err);
                 return err;
             };
             launcher.select.concurrent(.pane_output, readPane, .{ launcher.io, fresh }) catch |err| {
-                fresh.actorFinished();
-                fresh.output_pending = false;
-                fresh.output_done = true;
+                fresh.cancelPtyOutputRead();
+                fresh.finishPtyOutput();
                 launcher.abort(fresh, shell, .output_actor, err);
                 return err;
             };
