@@ -80,6 +80,7 @@ const runtime_encoder = @import("encoder.zig");
 pub const system_metrics = @import("system_metrics.zig");
 const system_metrics_mod = system_metrics;
 const telemetry_mod = @import("telemetry.zig");
+const telemetry_tick_coordinator = @import("telemetry_tick_coordinator.zig");
 const transport = @import("../transport/root.zig");
 const workspace_mod = @import("../workspace/root.zig");
 
@@ -102,6 +103,7 @@ const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+const TelemetryState = telemetry_mod.State;
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
@@ -1009,82 +1011,16 @@ const Server = struct {
         return coordinator.handle(event);
     }
 
-    fn handleTelemetryTickEvent(server: *Server, result: anyerror!void, telemetry: *diagnostics.Sink, buffer: *[12288]u8, write_pending: *bool) void {
-        result catch {
-            telemetry.deinit(server.io);
-            return;
-        };
-        if (!telemetry.available()) return;
-        server.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{server.io}) catch {
-            telemetry.deinit(server.io);
-            return;
-        };
-        if (write_pending.*) return;
-
-        var attachment_stores: [max_clients]*const AttachmentStore = undefined;
-        var attachment_store_count: usize = 0;
-        var response_queue_depth: usize = 0;
-        var response_queue_high_water: usize = 0;
-        var response_queue_dropped: u64 = 0;
-        for (&server.clients.items) |*slot| {
-            const session = slot.* orelse continue;
-            attachment_stores[attachment_store_count] = &session.attachments;
-            attachment_store_count += 1;
-            response_queue_depth += session.delivery.responses.len;
-            response_queue_high_water += session.delivery.responses.high_water;
-            response_queue_dropped +|= session.delivery.responses.dropped;
-        }
-        const proxy_metrics = if (server.proxy) |proxy|
-            proxy.metrics()
-        else
-            proxy_mod.MetricsSnapshot{};
-        const workspaces = server.workspaceReader();
-
-        const line = formatRuntimeTelemetry(
-            buffer,
-            server.io,
-            &server.metrics,
-            attachment_stores[0..attachment_store_count],
-            server.clients.count,
-            workspaces.count(),
-            workspaces.totalTabs(),
-            &server.model.panes,
-            server.history_service,
-            response_queue_depth,
-            response_queue_high_water,
-            response_queue_dropped,
-            server.proxy != null,
-            proxy_metrics.active_connections,
-            proxy_metrics.queued_events,
-            proxy_metrics.event_queue_high_water,
-            proxy_metrics.dropped_events,
-            proxy_metrics.rejected_connections,
-            proxy_metrics.invalid_authorization_rejections,
-            proxy_metrics.unknown_credential_rejections,
-            proxy_metrics.connection_limit_drops,
-            proxy_metrics.h2_decode_failures,
-            proxy_metrics.passthrough_connections,
-            proxy_metrics.upstream_connect_failures,
-            proxy_metrics.tls_context_failures,
-            proxy_metrics.tls_upstream_handshake_failures,
-            proxy_metrics.tls_downstream_handshake_failures,
-            proxy_metrics.tls_mint_failures,
-            server.heap,
-        ) catch return;
-        write_pending.* = true;
-        server.select.concurrent(.telemetry_written, writeDiagnostics, .{
-            server.io,
-            telemetry,
-            line,
-        }) catch {
-            write_pending.* = false;
-            telemetry.deinit(server.io);
-        };
+    fn handleTelemetryTickEvent(server: *Server, result: anyerror!void, state: *TelemetryState) void {
+        var coordinator = telemetryTickCoordinator(server, state);
+        coordinator.handle(result);
     }
 
-    fn handleTelemetryWrittenEvent(server: *Server, result: anyerror!void, telemetry: *diagnostics.Sink, write_pending: *bool) void {
-        write_pending.* = false;
-        result catch telemetry.deinit(server.io);
+    fn handleTelemetryWrittenEvent(server: *Server, result: anyerror!void, state: *TelemetryState) void {
+        state.completeWrite();
+        result catch {
+            state.deinit(server.io);
+        };
     }
 
     fn dispatchClientMessage(server: *Server, session: *ClientSession, message: schema.ClientMessage) !void {
@@ -1968,7 +1904,7 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         "runtime-{d}",
         .{std.c.getpid()},
     ) catch "runtime";
-    var telemetry = diagnostics.Sink.init(io, endpoint, telemetry_suffix);
+    var telemetry = TelemetryState.init(io, endpoint, telemetry_suffix);
     defer telemetry.deinit(io);
 
     const clients = try gpa.create(ClientStore);
@@ -2018,8 +1954,6 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
         },
         .metrics = .{ .started_ns = diagnostics.now(io) },
     };
-    var telemetry_buffer: [12288]u8 = undefined;
-    var telemetry_write_pending = false;
     defer {
         listener.shutdown();
         for (&server.clients.items) |*slot|
@@ -2073,17 +2007,8 @@ fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, o
             .pane_observed => |event_value| try server.handlePaneObservedEvent(event_value),
             .pane_media => |event_value| try server.handlePaneMediaEvent(event_value),
             .pane_exit => |event_value| try server.handlePaneExitEvent(event_value),
-            .telemetry_tick => |result| server.handleTelemetryTickEvent(
-                result,
-                &telemetry,
-                &telemetry_buffer,
-                &telemetry_write_pending,
-            ),
-            .telemetry_written => |result| server.handleTelemetryWrittenEvent(
-                result,
-                &telemetry,
-                &telemetry_write_pending,
-            ),
+            .telemetry_tick => |result| server.handleTelemetryTickEvent(result, &telemetry),
+            .telemetry_written => |result| server.handleTelemetryWrittenEvent(result, &telemetry),
         }
     }
 }
@@ -2156,12 +2081,8 @@ fn sendSession(
     return .{ .client = key, .result = connection.send(io, payload) };
 }
 
-fn writeDiagnostics(
-    io: Io,
-    sink: *diagnostics.Sink,
-    bytes: []const u8,
-) anyerror!void {
-    try sink.write(io, bytes);
+fn writeDiagnostics(io: Io, state: *TelemetryState, bytes: []const u8) anyerror!void {
+    try state.write(io, bytes);
 }
 
 const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
@@ -2437,6 +2358,88 @@ fn paneExitCoordinator(server: *Server) RuntimePaneExitCoordinator {
 
 fn revokeExitedPaneCredential(server: *Server, pane: *Pane) void {
     server.revokePaneCredential(pane);
+}
+
+const telemetry_tick_runtime_port: telemetry_tick_coordinator.RuntimePort(Server) = .{
+    .available = telemetryAvailable,
+    .disable = disableTelemetry,
+    .schedule_tick = scheduleTelemetryTick,
+    .format_sample = formatTelemetrySample,
+    .schedule_write = scheduleTelemetryWrite,
+};
+
+const RuntimeTelemetryTickCoordinator = telemetry_tick_coordinator.Coordinator(Server, telemetry_tick_runtime_port);
+
+fn telemetryTickCoordinator(server: *Server, state: *TelemetryState) RuntimeTelemetryTickCoordinator {
+    return RuntimeTelemetryTickCoordinator.init(server, state);
+}
+
+fn telemetryAvailable(_: *Server, state: *const TelemetryState) bool {
+    return state.available();
+}
+
+fn disableTelemetry(server: *Server, state: *TelemetryState) void {
+    state.deinit(server.io);
+}
+
+fn scheduleTelemetryTick(server: *Server) !void {
+    try server.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{server.io});
+}
+
+fn formatTelemetrySample(server: *Server, buffer: []u8) ![]const u8 {
+    var attachment_stores: [max_clients]*const AttachmentStore = undefined;
+    var attachment_count: usize = 0;
+    var clients: telemetry_mod.ClientSample = .{ .count = server.clients.count };
+
+    for (&server.clients.items) |*slot| {
+        const session = slot.* orelse continue;
+        attachment_stores[attachment_count] = &session.attachments;
+        attachment_count += 1;
+        clients.response_queue_depth += session.delivery.responses.len;
+        clients.response_queue_high_water += session.delivery.responses.high_water;
+        clients.response_queue_dropped +|= session.delivery.responses.dropped;
+    }
+
+    clients.attachment_stores = attachment_stores[0..attachment_count];
+
+    const proxy_metrics = if (server.proxy) |proxy|
+        proxy.metrics()
+    else
+        proxy_mod.MetricsSnapshot{};
+    const workspaces = server.workspaceReader();
+
+    return formatRuntimeTelemetry(buffer, .{
+        .io = server.io,
+        .metrics = &server.metrics,
+        .clients = clients,
+        .workspace_count = workspaces.count(),
+        .tab_count = workspaces.totalTabs(),
+        .panes = &server.model.panes,
+        .history_service = server.history_service,
+        .proxy = .{
+            .active = server.proxy != null,
+            .active_connections = proxy_metrics.active_connections,
+            .event_queue_depth = proxy_metrics.queued_events,
+            .event_queue_high_water = proxy_metrics.event_queue_high_water,
+            .dropped_events = proxy_metrics.dropped_events,
+            .rejected_connections = proxy_metrics.rejected_connections,
+            .invalid_authorization_rejections = proxy_metrics.invalid_authorization_rejections,
+            .unknown_credential_rejections = proxy_metrics.unknown_credential_rejections,
+            .connection_limit_drops = proxy_metrics.connection_limit_drops,
+            .h2_decode_failures = proxy_metrics.h2_decode_failures,
+            .passthrough_connections = proxy_metrics.passthrough_connections,
+            .upstream_connect_failures = proxy_metrics.upstream_connect_failures,
+            .tls_context_failures = proxy_metrics.tls_context_failures,
+            .tls_upstream_handshake_failures = proxy_metrics.tls_upstream_handshake_failures,
+            .tls_downstream_handshake_failures = proxy_metrics.tls_downstream_handshake_failures,
+            .tls_mint_failures = proxy_metrics.tls_mint_failures,
+        },
+        .heap = server.heap,
+    });
+}
+
+fn scheduleTelemetryWrite(server: *Server, state: *TelemetryState, line: []const u8) !void {
+    try server.select.concurrent(.telemetry_written, writeDiagnostics, .{ server.io, state, line });
 }
 
 const pane_observation_runtime_port: pane_observation_coordinator.RuntimePort(Server) = .{
@@ -2738,6 +2741,7 @@ test {
     _ = pane_ingest_coordinator;
     _ = pane_media_coordinator;
     _ = pane_observation_coordinator;
+    _ = telemetry_tick_coordinator;
     _ = pane_output_pipeline;
     _ = pane_response_pump;
     _ = pane_resize_commands;

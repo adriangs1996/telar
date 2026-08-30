@@ -12,6 +12,99 @@ const diagnostics = core.diagnostics;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const PaneStore = pane_mod.PaneStore;
 
+pub const max_line_bytes = 12288;
+
+pub const State = struct {
+    sink: diagnostics.Sink = .{},
+    line: [max_line_bytes]u8 = undefined,
+    write_pending: bool = false,
+
+    /// Creates the runtime-owned telemetry sink and its bounded line buffer.
+    ///
+    /// ```zig
+    /// var state = State.init(io, endpoint, "runtime");
+    /// ```
+    pub fn init(io: Io, endpoint: []const u8, suffix: []const u8) State {
+        return .{ .sink = diagnostics.Sink.init(io, endpoint, suffix) };
+    }
+
+    /// Closes the sink without invalidating an in-flight write completion.
+    ///
+    /// ```zig
+    /// state.deinit(io);
+    /// ```
+    pub fn deinit(state: *State, io: Io) void {
+        state.sink.deinit(io);
+    }
+
+    /// Reports whether telemetry can accept another scheduled sample.
+    ///
+    /// ```zig
+    /// if (!state.available()) return;
+    /// ```
+    pub fn available(state: *const State) bool {
+        return state.sink.available();
+    }
+
+    /// Returns the fixed storage reused by consecutive telemetry samples.
+    ///
+    /// ```zig
+    /// const line = try formatRuntimeTelemetry(state.buffer(), sample);
+    /// ```
+    pub fn buffer(state: *State) []u8 {
+        return &state.line;
+    }
+
+    /// Reports whether the shared line buffer belongs to a write actor.
+    ///
+    /// ```zig
+    /// if (state.writePending()) return;
+    /// ```
+    pub fn writePending(state: *const State) bool {
+        return state.write_pending;
+    }
+
+    /// Borrows the shared line buffer for one asynchronous sink write.
+    ///
+    /// ```zig
+    /// state.beginWrite();
+    /// ```
+    pub fn beginWrite(state: *State) void {
+        std.debug.assert(!state.write_pending);
+        state.write_pending = true;
+    }
+
+    /// Rolls back a write actor that could not be scheduled.
+    ///
+    /// ```zig
+    /// state.cancelWrite();
+    /// ```
+    pub fn cancelWrite(state: *State) void {
+        std.debug.assert(state.write_pending);
+        state.write_pending = false;
+    }
+
+    /// Releases the shared line buffer after its write actor completes.
+    ///
+    /// ```zig
+    /// state.completeWrite();
+    /// ```
+    pub fn completeWrite(state: *State) void {
+        std.debug.assert(state.write_pending);
+        state.write_pending = false;
+    }
+
+    /// Writes the borrowed line through the development diagnostics sink.
+    ///
+    /// ```zig
+    /// try state.write(io, line);
+    /// ```
+    pub fn write(state: *State, io: Io, line: []const u8) !void {
+        std.debug.assert(state.write_pending);
+        try state.sink.write(io, line);
+    }
+};
+
 pub const RuntimeMetrics = struct {
     started_ns: u64,
     client_messages: u64 = 0,
@@ -73,38 +166,57 @@ pub const RuntimeMetrics = struct {
     client_resyncs: u64 = 0,
 };
 
-pub fn formatRuntimeTelemetry(
-    buffer: []u8,
+pub const ClientSample = struct {
+    attachment_stores: []const *const AttachmentStore = &.{},
+    count: usize = 0,
+    response_queue_depth: usize = 0,
+    response_queue_high_water: usize = 0,
+    response_queue_dropped: u64 = 0,
+};
+
+pub const ProxySample = struct {
+    active: bool = false,
+    active_connections: u32 = 0,
+    event_queue_depth: u64 = 0,
+    event_queue_high_water: u64 = 0,
+    dropped_events: u64 = 0,
+    rejected_connections: u64 = 0,
+    invalid_authorization_rejections: u64 = 0,
+    unknown_credential_rejections: u64 = 0,
+    connection_limit_drops: u64 = 0,
+    h2_decode_failures: u64 = 0,
+    passthrough_connections: u64 = 0,
+    upstream_connect_failures: u64 = 0,
+    tls_context_failures: u64 = 0,
+    tls_upstream_handshake_failures: u64 = 0,
+    tls_downstream_handshake_failures: u64 = 0,
+    tls_mint_failures: u64 = 0,
+};
+
+pub const Sample = struct {
     io: Io,
     metrics: *const RuntimeMetrics,
-    attachment_stores: []const *const AttachmentStore,
-    client_count: usize,
-    workspace_count: usize,
-    tab_count: usize,
+    clients: ClientSample = .{},
+    workspace_count: usize = 0,
+    tab_count: usize = 0,
     panes: *const PaneStore,
     history_service: *const history.Service,
-    response_queue_depth: usize,
-    response_queue_high_water: usize,
-    response_queue_dropped: u64,
-    proxy_active: bool,
-    proxy_active_connections: u32,
-    proxy_event_queue_depth: u64,
-    proxy_event_queue_high_water: u64,
-    proxy_dropped_events: u64,
-    proxy_rejected_connections: u64,
-    proxy_invalid_authorization_rejections: u64,
-    proxy_unknown_credential_rejections: u64,
-    proxy_connection_limit_drops: u64,
-    proxy_h2_decode_failures: u64,
-    proxy_passthrough_connections: u64,
-    proxy_upstream_connect_failures: u64,
-    proxy_tls_context_failures: u64,
-    proxy_tls_upstream_handshake_failures: u64,
-    proxy_tls_downstream_handshake_failures: u64,
-    proxy_tls_mint_failures: u64,
+    proxy: ProxySample = .{},
     heap: *const diagnostics.Heap,
-) ![]const u8 {
-    const now_ns = diagnostics.now(io);
+};
+
+/// Serializes one immutable view of runtime counters and retained resources
+/// into caller-owned storage. The returned slice aliases `buffer`.
+///
+/// ```zig
+/// const line = try formatRuntimeTelemetry(&buffer, sample);
+/// ```
+pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
+    const metrics = sample.metrics;
+    const panes = sample.panes;
+    const clients = sample.clients;
+    const proxy = sample.proxy;
+    const now_ns = diagnostics.now(sample.io);
     var outstanding_frames: usize = 0;
     var dirty_panes: usize = 0;
     var attachment_count: usize = 0;
@@ -184,7 +296,7 @@ pub fn formatRuntimeTelemetry(
             }
         }
     }
-    for (attachment_stores) |attachments| {
+    for (clients.attachment_stores) |attachments| {
         attachment_count += attachments.len();
         var iterator = attachments.iterator();
         while (iterator.next()) |active| {
@@ -195,7 +307,7 @@ pub fn formatRuntimeTelemetry(
             if (active.outstandingFrameId() != 0) outstanding_frames += 1;
         }
     }
-    const history_stats = history_service.statsSnapshot();
+    const history_stats = sample.history_service.statsSnapshot();
     var output = Io.Writer.fixed(buffer);
     try output.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
         "\"client_count\":{d},\"workspace_count\":{d},\"tab_count\":{d}," ++
@@ -213,9 +325,9 @@ pub fn formatRuntimeTelemetry(
         "\"coalesced_bytes_saved\":{d},", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
-        client_count,
-        workspace_count,
-        tab_count,
+        clients.count,
+        sample.workspace_count,
+        sample.tab_count,
         panes.count,
         attachment_count,
         outstanding_frames,
@@ -287,9 +399,9 @@ pub fn formatRuntimeTelemetry(
             pty_response_dropped,
             pane_input_queue_depth,
             pane_input_dropped_bytes,
-            response_queue_depth,
-            response_queue_high_water,
-            response_queue_dropped,
+            clients.response_queue_depth,
+            clients.response_queue_high_water,
+            clients.response_queue_dropped,
         },
     );
     try output.print("\"history_captured\":{d},\"history_dropped\":{d}," ++
@@ -340,23 +452,23 @@ pub fn formatRuntimeTelemetry(
         .{
             metrics.agent_process_inspections,
             metrics.agent_process_misses,
-            @intFromBool(proxy_active),
+            @intFromBool(proxy.active),
             metrics.proxy_observations,
-            proxy_active_connections,
-            proxy_event_queue_depth,
-            proxy_event_queue_high_water,
-            proxy_dropped_events,
-            proxy_rejected_connections,
-            proxy_invalid_authorization_rejections,
-            proxy_unknown_credential_rejections,
-            proxy_connection_limit_drops,
-            proxy_h2_decode_failures,
-            proxy_passthrough_connections,
-            proxy_upstream_connect_failures,
-            proxy_tls_context_failures,
-            proxy_tls_upstream_handshake_failures,
-            proxy_tls_downstream_handshake_failures,
-            proxy_tls_mint_failures,
+            proxy.active_connections,
+            proxy.event_queue_depth,
+            proxy.event_queue_high_water,
+            proxy.dropped_events,
+            proxy.rejected_connections,
+            proxy.invalid_authorization_rejections,
+            proxy.unknown_credential_rejections,
+            proxy.connection_limit_drops,
+            proxy.h2_decode_failures,
+            proxy.passthrough_connections,
+            proxy.upstream_connect_failures,
+            proxy.tls_context_failures,
+            proxy.tls_upstream_handshake_failures,
+            proxy.tls_downstream_handshake_failures,
+            proxy.tls_mint_failures,
         },
     );
     try output.print("\"history_available\":{d},\"sqlite_open_failures\":{d}," ++
@@ -403,7 +515,7 @@ pub fn formatRuntimeTelemetry(
         metrics.ack.average() / std.time.ns_per_us,
         metrics.ack.max_ns / std.time.ns_per_us,
     });
-    const heap_snap = heap.snapshot();
+    const heap_snap = sample.heap.snapshot();
     try output.print(
         "\"rss_bytes\":{d},\"graphics_budget_used\":{d},\"pane_media_used\":{d}," ++
             "\"vt_scrollback_bytes\":{d},\"vt_screen_bytes\":{d}," ++
@@ -422,7 +534,7 @@ pub fn formatRuntimeTelemetry(
             pane_media_used,
             vt_scrollback_bytes,
             vt_screen_bytes,
-            history_service.sqliteBytes(io),
+            sample.history_service.sqliteBytes(sample.io),
             heap_snap.live_bytes,
             heap_snap.live_allocs,
             heap_snap.allocs,
@@ -448,6 +560,21 @@ pub fn averageNs(total: u64, count: u64) u64 {
     return if (count == 0) 0 else total / count;
 }
 
+test "telemetry state lends its line buffer to exactly one write" {
+    var state: State = .{};
+
+    try std.testing.expect(!state.writePending());
+    state.beginWrite();
+    try std.testing.expect(state.writePending());
+
+    state.completeWrite();
+    try std.testing.expect(!state.writePending());
+
+    state.beginWrite();
+    state.cancelWrite();
+    try std.testing.expect(!state.writePending());
+}
+
 test "runtime telemetry reports retained memory domains" {
     const io = std.testing.io;
     var service = try history.Service.init(std.testing.allocator, ":memory:");
@@ -460,39 +587,41 @@ test "runtime telemetry reports retained memory domains" {
         defer heap.allocator().free(scratch);
         var panes: PaneStore = .{};
         panes.graphics_budget.used = 99;
-        var buffer: [16384]u8 = undefined;
+        var buffer: [max_line_bytes]u8 = undefined;
         const metrics: RuntimeMetrics = .{ .started_ns = 0 };
-        const line = try formatRuntimeTelemetry(
-            &buffer,
-            io,
-            &metrics,
-            &.{},
-            0,
-            0,
-            0,
-            &panes,
-            &service,
-            0,
-            0,
-            0,
-            false,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            &heap,
-        );
+        const line = try formatRuntimeTelemetry(&buffer, .{
+            .io = io,
+            .metrics = &metrics,
+            .clients = .{
+                .count = 2,
+                .response_queue_depth = 3,
+                .response_queue_high_water = 5,
+                .response_queue_dropped = 7,
+            },
+            .workspace_count = 11,
+            .tab_count = 13,
+            .panes = &panes,
+            .history_service = &service,
+            .proxy = .{
+                .active = true,
+                .active_connections = 17,
+                .event_queue_depth = 19,
+                .event_queue_high_water = 23,
+                .dropped_events = 29,
+                .rejected_connections = 31,
+                .invalid_authorization_rejections = 37,
+                .unknown_credential_rejections = 41,
+                .connection_limit_drops = 43,
+                .h2_decode_failures = 47,
+                .passthrough_connections = 53,
+                .upstream_connect_failures = 59,
+                .tls_context_failures = 61,
+                .tls_upstream_handshake_failures = 67,
+                .tls_downstream_handshake_failures = 71,
+                .tls_mint_failures = 73,
+            },
+            .heap = &heap,
+        });
         try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_budget_used\":99") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"pane_media_used\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"vt_scrollback_bytes\":0") != null);
@@ -512,10 +641,33 @@ test "runtime telemetry reports retained memory domains" {
         try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_vt_allocs\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_telar_allocs\":0") != null);
-        try std.testing.expect(std.mem.indexOf(
-            u8,
-            line,
-            "\"proxy_invalid_authorization_rejections\":0",
-        ) != null);
+        const expected_fields = [_][]const u8{
+            "\"client_count\":2",
+            "\"workspace_count\":11",
+            "\"tab_count\":13",
+            "\"response_queue_depth\":3",
+            "\"response_queue_high_water\":5",
+            "\"response_queue_dropped\":7",
+            "\"proxy_active\":1",
+            "\"proxy_active_connections\":17",
+            "\"proxy_event_queue_depth\":19",
+            "\"proxy_event_queue_high_water\":23",
+            "\"proxy_dropped_events\":29",
+            "\"proxy_rejected_connections\":31",
+            "\"proxy_invalid_authorization_rejections\":37",
+            "\"proxy_unknown_credential_rejections\":41",
+            "\"proxy_connection_limit_drops\":43",
+            "\"proxy_h2_decode_failures\":47",
+            "\"proxy_passthrough_connections\":53",
+            "\"proxy_upstream_connect_failures\":59",
+            "\"proxy_tls_context_failures\":61",
+            "\"proxy_tls_upstream_handshake_failures\":67",
+            "\"proxy_tls_downstream_handshake_failures\":71",
+            "\"proxy_tls_mint_failures\":73",
+        };
+
+        for (expected_fields) |field| {
+            try std.testing.expect(std.mem.indexOf(u8, line, field) != null);
+        }
     }
 }
