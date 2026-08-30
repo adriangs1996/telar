@@ -21,12 +21,12 @@ const diagnostics = core.diagnostics;
 
 const client_mod = @import("client.zig");
 const Client = client_mod;
-const InputHandler = @import("input_handler.zig");
 const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
+const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
 const rectSize = multiplexer.rectSize;
@@ -207,9 +207,7 @@ fn handleResyncMessage(client: *Client, required: schema.ResyncRequired) !?u8 {
         .stay => try handleResyncRequired(client, required),
         .exit => return 0,
         .switch_to => |previous| {
-            var handler: InputHandler = .{ .client = client };
-            try handler.switchWorkspaceResolved(previous);
-            try client.presenter.requestDraw();
+            _ = try workspace_handoffs.requestWorkspace(client, previous);
         },
     }
     return null;
@@ -367,7 +365,11 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
     const continuation = client.requests.take(opened.request_id) orelse
         return error.UnexpectedRequest;
     switch (continuation) {
-        .initial_open => try bootstrapWorkspace(client, opened),
+        .initial_open => {
+            var use_case = workspace_handoffs.confirmationHandler(client);
+            try use_case.execute(try workspace_handoffs.arrival(client, opened));
+            return;
+        },
         .create_workspace => {
             if (!opened.created) return error.UnexpectedRequest;
             client.rememberCurrentNavigation();
@@ -380,7 +382,7 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
                 }
             }
             client.model.workspace.deinit();
-            try bootstrapWorkspace(client, opened);
+            try bootstrapCreatedWorkspace(client, opened);
         },
         .split => |split| {
             var use_case = pane_splits.confirmationHandler(client);
@@ -418,8 +420,8 @@ fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
     try client.presenter.requestDraw();
 }
 
-/// First pane of a workspace: builds the tab model and asks for both snapshots.
-fn bootstrapWorkspace(client: *Client, opened: schema.PaneOpened) !void {
+/// Temporary legacy bootstrap owned by the create-workspace slice.
+fn bootstrapCreatedWorkspace(client: *Client, opened: schema.PaneOpened) !void {
     if (client.model.workspace.count != 0) return error.UnexpectedRequest;
     try client.model.workspace.bootstrap(
         opened.pane_id,
@@ -536,9 +538,7 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
         .stay => {},
         .exit => return 0,
         .switch_to => |previous| {
-            var handler: InputHandler = .{ .client = client };
-            try handler.switchWorkspaceResolved(previous);
-            try client.presenter.requestDraw();
+            _ = try workspace_handoffs.requestWorkspace(client, previous);
             return null;
         },
     }
@@ -634,27 +634,13 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
         },
         .create_workspace, .notification => {},
         .initial_open => |open| {
-            const workspace = open.fallback_workspace orelse return error.RuntimeRequestFailed;
-
-            if (failure.code != .pane_not_found) {
+            var recovery = workspace_handoffs.recoveryHandler(client);
+            if (try recovery.execute(.{
+                .fallback_workspace = open.fallback_workspace,
+                .code = failure.code,
+            }) == .unrecoverable) {
                 return error.RuntimeRequestFailed;
             }
-
-            client.navigation_history.forget(.{ .workspace = workspace });
-            const request_id = try client.nextId();
-            try client.enqueueRequest(
-                request_id,
-                .{ .initial_open = .{} },
-                .{ .open_pane = .{
-                    .request_id = request_id,
-                    .target = .{ .workspace = workspace },
-                    .size = rectSize(client.view.workbench()) orelse
-                        return error.TerminalTooSmall,
-                    .launch = null,
-                } },
-            );
-            client.view.invalidate();
-            try client.presenter.requestDraw();
             return;
         },
         .workspace_snapshot, .tab_snapshot, .create_tab => return error.RuntimeRequestFailed,

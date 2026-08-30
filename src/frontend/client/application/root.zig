@@ -9,6 +9,7 @@ pub const rename_workspace = @import("rename_workspace.zig");
 pub const select_tab = @import("select_tab.zig");
 pub const split_pane = @import("split_pane.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
+pub const workspace_handoff = @import("workspace_handoff.zig");
 pub const workspace_snapshot = @import("workspace_snapshot.zig");
 
 test {
@@ -21,5 +22,6 @@ test {
     _ = select_tab;
     _ = split_pane;
     _ = tab_snapshot;
+    _ = workspace_handoff;
     _ = workspace_snapshot;
 }

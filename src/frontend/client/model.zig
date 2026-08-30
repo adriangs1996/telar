@@ -43,6 +43,25 @@ pub const TabCreation = struct {
     created: schema.TabLocation,
 };
 
+pub const WorkspaceBookmark = struct {
+    location: schema.TabLocation,
+    pane_id: schema.PaneId,
+    tab_layout: layout_mod.Layout,
+};
+
+pub const WorkspaceDeparture = struct {
+    source: ?schema.WorkspaceLocation = null,
+    bookmark: ?WorkspaceBookmark = null,
+    panes: RemovedWorkspacePanes = .{},
+};
+
+pub const WorkspaceArrival = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    size: schema.TerminalSize,
+    saved_layout: ?layout_mod.Layout = null,
+};
+
 pub const PaneAttachment = struct {
     pane_id: schema.PaneId,
     location: schema.TabLocation,
@@ -283,6 +302,76 @@ pub const Model = struct {
         const index = model.workspace.indexOf(tab_id) orelse return null;
 
         return model.workspace.items[index].?.location;
+    }
+
+    /// Retires the current workspace projection and captures the bounded
+    /// client state needed by post-commit cleanup and navigation history.
+    /// An already empty model is an idempotent no-op.
+    ///
+    /// ```zig
+    /// const departure = model.departWorkspace();
+    /// ```
+    pub fn departWorkspace(model: *Model) WorkspaceDeparture {
+        const source = model.workspace.workspace orelse return .{};
+        const active = model.workspace.activeConst();
+        var departure: WorkspaceDeparture = .{ .source = source };
+        if (active) |tab| {
+            if (tab.model.focusedPaneConst()) |pane| {
+                departure.bookmark = .{
+                    .location = tab.location,
+                    .pane_id = pane.id,
+                    .tab_layout = tab.model.layout,
+                };
+            }
+        }
+
+        var tabs = model.workspace.tabIterator();
+        while (tabs.next()) |tab| {
+            var panes = tab.model.paneIterator();
+            while (panes.next()) |pane| {
+                departure.panes.append(pane.id);
+            }
+        }
+
+        const had_tabs = model.workspace.count != 0;
+        const had_active = active != null;
+        const had_visible_panes = if (active) |tab| tab.model.pane_count != 0 else false;
+        model.workspace.deinit();
+        model.workspace_revision +%= 1;
+        if (had_tabs) {
+            model.tabs_revision +%= 1;
+        }
+        if (had_active) {
+            model.active_tab_revision +%= 1;
+        }
+        if (had_visible_panes) {
+            model.panes_revision +%= 1;
+        }
+
+        return departure;
+    }
+
+    /// Builds the confirmed root tab transactionally inside an empty client
+    /// model. Construction failure preserves the empty model and every
+    /// version.
+    ///
+    /// ```zig
+    /// try model.arriveWorkspace(arrival);
+    /// ```
+    pub fn arriveWorkspace(model: *Model, arrival: WorkspaceArrival) !void {
+        if (model.workspace.count != 0 or model.workspace.workspace != null) {
+            return error.ModelNotEmpty;
+        }
+
+        try model.workspace.bootstrap(arrival.pane_id, arrival.location, arrival.size);
+        if (arrival.saved_layout) |saved| {
+            std.debug.assert(model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved));
+        }
+
+        model.workspace_revision +%= 1;
+        model.tabs_revision +%= 1;
+        model.active_tab_revision +%= 1;
+        model.panes_revision +%= 1;
     }
 
     /// Commits one canonical workspace snapshot and reports the client
@@ -796,6 +885,137 @@ fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !s
 
 fn testingTabSnapshot(buffer: []u8, snapshot: schema.TabSnapshot) !schema.TabSnapshotView {
     return (try schema.decodeServer(try schema.encodeTabSnapshot(buffer, snapshot))).tab_snapshot;
+}
+
+test "workspace departure commits one empty version and captures bounded client state" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const active: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const inactive: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const first: schema.PaneId = @enumFromInt(1);
+    const focused: schema.PaneId = @enumFromInt(2);
+    const third: schema.PaneId = @enumFromInt(3);
+    const area: ui.Rect = .{ .w = 40, .h = 10 };
+    try model.workspace.bootstrap(first, active, .{ .cols = 20, .rows = 5 });
+    try model.workspace.active().?.model.split(first, focused, active, .horizontal, area);
+    _ = try model.workspace.addCreated(.{
+        .location = inactive,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = third,
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.workspace.select(active.tab_id));
+
+    const departure = model.departWorkspace();
+
+    try std.testing.expectEqualDeep(@as(?schema.WorkspaceLocation, workspace), departure.source);
+    try std.testing.expectEqualDeep(active, departure.bookmark.?.location);
+    try std.testing.expectEqual(focused, departure.bookmark.?.pane_id);
+    try std.testing.expectEqual(focused, departure.bookmark.?.tab_layout.focused().?);
+    try std.testing.expectEqualSlices(schema.PaneId, &.{ first, focused, third }, departure.panes.slice());
+    try std.testing.expect(model.workspace.workspace == null);
+    try std.testing.expectEqual(@as(usize, 0), model.workspace.count);
+    try std.testing.expectEqualDeep(Version{
+        .workspace = 1,
+        .tabs = 1,
+        .active_tab = 1,
+        .panes = 1,
+    }, model.version());
+
+    const version = model.version();
+    const repeated = model.departWorkspace();
+
+    try std.testing.expect(repeated.source == null);
+    try std.testing.expect(repeated.bookmark == null);
+    try std.testing.expectEqual(@as(usize, 0), repeated.panes.slice().len);
+    try std.testing.expectEqualDeep(version, model.version());
+}
+
+test "workspace arrival commits atomically and stages the saved layout" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .tab_id = @enumFromInt(4),
+    };
+    const left: schema.PaneId = @enumFromInt(10);
+    const focused: schema.PaneId = @enumFromInt(11);
+    const area: ui.Rect = .{ .w = 60, .h = 12 };
+    var saved: layout_mod.Layout = .{};
+    try saved.addRoot(left);
+    try saved.split(left, focused, .horizontal);
+    var expected: layout_mod.Snapshot = .{};
+    saved.snapshot(area, &expected);
+
+    try model.arriveWorkspace(.{
+        .pane_id = focused,
+        .location = location,
+        .size = .{ .cols = 30, .rows = 8 },
+        .saved_layout = saved,
+    });
+
+    try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
+    try std.testing.expectEqual(focused, model.workspace.activeConst().?.model.layout.focused().?);
+    try std.testing.expectEqualDeep(Version{
+        .workspace = 1,
+        .tabs = 1,
+        .active_tab = 1,
+        .panes = 1,
+    }, model.version());
+
+    var buffer: [256]u8 = undefined;
+    const snapshot = try testingTabSnapshot(&buffer, .{
+        .request_id = @enumFromInt(1),
+        .location = location,
+        .panes = &.{
+            .{ .pane_id = left, .lifecycle = .running },
+            .{ .pane_id = focused, .lifecycle = .running },
+        },
+    });
+    _ = try model.reconcileTab(snapshot, area);
+    var actual: layout_mod.Snapshot = .{};
+    model.workspace.activeConst().?.model.layout.snapshot(area, &actual);
+
+    try std.testing.expectEqual(focused, model.workspace.activeConst().?.model.layout.focused().?);
+    for ([_]schema.PaneId{ left, focused }) |pane_id| {
+        try std.testing.expectEqual(expected.find(pane_id).?.outer, actual.find(pane_id).?.outer);
+    }
+}
+
+test "rejected workspace arrival preserves its previous model and version" {
+    var empty = Model.init(std.testing.allocator, true);
+    defer empty.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .tab_id = @enumFromInt(4),
+    };
+
+    try std.testing.expectError(error.InvalidPaneId, empty.arriveWorkspace(.{
+        .pane_id = .invalid,
+        .location = location,
+        .size = .{ .cols = 30, .rows = 8 },
+    }));
+
+    try std.testing.expect(empty.workspace.workspace == null);
+    try std.testing.expectEqual(@as(usize, 0), empty.workspace.count);
+    try std.testing.expectEqualDeep(Version{}, empty.version());
+
+    var occupied = Model.init(std.testing.allocator, true);
+    defer occupied.deinit();
+    try occupied.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 30, .rows = 8 });
+
+    try std.testing.expectError(error.ModelNotEmpty, occupied.arriveWorkspace(.{
+        .pane_id = @enumFromInt(2),
+        .location = location,
+        .size = .{ .cols = 30, .rows = 8 },
+    }));
+
+    try std.testing.expectEqual(@as(usize, 1), occupied.workspace.count);
+    try std.testing.expect(occupied.workspace.findPane(@enumFromInt(1)) != null);
+    try std.testing.expectEqualDeep(Version{}, occupied.version());
 }
 
 test "workspace reconciliation versions semantic dimensions independently" {

@@ -14,6 +14,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_renames = @import("tab_renames.zig");
+const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_renames = @import("workspace_renames.zig");
 const action_mod = input_capability.action;
 const copy_mode = input_capability.copy_mode;
@@ -43,10 +44,9 @@ client: *Client,
 redraw: bool = false,
 
 /// The model host input should act on, or null while no tab exists —
-/// before bootstrap completes, or during a workspace handoff after
-/// `tabs.deinit()` while the runtime's reply is outstanding. Input
-/// arriving in that window is dropped, mirroring presentableModel on
-/// the draw path.
+/// before bootstrap completes, or while the workspace-handoff model is
+/// explicitly empty. Input arriving in that window is dropped, mirroring
+/// `presentableModel` on the normal draw path.
 fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
     return presentableModel(&handler.client.model.workspace);
 }
@@ -77,39 +77,7 @@ fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void 
 /// Starts a handoff chosen from runtime-owned workspace state. Unlike an
 /// interactive selection, it must not consult the client's stale list.
 pub fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
-    const client = handler.client;
-    if (client.requests.count != 0) return error.WorkspaceSwitchWhileRequestPending;
-    const destination: schema.WorkspaceLocation = .{ .workspace = workspace };
-    const target: schema.PaneTarget = if (client.navigation_history.find(destination)) |bookmark|
-        .{ .pane = bookmark.pane_id }
-    else
-        .{ .workspace = workspace };
-    try handler.beginWorkspaceHandoff(target, workspace);
-}
-
-fn beginWorkspaceHandoff(
-    handler: *InputHandler,
-    target: schema.PaneTarget,
-    fallback_workspace: ?schema.WorkspaceId,
-) !void {
-    const client = handler.client;
-    client.rememberCurrentNavigation();
-    var tabs = client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| try tab_attachments.detach(client, tab);
-    client.model.workspace.deinit();
-    const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .initial_open = .{ .fallback_workspace = fallback_workspace } },
-        .{ .open_pane = .{
-            .request_id = request_id,
-            .target = target,
-            .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-            .launch = null,
-        } },
-    );
-    client.view.invalidate();
-    handler.redraw = true;
+    _ = try workspace_handoffs.requestWorkspace(handler.client, workspace);
 }
 
 fn focusSidebarAgent(
@@ -137,7 +105,7 @@ fn focusSidebarAgent(
         .workspace => |workspace| workspace,
         .worktree => null,
     };
-    try handler.beginWorkspaceHandoff(.{ .pane = agent_key.pane_id }, fallback);
+    _ = try workspace_handoffs.requestPane(handler.client, agent_key.pane_id, fallback);
     return true;
 }
 

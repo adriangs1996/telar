@@ -44,6 +44,7 @@ test {
     _ = @import("tab_attachments.zig");
     _ = @import("tab_renames.zig");
     _ = @import("tab_snapshots.zig");
+    _ = @import("workspace_handoffs.zig");
     _ = @import("workspace_renames.zig");
     _ = @import("workspace_snapshots.zig");
     _ = @import("input_handler.zig");

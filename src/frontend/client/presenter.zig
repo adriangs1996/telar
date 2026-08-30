@@ -116,16 +116,14 @@ fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
     };
 }
 
-/// The `.draw` event: present if there is anything to show yet.
+/// The `.draw` event: presents the latest semantic model, including its
+/// explicit empty state during startup and workspace handoff.
 pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     presenter.draw_pending = false;
     if (comptime diagnostics.enabled)
         presenter.metrics.draw_lateness.observe(monotonic(presenter.io) -| presenter.draw_due_ns);
     if (presenter.pending_updates == 0) return;
-    // A draw can be scheduled before the first `pane_opened` bootstraps a
-    // tab - a resize or the capability timeout does exactly that. The
-    // updates stay queued for the draw that follows the bootstrap.
-    const model = presentableModel(&client.model.workspace) orelse return;
+    const model = presentableModel(&client.model.workspace);
     const workspace_changed = presenter.presented_model_version.workspace !=
         presenter.observed_model_version.workspace;
     const tabs_changed = presenter.presented_model_version.tabs !=
@@ -138,10 +136,15 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         client.view.invalidate();
     }
     if (active_tab_changed or panes_changed) {
-        model.composition_invalidated = true;
+        if (model) |active| {
+            active.composition_invalidated = true;
+        }
     }
 
-    const presented = try presenter.present(client, model);
+    const presented = if (model) |active|
+        try presenter.present(client, active)
+    else
+        try presenter.presentEmpty(client);
     presenter.presented_model_version = presenter.observed_model_version;
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
@@ -155,7 +158,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
                 diagnostics.elapsed(ack_started, diagnostics.now(presenter.io)),
             );
     }
-    if (presenter.mediaWorkPending(client)) try presenter.requestMedia();
+    if (model != null and presenter.mediaWorkPending(client)) try presenter.requestMedia();
 }
 
 /// The media event never composes cells. A pending or scheduled cell frame
@@ -309,6 +312,16 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
         acks.len += 1;
     }
     return .{ .presented_ns = monotonic(presenter.io), .acks = acks };
+}
+
+fn presentEmpty(presenter: *Presenter, client: *Client) !Presented {
+    const buffer = presenter.screen.buffer();
+    buffer.clear(.{});
+    presenter.screen.cursor = null;
+    presenter.screen.graphics = null;
+    try flushScreen(presenter.io, &presenter.screen, client.writer, presenter.metrics);
+
+    return .{ .presented_ns = monotonic(presenter.io), .acks = .{} };
 }
 
 const CombinedGraphicsWriter = struct {

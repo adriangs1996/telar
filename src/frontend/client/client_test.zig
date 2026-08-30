@@ -16,6 +16,7 @@ const schema = core.schema;
 
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
+const client_outbox = @import("outbox.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const InputChunk = Client.InputChunk;
@@ -166,6 +167,8 @@ const TestHarness = struct {
         try std.testing.expect(first == .request_workspace_snapshot);
         const second = try harness.nextClientMessage(&buffer);
         try std.testing.expect(second == .request_tab_snapshot);
+        try harness.client.observeModel();
+        try harness.settleModelPresentation();
     }
 
     fn addTab(harness: *TestHarness, tab_id: schema.TabId, pane_id: schema.PaneId) !schema.TabLocation {
@@ -225,6 +228,14 @@ test "bootstrap answers the initial open with both snapshot requests" {
     const pane = harness.client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     try std.testing.expect(pane.attached);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, harness.client.reported_focus);
+    try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().workspace);
+    try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().tabs);
+    try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().active_tab);
+    try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().panes);
+    try std.testing.expectEqualDeep(
+        harness.client.model.version(),
+        harness.client.presenter.presented_model_version,
+    );
 }
 
 test "new tab inherits cwd from the focused runtime pane" {
@@ -298,9 +309,33 @@ test "workspace handoff opens the pane remembered for that workspace" {
         .location = .{ .workspace = destination, .tab_id = @enumFromInt(8) },
         .pane_id = restored_pane,
     });
+    const version_before_departure = client.model.version();
+    const pending_updates_before_departure = client.presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
     try handler.switchWorkspaceResolved(@enumFromInt(2));
+
+    try std.testing.expect(client.model.workspaceLocation() == null);
+    try std.testing.expectEqual(@as(usize, 0), client.model.workspace.count);
+    try std.testing.expectEqual(version_before_departure.workspace + 1, client.model.version().workspace);
+    try std.testing.expectEqual(version_before_departure.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_departure.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expectEqual(version_before_departure.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_departure, client.presenter.pending_updates);
+    try std.testing.expect(client.reported_focus == null);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_departure + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
     try harness.settle();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
+    for (client.presenter.screen.front.cells) |cell| {
+        try std.testing.expectEqualStrings(" ", cell.text());
+        try std.testing.expectEqual(@as(u8, 1), cell.width);
+    }
+    try client.observeModel();
+    try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
 
     var buffer: [256]u8 = undefined;
     var target: ?schema.PaneTarget = null;
@@ -324,14 +359,46 @@ test "workspace handoff opens the pane remembered for that workspace" {
         .code = .pane_not_found,
         .message = "remembered pane closed",
     });
+    const version_before_recovery = client.model.version();
+    const pending_updates_before_recovery = client.presenter.pending_updates;
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+
+    try std.testing.expectEqualDeep(version_before_recovery, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_recovery, client.presenter.pending_updates);
     try harness.settle();
     const fallback = (try harness.nextClientMessage(&buffer)).open_pane;
     try std.testing.expectEqualDeep(
         schema.PaneTarget{ .workspace = @enumFromInt(2) },
         fallback.target,
     );
+    const retry = client.requests.take(fallback.request_id).?;
+    try std.testing.expect(retry == .initial_open);
+    try std.testing.expect(retry.initial_open.fallback_workspace == null);
     try std.testing.expect(client.navigation_history.find(destination) == null);
+}
+
+test "workspace handoff capacity failure preserves the source model" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    while (client.outbox.len < client_outbox.capacity - 1) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version_before = client.model.version();
+    const focus_before = client.reported_focus;
+    var handler: InputHandler = .{ .client = client };
+
+    try std.testing.expectError(error.ClientOutboxFull, handler.switchWorkspaceResolved(@enumFromInt(2)));
+
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqual(focus_before, client.reported_focus);
+    try std.testing.expect(client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
+    try std.testing.expect(client.requests.has(.tab_snapshot));
 }
 
 test "clicking a sidebar agent hands off directly to its pane" {
@@ -400,8 +467,22 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .location = agent.location,
         .created = false,
     });
+    const version_before_arrival = client.model.version();
+    const pending_updates_before_arrival = client.presenter.pending_updates;
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+
+    try std.testing.expectEqual(version_before_arrival.workspace + 1, client.model.version().workspace);
+    try std.testing.expectEqual(version_before_arrival.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_arrival.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expectEqual(version_before_arrival.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_arrival, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_arrival + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
     try harness.settle();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
     try std.testing.expectEqualDeep(
         @as(?schema.WorkspaceLocation, agent.location.workspace),
         client.model.workspace.workspace,
