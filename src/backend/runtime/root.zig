@@ -4,6 +4,7 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const agent_mod = @import("../agent/root.zig");
+const agent_description_coordinator = @import("agent_description_coordinator.zig");
 const agent_maintenance_coordinator = @import("agent_maintenance_coordinator.zig");
 const agent_process = @import("../process/root.zig");
 const history = @import("../history/root.zig");
@@ -344,7 +345,7 @@ const Server = struct {
     inherited_environment: std.process.Environ,
     proxy: ?*proxy_mod.Proxy,
     agent_description_options: ?AgentDescriptionOptions,
-    agent_description_pending: bool = false,
+    agent_description_state: agent_description_coordinator.State = .{},
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     handshake_slot: ?core.transport.SocketChannel = null,
@@ -616,59 +617,9 @@ const Server = struct {
         }
     }
 
-    fn scheduleAgentDescription(server: *Server) void {
-        const options = server.agent_description_options orelse return;
-        if (server.agent_description_pending) return;
-        var job = server.model.agents.nextDescriptionJob() orelse return;
-        defer std.crypto.secureZero(u8, &job.query);
-        server.select.concurrent(
-            .agent_description,
-            agent_mod.description.generate,
-            .{
-                server.io,
-                server.gpa,
-                agent_mod.description.Command{
-                    .arguments = options.arguments,
-                    .timeout_ms = options.timeout_ms,
-                },
-                job,
-            },
-        ) catch {
-            const failed: agent_mod.description.Result = .{
-                .pane = job.pane,
-                .session_id = job.session_id,
-                .status = .failed,
-            };
-            if (server.model.agents.finishDescription(&failed))
-                _ = server.history_service.setSessionTitle(
-                    server.io,
-                    failed.session_id,
-                    "",
-                    .telar,
-                    .failed,
-                );
-            server.pumpAll();
-            return;
-        };
-        server.agent_description_pending = true;
-    }
-
-    fn handleAgentDescriptionEvent(
-        server: *Server,
-        result: agent_mod.description.Result,
-    ) void {
-        server.agent_description_pending = false;
-        if (server.model.agents.finishDescription(&result)) {
-            _ = server.history_service.setSessionTitle(
-                server.io,
-                result.session_id,
-                if (result.status == .success) result.titleSlice() else "",
-                if (result.status == .success) .generated else .telar,
-                if (result.status == .success) .ready else .failed,
-            );
-        }
-        server.scheduleAgentDescription();
-        server.pumpAll();
+    fn handleAgentDescriptionEvent(server: *Server, result: agent_mod.description.Result) void {
+        var coordinator = agentDescriptionCoordinator(server);
+        coordinator.handle(result);
     }
 
     fn pumpAll(server: *Server) void {
@@ -2312,6 +2263,48 @@ fn revokeExitedPaneCredential(server: *Server, pane: *Pane) void {
     server.revokePaneCredential(pane);
 }
 
+const agent_description_runtime_port: agent_description_coordinator.RuntimePort(Server) = .{
+    .start = startAgentDescription,
+    .persist = persistAgentDescription,
+    .pump_clients = pumpRuntimeClients,
+};
+
+const RuntimeAgentDescriptionCoordinator = agent_description_coordinator.Coordinator(Server, agent_description_runtime_port);
+
+fn agentDescriptionCoordinator(server: *Server) RuntimeAgentDescriptionCoordinator {
+    const command: ?agent_mod.description.Command = if (server.agent_description_options) |options|
+        .{ .arguments = options.arguments, .timeout_ms = options.timeout_ms }
+    else
+        null;
+
+    return RuntimeAgentDescriptionCoordinator.init(server, .{
+        .agents = &server.model.agents,
+        .state = &server.agent_description_state,
+        .command = command,
+    });
+}
+
+fn startAgentDescription(server: *Server, command: agent_mod.description.Command, job_value: agent_mod.description.Job) !void {
+    var job = job_value;
+    defer std.crypto.secureZero(u8, &job.query);
+
+    try server.select.concurrent(
+        .agent_description,
+        agent_mod.description.generate,
+        .{ server.io, server.gpa, command, job },
+    );
+}
+
+fn persistAgentDescription(server: *Server, finished: agent_mod.DescriptionFinished) void {
+    _ = server.history_service.setSessionTitle(
+        server.io,
+        finished.session_id,
+        finished.titleSlice(),
+        finished.source,
+        finished.state,
+    );
+}
+
 const agent_maintenance_runtime_port: agent_maintenance_coordinator.RuntimePort(Server) = .{
     .rearm_tick = rearmAgentMaintenance,
     .now_ms = runtimeWallClockMs,
@@ -2483,7 +2476,8 @@ fn publishObservedAgentSound(server: *Server, notification: schema.AgentSoundNot
 }
 
 fn scheduleAgentDescriptionWork(server: *Server) void {
-    server.scheduleAgentDescription();
+    var coordinator = agentDescriptionCoordinator(server);
+    _ = coordinator.schedule();
 }
 
 const pane_media_runtime_port: pane_media_coordinator.RuntimePort(Server) = .{
@@ -2700,6 +2694,7 @@ test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
 }
 
 test {
+    _ = agent_description_coordinator;
     _ = agent_maintenance_coordinator;
     _ = close_tab_commands;
     _ = close_tab_controller;

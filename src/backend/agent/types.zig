@@ -108,3 +108,23 @@ pub const ProxyObservation = struct {
         return observation.phase == .response_activity;
     }
 };
+
+/// Owned title projection emitted only after the agent aggregate accepts and
+/// validates a description result.
+pub const DescriptionFinished = struct {
+    pane: PaneKey,
+    session_id: [16]u8,
+    title: [schema.max_agent_session_title_bytes]u8 = undefined,
+    title_len: u8 = 0,
+    source: schema.AgentTitleSource,
+    state: schema.AgentTitleState,
+
+    /// Returns the title bytes owned by this completion event.
+    ///
+    /// ```zig
+    /// try persist(finished.titleSlice());
+    /// ```
+    pub fn titleSlice(finished: *const DescriptionFinished) []const u8 {
+        return finished.title[0..finished.title_len];
+    }
+};
