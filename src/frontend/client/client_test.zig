@@ -1721,11 +1721,16 @@ test "move tab waits for the canonical response and preserves active identity" {
     try harness.bootstrap();
     const client = harness.client;
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+    const version_before_request = client.model.version();
+    const pending_updates_before_request = client.presenter.pending_updates;
     var handler: InputHandler = .{ .client = client };
 
     _ = try handler.applyNativeAction(.{ .move_tab = .previous });
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -1733,6 +1738,10 @@ test "move tab waits for the canonical response and preserves active identity" {
     try std.testing.expectEqualDeep(second, message.move_tab.location);
     try std.testing.expectEqual(schema.TabMoveDirection.previous, message.move_tab.direction);
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
+    const continuation = client.requests.take(message.move_tab.request_id).?;
+    try std.testing.expect(continuation == .move_tab);
+    try std.testing.expectEqualDeep(second, continuation.move_tab);
+    try client.requests.add(message.move_tab.request_id, continuation);
 
     try std.testing.expect(client.model.workspace.select(TestHarness.bootstrap_location.tab_id));
     const version_before_response = client.model.version();
@@ -1808,6 +1817,68 @@ test "canonical tab move at an edge does not advance or schedule the model" {
     try std.testing.expectEqualDeep(version_before_response, client.model.version());
     try std.testing.expectEqual(pending_updates_before_response, client.presenter.pending_updates);
     try std.testing.expect(!client.requests.has(.tab_operation));
+}
+
+test "tab move response must match the requested identity" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+    const version_before_response = client.model.version();
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.{ .move_tab = .previous });
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&message_buffer);
+    var response_buffer: [256]u8 = undefined;
+    const response = try schema.encodeTabMoved(&response_buffer, .{
+        .request_id = message.move_tab.request_id,
+        .location = TestHarness.bootstrap_location,
+        .position = 0,
+    });
+
+    try std.testing.expectError(
+        error.UnexpectedTabMoved,
+        server_messages.handleServerMessage(client, try schema.decodeServer(response)),
+    );
+
+    try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
+    try std.testing.expectEqualDeep(version_before_response, client.model.version());
+    try std.testing.expect(!client.requests.has(.tab_operation));
+}
+
+test "a failed tab move preserves order and notifies" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+    const version_before_failure = client.model.version();
+    const active_before_failure = client.model.activeTabLocation().?;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.{ .move_tab = .previous });
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&message_buffer);
+    var response_buffer: [256]u8 = undefined;
+    const response = try schema.encodeRequestFailed(&response_buffer, .{
+        .request_id = message.move_tab.request_id,
+        .code = .tab_not_found,
+        .message = "tab not found",
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(response));
+
+    try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
+    try std.testing.expectEqualDeep(active_before_failure, client.model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try std.testing.expect(!client.requests.has(.tab_operation));
+    try std.testing.expect(client.notification_tick_pending);
 }
 
 test "select tab detaches the current tab before requesting the target snapshot" {

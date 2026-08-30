@@ -24,6 +24,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_creations = @import("tab_creations.zig");
+const tab_moves = @import("tab_moves.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
@@ -511,9 +512,12 @@ fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
         return error.UnexpectedTabMoved;
     if (continuation != .move_tab or
         !std.meta.eql(continuation.move_tab, moved.location))
+    {
         return error.UnexpectedTabMoved;
-    _ = client.model.applyTabPosition(moved.location, moved.position) catch
-        return error.UnexpectedTabMoved;
+    }
+
+    var use_case = tab_moves.confirmationHandler(client);
+    _ = use_case.execute(tab_moves.confirmation(moved)) catch return error.UnexpectedTabMoved;
 }
 
 /// One pane frame: apply the patch or ask for a snapshot on a broken base.

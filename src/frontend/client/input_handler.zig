@@ -14,6 +14,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_creations = @import("tab_creations.zig");
+const tab_moves = @import("tab_moves.zig");
 const tab_renames = @import("tab_renames.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
@@ -783,18 +784,8 @@ fn closeTab(handler: *InputHandler) !void {
 }
 
 fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
-    if (handler.client.requests.has(.tab_operation)) return;
-    const location = handler.client.model.activeTabLocation() orelse return;
-    const request_id = try handler.client.nextId();
-    try handler.client.enqueueRequest(
-        request_id,
-        .{ .move_tab = location },
-        .{ .move_tab = .{
-            .request_id = request_id,
-            .location = location,
-            .direction = direction,
-        } },
-    );
+    var use_case = tab_moves.requestHandler(handler.client);
+    _ = try use_case.execute(.{ .direction = direction });
 }
 
 fn submitTabRename(handler: *InputHandler, label: []const u8) !void {

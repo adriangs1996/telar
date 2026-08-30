@@ -43,6 +43,7 @@ test {
     _ = @import("server_messages.zig");
     _ = @import("tab_attachments.zig");
     _ = @import("tab_creations.zig");
+    _ = @import("tab_moves.zig");
     _ = @import("tab_renames.zig");
     _ = @import("tab_snapshots.zig");
     _ = @import("workspace_creations.zig");
