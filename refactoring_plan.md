@@ -78,7 +78,7 @@ failure and scheduling contract.
 | --- | --- | --- | --- | --- | --- |
 | BRE-01 | `accepted` | `Server.handleAcceptedEvent` | Client admission service | Pending | Socket admission, capacity policy, handshake scheduling, and retry are runtime-root methods. |
 | BRE-02 | `handshaken` | `Server.handleHandshakenEvent` | Client admission service | Pending | Authentication completion and receive scheduling remain coupled to `Server`. |
-| BRE-03 | `client_message` | `Server.handleClientMessageEvent` / `dispatchClientMessage` | Client request router | Pending | The switch is a composition root but still constructs every use case inline. |
+| BRE-03 | `client_message` | `runtime/client_request_router.zig` | Client request router | Ready | Compile-time typed routing covers every client tag exactly once, preserves payloads, classifies connection roles, propagates handler errors, and delegates into request-scoped composition; transport integration and 1591 Debug/ReleaseFast tests pass. |
 | BRE-04 | `client_sent` | `Server.handleClientSentEvent` | Client delivery capability | Pending | Send completion, detach effects, retry, and connection teardown need an isolated state machine. |
 | BRE-05 | `history_response` | `Server.handleHistoryResponseEvent` | History response controller | Pending | Async ownership and control-client close policy need focused proof. |
 | BRE-06 | `pane_input_written` | `Server.handlePaneInputWrittenEvent` | Pane input pump | Pending | Queue advancement, metrics, failure, and rescheduling live in runtime root. |

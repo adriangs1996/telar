@@ -7,6 +7,7 @@ const agent_mod = @import("../agent/root.zig");
 const agent_process = @import("../process/root.zig");
 const history = @import("../history/root.zig");
 const attachment_mod = @import("attachment.zig");
+const client_request_router = @import("client_request_router.zig");
 const delivery_mod = @import("delivery.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
@@ -781,10 +782,13 @@ const Server = struct {
                 diagnostics.elapsed(decode_started, diagnostics.now(server.io)),
             );
         }
-        if (session.role == .undecided) session.role = switch (message) {
-            .runtime_stop, .query_history, .show_notification => .control,
-            else => .ui,
-        };
+        if (session.role == .undecided) {
+            session.role = switch (client_request_router.classify(std.meta.activeTag(message))) {
+                .ui => .ui,
+                .control => .control,
+            };
+        }
+
         server.dispatchClientMessage(session, message) catch {
             server.dropClient(event.client);
             return false;
@@ -1378,415 +1382,462 @@ const Server = struct {
     }
 
     fn dispatchClientMessage(server: *Server, session: *ClientSession, message: schema.ClientMessage) !void {
-        const io = server.io;
-        const panes = &server.model.panes;
-        var workspace_repository = server.workspaceRepository();
-        const workspaces = &workspace_repository;
-        const attachments = &session.attachments;
-        const responses = &session.delivery.responses;
-        const metrics = &server.metrics;
-        switch (message) {
-            .open_pane => |open| {
-                var client_context: ClientLaunchContext = .{
-                    .server = server,
-                    .session = session,
-                };
-                var handler: open_pane_commands.OpenPaneHandler = .{
-                    .workspaces = workspaces,
-                    .panes = .{
-                        .context = &client_context,
-                        .find = findOpenPane,
-                        .first = findFirstOpenPane,
-                        .launch = launchOpenPane,
-                        .prepare_view = prepareOpenPaneView,
-                        .attach = attachOpenPane,
-                    },
-                    .authority = .{
-                        .context = &client_context,
-                        .prepare = prepareOpenPaneLaunch,
-                    },
-                    .geometry = .{
-                        .context = &client_context,
-                        .acquire = acquireCreatedWorkspaceGeometry,
-                        .release = releaseCreatedWorkspaceGeometry,
-                    },
-                    .events = .{
-                        .context = &client_context,
-                        .publish = publishOpenPaneEvent,
-                    },
-                };
-                var controller = open_pane_controller.Controller.init(responses, handler.executor());
+        var context = ClientRequestContext.init(server, session);
+        const router = ClientRequestRouter.init(&context);
 
-                try controller.openPane(open);
-            },
-            .create_workspace => |create| {
-                var client_context: ClientLaunchContext = .{
-                    .server = server,
-                    .session = session,
-                };
-                var event_context: WorkspaceEventContext = .{
-                    .server = server,
-                    .origin = session.key,
-                };
-                var handler: create_workspace_commands.CreateWorkspaceHandler = .{
-                    .workspaces = workspaces,
-                    .authority = .{
-                        .context = &client_context,
-                        .prepare = prepareCreateWorkspaceLaunch,
-                    },
-                    .geometry = .{
-                        .context = &client_context,
-                        .acquire = acquireCreatedWorkspaceGeometry,
-                        .release = releaseCreatedWorkspaceGeometry,
-                    },
-                    .launcher = .{
-                        .context = server,
-                        .launch = launchCreatedWorkspacePane,
-                    },
-                    .attachment = .{
-                        .context = &client_context,
-                        .replace = replaceCreatedWorkspaceAttachments,
-                    },
-                    .events = .{
-                        .context = &event_context,
-                        .publish = publishWorkspaceCreated,
-                    },
-                };
-                var controller = create_workspace_controller.Controller.init(responses, handler.executor());
-
-                try controller.createWorkspace(create);
-            },
-            .rename_workspace => |rename| {
-                var event_context: WorkspaceEventContext = .{
-                    .server = server,
-                    .origin = session.key,
-                };
-                var handler: rename_workspace_commands.RenameWorkspaceHandler = .{
-                    .workspaces = workspaces,
-                    .events = .{
-                        .context = &event_context,
-                        .publish = publishWorkspaceRenamed,
-                    },
-                };
-                var controller = rename_workspace_controller.Controller.init(responses, handler.executor());
-
-                try controller.renameWorkspace(rename);
-            },
-            .pane_input => |input| {
-                var handler: pane_input_commands.PaneInputHandler = .{
-                    .io = io,
-                    .attachments = attachments,
-                    .metrics = metrics,
-                    .agent_input = if (server.agent_description_options != null) &server.model.agents else null,
-                    .scheduler = paneInputScheduler(server),
-                };
-                var controller = PaneInputController.init(metrics, &handler);
-
-                try controller.paneInput(input);
-            },
-            .pane_resize => |resize| {
-                var resize_context: ClientAttachmentContext = .{
-                    .server = server,
-                    .session = session,
-                };
-                var handler: pane_resize_commands.PaneResizeHandler = .{
-                    .attachments = attachments,
-                    .geometry = .{
-                        .context = &resize_context,
-                        .holds = clientHoldsWorkspaceGeometry,
-                        .release = releaseClientWorkspaceGeometry,
-                    },
-                    .scheduler = paneResizeScheduler(server),
-                };
-                var controller = PaneResizeController.init(metrics, &handler);
-
-                try controller.paneResize(resize);
-            },
-            .set_pane_viewport => |viewport| {
-                var handler: pane_viewport_commands.SetPaneViewportHandler = .{
-                    .attachments = attachments,
-                };
-                var controller = PaneViewportController.init(metrics, &handler);
-
-                try controller.setPaneViewport(viewport);
-            },
-            .copy_selection => |request| {
-                var handler: copy_selection_commands.CopySelectionHandler = .{
-                    .attachments = attachments,
-                };
-                var controller = CopySelectionController.init(metrics, &handler, &session.delivery);
-
-                controller.copySelection(request);
-            },
-            .request_graphics_snapshot => |request| {
-                var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
-                    .attachments = attachments,
-                };
-                var controller = RequestGraphicsSnapshotController.init(metrics, &handler);
-
-                try controller.requestGraphicsSnapshot(request);
-            },
-            .configure_graphics => |configure| {
-                var handler: graphics_configuration_commands.ConfigureGraphicsHandler = .{
-                    .attachments = attachments,
-                };
-                var controller = GraphicsConfigurationController.init(&handler);
-
-                try controller.configureGraphics(configure);
-            },
-            .request_runtime_state => {
-                var controller = RuntimeStateController.init(&session.delivery);
-
-                controller.requestRuntimeState();
-            },
-            .graphics_credit => |credit| {
-                var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
-                    .attachments = attachments,
-                };
-                var controller = GraphicsCreditController.init(metrics, &handler);
-
-                try controller.graphicsCredit(credit);
-            },
-            .frame_ack => |ack| {
-                var handler: frame_ack_commands.FrameAckHandler = .{
-                    .attachments = attachments,
-                };
-                var controller = FrameAckController.init(io, metrics, &handler);
-
-                try controller.frameAck(ack);
-            },
-            .request_snapshot => |request| {
-                var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
-                    .attachments = attachments,
-                };
-                var controller = RequestSnapshotController.init(metrics, &handler);
-
-                try controller.requestSnapshot(request);
-            },
-            .detach_pane => |detach| {
-                var detach_context: ClientAttachmentContext = .{
-                    .server = server,
-                    .session = session,
-                };
-                var handler: detach_pane_commands.DetachPaneHandler = .{
-                    .attachments = .{
-                        .context = &detach_context,
-                        .detach = detachClientAttachment,
-                        .leave_workspace = leaveClientWorkspace,
-                    },
-                    .geometry = .{
-                        .context = &detach_context,
-                        .release = releaseClientWorkspaceGeometry,
-                    },
-                };
-                var controller = detach_pane_controller.Controller.init(handler.executor(), .{
-                    .context = metrics,
-                    .record = recordStaleClientMessage,
-                });
-
-                try controller.detachPane(detach);
-            },
-            .request_tab_snapshot => |request| {
-                var source_context: TabSnapshotSourceContext = .{
-                    .panes = panes,
-                    .workspaces = workspaces,
-                };
-                var handler: tab_snapshot_query.Handler = .{
-                    .source = .{
-                        .context = &source_context,
-                        .contains_tab = tabSnapshotContainsTab,
-                        .running_panes = tabSnapshotRunningPanes,
-                    },
-                };
-                var controller = tab_snapshot_controller.Controller.init(responses, handler.executor());
-
-                try controller.requestTabSnapshot(request);
-            },
-            .create_pane => |create| {
-                var client_context: ClientLaunchContext = .{
-                    .server = server,
-                    .session = session,
-                };
-                var event_context: WorkspaceEventContext = .{
-                    .server = server,
-                    .origin = session.key,
-                };
-                var handler: create_pane_commands.CreatePaneHandler = .{
-                    .workspaces = workspaces.reader(),
-                    .panes = .{
-                        .context = panes,
-                        .has_running = createPaneHasRunning,
-                    },
-                    .authority = .{
-                        .context = &client_context,
-                        .prepare = prepareCreatePaneLaunch,
-                    },
-                    .launcher = .{
-                        .context = server,
-                        .launch = launchCreatedPane,
-                    },
-                    .attachment = .{
-                        .context = &client_context,
-                        .attach = attachCreatedPane,
-                    },
-                    .events = .{
-                        .context = &event_context,
-                        .publish = publishPaneLaunched,
-                    },
-                };
-                var controller = create_pane_controller.Controller.init(responses, handler.executor());
-
-                try controller.createPane(create);
-            },
-            .close_pane => |close| {
-                var handler: close_pane_commands.ClosePaneHandler = .{
-                    .panes = .{
-                        .context = attachments,
-                        .request_close = requestAttachedPaneClose,
-                    },
-                };
-                var controller = close_pane_controller.Controller.init(responses, handler.executor());
-
-                try controller.closePane(close);
-            },
-            .request_workspace_snapshot => |request| {
-                var handler: workspace_snapshot_query.Handler = .{
-                    .workspaces = workspaces.reader(),
-                };
-                var controller = workspace_snapshot_controller.Controller.init(responses, handler.executor());
-
-                try controller.requestWorkspaceSnapshot(request);
-            },
-            .create_tab => |create| {
-                var client_context: ClientLaunchContext = .{
-                    .server = server,
-                    .session = session,
-                };
-                var event_context: WorkspaceEventContext = .{
-                    .server = server,
-                    .origin = session.key,
-                };
-                var handler: create_tab_commands.CreateTabHandler = .{
-                    .workspaces = workspaces,
-                    .authority = .{
-                        .context = &client_context,
-                        .prepare = prepareCreateTabLaunch,
-                    },
-                    .launcher = .{
-                        .context = server,
-                        .launch = launchCreatedTabPane,
-                    },
-                    .attachment = .{
-                        .context = &client_context,
-                        .attach = attachCreatedTab,
-                    },
-                    .events = .{
-                        .context = &event_context,
-                        .publish = publishTabCreated,
-                    },
-                };
-                var controller = create_tab_controller.Controller.init(responses, handler.executor());
-
-                try controller.createTab(create);
-            },
-            .rename_tab => |rename| {
-                var event_context: WorkspaceEventContext = .{
-                    .server = server,
-                    .origin = session.key,
-                };
-                var handler: tab_commands.RenameTabHandler = .{
-                    .workspaces = workspaces,
-                    .events = .{
-                        .context = &event_context,
-                        .publish = publishTabRenamed,
-                    },
-                };
-                var controller = tab_controller.Controller.init(responses, handler.executor());
-
-                try controller.renameTab(rename);
-            },
-            .close_tab => |close| {
-                var event_context: WorkspaceEventContext = .{
-                    .server = server,
-                    .origin = session.key,
-                };
-                var handler: close_tab_commands.CloseTabHandler = .{
-                    .workspaces = workspaces,
-                    .panes = .{
-                        .context = panes,
-                        .close_all = closeTabPanes,
-                    },
-                    .events = .{
-                        .context = &event_context,
-                        .publish = publishTabRemoved,
-                    },
-                };
-                var controller = close_tab_controller.Controller.init(responses, handler.executor());
-
-                try controller.closeTab(close);
-            },
-            .move_tab => |move| {
-                var event_context: WorkspaceEventContext = .{
-                    .server = server,
-                    .origin = session.key,
-                };
-                var handler: move_tab_commands.MoveTabHandler = .{
-                    .workspaces = workspaces,
-                    .events = .{
-                        .context = &event_context,
-                        .publish = publishTabMoved,
-                    },
-                };
-                var controller = move_tab_controller.Controller.init(responses, handler.executor());
-
-                try controller.moveTab(move);
-            },
-            .query_history => |request| {
-                var service_context: HistoryQueryServiceContext = .{
-                    .io = io,
-                    .service = server.history_service,
-                };
-                var handler: history_query.Handler = .{
-                    .service = .{
-                        .context = &service_context,
-                        .submit_fn = submitHistoryQuery,
-                    },
-                };
-                var controller = history_query_controller.Controller.init(
-                    responses,
-                    metrics,
-                    handler.executor(),
-                );
-
-                try controller.queryHistory(.{
-                    .client = session.key,
-                    .close_after_reply = session.role == .control,
-                }, request);
-            },
-            .show_notification => |request| {
-                var handler: show_notification_commands.ShowNotificationHandler = .{
-                    .notifications = notificationPublisher(server),
-                };
-                var controller = show_notification_controller.Controller.init(
-                    responses,
-                    handler.executor(),
-                    notificationDelivery(server),
-                );
-
-                try controller.showNotification(request);
-            },
-            .runtime_stop => {
-                var handler: runtime_stop_commands.RuntimeStopHandler = .{
-                    .shutdown = &server.shutdown,
-                    .notifications = runtimeStopNotifications(server),
-                };
-                var controller = runtime_stop_controller.Controller.init(handler.executor());
-
-                controller.runtimeStop(session.key);
-            },
-        }
+        return router.route(message);
     }
 };
+
+const ClientRequestContext = struct {
+    server: *Server,
+    session: *ClientSession,
+    workspaces: WorkspaceRepository,
+
+    fn init(server: *Server, session: *ClientSession) ClientRequestContext {
+        return .{
+            .server = server,
+            .session = session,
+            .workspaces = server.workspaceRepository(),
+        };
+    }
+};
+
+const client_request_handlers: client_request_router.Handlers(ClientRequestContext) = .{
+    .open_pane = routeOpenPane,
+    .pane_input = routePaneInput,
+    .pane_resize = routePaneResize,
+    .frame_ack = routeFrameAck,
+    .request_snapshot = routeRequestSnapshot,
+    .detach_pane = routeDetachPane,
+    .runtime_stop = routeRuntimeStop,
+    .request_tab_snapshot = routeRequestTabSnapshot,
+    .create_pane = routeCreatePane,
+    .close_pane = routeClosePane,
+    .query_history = routeQueryHistory,
+    .request_workspace_snapshot = routeRequestWorkspaceSnapshot,
+    .create_tab = routeCreateTab,
+    .rename_tab = routeRenameTab,
+    .close_tab = routeCloseTab,
+    .move_tab = routeMoveTab,
+    .request_graphics_snapshot = routeRequestGraphicsSnapshot,
+    .graphics_credit = routeGraphicsCredit,
+    .configure_graphics = routeConfigureGraphics,
+    .request_runtime_state = routeRequestRuntimeState,
+    .create_workspace = routeCreateWorkspace,
+    .rename_workspace = routeRenameWorkspace,
+    .set_pane_viewport = routeSetPaneViewport,
+    .copy_selection = routeCopySelection,
+    .show_notification = routeShowNotification,
+};
+
+const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
+
+fn routeOpenPane(request: *ClientRequestContext, open: schema.OpenPaneView) !void {
+    const server = request.server;
+    const session = request.session;
+    var client_context: ClientLaunchContext = .{ .server = server, .session = session };
+    var handler: open_pane_commands.OpenPaneHandler = .{
+        .workspaces = &request.workspaces,
+        .panes = .{
+            .context = &client_context,
+            .find = findOpenPane,
+            .first = findFirstOpenPane,
+            .launch = launchOpenPane,
+            .prepare_view = prepareOpenPaneView,
+            .attach = attachOpenPane,
+        },
+        .authority = .{
+            .context = &client_context,
+            .prepare = prepareOpenPaneLaunch,
+        },
+        .geometry = .{
+            .context = &client_context,
+            .acquire = acquireCreatedWorkspaceGeometry,
+            .release = releaseCreatedWorkspaceGeometry,
+        },
+        .events = .{
+            .context = &client_context,
+            .publish = publishOpenPaneEvent,
+        },
+    };
+    var controller = open_pane_controller.Controller.init(&session.delivery.responses, handler.executor());
+
+    try controller.openPane(open);
+}
+
+fn routePaneInput(request: *ClientRequestContext, input: schema.PaneInput) !void {
+    const server = request.server;
+    var handler: pane_input_commands.PaneInputHandler = .{
+        .io = server.io,
+        .attachments = &request.session.attachments,
+        .metrics = &server.metrics,
+        .agent_input = if (server.agent_description_options != null) &server.model.agents else null,
+        .scheduler = paneInputScheduler(server),
+    };
+    var controller = PaneInputController.init(&server.metrics, &handler);
+
+    try controller.paneInput(input);
+}
+
+fn routePaneResize(request: *ClientRequestContext, resize: schema.PaneResize) !void {
+    const server = request.server;
+    const session = request.session;
+    var resize_context: ClientAttachmentContext = .{ .server = server, .session = session };
+    var handler: pane_resize_commands.PaneResizeHandler = .{
+        .attachments = &session.attachments,
+        .geometry = .{
+            .context = &resize_context,
+            .holds = clientHoldsWorkspaceGeometry,
+            .release = releaseClientWorkspaceGeometry,
+        },
+        .scheduler = paneResizeScheduler(server),
+    };
+    var controller = PaneResizeController.init(&server.metrics, &handler);
+
+    try controller.paneResize(resize);
+}
+
+fn routeFrameAck(request: *ClientRequestContext, ack: schema.FrameAck) !void {
+    const server = request.server;
+    var handler: frame_ack_commands.FrameAckHandler = .{
+        .attachments = &request.session.attachments,
+    };
+    var controller = FrameAckController.init(server.io, &server.metrics, &handler);
+
+    try controller.frameAck(ack);
+}
+
+fn routeRequestSnapshot(request: *ClientRequestContext, snapshot: schema.RequestSnapshot) !void {
+    var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
+        .attachments = &request.session.attachments,
+    };
+    var controller = RequestSnapshotController.init(&request.server.metrics, &handler);
+
+    try controller.requestSnapshot(snapshot);
+}
+
+fn routeDetachPane(request: *ClientRequestContext, detach: schema.DetachPane) !void {
+    const server = request.server;
+    const session = request.session;
+    var detach_context: ClientAttachmentContext = .{ .server = server, .session = session };
+    var handler: detach_pane_commands.DetachPaneHandler = .{
+        .attachments = .{
+            .context = &detach_context,
+            .detach = detachClientAttachment,
+            .leave_workspace = leaveClientWorkspace,
+        },
+        .geometry = .{
+            .context = &detach_context,
+            .release = releaseClientWorkspaceGeometry,
+        },
+    };
+    var controller = detach_pane_controller.Controller.init(handler.executor(), .{
+        .context = &server.metrics,
+        .record = recordStaleClientMessage,
+    });
+
+    try controller.detachPane(detach);
+}
+
+fn routeRuntimeStop(request: *ClientRequestContext) !void {
+    var handler: runtime_stop_commands.RuntimeStopHandler = .{
+        .shutdown = &request.server.shutdown,
+        .notifications = runtimeStopNotifications(request.server),
+    };
+    var controller = runtime_stop_controller.Controller.init(handler.executor());
+
+    controller.runtimeStop(request.session.key);
+}
+
+fn routeRequestTabSnapshot(request: *ClientRequestContext, snapshot: schema.RequestTabSnapshot) !void {
+    var source_context: TabSnapshotSourceContext = .{
+        .panes = &request.server.model.panes,
+        .workspaces = &request.workspaces,
+    };
+    var handler: tab_snapshot_query.Handler = .{
+        .source = .{
+            .context = &source_context,
+            .contains_tab = tabSnapshotContainsTab,
+            .running_panes = tabSnapshotRunningPanes,
+        },
+    };
+    var controller = tab_snapshot_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+
+    try controller.requestTabSnapshot(snapshot);
+}
+
+fn routeCreatePane(request: *ClientRequestContext, create: schema.CreatePaneView) !void {
+    const server = request.server;
+    const session = request.session;
+    var client_context: ClientLaunchContext = .{ .server = server, .session = session };
+    var event_context: WorkspaceEventContext = .{ .server = server, .origin = session.key };
+    var handler: create_pane_commands.CreatePaneHandler = .{
+        .workspaces = request.workspaces.reader(),
+        .panes = .{
+            .context = &server.model.panes,
+            .has_running = createPaneHasRunning,
+        },
+        .authority = .{
+            .context = &client_context,
+            .prepare = prepareCreatePaneLaunch,
+        },
+        .launcher = .{
+            .context = server,
+            .launch = launchCreatedPane,
+        },
+        .attachment = .{
+            .context = &client_context,
+            .attach = attachCreatedPane,
+        },
+        .events = .{
+            .context = &event_context,
+            .publish = publishPaneLaunched,
+        },
+    };
+    var controller = create_pane_controller.Controller.init(&session.delivery.responses, handler.executor());
+
+    try controller.createPane(create);
+}
+
+fn routeClosePane(request: *ClientRequestContext, close: schema.ClosePane) !void {
+    var handler: close_pane_commands.ClosePaneHandler = .{
+        .panes = .{
+            .context = &request.session.attachments,
+            .request_close = requestAttachedPaneClose,
+        },
+    };
+    var controller = close_pane_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+
+    try controller.closePane(close);
+}
+
+fn routeQueryHistory(request: *ClientRequestContext, query: schema.QueryHistory) !void {
+    const server = request.server;
+    const session = request.session;
+    var service_context: HistoryQueryServiceContext = .{
+        .io = server.io,
+        .service = server.history_service,
+    };
+    var handler: history_query.Handler = .{
+        .service = .{
+            .context = &service_context,
+            .submit_fn = submitHistoryQuery,
+        },
+    };
+    var controller = history_query_controller.Controller.init(
+        &session.delivery.responses,
+        &server.metrics,
+        handler.executor(),
+    );
+
+    try controller.queryHistory(.{
+        .client = session.key,
+        .close_after_reply = session.role == .control,
+    }, query);
+}
+
+fn routeRequestWorkspaceSnapshot(request: *ClientRequestContext, snapshot: schema.RequestWorkspaceSnapshot) !void {
+    var handler: workspace_snapshot_query.Handler = .{
+        .workspaces = request.workspaces.reader(),
+    };
+    var controller = workspace_snapshot_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+
+    try controller.requestWorkspaceSnapshot(snapshot);
+}
+
+fn routeCreateTab(request: *ClientRequestContext, create: schema.CreateTabView) !void {
+    const server = request.server;
+    const session = request.session;
+    var client_context: ClientLaunchContext = .{ .server = server, .session = session };
+    var event_context: WorkspaceEventContext = .{ .server = server, .origin = session.key };
+    var handler: create_tab_commands.CreateTabHandler = .{
+        .workspaces = &request.workspaces,
+        .authority = .{
+            .context = &client_context,
+            .prepare = prepareCreateTabLaunch,
+        },
+        .launcher = .{
+            .context = server,
+            .launch = launchCreatedTabPane,
+        },
+        .attachment = .{
+            .context = &client_context,
+            .attach = attachCreatedTab,
+        },
+        .events = .{
+            .context = &event_context,
+            .publish = publishTabCreated,
+        },
+    };
+    var controller = create_tab_controller.Controller.init(&session.delivery.responses, handler.executor());
+
+    try controller.createTab(create);
+}
+
+fn routeRenameTab(request: *ClientRequestContext, rename: schema.RenameTab) !void {
+    const server = request.server;
+    var event_context: WorkspaceEventContext = .{ .server = server, .origin = request.session.key };
+    var handler: tab_commands.RenameTabHandler = .{
+        .workspaces = &request.workspaces,
+        .events = .{
+            .context = &event_context,
+            .publish = publishTabRenamed,
+        },
+    };
+    var controller = tab_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+
+    try controller.renameTab(rename);
+}
+
+fn routeCloseTab(request: *ClientRequestContext, close: schema.CloseTab) !void {
+    const server = request.server;
+    var event_context: WorkspaceEventContext = .{ .server = server, .origin = request.session.key };
+    var handler: close_tab_commands.CloseTabHandler = .{
+        .workspaces = &request.workspaces,
+        .panes = .{
+            .context = &server.model.panes,
+            .close_all = closeTabPanes,
+        },
+        .events = .{
+            .context = &event_context,
+            .publish = publishTabRemoved,
+        },
+    };
+    var controller = close_tab_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+
+    try controller.closeTab(close);
+}
+
+fn routeMoveTab(request: *ClientRequestContext, move: schema.MoveTab) !void {
+    const server = request.server;
+    var event_context: WorkspaceEventContext = .{ .server = server, .origin = request.session.key };
+    var handler: move_tab_commands.MoveTabHandler = .{
+        .workspaces = &request.workspaces,
+        .events = .{
+            .context = &event_context,
+            .publish = publishTabMoved,
+        },
+    };
+    var controller = move_tab_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+
+    try controller.moveTab(move);
+}
+
+fn routeRequestGraphicsSnapshot(request: *ClientRequestContext, snapshot: schema.RequestGraphicsSnapshot) !void {
+    var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
+        .attachments = &request.session.attachments,
+    };
+    var controller = RequestGraphicsSnapshotController.init(&request.server.metrics, &handler);
+
+    try controller.requestGraphicsSnapshot(snapshot);
+}
+
+fn routeGraphicsCredit(request: *ClientRequestContext, credit: schema.GraphicsCredit) !void {
+    var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
+        .attachments = &request.session.attachments,
+    };
+    var controller = GraphicsCreditController.init(&request.server.metrics, &handler);
+
+    try controller.graphicsCredit(credit);
+}
+
+fn routeConfigureGraphics(request: *ClientRequestContext, configure: schema.ConfigureGraphics) !void {
+    var handler: graphics_configuration_commands.ConfigureGraphicsHandler = .{
+        .attachments = &request.session.attachments,
+    };
+    var controller = GraphicsConfigurationController.init(&handler);
+
+    try controller.configureGraphics(configure);
+}
+
+fn routeRequestRuntimeState(request: *ClientRequestContext) !void {
+    var controller = RuntimeStateController.init(&request.session.delivery);
+
+    controller.requestRuntimeState();
+}
+
+fn routeCreateWorkspace(request: *ClientRequestContext, create: schema.CreateWorkspaceView) !void {
+    const server = request.server;
+    const session = request.session;
+    var client_context: ClientLaunchContext = .{ .server = server, .session = session };
+    var event_context: WorkspaceEventContext = .{ .server = server, .origin = session.key };
+    var handler: create_workspace_commands.CreateWorkspaceHandler = .{
+        .workspaces = &request.workspaces,
+        .authority = .{
+            .context = &client_context,
+            .prepare = prepareCreateWorkspaceLaunch,
+        },
+        .geometry = .{
+            .context = &client_context,
+            .acquire = acquireCreatedWorkspaceGeometry,
+            .release = releaseCreatedWorkspaceGeometry,
+        },
+        .launcher = .{
+            .context = server,
+            .launch = launchCreatedWorkspacePane,
+        },
+        .attachment = .{
+            .context = &client_context,
+            .replace = replaceCreatedWorkspaceAttachments,
+        },
+        .events = .{
+            .context = &event_context,
+            .publish = publishWorkspaceCreated,
+        },
+    };
+    var controller = create_workspace_controller.Controller.init(&session.delivery.responses, handler.executor());
+
+    try controller.createWorkspace(create);
+}
+
+fn routeRenameWorkspace(request: *ClientRequestContext, rename: schema.RenameWorkspace) !void {
+    var event_context: WorkspaceEventContext = .{
+        .server = request.server,
+        .origin = request.session.key,
+    };
+    var handler: rename_workspace_commands.RenameWorkspaceHandler = .{
+        .workspaces = &request.workspaces,
+        .events = .{
+            .context = &event_context,
+            .publish = publishWorkspaceRenamed,
+        },
+    };
+    var controller = rename_workspace_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+
+    try controller.renameWorkspace(rename);
+}
+
+fn routeSetPaneViewport(request: *ClientRequestContext, viewport: schema.SetPaneViewport) !void {
+    var handler: pane_viewport_commands.SetPaneViewportHandler = .{
+        .attachments = &request.session.attachments,
+    };
+    var controller = PaneViewportController.init(&request.server.metrics, &handler);
+
+    try controller.setPaneViewport(viewport);
+}
+
+fn routeCopySelection(request: *ClientRequestContext, selection: schema.CopySelection) !void {
+    var handler: copy_selection_commands.CopySelectionHandler = .{
+        .attachments = &request.session.attachments,
+    };
+    var controller = CopySelectionController.init(&request.server.metrics, &handler, &request.session.delivery);
+
+    controller.copySelection(selection);
+}
+
+fn routeShowNotification(request: *ClientRequestContext, notification: schema.ShowNotification) !void {
+    var handler: show_notification_commands.ShowNotificationHandler = .{
+        .notifications = notificationPublisher(request.server),
+    };
+    var controller = show_notification_controller.Controller.init(
+        &request.session.delivery.responses,
+        handler.executor(),
+        notificationDelivery(request.server),
+    );
+
+    try controller.showNotification(notification);
+}
 
 fn paneInputScheduler(server: *Server) pane_input_commands.Scheduler {
     return .{
@@ -2785,6 +2836,7 @@ test {
     _ = close_pane_controller;
     _ = copy_selection_commands;
     _ = copy_selection_controller;
+    _ = client_request_router;
     _ = create_tab_commands;
     _ = create_tab_controller;
     _ = create_pane_commands;
