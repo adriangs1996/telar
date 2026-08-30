@@ -11,10 +11,8 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const client_requests = @import("requests.zig");
 const widgets = @import("../widgets/root.zig");
-const kitty = graphics.kitty;
 const copy_mode = input_capability.copy_mode;
 const multiplexer = workspace_capability.multiplexer;
-const tabs_mod = workspace_capability.tabs;
 const term = presentation.screen;
 
 const Io = std.Io;
@@ -25,6 +23,7 @@ const client_mod = @import("client.zig");
 const Client = client_mod;
 const InputHandler = @import("input_handler.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
 const rectSize = multiplexer.rectSize;
 
@@ -464,7 +463,7 @@ fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
     try client.presenter.requestDraw();
 }
 
-/// Reconciles the tab list against the runtime's canonical order.
+/// Applies one correlated canonical workspace snapshot.
 fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
     const continuation = client.requests.take(snapshot.request_id) orelse
         return error.UnexpectedWorkspaceSnapshot;
@@ -473,38 +472,12 @@ fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotVi
         .rename_workspace => |workspace| workspace,
         else => return error.UnexpectedWorkspaceSnapshot,
     };
-    if (!std.meta.eql(expected_workspace, snapshot.workspace))
+    if (!std.meta.eql(expected_workspace, snapshot.workspace)) {
         return error.UnexpectedWorkspaceSnapshot;
-    var canonical_tabs: [tabs_mod.max_tabs]schema.TabId = undefined;
-    var canonical_count: usize = 0;
-    var iterator = snapshot.tabs();
-    while (try iterator.next()) |descriptor| {
-        canonical_tabs[canonical_count] = descriptor.tab_id;
-        canonical_count += 1;
     }
-    var tabs = client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        if (std.mem.findScalar(
-            schema.TabId,
-            canonical_tabs[0..canonical_count],
-            tab.location.tab_id,
-        ) == null) releaseTabGraphics(&client.graphics_store, tab);
-    }
-    try client.model.workspace.reconcileWorkspace(snapshot);
-    if (!client.requests.has(.tab_snapshot)) {
-        if (client.model.workspace.active()) |active| {
-            if (!active.snapshot_loaded) {
-                try client.requestTabSnapshot(active.location);
-            } else {
-                // A resync can mean the geometry lease was released.
-                // Re-offer this client's sizes; the runtime adopts them
-                // when the lease is free and ignores them otherwise.
-                try client.resizeAttached(&active.model, client.view.workbench());
-            }
-        }
-    }
-    client.view.invalidate();
-    try client.presenter.requestDraw();
+
+    var use_case = workspace_snapshots.reconciliationHandler(client);
+    try use_case.execute(snapshot);
 }
 
 /// A created tab becomes active; the previous one detaches.
@@ -786,14 +759,6 @@ fn requestGraphicsSnapshot(client: *Client, pane_id: schema.PaneId) !void {
     } });
 }
 
-/// Drops every image, placement, and revision held for a removed tab's panes.
-fn releaseTabGraphics(store: *kitty.Store, tab: *tabs_mod.Tab) void {
-    var panes = tab.model.paneIterator();
-    while (panes.next()) |pane| {
-        store.clearPane(pane.id);
-    }
-}
-
 test "workspace closure exits only when no predecessor survives" {
     try std.testing.expectEqualDeep(
         WorkspaceClosureAction.stay,
@@ -816,32 +781,4 @@ test "agent notifications report only actionable status transitions" {
     try std.testing.expect(shouldNotifyAgentStatus(.working, .blocked));
     try std.testing.expect(shouldNotifyAgentStatus(.working, .ready));
     try std.testing.expect(shouldNotifyAgentStatus(.working, .failed));
-}
-
-test "workspace reconciliation releases graphics held by removed tabs" {
-    var tabs = tabs_mod.Model.init(std.testing.allocator);
-    defer tabs.deinit();
-
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try tabs.bootstrap(@enumFromInt(7), .{
-        .workspace = workspace,
-        .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
-
-    var store = kitty.Store.init(std.testing.allocator);
-    defer store.deinit();
-
-    try store.applyImage(.{ .pane_id = @enumFromInt(7), .revision = 1, .image = .{
-        .key = .{ .image_id = 1, .generation = 1 },
-        .format = .rgb,
-        .width = 1,
-        .height = 1,
-        .byte_len = 3,
-    } });
-    try std.testing.expect(store.hasPaneGraphics(@enumFromInt(7)));
-
-    releaseTabGraphics(&store, tabs.active().?);
-
-    try std.testing.expect(!store.hasPaneGraphics(@enumFromInt(7)));
-    try std.testing.expectEqual(@as(usize, 0), store.total_bytes);
 }

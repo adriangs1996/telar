@@ -126,11 +126,13 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     // tab - a resize or the capability timeout does exactly that. The
     // updates stay queued for the draw that follows the bootstrap.
     const model = presentableModel(&client.model.workspace) orelse return;
+    const workspace_changed = presenter.presented_model_version.workspace !=
+        presenter.observed_model_version.workspace;
     const tabs_changed = presenter.presented_model_version.tabs !=
         presenter.observed_model_version.tabs;
     const active_tab_changed = presenter.presented_model_version.active_tab !=
         presenter.observed_model_version.active_tab;
-    if (tabs_changed or active_tab_changed) {
+    if (workspace_changed or tabs_changed or active_tab_changed) {
         client.view.invalidate();
     }
     if (active_tab_changed) {

@@ -193,7 +193,12 @@ fn applyClosure(context: *anyopaque, removal: client_model.TabRemoval) !void {
     }
 }
 
-fn releasePaneState(client: *Client, pane_id: schema.PaneId) void {
+/// Releases every disposable client resource associated with one retired pane.
+///
+/// ```zig
+/// releasePaneState(client, pane_id);
+/// ```
+pub fn releasePaneState(client: *Client, pane_id: schema.PaneId) void {
     if (client.mode == .copy and client.mode.copy.pane_id == pane_id) {
         client.mode = .normal;
     }

@@ -471,11 +471,14 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
     );
 }
 
-test "a workspace snapshot reconciles the tab list" {
+test "workspace snapshots commit semantic revisions before presentation" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
     const snapshot = try schema.encodeWorkspaceSnapshot(&payload, .{
@@ -489,36 +492,90 @@ test "a workspace snapshot reconciles the tab list" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot)),
-    );
-    try harness.settle();
-
-    try std.testing.expectEqual(@as(usize, 2), harness.client.model.workspace.count);
-    try std.testing.expect(harness.client.model.workspace.find(@enumFromInt(2)) != null);
-    // The active tab keeps its identity through reconciliation.
-    try std.testing.expectEqual(
-        TestHarness.bootstrap_location.tab_id,
-        harness.client.model.workspace.active().?.location.tab_id,
+        try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot)),
     );
 
-    try harness.client.requests.add(@enumFromInt(4), .{
-        .rename_workspace = TestHarness.bootstrap_location.workspace,
+    try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
+    try std.testing.expect(client.model.workspace.find(@enumFromInt(2)) != null);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(version_before.workspace + 1, client.model.version().workspace);
+    try std.testing.expectEqual(version_before.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const version_before_noop = client.model.version();
+    const pending_updates_before_noop = client.presenter.pending_updates;
+    try client.requests.add(@enumFromInt(4), .{
+        .workspace_snapshot = TestHarness.bootstrap_location.workspace,
     });
-    const renamed = try schema.encodeWorkspaceSnapshot(&payload, .{
+    const unchanged = try schema.encodeWorkspaceSnapshot(&payload, .{
         .request_id = @enumFromInt(4),
         .workspace = TestHarness.bootstrap_location.workspace,
-        .name = "renamed",
+        .name = "main",
         .tabs = &.{
             .{ .tab_id = @enumFromInt(1), .position = 0, .pane_count = 1, .label = "main" },
             .{ .tab_id = @enumFromInt(2), .position = 1, .pane_count = 1, .label = "second" },
         },
     });
-    _ = try server_messages.handleServerMessage(
-        harness.client,
-        try schema.decodeServer(renamed),
-    );
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
+    try client.observeModel();
+
+    try std.testing.expectEqualDeep(version_before_noop, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
+}
+
+test "workspace reconciliation retires removed state and restores the new active tab" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
+    try client.requests.add(@enumFromInt(90), .{ .rename_tab = TestHarness.bootstrap_location });
+    try client.graphics_store.applyImage(.{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    try std.testing.expect(client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    const pending_updates_before = client.presenter.pending_updates;
+
+    var payload: [512]u8 = undefined;
+    const snapshot = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = @enumFromInt(2),
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .name = "main",
+        .tabs = &.{
+            .{ .tab_id = second.tab_id, .position = 0, .pane_count = 1, .label = "second" },
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+
+    try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    try std.testing.expect(client.graphics_store.paneVisible(@enumFromInt(20)));
+    try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(20)), client.reported_focus);
+    try std.testing.expect(client.requests.take(@enumFromInt(3)).? == .ignored);
+    try std.testing.expect(client.requests.take(@enumFromInt(90)).? == .ignored);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try harness.settle();
-    try std.testing.expect(!harness.client.notification_tick_pending);
+
+    var buffer: [256]u8 = undefined;
+    const requested = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(requested == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(second, requested.request_tab_snapshot.location);
 }
 
 test "resync required requests one workspace snapshot and coalesces repeats" {
@@ -1727,6 +1784,101 @@ test "copy mode round trip: enter, select, copy, leave" {
             else => return error.UnexpectedClientMessage,
         }
     }
+}
+
+test "workspace rename separates prompt submission canonical commit and presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before_request = client.model.version();
+    const pending_updates_before_request = client.presenter.pending_updates;
+
+    client.beginWorkspaceRenamePrompt(TestHarness.bootstrap_location.workspace, "main");
+    var handler: InputHandler = .{ .client = client };
+    try handler.forward("x\r");
+
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.view.hasNamePrompt());
+    try std.testing.expectEqualStrings("", client.model.workspace.workspaceName());
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .rename_workspace);
+    try std.testing.expectEqualStrings("mainx", message.rename_workspace.name);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location.workspace, message.rename_workspace.workspace);
+
+    var payload: [512]u8 = undefined;
+    const renamed = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = message.rename_workspace.request_id,
+        .workspace = message.rename_workspace.workspace,
+        .name = message.rename_workspace.name,
+        .tabs = &.{
+            .{ .tab_id = TestHarness.bootstrap_location.tab_id, .position = 0, .pane_count = 1, .label = "main" },
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(renamed));
+
+    try std.testing.expectEqualStrings("mainx", client.model.workspace.workspaceName());
+    try std.testing.expectEqual(version_before_request.workspace + 1, client.model.version().workspace);
+    try std.testing.expectEqual(version_before_request.tabs, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_request.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const version_before_noop = client.model.version();
+    const pending_updates_before_noop = client.presenter.pending_updates;
+    try client.requests.add(@enumFromInt(90), .{
+        .rename_workspace = TestHarness.bootstrap_location.workspace,
+    });
+    const unchanged = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = @enumFromInt(90),
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .name = "mainx",
+        .tabs = &.{
+            .{ .tab_id = TestHarness.bootstrap_location.tab_id, .position = 0, .pane_count = 1, .label = "main" },
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
+    try client.observeModel();
+
+    try std.testing.expectEqualDeep(version_before_noop, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
+}
+
+test "pending workspace operation keeps the rename prompt without sending" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    try client.requests.add(@enumFromInt(90), .{
+        .rename_workspace = TestHarness.bootstrap_location.workspace,
+    });
+    const next_request_id = client.next_request_id;
+    const version_before_request = client.model.version();
+
+    client.beginWorkspaceRenamePrompt(TestHarness.bootstrap_location.workspace, "main");
+    var handler: InputHandler = .{ .client = client };
+    try handler.forward("x\r");
+
+    try std.testing.expect(client.mode == .prompt);
+    try std.testing.expect(client.view.hasNamePrompt());
+    try std.testing.expectEqual(next_request_id, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+
+    try handler.forward("\x1b");
+    try std.testing.expect(client.mode == .normal);
 }
 
 test "tab rename separates prompt submission canonical commit and presentation" {

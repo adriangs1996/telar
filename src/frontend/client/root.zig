@@ -39,6 +39,8 @@ test {
     _ = @import("server_messages.zig");
     _ = @import("tab_attachments.zig");
     _ = @import("tab_renames.zig");
+    _ = @import("workspace_renames.zig");
+    _ = @import("workspace_snapshots.zig");
     _ = @import("input_handler.zig");
     _ = @import("run.zig");
     _ = @import("telemetry.zig");

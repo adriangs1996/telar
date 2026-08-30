@@ -12,6 +12,7 @@ const plugin_broker = @import("../plugins/root.zig");
 const widgets = @import("../widgets/root.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_renames = @import("tab_renames.zig");
+const workspace_renames = @import("workspace_renames.zig");
 const action_mod = input_capability.action;
 const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
@@ -866,14 +867,15 @@ fn submitWorkspaceCreate(handler: *InputHandler, name: []const u8) !void {
 
 fn submitWorkspaceRename(handler: *InputHandler, name: []const u8) !void {
     const client = handler.client;
-    if (client.requests.has(.workspace_operation)) return;
     const workspace = client.view.renamedWorkspace() orelse return;
-    const request_id = try client.nextId();
-    try client.enqueueWorkspaceRenameRequest(.{
-        .request_id = request_id,
+    var use_case = workspace_renames.requestHandler(client);
+    if (!try use_case.execute(.{
         .workspace = workspace,
         .name = name,
-    });
+    })) {
+        return;
+    }
+
     client.finishNamePrompt();
 }
 

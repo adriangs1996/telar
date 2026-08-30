@@ -20,6 +20,22 @@ pub const LabelChange = enum {
     changed,
 };
 
+fn validateLabel(label: []const u8) !void {
+    if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
+        return error.InvalidTabLabel;
+    }
+
+    if (!std.unicode.utf8ValidateSlice(label)) {
+        return error.InvalidUtf8;
+    }
+
+    for (label) |byte| {
+        if (byte < 0x20 or byte == 0x7f) {
+            return error.InvalidTabLabel;
+        }
+    }
+}
+
 pub const CreatedTab = struct {
     location: schema.TabLocation,
     position: u16,
@@ -259,42 +275,124 @@ pub const Model = struct {
         return null;
     }
 
+    /// Reconciles one decoded canonical snapshot without replacing retained
+    /// tab layouts. Validation completes before the first mutation.
+    ///
+    /// ```zig
+    /// try model.reconcileWorkspace(snapshot);
+    /// ```
     pub fn reconcileWorkspace(model: *Model, snapshot: schema.WorkspaceSnapshotView) !void {
-        if (model.workspace == null or !std.meta.eql(model.workspace.?, snapshot.workspace))
+        if (model.workspace == null or !std.meta.eql(model.workspace.?, snapshot.workspace)) {
             return error.UnexpectedWorkspace;
+        }
+
+        if (snapshot.tab_count == 0) {
+            return error.WorkspaceHasNoTabs;
+        }
+
+        const snapshot_tab_count: usize = snapshot.tab_count;
+        if (snapshot_tab_count > max_tabs) {
+            return error.TabLimitReached;
+        }
+
+        if (snapshot.name.len == 0 or snapshot.name.len > schema.max_workspace_name_bytes or
+            std.mem.findScalar(u8, snapshot.name, 0) != null)
+        {
+            return error.InvalidWorkspaceName;
+        }
+
+        var descriptors: [max_tabs]schema.TabDescriptor = undefined;
+        var descriptor_count: usize = 0;
+        var iterator = snapshot.tabs();
+        while (try iterator.next()) |descriptor| {
+            if (descriptor.position != descriptor_count) {
+                return error.InvalidTabPosition;
+            }
+
+            if (descriptor.pane_count > schema.max_panes_per_tab) {
+                return error.TooManyPanes;
+            }
+
+            try validateLabel(descriptor.label);
+            for (descriptors[0..descriptor_count]) |previous| {
+                if (previous.tab_id == descriptor.tab_id) {
+                    return error.DuplicateTab;
+                }
+            }
+
+            descriptors[descriptor_count] = descriptor;
+            descriptor_count += 1;
+        }
+
+        const active_id = (model.activeConst() orelse return error.WorkspaceHasNoTabs).location.tab_id;
+        var canonical_ids: [max_tabs]schema.TabId = undefined;
+        for (descriptors[0..descriptor_count], 0..) |descriptor, index| {
+            canonical_ids[index] = descriptor.tab_id;
+        }
+
+        var current = model.count;
+        while (current > 0) {
+            current -= 1;
+            const tab_id = model.items[current].?.location.tab_id;
+            if (std.mem.findScalar(schema.TabId, canonical_ids[0..descriptor_count], tab_id) == null) {
+                model.removeForReconciliation(current);
+            }
+        }
+
+        for (descriptors[0..descriptor_count], 0..) |descriptor, index| {
+            if (model.indexOf(descriptor.tab_id)) |existing_index| {
+                if (existing_index != index) {
+                    std.mem.swap(?Tab, &model.items[existing_index], &model.items[index]);
+                }
+            } else {
+                model.insertDiscovered(descriptor, index);
+            }
+
+            const tab = &model.items[index].?;
+            tab.setLabel(descriptor.label);
+            if (tab.model.pane_count != descriptor.pane_count) {
+                tab.snapshot_loaded = false;
+            }
+        }
+
+        std.debug.assert(model.count == descriptor_count);
+        if (model.pending_layout_restore) |pending| {
+            if (std.mem.findScalar(schema.TabId, canonical_ids[0..descriptor_count], pending.location.tab_id) == null) {
+                model.pending_layout_restore = null;
+            }
+        }
 
         @memcpy(model.workspace_name[0..snapshot.name.len], snapshot.name);
         model.workspace_name_len = @intCast(snapshot.name.len);
-
-        const active_id = model.activeConst().?.location.tab_id;
-        var iterator = snapshot.tabs();
-        var index: usize = 0;
-        while (try iterator.next()) |descriptor| : (index += 1) {
-            if (model.indexOf(descriptor.tab_id)) |existing_index| {
-                if (existing_index != index)
-                    std.mem.swap(?Tab, &model.items[existing_index], &model.items[index]);
-                const existing = &model.items[index].?;
-                existing.setLabel(descriptor.label);
-                if (existing.model.pane_count != descriptor.pane_count)
-                    existing.snapshot_loaded = false;
-            } else {
-                if (model.count == max_tabs) return error.TabLimitReached;
-                var cursor = model.count;
-                while (cursor > index) : (cursor -= 1)
-                    model.items[cursor] = model.items[cursor - 1];
-                model.items[index] = Tab.init(model.gpa, .{
-                    .workspace = snapshot.workspace,
-                    .tab_id = descriptor.tab_id,
-                }, descriptor.label, model.pane_gaps);
-                model.count += 1;
-            }
-        }
-        while (model.count > index) {
-            model.count -= 1;
-            model.items[model.count].?.deinit();
-            model.items[model.count] = null;
-        }
         model.active_index = model.indexOf(active_id) orelse 0;
+    }
+
+    fn removeForReconciliation(model: *Model, index: usize) void {
+        model.items[index].?.deinit();
+
+        var cursor = index;
+        while (cursor + 1 < model.count) : (cursor += 1) {
+            model.items[cursor] = model.items[cursor + 1];
+        }
+
+        model.count -= 1;
+        model.items[model.count] = null;
+    }
+
+    fn insertDiscovered(model: *Model, descriptor: schema.TabDescriptor, index: usize) void {
+        std.debug.assert(model.count < max_tabs);
+        std.debug.assert(index <= model.count);
+
+        var cursor = model.count;
+        while (cursor > index) : (cursor -= 1) {
+            model.items[cursor] = model.items[cursor - 1];
+        }
+
+        model.items[index] = Tab.init(model.gpa, .{
+            .workspace = model.workspace.?,
+            .tab_id = descriptor.tab_id,
+        }, descriptor.label, model.pane_gaps);
+        model.count += 1;
     }
 
     /// Adds a runtime-confirmed tab and makes it active.
@@ -344,19 +442,7 @@ pub const Model = struct {
     /// ```
     pub fn applyLabel(model: *Model, tab_id: schema.TabId, label: []const u8) !LabelChange {
         const tab = model.find(tab_id) orelse return error.TabNotFound;
-        if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
-            return error.InvalidTabLabel;
-        }
-
-        if (!std.unicode.utf8ValidateSlice(label)) {
-            return error.InvalidUtf8;
-        }
-
-        for (label) |byte| {
-            if (byte < 0x20 or byte == 0x7f) {
-                return error.InvalidTabLabel;
-            }
-        }
+        try validateLabel(label);
 
         if (std.mem.eql(u8, tab.labelSlice(), label)) {
             return .unchanged;
@@ -585,6 +671,53 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(2)), model.items[0].?.location.tab_id);
     try std.testing.expectEqualStrings("logs", model.items[0].?.labelSlice());
     try std.testing.expect(model.find(@enumFromInt(1)).?.model.find(@enumFromInt(7)) != null);
+}
+
+test "workspace reconciliation replaces a tab at full capacity" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    try model.bootstrap(@enumFromInt(1), .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 2, .rows = 1 });
+    for (1..max_tabs) |index| {
+        const raw_id = index + 1;
+        _ = try model.addCreated(.{
+            .location = .{
+                .workspace = workspace,
+                .tab_id = @enumFromInt(raw_id),
+            },
+            .position = @intCast(index),
+            .label = "tab",
+            .root_pane_id = @enumFromInt(raw_id),
+        }, .{ .cols = 2, .rows = 1 });
+    }
+
+    var descriptors: [max_tabs]schema.TabDescriptor = undefined;
+    for (&descriptors, 0..) |*descriptor, index| {
+        descriptor.* = .{
+            .tab_id = @enumFromInt(index + 2),
+            .position = @intCast(index),
+            .pane_count = 1,
+            .label = "tab",
+        };
+    }
+    var buffer: [2048]u8 = undefined;
+    const decoded = (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(&buffer, .{
+        .request_id = @enumFromInt(4),
+        .workspace = workspace,
+        .name = "project",
+        .tabs = &descriptors,
+    }))).workspace_snapshot;
+
+    try model.reconcileWorkspace(decoded);
+
+    try std.testing.expectEqual(@as(usize, max_tabs), model.count);
+    try std.testing.expect(model.find(@enumFromInt(1)) == null);
+    try std.testing.expect(model.find(@enumFromInt(max_tabs + 1)) != null);
+    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(max_tabs)), model.activeConst().?.location.tab_id);
 }
 
 test "tab reconciliation preserves the pane selected for workspace restoration" {
