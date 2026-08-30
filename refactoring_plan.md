@@ -43,7 +43,7 @@ protocol request necessarily extends this inventory.
 | ID | Trigger | Current entrypoint | Target owner | Status | Evidence / missing proof |
 | --- | --- | --- | --- | --- | --- |
 | BCR-01 | `open_pane` | `runtime/controllers/open_pane.zig` | Open-pane controller and launch/attachment command | Ready | Explicit/default/workspace selection, invisible workspace proposal, geometry and launch rollback, typed events, post-commit durability, response mapping, backpressure, root-path naming, and vertical integration tests pass. |
-| BCR-02 | `pane_input` | `runtime/entrypoints/attachment.zig` | Attachment input controller and pane-input command | Pending | Seven-parameter entrypoint and runtime scheduling concerns are coupled. |
+| BCR-02 | `pane_input` | `runtime/controllers/pane_input.zig` | Attachment input controller and pane-input command | Ready | Statically dispatched controller, typed stale outcomes, aggregate-owned bounded queue, agent toggle, close/exit boundaries, effect ordering, scheduler failures, saturation, byte ownership, vertical flow, and repeated transport tests pass without allocations. |
 | BCR-03 | `pane_resize` | `runtime/entrypoints/attachment.zig` | Attachment resize controller and geometry command | Pending | Six-parameter entrypoint; ownership and scheduling tests need isolation. |
 | BCR-04 | `frame_ack` | `runtime/entrypoints/attachment.zig` | Attachment synchronization capability | Pending | Protocol mapping and synchronization mutation share the entrypoint. |
 | BCR-05 | `request_snapshot` | `runtime/entrypoints/attachment.zig` | Snapshot query controller | Pending | Query behavior needs a narrow context and response/backpressure tests. |

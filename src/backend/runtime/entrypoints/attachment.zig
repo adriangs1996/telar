@@ -3,8 +3,6 @@
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
-const agent_mod = @import("../../agent/root.zig");
-const pane_mod = @import("../../pane/root.zig");
 const attachment_mod = @import("../attachment.zig");
 const delivery_mod = @import("../delivery.zig");
 const telemetry_mod = @import("../telemetry.zig");
@@ -16,30 +14,6 @@ const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
-
-pub fn paneInput(io: Io, attachments: *AttachmentStore, metrics: *RuntimeMetrics, agents: *agent_mod.Tracker, observe_agent_input: bool, scheduler: common.Scheduler, input: schema.PaneInput) !void {
-    const active = attachments.find(input.pane_id) orelse {
-        metrics.stale_client_messages += 1;
-        return;
-    };
-    if (active.pane.exit != null) {
-        metrics.stale_client_messages += 1;
-        return;
-    }
-    if (comptime diagnostics.enabled) {
-        metrics.input_events += 1;
-        metrics.input_bytes += input.bytes.len;
-    }
-    if (observe_agent_input) _ = agents.observeInput(active.pane.key(), input.bytes);
-    active.pane.queueHistoryInput(
-        input.bytes,
-        active.pane.session.shellForeground() orelse false,
-        pane_mod.historyClock(io),
-    );
-    try scheduler.observation(scheduler.context, active.pane);
-    _ = active.pane.input_queue.push(input.bytes);
-    try scheduler.input(scheduler.context, active.pane);
-}
 
 pub fn paneResize(
     attachments: *AttachmentStore,

@@ -27,6 +27,8 @@ const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
 const open_pane_commands = @import("commands/open_pane.zig");
 const open_pane_controller = @import("controllers/open_pane.zig");
+const pane_input_commands = @import("commands/pane_input.zig");
+const pane_input_controller = @import("controllers/pane_input.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
 const tab_snapshot_query = @import("queries/tab_snapshot.zig");
@@ -72,6 +74,7 @@ const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = 8;
 const PendingResponse = response_queue.PendingResponse;
@@ -1449,15 +1452,16 @@ const Server = struct {
                 try controller.renameWorkspace(rename);
             },
             .pane_input => |input| {
-                try attachment_entrypoints.paneInput(
-                    io,
-                    attachments,
-                    metrics,
-                    &server.model.agents,
-                    server.agent_description_options != null,
-                    entrypointScheduler(server),
-                    input,
-                );
+                var handler: pane_input_commands.PaneInputHandler = .{
+                    .io = io,
+                    .attachments = attachments,
+                    .metrics = metrics,
+                    .agent_input = if (server.agent_description_options != null) &server.model.agents else null,
+                    .scheduler = paneInputScheduler(server),
+                };
+                var controller = PaneInputController.init(metrics, &handler);
+
+                try controller.paneInput(input);
             },
             .pane_resize => |resize| {
                 try attachment_entrypoints.paneResize(
@@ -1713,6 +1717,14 @@ fn entrypointScheduler(server: *Server) entrypoint_common.Scheduler {
         .observation = entrypointScheduleObservation,
         .media = entrypointScheduleMedia,
         .response = entrypointScheduleResponse,
+        .input = entrypointScheduleInput,
+    };
+}
+
+fn paneInputScheduler(server: *Server) pane_input_commands.Scheduler {
+    return .{
+        .context = server,
+        .observation = entrypointScheduleObservation,
         .input = entrypointScheduleInput,
     };
 }
@@ -2702,6 +2714,8 @@ test {
     _ = move_tab_controller;
     _ = open_pane_commands;
     _ = open_pane_controller;
+    _ = pane_input_commands;
+    _ = pane_input_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
     _ = tab_snapshot_query;
@@ -2718,6 +2732,7 @@ test {
     _ = @import("detach_pane_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("open_pane_test.zig");
+    _ = @import("pane_input_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
     _ = @import("tab_snapshot_test.zig");

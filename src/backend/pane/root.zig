@@ -722,6 +722,16 @@ pub const Pane = struct {
         pane.history_observer.queueInput(bytes, shell_foreground, clock);
     }
 
+    /// Enqueues one complete client message for the PTY writer or records the
+    /// complete message as dropped when the bounded queue has no room.
+    ///
+    /// ```zig
+    /// const queued = pane.queuePtyInput(bytes);
+    /// ```
+    pub fn queuePtyInput(pane: *Pane, bytes: []const u8) bool {
+        return pane.input_queue.push(bytes);
+    }
+
     pub fn queueHistoryOutput(
         pane: *Pane,
         bytes: []const u8,
