@@ -896,18 +896,9 @@ fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
 }
 
 fn closeTab(handler: *InputHandler) !void {
-    if (handler.client.requests.has(.tab_operation)) return;
-    const tab = handler.client.model.workspace.active() orelse return;
-    const request_id = try handler.client.nextId();
-    try tab_attachments.detach(handler.client, tab);
-    try handler.client.enqueueRequest(
-        request_id,
-        .{ .close_tab = tab.location },
-        .{ .close_tab = .{
-            .request_id = request_id,
-            .location = tab.location,
-        } },
-    );
+    var use_case = tab_attachments.closeRequestHandler(handler.client);
+
+    _ = try use_case.execute();
 }
 
 fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {

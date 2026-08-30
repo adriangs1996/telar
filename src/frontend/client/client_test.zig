@@ -798,6 +798,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
+    try harness.allowTabSelection();
     const client = harness.client;
     const workspace = TestHarness.bootstrap_location.workspace;
     const second_location: schema.TabLocation = .{
@@ -863,8 +864,20 @@ test "tab lifecycle: created, renamed, moved, closed" {
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(moved));
     try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(second_location.tab_id));
 
-    // Requested close of the active tab: the survivor becomes active and a
-    // fresh snapshot for it is requested.
+    // Requested close of the active tab: the semantic commit precedes
+    // cleanup, and the presenter observes it independently.
+    try client.graphics_store.applyImage(.{ .pane_id = @enumFromInt(20), .revision = 1, .image = .{
+        .key = .{ .image_id = 1, .generation = 1 },
+        .format = .rgb,
+        .width = 1,
+        .height = 1,
+        .byte_len = 3,
+    } });
+    client.mode = .{ .copy = .init(@enumFromInt(20), .{ .x = 0, .y = 0 }, 0) };
+    client.paste_pane = @enumFromInt(20);
+    try std.testing.expect(client.graphics_store.hasPaneGraphics(@enumFromInt(20)));
+    const version_before_close = client.model.version();
+    const pending_updates_before_close = client.presenter.pending_updates;
     try client.requests.add(@enumFromInt(7), .{ .close_tab = second_location });
     const closed = try schema.encodeTabClosed(&payload, .{
         .request_id = @enumFromInt(7),
@@ -875,12 +888,31 @@ test "tab lifecycle: created, renamed, moved, closed" {
         @as(?u8, null),
         try server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
     );
-    try harness.settle();
+
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
     try std.testing.expectEqual(
         TestHarness.bootstrap_location.tab_id,
         client.model.workspace.active().?.location.tab_id,
     );
+    try std.testing.expectEqual(version_before_close.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_close.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before_close, client.presenter.pending_updates);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(@enumFromInt(20)));
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(client.paste_pane == null);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_close + 1, client.presenter.pending_updates);
+    try harness.settle();
+    const survivor_snapshot = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(survivor_snapshot == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(
+        TestHarness.bootstrap_location,
+        survivor_snapshot.request_tab_snapshot.location,
+    );
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 
     // An unknown close request is rejected.
     const unexpected = try schema.encodeTabClosed(&payload, .{
@@ -1090,11 +1122,153 @@ test "pending tab snapshot suppresses tab selection without effects" {
     try std.testing.expect(!handler.redraw);
 }
 
+test "close tab request detaches before delivery and rejection requests restoration" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const version_before_request = client.model.version();
+    const pending_updates_before_request = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.close_tab);
+
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
+    const requested = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(requested == .close_tab);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, requested.close_tab.location);
+
+    var failure_buffer: [256]u8 = undefined;
+    const failed = try schema.encodeRequestFailed(&failure_buffer, .{
+        .request_id = requested.close_tab.request_id,
+        .code = .internal,
+        .message = "close rejected",
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+    try harness.settle();
+
+    const recovery = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(recovery == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(
+        TestHarness.bootstrap_location,
+        recovery.request_tab_snapshot.location,
+    );
+    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+}
+
+test "inactive tab lifecycle closure changes only the tab collection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const second_pane: schema.PaneId = @enumFromInt(20);
+    const second = try harness.addInactiveTab(@enumFromInt(2), second_pane);
+    try client.graphics_store.applyImage(.{ .pane_id = second_pane, .revision = 1, .image = .{
+        .key = .{ .image_id = 1, .generation = 1 },
+        .format = .rgb,
+        .width = 1,
+        .height = 1,
+        .byte_len = 3,
+    } });
+    const version_before_close = client.model.version();
+    const pending_updates_before_close = client.presenter.pending_updates;
+
+    var payload: [128]u8 = undefined;
+    const closed = try schema.encodeTabClosed(&payload, .{
+        .request_id = .none,
+        .location = second,
+        .workspace_closed = false,
+    });
+    try std.testing.expectEqual(
+        @as(?u8, null),
+        try server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(version_before_close.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_close.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before_close, client.presenter.pending_updates);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(second_pane));
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_close + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "invalid last tab closure has no semantic or cleanup effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    try client.graphics_store.applyImage(.{ .pane_id = TestHarness.bootstrap_pane, .revision = 1, .image = .{
+        .key = .{ .image_id = 1, .generation = 1 },
+        .format = .rgb,
+        .width = 1,
+        .height = 1,
+        .byte_len = 3,
+    } });
+    try client.requests.add(@enumFromInt(4), .{ .close_tab = TestHarness.bootstrap_location });
+    try client.requests.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
+    const version_before_close = client.model.version();
+    const pending_updates_before_close = client.presenter.pending_updates;
+
+    var payload: [128]u8 = undefined;
+    const closed = try schema.encodeTabClosed(&payload, .{
+        .request_id = @enumFromInt(4),
+        .location = TestHarness.bootstrap_location,
+        .workspace_closed = false,
+    });
+    try std.testing.expectError(
+        error.UnexpectedWorkspaceClosure,
+        server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    try std.testing.expectEqualDeep(version_before_close, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_close, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expect(client.requests.take(@enumFromInt(90)).? == .tab_snapshot);
+}
+
 test "closing the last workspace exits the client" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    try client.graphics_store.applyImage(.{ .pane_id = TestHarness.bootstrap_pane, .revision = 1, .image = .{
+        .key = .{ .image_id = 1, .generation = 1 },
+        .format = .rgb,
+        .width = 1,
+        .height = 1,
+        .byte_len = 3,
+    } });
+    const version_before_close = client.model.version();
 
     var payload: [128]u8 = undefined;
     const closed = try schema.encodeTabClosed(&payload, .{
@@ -1104,8 +1278,14 @@ test "closing the last workspace exits the client" {
     });
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(closed)),
+        try server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
     );
+    try std.testing.expectEqual(@as(usize, 0), client.model.workspace.count);
+    try std.testing.expect(client.model.activeTabLocation() == null);
+    try std.testing.expectEqual(version_before_close.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_close.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
 }
 
 test "a closed workspace with a survivor starts a handoff to it" {

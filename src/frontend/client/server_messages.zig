@@ -543,29 +543,32 @@ fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
 /// A closed tab: lifecycle event or reply, possibly ending the workspace.
 fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
     const lifecycle_event = closed.request_id == .none;
-    if (lifecycle_event) {
-        client.requests.ignoreTab(closed.location.tab_id);
-    } else {
+    if (!lifecycle_event) {
         const continuation = client.requests.take(closed.request_id) orelse
             return error.UnexpectedTabClosed;
         if (continuation != .close_tab or
             !std.meta.eql(continuation.close_tab, closed.location))
             return error.UnexpectedTabClosed;
     }
-    const was_active = client.model.workspace.activeConst() != null and
-        client.model.workspace.activeConst().?.location.tab_id == closed.location.tab_id;
-    if (was_active) client.forgetPaneFocus();
-    // The runtime sends no per-pane exit for a closed tab, so its
-    // graphics would stay resident forever without this.
-    if (client.model.workspace.find(closed.location.tab_id)) |closing|
-        releaseTabGraphics(&client.graphics_store, closing);
-    if (!client.model.workspace.remove(closed.location.tab_id)) {
-        if (lifecycle_event) return null;
+
+    var use_case = tab_attachments.closureHandler(client);
+    const removal = try use_case.execute(.{
+        .location = closed.location,
+        .workspace_closed = closed.workspace_closed,
+    });
+    if (removal == null) {
+        if (lifecycle_event) {
+            client.requests.ignoreTab(closed.location.tab_id);
+            return null;
+        }
+
         return error.UnexpectedTab;
     }
-    if (closed.workspace_closed)
+
+    const committed = removal.?;
+    if (committed.workspace_closed)
         client.navigation_history.forget(closed.location.workspace);
-    switch (workspaceClosureAction(closed.workspace_closed, closed.previous_workspace)) {
+    switch (workspaceClosureAction(committed.workspace_closed, closed.previous_workspace)) {
         .stay => {},
         .exit => return 0,
         .switch_to => |previous| {
@@ -575,14 +578,6 @@ fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
             return null;
         },
     }
-    if (client.model.workspace.count == 0) return error.WorkspaceHasNoTabs;
-    if (was_active) {
-        const active = client.model.workspace.active().?;
-        try client.syncPaneFocus(&active.model);
-        try client.requestTabSnapshot(active.location);
-    }
-    client.view.invalidate();
-    try client.presenter.requestDraw();
     return null;
 }
 
@@ -672,9 +667,9 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
             if (client.model.workspace.active()) |active|
                 try client.resizeAttached(&active.model, client.view.workbench());
         },
-        .close_tab => {
-            const active = client.model.workspace.active().?;
-            try client.requestTabSnapshot(active.location);
+        .close_tab => |location| {
+            var recovery = tab_attachments.closeRecoveryHandler(client);
+            _ = try recovery.execute(location);
         },
         .create_workspace, .notification => {},
         .initial_open => |open| {
@@ -790,11 +785,12 @@ fn requestGraphicsSnapshot(client: *Client, pane_id: schema.PaneId) !void {
     } });
 }
 
-/// Drops every image, placement, and revision the store holds for the panes
-/// of a tab that no longer exists.
+/// Drops every image, placement, and revision held for a removed tab's panes.
 fn releaseTabGraphics(store: *kitty.Store, tab: *tabs_mod.Tab) void {
     var panes = tab.model.paneIterator();
-    while (panes.next()) |pane| store.clearPane(pane.id);
+    while (panes.next()) |pane| {
+        store.clearPane(pane.id);
+    }
 }
 
 test "workspace closure exits only when no predecessor survives" {
@@ -821,12 +817,10 @@ test "agent notifications report only actionable status transitions" {
     try std.testing.expect(shouldNotifyAgentStatus(.working, .failed));
 }
 
-test "closing a tab releases the graphics its panes held" {
-    // Red is infeasible in-process: the leak is the *absence* of this call in
-    // the `.tab_closed` arm, which needs a live event loop to drive. The
-    // helper the arm now calls is proven here instead.
+test "workspace reconciliation releases graphics held by removed tabs" {
     var tabs = tabs_mod.Model.init(std.testing.allocator);
     defer tabs.deinit();
+
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try tabs.bootstrap(@enumFromInt(7), .{
         .workspace = workspace,
@@ -835,6 +829,7 @@ test "closing a tab releases the graphics its panes held" {
 
     var store = kitty.Store.init(std.testing.allocator);
     defer store.deinit();
+
     try store.applyImage(.{ .pane_id = @enumFromInt(7), .revision = 1, .image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgb,
@@ -845,6 +840,7 @@ test "closing a tab releases the graphics its panes held" {
     try std.testing.expect(store.hasPaneGraphics(@enumFromInt(7)));
 
     releaseTabGraphics(&store, tabs.active().?);
+
     try std.testing.expect(!store.hasPaneGraphics(@enumFromInt(7)));
     try std.testing.expectEqual(@as(usize, 0), store.total_bytes);
 }
