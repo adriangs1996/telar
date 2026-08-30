@@ -24,6 +24,83 @@ pub const DescriptorSnapshot = struct {
     tabs: []schema.TabDescriptor,
 };
 
+/// Repository-owned aggregate candidate that remains invisible until commit.
+pub const Proposal = struct {
+    repository: *Repository,
+    workspace: ?Workspace,
+    proposed_location: schema.TabLocation,
+
+    /// Returns the stable identity reserved by this proposal.
+    ///
+    /// ```zig
+    /// const location = proposal.location();
+    /// ```
+    pub fn location(proposal: *const Proposal) schema.TabLocation {
+        std.debug.assert(proposal.workspace != null);
+        return proposal.proposed_location;
+    }
+
+    /// Returns the proposal-owned workspace path until commit or rollback.
+    ///
+    /// ```zig
+    /// const path = proposal.path();
+    /// ```
+    pub fn path(proposal: *const Proposal) []const u8 {
+        return proposal.workspace.?.pathSlice();
+    }
+
+    /// Returns the canonical proposal-owned workspace name.
+    ///
+    /// ```zig
+    /// const name = proposal.name();
+    /// ```
+    pub fn name(proposal: *const Proposal) []const u8 {
+        return proposal.workspace.?.name();
+    }
+
+    /// Transfers the aggregate into repository state and advances identities
+    /// and list revision exactly once.
+    ///
+    /// ```zig
+    /// const location = proposal.commit();
+    /// ```
+    pub fn commit(proposal: *Proposal) schema.TabLocation {
+        const repository = proposal.repository;
+        std.debug.assert(proposal.workspace != null);
+        std.debug.assert(schema.id.raw(workspaceId(proposal.proposed_location.workspace).?) == repository.state.next_workspace_id);
+        std.debug.assert(schema.id.raw(proposal.proposed_location.tab_id) == repository.state.next_tab_id);
+        std.debug.assert(repository.state.count < repository.state.items.len);
+
+        for (&repository.state.items) |*slot| {
+            if (slot.* != null) {
+                continue;
+            }
+
+            slot.* = proposal.workspace.?;
+            proposal.workspace = null;
+            repository.state.count += 1;
+            repository.state.next_workspace_id += 1;
+            repository.state.next_tab_id += 1;
+            state_mod.advanceRevision(repository.state);
+            return proposal.proposed_location;
+        }
+
+        unreachable;
+    }
+
+    /// Releases an uncommitted aggregate. Calling it after commit is a no-op,
+    /// which makes it safe in a transaction defer.
+    ///
+    /// ```zig
+    /// defer proposal.rollback();
+    /// ```
+    pub fn rollback(proposal: *Proposal) void {
+        const workspace = if (proposal.workspace) |*value| value else return;
+        workspace.deinit(proposal.repository.gpa);
+        proposal.workspace = null;
+    }
+};
+
 pub const Reader = struct {
     state: *const State,
 
@@ -237,6 +314,19 @@ pub const Repository = struct {
     /// });
     /// ```
     pub fn insert(repository: *Repository, request: Insert) !schema.TabLocation {
+        var proposal = try repository.propose(request);
+        defer proposal.rollback();
+        return proposal.commit();
+    }
+
+    /// Allocates and validates a distinct aggregate without exposing it or
+    /// consuming its identities. The caller must commit or roll it back.
+    ///
+    /// ```zig
+    /// var proposal = try repository.propose(.{ .path = "/work/telar" });
+    /// defer proposal.rollback();
+    /// ```
+    pub fn propose(repository: *Repository, request: Insert) !Proposal {
         if (repository.state.count == repository.state.items.len) {
             return error.WorkspaceLimitReached;
         }
@@ -252,24 +342,14 @@ pub const Repository = struct {
             .explicit_name = request.explicit_name,
         });
 
-        for (&repository.state.items) |*slot| {
-            if (slot.* != null) {
-                continue;
-            }
-
-            slot.* = workspace;
-            repository.state.count += 1;
-            repository.state.next_workspace_id += 1;
-            repository.state.next_tab_id += 1;
-            state_mod.advanceRevision(repository.state);
-
-            return .{
+        return .{
+            .repository = repository,
+            .workspace = workspace,
+            .proposed_location = .{
                 .workspace = .{ .workspace = workspace_id },
                 .tab_id = tab_id,
-            };
-        }
-
-        unreachable;
+            },
+        };
     }
 
     /// Removes one aggregate and releases its repository-owned path.
@@ -356,6 +436,49 @@ test "repository ensures stable path identity and owns aggregate storage" {
     unknown_tab.tab_id = try schema.id.tab(999);
     try std.testing.expect(!reader_value.contains(unknown_tab));
     try std.testing.expectEqual(@as(usize, 2), reader_value.count());
+}
+
+test "workspace proposals stay invisible and preserve identities on rollback" {
+    var state: State = .{};
+    var repository = Repository.init(&state, std.testing.allocator);
+    defer repository.deinit();
+    const initial_revision = repository.reader().revision();
+    var proposal = try repository.propose(.{
+        .path = "/work/project",
+        .explicit_name = "backend",
+    });
+
+    try std.testing.expectEqual(@as(usize, 0), repository.reader().count());
+    try std.testing.expect(!repository.reader().contains(proposal.location()));
+    try std.testing.expectEqual(initial_revision, repository.reader().revision());
+    try std.testing.expectEqualStrings("/work/project", proposal.path());
+    try std.testing.expectEqualStrings("backend", proposal.name());
+
+    proposal.rollback();
+    proposal.rollback();
+
+    const inserted = try repository.insert(.{ .path = "/work/reused" });
+    const workspace_id = workspaceId(inserted.workspace).?;
+    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(workspace_id));
+    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(inserted.tab_id));
+}
+
+test "committing a workspace proposal advances state exactly once" {
+    var state: State = .{};
+    var repository = Repository.init(&state, std.testing.allocator);
+    defer repository.deinit();
+    const initial_revision = repository.reader().revision();
+    var proposal = try repository.propose(.{ .path = "/work/project" });
+    const proposed_location = proposal.location();
+
+    const committed_location = proposal.commit();
+    proposal.rollback();
+
+    try std.testing.expectEqualDeep(proposed_location, committed_location);
+    try std.testing.expect(repository.reader().contains(committed_location));
+    try std.testing.expectEqual(@as(usize, 1), repository.reader().count());
+    try std.testing.expect(repository.reader().revision() != initial_revision);
+    try std.testing.expectEqual(@as(u64, 2), schema.id.raw(try repository.nextTabId()));
 }
 
 test "repository permits distinct aggregates with the same path" {

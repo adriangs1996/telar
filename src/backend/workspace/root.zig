@@ -14,12 +14,14 @@ pub const Repository = repository.Repository;
 pub const Reader = repository.Reader;
 pub const Ensured = repository.Ensured;
 pub const Insert = repository.Insert;
+pub const WorkspaceProposal = repository.Proposal;
 pub const DescriptorSnapshot = repository.DescriptorSnapshot;
 pub const TabCreated = events.TabCreated;
 pub const TabRemoved = events.TabRemoved;
 pub const TabRenamed = events.TabRenamed;
 pub const TabMoved = events.TabMoved;
 pub const WorkspaceRenamed = events.WorkspaceRenamed;
+pub const WorkspaceCreated = events.WorkspaceCreated;
 
 pub const max_workspaces = state.max_workspaces;
 pub const max_tabs_per_workspace = workspace.max_tabs_per_workspace;

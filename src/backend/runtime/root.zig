@@ -15,6 +15,8 @@ const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("controllers/close_tab.zig");
 const create_tab_commands = @import("commands/create_tab.zig");
 const create_tab_controller = @import("controllers/create_tab.zig");
+const create_workspace_commands = @import("commands/create_workspace.zig");
+const create_workspace_controller = @import("controllers/create_workspace.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
@@ -27,7 +29,6 @@ const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const history_entrypoints = @import("entrypoints/history.zig");
 const pane_entrypoints = @import("entrypoints/pane.zig");
-const workspace_entrypoints = @import("entrypoints/workspace.zig");
 const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_mod = @import("../pane/root.zig");
 const blit = pane_mod.blit;
@@ -1315,16 +1316,41 @@ const Server = struct {
                 }, open);
             },
             .create_workspace => |create| {
-                try workspace_entrypoints.createWorkspace(.{
-                    .gpa = gpa,
+                var client_context: ClientLaunchContext = .{
+                    .server = server,
+                    .session = session,
+                };
+                var event_context: WorkspaceEventContext = .{
+                    .server = server,
+                    .origin = session.key,
+                };
+                var handler: create_workspace_commands.CreateWorkspaceHandler = .{
                     .workspaces = workspaces,
-                    .attachments = attachments,
-                    .responses = responses,
-                    .client = session.key,
-                    .shared_graphics = session.shared_graphics,
-                    .geometry = entrypointGeometry(server),
-                    .launcher = entrypointLauncher(server),
-                }, create);
+                    .authority = .{
+                        .context = &client_context,
+                        .prepare = prepareCreateWorkspaceLaunch,
+                    },
+                    .geometry = .{
+                        .context = &client_context,
+                        .acquire = acquireCreatedWorkspaceGeometry,
+                        .release = releaseCreatedWorkspaceGeometry,
+                    },
+                    .launcher = .{
+                        .context = server,
+                        .launch = launchCreatedWorkspacePane,
+                    },
+                    .attachment = .{
+                        .context = &client_context,
+                        .replace = replaceCreatedWorkspaceAttachments,
+                    },
+                    .events = .{
+                        .context = &event_context,
+                        .publish = publishWorkspaceCreated,
+                    },
+                };
+                var controller = create_workspace_controller.Controller.init(responses, handler.executor());
+
+                try controller.createWorkspace(create);
             },
             .rename_workspace => |rename| {
                 var event_context: WorkspaceEventContext = .{
@@ -1447,7 +1473,7 @@ const Server = struct {
                 try controller.requestWorkspaceSnapshot(request);
             },
             .create_tab => |create| {
-                var client_context: CreateTabClientContext = .{
+                var client_context: ClientLaunchContext = .{
                     .server = server,
                     .session = session,
                 };
@@ -1611,7 +1637,7 @@ fn entrypointWorkspaceEvents(server: *Server) entrypoint_common.WorkspaceEvents 
     };
 }
 
-const CreateTabClientContext = struct {
+const ClientLaunchContext = struct {
     server: *Server,
     session: *ClientSession,
 };
@@ -1637,7 +1663,7 @@ fn tabSnapshotRunningPanes(context: *anyopaque, location: schema.TabLocation) u1
 }
 
 fn prepareCreateTabLaunch(context: *anyopaque, request: create_tab_commands.PrepareLaunch) ![]const u8 {
-    const client: *CreateTabClientContext = @ptrCast(@alignCast(context));
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
 
     if (!client.server.holdsGeometry(client.session.key, request.workspace)) {
         return error.GeometryUnavailable;
@@ -1651,7 +1677,7 @@ fn prepareCreateTabLaunch(context: *anyopaque, request: create_tab_commands.Prep
 }
 
 fn attachCreatedTab(context: *anyopaque, launched: create_tab_commands.LaunchedPane) !void {
-    const client: *CreateTabClientContext = @ptrCast(@alignCast(context));
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
     const pane = client.server.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
 
     const attachment = try client.session.attachments.attach(client.server.gpa, pane);
@@ -1669,6 +1695,53 @@ fn launchCreatedTabPane(context: *anyopaque, request: create_tab_commands.Launch
     );
 
     return .{ .id = pane.id };
+}
+
+fn prepareCreateWorkspaceLaunch(context: *anyopaque, request: create_workspace_commands.PrepareLaunch) ![]const u8 {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    return entrypoint_common.resolveLaunchCwd(
+        &client.session.attachments,
+        request.launch,
+        .any,
+    ) catch error.InvalidLaunchCwd;
+}
+
+fn acquireCreatedWorkspaceGeometry(context: *anyopaque, workspace: schema.WorkspaceLocation) bool {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    return client.server.holdsGeometry(client.session.key, workspace);
+}
+
+fn releaseCreatedWorkspaceGeometry(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    client.server.releaseGeometryFor(client.session.key, workspace);
+}
+
+fn launchCreatedWorkspacePane(context: *anyopaque, request: create_workspace_commands.LaunchPane) !create_workspace_commands.LaunchedPane {
+    const server: *Server = @ptrCast(@alignCast(context));
+    const pane = try server.launchPane(
+        request.location,
+        request.size,
+        request.launch,
+        request.launch_cwd,
+        request.workspace_path,
+    );
+
+    return .{ .id = pane.id };
+}
+
+fn replaceCreatedWorkspaceAttachments(context: *anyopaque, launched: create_workspace_commands.LaunchedPane) !void {
+    const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
+    const pane = client.server.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
+    const previous_workspace = client.session.attachments.currentWorkspace();
+
+    client.session.attachments.deinit();
+    if (previous_workspace) |previous| {
+        client.server.releaseGeometryFor(client.session.key, previous);
+    }
+
+    const attachment = try client.session.attachments.attach(client.server.gpa, pane);
+    attachment.configureGraphics(client.session.shared_graphics);
+    _ = try attachment.resizeIfNeeded();
 }
 
 fn publishTabCreated(context: *anyopaque, event: workspace_mod.TabCreated) void {
@@ -1693,6 +1766,11 @@ fn publishWorkspaceRenamed(context: *anyopaque, event: workspace_mod.WorkspaceRe
 
     publication.server.model.agents.touch();
     publication.server.notifyWorkspaceChanged(publication.origin, event.location);
+}
+
+fn publishWorkspaceCreated(context: *anyopaque, event: workspace_mod.WorkspaceCreated) void {
+    const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+    publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
 }
 
 fn closeTabPanes(context: *anyopaque, location: schema.TabLocation) void {
@@ -2366,6 +2444,8 @@ test {
     _ = close_tab_controller;
     _ = create_tab_commands;
     _ = create_tab_controller;
+    _ = create_workspace_commands;
+    _ = create_workspace_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
     _ = rename_workspace_commands;
@@ -2378,6 +2458,7 @@ test {
     _ = tab_controller;
     _ = @import("close_tab_test.zig");
     _ = @import("create_tab_test.zig");
+    _ = @import("create_workspace_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
