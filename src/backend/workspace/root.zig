@@ -15,7 +15,7 @@ pub const Reader = repository.Reader;
 pub const Ensured = repository.Ensured;
 pub const Insert = repository.Insert;
 pub const DescriptorSnapshot = repository.DescriptorSnapshot;
-pub const TabCreated = commands.TabCreated;
+pub const TabCreated = events.TabCreated;
 pub const TabRemoval = commands.TabRemoval;
 pub const TabRenamed = events.TabRenamed;
 
@@ -23,7 +23,6 @@ pub const max_workspaces = state.max_workspaces;
 pub const max_tabs_per_workspace = workspace.max_tabs_per_workspace;
 
 pub const renameWorkspace = commands.renameWorkspace;
-pub const createTab = commands.createTab;
 pub const moveTab = commands.moveTab;
 pub const removeTab = commands.removeTab;
 

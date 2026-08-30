@@ -41,11 +41,6 @@ pub const Workspace = struct {
         explicit_name: ?[]const u8 = null,
     };
 
-    pub const TabCreated = struct {
-        id: schema.TabId,
-        position: u16,
-    };
-
     id: schema.WorkspaceId,
     path: []u8,
     explicit_name: [schema.max_tab_label_bytes]u8 = undefined,
@@ -105,13 +100,14 @@ pub const Workspace = struct {
         return workspace.findTabConst(tab_id) != null;
     }
 
-    /// Adds one tab after validating its label. An empty requested label is
-    /// replaced with the stable `tab <id>` default used by the runtime.
+    /// Adds one tab after validating its label and returns an owned event for
+    /// the caller's transaction boundary. An empty requested label is replaced
+    /// with the stable `tab <id>` default used by the runtime.
     ///
     /// ```zig
     /// const created = try workspace.createTab(tab_id, "logs");
     /// ```
-    pub fn createTab(workspace: *Workspace, tab_id: schema.TabId, requested_label: []const u8) !TabCreated {
+    pub fn createTab(workspace: *Workspace, tab_id: schema.TabId, requested_label: []const u8) !events.TabCreated {
         if (workspace.tab_count == workspace.tabs.len) {
             return error.TabLimitReached;
         }
@@ -123,7 +119,10 @@ pub const Workspace = struct {
             requested_label;
         const position = try workspace.appendTab(try Tab.init(tab_id, label));
 
-        return .{ .id = tab_id, .position = position };
+        return events.TabCreated.init(.{
+            .workspace = .{ .workspace = workspace.id },
+            .tab_id = tab_id,
+        }, position, label) catch unreachable;
     }
 
     /// Renames one tab and returns an owned event describing the committed
@@ -304,6 +303,9 @@ test "tabs are created moved described and removed through the aggregate" {
     const generated = try workspace.createTab(generated_id, "");
     try std.testing.expectEqual(@as(u16, 1), logs.position);
     try std.testing.expectEqual(@as(u16, 2), generated.position);
+    try std.testing.expectEqual(logs_id, logs.location.tab_id);
+    try std.testing.expectEqualStrings("logs", logs.labelSlice());
+    try std.testing.expectEqualStrings("tab 3", generated.labelSlice());
     try std.testing.expectEqualStrings("tab 3", workspace.tabLabel(generated_id).?);
 
     try std.testing.expectEqual(@as(u16, 0), workspace.moveTab(logs_id, .previous).?);

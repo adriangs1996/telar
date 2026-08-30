@@ -8,11 +8,6 @@ const state_mod = @import("state.zig");
 const schema = core.schema;
 const Repository = repository_mod.Repository;
 
-pub const TabCreated = struct {
-    location: schema.TabLocation,
-    position: u16,
-};
-
 pub const TabRemoval = struct {
     workspace_closed: bool,
     previous_workspace: ?schema.WorkspaceId = null,
@@ -27,24 +22,6 @@ pub fn renameWorkspace(repository: *Repository, location: schema.WorkspaceLocati
     const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
     try workspace.rename(name);
     repository.recordListChange();
-}
-
-/// Creates a tab with a globally stable identity. Identity and list revision
-/// are committed only after the aggregate accepts the requested label.
-///
-/// ```zig
-/// const created = try createTab(&repository, workspace, "logs");
-/// ```
-pub fn createTab(repository: *Repository, location: schema.WorkspaceLocation, label: []const u8) !TabCreated {
-    const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
-    const tab_id = try repository.nextTabId();
-    const created = try workspace.createTab(tab_id, label);
-    repository.recordTabCreated(tab_id);
-
-    return .{
-        .location = .{ .workspace = location, .tab_id = created.id },
-        .position = created.position,
-    };
 }
 
 /// Reorders one tab inside its aggregate without changing list revision.
@@ -94,42 +71,32 @@ fn insertWorkspace(repository: *Repository, path: []const u8) !schema.TabLocatio
     return repository.insert(.{ .path = path });
 }
 
-test "failed tab creation does not consume its candidate identity" {
-    var state: state_mod.State = .{};
-    var repository = Repository.init(&state, std.testing.allocator);
-    defer repository.deinit();
-    const initial = try insertWorkspace(&repository, "/work/project");
-    const initial_revision = repository.reader().revision();
-    const oversized_label: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
-
-    try std.testing.expectError(
-        error.InvalidTabLabel,
-        createTab(&repository, initial.workspace, &oversized_label),
-    );
-    try std.testing.expectEqual(initial_revision, repository.reader().revision());
-    try std.testing.expectEqual(@as(usize, 1), repository.reader().totalTabs());
-
-    const created = try createTab(&repository, initial.workspace, "logs");
-    try std.testing.expectEqual(@as(u64, 2), schema.id.raw(created.location.tab_id));
+fn insertTestingTab(repository: *Repository, location: schema.WorkspaceLocation, label: []const u8) !schema.TabLocation {
+    const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
+    const tab_id = try repository.nextTabId();
+    const created = try workspace.createTab(tab_id, label);
+    repository.recordTabCreated(tab_id);
+    return created.location;
 }
 
-test "workspace commands create move and remove tabs with list revisions" {
+test "workspace commands move and remove tabs around repository state" {
     var state: state_mod.State = .{};
     var repository = Repository.init(&state, std.testing.allocator);
     defer repository.deinit();
     const initial = try insertWorkspace(&repository, "/work/project");
-    const before_create = repository.reader().revision();
+    const logs = try insertTestingTab(&repository, initial.workspace, "logs");
+    try std.testing.expectEqualStrings("logs", repository.reader().tabLabel(logs).?);
 
-    const logs = try createTab(&repository, initial.workspace, "logs");
-    try std.testing.expect(repository.reader().revision() != before_create);
-    try std.testing.expectEqualStrings("logs", repository.reader().tabLabel(logs.location).?);
+    const before_move = repository.reader().revision();
+    try std.testing.expectEqual(@as(u16, 0), try moveTab(&repository, logs, .previous));
+    try std.testing.expectEqual(logs.tab_id, repository.reader().defaultTab(initial.workspace).?);
+    try std.testing.expectEqual(before_move, repository.reader().revision());
 
-    try std.testing.expectEqual(@as(u16, 0), try moveTab(&repository, logs.location, .previous));
-    try std.testing.expectEqual(logs.location.tab_id, repository.reader().defaultTab(initial.workspace).?);
-
+    const before_remove = repository.reader().revision();
     const first_removal = removeTab(&repository, initial).?;
     try std.testing.expect(!first_removal.workspace_closed);
-    const final_removal = removeTab(&repository, logs.location).?;
+    try std.testing.expect(repository.reader().revision() != before_remove);
+    const final_removal = removeTab(&repository, logs).?;
     try std.testing.expect(final_removal.workspace_closed);
     try std.testing.expectEqual(@as(usize, 0), repository.reader().count());
 }

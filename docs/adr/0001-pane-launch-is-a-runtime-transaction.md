@@ -24,8 +24,11 @@ the PTY, and retains the allocation until the child is reaped and no actor can
 access it. A consumed `PaneKey` is never reused.
 
 A workspace or tab created for the first pane remains provisional until
-`PaneLauncher` commits the pane. Flow entrypoints, rather than `PaneLauncher`,
-own rollback of provisional containers and geometry leases. After commit,
+`PaneLauncher` commits the pane. The application flow, rather than
+`PaneLauncher` or a request controller, owns rollback of provisional
+containers and geometry leases; migrated mutations place that policy in their
+command handler. The `createTab` handler consumes its proposed tab identity and
+publishes the owned domain event only after pane commit. After commit,
 attachment or response delivery failure removes neither the pane nor its
 container. Reconnection discovers the committed pane from runtime state and
 never replays the launch automatically.

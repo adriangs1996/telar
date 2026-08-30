@@ -1,16 +1,11 @@
 //! Tab lifecycle external message entrypoints.
 
-const std = @import("std");
 const core = @import("telar-core");
-const attachment_mod = @import("../attachment.zig");
 const pane_mod = @import("../../pane/root.zig");
-const response_queue = @import("../response_queue.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 const common = @import("common.zig");
 
-const AttachmentStore = attachment_mod.AttachmentStore;
 const PaneStore = pane_mod.PaneStore;
-const PendingTabCreated = response_queue.PendingTabCreated;
 const WorkspaceRepository = workspace_mod.Repository;
 const schema = core.schema;
 
@@ -18,18 +13,6 @@ pub const RequestTabSnapshotContext = struct {
     panes: *PaneStore,
     workspaces: *WorkspaceRepository,
     responses: *common.ResponseQueue,
-};
-
-pub const CreateTabContext = struct {
-    gpa: std.mem.Allocator,
-    workspaces: *WorkspaceRepository,
-    attachments: *AttachmentStore,
-    responses: *common.ResponseQueue,
-    client: common.ClientKey,
-    shared_graphics: bool,
-    geometry: common.Geometry,
-    launcher: common.Launcher,
-    events: common.WorkspaceEvents,
 };
 
 pub const CloseTabContext = struct {
@@ -57,99 +40,6 @@ pub fn requestTabSnapshot(context: RequestTabSnapshotContext, request: schema.Re
         .request_id = request.request_id,
         .location = request.location,
     } });
-}
-
-/// Creates a tab and root pane as one rollback-safe runtime transaction. The
-/// tab is removed again if pane launch fails before ownership is committed.
-///
-/// ```zig
-/// try createTab(context, request);
-/// ```
-pub fn createTab(context: CreateTabContext, create: schema.CreateTabView) !void {
-    const gpa = context.gpa;
-    const workspaces = context.workspaces;
-    const attachments = context.attachments;
-    const responses = context.responses;
-    const client = context.client;
-    const shared_graphics = context.shared_graphics;
-    const geometry = context.geometry;
-    const launcher = context.launcher;
-    const events = context.events;
-
-    if (!geometry.holds(geometry.context, client, create.workspace)) {
-        try common.queueFailure(
-            responses,
-            create.request_id,
-            .resource_limit,
-            "workspace geometry is leased by another client",
-        );
-        return;
-    }
-
-    const launch_cwd = (try common.requestLaunchCwd(
-        attachments,
-        responses,
-        create.request_id,
-        create.launch,
-        .{ .workspace = create.workspace },
-    )) orelse return;
-
-    const created = workspace_mod.createTab(
-        workspaces,
-        create.workspace,
-        create.label,
-    ) catch |err| {
-        switch (err) {
-            error.WorkspaceNotFound => try common.queueFailure(
-                responses,
-                create.request_id,
-                .workspace_not_found,
-                "workspace not found",
-            ),
-            error.TabLimitReached => try common.queueFailure(
-                responses,
-                create.request_id,
-                .resource_limit,
-                "tab limit reached",
-            ),
-            else => return err,
-        }
-        return;
-    };
-
-    var tab_committed = false;
-
-    defer if (!tab_committed) {
-        _ = workspace_mod.removeTab(workspaces, created.location);
-    };
-
-    const fresh = launcher.launch(
-        launcher.context,
-        created.location,
-        create.size,
-        create.launch,
-        launch_cwd,
-        workspaces.reader().workspacePath(create.workspace).?,
-    ) catch |err| {
-        try common.queueSpawnFailure(responses, create.request_id, err);
-        return;
-    };
-
-    tab_committed = true;
-    const attachment = try attachments.attach(gpa, fresh);
-    attachment.configureGraphics(shared_graphics);
-    const label = workspaces.reader().tabLabel(created.location).?;
-    var pending: PendingTabCreated = .{
-        .request_id = create.request_id,
-        .location = created.location,
-        .position = created.position,
-        .label = undefined,
-        .label_len = @intCast(label.len),
-        .root_pane_id = fresh.id,
-    };
-    @memcpy(pending.label[0..pending.label_len], label);
-    try responses.push(.{ .tab_created = pending });
-    events.changed(events.context, client, create.workspace);
 }
 
 /// Closes every pane in a tab, removes the tab aggregate and reports which

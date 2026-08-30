@@ -8,7 +8,9 @@ Runtime client messages currently enter through functions that may combine wire
 translation, domain mutation, cross-capability effects and response delivery.
 That makes a protocol boundary depend on every participant in the use case and
 makes the domain transaction difficult to test without runtime infrastructure.
-The tab rename flow is the first vertical slice to separate those concerns.
+The tab rename flow is the first vertical slice to separate those concerns;
+tab creation extends the design to a transaction spanning an aggregate, pane
+launch, client attachment and response delivery.
 
 ## Decision
 
@@ -49,11 +51,22 @@ post-commit publisher used in this path is infallible. Fallible durable
 persistence requires an explicit commit policy and does not hide behind this
 publisher.
 
+Some use cases have a wider commit boundary than one aggregate method. For
+`createTab`, the handler proposes a tab identity and mutates the aggregate
+provisionally, then launches the root pane through a narrow synchronous port.
+Launch failure removes the provisional tab without consuming its identity or
+advancing the workspace revision. Pane launch success commits the identity and
+revision, publishes the owned `TabCreated` event, and only then attaches the
+requesting client. Attachment and response-queue failures are post-commit and
+therefore never remove the pane or tab. The workspace capability exposes no
+shortcut that can commit a production tab without this runtime transaction.
+
 Controllers live only for the request call. They may borrow decoded request
 slices during that call. Anything retained by an aggregate, event, queue or
-asynchronous boundary owns its bytes. The existing `renameTab` slice is the
-reference implementation; other entrypoints migrate when their transaction and
-failure contracts are understood and covered by tests.
+asynchronous boundary owns its bytes. The `renameTab` and `createTab` slices
+are the reference implementations for single-aggregate and wider runtime
+transactions respectively; other entrypoints migrate when their transaction
+and failure contracts are understood and covered by tests.
 
 This decision refines
 [ADR 0002](0002-organize-capabilities-around-explicit-entrypoints.md). The
@@ -83,6 +96,12 @@ aggregate operation and domain event. There are more small types, but each layer
 can be tested against its own contract: controller tests use a fake executor,
 handler tests use an in-memory repository and captured publisher, and aggregate
 tests inspect invariants and event ownership.
+
+Handlers that span capabilities use narrow synchronous ports rather than
+receiving `Server`, client sessions or concrete infrastructure stores. This
+keeps transaction ordering unit-testable while the composition root remains the
+only code that converts those ports into pane launch, cwd authority, attachment
+and workspace notification operations.
 
 Response delivery no longer participates in domain commit. A client can miss a
 confirmation for a mutation that exists, which is already required for a

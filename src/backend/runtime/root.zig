@@ -11,6 +11,8 @@ const delivery_mod = @import("delivery.zig");
 const attachment_entrypoints = @import("entrypoints/attachment.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
 const control_entrypoints = @import("entrypoints/control.zig");
+const create_tab_commands = @import("commands/create_tab.zig");
+const create_tab_controller = @import("controllers/create_tab.zig");
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const history_entrypoints = @import("entrypoints/history.zig");
@@ -1413,20 +1415,39 @@ const Server = struct {
                 );
             },
             .create_tab => |create| {
-                try tab_entrypoints.createTab(.{
-                    .gpa = gpa,
+                var client_context: CreateTabClientContext = .{
+                    .server = server,
+                    .session = session,
+                };
+                var event_context: WorkspaceEventContext = .{
+                    .server = server,
+                    .origin = session.key,
+                };
+                var handler: create_tab_commands.CreateTabHandler = .{
                     .workspaces = workspaces,
-                    .attachments = attachments,
-                    .responses = responses,
-                    .client = session.key,
-                    .shared_graphics = session.shared_graphics,
-                    .geometry = entrypointGeometry(server),
-                    .launcher = entrypointLauncher(server),
-                    .events = entrypointWorkspaceEvents(server),
-                }, create);
+                    .authority = .{
+                        .context = &client_context,
+                        .prepare = prepareCreateTabLaunch,
+                    },
+                    .launcher = .{
+                        .context = server,
+                        .launch = launchCreatedTabPane,
+                    },
+                    .attachment = .{
+                        .context = &client_context,
+                        .attach = attachCreatedTab,
+                    },
+                    .events = .{
+                        .context = &event_context,
+                        .publish = publishTabCreated,
+                    },
+                };
+                var controller = create_tab_controller.Controller.init(responses, handler.executor());
+
+                try controller.createTab(create);
             },
             .rename_tab => |rename| {
-                var event_context: RenameTabEventContext = .{
+                var event_context: WorkspaceEventContext = .{
                     .server = server,
                     .origin = session.key,
                 };
@@ -1540,13 +1561,58 @@ fn entrypointWorkspaceEvents(server: *Server) entrypoint_common.WorkspaceEvents 
     };
 }
 
-const RenameTabEventContext = struct {
+const CreateTabClientContext = struct {
+    server: *Server,
+    session: *ClientSession,
+};
+
+const WorkspaceEventContext = struct {
     server: *Server,
     origin: ClientKey,
 };
 
+fn prepareCreateTabLaunch(context: *anyopaque, request: create_tab_commands.PrepareLaunch) ![]const u8 {
+    const client: *CreateTabClientContext = @ptrCast(@alignCast(context));
+
+    if (!client.server.holdsGeometry(client.session.key, request.workspace)) {
+        return error.GeometryUnavailable;
+    }
+
+    return entrypoint_common.resolveLaunchCwd(
+        &client.session.attachments,
+        request.launch,
+        .{ .workspace = request.workspace },
+    ) catch error.InvalidLaunchCwd;
+}
+
+fn attachCreatedTab(context: *anyopaque, launched: create_tab_commands.LaunchedPane) !void {
+    const client: *CreateTabClientContext = @ptrCast(@alignCast(context));
+    const pane = client.server.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
+
+    const attachment = try client.session.attachments.attach(client.server.gpa, pane);
+    attachment.configureGraphics(client.session.shared_graphics);
+}
+
+fn launchCreatedTabPane(context: *anyopaque, request: create_tab_commands.LaunchPane) !create_tab_commands.LaunchedPane {
+    const server: *Server = @ptrCast(@alignCast(context));
+    const pane = try server.launchPane(
+        request.location,
+        request.size,
+        request.launch,
+        request.launch_cwd,
+        request.workspace_path,
+    );
+
+    return .{ .id = pane.id };
+}
+
+fn publishTabCreated(context: *anyopaque, event: workspace_mod.TabCreated) void {
+    const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+    publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
+}
+
 fn publishTabRenamed(context: *anyopaque, event: workspace_mod.TabRenamed) void {
-    const publication: *RenameTabEventContext = @ptrCast(@alignCast(context));
+    const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
 
     publication.server.model.agents.touch();
     publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
@@ -2201,8 +2267,11 @@ test "agent sounds require exact working transitions" {
 }
 
 test {
+    _ = create_tab_commands;
+    _ = create_tab_controller;
     _ = tab_commands;
     _ = tab_controller;
+    _ = @import("create_tab_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = model_mod;
     _ = pane_mod;
