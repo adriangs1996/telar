@@ -29,6 +29,11 @@ pub const InitialOpen = struct {
     fallback_workspace: ?schema.WorkspaceId = null,
 };
 
+pub const CreateTab = struct {
+    workspace: schema.WorkspaceLocation,
+    size: schema.TerminalSize,
+};
+
 pub const Continuation = union(enum) {
     initial_open: InitialOpen,
     create_workspace: schema.TerminalSize,
@@ -38,7 +43,7 @@ pub const Continuation = union(enum) {
     split: Split,
     close_pane: PaneOperation,
     attach_pane: PaneOperation,
-    create_tab: schema.WorkspaceLocation,
+    create_tab: CreateTab,
     rename_tab: schema.TabLocation,
     close_tab: schema.TabLocation,
     move_tab: schema.TabLocation,

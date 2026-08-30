@@ -8,11 +8,9 @@ const core = @import("telar-core");
 const graphics = @import("../graphics/root.zig");
 const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
-const workspace_capability = @import("../workspace/root.zig");
 const client_requests = @import("requests.zig");
 const widgets = @import("../widgets/root.zig");
 const copy_mode = input_capability.copy_mode;
-const multiplexer = workspace_capability.multiplexer;
 const term = presentation.screen;
 
 const Io = std.Io;
@@ -25,12 +23,12 @@ const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_creations = @import("tab_creations.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
-const rectSize = multiplexer.rectSize;
 
 const WorkspaceClosureAction = union(enum) {
     stay,
@@ -73,7 +71,7 @@ fn notificationTarget(
             .select_tab = location.tab_id,
         },
         .rename_workspace, .workspace_snapshot => |location| workspaceNotificationTarget(location),
-        .create_tab => |location| workspaceNotificationTarget(location),
+        .create_tab => |creation| workspaceNotificationTarget(creation.workspace),
         .initial_open, .create_workspace, .notification, .ignored => .none,
     };
 }
@@ -447,19 +445,11 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
     const continuation = client.requests.take(created.request_id) orelse
         return error.UnexpectedTabCreated;
     if (continuation != .create_tab or
-        !std.meta.eql(continuation.create_tab, created.location.workspace))
+        !std.meta.eql(continuation.create_tab.workspace, created.location.workspace))
         return error.UnexpectedTabCreated;
 
-    var use_case = tab_attachments.creationHandler(client);
-    _ = try use_case.execute(.{
-        .created = .{
-            .location = created.location,
-            .position = created.position,
-            .label = created.label,
-            .root_pane_id = created.root_pane_id,
-        },
-        .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-    });
+    var use_case = tab_creations.confirmationHandler(client);
+    _ = try use_case.execute(tab_creations.confirmation(created, continuation.create_tab.size));
 }
 
 /// A confirmed tab rename.
@@ -613,7 +603,8 @@ fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
             }
             return;
         },
-        .workspace_snapshot, .tab_snapshot, .create_tab => return error.RuntimeRequestFailed,
+        .create_tab => {},
+        .workspace_snapshot, .tab_snapshot => return error.RuntimeRequestFailed,
     }
     if (continuation == .ignored or !notify_failure) {
         return;

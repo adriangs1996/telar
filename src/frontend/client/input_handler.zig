@@ -13,6 +13,7 @@ const widgets = @import("../widgets/root.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_creations = @import("tab_creations.zig");
 const tab_renames = @import("tab_renames.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
@@ -35,7 +36,6 @@ const Client = client_mod;
 const Action = action_mod.Action;
 const monotonic = client_mod.monotonic;
 const presentableModel = client_mod.presentableModel;
-const rectSize = multiplexer.rectSize;
 const encodeSgrMouse = mouse_protocol.encodeSgr;
 const mouseTracked = mouse_protocol.tracked;
 
@@ -722,26 +722,8 @@ fn closeFocused(handler: *InputHandler) !void {
 }
 
 fn createTab(handler: *InputHandler) !void {
-    if (handler.client.requests.has(.tab_operation)) return;
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    const workspace = handler.client.model.workspace.workspace orelse return;
-    const request_id = try handler.client.nextId();
-    try handler.client.enqueueRequest(
-        request_id,
-        .{ .create_tab = workspace },
-        .{ .create_tab = .{
-            .request_id = request_id,
-            .workspace = workspace,
-            .size = rectSize(handler.client.view.workbench()) orelse return,
-            .launch = .{
-                .cwd = handler.client.options.cwd,
-                .cwd_source = pane.id,
-                .arguments = handler.client.options.arguments,
-            },
-        } },
-    );
+    var use_case = tab_creations.requestHandler(handler.client);
+    _ = try use_case.execute(.{});
 }
 
 fn beginWorkspaceCreate(handler: *InputHandler) !void {

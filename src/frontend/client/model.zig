@@ -43,6 +43,11 @@ pub const TabCreation = struct {
     created: schema.TabLocation,
 };
 
+pub const TabCreationPlan = struct {
+    workspace: schema.WorkspaceLocation,
+    cwd_source: schema.PaneId,
+};
+
 pub const WorkspaceBookmark = struct {
     location: schema.TabLocation,
     pane_id: schema.PaneId,
@@ -317,13 +322,22 @@ pub const Model = struct {
     /// const pane_id = model.planWorkspaceCreation() orelse return;
     /// ```
     pub fn planWorkspaceCreation(model: *const Model) ?schema.PaneId {
-        const active = model.workspace.activeConst() orelse return null;
-        const pane = active.model.focusedPaneConst() orelse return null;
-        if (!pane.attached or !std.meta.eql(pane.location, active.location)) {
-            return null;
-        }
+        return (focusedLaunchSource(model) orelse return null).pane_id;
+    }
 
-        return pane.id;
+    /// Captures the current workspace and attached focused pane for a tab
+    /// creation request without changing client state.
+    ///
+    /// ```zig
+    /// const plan = model.planTabCreation() orelse return;
+    /// ```
+    pub fn planTabCreation(model: *const Model) ?TabCreationPlan {
+        const source = focusedLaunchSource(model) orelse return null;
+
+        return .{
+            .workspace = source.location.workspace,
+            .cwd_source = source.pane_id,
+        };
     }
 
     /// Retires the current workspace projection and captures the bounded
@@ -927,6 +941,21 @@ fn captureWorkspace(model: *Model) WorkspaceDeparture {
     return departure;
 }
 
+const LaunchSource = struct {
+    location: schema.TabLocation,
+    pane_id: schema.PaneId,
+};
+
+fn focusedLaunchSource(model: *const Model) ?LaunchSource {
+    const active = model.workspace.activeConst() orelse return null;
+    const pane = active.model.focusedPaneConst() orelse return null;
+    if (!pane.attached or !std.meta.eql(pane.location, active.location)) {
+        return null;
+    }
+
+    return .{ .location = active.location, .pane_id = pane.id };
+}
+
 fn inheritCellSize(size: *schema.TerminalSize, source: schema.TerminalSize) void {
     size.cell_width_px = source.cell_width_px;
     size.cell_height_px = source.cell_height_px;
@@ -969,6 +998,27 @@ test "workspace creation planning requires the attached focused pane" {
     try std.testing.expectEqual(pane_id, model.planWorkspaceCreation().?);
     model.workspace.findPane(pane_id).?.attached = false;
     try std.testing.expect(model.planWorkspaceCreation() == null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "tab creation planning captures the workspace and attached focused pane" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    try std.testing.expect(model.planTabCreation() == null);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+
+    try std.testing.expectEqualDeep(TabCreationPlan{
+        .workspace = location.workspace,
+        .cwd_source = pane_id,
+    }, model.planTabCreation().?);
+    model.workspace.findPane(pane_id).?.attached = false;
+    try std.testing.expect(model.planTabCreation() == null);
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 

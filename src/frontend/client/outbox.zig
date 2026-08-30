@@ -1,6 +1,6 @@
 //! Bounded, allocation-free queue for messages sent by one frontend client.
 //!
-//! Variable input, workspace creation, rename, notification, and launch-cwd bytes are copied
+//! Variable input, creation labels, rename, notification, and launch-cwd bytes are copied
 //! because their producers may reuse or replace their buffers as soon as the
 //! event handler returns. One encoded buffer is borrowed only while a send
 //! actor is active.
@@ -63,6 +63,28 @@ const OwnedCreateWorkspace = struct {
     }
 };
 
+const OwnedCreateTab = struct {
+    request_id: schema.RequestId,
+    workspace: schema.WorkspaceLocation,
+    label: [schema.max_tab_label_bytes]u8 = undefined,
+    label_len: u8,
+    size: schema.TerminalSize,
+    launch: schema.Launch,
+
+    fn view(value: *const OwnedCreateTab, cwd: []const u8) schema.CreateTab {
+        var launch = value.launch;
+        launch.cwd = cwd;
+
+        return .{
+            .request_id = value.request_id,
+            .workspace = value.workspace,
+            .label = value.label[0..value.label_len],
+            .size = value.size,
+            .launch = launch,
+        };
+    }
+};
+
 const OwnedNotification = struct {
     request_id: schema.RequestId,
     level: schema.NotificationLevel,
@@ -109,7 +131,7 @@ pub const Message = union(enum) {
     create_pane: schema.CreatePane,
     close_pane: schema.ClosePane,
     request_workspace_snapshot: schema.RequestWorkspaceSnapshot,
-    create_tab: schema.CreateTab,
+    create_tab: OwnedCreateTab,
     rename_tab: OwnedRename,
     close_tab: schema.CloseTab,
     move_tab: schema.MoveTab,
@@ -160,7 +182,7 @@ pub const Outbox = struct {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
             .frame_ack => |ack| return outbox.pushAck(ack),
-            .pane_input, .create_workspace, .rename_tab, .rename_workspace, .show_notification => unreachable,
+            .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification => unreachable,
             else => {},
         }
         try outbox.append(message);
@@ -228,6 +250,22 @@ pub const Outbox = struct {
         };
         @memcpy(owned.name[0..request.name.len], request.name);
         try outbox.append(.{ .create_workspace = owned });
+    }
+
+    pub fn pushCreateTab(outbox: *Outbox, request: schema.CreateTab) !void {
+        if (request.label.len > schema.max_tab_label_bytes) {
+            return error.InvalidTabLabel;
+        }
+
+        var owned: OwnedCreateTab = .{
+            .request_id = request.request_id,
+            .workspace = request.workspace,
+            .label_len = @intCast(request.label.len),
+            .size = request.size,
+            .launch = request.launch,
+        };
+        @memcpy(owned.label[0..request.label.len], request.label);
+        try outbox.append(.{ .create_tab = owned });
     }
 
     pub fn pushNotification(outbox: *Outbox, request: schema.ShowNotification) !void {
@@ -307,11 +345,10 @@ pub const Outbox = struct {
             },
             .close_pane => |value| schema.encodeClosePane(buffer, value),
             .request_workspace_snapshot => |value| schema.encodeRequestWorkspaceSnapshot(buffer, value),
-            .create_tab => |value| {
-                var owned = value;
-                owned.launch.cwd = outbox.launchCwd(outbox.head);
-                return schema.encodeCreateTab(buffer, owned);
-            },
+            .create_tab => |*value| schema.encodeCreateTab(
+                buffer,
+                value.view(outbox.launchCwd(outbox.head)),
+            ),
             .rename_tab => |*value| schema.encodeRenameTab(buffer, .{
                 .request_id = value.request_id,
                 .location = value.location,
@@ -519,6 +556,39 @@ test "queued workspace creation owns name and cwd bytes until encoding" {
     try std.testing.expectEqualStrings("agents", decoded.create_workspace.name);
     try std.testing.expectEqualStrings("/work/source", decoded.create_workspace.launch.cwd);
     try std.testing.expectEqual(pane_id, decoded.create_workspace.launch.cwd_source.?);
+}
+
+test "queued tab creation owns label and cwd bytes until encoding" {
+    var outbox: Outbox = .{};
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try outbox.push(.{ .pane_resize = .{
+        .pane_id = pane_id,
+        .size = .{ .cols = 20, .rows = 10 },
+    } });
+    var buffer: [512]u8 = undefined;
+    _ = (try outbox.beginSend(&buffer)).?;
+
+    var label = "agents".*;
+    var cwd = "/work/source".*;
+    try outbox.pushCreateTab(.{
+        .request_id = @enumFromInt(2),
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .label = &label,
+        .size = .{ .cols = 30, .rows = 12 },
+        .launch = .{
+            .cwd = &cwd,
+            .cwd_source = pane_id,
+            .arguments = &.{"/bin/sh"},
+        },
+    });
+    @memset(&label, 'x');
+    @memset(&cwd, 'y');
+
+    outbox.popSent();
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqualStrings("agents", decoded.create_tab.label);
+    try std.testing.expectEqualStrings("/work/source", decoded.create_tab.launch.cwd);
+    try std.testing.expectEqual(pane_id, decoded.create_tab.launch.cwd_source.?);
 }
 
 test "pending launch cwd storage has an explicit bound" {

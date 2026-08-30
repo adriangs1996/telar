@@ -9,7 +9,6 @@ const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
 const close_tab = client_application.close_tab;
-const create_tab = client_application.create_tab;
 const schema = core.schema;
 const select_tab = client_application.select_tab;
 const tabs_mod = workspace_capability.tabs;
@@ -64,22 +63,6 @@ pub fn closureHandler(client: *Client) close_tab.CloseTabHandler {
         .effects = .{
             .context = client,
             .apply = applyClosure,
-        },
-    };
-}
-
-/// Wires the tab-creation use case to this client's attachment port.
-///
-/// ```zig
-/// var handler = creationHandler(client);
-/// _ = try handler.execute(command);
-/// ```
-pub fn creationHandler(client: *Client) create_tab.CreateTabHandler {
-    return .{
-        .model = &client.model,
-        .effects = .{
-            .context = client,
-            .apply = applyCreation,
         },
     };
 }
@@ -194,18 +177,6 @@ fn applyClosure(context: *anyopaque, removal: client_model.TabRemoval) !void {
     if (!client.requests.has(.tab_snapshot)) {
         try client.requestTabSnapshot(active.location);
     }
-}
-
-fn applyCreation(context: *anyopaque, creation: client_model.TabCreation) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    const workspace = &client.model.workspace;
-    const previous = findTab(workspace, creation.previous) orelse
-        return error.UnexpectedTabCreation;
-    const created = findTab(workspace, creation.created) orelse
-        return error.UnexpectedTabCreation;
-
-    try detach(client, previous);
-    try client.syncPaneFocus(&created.model);
 }
 
 fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !void {

@@ -238,12 +238,14 @@ test "bootstrap answers the initial open with both snapshot requests" {
     );
 }
 
-test "new tab inherits cwd from the focused runtime pane" {
+test "new tab request captures launch source geometry and continuation without mutation" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
     harness.client.options.arguments = &.{"/bin/sh"};
+    const version_before_request = harness.client.model.version();
+    const pending_updates_before_request = harness.client.presenter.pending_updates;
 
     var handler: InputHandler = .{ .client = harness.client };
     _ = try handler.applyNativeAction(.new_tab);
@@ -253,7 +255,20 @@ test "new tab inherits cwd from the focused runtime pane" {
     const message = try harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .create_tab);
     const created = message.create_tab;
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location.workspace, created.workspace);
+    try std.testing.expectEqualStrings("", created.label);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, created.launch.cwd_source.?);
+    try std.testing.expectEqual(schema.TerminalSize{
+        .cols = harness.client.view.workbench().w,
+        .rows = harness.client.view.workbench().h,
+    }, created.size);
+    try std.testing.expectEqualDeep(version_before_request, harness.client.model.version());
+    try std.testing.expectEqual(pending_updates_before_request, harness.client.presenter.pending_updates);
+
+    const continuation = harness.client.requests.take(created.request_id).?;
+    try std.testing.expect(continuation == .create_tab);
+    try std.testing.expectEqualDeep(created.workspace, continuation.create_tab.workspace);
+    try std.testing.expectEqual(created.size, continuation.create_tab.size);
 }
 
 test "new pane inherits cwd from the focused runtime pane" {
@@ -1494,12 +1509,19 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
+    const requested_size: schema.TerminalSize = .{
+        .cols = client.view.workbench().w - 1,
+        .rows = client.view.workbench().h - 1,
+    };
     var payload: [256]u8 = undefined;
 
     // Created: the new tab becomes active and the old one detaches.
     const version_before_creation = client.model.version();
     const pending_updates_before_creation = client.presenter.pending_updates;
-    try client.requests.add(@enumFromInt(4), .{ .create_tab = workspace });
+    try client.requests.add(@enumFromInt(4), .{ .create_tab = .{
+        .workspace = workspace,
+        .size = requested_size,
+    } });
     const created = try schema.encodeTabCreated(&payload, .{
         .request_id = @enumFromInt(4),
         .location = second_location,
@@ -1516,7 +1538,10 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(version_before_creation.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
     try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expect(client.model.workspace.findPane(@enumFromInt(20)).?.attached);
+    const created_pane = client.model.workspace.findPane(@enumFromInt(20)).?;
+    try std.testing.expect(created_pane.attached);
+    try std.testing.expectEqual(requested_size.cols, created_pane.buffer.w);
+    try std.testing.expectEqual(requested_size.rows, created_pane.buffer.h);
 
     try client.observeModel();
 
@@ -1635,7 +1660,10 @@ test "rejected tab creation leaves the active tab attached" {
     const version_before_creation = client.model.version();
     const pending_updates_before_creation = client.presenter.pending_updates;
     try client.requests.add(@enumFromInt(4), .{
-        .create_tab = TestHarness.bootstrap_location.workspace,
+        .create_tab = .{
+            .workspace = TestHarness.bootstrap_location.workspace,
+            .size = .{ .cols = 80, .rows = 20 },
+        },
     });
     var payload: [256]u8 = undefined;
     const duplicate = try schema.encodeTabCreated(&payload, .{
@@ -1657,6 +1685,33 @@ test "rejected tab creation leaves the active tab attached" {
     try std.testing.expectEqualDeep(version_before_creation, client.model.version());
     try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "a failed tab creation preserves the current projection and notifies" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before_failure = client.model.version();
+    const location_before_failure = client.model.activeTabLocation().?;
+    try client.requests.add(@enumFromInt(4), .{ .create_tab = .{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .size = .{ .cols = 80, .rows = 20 },
+    } });
+    var payload: [256]u8 = undefined;
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = @enumFromInt(4),
+        .code = .spawn_failed,
+        .message = "shell launch failed",
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
+
+    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.notification_tick_pending);
 }
 
 test "move tab waits for the canonical response and preserves active identity" {

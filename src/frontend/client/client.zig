@@ -398,6 +398,16 @@ pub fn enqueueCreateWorkspaceRequest(client: *Client, request: schema.CreateWork
     try client.pumpOutbox();
 }
 
+pub fn enqueueCreateTabRequest(client: *Client, request: schema.CreateTab) !void {
+    try client.requests.add(request.request_id, .{ .create_tab = .{
+        .workspace = request.workspace,
+        .size = request.size,
+    } });
+    errdefer _ = client.requests.take(request.request_id);
+    try client.outbox.pushCreateTab(request);
+    try client.pumpOutbox();
+}
+
 pub fn enqueueNotificationRequest(
     client: *Client,
     request: schema.ShowNotification,
