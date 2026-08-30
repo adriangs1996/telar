@@ -36,6 +36,7 @@ const graphics_credit_commands = @import("commands/graphics_credit.zig");
 const graphics_credit_controller = @import("controllers/graphics_credit.zig");
 const history_query = @import("queries/history.zig");
 const history_query_controller = @import("controllers/history_query.zig");
+const history_response_controller = @import("history_response_controller.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
 const open_pane_commands = @import("commands/open_pane.zig");
@@ -779,37 +780,9 @@ const Server = struct {
         return coordinator.handle(.{ .client = event.client, .result = event.result });
     }
 
-    fn handleHistoryResponseEvent(
-        server: *Server,
-        response_result: anyerror!history.Response,
-    ) !void {
-        const response = response_result catch return;
-        try server.select.concurrent(.history_response, history.receiveResponse, .{
-            server.io,
-            server.history_service,
-        });
-        switch (response) {
-            .query_result => |result| {
-                const session = server.clients.resolve(result.origin.client) orelse {
-                    result.deinit();
-                    return;
-                };
-                session.delivery.setCloseAfterReply(result.origin.close_after_reply);
-                session.delivery.responses.push(.{ .history_result = result }) catch
-                    result.deinit();
-            },
-            .failed => |failure| {
-                const session = server.clients.resolve(failure.origin.client) orelse return;
-                session.delivery.setCloseAfterReply(failure.origin.close_after_reply);
-                queueFailure(
-                    &session.delivery.responses,
-                    failure.request_id,
-                    .internal,
-                    failure.message,
-                ) catch {};
-            },
-        }
-        server.pumpAll();
+    fn handleHistoryResponseEvent(server: *Server, response_result: anyerror!history.Response) !void {
+        var controller = historyResponseController(server);
+        return controller.handle(response_result);
     }
 
     fn handleProxyEvent(server: *Server, event_result: anyerror!proxy_mod.Observation) !void {
@@ -2087,6 +2060,48 @@ fn clientSendShutdownDelivered(server: *Server) bool {
     return server.shutdownDelivered();
 }
 
+const history_response_runtime_port: history_response_controller.RuntimePort(Server, *ClientSession) = .{
+    .rearm_receive = rearmHistoryResponse,
+    .resolve = resolveHistoryResponseClient,
+    .set_close_after_reply = setHistoryCloseAfterReply,
+    .enqueue_query_result = enqueueHistoryQueryResult,
+    .enqueue_failure = enqueueHistoryFailure,
+    .dispose_query_result = disposeHistoryQueryResult,
+    .pump_clients = pumpRuntimeClients,
+};
+
+const RuntimeHistoryResponseController = history_response_controller.Controller(Server, *ClientSession, history_response_runtime_port);
+
+fn historyResponseController(server: *Server) RuntimeHistoryResponseController {
+    return RuntimeHistoryResponseController.init(server);
+}
+
+fn rearmHistoryResponse(server: *Server) !void {
+    try server.select.concurrent(.history_response, history.receiveResponse, .{ server.io, server.history_service });
+}
+
+fn resolveHistoryResponseClient(server: *Server, client: ClientKey) ?*ClientSession {
+    return server.clients.resolve(client);
+}
+
+fn setHistoryCloseAfterReply(_: *Server, session: *ClientSession, enabled: bool) void {
+    session.delivery.setCloseAfterReply(enabled);
+}
+
+fn enqueueHistoryQueryResult(_: *Server, session: *ClientSession, result: *history.model.QueryResult) bool {
+    session.delivery.responses.push(.{ .history_result = result }) catch return false;
+    return true;
+}
+
+fn enqueueHistoryFailure(_: *Server, session: *ClientSession, failure: history.model.Failure) bool {
+    queueFailure(&session.delivery.responses, failure.request_id, .internal, failure.message) catch return false;
+    return true;
+}
+
+fn disposeHistoryQueryResult(_: *Server, result: *history.model.QueryResult) void {
+    result.deinit();
+}
+
 const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
     .start = startPaneInputWrite,
     .collect = collectPaneLifecycle,
@@ -2841,6 +2856,7 @@ test {
     _ = graphics_credit_controller;
     _ = history_query;
     _ = history_query_controller;
+    _ = history_response_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
     _ = media_projection;
