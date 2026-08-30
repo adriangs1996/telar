@@ -238,6 +238,9 @@ pub fn build(b: *std.Build) void {
     // ---------------------------------------------------------------------
 
     const test_step = b.step("test", "Run the tests");
+    const parallel_test_prerequisites = testBarrier(b, "run parallel test prerequisites");
+    const transport_test_prerequisites = testBarrier(b, "run transport test prerequisites");
+    const schema_test_prerequisites = testBarrier(b, "run schema test prerequisites");
     const backend_proxy_test_step = b.step(
         "test-backend-proxy",
         "Run the runtime observation proxy tests",
@@ -262,6 +265,7 @@ pub fn build(b: *std.Build) void {
         transport: bool = false,
         schema: bool = false,
         frontend: bool = false,
+        isolated: bool = false,
     };
     const suites = [_]Suite{
         .{ .path = "src/core/ui/root.zig" },
@@ -291,16 +295,17 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/backend/pty/root.zig", .libc = true },
         .{ .path = "src/backend/root.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
+        .{ .path = "src/main.zig", .vt = true, .libc = true },
+        .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
+        .{ .path = "examples/terminal_browser_pane.zig", .vt = true, .libc = true },
         .{
             .path = "src/transport_integration_test.zig",
             .vt = true,
             .libc = true,
             .transport = true,
             .schema = true,
+            .isolated = true,
         },
-        .{ .path = "src/main.zig", .vt = true, .libc = true },
-        .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
-        .{ .path = "examples/terminal_browser_pane.zig", .vt = true, .libc = true },
     };
     for (suites) |suite| {
         const tests = b.addTest(.{
@@ -323,12 +328,29 @@ pub fn build(b: *std.Build) void {
         tests.root_module.linkSystemLibrary("nghttp2", .{});
         if (suite.vt) tests.root_module.addImport("ghostty-vt", ghostty_vt);
         coverage.instrumentTest(tests);
+        if (suite.isolated) {
+            // These PTY, process, and socket tests share finite host resources.
+            // Separate runs preserve each test step's scope while ensuring the
+            // integration event loops start after that step's other binaries.
+            const default_run = isolatedTestRun(b, tests, parallel_test_prerequisites);
+            test_step.dependOn(&default_run.step);
+            if (suite.transport) {
+                const transport_run = isolatedTestRun(b, tests, transport_test_prerequisites);
+                transport_test_step.dependOn(&transport_run.step);
+            }
+            if (suite.schema) {
+                const schema_run = isolatedTestRun(b, tests, schema_test_prerequisites);
+                schema_test_step.dependOn(&schema_run.step);
+            }
+            continue;
+        }
+
         const run_tests = b.addRunArtifact(tests);
-        test_step.dependOn(&run_tests.step);
+        parallel_test_prerequisites.dependOn(&run_tests.step);
         if (std.mem.eql(u8, suite.path, "src/backend/proxy_test.zig"))
             backend_proxy_test_step.dependOn(&run_tests.step);
-        if (suite.transport) transport_test_step.dependOn(&run_tests.step);
-        if (suite.schema) schema_test_step.dependOn(&run_tests.step);
+        if (suite.transport) transport_test_prerequisites.dependOn(&run_tests.step);
+        if (suite.schema) schema_test_prerequisites.dependOn(&run_tests.step);
         if (suite.frontend) frontend_test_step.dependOn(&run_tests.step);
     }
 
@@ -351,7 +373,7 @@ pub fn build(b: *std.Build) void {
     });
     substitution.root_module.addImport("unicode", unicode_fake);
     coverage.instrumentTest(substitution);
-    test_step.dependOn(&b.addRunArtifact(substitution).step);
+    parallel_test_prerequisites.dependOn(&b.addRunArtifact(substitution).step);
 
     // ---------------------------------------------------------------------
     // The proxy example
@@ -489,7 +511,19 @@ pub fn build(b: *std.Build) void {
             cross_step.dependOn(&local_transport_check.step);
         }
     }
-    test_step.dependOn(cross_step);
+    parallel_test_prerequisites.dependOn(cross_step);
+}
+
+fn testBarrier(b: *std.Build, name: []const u8) *std.Build.Step {
+    const barrier = b.allocator.create(std.Build.Step) catch @panic("OOM");
+    barrier.* = std.Build.Step.init(.{ .id = .custom, .name = name, .owner = b });
+    return barrier;
+}
+
+fn isolatedTestRun(b: *std.Build, tests: *std.Build.Step.Compile, prerequisites: *std.Build.Step) *std.Build.Step.Run {
+    const run = b.addRunArtifact(tests);
+    run.step.dependOn(prerequisites);
+    return run;
 }
 
 const Coverage = struct {
