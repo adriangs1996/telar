@@ -170,14 +170,17 @@ pub const Attachment = struct {
         attachment.graphics.shared_transport = shared;
     }
 
-    pub fn grantGraphicsCredit(attachment: *Attachment, bytes: usize) bool {
-        if (bytes > core.graphics.max_image_bytes_per_pane - attachment.graphics.credit)
+    fn returnGraphicsCredit(attachment: *Attachment, bytes: usize) bool {
+        const available = core.graphics.max_image_bytes_per_pane -| attachment.graphics.credit;
+        if (bytes == 0 or bytes > available) {
             return false;
+        }
+
         attachment.graphics.credit += bytes;
         return true;
     }
 
-    pub fn graphicsCredit(attachment: *const Attachment) usize {
+    fn graphicsCredit(attachment: *const Attachment) usize {
         return attachment.graphics.credit;
     }
 
@@ -272,6 +275,12 @@ pub const ViewportUpdate = enum {
     unchanged,
 };
 
+pub const GraphicsCreditUpdate = enum {
+    returned,
+    pane_not_attached,
+    invalid_amount,
+};
+
 pub const SelectionRange = selection.Range;
 pub const SelectionResult = selection.Result;
 pub const selection_scratch_bytes = selection.scratch_bytes;
@@ -330,6 +339,23 @@ pub const AttachmentStore = struct {
         const attachment = store.find(pane_id) orelse return false;
         attachment.requestGraphicsSnapshot();
         return true;
+    }
+
+    /// Restores only graphics bytes previously consumed by one client
+    /// attachment. Invalid amounts and missing panes leave all credit unchanged.
+    ///
+    /// ```zig
+    /// const update = store.returnGraphicsCredit(credit);
+    /// ```
+    pub fn returnGraphicsCredit(store: *AttachmentStore, credit: schema.GraphicsCredit) GraphicsCreditUpdate {
+        const attachment = store.find(credit.pane_id) orelse return .pane_not_attached;
+        const bytes = std.math.cast(usize, credit.bytes) orelse return .invalid_amount;
+
+        if (!attachment.returnGraphicsCredit(bytes)) {
+            return .invalid_amount;
+        }
+
+        return .returned;
     }
 
     /// Accepts only the frame currently outstanding for the selected client

@@ -27,6 +27,8 @@ const detach_pane_commands = @import("commands/detach_pane.zig");
 const detach_pane_controller = @import("controllers/detach_pane.zig");
 const frame_ack_commands = @import("commands/frame_ack.zig");
 const frame_ack_controller = @import("controllers/frame_ack.zig");
+const graphics_credit_commands = @import("commands/graphics_credit.zig");
+const graphics_credit_controller = @import("controllers/graphics_credit.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("controllers/move_tab.zig");
 const open_pane_commands = @import("commands/open_pane.zig");
@@ -90,6 +92,7 @@ const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
+const GraphicsCreditController = graphics_credit_controller.Controller(*graphics_credit_commands.ReturnGraphicsCreditHandler);
 const PaneInputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
 const PaneResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
 const PaneViewportController = pane_viewport_controller.Controller(*pane_viewport_commands.SetPaneViewportHandler);
@@ -1531,11 +1534,14 @@ const Server = struct {
                 configure,
             ),
             .request_runtime_state => attachment_entrypoints.requestRuntimeState(&session.delivery),
-            .graphics_credit => |credit| attachment_entrypoints.graphicsCredit(
-                attachments,
-                metrics,
-                credit,
-            ),
+            .graphics_credit => |credit| {
+                var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
+                    .attachments = attachments,
+                };
+                var controller = GraphicsCreditController.init(metrics, &handler);
+
+                try controller.graphicsCredit(credit);
+            },
             .frame_ack => |ack| {
                 var handler: frame_ack_commands.FrameAckHandler = .{
                     .attachments = attachments,
@@ -2757,6 +2763,8 @@ test {
     _ = detach_pane_controller;
     _ = frame_ack_commands;
     _ = frame_ack_controller;
+    _ = graphics_credit_commands;
+    _ = graphics_credit_controller;
     _ = move_tab_commands;
     _ = move_tab_controller;
     _ = open_pane_commands;
@@ -2789,6 +2797,7 @@ test {
     _ = @import("create_workspace_test.zig");
     _ = @import("detach_pane_test.zig");
     _ = @import("frame_ack_test.zig");
+    _ = @import("graphics_credit_test.zig");
     _ = @import("move_tab_test.zig");
     _ = @import("open_pane_test.zig");
     _ = @import("pane_input_test.zig");
