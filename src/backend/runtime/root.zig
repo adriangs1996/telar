@@ -4,6 +4,7 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const agent_mod = @import("../agent/root.zig");
+const agent_maintenance_coordinator = @import("agent_maintenance_coordinator.zig");
 const agent_process = @import("../process/root.zig");
 const history = @import("../history/root.zig");
 const attachment_mod = @import("attachment.zig");
@@ -926,10 +927,8 @@ const Server = struct {
     }
 
     fn handleAgentTickEvent(server: *Server, result: anyerror!void) !void {
-        result catch return;
-        try server.select.concurrent(.agent_tick, waitForAgentTick, .{server.io});
-        _ = server.model.agents.expire(Io.Timestamp.now(server.io, .real).toMilliseconds());
-        server.pumpAll();
+        var coordinator = agentMaintenanceCoordinator(server);
+        return coordinator.handle(result);
     }
 
     fn handleMetricsTickEvent(server: *Server, result: anyerror!void) !void {
@@ -2313,6 +2312,26 @@ fn revokeExitedPaneCredential(server: *Server, pane: *Pane) void {
     server.revokePaneCredential(pane);
 }
 
+const agent_maintenance_runtime_port: agent_maintenance_coordinator.RuntimePort(Server) = .{
+    .rearm_tick = rearmAgentMaintenance,
+    .now_ms = runtimeWallClockMs,
+    .pump_clients = pumpRuntimeClients,
+};
+
+const RuntimeAgentMaintenanceCoordinator = agent_maintenance_coordinator.Coordinator(Server, agent_maintenance_runtime_port);
+
+fn agentMaintenanceCoordinator(server: *Server) RuntimeAgentMaintenanceCoordinator {
+    return RuntimeAgentMaintenanceCoordinator.init(server, .{ .agents = &server.model.agents });
+}
+
+fn rearmAgentMaintenance(server: *Server) !void {
+    try server.select.concurrent(.agent_tick, waitForAgentTick, .{server.io});
+}
+
+fn runtimeWallClockMs(server: *Server) i64 {
+    return Io.Timestamp.now(server.io, .real).toMilliseconds();
+}
+
 const proxy_observation_runtime_port: proxy_observation_adapter.RuntimePort(Server) = .{
     .rearm_receive = rearmProxyObservation,
     .schedule_description = scheduleAgentDescriptionWork,
@@ -2681,6 +2700,7 @@ test "runtime VT answers KGP queries and decodes terminal-browser zlib RGBA" {
 }
 
 test {
+    _ = agent_maintenance_coordinator;
     _ = close_tab_commands;
     _ = close_tab_controller;
     _ = close_pane_commands;
