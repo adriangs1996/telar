@@ -1342,7 +1342,7 @@ test "tab launch inherits cwd from a runtime-owned pane" {
     const inherited_arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "pwd > \"$1\"; sleep 600",
+        "pwd > \"$1.tmp\" && mv \"$1.tmp\" \"$1\"; sleep 600",
         "telar",
         sentinel_path,
     };
