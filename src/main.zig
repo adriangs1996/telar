@@ -442,8 +442,8 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     try backend.runtime.serve(
         init.io,
         init.gpa,
-        endpoint.path(),
         .{
+            .endpoint = endpoint.path(),
             .graphics = resolved_options.graphics,
             .environment = init.minimal.environ,
             .history_path = history_path.path,

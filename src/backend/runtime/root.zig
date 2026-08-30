@@ -132,6 +132,7 @@ const ResponseQueue = response_queue.ResponseQueue;
 const encodeResponse = runtime_encoder.encodeResponse;
 
 pub const ServeOptions = struct {
+    endpoint: []const u8,
     graphics: GraphicsLimits = .{},
     environment: std.process.Environ,
     /// SQLite database for durable history; the default keeps it in memory.
@@ -323,8 +324,21 @@ const GeometryLease = struct {
     owner: ClientKey,
 };
 
-pub fn serve(io: Io, gpa: std.mem.Allocator, endpoint: []const u8, options: ServeOptions) !void {
-    return serveInternal(io, gpa, endpoint, options);
+/// Runs one runtime instance until a stop event or fatal runtime error.
+/// `options` is borrowed for the duration of the call.
+///
+/// ```zig
+/// try serve(io, gpa, .{
+///     .endpoint = "/tmp/telar.sock",
+///     .environment = environment,
+/// });
+/// ```
+pub fn serve(io: Io, gpa: std.mem.Allocator, options: ServeOptions) !void {
+    var runtime: Runtime = undefined;
+    try runtime.init(.{ .io = io, .backing_gpa = gpa, .options = options });
+    defer runtime.deinit();
+
+    try runtime.run();
 }
 
 /// Deterministic integration seam proving that PTY input remains independent
@@ -1678,128 +1692,212 @@ fn pumpNotificationClients(context: *anyopaque) void {
     server.pumpAll();
 }
 
-fn serveInternal(io: Io, backing_gpa: std.mem.Allocator, endpoint: []const u8, options: ServeOptions) !void {
-    var heap = diagnostics.Heap.init(backing_gpa);
-    const gpa = heap.allocator();
-    try options.graphics.validate();
-    attachment_mod.initSharedFreezeNonce(io);
-    const history_path = options.history_path;
-    const stop = options.stop;
-    const ingest_gate = options.ingest_gate;
-    var child_environment = try pty.Environment.init(gpa, options.environment, "telar");
-    defer child_environment.deinit();
-    var proxy_runtime = try proxy_runtime_mod.Runtime.init(io, gpa, options.proxy);
-    defer proxy_runtime.deinit();
+const RuntimeStartupPhase = enum {
+    child_environment,
+    proxy,
+    listener,
+    telemetry,
+    clients,
+    history,
+    actors,
+};
 
-    var listener = try transport.local.LocalListener.listen(io, endpoint);
+const RuntimeStartup = struct {
+    io: Io,
+    backing_gpa: std.mem.Allocator,
+    options: ServeOptions,
+    fail_after: ?RuntimeStartupPhase = null,
+
+    fn checkpoint(startup: RuntimeStartup, phase: RuntimeStartupPhase) !void {
+        if (startup.fail_after == phase) {
+            return error.InjectedStartupFailure;
+        }
+    }
+};
+
+const Runtime = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+    heap: diagnostics.Heap,
+    child_environment: pty.Environment,
+    proxy_runtime: proxy_runtime_mod.Runtime,
+    listener: transport.local.LocalListener,
+    telemetry: TelemetryState,
+    clients: *ClientStore,
+    history_runtime: history_runtime_mod.Runtime,
+    select_storage: [16 + 2 * max_clients + 7 * max_panes]RuntimeEvent,
+    select: Io.Select(RuntimeEvent),
+    server: Server,
+    ingest_gate: ?*IngestTestGate,
+
+    fn init(runtime: *Runtime, startup: RuntimeStartup) !void {
+        runtime.io = startup.io;
+        runtime.heap = diagnostics.Heap.init(startup.backing_gpa);
+        runtime.gpa = runtime.heap.allocator();
+        runtime.ingest_gate = startup.options.ingest_gate;
+
+        try startup.options.graphics.validate();
+        attachment_mod.initSharedFreezeNonce(runtime.io);
+
+        runtime.child_environment = try pty.Environment.init(runtime.gpa, startup.options.environment, "telar");
+        errdefer runtime.child_environment.deinit();
+        try startup.checkpoint(.child_environment);
+
+        runtime.proxy_runtime = try proxy_runtime_mod.Runtime.init(runtime.io, runtime.gpa, startup.options.proxy);
+        errdefer runtime.proxy_runtime.deinit();
+        try startup.checkpoint(.proxy);
+
+        runtime.listener = try transport.local.LocalListener.listen(runtime.io, startup.options.endpoint);
+        errdefer runtime.listener.deinit(runtime.io);
+        try startup.checkpoint(.listener);
+
+        runtime.telemetry = initRuntimeTelemetry(runtime.io, startup.options.endpoint);
+        errdefer runtime.telemetry.deinit(runtime.io);
+        try startup.checkpoint(.telemetry);
+
+        runtime.clients = try createClientStore(runtime.gpa);
+        errdefer runtime.gpa.destroy(runtime.clients);
+        try startup.checkpoint(.clients);
+
+        runtime.history_runtime = try history_runtime_mod.Runtime.init(runtime.io, runtime.gpa, startup.options.history_path);
+        errdefer runtime.history_runtime.deinit();
+        try startup.checkpoint(.history);
+
+        runtime.select = Io.Select(RuntimeEvent).init(runtime.io, &runtime.select_storage);
+        errdefer runtime.select.cancelDiscard();
+        try runtime.scheduleInitialEvents(startup.options.stop);
+        try startup.checkpoint(.actors);
+
+        runtime.server = runtime.composeServer(startup.options);
+    }
+
+    fn scheduleInitialEvents(runtime: *Runtime, stop: ?*Io.Queue(u8)) !void {
+        try runtime.select.concurrent(.accepted, acceptClient, .{ runtime.io, &runtime.listener });
+        if (stop) |queue| {
+            try runtime.select.concurrent(.stopped, waitForStop, .{ runtime.io, queue });
+        }
+        try runtime.select.concurrent(.history_response, history.receiveResponse, .{ runtime.io, runtime.history_runtime.service() });
+
+        var proxy_schedule_context: ProxyScheduleContext = .{ .io = runtime.io, .select = &runtime.select };
+        try runtime.proxy_runtime.schedule(proxy_schedule_context.scheduler());
+        try runtime.select.concurrent(.agent_tick, waitForAgentTick, .{runtime.io});
+        try runtime.select.concurrent(.metrics_tick, waitForMetricsTick, .{runtime.io});
+
+        if (comptime diagnostics.enabled) {
+            if (runtime.telemetry.available()) {
+                try runtime.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{runtime.io});
+            }
+        }
+    }
+
+    fn composeServer(runtime: *Runtime, options: ServeOptions) Server {
+        return .{
+            .io = runtime.io,
+            .gpa = runtime.gpa,
+            .heap = &runtime.heap,
+            .select = &runtime.select,
+            .history_service = runtime.history_runtime.service(),
+            .child_environment = &runtime.child_environment,
+            .inherited_environment = options.environment,
+            .proxy_runtime = &runtime.proxy_runtime,
+            .agent_description_options = options.agent_descriptions,
+            .launch_fault = options.launch_fault,
+            .clients = runtime.clients,
+            .model = .{
+                .panes = .{
+                    .graphics_limits = options.graphics,
+                    .graphics_budget = .init(options.graphics.global_bytes),
+                },
+            },
+            .metrics = .{ .started_ns = diagnostics.now(runtime.io) },
+        };
+    }
+
+    fn run(runtime: *Runtime) !void {
+        while (true) {
+            const event = try runtime.select.await();
+            const path = diagnostics.enter(runtimeEventPath(event));
+            defer path.restore();
+
+            switch (event) {
+                .stopped => |result| return result,
+                .accepted => |result| try runtime.server.handleAcceptedEvent(result, &runtime.listener),
+                .handshaken => |result| runtime.server.handleHandshakenEvent(result),
+                .client_message => |event_value| if (try runtime.server.handleClientMessageEvent(event_value)) return,
+                .client_sent => |event_value| if (runtime.server.handleClientSentEvent(event_value)) return,
+                .history_response => |result| try runtime.server.handleHistoryResponseEvent(result),
+                .proxy_event => |result| try runtime.server.handleProxyEvent(result),
+                .agent_tick => |result| try runtime.server.handleAgentTickEvent(result),
+                .agent_description => |result| runtime.server.handleAgentDescriptionEvent(result),
+                .metrics_tick => |result| try runtime.server.handleMetricsTickEvent(result),
+                .pane_input_written => |event_value| try runtime.server.handlePaneInputWrittenEvent(event_value),
+                .pane_response_written => |event_value| try runtime.server.handlePaneResponseWrittenEvent(event_value),
+                .pane_output => |event_value| try runtime.server.handlePaneOutputEvent(event_value, runtime.ingest_gate),
+                .pane_ingested => |event_value| try runtime.server.handlePaneIngestedEvent(event_value),
+                .pane_observed => |event_value| try runtime.server.handlePaneObservedEvent(event_value),
+                .pane_media => |event_value| try runtime.server.handlePaneMediaEvent(event_value),
+                .pane_exit => |event_value| try runtime.server.handlePaneExitEvent(event_value),
+                .telemetry_tick => |result| runtime.server.handleTelemetryTickEvent(result, &runtime.telemetry),
+                .telemetry_written => |result| runtime.server.handleTelemetryWrittenEvent(result, &runtime.telemetry),
+            }
+        }
+    }
+
+    fn deinit(runtime: *Runtime) void {
+        runtime.listener.shutdown();
+        for (&runtime.server.clients.items) |*slot| {
+            if (slot.*) |session| {
+                session.connection.shutdown(runtime.io);
+            }
+        }
+        if (runtime.server.client_admission.pendingConnection()) |pending| {
+            pending.shutdown(runtime.io);
+        }
+
+        // `pane_exit` blocks in libc's waitpid and cannot observe Select
+        // cancellation. End the PTY sessions first so their waits can finish;
+        // masters stay open here and close in `destroy`, after every actor
+        // has been joined, because Darwin's close waits behind blocked writes.
+        runtime.server.model.panes.shutdown();
+        runtime.select.cancelDiscard();
+        runtime.proxy_runtime.deinit();
+        runtime.listener.deinit(runtime.io);
+
+        if (runtime.server.client_admission.pendingConnection()) |pending| {
+            pending.deinit(runtime.io);
+        }
+        for (&runtime.server.clients.items) |*slot| {
+            if (slot.*) |session| {
+                session.read_pending = false;
+                session.send_pending = false;
+            }
+        }
+
+        runtime.server.clients.deinit(runtime.io, runtime.gpa);
+        runtime.server.model.panes.deinit();
+        var workspace_repository = runtime.server.workspaceRepository();
+        workspace_repository.deinit();
+        runtime.history_runtime.deinit();
+        runtime.gpa.destroy(runtime.clients);
+        runtime.telemetry.deinit(runtime.io);
+        runtime.child_environment.deinit();
+    }
+};
+
+fn initRuntimeTelemetry(io: Io, endpoint: []const u8) TelemetryState {
     var telemetry_suffix_buffer: [64]u8 = undefined;
     const telemetry_suffix = std.fmt.bufPrint(
         &telemetry_suffix_buffer,
         "runtime-{d}",
         .{std.c.getpid()},
     ) catch "runtime";
-    var telemetry = TelemetryState.init(io, endpoint, telemetry_suffix);
-    defer telemetry.deinit(io);
+    return TelemetryState.init(io, endpoint, telemetry_suffix);
+}
 
+fn createClientStore(gpa: std.mem.Allocator) !*ClientStore {
     const clients = try gpa.create(ClientStore);
     clients.* = .{};
-    defer gpa.destroy(clients);
-
-    var history_runtime = try history_runtime_mod.Runtime.init(io, gpa, history_path);
-    defer history_runtime.deinit();
-    const history_service = history_runtime.service();
-
-    var select_storage: [16 + 2 * max_clients + 7 * max_panes]RuntimeEvent = undefined;
-    var select = Io.Select(RuntimeEvent).init(io, &select_storage);
-    var select_owned = true;
-    errdefer {
-        if (select_owned) {
-            select.cancelDiscard();
-        }
-    }
-    try select.concurrent(.accepted, acceptClient, .{ io, &listener });
-    if (stop) |queue| try select.concurrent(.stopped, waitForStop, .{ io, queue });
-    try select.concurrent(.history_response, history.receiveResponse, .{ io, history_service });
-    var proxy_schedule_context: ProxyScheduleContext = .{ .io = io, .select = &select };
-    try proxy_runtime.schedule(proxy_schedule_context.scheduler());
-    try select.concurrent(.agent_tick, waitForAgentTick, .{io});
-    try select.concurrent(.metrics_tick, waitForMetricsTick, .{io});
-    if (comptime diagnostics.enabled) {
-        if (telemetry.available())
-            try select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
-    }
-
-    var server: Server = .{
-        .io = io,
-        .gpa = gpa,
-        .heap = &heap,
-        .select = &select,
-        .history_service = history_service,
-        .child_environment = &child_environment,
-        .inherited_environment = options.environment,
-        .proxy_runtime = &proxy_runtime,
-        .agent_description_options = options.agent_descriptions,
-        .launch_fault = options.launch_fault,
-        .clients = clients,
-        .model = .{
-            .panes = .{
-                .graphics_limits = options.graphics,
-                .graphics_budget = .init(options.graphics.global_bytes),
-            },
-        },
-        .metrics = .{ .started_ns = diagnostics.now(io) },
-    };
-    defer {
-        listener.shutdown();
-        for (&server.clients.items) |*slot|
-            if (slot.*) |session| session.connection.shutdown(io);
-        if (server.client_admission.pendingConnection()) |pending| pending.shutdown(io);
-        // `pane_exit` blocks in libc's waitpid and cannot observe Select
-        // cancellation. End the PTY sessions first so their waits can finish;
-        // masters stay open here and close in `destroy`, after every actor
-        // has been joined, because Darwin's close waits behind blocked writes.
-        server.model.panes.shutdown();
-        select.cancelDiscard();
-        proxy_runtime.deinit();
-        listener.deinit(io);
-        if (server.client_admission.pendingConnection()) |pending| pending.deinit(io);
-        for (&server.clients.items) |*slot| if (slot.*) |session| {
-            session.read_pending = false;
-            session.send_pending = false;
-        };
-        server.clients.deinit(io, gpa);
-        server.model.panes.deinit();
-        var workspace_repository = server.workspaceRepository();
-        workspace_repository.deinit();
-    }
-    select_owned = false;
-
-    while (true) {
-        const event = try select.await();
-        const path = diagnostics.enter(runtimeEventPath(event));
-        defer path.restore();
-        switch (event) {
-            .stopped => |result| return result,
-            .accepted => |result| try server.handleAcceptedEvent(result, &listener),
-            .handshaken => |result| server.handleHandshakenEvent(result),
-            .client_message => |event_value| if (try server.handleClientMessageEvent(event_value)) return,
-            .client_sent => |event_value| if (server.handleClientSentEvent(event_value)) return,
-            .history_response => |result| try server.handleHistoryResponseEvent(result),
-            .proxy_event => |result| try server.handleProxyEvent(result),
-            .agent_tick => |result| try server.handleAgentTickEvent(result),
-            .agent_description => |result| server.handleAgentDescriptionEvent(result),
-            .metrics_tick => |result| try server.handleMetricsTickEvent(result),
-            .pane_input_written => |event_value| try server.handlePaneInputWrittenEvent(event_value),
-            .pane_response_written => |event_value| try server.handlePaneResponseWrittenEvent(event_value),
-            .pane_output => |event_value| try server.handlePaneOutputEvent(event_value, ingest_gate),
-            .pane_ingested => |event_value| try server.handlePaneIngestedEvent(event_value),
-            .pane_observed => |event_value| try server.handlePaneObservedEvent(event_value),
-            .pane_media => |event_value| try server.handlePaneMediaEvent(event_value),
-            .pane_exit => |event_value| try server.handlePaneExitEvent(event_value),
-            .telemetry_tick => |result| server.handleTelemetryTickEvent(result, &telemetry),
-            .telemetry_written => |result| server.handleTelemetryWrittenEvent(result, &telemetry),
-        }
-    }
+    return clients;
 }
 
 fn runtimeEventPath(event: RuntimeEvent) diagnostics.Path {
@@ -2650,6 +2748,87 @@ fn synchronizeMediaClients(server: *Server, pane: *Pane, reset: bool) media_proj
     }
 
     return media_projection.synchronize(pane, stores[0..count], reset);
+}
+
+fn expectRuntimeEndpointRemoved(io: Io, endpoint: []const u8) !void {
+    try std.testing.expectError(
+        error.FileNotFound,
+        Io.Dir.cwd().statFile(io, endpoint, .{ .follow_symlinks = false }),
+    );
+}
+
+test "invalid graphics limits fail before runtime resources are created" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/invalid.sock", .{directory_buffer[0..directory_len]});
+    var runtime: Runtime = undefined;
+
+    try std.testing.expectError(error.InvalidGraphicsLimits, runtime.init(.{
+        .io = io,
+        .backing_gpa = std.testing.allocator,
+        .options = .{
+            .endpoint = endpoint,
+            .environment = std.testing.environ,
+            .graphics = .{ .pane_bytes = 1 },
+        },
+    }));
+    try expectRuntimeEndpointRemoved(io, endpoint);
+}
+
+test "every runtime startup checkpoint rolls back acquired resources" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+
+    for (std.enums.values(RuntimeStartupPhase), 0..) |phase, index| {
+        var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const endpoint = try std.fmt.bufPrint(
+            &endpoint_buffer,
+            "{s}/startup-{d}.sock",
+            .{ directory_buffer[0..directory_len], index },
+        );
+        var runtime: Runtime = undefined;
+
+        try std.testing.expectError(error.InjectedStartupFailure, runtime.init(.{
+            .io = io,
+            .backing_gpa = std.testing.allocator,
+            .options = .{ .endpoint = endpoint, .environment = std.testing.environ },
+            .fail_after = phase,
+        }));
+        try expectRuntimeEndpointRemoved(io, endpoint);
+    }
+}
+
+test "runtime composition keeps every borrowed capability at a stable address" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/composed.sock", .{directory_buffer[0..directory_len]});
+    var runtime: Runtime = undefined;
+    try runtime.init(.{
+        .io = io,
+        .backing_gpa = std.testing.allocator,
+        .options = .{ .endpoint = endpoint, .environment = std.testing.environ },
+    });
+
+    try std.testing.expect(runtime.server.heap == &runtime.heap);
+    try std.testing.expect(runtime.server.select == &runtime.select);
+    try std.testing.expect(runtime.server.history_service == runtime.history_runtime.service());
+    try std.testing.expect(runtime.server.child_environment == &runtime.child_environment);
+    try std.testing.expect(runtime.server.proxy_runtime == &runtime.proxy_runtime);
+    try std.testing.expect(runtime.server.clients == runtime.clients);
+
+    runtime.deinit();
+    try expectRuntimeEndpointRemoved(io, endpoint);
 }
 
 test "client session storage stays off the runtime stack" {

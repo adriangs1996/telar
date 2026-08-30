@@ -249,7 +249,8 @@ test "runtime stops with a live pane and removes its endpoint" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -328,7 +329,8 @@ test "invalid launch cwd fails before workspace commit" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -400,7 +402,8 @@ fn expectPartialLaunchRecovery(phase: backend.history.LaunchPhase) !void {
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
     var fault: backend.runtime.LaunchTestFault = .{ .phase = phase };
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
         .launch_fault = &fault,
@@ -495,7 +498,8 @@ test "runtime destroys a pane after its shell exits" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -625,7 +629,8 @@ test "the last pane closes only its tab when the workspace has another tab" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -723,7 +728,8 @@ test "an exited detached pane removes its tab and workspace" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -783,7 +789,8 @@ test "one client drives two attached panes and closes either one" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -943,7 +950,8 @@ test "pane keeps running while its client is disconnected" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1070,7 +1078,8 @@ test "runtime keeps independent panes for different workspaces" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1154,7 +1163,8 @@ test "explicit workspace creation and selection use identity instead of path" {
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
     var fault: backend.runtime.LaunchTestFault = .{ .phase = .pane_registration };
     fault.claimed.store(true, .release);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
         .launch_fault = &fault,
@@ -1317,7 +1327,8 @@ test "tab launch inherits cwd from a runtime-owned pane" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1427,7 +1438,8 @@ test "runtime owns the complete tab lifecycle" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1571,7 +1583,8 @@ test "a reconnect restores tab order labels and pane membership" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1717,7 +1730,8 @@ test "an identical pane resize does not emit another snapshot" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1811,8 +1825,8 @@ test "runtime persists terminal-edited commands without shell integration" {
     var server = try io.concurrent(backend.runtime.serve, .{
         io,
         gpa,
-        socket_path,
         .{
+            .endpoint = socket_path,
             .environment = std.testing.environ,
             .history_path = database_path,
             .stop = &stop,
@@ -1926,7 +1940,8 @@ test "modified Enter follows child keyboard negotiation through the PTY" {
     const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/keyboard.sock", .{directory});
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2034,8 +2049,8 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     var server = try io.concurrent(backend.runtime.serve, .{
         io,
         gpa,
-        socket_path,
         .{
+            .endpoint = socket_path,
             .environment = std.testing.environ,
             .stop = &stop,
             .ingest_gate = &gate,
@@ -2125,7 +2140,8 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2249,7 +2265,8 @@ test "a silent connection cannot starve later clients" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2304,7 +2321,8 @@ test "input to one pane flows while another pane's PTY is wedged" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2413,7 +2431,8 @@ test "two clients observe one pane with independent frame acknowledgement" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2587,7 +2606,8 @@ test "a stale attachment command does not disconnect the client" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2642,7 +2662,8 @@ test "runtime broadcasts a bounded notification and acknowledges delivery" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
