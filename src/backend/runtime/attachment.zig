@@ -225,12 +225,7 @@ pub const Attachment = struct {
     /// const prepared = try attachment.prepareNextGraphics(.{ .buffer = buffer, .global_credit = credit, .live_storage_available = true });
     /// ```
     pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPreparation) !?Prepared {
-        const payload = (try encodeNextGraphics(
-            preparation.buffer,
-            attachment,
-            preparation.global_credit,
-            preparation.live_storage_available,
-        )) orelse return null;
+        const payload = (try encodeNextGraphics(attachment, preparation)) orelse return null;
 
         return .{
             .bytes = payload,
@@ -618,12 +613,11 @@ pub fn abandonGraphicsBatch(attachment: *Attachment) void {
     attachment.graphics.observed_revision = attachment.pane.graphics_revision;
 }
 
-fn encodeNextGraphics(
-    buffer: []u8,
-    attachment: *Attachment,
-    global_credit: usize,
-    live_storage_available: bool,
-) !?[]const u8 {
+fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsPreparation) !?[]const u8 {
+    const buffer = preparation.buffer;
+    const global_credit = preparation.global_credit;
+    const live_storage_available = preparation.live_storage_available;
+
     const pane = attachment.pane;
     const storage = &pane.media.terminal.screens.active.kitty_images;
     if (!attachment.graphics.batch_active) {
@@ -727,12 +721,7 @@ fn encodeNextGraphics(
     }
 
     switch (try stageNextTransfer(attachment, global_credit)) {
-        .staged => return encodeNextGraphics(
-            buffer,
-            attachment,
-            global_credit,
-            live_storage_available,
-        ),
+        .staged => return encodeNextGraphics(attachment, preparation),
         .blocked => return null,
         .idle => {},
     }
@@ -755,7 +744,7 @@ fn encodeNextGraphics(
         const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
         if (!knowsImage(attachment, .{ .image_id = image.id, .generation = image.generation }))
             continue;
-        const placement = placementValue(pane, entry.key_ptr.*, entry.value_ptr.*, image) orelse
+        const placement = placementValue(pane, .{ .key = entry.key_ptr.*, .placement = entry.value_ptr.*, .image = image }) orelse
             continue;
         if (knownPlacement(attachment, placement.virtual_id)) |known| {
             if (std.meta.eql(known.placement, placement)) continue;
@@ -856,12 +845,11 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
         var placement_iterator = storage.placements.iterator();
         while (placement_iterator.next()) |placement_entry| {
             if (placement_entry.key_ptr.image_id != image.id) continue;
-            const placement = placementValue(
-                pane,
-                placement_entry.key_ptr.*,
-                placement_entry.value_ptr.*,
-                image.*,
-            ) orelse continue;
+            const placement = placementValue(pane, .{
+                .key = placement_entry.key_ptr.*,
+                .placement = placement_entry.value_ptr.*,
+                .image = image.*,
+            }) orelse continue;
             const index = attachment.graphics.transfer.?.placement_count;
             if (index == core.graphics.max_placements_per_pane) break;
             attachment.graphics.transfer.?.placements[index] = placement;
@@ -937,17 +925,8 @@ pub fn findPlacement(storage: *vt.kitty.graphics.ImageStorage, virtual_id: u64) 
     return null;
 }
 
-fn placementValue(
-    pane: *Pane,
-    key: vt.kitty.graphics.ImageStorage.PlacementKey,
-    placement: vt.kitty.graphics.ImageStorage.Placement,
-    image: vt.kitty.graphics.Image,
-) ?core.graphics.Placement {
-    return media_mod.placementValue(&pane.media.terminal, .{
-        .key = key,
-        .placement = placement,
-        .image = image,
-    });
+fn placementValue(pane: *Pane, source: media_mod.PlacementSource) ?core.graphics.Placement {
+    return media_mod.placementValue(&pane.media.terminal, source);
 }
 
 test "attachment store reports and commits workspace departure on the last pane" {
@@ -1137,12 +1116,11 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
     const buffer = try gpa.alloc(u8, 64 * 1024);
     defer gpa.free(buffer);
     var messages: usize = 0;
-    while (try encodeNextGraphics(
-        buffer,
-        &attachment,
-        core.graphics.max_image_bytes_global,
-        true,
-    )) |_| {
+    while (try encodeNextGraphics(&attachment, .{
+        .buffer = buffer,
+        .global_credit = core.graphics.max_image_bytes_global,
+        .live_storage_available = true,
+    })) |_| {
         messages += 1;
         try std.testing.expect(messages < 64);
     }
@@ -1210,16 +1188,16 @@ test "graphics transfers wait for pane and client memory credit" {
     var buffer: [1024]u8 = undefined;
 
     // Snapshot framing itself consumes no image memory.
-    try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 3, true) != null);
+    try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 3, .live_storage_available = true }) != null);
     attachment.graphics.credit = 3;
-    try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 4, true) == null);
+    try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 4, .live_storage_available = true }) == null);
     try std.testing.expect(attachment.graphics.transfer == null);
 
     attachment.graphics.credit = 4;
-    try std.testing.expect(try encodeNextGraphics(&buffer, &attachment, 3, true) == null);
+    try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 3, .live_storage_available = true }) == null);
     try std.testing.expect(attachment.graphics.transfer == null);
 
-    const payload = (try encodeNextGraphics(&buffer, &attachment, 4, true)).?;
+    const payload = (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 4, .live_storage_available = true })).?;
     try std.testing.expect((try schema.decodeServer(payload)) == .graphics_image);
     try std.testing.expectEqual(@as(usize, 0), attachment.graphics.credit);
     try std.testing.expect(attachment.graphics.transfer != null);
@@ -1281,7 +1259,7 @@ test "a staged transfer drains while the media actor stays busy" {
     // it would have written.
     try std.testing.expectEqual(StageResult.idle, try stageNextTransfer(&attachment, credit));
     try std.testing.expect((try schema.decodeServer(
-        (try encodeNextGraphics(&buffer, &attachment, credit, true)).?,
+        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = true })).?,
     )) == .graphics_snapshot);
 
     // The runtime stages at its media-idle boundary; the send loop then
@@ -1289,22 +1267,22 @@ test "a staged transfer drains while the media actor stays busy" {
     try std.testing.expectEqual(StageResult.staged, try stageNextTransfer(&attachment, credit));
     try std.testing.expect(attachment.graphics.transfer != null);
     try std.testing.expect((try schema.decodeServer(
-        (try encodeNextGraphics(&buffer, &attachment, credit, false)).?,
+        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = false })).?,
     )) == .graphics_image);
     try std.testing.expect((try schema.decodeServer(
-        (try encodeNextGraphics(&buffer, &attachment, credit, false)).?,
+        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = false })).?,
     )) == .graphics_image_chunk);
     try std.testing.expectEqual(@as(u32, 1), attachment.graphics.sent_images);
 
     // With the transfer drained the walk needs live storage; the batch stays
     // open instead of closing blind.
-    try std.testing.expect((try encodeNextGraphics(&buffer, &attachment, credit, false)) == null);
+    try std.testing.expect((try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = false })) == null);
     try std.testing.expect(attachment.graphics.batch_active);
     try std.testing.expect(attachment.graphics.transfer == null);
 
     // Once the media actor rests, the batch completes normally.
     var closed = false;
-    while (try encodeNextGraphics(&buffer, &attachment, credit, true)) |payload| {
+    while (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = true })) |payload| {
         const message = try schema.decodeServer(payload);
         if (message == .graphics_snapshot and message.graphics_snapshot.phase == .end)
             closed = true;
@@ -1446,10 +1424,10 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
 
     // Snapshot begin, then the complete image as one small named message.
     try std.testing.expect((try schema.decodeServer(
-        (try encodeNextGraphics(&buffer, &attachment, core.graphics.max_image_bytes_global, true)).?,
+        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.graphics.max_image_bytes_global, .live_storage_available = true })).?,
     )) == .graphics_snapshot);
     const message = (try schema.decodeServer(
-        (try encodeNextGraphics(&buffer, &attachment, core.graphics.max_image_bytes_global, true)).?,
+        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.graphics.max_image_bytes_global, .live_storage_available = true })).?,
     )).graphics_shared_image;
     try std.testing.expectEqual(@as(u64, 4), message.image.byte_len);
 
@@ -1475,7 +1453,7 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
 
     // Draining the batch never emits a pixel chunk; ownership of the object
     // has passed to the client, so it survives the completed transfer.
-    while (try encodeNextGraphics(&buffer, &attachment, core.graphics.max_image_bytes_global, true)) |payload| {
+    while (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.graphics.max_image_bytes_global, .live_storage_available = true })) |payload| {
         try std.testing.expect((try schema.decodeServer(payload)) != .graphics_image_chunk);
     }
     const probe = std.c.shm_open(

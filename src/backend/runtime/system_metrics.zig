@@ -50,10 +50,8 @@ pub const Sampler = struct {
 
     fn apply(sampler: *Sampler, raw: Raw) void {
         const cpu = cpuPercent(
-            sampler.previous_busy,
-            sampler.previous_total,
-            raw.busy_ticks,
-            raw.total_ticks,
+            .{ .busy = sampler.previous_busy, .total = sampler.previous_total },
+            .{ .busy = raw.busy_ticks, .total = raw.total_ticks },
         );
         sampler.previous_busy = raw.busy_ticks;
         sampler.previous_total = raw.total_ticks;
@@ -71,11 +69,23 @@ pub const Sampler = struct {
 
 /// The first read has no predecessor, so it reports zero instead of a
 /// since-boot average that would spike the bar on startup.
-fn cpuPercent(previous_busy: u64, previous_total: u64, busy: u64, total: u64) u8 {
-    if (previous_total == 0) return 0;
-    const busy_delta = busy -| previous_busy;
-    const total_delta = total -| previous_total;
-    if (total_delta == 0) return 0;
+const CpuTicks = struct {
+    busy: u64,
+    total: u64,
+};
+
+fn cpuPercent(previous: CpuTicks, current: CpuTicks) u8 {
+    if (previous.total == 0) {
+        return 0;
+    }
+
+    const busy_delta = current.busy -| previous.busy;
+    const total_delta = current.total -| previous.total;
+
+    if (total_delta == 0) {
+        return 0;
+    }
+
     return @intCast(@min(100, busy_delta * 100 / total_delta));
 }
 
@@ -214,10 +224,10 @@ fn meminfoValue(content: []const u8, key: []const u8) ?u64 {
 }
 
 test "cpu percentage comes from tick deltas, never the since-boot average" {
-    try std.testing.expectEqual(@as(u8, 0), cpuPercent(0, 0, 900, 1000));
-    try std.testing.expectEqual(@as(u8, 50), cpuPercent(900, 1000, 950, 1100));
-    try std.testing.expectEqual(@as(u8, 0), cpuPercent(900, 1000, 900, 1000));
-    try std.testing.expectEqual(@as(u8, 100), cpuPercent(0, 1, 5000, 2001));
+    try std.testing.expectEqual(@as(u8, 0), cpuPercent(.{ .busy = 0, .total = 0 }, .{ .busy = 900, .total = 1000 }));
+    try std.testing.expectEqual(@as(u8, 50), cpuPercent(.{ .busy = 900, .total = 1000 }, .{ .busy = 950, .total = 1100 }));
+    try std.testing.expectEqual(@as(u8, 0), cpuPercent(.{ .busy = 900, .total = 1000 }, .{ .busy = 900, .total = 1000 }));
+    try std.testing.expectEqual(@as(u8, 100), cpuPercent(.{ .busy = 0, .total = 1 }, .{ .busy = 5000, .total = 2001 }));
 }
 
 test "memory converts to tenths of a GiB" {

@@ -99,11 +99,7 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
     };
 }
 
-fn encodeHistoryResult(
-    buffer: []u8,
-    result: *const history.model.QueryResult,
-    storage: *[history.model.max_results]schema.HistoryEntry,
-) ![]const u8 {
+fn encodeHistoryResult(buffer: []u8, result: *const history.model.QueryResult, storage: *[history.model.max_results]schema.HistoryEntry) ![]const u8 {
     std.debug.assert(result.entries.len <= storage.len);
     for (result.entries, 0..) |entry, index| {
         storage[index] = .{

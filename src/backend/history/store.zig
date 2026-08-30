@@ -135,11 +135,11 @@ pub const Store = struct {
         _ = c.sqlite3_extended_result_codes(opened, 1);
         if (c.sqlite3_exec(opened, database_schema, null, null, null) != c.SQLITE_OK)
             return error.HistorySchemaFailed;
-        try ensureColumn(opened, "session", "tab_id", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
-        try ensureColumn(opened, "command", "tab_id", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
-        try ensureColumn(opened, "session", "title", "ALTER TABLE session ADD COLUMN title TEXT;");
-        try ensureColumn(opened, "session", "title_source", "ALTER TABLE session ADD COLUMN title_source INTEGER;");
-        try ensureColumn(opened, "session", "title_state", "ALTER TABLE session ADD COLUMN title_state INTEGER;");
+        try ensureColumn(opened, .{ .table = "session", .column = "tab_id", .alter_sql = "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;" });
+        try ensureColumn(opened, .{ .table = "command", .column = "tab_id", .alter_sql = "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;" });
+        try ensureColumn(opened, .{ .table = "session", .column = "title", .alter_sql = "ALTER TABLE session ADD COLUMN title TEXT;" });
+        try ensureColumn(opened, .{ .table = "session", .column = "title_source", .alter_sql = "ALTER TABLE session ADD COLUMN title_source INTEGER;" });
+        try ensureColumn(opened, .{ .table = "session", .column = "title_state", .alter_sql = "ALTER TABLE session ADD COLUMN title_state INTEGER;" });
         const fts_available = enableCommandSearchIndex(opened);
 
         const insert_launch_attempt = try prepare(opened, insert_launch_attempt_sql);
@@ -418,27 +418,31 @@ fn queryCharacters(text: []const u8) usize {
     return std.unicode.utf8CountCodepoints(text) catch text.len;
 }
 
-fn ensureColumn(
-    db: *c.sqlite3,
+const ColumnMigration = struct {
     table: []const u8,
     column: []const u8,
     alter_sql: [:0]const u8,
-) !void {
+};
+
+fn ensureColumn(db: *c.sqlite3, migration: ColumnMigration) !void {
     var pragma_buffer: [64]u8 = undefined;
-    const pragma = try std.fmt.bufPrint(&pragma_buffer, "PRAGMA table_info({s});", .{table});
+    const pragma = try std.fmt.bufPrint(&pragma_buffer, "PRAGMA table_info({s});", .{migration.table});
     const stmt = try prepare(db, pragma);
     defer _ = c.sqlite3_finalize(stmt);
     while (true) switch (c.sqlite3_step(stmt)) {
         c.SQLITE_ROW => {
             const len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
             const pointer = c.sqlite3_column_text(stmt, 1) orelse continue;
-            if (std.mem.eql(u8, pointer[0..len], column)) return;
+            if (std.mem.eql(u8, pointer[0..len], migration.column)) {
+                return;
+            }
         },
         c.SQLITE_DONE => break,
         else => return error.HistorySchemaFailed,
     };
-    if (c.sqlite3_exec(db, alter_sql.ptr, null, null, null) != c.SQLITE_OK)
+    if (c.sqlite3_exec(db, migration.alter_sql.ptr, null, null, null) != c.SQLITE_OK) {
         return error.HistorySchemaFailed;
+    }
 }
 
 fn prepare(db: *c.sqlite3, sql: []const u8) !*c.sqlite3_stmt {

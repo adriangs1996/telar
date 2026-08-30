@@ -197,10 +197,7 @@ pub const Delivery = struct {
     /// const prepared = try delivery.prepare(.{ .io = io, .attachments = attachments, .sources = sources, .metrics = metrics });
     /// ```
     pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
-        const io = preparation.io;
-        const attachments = preparation.attachments;
         const sources = preparation.sources;
-        const metrics = preparation.metrics;
 
         std.debug.assert(delivery.phase == .ready);
         const buffer = delivery.send_buffer;
@@ -319,16 +316,25 @@ pub const Delivery = struct {
             );
         }
 
-        if (try delivery.prepareAttachment(attachments, .cwd, io, buffer, metrics)) |prepared|
+        if (try delivery.prepareAttachment(preparation, .cwd)) |prepared| {
             return prepared;
-        if (try delivery.prepareAttachment(attachments, .foreground, io, buffer, metrics)) |prepared|
+        }
+
+        if (try delivery.prepareAttachment(preparation, .foreground)) |prepared| {
             return prepared;
-        if (try delivery.prepareAttachment(attachments, .cells, io, buffer, metrics)) |prepared|
+        }
+
+        if (try delivery.prepareAttachment(preparation, .cells)) |prepared| {
             return prepared;
-        if (try delivery.prepareAttachment(attachments, .exit, io, buffer, metrics)) |prepared|
+        }
+
+        if (try delivery.prepareAttachment(preparation, .exit)) |prepared| {
             return prepared;
-        if (try delivery.prepareAttachment(attachments, .graphics, io, buffer, metrics)) |prepared|
+        }
+
+        if (try delivery.prepareAttachment(preparation, .graphics)) |prepared| {
             return prepared;
+        }
 
         if (delivery.responses.peekObservation()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
@@ -426,14 +432,10 @@ pub const Delivery = struct {
 
     const Lane = enum { cwd, foreground, cells, exit, graphics };
 
-    fn prepareAttachment(
-        delivery: *Delivery,
-        attachments: *AttachmentStore,
-        lane: Lane,
-        io: Io,
-        buffer: []u8,
-        metrics: *RuntimeMetrics,
-    ) !?Prepared {
+    fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
+        const attachments = preparation.attachments;
+        const buffer = delivery.send_buffer;
+
         var checked: usize = 0;
         while (checked < AttachmentStore.capacity) : (checked += 1) {
             const index = (delivery.next_attachment + checked) % AttachmentStore.capacity;
@@ -441,7 +443,7 @@ pub const Delivery = struct {
             const candidate: ?attachment_mod.Attachment.Prepared = switch (lane) {
                 .cwd => try attachment.prepareCwd(buffer),
                 .foreground => try attachment.prepareForeground(buffer),
-                .cells => try attachment.prepareNextCells(.{ .io = io, .buffer = buffer, .metrics = metrics }),
+                .cells => try attachment.prepareNextCells(.{ .io = preparation.io, .buffer = buffer, .metrics = preparation.metrics }),
                 .exit => try attachment.prepareExit(buffer),
                 .graphics => graphics: {
                     const frozen = attachment.hasFrozenGraphics();

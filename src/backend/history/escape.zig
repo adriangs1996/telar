@@ -208,11 +208,16 @@ pub const InputScanner = struct {
 // Tests
 // ---------------------------------------------------------------------------
 
-fn collectOsc(scanner: *OscScanner, bytes: []const u8, payloads: *std.ArrayList(u8), ends: *usize) void {
+const OscCapture = struct {
+    payloads: *std.ArrayList(u8),
+    ends: *usize,
+};
+
+fn collectOsc(scanner: *OscScanner, bytes: []const u8, capture: OscCapture) void {
     for (bytes) |byte| switch (scanner.next(byte)) {
         .none, .start => {},
-        .byte => |value| payloads.appendAssumeCapacity(value),
-        .end => ends.* += 1,
+        .byte => |value| capture.payloads.appendAssumeCapacity(value),
+        .end => capture.ends.* += 1,
     };
 }
 
@@ -224,7 +229,7 @@ test "the OSC scanner produces identical events for any byte split" {
     defer whole_payloads.deinit(gpa);
     var whole_ends: usize = 0;
     var whole: OscScanner = .{};
-    collectOsc(&whole, stream, &whole_payloads, &whole_ends);
+    collectOsc(&whole, stream, .{ .payloads = &whole_payloads, .ends = &whole_ends });
     // "x" streams out before its sequence is abandoned; the consumer resets
     // its buffer on the next `.start`, the scanner just reports bytes.
     try std.testing.expectEqualStrings("133;A7;file://h/px2;t", whole_payloads.items);
@@ -235,8 +240,8 @@ test "the OSC scanner produces identical events for any byte split" {
         defer payloads.deinit(gpa);
         var ends: usize = 0;
         var scanner: OscScanner = .{};
-        collectOsc(&scanner, stream[0..split], &payloads, &ends);
-        collectOsc(&scanner, stream[split..], &payloads, &ends);
+        collectOsc(&scanner, stream[0..split], .{ .payloads = &payloads, .ends = &ends });
+        collectOsc(&scanner, stream[split..], .{ .payloads = &payloads, .ends = &ends });
         try std.testing.expectEqualStrings(whole_payloads.items, payloads.items);
         try std.testing.expectEqual(whole_ends, ends);
     }

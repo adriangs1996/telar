@@ -224,7 +224,9 @@ pub const Session = struct {
 
         const pid = std.c.fork();
         if (pid < 0) return error.ForkFailed;
-        if (pid == 0) childExec(master, slave, cwd_fd, command);
+        if (pid == 0) {
+            childExec(.{ .master = master, .slave = slave, .cwd_fd = cwd_fd, .command = command });
+        }
 
         _ = std.c.close(slave);
         return .{ .master = master, .pid = pid };
@@ -352,12 +354,19 @@ fn cwdLinux(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
 
 /// Only async-signal-safe calls are allowed between fork and exec. In
 /// particular, no allocator or error unwinding may run in this branch.
-fn childExec(
+const ChildExec = struct {
     master: std.c.fd_t,
     slave: std.c.fd_t,
     cwd_fd: ?std.c.fd_t,
     command: *const Command,
-) noreturn {
+};
+
+fn childExec(child: ChildExec) noreturn {
+    const master = child.master;
+    const slave = child.slave;
+    const cwd_fd = child.cwd_fd;
+    const command = child.command;
+
     if (std.c.setsid() < 0) std.c._exit(1);
     if (std.c.ioctl(slave, TIOC.SCTTY, @as(c_int, 0)) != 0) std.c._exit(1);
     if (cwd_fd) |fd| if (std.c.fchdir(fd) != 0) std.c._exit(126);

@@ -160,6 +160,7 @@ pub const PaneMediaAllocator = struct {
     }
 
     pub fn allocator(media: *PaneMediaAllocator) std.mem.Allocator {
+        // Callback signatures are fixed by `std.mem.Allocator.VTable`.
         return .{ .ptr = media, .vtable = &.{
             .alloc = alloc,
             .resize = resize,
@@ -189,13 +190,7 @@ pub const PaneMediaAllocator = struct {
         };
     }
 
-    fn resize(
-        context: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        ret_addr: usize,
-    ) bool {
+    fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
         if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return false;
         if (!media.child.rawResize(memory, alignment, new_len, ret_addr)) {
@@ -206,13 +201,7 @@ pub const PaneMediaAllocator = struct {
         return true;
     }
 
-    fn remap(
-        context: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        ret_addr: usize,
-    ) ?[*]u8 {
+    fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
         if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return null;
         const result = media.child.rawRemap(memory, alignment, new_len, ret_addr) orelse {
@@ -223,12 +212,7 @@ pub const PaneMediaAllocator = struct {
         return result;
     }
 
-    fn free(
-        context: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        ret_addr: usize,
-    ) void {
+    fn free(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
         media.child.rawFree(memory, alignment, ret_addr);
         media.releaseManual(memory.len);

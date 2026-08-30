@@ -194,14 +194,20 @@ fn requestHead(start_line: []const u8, output: []u8) ![]const u8 {
     return std.fmt.bufPrint(output, "{s}\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{ start_line, basic });
 }
 
-fn expectRejected(decision: Decision, reason: RejectionReason, expected_response: []const u8, metric: ?RejectionMetric) !void {
+const ExpectedRejection = struct {
+    reason: RejectionReason,
+    response: []const u8,
+    metric: ?RejectionMetric,
+};
+
+fn expectRejected(decision: Decision, expected: ExpectedRejection) !void {
     const rejection = switch (decision) {
         .authenticated => return error.ExpectedConnectRejection,
         .rejected => |value| value,
     };
-    try std.testing.expectEqual(reason, rejection.reason);
-    try std.testing.expectEqualStrings(expected_response, rejection.response);
-    try std.testing.expectEqual(metric, rejection.metric);
+    try std.testing.expectEqual(expected.reason, rejection.reason);
+    try std.testing.expectEqualStrings(expected.response, rejection.response);
+    try std.testing.expectEqual(expected.metric, rejection.metric);
 }
 
 test "missing authorization is rejected before credential or target lookup" {
@@ -209,9 +215,11 @@ test "missing authorization is rejected before credential or target lookup" {
 
     try expectRejected(
         TestCommand.execute(&store, "GET / HTTP/1.1\r\n\r\n"),
-        .invalid_authorization,
-        authentication_required_response,
-        .invalid_authorization,
+        .{
+            .reason = .invalid_authorization,
+            .response = authentication_required_response,
+            .metric = .invalid_authorization,
+        },
     );
     try std.testing.expectEqual(@as(usize, 0), store.lookups);
 }
@@ -221,9 +229,11 @@ test "a malformed Basic value is an invalid authorization" {
 
     try expectRejected(
         TestCommand.execute(&store, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic !!!\r\n\r\n"),
-        .invalid_authorization,
-        authentication_required_response,
-        .invalid_authorization,
+        .{
+            .reason = .invalid_authorization,
+            .response = authentication_required_response,
+            .metric = .invalid_authorization,
+        },
     );
     try std.testing.expectEqual(@as(usize, 0), store.lookups);
 }
@@ -235,9 +245,11 @@ test "a parsed credential must still be live" {
 
     try expectRejected(
         TestCommand.execute(&store, head),
-        .unknown_credential,
-        authentication_required_response,
-        .unknown_credential,
+        .{
+            .reason = .unknown_credential,
+            .response = authentication_required_response,
+            .metric = .unknown_credential,
+        },
     );
     try std.testing.expectEqual(@as(usize, 1), store.lookups);
 }
@@ -249,9 +261,11 @@ test "target validity is hidden until credential authentication succeeds" {
 
     try expectRejected(
         TestCommand.execute(&store, head),
-        .unknown_credential,
-        authentication_required_response,
-        .unknown_credential,
+        .{
+            .reason = .unknown_credential,
+            .response = authentication_required_response,
+            .metric = .unknown_credential,
+        },
     );
     try std.testing.expectEqual(@as(usize, 1), store.lookups);
 }
@@ -277,9 +291,11 @@ test "authenticated malformed targets map to a bad request without an auth metri
 
         try expectRejected(
             TestCommand.execute(&store, head),
-            .invalid_target,
-            bad_request_response,
-            null,
+            .{
+                .reason = .invalid_target,
+                .response = bad_request_response,
+                .metric = null,
+            },
         );
         try std.testing.expectEqual(@as(usize, 1), store.lookups);
     }

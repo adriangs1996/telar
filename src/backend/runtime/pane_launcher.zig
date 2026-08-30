@@ -34,6 +34,19 @@ pub const LaunchRequest = struct {
     workspace_path: []const u8,
 };
 
+const LaunchFailure = struct {
+    shell: []const u8,
+    phase: history.LaunchPhase,
+    cause: anyerror,
+};
+
+const CommandInitialization = struct {
+    gpa: std.mem.Allocator,
+    launch: schema.LaunchView,
+    cwd_path: []const u8,
+    environment: *const pty.Environment,
+};
+
 /// One-shot integration seam for post-spawn launch recovery.
 pub const LaunchTestFault = struct {
     phase: history.LaunchPhase,
@@ -82,12 +95,12 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 break :block proxy_environment.?.environment();
             } else launcher.child_environment;
 
-            var command = try OwnedCommand.init(
-                launcher.gpa,
-                request.launch,
-                request.launch_cwd,
-                child_environment,
-            );
+            var command = try OwnedCommand.init(.{
+                .gpa = launcher.gpa,
+                .launch = request.launch,
+                .cwd_path = request.launch_cwd,
+                .environment = child_environment,
+            });
             defer command.deinit();
             const shell = std.mem.span(command.command.file);
             const fresh = try Pane.create(.{
@@ -106,13 +119,13 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             });
 
             launcher.panes.insert(fresh) catch |err| {
-                launcher.recordFailure(fresh, shell, .pane_registration, err);
+                launcher.recordFailure(fresh, .{ .shell = shell, .phase = .pane_registration, .cause = err });
                 fresh.abortLaunch();
                 fresh.destroy();
                 return err;
             };
             launcher.injectFault(.pane_registration) catch |err| {
-                launcher.abort(fresh, shell, .pane_registration, err);
+                launcher.abort(fresh, .{ .shell = shell, .phase = .pane_registration, .cause = err });
                 launcher.panes.removeAndDestroy(fresh);
                 return err;
             };
@@ -122,13 +135,13 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             std.debug.assert(wait_started);
             launcher.injectFault(.wait_actor) catch |err| {
                 fresh.cancelExitWait();
-                launcher.abort(fresh, shell, .wait_actor, err);
+                launcher.abort(fresh, .{ .shell = shell, .phase = .wait_actor, .cause = err });
                 launcher.panes.removeAndDestroy(fresh);
                 return err;
             };
             launcher.select.concurrent(.pane_exit, waitPane, .{fresh}) catch |err| {
                 fresh.cancelExitWait();
-                launcher.abort(fresh, shell, .wait_actor, err);
+                launcher.abort(fresh, .{ .shell = shell, .phase = .wait_actor, .cause = err });
                 launcher.panes.removeAndDestroy(fresh);
                 return err;
             };
@@ -138,13 +151,13 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             launcher.injectFault(.output_actor) catch |err| {
                 fresh.cancelPtyOutputRead();
                 fresh.finishPtyOutput();
-                launcher.abort(fresh, shell, .output_actor, err);
+                launcher.abort(fresh, .{ .shell = shell, .phase = .output_actor, .cause = err });
                 return err;
             };
             launcher.select.concurrent(.pane_output, readPane, .{ launcher.io, fresh }) catch |err| {
                 fresh.cancelPtyOutputRead();
                 fresh.finishPtyOutput();
-                launcher.abort(fresh, shell, .output_actor, err);
+                launcher.abort(fresh, .{ .shell = shell, .phase = .output_actor, .cause = err });
                 return err;
             };
 
@@ -157,33 +170,21 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             if (launcher.launch_fault) |fault| try fault.inject(phase);
         }
 
-        fn recordFailure(
-            launcher: *Self,
-            pane: *const Pane,
-            shell: []const u8,
-            phase: history.LaunchPhase,
-            cause: anyerror,
-        ) void {
+        fn recordFailure(launcher: *Self, pane: *const Pane, failure: LaunchFailure) void {
             _ = launcher.history_service.recordLaunchAttempt(launcher.io, .{
                 .pane_id = pane.id,
                 .pane_generation = pane.generation,
                 .location = pane.location,
                 .workspace_path = pane.workspace_path,
-                .shell = shell,
+                .shell = failure.shell,
                 .started_at_ms = pane.started_at_ms,
-                .phase = phase,
-                .cause = @errorName(cause),
+                .phase = failure.phase,
+                .cause = @errorName(failure.cause),
             });
         }
 
-        fn abort(
-            launcher: *Self,
-            pane: *Pane,
-            shell: []const u8,
-            phase: history.LaunchPhase,
-            cause: anyerror,
-        ) void {
-            launcher.recordFailure(pane, shell, phase, cause);
+        fn abort(launcher: *Self, pane: *Pane, failure: LaunchFailure) void {
+            launcher.recordFailure(pane, failure);
             pane.abortLaunch();
         }
     };
@@ -195,12 +196,12 @@ const OwnedCommand = struct {
     cwd: [:0]u8,
     gpa: std.mem.Allocator,
 
-    fn init(
-        gpa: std.mem.Allocator,
-        launch: schema.LaunchView,
-        cwd_path: []const u8,
-        environment: *const pty.Environment,
-    ) !OwnedCommand {
+    fn init(initialization: CommandInitialization) !OwnedCommand {
+        const gpa = initialization.gpa;
+        const launch = initialization.launch;
+        const cwd_path = initialization.cwd_path;
+        const environment = initialization.environment;
+
         if (launch.environment_mode != .inherit_runtime or launch.environment_count != 0)
             return error.UnsupportedEnvironment;
 

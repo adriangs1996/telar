@@ -574,10 +574,7 @@ test "an inverse status row does not revive a stale Claude prompt" {
     ) == null);
 }
 
-fn agentSignalForOutput(
-    output: []const u8,
-    size: schema.TerminalSize,
-) !?agent_detection.Signal {
+fn agentSignalForOutput(output: []const u8, size: schema.TerminalSize) !?agent_detection.Signal {
     var observer: Observer = undefined;
     try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = size });
     defer observer.deinit();

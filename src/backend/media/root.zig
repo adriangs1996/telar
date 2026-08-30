@@ -425,11 +425,7 @@ fn observeNonEmpty(sink: anytype, bytes: []const u8) void {
     }
 }
 
-fn recordSharedFrame(
-    selected: []SelectedSharedFrame,
-    selected_count: *usize,
-    frame: SharedFrame,
-) bool {
+fn recordSharedFrame(selected: []SelectedSharedFrame, selected_count: *usize, frame: SharedFrame) bool {
     for (selected[0..selected_count.*]) |*entry| {
         if (!std.meta.eql(entry.key, frame.key)) continue;
         if (entry.recent_count == entry.recent_starts.len) {

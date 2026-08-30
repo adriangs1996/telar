@@ -72,6 +72,23 @@ pub const Stats = struct {
     skipped: u16 = 0,
 };
 
+const ColorSource = struct {
+    terminal: *const vt.Terminal,
+    colors: vt.RenderState.Colors,
+};
+
+const RowTarget = struct {
+    buffer: *ui.Buffer,
+    area: ui.Rect,
+    y: u16,
+};
+
+const RowProjection = struct {
+    target: RowTarget,
+    cells: std.MultiArrayList(vt.RenderState.Cell).Slice,
+    colors: ColorSource,
+};
+
 /// Copies the viewport of `state` into `area` of `b`.
 ///
 /// `state` must have completed an `endUpdate`. Rows the emulator did not mark
@@ -88,6 +105,7 @@ pub fn blit(operation: Operation) Stats {
     const terminal = operation.terminal;
     const state = operation.state;
     const opts = operation.options;
+    const color_source: ColorSource = .{ .terminal = terminal, .colors = state.colors };
 
     var stats: Stats = .{};
     if (opts.damaged_rows) |damaged| std.debug.assert(damaged.len >= b.h);
@@ -114,8 +132,11 @@ pub fn blit(operation: Operation) Stats {
             stats.skipped += 1;
             continue;
         }
-        blitRow(b, area, y, row_cells[y].slice(), terminal, state.colors);
-        if (opts.selection) |range| highlightRow(b, area, y, range);
+        const target: RowTarget = .{ .buffer = b, .area = area, .y = y };
+        blitRow(.{ .target = target, .cells = row_cells[y].slice(), .colors = color_source });
+        if (opts.selection) |range| {
+            highlightRow(target, range);
+        }
         dirty[y] = false;
         if (opts.damaged_rows) |damaged| damaged[area.y + y] = true;
         stats.copied += 1;
@@ -125,7 +146,7 @@ pub fn blit(operation: Operation) Stats {
     // during a resize, and leaving the previous tenant's pixels there reads as
     // a rendering bug.
     while (y < area.h) : (y += 1) {
-        b.fill(area.row(y), " ", .{ .bg = defaultBackground(terminal, state.colors) });
+        b.fill(area.row(y), " ", .{ .bg = defaultBackground(color_source) });
         if (opts.damaged_rows) |damaged| damaged[area.y + y] = true;
     }
 
@@ -135,7 +156,9 @@ pub fn blit(operation: Operation) Stats {
     if (opts.selection) |range| {
         var row: u16 = 0;
         while (row < height) : (row += 1) {
-            if (!all and !dirty[row]) highlightRow(b, area, row, range);
+            if (!all and !dirty[row]) {
+                highlightRow(.{ .buffer = b, .area = area, .y = row }, range);
+            }
         }
     }
 
@@ -143,7 +166,11 @@ pub fn blit(operation: Operation) Stats {
     return stats;
 }
 
-fn highlightRow(b: *ui.Buffer, area: ui.Rect, y: u16, range: sel.Range) void {
+fn highlightRow(target: RowTarget, range: sel.Range) void {
+    const b = target.buffer;
+    const area = target.area;
+    const y = target.y;
+
     var x: u16 = 0;
     while (x < area.w) : (x += 1) {
         if (!range.contains(x, y)) continue;
@@ -180,14 +207,13 @@ pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: sel.
     return s.selectionString(gpa, .{ .sel = selection, .trim = true });
 }
 
-fn blitRow(
-    b: *ui.Buffer,
-    area: ui.Rect,
-    y: u16,
-    cells: std.MultiArrayList(vt.RenderState.Cell).Slice,
-    terminal: *const vt.Terminal,
-    colors: vt.RenderState.Colors,
-) void {
+fn blitRow(projection: RowProjection) void {
+    const b = projection.target.buffer;
+    const area = projection.target.area;
+    const y = projection.target.y;
+    const cells = projection.cells;
+    const colors = projection.colors;
+
     const raws = cells.items(.raw);
     const styles = cells.items(.style);
     const graphemes = cells.items(.grapheme);
@@ -200,11 +226,7 @@ fn blitRow(
         // Style id zero is the default style and the emulator does not fill
         // `style` for it, so reading it unconditionally is reading undefined
         // memory.
-        const style = translate(
-            if (raw.style_id == 0) .{} else styles[x],
-            terminal,
-            colors,
-        );
+        const style = translate(if (raw.style_id == 0) .{} else styles[x], colors);
 
         switch (raw.wide) {
             // The emulator's own marker for the column a wide glyph continues
@@ -240,7 +262,7 @@ fn blitRow(
             // without a style entry precisely because they are common, so the
             // colour comes off the cell itself.
             .bg_color_palette => b.setCell(area.x + x, area.y + y, " ", 1, .{
-                .bg = paletteColor(terminal, colors, raw.content.color_palette.data),
+                .bg = paletteColor(colors, raw.content.color_palette.data),
             }),
             .bg_color_rgb => {
                 const c = raw.content.color_rgb;
@@ -253,7 +275,7 @@ fn blitRow(
     var pad = width;
     while (pad < area.w) : (pad += 1) {
         b.setCell(area.x + pad, area.y + y, " ", 1, .{
-            .bg = defaultBackground(terminal, colors),
+            .bg = defaultBackground(colors),
         });
     }
 }
@@ -283,19 +305,15 @@ fn encode(out: *[ui.Cell.max_bytes]u8, base: u21, extra: []const u21) []const u8
 /// The attribute word is reinterpreted rather than copied field by field;
 /// `ui.Style.Flags` is declared to match it and a test in `ui.zig` fails if a
 /// libghostty-vt update moves a bit.
-fn translate(
-    style: vt.Style,
-    terminal: *const vt.Terminal,
-    colors: vt.RenderState.Colors,
-) ui.Style {
+fn translate(style: vt.Style, colors: ColorSource) ui.Style {
     return .{
-        .fg = resolve(style.fg_color, terminal, colors, .foreground),
-        .bg = resolve(style.bg_color, terminal, colors, .background),
+        .fg = resolve(style.fg_color, colors, .foreground),
+        .bg = resolve(style.bg_color, colors, .background),
         // Underline colour has no default of its own: unset means "use the
         // foreground", which the terminal already does when SGR 58 is absent.
         .underline_color = switch (style.underline_color) {
             .none => .default,
-            else => resolve(style.underline_color, terminal, colors, .foreground),
+            else => resolve(style.underline_color, colors, .foreground),
         },
         .flags = @bitCast(@as(u16, @bitCast(style.flags))),
     };
@@ -308,38 +326,38 @@ fn translate(
 /// whatever the user's theme happens to map that slot to.
 const DefaultColor = enum { foreground, background };
 
-fn resolve(
-    c: vt.Style.Color,
-    terminal: *const vt.Terminal,
-    colors: vt.RenderState.Colors,
-    default_color: DefaultColor,
-) ui.Color {
+fn resolve(c: vt.Style.Color, colors: ColorSource, default_color: DefaultColor) ui.Color {
     return switch (c) {
         .none => switch (default_color) {
-            .foreground => defaultForeground(terminal, colors),
-            .background => defaultBackground(terminal, colors),
+            .foreground => defaultForeground(colors),
+            .background => defaultBackground(colors),
         },
-        .palette => |i| paletteColor(terminal, colors, i),
+        .palette => |i| paletteColor(colors, i),
         .rgb => |v| rgb(v),
     };
 }
 
-fn defaultForeground(terminal: *const vt.Terminal, colors: vt.RenderState.Colors) ui.Color {
-    if (terminal.modes.get(.reverse_colors)) return rgb(colors.foreground);
-    return if (terminal.colors.foreground.override) |color| rgb(color) else .default;
+fn defaultForeground(source: ColorSource) ui.Color {
+    if (source.terminal.modes.get(.reverse_colors)) {
+        return rgb(source.colors.foreground);
+    }
+
+    return if (source.terminal.colors.foreground.override) |color| rgb(color) else .default;
 }
 
-fn defaultBackground(terminal: *const vt.Terminal, colors: vt.RenderState.Colors) ui.Color {
-    if (terminal.modes.get(.reverse_colors)) return rgb(colors.background);
-    return if (terminal.colors.background.override) |color| rgb(color) else .default;
+fn defaultBackground(source: ColorSource) ui.Color {
+    if (source.terminal.modes.get(.reverse_colors)) {
+        return rgb(source.colors.background);
+    }
+
+    return if (source.terminal.colors.background.override) |color| rgb(color) else .default;
 }
 
-fn paletteColor(
-    terminal: *const vt.Terminal,
-    colors: vt.RenderState.Colors,
-    index: u8,
-) ui.Color {
-    if (terminal.colors.palette.mask.isSet(index)) return rgb(colors.palette[index]);
+fn paletteColor(source: ColorSource, index: u8) ui.Color {
+    if (source.terminal.colors.palette.mask.isSet(index)) {
+        return rgb(source.colors.palette[index]);
+    }
+
     return .{ .indexed = index };
 }
 
