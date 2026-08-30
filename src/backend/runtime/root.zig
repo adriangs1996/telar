@@ -81,6 +81,7 @@ const model_mod = @import("model/root.zig");
 const pty = @import("../pty/root.zig");
 const response_queue = @import("response_queue.zig");
 const shutdown_mod = @import("shutdown.zig");
+const stop_signal_mod = @import("stop_signal.zig");
 const proxy_mod = @import("../proxy/root.zig");
 const proxy_observation_adapter = @import("proxy_observation_adapter.zig");
 const proxy_runtime_mod = @import("proxy_runtime.zig");
@@ -1725,6 +1726,7 @@ const Runtime = struct {
     telemetry: TelemetryState,
     clients: *ClientStore,
     history_runtime: history_runtime_mod.Runtime,
+    stop_signal: stop_signal_mod.Coordinator,
     select_storage: [16 + 2 * max_clients + 7 * max_panes]RuntimeEvent,
     select: Io.Select(RuntimeEvent),
     server: Server,
@@ -1735,6 +1737,7 @@ const Runtime = struct {
         runtime.heap = diagnostics.Heap.init(startup.backing_gpa);
         runtime.gpa = runtime.heap.allocator();
         runtime.ingest_gate = startup.options.ingest_gate;
+        runtime.stop_signal = .init(startup.options.stop);
 
         try startup.options.graphics.validate();
         attachment_mod.initSharedFreezeNonce(runtime.io);
@@ -1765,17 +1768,16 @@ const Runtime = struct {
 
         runtime.select = Io.Select(RuntimeEvent).init(runtime.io, &runtime.select_storage);
         errdefer runtime.select.cancelDiscard();
-        try runtime.scheduleInitialEvents(startup.options.stop);
+        try runtime.scheduleInitialEvents();
         try startup.checkpoint(.actors);
 
         runtime.server = runtime.composeServer(startup.options);
     }
 
-    fn scheduleInitialEvents(runtime: *Runtime, stop: ?*Io.Queue(u8)) !void {
+    fn scheduleInitialEvents(runtime: *Runtime) !void {
         try runtime.select.concurrent(.accepted, acceptClient, .{ runtime.io, &runtime.listener });
-        if (stop) |queue| {
-            try runtime.select.concurrent(.stopped, waitForStop, .{ runtime.io, queue });
-        }
+        var stop_schedule_context: StopScheduleContext = .{ .io = runtime.io, .select = &runtime.select };
+        try runtime.stop_signal.arm(stop_schedule_context.scheduler());
         try runtime.select.concurrent(.history_response, history.receiveResponse, .{ runtime.io, runtime.history_runtime.service() });
 
         var proxy_schedule_context: ProxyScheduleContext = .{ .io = runtime.io, .select = &runtime.select };
@@ -1820,7 +1822,9 @@ const Runtime = struct {
             defer path.restore();
 
             switch (event) {
-                .stopped => |result| return result,
+                .stopped => |result| switch (try runtime.stop_signal.complete(result)) {
+                    .stop => return,
+                },
                 .accepted => |result| try runtime.server.handleAcceptedEvent(result, &runtime.listener),
                 .handshaken => |result| runtime.server.handleHandshakenEvent(result),
                 .client_message => |event_value| if (try runtime.server.handleClientMessageEvent(event_value)) return,
@@ -2249,10 +2253,6 @@ fn writePaneResponse(write: pane_response_pump.Write) PaneResponseEvent {
     };
 }
 
-fn waitForStop(io: Io, stop: *Io.Queue(u8)) anyerror!void {
-    _ = try stop.getOne(io);
-}
-
 fn waitForAgentTick(io: Io) anyerror!void {
     try io.sleep(.fromSeconds(1), .awake);
 }
@@ -2547,6 +2547,20 @@ fn proxyObservationAdapter(server: *Server) RuntimeProxyObservationAdapter {
         .metrics = &server.metrics,
     });
 }
+
+const StopScheduleContext = struct {
+    io: Io,
+    select: *Io.Select(RuntimeEvent),
+
+    fn scheduler(context: *StopScheduleContext) stop_signal_mod.Scheduler {
+        return .{ .context = context, .schedule_fn = schedule };
+    }
+
+    fn schedule(context_value: *anyopaque, queue: *Io.Queue(u8)) !void {
+        const context: *StopScheduleContext = @ptrCast(@alignCast(context_value));
+        try context.select.concurrent(.stopped, stop_signal_mod.wait, .{ context.io, queue });
+    }
+};
 
 const ProxyScheduleContext = struct {
     io: Io,
@@ -3037,6 +3051,7 @@ test {
     _ = telemetry_tick_coordinator;
     _ = proxy_observation_adapter;
     _ = proxy_runtime_mod;
+    _ = stop_signal_mod;
     _ = pane_output_pipeline;
     _ = pane_response_pump;
     _ = pane_resize_commands;
