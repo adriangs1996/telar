@@ -13,6 +13,8 @@ const entrypoint_common = @import("entrypoints/common.zig");
 const control_entrypoints = @import("entrypoints/control.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("controllers/close_tab.zig");
+const close_pane_commands = @import("commands/close_pane.zig");
+const close_pane_controller = @import("controllers/close_pane.zig");
 const create_tab_commands = @import("commands/create_tab.zig");
 const create_tab_controller = @import("controllers/create_tab.zig");
 const create_workspace_commands = @import("commands/create_workspace.zig");
@@ -795,8 +797,7 @@ const Server = struct {
         active.actorFinished();
         active.ingest_pending = false;
         const stats = event.result catch {
-            active.close_requested = true;
-            active.session.shutdown();
+            _ = active.requestClose();
             active.output_done = true;
             server.collect();
             return;
@@ -1462,7 +1463,15 @@ const Server = struct {
                 }, create);
             },
             .close_pane => |close| {
-                try pane_entrypoints.closePane(attachments, responses, close);
+                var handler: close_pane_commands.ClosePaneHandler = .{
+                    .panes = .{
+                        .context = attachments,
+                        .request_close = requestAttachedPaneClose,
+                    },
+                };
+                var controller = close_pane_controller.Controller.init(responses, handler.executor());
+
+                try controller.closePane(close);
             },
             .request_workspace_snapshot => |request| {
                 var handler: workspace_snapshot_query.Handler = .{
@@ -1660,6 +1669,12 @@ fn tabSnapshotContainsTab(context: *anyopaque, location: schema.TabLocation) boo
 fn tabSnapshotRunningPanes(context: *anyopaque, location: schema.TabLocation) u16 {
     const source: *TabSnapshotSourceContext = @ptrCast(@alignCast(context));
     return source.panes.countAt(location);
+}
+
+fn requestAttachedPaneClose(context: *anyopaque, pane_id: schema.PaneId) ?bool {
+    const attachments: *AttachmentStore = @ptrCast(@alignCast(context));
+    const attachment = attachments.find(pane_id) orelse return null;
+    return attachment.pane.requestClose();
 }
 
 fn prepareCreateTabLaunch(context: *anyopaque, request: create_tab_commands.PrepareLaunch) ![]const u8 {
@@ -2258,8 +2273,7 @@ fn processPaneMedia(pane: *Pane, current_size: schema.TerminalSize) PaneMediaEve
 /// follow the client's geometry - and leaves every other pane running.
 fn retirePaneOnFailure(pane: *Pane, result: anyerror!void) anyerror!void {
     result catch |err| {
-        pane.close_requested = true;
-        pane.session.shutdown();
+        _ = pane.requestClose();
         return err;
     };
 }
@@ -2442,6 +2456,8 @@ test "agent sounds require exact working transitions" {
 test {
     _ = close_tab_commands;
     _ = close_tab_controller;
+    _ = close_pane_commands;
+    _ = close_pane_controller;
     _ = create_tab_commands;
     _ = create_tab_controller;
     _ = create_workspace_commands;
@@ -2457,6 +2473,7 @@ test {
     _ = tab_commands;
     _ = tab_controller;
     _ = @import("close_tab_test.zig");
+    _ = @import("close_pane_test.zig");
     _ = @import("create_tab_test.zig");
     _ = @import("create_workspace_test.zig");
     _ = @import("move_tab_test.zig");

@@ -560,8 +560,23 @@ pub const Pane = struct {
 
     pub fn abortLaunch(pane: *Pane) void {
         pane.launch_state.abort();
+        _ = pane.requestClose();
+    }
+
+    /// Requests PTY shutdown exactly once. Pane retirement remains owned by
+    /// the later exit event and actor-drain lifecycle.
+    ///
+    /// ```zig
+    /// const started = pane.requestClose();
+    /// ```
+    pub fn requestClose(pane: *Pane) bool {
+        if (pane.close_requested) {
+            return false;
+        }
+
         pane.close_requested = true;
         pane.session.shutdown();
+        return true;
     }
 
     pub fn mouseState(pane: *const Pane) schema.frame.Mouse {
@@ -1096,9 +1111,11 @@ pub const PaneStore = struct {
     pub fn closeAt(store: *PaneStore, location: schema.TabLocation) void {
         for (store.items) |slot| {
             const pane = slot orelse continue;
-            if (!std.meta.eql(pane.location, location) or pane.close_requested) continue;
-            pane.close_requested = true;
-            pane.session.shutdown();
+            if (!std.meta.eql(pane.location, location)) {
+                continue;
+            }
+
+            _ = pane.requestClose();
         }
     }
 
@@ -1367,6 +1384,37 @@ test "pane keeps launch cwd separate from workspace path" {
     }
     try std.testing.expectEqualStrings("/", pane.cwd.slice());
     try std.testing.expectEqualStrings("/work/telar", pane.workspace_path);
+}
+
+test "pane close requests shut down the PTY exactly once" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var history_service = try history.Service.init(gpa, ":memory:");
+    defer history_service.deinit(io);
+    const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&argv);
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const pane = try Pane.create(
+        io,
+        gpa,
+        .{ .id = @enumFromInt(1), .generation = 1 },
+        .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        &command,
+        "/",
+        "/work/telar",
+        &history_service,
+        .{ .cols = 20, .rows = 5 },
+        .{},
+        &budget,
+    );
+    defer pane.destroy();
+
+    try std.testing.expect(pane.requestClose());
+    try std.testing.expect(!pane.requestClose());
+    try std.testing.expect(pane.close_requested);
 }
 
 test "a pane is destroyable only when no actor can still borrow it" {

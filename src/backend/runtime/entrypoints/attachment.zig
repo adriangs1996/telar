@@ -60,8 +60,7 @@ pub fn paneResize(
     try active.pane.requestResize(resize.size);
     if (!active.pane.ingest_pending) {
         active.pane.applyPendingResize() catch {
-            active.pane.close_requested = true;
-            active.pane.session.shutdown();
+            _ = active.pane.requestClose();
             return;
         };
         try scheduler.observation(scheduler.context, active.pane);

@@ -235,14 +235,3 @@ pub fn createPane(context: CreatePaneContext, create: schema.CreatePaneView) !vo
     } });
     events.changed(events.context, client, create.location.workspace);
 }
-
-pub fn closePane(attachments: *AttachmentStore, responses: *common.ResponseQueue, close: schema.ClosePane) !void {
-    const active = attachments.find(close.pane_id) orelse {
-        try common.queueFailure(responses, close.request_id, .pane_not_found, "pane not attached");
-        return;
-    };
-    if (!active.pane.close_requested) {
-        active.pane.close_requested = true;
-        active.pane.session.shutdown();
-    }
-}
