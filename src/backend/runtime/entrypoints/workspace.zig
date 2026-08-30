@@ -101,19 +101,3 @@ pub fn createWorkspace(context: CreateWorkspaceContext, create: schema.CreateWor
         .created = true,
     } });
 }
-
-pub fn requestWorkspaceSnapshot(workspaces: *WorkspaceRepository, responses: *common.ResponseQueue, request: schema.RequestWorkspaceSnapshot) !void {
-    if (!workspaces.reader().containsWorkspace(request.workspace)) {
-        try common.queueFailure(
-            responses,
-            request.request_id,
-            .workspace_not_found,
-            "workspace not found",
-        );
-        return;
-    }
-    try responses.push(.{ .workspace_snapshot = .{
-        .request_id = request.request_id,
-        .workspace = request.workspace,
-    } });
-}

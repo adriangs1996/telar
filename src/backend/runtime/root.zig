@@ -21,6 +21,8 @@ const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
 const tab_snapshot_query = @import("queries/tab_snapshot.zig");
 const tab_snapshot_controller = @import("controllers/tab_snapshot.zig");
+const workspace_snapshot_query = @import("queries/workspace_snapshot.zig");
+const workspace_snapshot_controller = @import("controllers/workspace_snapshot.zig");
 const tab_commands = @import("commands/tab.zig");
 const tab_controller = @import("controllers/tab.zig");
 const history_entrypoints = @import("entrypoints/history.zig");
@@ -1437,11 +1439,12 @@ const Server = struct {
                 try pane_entrypoints.closePane(attachments, responses, close);
             },
             .request_workspace_snapshot => |request| {
-                try workspace_entrypoints.requestWorkspaceSnapshot(
-                    workspaces,
-                    responses,
-                    request,
-                );
+                var handler: workspace_snapshot_query.Handler = .{
+                    .workspaces = workspaces.reader(),
+                };
+                var controller = workspace_snapshot_controller.Controller.init(responses, handler.executor());
+
+                try controller.requestWorkspaceSnapshot(request);
             },
             .create_tab => |create| {
                 var client_context: CreateTabClientContext = .{
@@ -2369,6 +2372,8 @@ test {
     _ = rename_workspace_controller;
     _ = tab_snapshot_query;
     _ = tab_snapshot_controller;
+    _ = workspace_snapshot_query;
+    _ = workspace_snapshot_controller;
     _ = tab_commands;
     _ = tab_controller;
     _ = @import("close_tab_test.zig");
@@ -2377,6 +2382,7 @@ test {
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
     _ = @import("tab_snapshot_test.zig");
+    _ = @import("workspace_snapshot_test.zig");
     _ = model_mod;
     _ = pane_mod;
     _ = workspace_mod;
