@@ -66,7 +66,7 @@ protocol request necessarily extends this inventory.
 | BCR-22 | `rename_workspace` | `runtime/controllers/rename_workspace.zig` | Rename-workspace controller and command handler | Ready | Owned `WorkspaceRenamed`; aggregate, handler, controller, error, ordering, ownership, and vertical backpressure tests pass. |
 | BCR-23 | `set_pane_viewport` | `runtime/controllers/pane_viewport.zig` | Viewport controller and attachment command | Ready | Client isolation, exact clamping, idempotence, snapshot scheduling, missing-pane handling, allocation rollback, shared-screen restoration, Debug, ReleaseFast, build, and transport tests pass. |
 | BCR-24 | `copy_selection` | `runtime/controllers/copy_selection.zig` | Selection query controller and bounded query handler | Ready | Absolute and reverse ranges, linewise normalization, column/history bounds, scratch exhaustion, 64 KiB wire limit, stale mapping, pending-clipboard isolation, Debug, ReleaseFast, build, and transport tests pass. |
-| BCR-25 | `show_notification` | `runtime/entrypoints/control.zig` | Notification controller and delivery port | Pending | Broadcast policy and requester acknowledgement need isolated tests. |
+| BCR-25 | `show_notification` | `runtime/controllers/show_notification.zig` | Notification controller, broadcast handler, and delivery port | Ready | Exact ring-buffer reservation, duplicate request IDs, owned broadcast, UI/control policy, zero recipients, recipient/requester backpressure, delivery ordering, Debug, ReleaseFast, build, and transport tests pass. |
 
 ## Runtime-event slices
 

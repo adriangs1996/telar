@@ -41,6 +41,8 @@ const request_snapshot_commands = @import("commands/request_snapshot.zig");
 const request_snapshot_controller = @import("controllers/request_snapshot.zig");
 const rename_workspace_commands = @import("commands/rename_workspace.zig");
 const rename_workspace_controller = @import("controllers/rename_workspace.zig");
+const show_notification_commands = @import("commands/show_notification.zig");
+const show_notification_controller = @import("controllers/show_notification.zig");
 const tab_snapshot_query = @import("queries/tab_snapshot.zig");
 const tab_snapshot_controller = @import("controllers/tab_snapshot.zig");
 const workspace_snapshot_query = @import("queries/workspace_snapshot.zig");
@@ -1736,11 +1738,16 @@ const Server = struct {
                 );
             },
             .show_notification => |request| {
-                try control_entrypoints.showNotification(
+                var handler: show_notification_commands.ShowNotificationHandler = .{
+                    .notifications = notificationPublisher(server),
+                };
+                var controller = show_notification_controller.Controller.init(
                     responses,
-                    entrypointControl(server),
-                    request,
+                    handler.executor(),
+                    notificationDelivery(server),
                 );
+
+                try controller.showNotification(request);
             },
             .runtime_stop => {
                 control_entrypoints.runtimeStop(session.key, entrypointControl(server));
@@ -2093,18 +2100,24 @@ fn publishTabRemoved(context: *anyopaque, event: workspace_mod.TabRemoved) void 
 fn entrypointControl(server: *Server) control_entrypoints.Actions {
     return .{
         .context = server,
-        .publish_notification = entrypointPublishNotification,
-        .pump_all = entrypointPumpAll,
         .request_stop = entrypointRequestStop,
     };
 }
 
-fn entrypointPublishNotification(context: *anyopaque, notification: schema.Notification) u8 {
+fn notificationPublisher(server: *Server) show_notification_commands.NotificationPublisher {
+    return .{ .context = server, .publish_fn = publishRequestedNotification };
+}
+
+fn publishRequestedNotification(context: *anyopaque, notification: schema.Notification) u8 {
     const server: *Server = @ptrCast(@alignCast(context));
     return server.publishNotification(notification);
 }
 
-fn entrypointPumpAll(context: *anyopaque) void {
+fn notificationDelivery(server: *Server) show_notification_controller.Delivery {
+    return .{ .context = server, .pump_all_fn = pumpNotificationClients };
+}
+
+fn pumpNotificationClients(context: *anyopaque) void {
     const server: *Server = @ptrCast(@alignCast(context));
     server.pumpAll();
 }
@@ -2752,6 +2765,8 @@ test {
     _ = request_snapshot_controller;
     _ = rename_workspace_commands;
     _ = rename_workspace_controller;
+    _ = show_notification_commands;
+    _ = show_notification_controller;
     _ = tab_snapshot_query;
     _ = tab_snapshot_controller;
     _ = workspace_snapshot_query;
@@ -2774,6 +2789,7 @@ test {
     _ = @import("request_snapshot_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
+    _ = @import("show_notification_test.zig");
     _ = @import("tab_snapshot_test.zig");
     _ = @import("workspace_snapshot_test.zig");
     _ = model_mod;

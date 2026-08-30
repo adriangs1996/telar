@@ -156,22 +156,22 @@ pub const ResponseQueue = struct {
         return true;
     }
 
-    pub fn setNotificationDelivery(
-        queue: *ResponseQueue,
-        request_id: schema.RequestId,
-        delivered_clients: u8,
-    ) void {
-        for (0..queue.len) |offset| {
-            const index = (@as(usize, queue.head) + offset) % queue.items.len;
-            switch (queue.items[index]) {
-                .notification_shown => |*shown| if (shown.request_id == request_id) {
-                    shown.delivered_clients = delivered_clients;
-                    return;
-                },
-                else => {},
-            }
-        }
-        unreachable;
+    /// Reserves the exact confirmation slot before a notification is
+    /// published. The returned pointer remains stable while synchronous
+    /// publication appends other fixed-capacity queue entries.
+    ///
+    /// ```zig
+    /// const shown = try queue.reserveNotificationShown(request_id);
+    /// shown.delivered_clients = delivered;
+    /// ```
+    pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: schema.RequestId) !*schema.NotificationShown {
+        try queue.push(.{ .notification_shown = .{
+            .request_id = request_id,
+            .delivered_clients = 0,
+        } });
+
+        const index = (@as(usize, queue.head) + queue.len - 1) % queue.items.len;
+        return &queue.items[index].notification_shown;
     }
 
     pub fn peek(queue: *ResponseQueue) ?*PendingResponse {
@@ -287,4 +287,40 @@ test "a dropped workspace close preserves its handoff target" {
         queue.resync_previous_workspace.?,
     );
     queue.len = 0;
+}
+
+test "notification reservations remain exact when request IDs repeat" {
+    var queue: ResponseQueue = .{};
+    const request_id: schema.RequestId = @enumFromInt(7);
+    for (0..queue.items.len - 1) |_| {
+        try queue.push(.{ .notification_shown = .{
+            .request_id = .none,
+            .delivered_clients = 0,
+        } });
+        queue.pop();
+    }
+    const first = try queue.reserveNotificationShown(request_id);
+    const second = try queue.reserveNotificationShown(request_id);
+
+    second.delivered_clients = 3;
+
+    try std.testing.expectEqual(@as(u8, 0), first.delivered_clients);
+    try std.testing.expectEqual(@as(u8, 3), second.delivered_clients);
+    try std.testing.expectEqual(@as(u8, 2), queue.len);
+}
+
+test "notification backpressure is counted and never overwrites queued work" {
+    var queue: ResponseQueue = .{};
+    while (queue.len < queue.items.len) {
+        try queue.push(.{ .notification_shown = .{
+            .request_id = @enumFromInt(queue.len + 1),
+            .delivered_clients = 0,
+        } });
+    }
+    const pending = PendingNotification.init(.{ .title = "ignored" });
+
+    try std.testing.expect(!queue.pushNotification(pending));
+
+    try std.testing.expectEqual(@as(u8, queue.items.len), queue.len);
+    try std.testing.expectEqual(@as(u64, 1), queue.dropped);
 }
