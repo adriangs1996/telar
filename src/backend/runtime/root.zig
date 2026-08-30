@@ -39,6 +39,7 @@ const open_pane_controller = @import("controllers/open_pane.zig");
 const pane_input_commands = @import("commands/pane_input.zig");
 const pane_input_controller = @import("controllers/pane_input.zig");
 const pane_input_pump = @import("pane_input_pump.zig");
+const pane_response_pump = @import("pane_response_pump.zig");
 const pane_resize_commands = @import("commands/pane_resize.zig");
 const pane_resize_controller = @import("controllers/pane_resize.zig");
 const pane_viewport_commands = @import("commands/pane_viewport.zig");
@@ -184,10 +185,7 @@ const PaneInputEvent = pane_input_pump.Completion;
 
 const PaneExitEvent = pane_launcher_mod.PaneExitEvent;
 
-const PaneResponseEvent = struct {
-    pane: PaneKey,
-    result: anyerror!void,
-};
+const PaneResponseEvent = pane_response_pump.Completion;
 
 const RuntimeEvent = union(enum) {
     accepted: anyerror!core.transport.SocketChannel,
@@ -899,7 +897,7 @@ const Server = struct {
                 };
             }
         }
-        try schedulePaneResponse(server.io, server.select, active);
+        try schedulePaneResponse(server, active);
         active.output_pending = true;
         active.actorStarted();
         server.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ server.io, active }) catch |err| {
@@ -1106,19 +1104,8 @@ const Server = struct {
     }
 
     fn handlePaneResponseWrittenEvent(server: *Server, event: PaneResponseEvent) !void {
-        const active = server.model.panes.resolve(event.pane) orelse {
-            server.metrics.stale_pane_events += 1;
-            return;
-        };
-        active.actorFinished();
-        active.response_pending = false;
-        if (event.result) |_| {
-            active.pty_responses.pop();
-            try schedulePaneResponse(server.io, server.select, active);
-        } else |_| {
-            active.pty_responses.clear();
-        }
-        server.collect();
+        var response_pump = paneResponsePump(server);
+        return response_pump.complete(event);
     }
 
     fn handlePaneObservedEvent(server: *Server, event: PaneObservationEvent) !void {
@@ -1251,7 +1238,7 @@ const Server = struct {
                 .blocked, .idle => {},
             }
         }
-        try schedulePaneResponse(server.io, server.select, active);
+        try schedulePaneResponse(server, active);
         server.pumpAll();
         try schedulePaneMedia(server.select, active);
         server.collect();
@@ -1847,7 +1834,7 @@ fn entrypointScheduleMedia(context: *anyopaque, pane: *Pane) !void {
 
 fn entrypointScheduleResponse(context: *anyopaque, pane: *Pane) !void {
     const server: *Server = @ptrCast(@alignCast(context));
-    return schedulePaneResponse(server.io, server.select, pane);
+    return schedulePaneResponse(server, pane);
 }
 
 fn entrypointScheduleInput(context: *anyopaque, pane: *Pane) !void {
@@ -2439,7 +2426,7 @@ fn writeDiagnostics(
 
 const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
     .start = startPaneInputWrite,
-    .collect = collectAfterPaneInput,
+    .collect = collectAfterPaneWrite,
 };
 
 const RuntimePaneInputPump = pane_input_pump.Pump(Server, pane_input_runtime_port);
@@ -2456,7 +2443,7 @@ fn startPaneInputWrite(server: *Server, write: pane_input_pump.Write) !void {
     try server.select.concurrent(.pane_input_written, writePaneInput, .{write});
 }
 
-fn collectAfterPaneInput(server: *Server) void {
+fn collectAfterPaneWrite(server: *Server) void {
     server.collect();
 }
 
@@ -2474,32 +2461,40 @@ fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {
     };
 }
 
-fn schedulePaneResponse(
-    io: Io,
-    select: *Io.Select(RuntimeEvent),
-    pane: *Pane,
-) !void {
-    if (pane.response_pending) return;
-    const response = pane.pty_responses.peek() orelse return;
-    pane.response_pending = true;
-    pane.actorStarted();
-    select.concurrent(.pane_response_written, writePaneResponse, .{
-        io,
-        pane,
-        response,
-    }) catch |err| {
-        pane.actorFinished();
-        pane.response_pending = false;
-        return err;
-    };
+const pane_response_runtime_port: pane_response_pump.RuntimePort(Server) = .{
+    .start = startPaneResponseWrite,
+    .collect = collectAfterPaneWrite,
+};
+
+const RuntimePaneResponsePump = pane_response_pump.Pump(Server, pane_response_runtime_port);
+
+fn paneResponsePump(server: *Server) RuntimePaneResponsePump {
+    return RuntimePaneResponsePump.init(server, .{
+        .io = server.io,
+        .panes = &server.model.panes,
+        .metrics = &server.metrics,
+    });
 }
 
-fn writePaneResponse(io: Io, pane: *Pane, bytes: []const u8) PaneResponseEvent {
-    pane.pty_write_mutex.lockUncancelable(io);
-    defer pane.pty_write_mutex.unlock(io);
+fn schedulePaneResponse(server: *Server, pane: *Pane) !void {
+    var response_pump = paneResponsePump(server);
+    return response_pump.schedule(pane);
+}
+
+fn startPaneResponseWrite(server: *Server, write: pane_response_pump.Write) !void {
+    try server.select.concurrent(.pane_response_written, writePaneResponse, .{write});
+}
+
+fn writePaneResponse(write: pane_response_pump.Write) PaneResponseEvent {
+    const path = diagnostics.enter(.interactive);
+    defer path.restore();
+
+    write.pane.pty_write_mutex.lockUncancelable(write.io);
+    defer write.pane.pty_write_mutex.unlock(write.io);
+
     return .{
-        .pane = pane.key(),
-        .result = pane.session.file().writeStreamingAll(io, bytes),
+        .pane = write.pane.key(),
+        .result = write.pane.session.file().writeStreamingAll(write.io, write.bytes),
     };
 }
 
@@ -2840,6 +2835,7 @@ test {
     _ = pane_input_commands;
     _ = pane_input_controller;
     _ = pane_input_pump;
+    _ = pane_response_pump;
     _ = pane_resize_commands;
     _ = pane_resize_controller;
     _ = pane_viewport_commands;

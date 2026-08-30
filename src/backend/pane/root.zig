@@ -341,7 +341,7 @@ pub const PaneInputQueue = struct {
     }
 };
 
-pub const PtyInputWriteResult = enum {
+pub const PtyWriteResult = enum {
     succeeded,
     failed,
 };
@@ -738,6 +738,54 @@ pub const Pane = struct {
         return pane.input_queue.push(bytes);
     }
 
+    /// Borrows the head response until one asynchronous write settles.
+    /// Producers may append behind it, but no second consumer can start.
+    ///
+    /// ```zig
+    /// const response = pane.beginPtyResponseWrite() orelse return;
+    /// ```
+    pub fn beginPtyResponseWrite(pane: *Pane) ?[]const u8 {
+        if (pane.response_pending) {
+            return null;
+        }
+
+        const response = pane.pty_responses.peek() orelse return null;
+        pane.response_pending = true;
+        pane.actorStarted();
+        return response;
+    }
+
+    /// Releases the response borrow, removing only the written head on
+    /// success or clearing a queue that can no longer reach the child.
+    ///
+    /// ```zig
+    /// pane.completePtyResponseWrite(.succeeded);
+    /// ```
+    pub fn completePtyResponseWrite(pane: *Pane, result: PtyWriteResult) void {
+        std.debug.assert(pane.response_pending);
+
+        pane.response_pending = false;
+        pane.actorFinished();
+
+        switch (result) {
+            .succeeded => pane.pty_responses.pop(),
+            .failed => pane.pty_responses.clear(),
+        }
+    }
+
+    /// Rolls back a response whose actor could not be scheduled, preserving
+    /// the queue head for the next attempt.
+    ///
+    /// ```zig
+    /// pane.cancelPtyResponseWrite();
+    /// ```
+    pub fn cancelPtyResponseWrite(pane: *Pane) void {
+        std.debug.assert(pane.response_pending);
+
+        pane.response_pending = false;
+        pane.actorFinished();
+    }
+
     /// Borrows the next stable queue chunk for one asynchronous PTY write.
     /// Repeated calls return null until that write completes or is cancelled.
     ///
@@ -762,7 +810,7 @@ pub const Pane = struct {
     /// ```zig
     /// pane.completePtyInputWrite(.succeeded);
     /// ```
-    pub fn completePtyInputWrite(pane: *Pane, result: PtyInputWriteResult) void {
+    pub fn completePtyInputWrite(pane: *Pane, result: PtyWriteResult) void {
         std.debug.assert(pane.input_write_pending);
         std.debug.assert(pane.input_write_len != 0);
 
