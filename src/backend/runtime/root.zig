@@ -11,6 +11,7 @@ const history = @import("../history/root.zig");
 const attachment_mod = @import("attachment.zig");
 const client_admission = @import("client_admission.zig");
 const client_request_router = @import("client_request_router.zig");
+const client_send_coordinator = @import("client_send_coordinator.zig");
 const delivery_mod = @import("delivery.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
@@ -774,37 +775,8 @@ const Server = struct {
     }
 
     fn handleClientSentEvent(server: *Server, event: ClientSentEvent) bool {
-        const session = server.clients.resolve(event.client) orelse {
-            server.metrics.stale_client_messages += 1;
-            return false;
-        };
-        session.send_pending = false;
-        if (session.closing) {
-            server.finalizeClient(event.client);
-            return server.shutdownDelivered();
-        }
-        const completion = session.delivery.complete(event.result);
-        if (completion.close_client) {
-            server.dropClient(event.client);
-            return server.shutdownDelivered();
-        }
-        if (completion.detach_pane) |pane_id| {
-            _ = session.attachments.detach(pane_id);
-            server.collect();
-        }
-        if (session.delivery.shouldCloseAfterReply() and
-            !server.shutdown.isRequested())
-        {
-            server.dropClient(event.client);
-            return false;
-        }
-        server.pump(session) catch server.dropClient(event.client);
-        if (!server.shutdown.isRequested()) {
-            return false;
-        }
-
-        server.pumpAll();
-        return server.shutdownDelivered();
+        var coordinator = clientSendCoordinator(server);
+        return coordinator.handle(.{ .client = event.client, .result = event.result });
     }
 
     fn handleHistoryResponseEvent(
@@ -2037,6 +2009,84 @@ fn dropAdmittedClient(server: *Server, session: *ClientSession) void {
     server.dropClient(session.key);
 }
 
+const ClientSendTypes = struct {
+    pub const Client = ClientKey;
+    pub const Session = *ClientSession;
+    pub const Completion = delivery_mod.Completion;
+    pub const Detach = schema.PaneId;
+};
+
+const client_send_runtime_port: client_send_coordinator.RuntimePort(Server, ClientSendTypes) = .{
+    .resolve = resolveSentClient,
+    .record_stale = recordStaleClientSend,
+    .release_send = releaseClientSend,
+    .is_closing = sentClientIsClosing,
+    .finalize = finalizeSentClient,
+    .complete_delivery = completeClientDelivery,
+    .drop_client = dropSentClient,
+    .detach_after_send = detachAfterClientSend,
+    .should_close_after_reply = sentClientShouldCloseAfterReply,
+    .stopping = clientSendRuntimeStopping,
+    .pump_client = pumpSentClient,
+    .pump_all = pumpRuntimeClients,
+    .shutdown_delivered = clientSendShutdownDelivered,
+};
+
+const RuntimeClientSendCoordinator = client_send_coordinator.Coordinator(Server, ClientSendTypes, client_send_runtime_port);
+
+fn clientSendCoordinator(server: *Server) RuntimeClientSendCoordinator {
+    return RuntimeClientSendCoordinator.init(server);
+}
+
+fn resolveSentClient(server: *Server, client: ClientKey) ?*ClientSession {
+    return server.clients.resolve(client);
+}
+
+fn recordStaleClientSend(server: *Server) void {
+    server.metrics.stale_client_messages += 1;
+}
+
+fn releaseClientSend(_: *Server, session: *ClientSession) void {
+    session.send_pending = false;
+}
+
+fn sentClientIsClosing(_: *Server, session: *ClientSession) bool {
+    return session.closing;
+}
+
+fn finalizeSentClient(server: *Server, client: ClientKey) void {
+    server.finalizeClient(client);
+}
+
+fn completeClientDelivery(_: *Server, session: *ClientSession, result: anyerror!void) delivery_mod.Completion {
+    return session.delivery.complete(result);
+}
+
+fn dropSentClient(server: *Server, client: ClientKey) void {
+    server.dropClient(client);
+}
+
+fn detachAfterClientSend(server: *Server, session: *ClientSession, pane: schema.PaneId) void {
+    _ = session.attachments.detach(pane);
+    server.collect();
+}
+
+fn sentClientShouldCloseAfterReply(_: *Server, session: *ClientSession) bool {
+    return session.delivery.shouldCloseAfterReply();
+}
+
+fn clientSendRuntimeStopping(server: *Server) bool {
+    return server.shutdown.isRequested();
+}
+
+fn pumpSentClient(server: *Server, session: *ClientSession) !void {
+    try server.pump(session);
+}
+
+fn clientSendShutdownDelivered(server: *Server) bool {
+    return server.shutdownDelivered();
+}
+
 const pane_input_runtime_port: pane_input_pump.RuntimePort(Server) = .{
     .start = startPaneInputWrite,
     .collect = collectPaneLifecycle,
@@ -2766,6 +2816,7 @@ test {
     _ = agent_description_coordinator;
     _ = agent_maintenance_coordinator;
     _ = client_admission;
+    _ = client_send_coordinator;
     _ = system_metrics_coordinator;
     _ = close_tab_commands;
     _ = close_tab_controller;
