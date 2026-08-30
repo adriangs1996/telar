@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const events = @import("events.zig");
 
 const schema = core.schema;
 
@@ -125,15 +126,21 @@ pub const Workspace = struct {
         return .{ .id = tab_id, .position = position };
     }
 
-    /// Renames one tab without changing workspace-list revision metadata. The
-    /// caller records any client or persistence projection after this succeeds.
+    /// Renames one tab and returns an owned event describing the committed
+    /// change. Repository revisions and external projections remain outside
+    /// the aggregate.
     ///
     /// ```zig
-    /// try workspace.renameTab(tab_id, "server");
+    /// const renamed = try workspace.renameTab(tab_id, "server");
     /// ```
-    pub fn renameTab(workspace: *Workspace, tab_id: schema.TabId, label: []const u8) !void {
+    pub fn renameTab(workspace: *Workspace, tab_id: schema.TabId, label: []const u8) !events.TabRenamed {
         const tab = workspace.findTab(tab_id) orelse return error.TabNotFound;
         try tab.rename(label);
+
+        return events.TabRenamed.init(.{
+            .workspace = .{ .workspace = workspace.id },
+            .tab_id = tab.id,
+        }, tab.labelSlice()) catch unreachable;
     }
 
     pub fn removeTab(workspace: *Workspace, tab_id: schema.TabId) bool {
@@ -268,9 +275,11 @@ test "renameTab validates and mutates only the requested tab" {
     const logs_id = try schema.id.tab(2);
     _ = try workspace.createTab(logs_id, "logs");
 
-    try workspace.renameTab(logs_id, "server");
+    const renamed = try workspace.renameTab(logs_id, "server");
     try std.testing.expectEqualStrings("server", workspace.tabLabel(logs_id).?);
     try std.testing.expectEqualStrings("main", workspace.tabLabel(try schema.id.tab(1)).?);
+    try std.testing.expectEqualStrings("server", renamed.labelSlice());
+    try std.testing.expectEqual(logs_id, renamed.location.tab_id);
 
     try std.testing.expectError(error.InvalidTabLabel, workspace.renameTab(logs_id, ""));
     try std.testing.expectEqualStrings("server", workspace.tabLabel(logs_id).?);
@@ -280,6 +289,9 @@ test "renameTab validates and mutates only the requested tab" {
     try std.testing.expectEqualStrings("server", workspace.tabLabel(logs_id).?);
 
     try std.testing.expectError(error.TabNotFound, workspace.renameTab(try schema.id.tab(999), "missing"));
+
+    _ = try workspace.renameTab(logs_id, "api");
+    try std.testing.expectEqualStrings("server", renamed.labelSlice());
 }
 
 test "tabs are created moved described and removed through the aggregate" {

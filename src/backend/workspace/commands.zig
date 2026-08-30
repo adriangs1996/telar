@@ -47,17 +47,6 @@ pub fn createTab(repository: *Repository, location: schema.WorkspaceLocation, la
     };
 }
 
-/// Applies a tab rename through its workspace aggregate. It deliberately does
-/// not advance workspace-list revision because that projection omits labels.
-///
-/// ```zig
-/// try workspace.renameTab(&repository, location, "server");
-/// ```
-pub fn renameTab(repository: *Repository, location: schema.TabLocation, label: []const u8) !void {
-    const workspace = repository.find(location.workspace) orelse return error.TabNotFound;
-    try workspace.renameTab(location.tab_id, label);
-}
-
 /// Reorders one tab inside its aggregate without changing list revision.
 ///
 /// ```zig
@@ -103,38 +92,6 @@ pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?TabRemo
 
 fn insertWorkspace(repository: *Repository, path: []const u8) !schema.TabLocation {
     return repository.insert(.{ .path = path });
-}
-
-test "renameTab changes the requested aggregate without advancing list revision" {
-    var state: state_mod.State = .{};
-    var repository = Repository.init(&state, std.testing.allocator);
-    defer repository.deinit();
-    const location = try insertWorkspace(&repository, "/work/project");
-    const list_revision = repository.reader().revision();
-
-    try renameTab(&repository, location, "server");
-
-    try std.testing.expectEqualStrings("server", repository.reader().tabLabel(location).?);
-    try std.testing.expectEqual(list_revision, repository.reader().revision());
-}
-
-test "renameTab rejects missing and invalid tabs without mutation" {
-    var state: state_mod.State = .{};
-    var repository = Repository.init(&state, std.testing.allocator);
-    defer repository.deinit();
-    const location = try insertWorkspace(&repository, "/work/project");
-
-    try std.testing.expectError(error.InvalidTabLabel, renameTab(&repository, location, ""));
-    try std.testing.expectEqualStrings("main", repository.reader().tabLabel(location).?);
-
-    var oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
-    try std.testing.expectError(error.InvalidTabLabel, renameTab(&repository, location, &oversized));
-    try std.testing.expectEqualStrings("main", repository.reader().tabLabel(location).?);
-
-    var missing = location;
-    missing.tab_id = try schema.id.tab(999);
-    try std.testing.expectError(error.TabNotFound, renameTab(&repository, missing, "missing"));
-    try std.testing.expectEqualStrings("main", repository.reader().tabLabel(location).?);
 }
 
 test "failed tab creation does not consume its candidate identity" {

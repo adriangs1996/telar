@@ -19,10 +19,14 @@ exposes the smallest complete protocol for it. There is no numeric limit on
 public methods.
 
 Client and runtime event loops classify events and delegate immediately to
-entrypoints. An entrypoint owns orchestration, ordering, transaction policy and
-rollback for one external event. It uses capability APIs and does not mutate
-their representations directly. Protocol messages connect entrypoints across
-the process boundary.
+explicit boundary entrypoints. A simple event may be handled there directly.
+For a client mutation separated under
+[ADR 0006](0006-separate-request-controllers-from-command-handlers.md), a
+request controller owns wire translation and response delivery while an
+application command handler owns domain orchestration, ordering, transaction
+policy, rollback and domain event publication. Both use capability APIs and do
+not mutate their representations directly. Protocol messages connect
+entrypoints across the process boundary.
 
 User-visible flows are named separately from capabilities because one flow may
 cross several owners, asynchronous events and both processes. Each flow records

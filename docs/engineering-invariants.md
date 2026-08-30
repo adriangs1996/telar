@@ -28,8 +28,15 @@ A design is incomplete while any item is unknown.
   protocol for it. Method count and line count are not design targets.
 - An external event has one explicit entrypoint in the process that receives
   it. Event loops classify and delegate; they do not contain the flow itself.
-- An entrypoint owns orchestration, ordering, transaction policy and rollback.
-  It calls capability APIs and does not mutate their representations directly.
+- A new or materially refactored client mutation uses a request controller for
+  protocol translation, expected-error mapping and response delivery. The
+  controller does not mutate domain state or publish domain events.
+- Its application command handler owns domain orchestration, ordering,
+  transaction policy, rollback and event publication. It calls capability APIs
+  and does not mutate their representations directly.
+- A domain event produced by a committed aggregate change is owned and typed.
+  Client identity, request IDs, callbacks and borrowed request buffers are not
+  domain event data.
 - Protocol messages connect entrypoints across processes. Message names remain
   stable search terms on both sides of the connection.
 - A user-visible flow records its external trigger, process entrypoints,

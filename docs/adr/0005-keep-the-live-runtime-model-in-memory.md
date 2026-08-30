@@ -53,13 +53,14 @@ runtime begins accepting mutations and receives owned persistence records or
 checkpoints after semantic changes. Ordinary runtime queries continue reading
 the in-memory model.
 
-Aggregates do not save themselves. An entrypoint validates and applies a
-command through capability, aggregate and repository APIs, then submits any
-resulting persistable change to the persistence capability. Each operation must
-state whether client confirmation requires durable commit or whether bounded
-write-behind is acceptable. A durable commit runs in a worker and never blocks
-the event loop. Failure policy, retry bounds and unsaved-state reporting belong
-to that operation's contract.
+Aggregates do not save themselves. An application command handler validates and
+applies a command through capability, aggregate and repository APIs, then
+submits any resulting persistable change to the persistence capability. A
+request controller remains responsible for translating the client protocol and
+delivering its result. Each operation must state whether client confirmation
+requires durable commit or whether bounded write-behind is acceptable. A
+durable commit runs in a worker and never blocks the event loop. Failure policy,
+retry bounds and unsaved-state reporting belong to that operation's contract.
 
 Calls within one process and one latency budget remain direct typed calls. We
 do not introduce a universal event bus or serialize messages merely to cross a

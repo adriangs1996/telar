@@ -11,6 +11,8 @@ const delivery_mod = @import("delivery.zig");
 const attachment_entrypoints = @import("entrypoints/attachment.zig");
 const entrypoint_common = @import("entrypoints/common.zig");
 const control_entrypoints = @import("entrypoints/control.zig");
+const tab_commands = @import("commands/tab.zig");
+const tab_controller = @import("controllers/tab.zig");
 const history_entrypoints = @import("entrypoints/history.zig");
 const pane_entrypoints = @import("entrypoints/pane.zig");
 const tab_entrypoints = @import("entrypoints/tab.zig");
@@ -1424,13 +1426,20 @@ const Server = struct {
                 }, create);
             },
             .rename_tab => |rename| {
-                try tab_entrypoints.renameTab(.{
+                var event_context: RenameTabEventContext = .{
+                    .server = server,
+                    .origin = session.key,
+                };
+                var handler: tab_commands.RenameTabHandler = .{
                     .workspaces = workspaces,
-                    .responses = responses,
-                    .agents = &server.model.agents,
-                    .client = session.key,
-                    .events = entrypointWorkspaceEvents(server),
-                }, rename);
+                    .events = .{
+                        .context = &event_context,
+                        .publish = publishTabRenamed,
+                    },
+                };
+                var controller = tab_controller.Controller.init(responses, handler.executor());
+
+                try controller.renameTab(rename);
             },
             .close_tab => |close| {
                 try tab_entrypoints.closeTab(.{
@@ -1529,6 +1538,18 @@ fn entrypointWorkspaceEvents(server: *Server) entrypoint_common.WorkspaceEvents 
         .changed = entrypointWorkspaceChanged,
         .closed = entrypointWorkspaceClosed,
     };
+}
+
+const RenameTabEventContext = struct {
+    server: *Server,
+    origin: ClientKey,
+};
+
+fn publishTabRenamed(context: *anyopaque, event: workspace_mod.TabRenamed) void {
+    const publication: *RenameTabEventContext = @ptrCast(@alignCast(context));
+
+    publication.server.model.agents.touch();
+    publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
 }
 
 fn entrypointWorkspaceChanged(context: *anyopaque, except: ClientKey, workspace: schema.WorkspaceLocation) void {
@@ -2180,6 +2201,9 @@ test "agent sounds require exact working transitions" {
 }
 
 test {
+    _ = tab_commands;
+    _ = tab_controller;
+    _ = @import("rename_tab_test.zig");
     _ = model_mod;
     _ = pane_mod;
     _ = workspace_mod;
