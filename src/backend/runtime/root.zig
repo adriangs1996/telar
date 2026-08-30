@@ -243,7 +243,26 @@ const ClientSession = struct {
     }
 };
 
+const SessionWrite = struct {
+    io: Io,
+    key: ClientKey,
+    connection: *core.transport.SocketChannel,
+    payload: []const u8,
+};
+
+const SessionRead = struct {
+    io: Io,
+    key: ClientKey,
+    connection: *core.transport.SocketChannel,
+    buffer: []u8,
+};
+
 const ClientStore = struct {
+    const Resources = struct {
+        io: Io,
+        gpa: std.mem.Allocator,
+    };
+
     items: [max_clients]?*ClientSession = @splat(null),
     count: usize = 0,
     next_id: u64 = 1,
@@ -293,13 +312,13 @@ const ClientStore = struct {
         return null;
     }
 
-    fn remove(store: *ClientStore, io: Io, gpa: std.mem.Allocator, key: ClientKey) bool {
+    fn remove(store: *ClientStore, resources: Resources, key: ClientKey) bool {
         for (&store.items) |*slot| {
             const session = slot.* orelse continue;
             if (session.key.id != key.id or session.key.generation != key.generation)
                 continue;
-            session.deinit(io, gpa);
-            gpa.destroy(session);
+            session.deinit(resources.io, resources.gpa);
+            resources.gpa.destroy(session);
             slot.* = null;
             store.count -= 1;
             return true;
@@ -324,6 +343,12 @@ const ClientStore = struct {
 const GeometryLease = struct {
     workspace: schema.WorkspaceLocation,
     owner: ClientKey,
+};
+
+const WorkspaceChange = struct {
+    origin: ClientKey,
+    workspace: schema.WorkspaceLocation,
+    previous_workspace: ?schema.WorkspaceId = null,
 };
 
 /// Runs one runtime instance until a stop event or fatal runtime error.
@@ -403,7 +428,7 @@ const Server = struct {
 
     /// Starts a pane and returns only after the runtime can observe both its
     /// output and exit. Client attachment and response delivery happen later.
-    fn launchPane(server: *Server, location: schema.TabLocation, size: schema.TerminalSize, launch: schema.LaunchView, launch_cwd: []const u8, workspace_path: []const u8) !*Pane {
+    fn launchPane(server: *Server, request: pane_launcher_mod.LaunchRequest) !*Pane {
         var launcher: PaneLauncher(RuntimeEvent) = .{
             .io = server.io,
             .gpa = server.gpa,
@@ -415,13 +440,7 @@ const Server = struct {
             .panes = &server.model.panes,
             .launch_fault = server.launch_fault,
         };
-        const fresh = try launcher.launch(.{
-            .location = location,
-            .size = size,
-            .launch = launch,
-            .launch_cwd = launch_cwd,
-            .workspace_path = workspace_path,
-        });
+        const fresh = try launcher.launch(request);
         server.model.agents.touch();
         return fresh;
     }
@@ -493,7 +512,7 @@ const Server = struct {
     fn finalizeClient(server: *Server, key: ClientKey) void {
         const session = server.clients.resolve(key) orelse return;
         if (!session.closing or session.read_pending or session.send_pending) return;
-        _ = server.clients.remove(server.io, server.gpa, key);
+        _ = server.clients.remove(.{ .io = server.io, .gpa = server.gpa }, key);
     }
 
     fn holdsGeometry(server: *Server, key: ClientKey, workspace: schema.WorkspaceLocation) bool {
@@ -534,24 +553,24 @@ const Server = struct {
     }
 
     fn notifyWorkspaceChanged(server: *Server, origin: ClientKey, workspace: schema.WorkspaceLocation) void {
-        server.notifyWorkspaceChangedWithFallback(origin, workspace, null);
+        server.notifyWorkspaceChange(.{ .origin = origin, .workspace = workspace });
     }
 
-    fn notifyWorkspaceClosed(server: *Server, origin: ClientKey, workspace: schema.WorkspaceLocation, previous_workspace: ?schema.WorkspaceId) void {
-        server.notifyWorkspaceChangedWithFallback(origin, workspace, previous_workspace);
+    fn notifyWorkspaceClosed(server: *Server, change: WorkspaceChange) void {
+        server.notifyWorkspaceChange(change);
     }
 
-    fn notifyWorkspaceChangedWithFallback(server: *Server, origin: ClientKey, workspace: schema.WorkspaceLocation, previous_workspace: ?schema.WorkspaceId) void {
+    fn notifyWorkspaceChange(server: *Server, change: WorkspaceChange) void {
         for (&server.clients.items) |*slot| {
             const session = slot.* orelse continue;
 
-            if (std.meta.eql(session.key, origin) or !session.active()) {
+            if (std.meta.eql(session.key, change.origin) or !session.active()) {
                 continue;
             }
 
-            if (session.attachments.observes(workspace)) {
-                session.delivery.responses.resync_workspace = workspace;
-                session.delivery.responses.resync_previous_workspace = previous_workspace;
+            if (session.attachments.observes(change.workspace)) {
+                session.delivery.responses.resync_workspace = change.workspace;
+                session.delivery.responses.resync_previous_workspace = change.previous_workspace;
             }
         }
     }
@@ -712,7 +731,7 @@ const Server = struct {
             },
             .metrics = &server.metrics,
         })) orelse return;
-        startSessionSend(server.io, server.select, session, prepared.payload) catch |err| {
+        startSessionSend(server, session, prepared.payload) catch |err| {
             session.delivery.abort(prepared);
             return err;
         };
@@ -770,7 +789,7 @@ const Server = struct {
             return false;
         };
         if (!server.shutdown.isRequested()) {
-            startSessionRead(server.io, server.select, session) catch
+            startSessionRead(server, session) catch
                 server.dropClient(event.client);
             return false;
         }
@@ -1462,13 +1481,13 @@ fn prepareOpenPaneLaunch(context: *anyopaque, request: open_pane_commands.Prepar
 
 fn launchOpenPane(context: *anyopaque, request: open_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
     const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
-    const pane = try client.server.launchPane(
-        request.location,
-        request.size,
-        request.launch,
-        request.launch_cwd,
-        request.workspace_path,
-    );
+    const pane = try client.server.launchPane(.{
+        .location = request.location,
+        .size = request.size,
+        .launch = request.launch,
+        .launch_cwd = request.launch_cwd,
+        .workspace_path = request.workspace_path,
+    });
 
     return .{ .key = pane.key(), .location = pane.location };
 }
@@ -1525,13 +1544,13 @@ fn attachCreatedTab(context: *anyopaque, launched: create_tab_commands.LaunchedP
 
 fn launchCreatedTabPane(context: *anyopaque, request: create_tab_commands.LaunchPane) !create_tab_commands.LaunchedPane {
     const server: *Server = @ptrCast(@alignCast(context));
-    const pane = try server.launchPane(
-        request.location,
-        request.size,
-        request.launch,
-        request.launch_cwd,
-        request.workspace_path,
-    );
+    const pane = try server.launchPane(.{
+        .location = request.location,
+        .size = request.size,
+        .launch = request.launch,
+        .launch_cwd = request.launch_cwd,
+        .workspace_path = request.workspace_path,
+    });
 
     return .{ .id = pane.id };
 }
@@ -1557,13 +1576,13 @@ fn releaseCreatedWorkspaceGeometry(context: *anyopaque, workspace: schema.Worksp
 
 fn launchCreatedWorkspacePane(context: *anyopaque, request: create_workspace_commands.LaunchPane) !create_workspace_commands.LaunchedPane {
     const server: *Server = @ptrCast(@alignCast(context));
-    const pane = try server.launchPane(
-        request.location,
-        request.size,
-        request.launch,
-        request.launch_cwd,
-        request.workspace_path,
-    );
+    const pane = try server.launchPane(.{
+        .location = request.location,
+        .size = request.size,
+        .launch = request.launch,
+        .launch_cwd = request.launch_cwd,
+        .workspace_path = request.workspace_path,
+    });
 
     return .{ .id = pane.id };
 }
@@ -1598,13 +1617,13 @@ fn prepareCreatePaneLaunch(context: *anyopaque, request: create_pane_commands.Pr
 
 fn launchCreatedPane(context: *anyopaque, request: create_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
     const server: *Server = @ptrCast(@alignCast(context));
-    const pane = try server.launchPane(
-        request.location,
-        request.size,
-        request.launch,
-        request.launch_cwd,
-        request.workspace_path,
-    );
+    const pane = try server.launchPane(.{
+        .location = request.location,
+        .size = request.size,
+        .launch = request.launch,
+        .launch_cwd = request.launch_cwd,
+        .workspace_path = request.workspace_path,
+    });
 
     return .{ .key = pane.key(), .location = pane.location };
 }
@@ -1658,11 +1677,11 @@ fn publishTabRemoved(context: *anyopaque, event: workspace_mod.TabRemoved) void 
     const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
 
     if (event.workspace_removed) {
-        publication.server.notifyWorkspaceClosed(
-            publication.origin,
-            event.location.workspace,
-            event.previous_workspace,
-        );
+        publication.server.notifyWorkspaceClosed(.{
+            .origin = publication.origin,
+            .workspace = event.location.workspace,
+            .previous_workspace = event.previous_workspace,
+        });
     } else {
         publication.server.notifyWorkspaceChanged(publication.origin, event.location.workspace);
     }
@@ -1978,45 +1997,30 @@ fn runtimeEventPath(event: RuntimeEvent) diagnostics.Path {
     };
 }
 
-fn queueFailure(
-    responses: *ResponseQueue,
-    request_id: schema.RequestId,
-    code: schema.FailureCode,
-    message: []const u8,
-) !void {
+fn queueFailure(responses: *ResponseQueue, failure: response_queue.PendingFailure) !void {
     try responses.push(.{ .request_failed = .{
-        .request_id = request_id,
-        .code = code,
-        .message = message,
+        .request_id = failure.request_id,
+        .code = failure.code,
+        .message = failure.message,
     } });
 }
 
-fn startSessionSend(
-    io: Io,
-    select: *Io.Select(RuntimeEvent),
-    session: *ClientSession,
-    payload: []const u8,
-) !void {
+fn startSessionSend(server: *Server, session: *ClientSession, payload: []const u8) !void {
     std.debug.assert(!session.send_pending);
     session.send_pending = true;
-    select.concurrent(.client_sent, sendSession, .{
-        io,
-        session.key,
-        &session.connection,
-        payload,
-    }) catch |err| {
+    server.select.concurrent(.client_sent, sendSession, .{SessionWrite{
+        .io = server.io,
+        .key = session.key,
+        .connection = &session.connection,
+        .payload = payload,
+    }}) catch |err| {
         session.send_pending = false;
         return err;
     };
 }
 
-fn sendSession(
-    io: Io,
-    key: ClientKey,
-    connection: *core.transport.SocketChannel,
-    payload: []const u8,
-) ClientSentEvent {
-    return .{ .client = key, .result = connection.send(io, payload) };
+fn sendSession(write: SessionWrite) ClientSentEvent {
+    return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
 }
 
 fn writeDiagnostics(io: Io, state: *TelemetryState, bytes: []const u8) anyerror!void {
@@ -2099,7 +2103,7 @@ fn admitNegotiatedClient(server: *Server, connection: core.transport.SocketChann
 }
 
 fn startNegotiatedClientRead(server: *Server, session: *ClientSession) !void {
-    try startSessionRead(server.io, server.select, session);
+    try startSessionRead(server, session);
 }
 
 fn dropAdmittedClient(server: *Server, session: *ClientSession) void {
@@ -2218,7 +2222,11 @@ fn enqueueHistoryQueryResult(_: *Server, session: *ClientSession, result: *histo
 }
 
 fn enqueueHistoryFailure(_: *Server, session: *ClientSession, failure: history.model.Failure) bool {
-    queueFailure(&session.delivery.responses, failure.request_id, .internal, failure.message) catch return false;
+    queueFailure(&session.delivery.responses, .{
+        .request_id = failure.request_id,
+        .code = .internal,
+        .message = failure.message,
+    }) catch return false;
     return true;
 }
 
@@ -2319,31 +2327,22 @@ fn handshakeClient(io: Io, connection: *core.transport.SocketChannel) anyerror!v
     if (response == .rejected) return error.IncompatibleProtocol;
 }
 
-fn startSessionRead(
-    io: Io,
-    select: *Io.Select(RuntimeEvent),
-    session: *ClientSession,
-) !void {
+fn startSessionRead(server: *Server, session: *ClientSession) !void {
     std.debug.assert(!session.read_pending);
     session.read_pending = true;
-    select.concurrent(.client_message, receiveSession, .{
-        io,
-        session.key,
-        &session.connection,
-        session.receive_buffer,
-    }) catch |err| {
+    server.select.concurrent(.client_message, receiveSession, .{SessionRead{
+        .io = server.io,
+        .key = session.key,
+        .connection = &session.connection,
+        .buffer = session.receive_buffer,
+    }}) catch |err| {
         session.read_pending = false;
         return err;
     };
 }
 
-fn receiveSession(
-    io: Io,
-    key: ClientKey,
-    connection: *core.transport.SocketChannel,
-    buffer: []u8,
-) ClientMessageEvent {
-    return .{ .client = key, .result = connection.receive(io, buffer) };
+fn receiveSession(read: SessionRead) ClientMessageEvent {
+    return .{ .client = read.key, .result = read.connection.receive(read.io, read.buffer) };
 }
 
 const PaneOutputRuntime = struct {

@@ -105,13 +105,9 @@ fn readRaw() ?Raw {
 // -- macOS ------------------------------------------------------------------
 
 const darwin = struct {
+    // These declarations must match the Darwin C ABI exactly.
     extern "c" fn mach_host_self() std.c.mach_port_t;
-    extern "c" fn host_statistics64(
-        host: std.c.mach_port_t,
-        flavor: c_int,
-        info: [*]u32,
-        count: *u32,
-    ) c_int;
+    extern "c" fn host_statistics64(host: std.c.mach_port_t, flavor: c_int, info: [*]u32, count: *u32) c_int;
     extern "c" fn getpagesize() c_int;
 
     const HOST_CPU_LOAD_INFO: c_int = 3;

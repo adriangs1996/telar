@@ -52,20 +52,9 @@ const CLD = struct {
     const DUMPED: c_int = 3;
 };
 
-extern "c" fn waitid(
-    idtype: c_int,
-    id: c_uint,
-    infop: *std.c.siginfo_t,
-    options: c_int,
-) c_int;
-
-extern "c" fn openpty(
-    amaster: *std.c.fd_t,
-    aslave: *std.c.fd_t,
-    name: ?[*]u8,
-    termp: ?*const std.posix.termios,
-    winp: ?*const std.posix.winsize,
-) c_int;
+// These declarations must match the platform C ABI exactly.
+extern "c" fn waitid(idtype: c_int, id: c_uint, infop: *std.c.siginfo_t, options: c_int) c_int;
+extern "c" fn openpty(amaster: *std.c.fd_t, aslave: *std.c.fd_t, name: ?[*]u8, termp: ?*const std.posix.termios, winp: ?*const std.posix.winsize) c_int;
 
 extern "c" fn execvp(file: [*:0]const u8, argv: [*:null]const ?[*:0]const u8) c_int;
 extern "c" fn _NSGetEnviron() *[*:null]?[*:0]u8;
