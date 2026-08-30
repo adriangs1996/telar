@@ -106,6 +106,18 @@ pub const PaneFocus = struct {
     geometry_changed: bool,
 };
 
+pub const ResizePaneRequest = struct {
+    direction: layout_mod.Direction,
+    area: ui.Rect,
+};
+
+pub const PaneLayoutResize = struct {
+    location: schema.TabLocation,
+    focused: schema.PaneId,
+    panes_revision: u64,
+    area: ui.Rect,
+};
+
 pub const RequestPaneSplit = struct {
     axis: layout_mod.Axis,
     area: ui.Rect,
@@ -661,6 +673,29 @@ pub const Model = struct {
             .previous = previous,
             .focused = focused,
             .geometry_changed = active.model.layout.isFullscreen(),
+        };
+    }
+
+    /// Moves the nearest split edge around the focused pane and reports the
+    /// committed pane revision. Missing axes and constrained edges are no-ops.
+    ///
+    /// ```zig
+    /// const resize = model.resizePane(.{ .direction = .right, .area = area }) orelse return;
+    /// ```
+    pub fn resizePane(model: *Model, request: ResizePaneRequest) ?PaneLayoutResize {
+        const active = model.workspace.active() orelse return null;
+        const focused = active.model.layout.focused() orelse return null;
+        if (!active.model.resizeFocused(request.direction, request.area)) {
+            return null;
+        }
+
+        model.panes_revision +%= 1;
+
+        return .{
+            .location = active.location,
+            .focused = focused,
+            .panes_revision = model.panes_revision,
+            .area = request.area,
         };
     }
 
@@ -2010,6 +2045,55 @@ test "pane focus resolves identity and direction through one visible revision" {
         .area = area,
     })) == null);
     try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
+}
+
+test "pane resize owns direction resolution geometry and visible revisions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    try model.workspace.bootstrap(first, location, .{ .cols = 101, .rows = 41 });
+    const active = &model.workspace.active().?.model;
+    try active.split(first, second, location, .horizontal, area);
+    try std.testing.expect(active.focusPane(first));
+    const width_before = active.contentSize(first, area).?.cols;
+
+    const resized = model.resizePane(.{ .direction = .right, .area = area }).?;
+
+    try std.testing.expectEqualDeep(location, resized.location);
+    try std.testing.expectEqual(first, resized.focused);
+    try std.testing.expectEqual(model.version().panes, resized.panes_revision);
+    try std.testing.expectEqualDeep(area, resized.area);
+    try std.testing.expect(active.contentSize(first, area).?.cols > width_before);
+    try std.testing.expectEqual(Version{ .panes = 1 }, model.version());
+    try std.testing.expect((model.resizePane(.{ .direction = .up, .area = area })) == null);
+    try std.testing.expectEqual(Version{ .panes = 1 }, model.version());
+
+    try std.testing.expect(active.toggleFullscreen());
+    const fullscreen_resize = model.resizePane(.{ .direction = .left, .area = area }).?;
+    try std.testing.expect(active.layout.isFullscreen());
+    try std.testing.expectEqual(model.version().panes, fullscreen_resize.panes_revision);
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
+    try std.testing.expect(active.toggleFullscreen());
+    try std.testing.expectEqual(width_before, active.contentSize(first, area).?.cols);
+
+    while (model.resizePane(.{ .direction = .right, .area = .{ .w = 7, .h = 3 } }) != null) {}
+    const version_at_limit = model.version();
+    try std.testing.expect((model.resizePane(.{
+        .direction = .right,
+        .area = .{ .w = 7, .h = 3 },
+    })) == null);
+    try std.testing.expectEqualDeep(version_at_limit, model.version());
+
+    model.workspace.deinit();
+    try std.testing.expect((model.resizePane(.{ .direction = .right, .area = area })) == null);
+    try std.testing.expectEqualDeep(version_at_limit, model.version());
 }
 
 test "pane closure planning requires the active attached pane without mutation" {

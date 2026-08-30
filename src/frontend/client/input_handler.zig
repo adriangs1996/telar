@@ -12,6 +12,7 @@ const plugin_broker = @import("../plugins/root.zig");
 const widgets = @import("../widgets/root.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_resizes = @import("pane_resizes.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
@@ -681,12 +682,12 @@ fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
 }
 
 fn resizePane(handler: *InputHandler, direction: layout_mod.Direction) !void {
-    const model = handler.activeModel() orelse return;
-    if (!model.resizeFocused(direction, handler.client.view.workbench())) return;
-    handler.client.graphics_store.invalidatePlacements();
-    try handler.client.resizeAttached(model, handler.client.view.workbench());
-    handler.client.view.invalidate();
-    handler.redraw = true;
+    var use_case = pane_resizes.handler(handler.client);
+
+    _ = try use_case.execute(.{
+        .direction = direction,
+        .area = handler.client.view.workbench(),
+    });
 }
 
 fn togglePaneFullscreen(handler: *InputHandler) !void {

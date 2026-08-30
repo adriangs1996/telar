@@ -9,6 +9,7 @@ pub const focus_pane = @import("focus_pane.zig");
 pub const move_tab = @import("move_tab.zig");
 pub const rename_tab = @import("rename_tab.zig");
 pub const rename_workspace = @import("rename_workspace.zig");
+pub const resize_pane = @import("resize_pane.zig");
 pub const select_tab = @import("select_tab.zig");
 pub const split_pane = @import("split_pane.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
@@ -25,6 +26,7 @@ test {
     _ = move_tab;
     _ = rename_tab;
     _ = rename_workspace;
+    _ = resize_pane;
     _ = select_tab;
     _ = split_pane;
     _ = tab_snapshot;
