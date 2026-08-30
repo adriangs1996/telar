@@ -482,6 +482,31 @@ const tls_tunnel_port: tls_tunnel.Port(TlsTunnelContext, net.Stream, *tls.Sessio
 
 const EstablishTlsTunnel = tls_tunnel.Command(TlsTunnelContext, tls_tunnel_port);
 
+const Http1Context = struct {
+    service: *Service,
+    session: *tls.Session,
+    tunnel: *TunnelContext,
+};
+
+const http1_exchange_port: http.ExchangePort(Http1Context) = .{
+    .io = http1Io,
+    .relay_body = relayHttpRequestBody,
+    .relay_response = relayHttpResponse,
+};
+
+const RelayHttp1Exchange = http.Exchange(Http1Context, http1_exchange_port);
+
+const http1_connection_port: http.ConnectionPort(Http1Context) = .{
+    .read_request = relayHttpRequestHead,
+    .exchange = relayHttpExchange,
+    .publish_request = publishHttpRequest,
+    .publish_response = publishHttpResponse,
+    .publish_failure = publishHttpFailure,
+    .upgrade = upgradeHttpConnection,
+};
+
+const RelayHttp1Connection = http.Connection(Http1Context, http1_connection_port);
+
 const H2EventObserver = struct {
     context: *TunnelContext,
     responses: ?*provider.ResponseStreams = null,
@@ -629,89 +654,12 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
         return;
     }
 
-    while (true) {
-        const request = http.relayHeadTransformed(session, .{
-            .route = .{
-                .from = .child,
-                .to = .origin,
-                .is_response = false,
-                .response_to_head = false,
-            },
-            .pipeline = &service.transforms,
-            .io = service.io,
-            .context = context.transformContext(.request, .request, 0),
-        }) orelse return;
-        context.publish(
-            if (request.inference_request)
-                .request_started
-            else
-                .auxiliary_request_started,
-            0,
-        );
-        const response = if (request.framing.hasBody()) response: {
-            var event_storage: [2]HttpExchangeEvent = undefined;
-            var exchange = Io.Select(HttpExchangeEvent).init(service.io, &event_storage);
-            exchange.concurrent(.request_body, relayHttpRequestBody, .{
-                session,
-                request.framing,
-            }) catch {
-                context.publish(.request_failed, 0);
-                return;
-            };
-            exchange.concurrent(.response, relayHttpResponse, .{
-                session,
-                HttpResponseRequest.fromHead(request),
-                &context,
-            }) catch {
-                exchange.cancelDiscard();
-                context.publish(.request_failed, 0);
-                return;
-            };
-            defer exchange.cancelDiscard();
-
-            var body_finished = false;
-            while (true) switch (exchange.await() catch return) {
-                .request_body => |forwarded| {
-                    if (!forwarded) {
-                        context.publish(.request_failed, 0);
-                        return;
-                    }
-                    body_finished = true;
-                },
-                .response => |candidate| {
-                    const final = candidate orelse {
-                        context.publish(.request_failed, 0);
-                        return;
-                    };
-                    // A final response may legally reject an upload before the
-                    // client sends the body. The response has already reached
-                    // the child; cancel the body reader and close this HTTP/1.1
-                    // connection instead of waiting forever or reusing a stream
-                    // whose request boundary is no longer known.
-                    if (!body_finished) {
-                        context.status_code = final.status_code;
-                        context.publish(if (final.status_code >= 400)
-                            .request_failed
-                        else
-                            .response_finished, 0);
-                        return;
-                    }
-                    break :response final;
-                },
-            };
-        } else relayHttpResponse(session, HttpResponseRequest.fromHead(request), &context) orelse {
-            context.publish(.request_failed, 0);
-            return;
-        };
-        context.status_code = response.status_code;
-        context.publish(if (response.status_code >= 400) .request_failed else .response_finished, 0);
-        if (response.upgrade) {
-            context.protocol = .upgraded;
-            relayUpgrade(service.io, session, &context);
-            return;
-        }
-        if (response.closes) return;
-    }
+    var http1_context: Http1Context = .{
+        .service = service,
+        .session = session,
+        .tunnel = &context,
+    };
+    RelayHttp1Connection.run(&http1_context);
 }
 
 fn recordAuthenticationRejection(service: *Service, rejection: connect_authentication.RejectionMetric) void {
@@ -799,55 +747,66 @@ fn relayH2RequestTransformed(
     );
 }
 
-const HttpExchangeEvent = union(enum) {
-    request_body: bool,
-    response: ?http.Message,
-};
-
-const HttpResponseRequest = struct {
-    response_to_head: bool,
-    inference: bool,
-
-    fn fromHead(head: http.Head) HttpResponseRequest {
-        return .{
-            .response_to_head = head.message.head_request,
-            .inference = head.inference_request,
-        };
-    }
-};
-
 const IgnoreBodyObserver = struct {
     pub fn observe(_: IgnoreBodyObserver, _: http.BodyFragment) void {}
 };
 
-fn relayHttpRequestBody(session: *tls.Session, framing: http.Framing) bool {
+fn http1Io(context: *Http1Context) Io {
+    return context.service.io;
+}
+
+fn relayHttpRequestHead(context: *Http1Context) ?http.RequestHead {
+    const parsed = http.relayHeadTransformed(context.session, .{
+        .route = .{
+            .from = .child,
+            .to = .origin,
+            .is_response = false,
+            .response_to_head = false,
+        },
+        .pipeline = &context.service.transforms,
+        .io = context.service.io,
+        .context = context.tunnel.transformContext(.request, .request, 0),
+    }) orelse return null;
+
+    return .{
+        .classification = if (parsed.inference_request) .inference else .auxiliary,
+        .body = parsed.framing,
+        .response_context = if (parsed.message.head_request) .head_request else .normal,
+    };
+}
+
+fn relayHttpExchange(context: *Http1Context, request: http.RequestHead) http.ExchangeOutcome {
+    return RelayHttp1Exchange.execute(context, request);
+}
+
+fn relayHttpRequestBody(context: *Http1Context, framing: http.BodyPlan) bool {
     return http.relayBody(
-        session,
+        context.session,
         .{ .from = .child, .to = .origin, .framing = framing },
         IgnoreBodyObserver{},
     );
 }
 
-fn relayHttpResponse(session: *tls.Session, request: HttpResponseRequest, context: *TunnelContext) ?http.Message {
+fn relayHttpResponse(context: *Http1Context, request: http.RequestHead) ?http.ResponseHead {
     while (true) {
-        const head = http.relayHeadTransformed(session, .{
+        const head = http.relayHeadTransformed(context.session, .{
             .route = .{
                 .from = .origin,
                 .to = .child,
                 .is_response = true,
-                .response_to_head = request.response_to_head,
+                .response_to_head = request.response_context == .head_request,
             },
             .pipeline = &context.service.transforms,
             .io = context.service.io,
-            .context = context.transformContext(.response, .response, 0),
+            .context = context.tunnel.transformContext(.response, .response, 0),
         }) orelse return null;
 
         var observer: HttpResponseObserver = .init(
-            context,
+            context.tunnel,
             shouldInspectHttpResponse(request, head),
         );
         const forwarded = http.relayBody(
-            session,
+            context.session,
             .{ .from = .origin, .to = .child, .framing = head.framing },
             &observer,
         );
@@ -857,12 +816,53 @@ fn relayHttpResponse(session: *tls.Session, request: HttpResponseRequest, contex
             return null;
         }
 
-        const candidate = head.message;
-
-        if (!candidate.informational) {
-            return candidate;
+        if (!head.message.informational) {
+            return semanticResponseHead(head);
         }
     }
+}
+
+fn semanticResponseHead(head: http.Head) http.ResponseHead {
+    return .{
+        .status_code = head.message.status_code,
+        .body = head.framing,
+        .kind = if (head.message.informational)
+            .informational
+        else if (head.message.upgrade)
+            .upgrade
+        else
+            .final,
+        .connection = if (head.message.closes) .close else .keep_alive,
+    };
+}
+
+fn publishHttpRequest(context: *Http1Context, classification: http.RequestClass) void {
+    context.tunnel.publish(httpRequestPhase(classification), 0);
+}
+
+fn httpRequestPhase(classification: http.RequestClass) middleware.Phase {
+    return switch (classification) {
+        .inference => .request_started,
+        .auxiliary => .auxiliary_request_started,
+    };
+}
+
+fn publishHttpResponse(context: *Http1Context, response: http.ResponseHead) void {
+    context.tunnel.status_code = response.status_code;
+    context.tunnel.publish(httpResponsePhase(response.status_code), 0);
+}
+
+fn httpResponsePhase(status_code: u16) middleware.Phase {
+    return if (status_code >= 400) .request_failed else .response_finished;
+}
+
+fn publishHttpFailure(context: *Http1Context) void {
+    context.tunnel.publish(.request_failed, 0);
+}
+
+fn upgradeHttpConnection(context: *Http1Context) void {
+    context.tunnel.protocol = .upgraded;
+    relayUpgrade(context.service.io, context.session, context.tunnel);
 }
 
 const HttpResponseObserver = struct {
@@ -894,13 +894,17 @@ const HttpResponseObserver = struct {
     }
 };
 
-fn shouldInspectHttpResponse(request: HttpResponseRequest, head: http.Head) bool {
-    return request.inference and head.sse_body and
+fn shouldInspectHttpResponse(request: http.RequestHead, head: http.Head) bool {
+    return request.classification == .inference and head.sse_body and
         head.message.status_code >= 200 and head.message.status_code < 300;
 }
 
 test "provider payload inspection requires a successful inference stream" {
-    const request: HttpResponseRequest = .{ .response_to_head = false, .inference = true };
+    const request: http.RequestHead = .{
+        .classification = .inference,
+        .body = .none,
+        .response_context = .normal,
+    };
     const successful: http.Head = .{
         .message = .{ .status_code = 200 },
         .framing = .none,
@@ -910,8 +914,9 @@ test "provider payload inspection requires a successful inference stream" {
 
     try std.testing.expect(shouldInspectHttpResponse(request, successful));
     try std.testing.expect(!shouldInspectHttpResponse(.{
-        .response_to_head = false,
-        .inference = false,
+        .classification = .auxiliary,
+        .body = .none,
+        .response_context = .normal,
     }, successful));
 
     var non_sse = successful;
@@ -945,6 +950,48 @@ test "provider payload inspection requires a successful inference stream" {
         .sse_body = false,
         .bytes = "",
     }));
+}
+
+test "HTTP response metadata preserves final routing semantics" {
+    const informational = semanticResponseHead(.{
+        .message = .{ .status_code = 100, .informational = true },
+        .framing = .none,
+        .inference_request = false,
+        .sse_body = false,
+    });
+    try std.testing.expectEqual(http.ResponseKind.informational, informational.kind);
+    try std.testing.expectEqual(http.ConnectionPolicy.keep_alive, informational.connection);
+
+    const upgrade = semanticResponseHead(.{
+        .message = .{ .status_code = 101, .upgrade = true },
+        .framing = .none,
+        .inference_request = false,
+        .sse_body = false,
+    });
+    try std.testing.expectEqual(http.ResponseKind.upgrade, upgrade.kind);
+
+    const closing = semanticResponseHead(.{
+        .message = .{ .status_code = 200, .closes = true },
+        .framing = .until_close,
+        .inference_request = false,
+        .sse_body = false,
+    });
+    try std.testing.expectEqual(http.ResponseKind.final, closing.kind);
+    try std.testing.expectEqual(http.ConnectionPolicy.close, closing.connection);
+    try std.testing.expectEqual(http.BodyPlan.until_close, closing.body);
+}
+
+test "HTTP observations map request class and final status" {
+    try std.testing.expectEqual(middleware.Phase.request_started, httpRequestPhase(.inference));
+    try std.testing.expectEqual(middleware.Phase.auxiliary_request_started, httpRequestPhase(.auxiliary));
+
+    inline for (.{ @as(u16, 200), 204, 399 }) |status_code| {
+        try std.testing.expectEqual(middleware.Phase.response_finished, httpResponsePhase(status_code));
+    }
+
+    inline for (.{ @as(u16, 400), 429, 599 }) |status_code| {
+        try std.testing.expectEqual(middleware.Phase.request_failed, httpResponsePhase(status_code));
+    }
 }
 
 fn relayUpgrade(io: Io, session: *tls.Session, context: *TunnelContext) void {

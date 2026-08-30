@@ -7,6 +7,7 @@
 const std = @import("std");
 const middleware = @import("../middleware.zig");
 const tls = @import("../tls.zig");
+const types = @import("types.zig");
 
 pub const max_bytes = 32 * 1024;
 
@@ -18,20 +19,7 @@ pub const Message = struct {
     closes: bool = false,
 };
 
-pub const Framing = union(enum) {
-    none,
-    length: usize,
-    chunked,
-    until_close,
-
-    pub fn hasBody(framing: Framing) bool {
-        return switch (framing) {
-            .none => false,
-            .length => |len| len != 0,
-            .chunked, .until_close => true,
-        };
-    }
-};
+pub const Framing = types.BodyPlan;
 
 pub const Head = struct {
     message: Message,
@@ -64,7 +52,7 @@ pub fn read(session: anytype, side: tls.Session.Side, buffer: []u8) ?usize {
 pub fn analyze(bytes: []const u8, is_response: bool, response_to_head: bool) ?Head {
     const first_line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return null;
     const start_line = bytes[0..first_line_end];
-    const status_code = if (is_response) parseStatus(start_line) else 0;
+    const status_code: u16 = if (is_response) parseStatus(start_line) orelse return null else 0;
     const bodyless = is_response and (response_to_head or
         (status_code >= 100 and status_code < 200) or
         status_code == 204 or status_code == 205 or status_code == 304);
@@ -176,7 +164,7 @@ fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?Framing {
         if (lastTokenEquals(value, "chunked")) return .chunked;
         return if (is_response) .until_close else null;
     }
-    if (content_length) |len| return .{ .length = len };
+    if (content_length) |len| return .{ .content_length = len };
     return if (is_response) .until_close else .none;
 }
 
@@ -216,10 +204,18 @@ fn isHeadRequest(line: []const u8) bool {
     return std.mem.eql(u8, line[0..end], "HEAD");
 }
 
-fn parseStatus(line: []const u8) u16 {
+fn parseStatus(line: []const u8) ?u16 {
     var parts = std.mem.splitScalar(u8, line, ' ');
     _ = parts.next();
-    return std.fmt.parseInt(u16, parts.next() orelse return 0, 10) catch 0;
+    const text = parts.next() orelse return null;
+
+    if (text.len != 3) {
+        return null;
+    }
+
+    const status = std.fmt.parseInt(u16, text, 10) catch return null;
+
+    return if (status >= 100 and status <= 599) status else null;
 }
 
 test "head reader stops before the first body byte" {
@@ -257,7 +253,7 @@ test "head reader rejects a head that fills its bound" {
 }
 
 test "analyze recognizes fixed and chunked body framing" {
-    try std.testing.expectEqualDeep(Framing{ .length = 42 }, analyze(
+    try std.testing.expectEqualDeep(Framing{ .content_length = 42 }, analyze(
         "POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n",
         false,
         false,
@@ -270,7 +266,7 @@ test "analyze recognizes fixed and chunked body framing" {
 }
 
 test "analyze accepts repeated identical content lengths" {
-    try std.testing.expectEqualDeep(Framing{ .length = 4 }, analyze(
+    try std.testing.expectEqualDeep(Framing{ .content_length = 4 }, analyze(
         "POST / HTTP/1.1\r\nContent-Length: 4, 4\r\nContent-Length: 4\r\n\r\n",
         false,
         false,
@@ -365,6 +361,20 @@ test "status and connection tokens are case insensitive" {
     try std.testing.expect(parsed.message.closes);
 }
 
+test "response status must be exactly three digits in the HTTP range" {
+    const invalid = [_][]const u8{
+        "HTTP/1.1 0 Invalid\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 99 Invalid\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 600 Invalid\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 0200 Invalid\r\nContent-Length: 0\r\n\r\n",
+        "HTTP/1.1 two Invalid\r\nContent-Length: 0\r\n\r\n",
+    };
+
+    for (invalid) |bytes| {
+        try std.testing.expect(analyze(bytes, true, false) == null);
+    }
+}
+
 test "inference classification excludes auxiliary provider routes" {
     try std.testing.expect(analyze(
         "POST /v1/messages?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
@@ -396,8 +406,8 @@ test "a HEAD request is identified without assigning response metadata" {
 
 test "framing reports whether a concurrent body relay is needed" {
     try std.testing.expect(!Framing.hasBody(.none));
-    try std.testing.expect(!(Framing{ .length = 0 }).hasBody());
-    try std.testing.expect((Framing{ .length = 1 }).hasBody());
+    try std.testing.expect(!(Framing{ .content_length = 0 }).hasBody());
+    try std.testing.expect((Framing{ .content_length = 1 }).hasBody());
     try std.testing.expect(Framing.hasBody(.chunked));
     try std.testing.expect(Framing.hasBody(.until_close));
 }
