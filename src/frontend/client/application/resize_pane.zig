@@ -11,7 +11,7 @@ pub const ResizePane = client_model.ResizePaneRequest;
 
 pub const ResizeEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.PaneLayoutResize) anyerror!void,
+    apply: *const fn (*anyopaque, client_model.PaneGeometryChange) anyerror!void,
 };
 
 pub const ResizePaneHandler = struct {
@@ -24,7 +24,7 @@ pub const ResizePaneHandler = struct {
     /// ```zig
     /// const resize = try handler.execute(.{ .direction = .right, .area = area });
     /// ```
-    pub fn execute(handler: *ResizePaneHandler, command: ResizePane) !?client_model.PaneLayoutResize {
+    pub fn execute(handler: *ResizePaneHandler, command: ResizePane) !?client_model.PaneGeometryChange {
         const resize = handler.model.resizePane(command) orelse return null;
 
         try handler.effects.apply(handler.effects.context, resize);
@@ -73,14 +73,14 @@ const EffectsCapture = struct {
     width_before: u16,
     calls: usize = 0,
     observed_commit: bool = false,
-    resize: ?client_model.PaneLayoutResize = null,
+    resize: ?client_model.PaneGeometryChange = null,
     fail: bool = false,
 
     fn port(capture: *EffectsCapture) ResizeEffects {
         return .{ .context = capture, .apply = apply };
     }
 
-    fn apply(context: *anyopaque, resize: client_model.PaneLayoutResize) !void {
+    fn apply(context: *anyopaque, resize: client_model.PaneGeometryChange) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         const active = capture.model.workspace.active().?;
         capture.calls += 1;

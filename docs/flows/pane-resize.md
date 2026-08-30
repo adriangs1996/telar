@@ -21,7 +21,7 @@ ResizePaneHandler
         |
 ClientModel.resizePane
         |
-pane_resizes.applyResize
+pane_geometry.applyGeometry
         |                         |
 pane_resize messages             Client.observeModel
         |                         |

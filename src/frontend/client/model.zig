@@ -111,10 +111,15 @@ pub const ResizePaneRequest = struct {
     area: ui.Rect,
 };
 
-pub const PaneLayoutResize = struct {
+pub const PaneGeometryChange = struct {
     location: schema.TabLocation,
     focused: schema.PaneId,
     panes_revision: u64,
+    area: ui.Rect,
+    fullscreen: bool,
+};
+
+pub const TogglePaneFullscreenRequest = struct {
     area: ui.Rect,
 };
 
@@ -682,7 +687,7 @@ pub const Model = struct {
     /// ```zig
     /// const resize = model.resizePane(.{ .direction = .right, .area = area }) orelse return;
     /// ```
-    pub fn resizePane(model: *Model, request: ResizePaneRequest) ?PaneLayoutResize {
+    pub fn resizePane(model: *Model, request: ResizePaneRequest) ?PaneGeometryChange {
         const active = model.workspace.active() orelse return null;
         const focused = active.model.layout.focused() orelse return null;
         if (!active.model.resizeFocused(request.direction, request.area)) {
@@ -696,6 +701,31 @@ pub const Model = struct {
             .focused = focused,
             .panes_revision = model.panes_revision,
             .area = request.area,
+            .fullscreen = active.model.layout.isFullscreen(),
+        };
+    }
+
+    /// Toggles fullscreen for the focused pane without discarding tiled
+    /// geometry. Tabs with fewer than two panes leave every version intact.
+    ///
+    /// ```zig
+    /// const change = model.togglePaneFullscreen(.{ .area = area }) orelse return;
+    /// ```
+    pub fn togglePaneFullscreen(model: *Model, request: TogglePaneFullscreenRequest) ?PaneGeometryChange {
+        const active = model.workspace.active() orelse return null;
+        const focused = active.model.layout.focused() orelse return null;
+        if (!active.model.toggleFullscreen()) {
+            return null;
+        }
+
+        model.panes_revision +%= 1;
+
+        return .{
+            .location = active.location,
+            .focused = focused,
+            .panes_revision = model.panes_revision,
+            .area = request.area,
+            .fullscreen = active.model.layout.isFullscreen(),
         };
     }
 
@@ -2070,6 +2100,7 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     try std.testing.expectEqual(first, resized.focused);
     try std.testing.expectEqual(model.version().panes, resized.panes_revision);
     try std.testing.expectEqualDeep(area, resized.area);
+    try std.testing.expect(!resized.fullscreen);
     try std.testing.expect(active.contentSize(first, area).?.cols > width_before);
     try std.testing.expectEqual(Version{ .panes = 1 }, model.version());
     try std.testing.expect((model.resizePane(.{ .direction = .up, .area = area })) == null);
@@ -2079,6 +2110,7 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     const fullscreen_resize = model.resizePane(.{ .direction = .left, .area = area }).?;
     try std.testing.expect(active.layout.isFullscreen());
     try std.testing.expectEqual(model.version().panes, fullscreen_resize.panes_revision);
+    try std.testing.expect(fullscreen_resize.fullscreen);
     try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
     try std.testing.expect(active.toggleFullscreen());
     try std.testing.expectEqual(width_before, active.contentSize(first, area).?.cols);
@@ -2094,6 +2126,49 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     model.workspace.deinit();
     try std.testing.expect((model.resizePane(.{ .direction = .right, .area = area })) == null);
     try std.testing.expectEqualDeep(version_at_limit, model.version());
+}
+
+test "pane fullscreen preserves tiled geometry through two visible revisions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    try model.workspace.bootstrap(first, location, .{ .cols = 101, .rows = 41 });
+    const active = &model.workspace.active().?.model;
+    try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
+    try std.testing.expectEqual(Version{}, model.version());
+    try active.split(first, second, location, .horizontal, area);
+    try std.testing.expect(active.focusPane(first));
+    const first_tiled = active.contentSize(first, area).?;
+    const second_tiled = active.contentSize(second, area).?;
+
+    const entered = model.togglePaneFullscreen(.{ .area = area }).?;
+
+    try std.testing.expectEqualDeep(location, entered.location);
+    try std.testing.expectEqual(first, entered.focused);
+    try std.testing.expectEqual(model.version().panes, entered.panes_revision);
+    try std.testing.expectEqualDeep(area, entered.area);
+    try std.testing.expect(entered.fullscreen);
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w, .rows = area.h }, active.contentSize(first, area).?);
+    try std.testing.expect(active.contentSize(second, area) == null);
+    try std.testing.expectEqual(Version{ .panes = 1 }, model.version());
+
+    const exited = model.togglePaneFullscreen(.{ .area = area }).?;
+
+    try std.testing.expect(!exited.fullscreen);
+    try std.testing.expectEqual(first_tiled, active.contentSize(first, area).?);
+    try std.testing.expectEqual(second_tiled, active.contentSize(second, area).?);
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
+
+    model.workspace.deinit();
+    try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
 }
 
 test "pane closure planning requires the active attached pane without mutation" {

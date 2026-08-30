@@ -1152,6 +1152,86 @@ test "pane resize publishes committed geometry before presentation" {
     try std.testing.expect(!handler.redraw);
 }
 
+test "pane fullscreen publishes visible geometry without direct redraw" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const first = TestHarness.bootstrap_pane;
+    const second: schema.PaneId = @enumFromInt(20);
+    const area = client.view.workbench();
+
+    _ = try client.model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = first,
+            .location = TestHarness.bootstrap_location,
+            .axis = .horizontal,
+            .area = area,
+        },
+        .new_pane = second,
+    });
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const model = &client.model.workspace.active().?.model;
+    const first_tiled = model.contentSize(first, area).?;
+    const second_tiled = model.contentSize(second, area).?;
+    const version_before_enter = client.model.version();
+    const pending_updates_before_enter = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.toggle_pane_fullscreen);
+
+    try std.testing.expect(model.layout.isFullscreen());
+    try std.testing.expect(model.contentSize(first, area) == null);
+    const fullscreen_size = model.contentSize(second, area).?;
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w, .rows = area.h }, fullscreen_size);
+    try std.testing.expectEqual(version_before_enter.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_enter, client.presenter.pending_updates);
+    try std.testing.expect(model.composition_invalidated);
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expect(!handler.redraw);
+
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const fullscreen_resize = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(fullscreen_resize == .pane_resize);
+    try std.testing.expectEqual(second, fullscreen_resize.pane_resize.pane_id);
+    try std.testing.expectEqual(fullscreen_size, fullscreen_resize.pane_resize.size);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates_before_enter + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const version_before_exit = client.model.version();
+    const pending_updates_before_exit = client.presenter.pending_updates;
+    _ = try handler.applyNativeAction(.toggle_pane_fullscreen);
+
+    try std.testing.expect(!model.layout.isFullscreen());
+    try std.testing.expectEqual(first_tiled, model.contentSize(first, area).?);
+    try std.testing.expectEqual(second_tiled, model.contentSize(second, area).?);
+    try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expect(!handler.redraw);
+
+    try harness.settle();
+    const first_resize = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(first_resize == .pane_resize);
+    try std.testing.expectEqual(first, first_resize.pane_resize.pane_id);
+    try std.testing.expectEqual(first_tiled, first_resize.pane_resize.size);
+    const second_resize = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(second_resize == .pane_resize);
+    try std.testing.expectEqual(second, second_resize.pane_resize.pane_id);
+    try std.testing.expectEqual(second_tiled, second_resize.pane_resize.size);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
 test "an active split commits once and presentation observes the model" {
     var harness: TestHarness = undefined;
     try harness.init();
