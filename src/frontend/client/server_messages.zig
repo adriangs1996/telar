@@ -531,13 +531,14 @@ fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
 fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
     const continuation = client.requests.take(renamed.request_id) orelse
         return error.UnexpectedTabRenamed;
-    if (continuation != .rename_tab or
-        !std.meta.eql(continuation.rename_tab, renamed.location))
+    if (continuation != .rename_tab or !std.meta.eql(continuation.rename_tab, renamed.location)) {
         return error.UnexpectedTabRenamed;
-    if (!client.model.workspace.rename(renamed.location.tab_id, renamed.label))
-        return error.UnexpectedTab;
-    client.view.invalidate();
-    try client.presenter.requestDraw();
+    }
+
+    _ = client.model.renameTab(.{
+        .location = renamed.location,
+        .label = renamed.label,
+    }) catch return error.UnexpectedTabRenamed;
 }
 
 /// A closed tab: lifecycle event or reply, possibly ending the workspace.

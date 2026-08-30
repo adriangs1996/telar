@@ -15,6 +15,11 @@ pub const PositionChange = enum {
     changed,
 };
 
+pub const LabelChange = enum {
+    unchanged,
+    changed,
+};
+
 pub const CreatedTab = struct {
     location: schema.TabLocation,
     position: u16,
@@ -332,10 +337,33 @@ pub const Model = struct {
         return &model.items[created.position].?;
     }
 
-    pub fn rename(model: *Model, tab_id: schema.TabId, label: []const u8) bool {
-        const tab = model.find(tab_id) orelse return false;
+    /// Applies one canonical label and reports whether visible state changed.
+    ///
+    /// ```zig
+    /// const change = try model.applyLabel(tab_id, "server");
+    /// ```
+    pub fn applyLabel(model: *Model, tab_id: schema.TabId, label: []const u8) !LabelChange {
+        const tab = model.find(tab_id) orelse return error.TabNotFound;
+        if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
+            return error.InvalidTabLabel;
+        }
+
+        if (!std.unicode.utf8ValidateSlice(label)) {
+            return error.InvalidUtf8;
+        }
+
+        for (label) |byte| {
+            if (byte < 0x20 or byte == 0x7f) {
+                return error.InvalidTabLabel;
+            }
+        }
+
+        if (std.mem.eql(u8, tab.labelSlice(), label)) {
+            return .unchanged;
+        }
+
         tab.setLabel(label);
-        return true;
+        return .changed;
     }
 
     pub fn select(model: *Model, tab_id: schema.TabId) bool {
@@ -433,6 +461,27 @@ test "selection wraps and moving tabs preserves the active identity" {
     try std.testing.expectEqual(PositionChange.unchanged, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectError(error.TabNotFound, model.applyPosition(@enumFromInt(9), 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyPosition(@enumFromInt(1), 2));
+}
+
+test "canonical tab labels distinguish changes and reject invalid values" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+
+    try std.testing.expectEqual(LabelChange.changed, try model.applyLabel(location.tab_id, "server"));
+    try std.testing.expectEqualStrings("server", model.activeConst().?.labelSlice());
+    try std.testing.expectEqual(LabelChange.unchanged, try model.applyLabel(location.tab_id, "server"));
+    try std.testing.expectError(error.InvalidTabLabel, model.applyLabel(location.tab_id, ""));
+    try std.testing.expectError(error.InvalidTabLabel, model.applyLabel(location.tab_id, "bad\nlabel"));
+    const invalid_utf8 = [_]u8{0xff};
+    try std.testing.expectError(error.InvalidUtf8, model.applyLabel(location.tab_id, &invalid_utf8));
+    try std.testing.expectError(error.TabNotFound, model.applyLabel(@enumFromInt(9), "missing"));
+    try std.testing.expectEqualStrings("server", model.activeConst().?.labelSlice());
 }
 
 test "failed tab construction does not publish a shifted slot" {

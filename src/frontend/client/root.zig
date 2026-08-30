@@ -38,6 +38,7 @@ test {
     _ = @import("presenter.zig");
     _ = @import("server_messages.zig");
     _ = @import("tab_attachments.zig");
+    _ = @import("tab_renames.zig");
     _ = @import("input_handler.zig");
     _ = @import("run.zig");
     _ = @import("telemetry.zig");

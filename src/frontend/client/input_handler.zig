@@ -11,6 +11,7 @@ const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const widgets = @import("../widgets/root.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_renames = @import("tab_renames.zig");
 const action_mod = input_capability.action;
 const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
@@ -917,18 +918,12 @@ fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
 }
 
 fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
-    if (handler.client.requests.has(.tab_operation)) return;
     const tab_id = handler.client.view.renamedTab() orelse return;
-    const tab = handler.client.model.workspace.find(tab_id) orelse return;
-    const request_id = try handler.client.nextId();
-    try handler.client.enqueueRenameRequest(
-        .{
-            .request_id = request_id,
-            .location = tab.location,
-            .label = label,
-        },
-        .{ .rename_tab = tab.location },
-    );
+    var use_case = tab_renames.requestHandler(handler.client);
+    if (try use_case.execute(.{ .tab_id = tab_id, .label = label }) == null) {
+        return;
+    }
+
     handler.client.finishNamePrompt();
 }
 

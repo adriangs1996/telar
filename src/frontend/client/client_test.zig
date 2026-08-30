@@ -841,6 +841,8 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 
     // Renamed.
+    const version_before_rename = client.model.version();
+    const pending_updates_before_rename = client.presenter.pending_updates;
     try client.requests.add(@enumFromInt(5), .{ .rename_tab = second_location });
     const renamed = try schema.encodeTabRenamed(&payload, .{
         .request_id = @enumFromInt(5),
@@ -852,7 +854,16 @@ test "tab lifecycle: created, renamed, moved, closed" {
         "renamed",
         client.model.workspace.find(second_location.tab_id).?.labelSlice(),
     );
+    try std.testing.expectEqual(version_before_rename.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_rename.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before_rename, client.presenter.pending_updates);
     try std.testing.expect(!client.notification_tick_pending);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_rename + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 
     // Moved to the front.
     try client.requests.add(@enumFromInt(6), .{ .move_tab = second_location });
@@ -1718,12 +1729,15 @@ test "copy mode round trip: enter, select, copy, leave" {
     }
 }
 
-test "the name prompt captures keys until submit returns to normal" {
+test "tab rename separates prompt submission canonical commit and presentation" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    client.requests = .{};
+    const version_before_request = client.model.version();
+    const pending_updates_before_request = client.presenter.pending_updates;
 
     client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
     var handler: InputHandler = .{ .client = client };
@@ -1732,12 +1746,75 @@ test "the name prompt captures keys until submit returns to normal" {
     try handler.forward("x");
     try handler.forward("\r");
     try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.view.hasNamePrompt());
+    try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .rename_tab);
     try std.testing.expectEqualStrings("mainx", message.rename_tab.label);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, message.rename_tab.location);
+
+    var payload: [256]u8 = undefined;
+    const renamed = try schema.encodeTabRenamed(&payload, .{
+        .request_id = message.rename_tab.request_id,
+        .location = message.rename_tab.location,
+        .label = message.rename_tab.label,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(renamed));
+
+    try std.testing.expectEqualStrings("mainx", client.model.workspace.activeConst().?.labelSlice());
+    try std.testing.expectEqual(version_before_request.tabs + 1, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_request.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const version_before_noop = client.model.version();
+    const pending_updates_before_noop = client.presenter.pending_updates;
+    try client.requests.add(@enumFromInt(90), .{ .rename_tab = TestHarness.bootstrap_location });
+    const unchanged = try schema.encodeTabRenamed(&payload, .{
+        .request_id = @enumFromInt(90),
+        .location = TestHarness.bootstrap_location,
+        .label = "mainx",
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
+    try client.observeModel();
+
+    try std.testing.expectEqualDeep(version_before_noop, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
+}
+
+test "pending tab operation keeps the rename prompt without sending" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    try client.requests.add(@enumFromInt(90), .{ .move_tab = TestHarness.bootstrap_location });
+    const next_request_id = client.next_request_id;
+    const version_before_request = client.model.version();
+
+    client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
+    var handler: InputHandler = .{ .client = client };
+    try handler.forward("x\r");
+
+    try std.testing.expect(client.mode == .prompt);
+    try std.testing.expect(client.view.hasNamePrompt());
+    try std.testing.expectEqual(next_request_id, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+
+    try handler.forward("\x1b");
+    try std.testing.expect(client.mode == .normal);
 }
 
 test "escaping the prompt editor returns the mode to normal" {

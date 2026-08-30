@@ -22,6 +22,12 @@ pub const TabSelection = struct {
     selected: schema.TabLocation,
 };
 
+pub const RenameTab = struct {
+    location: schema.TabLocation,
+    /// Borrowed only for the synchronous transition.
+    label: []const u8,
+};
+
 pub const NewTab = struct {
     created: tabs_mod.CreatedTab,
     size: schema.TerminalSize,
@@ -114,6 +120,17 @@ pub const Model = struct {
         return active.location;
     }
 
+    /// Resolves one tab identity inside the currently observed workspace.
+    ///
+    /// ```zig
+    /// const location = model.tabLocation(tab_id) orelse return;
+    /// ```
+    pub fn tabLocation(model: *const Model, tab_id: schema.TabId) ?schema.TabLocation {
+        const index = model.workspace.indexOf(tab_id) orelse return null;
+
+        return model.workspace.items[index].?.location;
+    }
+
     /// Commits a runtime-confirmed tab position and advances the model once.
     ///
     /// ```zig
@@ -126,6 +143,26 @@ pub const Model = struct {
         }
 
         const change = try model.workspace.applyPosition(location.tab_id, position);
+        if (change == .unchanged) {
+            return .unchanged;
+        }
+
+        model.tabs_revision +%= 1;
+        return .changed;
+    }
+
+    /// Commits a runtime-confirmed label and advances the tab collection once.
+    ///
+    /// ```zig
+    /// const change = try model.renameTab(command);
+    /// ```
+    pub fn renameTab(model: *Model, command: RenameTab) !Change {
+        const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
+        if (!std.meta.eql(current_workspace, command.location.workspace)) {
+            return error.UnexpectedWorkspace;
+        }
+
+        const change = try model.workspace.applyLabel(command.location.tab_id, command.label);
         if (change == .unchanged) {
             return .unchanged;
         }
@@ -273,6 +310,75 @@ test "rejected tab positions do not advance the model" {
         .tab_id = @enumFromInt(9),
     }, 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyTabPosition(location, 1));
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "tab rename advances only the collection revision for a semantic change" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    const second: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.workspace.select(first.tab_id));
+
+    try std.testing.expectEqual(Change.changed, try model.renameTab(.{
+        .location = second,
+        .label = "server",
+    }));
+    try std.testing.expectEqualStrings("server", model.workspace.find(second.tab_id).?.labelSlice());
+    try std.testing.expectEqualDeep(first, model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
+    try std.testing.expectEqual(@as(u64, 0), model.version().active_tab);
+
+    try std.testing.expectEqual(Change.unchanged, try model.renameTab(.{
+        .location = second,
+        .label = "server",
+    }));
+    try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
+}
+
+test "rejected tab renames preserve labels and revisions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const location: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+
+    try std.testing.expectError(error.UnexpectedWorkspace, model.renameTab(.{
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(2) },
+            .tab_id = location.tab_id,
+        },
+        .label = "wrong workspace",
+    }));
+    try std.testing.expectError(error.TabNotFound, model.renameTab(.{
+        .location = .{ .workspace = workspace, .tab_id = @enumFromInt(9) },
+        .label = "missing",
+    }));
+    try std.testing.expectError(error.InvalidTabLabel, model.renameTab(.{
+        .location = location,
+        .label = "",
+    }));
+
+    try std.testing.expectEqualStrings("main", model.workspace.activeConst().?.labelSlice());
     try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
