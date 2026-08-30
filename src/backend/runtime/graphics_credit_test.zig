@@ -134,12 +134,12 @@ test "returned credit lets the next delivery pump stage a blocked image" {
         .home = null,
     };
 
-    try std.testing.expect((try delivery.prepare(
-        std.testing.io,
-        &fixture.attachments,
-        sources,
-        &fixture.metrics,
-    )) == null);
+    try std.testing.expect((try delivery.prepare(.{
+        .io = std.testing.io,
+        .attachments = &fixture.attachments,
+        .sources = sources,
+        .metrics = &fixture.metrics,
+    })) == null);
     try std.testing.expect(attachment.graphics.transfer == null);
 
     var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
@@ -148,18 +148,22 @@ test "returned credit lets the next delivery pump stage a blocked image" {
     var controller = GraphicsCreditController.init(&fixture.metrics, &handler);
     try controller.graphicsCredit(.{ .pane_id = fixture.pane.id, .bytes = 1 });
 
-    const prepared = (try delivery.prepare(
-        std.testing.io,
-        &fixture.attachments,
-        sources,
-        &fixture.metrics,
-    )).?;
+    const prepared = (try delivery.prepare(.{
+        .io = std.testing.io,
+        .attachments = &fixture.attachments,
+        .sources = sources,
+        .metrics = &fixture.metrics,
+    })).?;
     const message = try schema.decodeServer(prepared.payload);
 
     try std.testing.expect(message == .graphics_image);
     try std.testing.expectEqual(@as(usize, 0), attachment.graphics.credit);
     try std.testing.expect(attachment.graphics.transfer != null);
 
-    delivery.commit(prepared, &fixture.attachments, &fixture.metrics);
+    delivery.commit(.{
+        .prepared = prepared,
+        .attachments = &fixture.attachments,
+        .metrics = &fixture.metrics,
+    });
     _ = delivery.complete({});
 }

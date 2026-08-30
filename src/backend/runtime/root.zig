@@ -415,7 +415,13 @@ const Server = struct {
             .panes = &server.model.panes,
             .launch_fault = server.launch_fault,
         };
-        const fresh = try launcher.launch(location, size, launch, launch_cwd, workspace_path);
+        const fresh = try launcher.launch(.{
+            .location = location,
+            .size = size,
+            .launch = launch,
+            .launch_cwd = launch_cwd,
+            .workspace_path = workspace_path,
+        });
         server.model.agents.touch();
         return fresh;
     }
@@ -693,10 +699,10 @@ const Server = struct {
 
     fn pump(server: *Server, session: *ClientSession) !void {
         if (!session.active() or session.send_pending) return;
-        const prepared = (try session.delivery.prepare(
-            server.io,
-            &session.attachments,
-            .{
+        const prepared = (try session.delivery.prepare(.{
+            .io = server.io,
+            .attachments = &session.attachments,
+            .sources = .{
                 .panes = &server.model.panes,
                 .workspaces = server.workspaceReader(),
                 .agents = &server.model.agents,
@@ -704,13 +710,17 @@ const Server = struct {
                 .proxy_active = server.proxy_runtime.active(),
                 .home = server.inherited_environment.getPosix("HOME"),
             },
-            &server.metrics,
-        )) orelse return;
+            .metrics = &server.metrics,
+        })) orelse return;
         startSessionSend(server.io, server.select, session, prepared.payload) catch |err| {
             session.delivery.abort(prepared);
             return err;
         };
-        session.delivery.commit(prepared, &session.attachments, &server.metrics);
+        session.delivery.commit(.{
+            .prepared = prepared,
+            .attachments = &session.attachments,
+            .metrics = &server.metrics,
+        });
     }
 
     /// Applies one decoded client command. Domain rejection is represented by

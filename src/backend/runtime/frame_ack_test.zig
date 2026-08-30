@@ -13,11 +13,11 @@ const AckController = frame_ack_controller.Controller(*frame_ack_commands.FrameA
 
 fn prepareOutstandingFrame(fixture: *PaneFixture, buffer: []u8) !u64 {
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    const prepared = (try attachment.prepareNextCells(
-        std.testing.io,
-        buffer,
-        &fixture.metrics,
-    )).?;
+    const prepared = (try attachment.prepareNextCells(.{
+        .io = std.testing.io,
+        .buffer = buffer,
+        .metrics = &fixture.metrics,
+    })).?;
     const message = try schema.decodeServer(prepared.bytes);
     const frame = switch (message) {
         .pane_frame => |value| value,

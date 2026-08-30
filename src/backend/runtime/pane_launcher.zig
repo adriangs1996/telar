@@ -26,6 +26,14 @@ pub const PaneOutputEvent = pane_output_pipeline.Completion;
 
 pub const PaneExitEvent = pane_exit_coordinator.Completion;
 
+pub const LaunchRequest = struct {
+    location: schema.TabLocation,
+    size: schema.TerminalSize,
+    launch: schema.LaunchView,
+    launch_cwd: []const u8,
+    workspace_path: []const u8,
+};
+
 /// One-shot integration seam for post-spawn launch recovery.
 pub const LaunchTestFault = struct {
     phase: history.LaunchPhase,
@@ -52,14 +60,13 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         panes: *PaneStore,
         launch_fault: ?*LaunchTestFault,
 
-        pub fn launch(
-            launcher: *Self,
-            location: schema.TabLocation,
-            size: schema.TerminalSize,
-            launch_view: schema.LaunchView,
-            launch_cwd: []const u8,
-            workspace_path: []const u8,
-        ) !*Pane {
+        /// Executes one pane-launch transaction and returns only after both
+        /// runtime observation actors own their work.
+        ///
+        /// ```zig
+        /// const pane = try launcher.launch(.{ .location = location, .size = size, .launch = view, .launch_cwd = cwd, .workspace_path = path });
+        /// ```
+        pub fn launch(launcher: *Self, request: LaunchRequest) !*Pane {
             const pane_key = try launcher.panes.allocateKey();
             var proxy_environment: ?proxy_mod.PaneEnvironment = null;
             defer if (proxy_environment) |*owned| owned.deinit();
@@ -77,8 +84,8 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
 
             var command = try OwnedCommand.init(
                 launcher.gpa,
-                launch_view,
-                launch_cwd,
+                request.launch,
+                request.launch_cwd,
                 child_environment,
             );
             defer command.deinit();
@@ -87,12 +94,12 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 launcher.io,
                 launcher.gpa,
                 pane_key,
-                location,
+                request.location,
                 &command.command,
-                launch_cwd,
-                workspace_path,
+                request.launch_cwd,
+                request.workspace_path,
                 launcher.history_service,
-                size,
+                request.size,
                 launcher.panes.graphics_limits,
                 &launcher.panes.graphics_budget,
             );

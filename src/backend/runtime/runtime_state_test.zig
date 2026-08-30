@@ -61,14 +61,18 @@ const RuntimeStateFixture = struct {
     }
 
     fn next(fixture: *RuntimeStateFixture) !?schema.ServerMessage {
-        const prepared = (try fixture.delivery.prepare(
-            std.testing.io,
-            &fixture.attachments,
-            fixture.sources(),
-            &fixture.metrics,
-        )) orelse return null;
+        const prepared = (try fixture.delivery.prepare(.{
+            .io = std.testing.io,
+            .attachments = &fixture.attachments,
+            .sources = fixture.sources(),
+            .metrics = &fixture.metrics,
+        })) orelse return null;
         const message = try schema.decodeServer(prepared.payload);
-        fixture.delivery.commit(prepared, &fixture.attachments, &fixture.metrics);
+        fixture.delivery.commit(.{
+            .prepared = prepared,
+            .attachments = &fixture.attachments,
+            .metrics = &fixture.metrics,
+        });
         _ = fixture.delivery.complete({});
         return message;
     }

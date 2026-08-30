@@ -34,6 +34,19 @@ pub const Prepared = struct {
     ticket: u64,
 };
 
+pub const Preparation = struct {
+    io: Io,
+    attachments: *AttachmentStore,
+    sources: Sources,
+    metrics: *RuntimeMetrics,
+};
+
+pub const Commit = struct {
+    prepared: Prepared,
+    attachments: *AttachmentStore,
+    metrics: *RuntimeMetrics,
+};
+
 pub const Completion = struct {
     detach_pane: ?schema.PaneId = null,
     close_client: bool = false,
@@ -104,25 +117,15 @@ pub const Delivery = struct {
         delivery.responses.clear();
     }
 
-    pub fn enqueue(
-        delivery: *Delivery,
-        response: response_queue.PendingResponse,
-    ) !void {
+    pub fn enqueue(delivery: *Delivery, response: response_queue.PendingResponse) !void {
         try delivery.responses.push(response);
     }
 
-    pub fn publishOrResync(
-        delivery: *Delivery,
-        response: response_queue.PendingResponse,
-    ) void {
+    pub fn publishOrResync(delivery: *Delivery, response: response_queue.PendingResponse) void {
         delivery.responses.pushOrDrop(response);
     }
 
-    pub fn requestWorkspaceResync(
-        delivery: *Delivery,
-        workspace: schema.WorkspaceLocation,
-        previous_workspace: ?schema.WorkspaceId,
-    ) void {
+    pub fn requestWorkspaceResync(delivery: *Delivery, workspace: schema.WorkspaceLocation, previous_workspace: ?schema.WorkspaceId) void {
         delivery.responses.resync_workspace = workspace;
         delivery.responses.resync_previous_workspace = previous_workspace;
     }
@@ -187,13 +190,18 @@ pub const Delivery = struct {
         return true;
     }
 
-    pub fn prepare(
-        delivery: *Delivery,
-        io: Io,
-        attachments: *AttachmentStore,
-        sources: Sources,
-        metrics: *RuntimeMetrics,
-    ) !?Prepared {
+    /// Selects and stages the highest-priority deliverable without committing
+    /// its logical effect until the caller starts the socket write.
+    ///
+    /// ```zig
+    /// const prepared = try delivery.prepare(.{ .io = io, .attachments = attachments, .sources = sources, .metrics = metrics });
+    /// ```
+    pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
+        const io = preparation.io;
+        const attachments = preparation.attachments;
+        const sources = preparation.sources;
+        const metrics = preparation.metrics;
+
         std.debug.assert(delivery.phase == .ready);
         const buffer = delivery.send_buffer;
         const workspaces = sources.workspaces;
@@ -338,12 +346,16 @@ pub const Delivery = struct {
         return null;
     }
 
-    pub fn commit(
-        delivery: *Delivery,
-        prepared: Prepared,
-        attachments: *AttachmentStore,
-        metrics: *RuntimeMetrics,
-    ) void {
+    /// Commits one staged delivery immediately before its socket write begins.
+    ///
+    /// ```zig
+    /// delivery.commit(.{ .prepared = prepared, .attachments = attachments, .metrics = metrics });
+    /// ```
+    pub fn commit(delivery: *Delivery, operation: Commit) void {
+        const prepared = operation.prepared;
+        const attachments = operation.attachments;
+        const metrics = operation.metrics;
+
         const transaction = switch (delivery.phase) {
             .prepared => |transaction| transaction,
             else => unreachable,
@@ -429,18 +441,18 @@ pub const Delivery = struct {
             const candidate: ?attachment_mod.Attachment.Prepared = switch (lane) {
                 .cwd => try attachment.prepareCwd(buffer),
                 .foreground => try attachment.prepareForeground(buffer),
-                .cells => try attachment.prepareNextCells(io, buffer, metrics),
+                .cells => try attachment.prepareNextCells(.{ .io = io, .buffer = buffer, .metrics = metrics }),
                 .exit => try attachment.prepareExit(buffer),
                 .graphics => graphics: {
                     const frozen = attachment.hasFrozenGraphics();
                     if (attachment.pane.ingest_pending and !frozen) break :graphics null;
                     if (attachment.pane.media.worker != null and !frozen) break :graphics null;
                     if (!attachment.hasGraphicsWork()) break :graphics null;
-                    break :graphics attachment.prepareNextGraphics(
-                        buffer,
-                        attachments.availableGraphicsCredit(),
-                        attachment.pane.media.worker == null,
-                    ) catch {
+                    break :graphics attachment.prepareNextGraphics(.{
+                        .buffer = buffer,
+                        .global_credit = attachments.availableGraphicsCredit(),
+                        .live_storage_available = attachment.pane.media.worker == null,
+                    }) catch {
                         attachment.abandonGraphics();
                         break :graphics null;
                     };
@@ -580,7 +592,7 @@ test "delivery commits one logical send transaction before completion" {
     delivery.requestStop();
     const prepared = delivery.stage("stopping", .stopping);
     try std.testing.expect(delivery.stopping());
-    delivery.commit(prepared, &attachments, &metrics);
+    delivery.commit(.{ .prepared = prepared, .attachments = &attachments, .metrics = &metrics });
     try std.testing.expect(delivery.stopping());
     const completion = delivery.complete({});
     try std.testing.expect(completion.stopping_delivered);
@@ -624,21 +636,21 @@ test "delivery preserves management before resync wire order" {
         .home = null,
     };
 
-    const first = (try delivery.prepare(
-        std.testing.io,
-        &attachments,
-        sources,
-        &metrics,
-    )).?;
+    const first = (try delivery.prepare(.{
+        .io = std.testing.io,
+        .attachments = &attachments,
+        .sources = sources,
+        .metrics = &metrics,
+    })).?;
     try std.testing.expect((try schema.decodeServer(first.payload)) == .request_failed);
-    delivery.commit(first, &attachments, &metrics);
+    delivery.commit(.{ .prepared = first, .attachments = &attachments, .metrics = &metrics });
     _ = delivery.complete({});
 
-    const second = (try delivery.prepare(
-        std.testing.io,
-        &attachments,
-        sources,
-        &metrics,
-    )).?;
+    const second = (try delivery.prepare(.{
+        .io = std.testing.io,
+        .attachments = &attachments,
+        .sources = sources,
+        .metrics = &metrics,
+    })).?;
     try std.testing.expect((try schema.decodeServer(second.payload)) == .resync_required);
 }

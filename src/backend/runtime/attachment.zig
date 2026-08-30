@@ -13,6 +13,7 @@ const pty = @import("../pty/root.zig");
 const cell = @import("attachment/cell.zig");
 const graphics = @import("attachment/graphics.zig");
 const selection = @import("attachment/selection.zig");
+const telemetry = @import("telemetry.zig");
 
 const Io = std.Io;
 const schema = core.schema;
@@ -29,6 +30,16 @@ pub fn initSharedFreezeNonce(io: Io) void {
 /// baseline while the pane and its PTY continue to exist.
 pub const Attachment = struct {
     pub const GraphicsCounts = struct { images: u32, placements: u32 };
+    pub const CellPreparation = struct {
+        io: Io,
+        buffer: []u8,
+        metrics: *telemetry.RuntimeMetrics,
+    };
+    pub const GraphicsPreparation = struct {
+        buffer: []u8,
+        global_credit: usize,
+        live_storage_available: bool,
+    };
     pub const Prepared = struct {
         bytes: []const u8,
         effect: Effect,
@@ -119,16 +130,23 @@ pub const Attachment = struct {
         };
     }
 
-    pub fn prepareNextCells(
-        attachment: *Attachment,
-        io: Io,
-        buffer: []u8,
-        metrics: anytype,
-    ) !?Prepared {
+    /// Prepares one snapshot or incremental cell frame while preserving the
+    /// outstanding-frame and ingest single-flight rules.
+    ///
+    /// ```zig
+    /// const prepared = try attachment.prepareNextCells(.{ .io = io, .buffer = buffer, .metrics = metrics });
+    /// ```
+    pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !?Prepared {
         const pane = attachment.pane;
         if (pane.ingest_pending) return null;
         if (attachment.cells.snapshot_pending) {
-            const payload = (try attachment.cells.prepare(io, buffer, pane, true, metrics)) orelse
+            const payload = (try attachment.cells.prepare(.{
+                .io = preparation.io,
+                .buffer = preparation.buffer,
+                .pane = pane,
+                .force_snapshot = true,
+                .metrics = preparation.metrics,
+            })) orelse
                 unreachable;
             attachment.cells.snapshot_pending = false;
             return .{ .bytes = payload, .effect = .cells };
@@ -136,7 +154,13 @@ pub const Attachment = struct {
         if (attachment.cells.hasOutstanding() or
             (!pane.dirty and attachment.cells.observed_revision == pane.cell_revision))
             return null;
-        const payload = (try attachment.cells.prepare(io, buffer, pane, false, metrics)) orelse
+        const payload = (try attachment.cells.prepare(.{
+            .io = preparation.io,
+            .buffer = preparation.buffer,
+            .pane = pane,
+            .force_snapshot = false,
+            .metrics = preparation.metrics,
+        })) orelse
             return null;
         return .{ .bytes = payload, .effect = .cells };
     }
@@ -194,18 +218,20 @@ pub const Attachment = struct {
             attachment.graphics.observed_revision != attachment.pane.graphics_revision;
     }
 
-    pub fn prepareNextGraphics(
-        attachment: *Attachment,
-        buffer: []u8,
-        global_credit: usize,
-        live_storage_available: bool,
-    ) !?Prepared {
+    /// Prepares one bounded graphics message using the currently available
+    /// client and global transport credit.
+    ///
+    /// ```zig
+    /// const prepared = try attachment.prepareNextGraphics(.{ .buffer = buffer, .global_credit = credit, .live_storage_available = true });
+    /// ```
+    pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPreparation) !?Prepared {
         const payload = (try encodeNextGraphics(
-            buffer,
+            preparation.buffer,
             attachment,
-            global_credit,
-            live_storage_available,
+            preparation.global_credit,
+            preparation.live_storage_available,
         )) orelse return null;
+
         return .{
             .bytes = payload,
             .effect = .{ .graphics = attachment.takeGraphicsCounts() },
@@ -439,11 +465,7 @@ pub const AttachmentStore = struct {
         return .changed;
     }
 
-    pub fn attach(
-        store: *AttachmentStore,
-        gpa: std.mem.Allocator,
-        pane: *Pane,
-    ) !*Attachment {
+    pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *Pane) !*Attachment {
         std.debug.assert(pane.launch_state == .running);
         if (store.find(pane.id)) |existing| return existing;
         if (store.workspace) |workspace| {
@@ -596,7 +618,7 @@ pub fn abandonGraphicsBatch(attachment: *Attachment) void {
     attachment.graphics.observed_revision = attachment.pane.graphics_revision;
 }
 
-pub fn encodeNextGraphics(
+fn encodeNextGraphics(
     buffer: []u8,
     attachment: *Attachment,
     global_credit: usize,
@@ -907,10 +929,7 @@ pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 
     return media_mod.placementVirtualId(key);
 }
 
-pub fn findPlacement(
-    storage: *vt.kitty.graphics.ImageStorage,
-    virtual_id: u64,
-) ?vt.kitty.graphics.ImageStorage.Placement {
+pub fn findPlacement(storage: *vt.kitty.graphics.ImageStorage, virtual_id: u64) ?vt.kitty.graphics.ImageStorage.Placement {
     var iterator = storage.placements.iterator();
     while (iterator.next()) |entry| {
         if (placementVirtualId(entry.key_ptr.*) == virtual_id) return entry.value_ptr.*;
@@ -918,7 +937,7 @@ pub fn findPlacement(
     return null;
 }
 
-pub fn placementValue(
+fn placementValue(
     pane: *Pane,
     key: vt.kitty.graphics.ImageStorage.PlacementKey,
     placement: vt.kitty.graphics.ImageStorage.Placement,

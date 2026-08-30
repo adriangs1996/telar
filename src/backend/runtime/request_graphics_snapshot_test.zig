@@ -131,7 +131,11 @@ test "repeated recovery requests emit one complete empty graphics snapshot" {
 
     var buffer: [1024]u8 = undefined;
     const credit = fixture.attachments.availableGraphicsCredit();
-    const begin = (try attachment.prepareNextGraphics(&buffer, credit, true)).?;
+    const begin = (try attachment.prepareNextGraphics(.{
+        .buffer = &buffer,
+        .global_credit = credit,
+        .live_storage_available = true,
+    })).?;
     const begin_message = try schema.decodeServer(begin.bytes);
     const begin_effect = attachment.commitPrepared(begin);
 
@@ -139,14 +143,22 @@ test "repeated recovery requests emit one complete empty graphics snapshot" {
     try std.testing.expect(begin_message.graphics_snapshot.phase == .begin);
     try std.testing.expect(begin_effect.graphics_message);
 
-    const end = (try attachment.prepareNextGraphics(&buffer, credit, true)).?;
+    const end = (try attachment.prepareNextGraphics(.{
+        .buffer = &buffer,
+        .global_credit = credit,
+        .live_storage_available = true,
+    })).?;
     const end_message = try schema.decodeServer(end.bytes);
     const end_effect = attachment.commitPrepared(end);
 
     try std.testing.expect(end_message == .graphics_snapshot);
     try std.testing.expect(end_message.graphics_snapshot.phase == .end);
     try std.testing.expect(end_effect.graphics_message);
-    try std.testing.expect((try attachment.prepareNextGraphics(&buffer, credit, true)) == null);
+    try std.testing.expect((try attachment.prepareNextGraphics(.{
+        .buffer = &buffer,
+        .global_credit = credit,
+        .live_storage_available = true,
+    })) == null);
     try std.testing.expectEqual(.idle, attachment.graphics.snapshot);
     try std.testing.expect(!attachment.graphics.batch_active);
     try std.testing.expectEqual(fixture.pane.graphics_revision, attachment.graphics.observed_revision);

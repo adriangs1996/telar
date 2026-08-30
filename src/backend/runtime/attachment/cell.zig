@@ -12,6 +12,14 @@ const diagnostics = core.diagnostics;
 const Pane = pane_mod.Pane;
 const RuntimeMetrics = telemetry.RuntimeMetrics;
 
+pub const Preparation = struct {
+    io: Io,
+    buffer: []u8,
+    pane: *Pane,
+    force_snapshot: bool,
+    metrics: *RuntimeMetrics,
+};
+
 pub const Sync = struct {
     acknowledged: core.ui.Buffer,
     acknowledged_cursor: schema.frame.Cursor = .{},
@@ -206,14 +214,19 @@ pub const Sync = struct {
         };
     }
 
-    pub fn prepare(
-        sync: *Sync,
-        io: Io,
-        buffer: []u8,
-        pane: *Pane,
-        force_snapshot: bool,
-        metrics: *RuntimeMetrics,
-    ) !?[]const u8 {
+    /// Encodes the next cell projection without allocating and retains the
+    /// exact baseline needed to acknowledge it later.
+    ///
+    /// ```zig
+    /// const payload = try sync.prepare(.{ .io = io, .buffer = buffer, .pane = pane, .force_snapshot = false, .metrics = metrics });
+    /// ```
+    pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
+        const io = preparation.io;
+        const buffer = preparation.buffer;
+        const pane = preparation.pane;
+        const force_snapshot = preparation.force_snapshot;
+        const metrics = preparation.metrics;
+
         if (!force_snapshot and pane.holdFrames(io)) return null;
         const started = diagnostics.now(io);
         if (pane.render_pending) try pane.render(false);
