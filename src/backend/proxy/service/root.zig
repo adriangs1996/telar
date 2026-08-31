@@ -12,6 +12,7 @@ const listener_mod = @import("listener.zig");
 const metrics_mod = @import("../metrics.zig");
 const middleware = @import("../middleware.zig");
 const observation_queue = @import("../observation_queue.zig");
+const observations_mod = @import("observations.zig");
 const tunnel_mod = @import("../tunnel/root.zig");
 
 const Io = std.Io;
@@ -42,9 +43,8 @@ pub const Service = struct {
     listener: listener_mod.Listener,
     interception: interception_mod.Interception,
     credentials: credential_registry.Registry = .{},
-    pipeline: middleware.Pipeline = .{},
     configuration: configuration_mod.Configuration,
-    observations: observation_queue.Channel = undefined,
+    observations: observations_mod.Observations = undefined,
     connection_slots: connection_admission.Slots = .init(max_connections),
     telemetry: metrics_mod.Counters = .{},
     next_connection_id: std.atomic.Value(u64) = .init(1),
@@ -68,11 +68,10 @@ pub const Service = struct {
             .configuration = configuration,
             .observations = undefined,
         };
-        service.observations.init(.{
+        try service.observations.init(.{
             .context = service,
             .is_live = observationCredentialIsLive,
         });
-        try service.pipeline.add(service.observations.observer());
 
         return service;
     }
@@ -271,7 +270,7 @@ fn serveConnection(service: *Service, stream: net.Stream) Io.Cancelable!void {
         .dependencies = .{
             .tls = service.interception.tunnelResources(&service.telemetry),
             .credentials = &service.credentials,
-            .pipeline = &service.pipeline,
+            .pipeline = service.observations.pipeline(),
             .transforms = configuration.transforms,
             .has_custom_transformers = configuration.has_custom_transformers,
             .connection_ids = &service.next_connection_id,
@@ -452,8 +451,8 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
         .connection_id = 1,
         .observed_at_ms = 1,
     };
-    for (0..event_capacity) |_| service.pipeline.publish(io, observation);
-    service.pipeline.publish(io, observation);
+    for (0..event_capacity) |_| service.observations.pipeline().publish(io, observation);
+    service.observations.pipeline().publish(io, observation);
     const observation_metrics = service.observations.metrics();
 
     try std.testing.expectEqual(
@@ -615,7 +614,7 @@ test "receive discards observations queued before pane revocation" {
         .token = .{0x6b} ** identity.token_bytes,
     };
     try service.registerCredential(&current);
-    service.pipeline.publish(io, .{
+    service.observations.pipeline().publish(io, .{
         .credential = current,
         .provider = .codex,
         .phase = .request_started,
@@ -625,7 +624,7 @@ test "receive discards observations queued before pane revocation" {
     });
     service.unregisterPane(.{ .id = current.pane_id, .generation = current.pane_generation });
     try service.registerCredential(&next);
-    service.pipeline.publish(io, .{
+    service.observations.pipeline().publish(io, .{
         .credential = next,
         .provider = .codex,
         .phase = .request_started,
