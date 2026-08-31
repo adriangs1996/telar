@@ -49,6 +49,14 @@ pub const Service = struct {
     telemetry: metrics_mod.Counters = .{},
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
+    /// Builds the loopback listener and every bounded dependency without
+    /// starting concurrent traffic. Ownership transfers to the returned
+    /// service on success.
+    ///
+    /// ```zig
+    /// const service = try Service.create(io, gpa, paths);
+    /// defer service.destroy();
+    /// ```
     pub fn create(io: Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
         var interception = try interception_mod.Interception.init(io, gpa, paths);
         errdefer interception.deinit();
@@ -199,13 +207,7 @@ pub const Service = struct {
         return credential;
     }
 
-    /// Credentials are live capabilities, not merely well-formed proxy URL
-    /// userinfo. Registration and revocation follow the pane lifecycle.
-    ///
-    /// ```zig
-    /// try service.registerCredential(&credential);
-    /// ```
-    pub fn registerCredential(service: *Service, credential: *const identity.Credential) !void {
+    fn registerCredential(service: *Service, credential: *const identity.Credential) !void {
         return service.credentials.register(service.io, credential);
     }
 
