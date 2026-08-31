@@ -91,11 +91,11 @@ state, while runtime panes continue and a reconnect negotiates a fresh model.
 
 ## Presentation
 
-Neither the response adapter nor the timeout requests a draw or sets the input
-handler's redraw flag. The client loop publishes the resulting model version.
-The presenter folds a changed version into its paced frame and records the
-version it painted. A repeated reply or deadline on an already settled model
-schedules no frame.
+Neither the response adapter nor the timeout requests a draw or advances
+disposable presentation ingress. The client loop publishes the resulting model
+version. The presenter folds a changed version into its paced frame and records
+the version it painted. A repeated reply or deadline on an already settled
+model schedules no frame.
 
 `host_capabilities.scheduleExpiry` registers the deadline during bootstrap.
 `host_capabilities.handleExpiry` validates its completion before applying the

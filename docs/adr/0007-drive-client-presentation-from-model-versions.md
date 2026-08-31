@@ -17,7 +17,8 @@ draw. A committed semantic change advances a bounded model version; a rejected
 operation or canonical no-op does not.
 
 After each client event, the client loop gives `Presenter` the current model
-version and the observable revisions of presentation-owned resource stores.
+version and the observable revisions of presentation-owned resource stores,
+view interactions and visible input routing.
 The presenter stores observed and presented revisions, coalesces changes onto
 its existing paced deadline, selects damaged presentation regions and caps
 cell presentation at 60 Hz. An unchanged idle client schedules no frame.
@@ -27,6 +28,9 @@ Operational state such as requests, delivery and workers does not belong to
 the model. Presentation state such as screen buffers, pacing, damage caches and
 host graphics also remains outside it. A physical store may expose a monotonic
 revision for presentation without moving its resources into `ClientModel`.
+The same rule applies to disposable hover, sidebar scroll, attachment-modal and
+prefix-router state. Their owners expose revisions through
+`PresentationIngress`; input handlers do not return redraw commands.
 The target presentation boundary reads an immutable projection of
 `ClientModel`; rendering does not perform semantic mutations.
 

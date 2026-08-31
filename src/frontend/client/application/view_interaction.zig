@@ -22,13 +22,11 @@ pub const Intent = union(enum) {
 
 pub const Command = struct {
     intent: Intent = .none,
-    redraw: bool = false,
     layout_changed: bool = false,
     consumed: bool = false,
 };
 
 pub const Outcome = struct {
-    redraw: bool,
     consume_pane_input: bool,
 };
 
@@ -58,7 +56,6 @@ pub const DispatchViewInteractionHandler = struct {
         }
 
         return .{
-            .redraw = command.redraw,
             .consume_pane_input = command.consumed or capturesPaneInput(command.intent),
         };
     }
@@ -121,12 +118,10 @@ test "DispatchViewInteractionHandler applies intent before layout synchronizatio
 
     const outcome = try handler.execute(.{
         .intent = .{ .focus_agent = key },
-        .redraw = true,
         .layout_changed = true,
     });
 
     try std.testing.expectEqualDeep(Outcome{
-        .redraw = true,
         .consume_pane_input = true,
     }, outcome);
     try std.testing.expectEqual(@as(usize, 2), capture.count);

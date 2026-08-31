@@ -75,12 +75,14 @@ The read completes as `.input`. The event loop delegates it to
 2. stop on EOF;
 3. record input activity for media pacing;
 4. call `keybind.Router.feed` with an `InputHandler`;
-5. request a draw for immediate `View` changes that have no model revision;
+5. advance the visible input-routing revision when prefix state changed;
 6. synchronize input and binding deadlines;
 7. schedule the next TTY read.
 
-After the entrypoint returns, the event loop publishes `ClientModel.Version`.
-The presenter schedules a paced draw when a model-owned slice changed.
+After the entrypoint returns, the event loop publishes `ClientModel.Version`
+and `PresentationIngress`. The latter contains the disposable view-interaction
+and visible input-routing revisions. The presenter schedules a paced draw when
+any observed value changed.
 
 The router is in `src/frontend/input/keybind.zig`. `Router.feed` buffers split
 terminal sequences, `term.parse` produces semantic events, and `routeKey`
@@ -91,8 +93,7 @@ key. Partial global sequences retain the configured binding timeout.
 
 `host_inputs.handleInputTimeout` and `handleBindingTimeout` release their
 worker token before asking the router to expire partial state. Both paths reuse
-the same prefix invalidation, draw request and timer synchronization as a TTY
-read.
+the same input-routing revision and timer synchronization as a TTY read.
 
 Each deadline uses `deadline_timer.Scheduler`. It stores one atomic absolute
 deadline, one wake event and one pending worker. Replacing or removing a
@@ -108,8 +109,8 @@ A complete configured sequence returns `.action` from `Router.routeKey`.
 `Router.drain` calls `InputHandler.action` in
 `src/frontend/client/input_handler.zig`; it does not forward the matched bytes.
 
-`InputHandler.action` delegates the matched value and its redraw accumulator to
-`action_routing`. The adapter snapshots prompt and copy-mode authority, then
+`InputHandler.action` delegates the matched value to `action_routing`. The
+adapter snapshots prompt and copy-mode authority, then
 `ActionRoutingHandler` classifies three action sources:
 
 - built-in actions go to the shared `client_actions.apply` dispatcher;
@@ -122,8 +123,8 @@ A complete configured sequence returns `.action` from `Router.routeKey`.
 An active name prompt suppresses every source before its first effect. A Lua
 expression may return semantic keys or bounded paste. Keys re-enter
 `KeyRoutingHandler`; paste enters `PaneInputHandler` only when copy mode is not
-active. The adapter retains no returned slice after the synchronous call and
-preserves redraw from each successful re-entered key.
+active. The adapter retains no returned slice after the synchronous call.
+Re-entered owners publish their own semantic or disposable revision.
 
 The Lua branch does not expose the VM, registry or diagnostic storage to input
 routing. See [Lua action](lua-action.md) for callback context, complete batch
@@ -179,7 +180,8 @@ and selects only bounded vertical movement or exit. Only an `unowned` result
 reaches `View.handleMouse`. See [Copy mode](copy-mode.md).
 
 `View.handleMouse` returns one `view_interaction.Command`. The command contains
-one exclusive semantic intent plus redraw, layout and pointer-capture facts.
+one exclusive semantic intent plus layout and pointer-capture facts. Hover,
+sidebar scroll and attachment-modal changes advance `View.interactionVersion`.
 The view does not select tabs, focus panes, start prompts or navigate
 notifications.
 

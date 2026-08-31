@@ -17,17 +17,15 @@ const keybind = input.keybind;
 
 const Context = struct {
     client: *Client,
-    redraw: bool = false,
 };
 
-/// Routes one configured action and preserves redraws from re-entered keys.
+/// Routes one configured action through native, Lua or plugin policy.
 ///
 /// ```zig
-/// return try apply(client, action, &redraw);
+/// return try apply(client, action);
 /// ```
-pub fn apply(client: *Client, value: Action, redraw: *bool) !keybind.Control {
+pub fn apply(client: *Client, value: Action) !keybind.Control {
     var context: Context = .{ .client = client };
-    defer redraw.* = redraw.* or context.redraw;
 
     var use_case: action_routing.ActionRoutingHandler = .{
         .effects = .{
@@ -80,9 +78,7 @@ fn plugin(raw_context: *anyopaque, requested: PluginAction) !void {
 
 fn key(raw_context: *anyopaque, value: keybind.Key) !void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
-    const outcome = try key_routing.apply(context.client, .{ .key = value });
-
-    context.redraw = context.redraw or outcome.redraw;
+    _ = try key_routing.apply(context.client, .{ .key = value });
 }
 
 fn paste(raw_context: *anyopaque, text: []const u8) !void {

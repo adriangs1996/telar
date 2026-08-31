@@ -17,6 +17,7 @@ pub fn observation(client: *Client) presenter.Observation {
         .model = client.model.version(),
         .graphics_ingress = client.graphics_store.ingressVersion(),
         .attachment_ingress = client.view.kittyAttachments().ingressVersion(),
+        .presentation_ingress = presentationIngress(client),
     };
 }
 
@@ -35,6 +36,7 @@ pub fn projection(client: *const Client) presenter.Projection {
 
     return .{
         .version = client.model.version(),
+        .presentation_ingress = presentationIngress(client),
         .model = client.model.activeTabModelConst(),
         .tabs = &client.model.workspace,
         .agents = client.model.agentSnapshot(),
@@ -51,6 +53,13 @@ pub fn projection(client: *const Client) presenter.Projection {
         .workspace_list_collapsed = client.model.workspaceListCollapsed(),
         .host_capabilities = client.model.hostCapabilities(),
         .host_size = client.model.hostSize(),
+    };
+}
+
+fn presentationIngress(client: *const Client) presenter.PresentationIngress {
+    return .{
+        .view_interaction = client.view.interactionVersion(),
+        .input_routing = client.host_input.presentationVersion(),
     };
 }
 

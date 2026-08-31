@@ -37,9 +37,8 @@ optional close    neutral encoding   CopyModeHandler  PaneInputHandler
 ```
 
 `InputHandler` implements the generic callback protocol expected by
-`keybind.Router`. It delegates each value and folds only the returned redraw
-fact. It does not inspect client owners, encode prompt keys, invoke copy mode,
-send pane input or recognize `Ctrl+V`.
+`keybind.Router`. It delegates each value. It does not inspect client owners,
+encode prompt keys, invoke copy mode, send pane input or recognize `Ctrl+V`.
 
 The adapter takes one synchronous authority snapshot from `View` and
 `ClientModel`. It wires the selected effect to existing use cases. The
@@ -54,8 +53,8 @@ user's configured prefix bindings remain available.
 
 Semantic keys use this order:
 
-1. An attachment modal consumes every key. Escape closes it. Every modal key
-   requests one redraw, preserving the existing modal input contract.
+1. An attachment modal consumes every key. Escape closes it. Other keys are
+   presentation no-ops.
 2. The name prompt receives the key encoded with neutral terminal modes.
 3. Copy mode receives the semantic key.
 4. The focused pane receives the key and encodes it against its acknowledged
@@ -90,11 +89,11 @@ The authority snapshot is valid only for the synchronous handler call. Modal,
 prompt and copy effects resolve their current owner again through their
 capability adapter. No asynchronous task retains the snapshot or input slice.
 
-A modal key returns `redraw = true`; `host_inputs` schedules that draw after
-the router finishes. Prompt and copy changes advance their own
-`ClientModel.Version` fields, and `Presenter` observes them on the paced loop.
-Pane input requests no draw unless its existing viewport policy commits a
-scroll change. Clipboard media follows its independent ingress version.
+A successful modal close advances `View.interactionVersion`. Prompt and copy
+changes advance their own `ClientModel.Version` fields. `Presenter` observes
+both through the paced loop. Pane input produces no presentation revision
+unless its existing viewport policy commits a scroll change. Clipboard media
+follows its independent ingress version.
 
 Prompt, copy and pane failures preserve the transaction rules of their
 existing handlers. The key router does not retry or reinterpret a failed

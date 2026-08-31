@@ -83,6 +83,7 @@ pub const State = struct {
     sidebar: widgets.sidebar.State = .{},
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
+    interaction_revision: u64 = 0,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
     toast_overlay_drawn: bool = false,
     kitty_sidebar: kitty.KittySidebarRenderer,
@@ -148,6 +149,16 @@ pub const State = struct {
 
     pub fn workbench(state: *const State) ui.Rect {
         return state.regions.workbench;
+    }
+
+    /// Returns the revision of disposable view state changed by host input.
+    /// Presenter-owned projections and rendering do not advance it.
+    ///
+    /// ```zig
+    /// const revision = view.interactionVersion();
+    /// ```
+    pub fn interactionVersion(state: *const State) u64 {
+        return state.interaction_revision;
     }
 
     fn recalculateRegions(state: *State, width: u16, height: u16) void {
@@ -304,9 +315,13 @@ pub const State = struct {
     }
 
     pub fn closeAttachmentModal(state: *State) bool {
-        if (!state.attachment_store.closeModal()) return false;
+        if (!state.attachment_store.closeModal()) {
+            return false;
+        }
+
         state.hovered = null;
-        state.dirty = true;
+        state.recordInteraction();
+
         return true;
     }
 
@@ -379,17 +394,14 @@ pub const State = struct {
         const hovered = state.hits.at(mouse.x, mouse.y);
         if (!optionalActionEql(state.hovered, hovered)) {
             state.hovered = hovered;
-            state.dirty = true;
-            result.redraw = true;
+            state.recordInteraction();
         }
         if (state.regions.sidebar.contains(mouse.x, mouse.y)) switch (mouse.kind) {
             .scroll_up => if (state.sidebar.scrollBy(-3, state.sidebarListHeight())) {
-                state.dirty = true;
-                result.redraw = true;
+                state.recordInteraction();
             },
             .scroll_down => if (state.sidebar.scrollBy(3, state.sidebarListHeight())) {
-                state.dirty = true;
-                result.redraw = true;
+                state.recordInteraction();
             },
             else => {},
         };
@@ -411,8 +423,7 @@ pub const State = struct {
             .sidebar_focus_agent => |key| result.intent = .{ .focus_agent = key },
             .sidebar_scroll_to => |row| {
                 state.sidebar.scroll = row;
-                state.dirty = true;
-                result.redraw = true;
+                state.recordInteraction();
             },
             .notification_activate => |id| {
                 result.intent = .{ .notification_activate = id };
@@ -426,8 +437,7 @@ pub const State = struct {
                 result.consumed = true;
                 if (state.attachment_store.openModal(id)) {
                     state.hovered = null;
-                    state.dirty = true;
-                    result.redraw = true;
+                    state.recordInteraction();
                 }
             },
             .attachment_dismiss => |id| {
@@ -439,13 +449,12 @@ pub const State = struct {
                     if (result.layout_changed)
                         state.recalculateRegions(state.scratch.w, state.scratch.h);
                     state.hovered = null;
-                    state.dirty = true;
-                    result.redraw = true;
+                    state.recordInteraction();
                 }
             },
             .attachment_modal_close => {
                 result.consumed = true;
-                if (state.closeAttachmentModal()) result.redraw = true;
+                _ = state.closeAttachmentModal();
             },
             .attachment_modal_hold => result.consumed = true,
         }
@@ -454,6 +463,11 @@ pub const State = struct {
 
     fn sidebarListHeight(state: *const State) u16 {
         return state.regions.sidebar.h -| 11;
+    }
+
+    fn recordInteraction(state: *State) void {
+        state.interaction_revision +%= 1;
+        state.dirty = true;
     }
 
     /// A rejected configuration paints one red line over the bottom row so
@@ -773,20 +787,21 @@ test "workbench clicks return focus intent without mutating pane layout" {
     _ = state.handleMouse(point);
     state.dirty = false;
     const revision = model.layout.currentRevision();
+    const interaction_revision = state.interactionVersion();
 
     var click = point;
     click.kind = .press;
     const interaction = state.handleMouse(click);
 
     try std.testing.expectEqualDeep(InteractionIntent{ .focus_pane = second }, interaction.intent);
-    try std.testing.expect(!interaction.redraw);
     try std.testing.expect(!interaction.layout_changed);
     try std.testing.expectEqual(first, model.layout.focused().?);
     try std.testing.expectEqual(revision, model.layout.currentRevision());
+    try std.testing.expectEqual(interaction_revision, state.interactionVersion());
     try std.testing.expect(!state.dirty);
 }
 
-test "sidebar agent snapshots focus linked panes and stable hover requests no extra frame" {
+test "sidebar agent snapshots version changed hover only once" {
     const gpa = std.testing.allocator;
     var state = try State.init(gpa, 100, 30);
     defer state.deinit();
@@ -831,11 +846,15 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     });
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
-    try std.testing.expect(state.handleMouse(first_row).redraw);
-    try std.testing.expect(!state.handleMouse(first_row).redraw);
+    const before_hover = state.interactionVersion();
+    _ = state.handleMouse(first_row);
+    try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
+    _ = state.handleMouse(first_row);
+    try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(InteractionIntent{ .focus_agent = agent_entries[0].key }, interaction.intent);
+    try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
 }
 
@@ -1041,8 +1060,9 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
         Action{ .sidebar_focus_agent = agent_entries[0].key },
         state.hits.at(4, 4).?,
     );
+    const interaction_revision = state.interactionVersion();
     const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press });
-    try std.testing.expect(interaction.redraw);
+    try std.testing.expectEqual(interaction_revision + 1, state.interactionVersion());
     try std.testing.expectEqualDeep(InteractionIntent{ .focus_agent = agent_entries[0].key }, interaction.intent);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());

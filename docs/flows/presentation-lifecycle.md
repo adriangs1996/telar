@@ -23,7 +23,7 @@ committed client event
         |
 presentation_lifecycle.observe
         |
-model Version + graphics ingress + attachment ingress
+model Version + graphics/attachment ingress + PresentationIngress
         |
 Presenter.observe -> one paced draw task
         |
@@ -42,8 +42,9 @@ bounded graphics flush
 
 The loop publishes one complete `Presenter.Observation` after every event. It
 contains the semantic `ClientModel.Version` and the ingress versions of pane
-graphics and client attachments. `Presenter` compares it with both the last
-observation and the last successful presentation.
+graphics, client attachments, view interactions and visible input routing.
+`Presenter` compares it with both the last observation and the last successful
+presentation.
 
 An identical observation does nothing while a draw is pending. A newer
 observation increments the saturating `pending_updates` count but retains the
@@ -57,6 +58,11 @@ semantic snapshots, active tab model and copy-mode value. It separately exposes
 the mutable view, graphics store and host writer that presentation owns.
 `Presenter` imports neither `Client` nor its event union; an opaque scheduling
 port arms the client-owned draw and media tasks.
+
+`PresentationIngress` keeps disposable hover, sidebar scroll, attachment-modal
+and prefix-router state out of `ClientModel`. Their owners expose only monotonic
+revisions. Input adapters do not return redraw commands or call
+`Presenter.requestDraw`; the event-loop observation is the scheduling boundary.
 
 `ClientModel.activeTabModelConst` returns null during bootstrap and workspace
 handoff. A due draw then flushes an explicit empty screen instead of unwrapping
@@ -116,6 +122,11 @@ one draw task, one media task and the latest revisions.
   commits include hidden panes` prove bounded commit semantics.
 - `presentation folds repeated observations into one draw task` proves that an
   identical observation adds no work and newer revisions share one task.
+- `host input presentation state schedules only through observation` proves
+  that prefix state cannot schedule a frame before the presenter observes it.
+- `attachment modal captures semantic keys until escape closes it` proves that
+  a no-op modal key advances no revision and Escape reaches presentation only
+  through observation.
 - `presentation flushes an explicit empty model before bootstrap` proves the
   no-tab lifecycle.
 - `presentation worker failures release their scheduling tokens` injects both

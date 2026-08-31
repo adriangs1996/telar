@@ -20,21 +20,19 @@ pub const Outcome = pointer_routing.Outcome;
 const Context = struct {
     client: *Client,
     model: ?*multiplexer.Model = null,
-    redraw: bool = false,
 };
 
-/// Routes one host pointer event and preserves completed view redraws.
+/// Routes one host pointer event through the current exclusive owner.
 ///
 /// ```zig
-/// _ = try apply(client, event, &redraw);
+/// _ = try apply(client, event);
 /// ```
-pub fn apply(client: *Client, event: term.Event.Mouse, redraw: *bool) !Outcome {
+pub fn apply(client: *Client, event: term.Event.Mouse) !Outcome {
     if (comptime diagnostics.enabled) {
         client.telemetry.metrics.mouse_events += 1;
     }
 
     var context: Context = .{ .client = client };
-    defer redraw.* = redraw.* or context.redraw;
 
     var use_case: pointer_routing.PointerRoutingHandler = .{
         .effects = .{
@@ -85,7 +83,6 @@ fn view(raw_context: *anyopaque, command: pointer_routing.Command) !pointer_rout
     const context: *Context = @ptrCast(@alignCast(raw_context));
     const interaction = context.client.view.handleMouse(command.event);
     const outcome = try view_interactions.apply(context.client, context.model.?, interaction);
-    context.redraw = context.redraw or outcome.redraw;
 
     return .{
         .consume_pane_input = outcome.consume_pane_input,

@@ -75,7 +75,7 @@ presenter-owned compositor detects the active pane's projected scroll offset
 and rebuilds its composition. Inactive tabs retain no last-painted cache.
 
 Neither the viewport model transition nor its application handler touches
-presentation caches or `InputHandler.redraw`. Runtime `pane_frame` messages
+presentation caches or scheduling. Runtime `pane_frame` messages
 remain a separate reconciliation path. Applying a frame replaces the pane's
 scroll projection, records rendering damage and advances the frame revision;
 the presenter observes that revision and schedules presentation.

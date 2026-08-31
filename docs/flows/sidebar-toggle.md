@@ -81,5 +81,5 @@ roll back the client preference.
   without mutating the requested visibility.
 - `src/frontend/client/client_test.zig` proves exact expanded and contracted
   `pane_resize` messages, rejection before partial effects, absence of direct
-  handler redraw and presenter-only frame scheduling through a substituted
-  runtime socket.
+  presentation scheduling and presenter-only frame scheduling through a
+  substituted runtime socket.

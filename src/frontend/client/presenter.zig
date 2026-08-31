@@ -40,10 +40,17 @@ pub const Observation = struct {
     model: client_model.Version,
     graphics_ingress: u64,
     attachment_ingress: u64,
+    presentation_ingress: PresentationIngress,
+};
+
+pub const PresentationIngress = struct {
+    view_interaction: u64,
+    input_routing: u64,
 };
 
 pub const Projection = struct {
     version: client_model.Version,
+    presentation_ingress: PresentationIngress,
     model: ?*const multiplexer.Model,
     tabs: *const tabs.Model,
     agents: *const agents.Snapshot,
@@ -86,6 +93,14 @@ observed_graphics_ingress: u64 = 0,
 presented_graphics_ingress: u64 = 0,
 observed_attachment_ingress: u64 = 0,
 presented_attachment_ingress: u64 = 0,
+observed_presentation_ingress: PresentationIngress = .{
+    .view_interaction = 0,
+    .input_routing = 0,
+},
+presented_presentation_ingress: PresentationIngress = .{
+    .view_interaction = 0,
+    .input_routing = 0,
+},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
 media_tick_pending: bool = false,
@@ -132,18 +147,21 @@ pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
 pub fn observe(presenter: *Presenter, observation: Observation) !void {
     const newly_observed = !std.meta.eql(presenter.observed_model_version, observation.model) or
         presenter.observed_graphics_ingress != observation.graphics_ingress or
-        presenter.observed_attachment_ingress != observation.attachment_ingress;
+        presenter.observed_attachment_ingress != observation.attachment_ingress or
+        !std.meta.eql(presenter.observed_presentation_ingress, observation.presentation_ingress);
     if (newly_observed) {
         presenter.observed_model_version = observation.model;
         presenter.observed_graphics_ingress = observation.graphics_ingress;
         presenter.observed_attachment_ingress = observation.attachment_ingress;
+        presenter.observed_presentation_ingress = observation.presentation_ingress;
         try presenter.requestDraw();
         return;
     }
 
     const presentation_stale = !std.meta.eql(presenter.presented_model_version, observation.model) or
         presenter.presented_graphics_ingress != observation.graphics_ingress or
-        presenter.presented_attachment_ingress != observation.attachment_ingress;
+        presenter.presented_attachment_ingress != observation.attachment_ingress or
+        !std.meta.eql(presenter.presented_presentation_ingress, observation.presentation_ingress);
     if (presentation_stale and !presenter.draw_pending) {
         try presenter.requestDraw();
     }
@@ -240,6 +258,10 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     }
 
     std.debug.assert(std.meta.eql(projection.version, presenter.observed_model_version));
+    std.debug.assert(std.meta.eql(
+        projection.presentation_ingress,
+        presenter.observed_presentation_ingress,
+    ));
     const workspace_changed = presenter.presented_model_version.workspace !=
         projection.version.workspace;
     const configuration_changed = presenter.presented_model_version.configuration !=
@@ -279,6 +301,10 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     const viewport_changed = presenter.presented_model_version.viewport !=
         projection.version.viewport;
     const copy_status_changed = (presenter.compositor.copy == null) != (projection.copy == null);
+    const view_interaction_changed = presenter.presented_presentation_ingress.view_interaction !=
+        projection.presentation_ingress.view_interaction;
+    const input_routing_changed = presenter.presented_presentation_ingress.input_routing !=
+        projection.presentation_ingress.input_routing;
     if (chrome_changed) {
         resources.view.setSidebarVisible(projection.sidebar_visible);
         resources.view.setWorkspaceListCollapsed(projection.workspace_list_collapsed);
@@ -293,7 +319,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         workspace_list_changed or agents_changed or sidebar_animation_changed or
         proxy_status_changed or system_metrics_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
-        prompt_changed or copy_status_changed)
+        prompt_changed or copy_status_changed or view_interaction_changed or input_routing_changed)
     {
         resources.view.invalidate();
     }
@@ -313,6 +339,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     presenter.presented_model_version = projection.version;
     presenter.presented_graphics_ingress = presenter.observed_graphics_ingress;
     presenter.presented_attachment_ingress = presenter.observed_attachment_ingress;
+    presenter.presented_presentation_ingress = projection.presentation_ingress;
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
     presenter.pending_updates = 0;

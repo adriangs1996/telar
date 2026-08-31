@@ -64,6 +64,7 @@ pub const State = struct {
     file: File,
     router: Router,
     read_pending: bool = false,
+    presentation_revision: u64 = 0,
     input_timeout: deadline_timer.Scheduler = .{},
     binding_timeout: deadline_timer.Scheduler = .{},
 
@@ -83,9 +84,22 @@ pub const State = struct {
     /// state.replaceRouter(io, replacement);
     /// ```
     pub fn replaceRouter(state: *State, io: Io, replacement: Router) void {
+        const prefix_was_pending = state.router.prefixPending();
         state.router = replacement;
+        if (prefix_was_pending != state.router.prefixPending()) {
+            state.presentation_revision +%= 1;
+        }
         _ = state.input_timeout.update(io, null);
         _ = state.binding_timeout.update(io, null);
+    }
+
+    /// Returns the revision of visible host-input routing state.
+    ///
+    /// ```zig
+    /// const revision = state.presentationVersion();
+    /// ```
+    pub fn presentationVersion(state: *const State) u64 {
+        return state.presentation_revision;
     }
 
     /// Projects prefix help from the effective router without exposing its
@@ -168,7 +182,7 @@ pub fn handleRead(client: *Client, result: anyerror!Chunk) !bool {
         return true;
     }
 
-    try finishRouting(client, prefix_was_pending, &handler);
+    try finishRouting(client, prefix_was_pending);
     try scheduleRead(client);
 
     return false;
@@ -208,27 +222,22 @@ fn expire(client: *Client, expiry: Expiry) !bool {
         return true;
     }
 
-    try finishRouting(client, prefix_was_pending, &handler);
+    try finishRouting(client, prefix_was_pending);
 
     return false;
 }
 
-fn finishRouting(client: *Client, prefix_was_pending: bool, handler: *InputHandler) !void {
-    syncPrefixStatus(client, prefix_was_pending, handler);
-    if (handler.redraw) {
-        try client.presenter.requestDraw();
-    }
-
+fn finishRouting(client: *Client, prefix_was_pending: bool) !void {
+    syncPrefixStatus(client, prefix_was_pending);
     try synchronizeTimers(client);
 }
 
-fn syncPrefixStatus(client: *Client, prefix_was_pending: bool, handler: *InputHandler) void {
+fn syncPrefixStatus(client: *Client, prefix_was_pending: bool) void {
     if (prefix_was_pending == client.host_input.router.prefixPending()) {
         return;
     }
 
-    client.view.invalidate();
-    handler.redraw = true;
+    client.host_input.presentation_revision +%= 1;
 }
 
 fn synchronizeTimers(client: *Client) !void {
@@ -287,14 +296,15 @@ test "host input configuration owns router timeouts" {
     try std.testing.expectEqual(@as(u64, 11), router.sequence_timeout_ns);
 }
 
-test "router replacement clears obsolete deadlines without duplicating workers" {
+test "router replacement clears obsolete deadlines and visible prefix state" {
     const io = std.testing.io;
-    const original = try buildRouter(.{
+    var original = try buildRouter(.{
         .prefix = keybind.default_prefix,
         .bindings = &.{},
         .escape_timeout_ns = 25,
         .sequence_timeout_ns = 100,
     });
+    original.prefix_pending = true;
     const replacement = try buildRouter(.{
         .prefix = try keybind.parseKey("ctrl+s"),
         .bindings = &.{},
@@ -316,6 +326,7 @@ test "router replacement clears obsolete deadlines without duplicating workers" 
     try std.testing.expectEqual(std.math.maxInt(u64), state.binding_timeout.deadline_ns.load(.acquire));
     try std.testing.expectEqual(@as(u64, 5), state.router.escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 20), state.router.sequence_timeout_ns);
+    try std.testing.expectEqual(@as(u64, 1), state.presentationVersion());
 }
 
 test "prefix status uses only the effective host input router" {

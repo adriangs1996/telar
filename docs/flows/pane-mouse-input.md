@@ -52,7 +52,7 @@ SetPaneViewportHandler      +---------+----------+
                               runtime attachment
 ```
 
-`InputHandler.mouse` only delegates the host event and redraw accumulator.
+`InputHandler.mouse` only delegates the host event.
 `pointer_routing` counts the event, rejects input while a name prompt owns the
 client or no active model exists, and converts supported raw pixel coordinates
 to host cells. It captures one active model pointer for the synchronous call.
@@ -66,8 +66,8 @@ inside the post-interaction workbench and the view did not consume it.
 
 A consumed view command ends the event. Pane focus is different: the focus
 command commits first, then the same press may continue to the newly focused
-child. The adapter publishes a completed view redraw even if later pane input
-fails.
+child. View-local hover, scroll and modal changes advance their own revision
+before later effects run.
 
 Neither `InputHandler` nor `PointerRoutingHandler` inspects pane mouse modes,
 chooses scroll policy, encodes SGR bytes or sends IPC.

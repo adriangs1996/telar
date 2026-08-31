@@ -1,6 +1,5 @@
 //! Host input dispatch for one attached client. Constructed per event by the
-//! client's entrypoints; `redraw` collects whether the handled input needs a
-//! frame.
+//! client's entrypoints.
 
 const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
@@ -19,7 +18,6 @@ const Action = action_mod.Action;
 const InputHandler = @This();
 
 client: *Client,
-redraw: bool = false,
 
 /// Returns whether the current modal or prompt must bypass configured keys.
 ///
@@ -45,8 +43,7 @@ pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
 /// try handler.key(pressed);
 /// ```
 pub fn key(handler: *InputHandler, value: keybind.Key) !void {
-    const outcome = try key_routing.apply(handler.client, .{ .key = value });
-    handler.redraw = handler.redraw or outcome.redraw;
+    _ = try key_routing.apply(handler.client, .{ .key = value });
 }
 
 pub fn pasteStart(handler: *InputHandler) !void {
@@ -62,7 +59,7 @@ pub fn pasteEnd(handler: *InputHandler) !void {
 }
 
 pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
-    _ = try pointer_routing.apply(handler.client, event, &handler.redraw);
+    _ = try pointer_routing.apply(handler.client, event);
 }
 
 /// Reconciles one host-terminal capability response without forwarding it.
@@ -75,5 +72,5 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
 }
 
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
-    return action_routing.apply(handler.client, value, &handler.redraw);
+    return action_routing.apply(handler.client, value);
 }

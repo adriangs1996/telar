@@ -27,7 +27,6 @@ pub const Owner = enum {
 pub const Outcome = struct {
     owner: Owner,
     delivered: bool = false,
-    redraw: bool = false,
 };
 
 pub const Effects = struct {
@@ -71,7 +70,7 @@ pub const KeyRoutingHandler = struct {
                         handler.effects.close_modal(handler.effects.context);
                     }
 
-                    return .{ .owner = .attachment_modal, .redraw = true };
+                    return .{ .owner = .attachment_modal };
                 }
             },
         }
@@ -211,7 +210,6 @@ test "semantic key routing selects modal prompt copy mode or pane in order" {
         .copy_mode_active = true,
     });
     try std.testing.expectEqual(Owner.attachment_modal, modal.owner);
-    try std.testing.expect(modal.redraw);
     try std.testing.expectEqualSlices(Event, &.{.close_modal}, capture.events[0..capture.event_count]);
 
     capture = .{};
