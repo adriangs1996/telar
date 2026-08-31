@@ -64,7 +64,6 @@ pub const Options = struct {
 
 const clipboard_images = @import("clipboard_images.zig");
 const config_reload = @import("config_reload.zig");
-const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
 const notification_timers = @import("notification_timers.zig");
 const plugin_actions = @import("plugin_actions.zig");
@@ -261,21 +260,9 @@ pub fn handleClipboardImageEvent(client: *Client, completion: clipboard_images.C
     try clipboard_images.complete(client, completion);
 }
 
-/// Entrypoint for the capability-probe deadline: settle what the host never answered.
-pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !void {
-    try result;
-    _ = try host_capabilities.expire(client);
-}
-
 /// Entrypoint for one finished plugin action: authorize and apply its effects.
 pub fn handlePluginResultEvent(client: *Client, completion: plugin_actions.Completion) !bool {
     return plugin_actions.complete(client, completion);
-}
-
-pub fn waitCapabilityTimeout(io: Io) anyerror!void {
-    const now = monotonic(io);
-    const deadline = Io.Timestamp.fromNanoseconds(@intCast(now + kitty.capability_timeout_ns)).withClock(.awake);
-    try deadline.wait(io);
 }
 
 pub fn monotonic(io: Io) u64 {

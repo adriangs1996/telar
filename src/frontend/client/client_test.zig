@@ -34,6 +34,7 @@ const client_model = @import("model.zig");
 const client_telemetry = @import("telemetry.zig");
 const config_reload_worker = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
+const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const name_prompts = @import("name_prompts.zig");
@@ -6536,7 +6537,7 @@ test "capability expiry commits fallback state and presents only by model versio
     const client = harness.client;
     const pending_updates = client.presenter.pending_updates;
 
-    try client.handleCapabilityTimeoutEvent({});
+    _ = try host_capabilities.handleExpiry(client, {});
 
     const capabilities = client.model.hostCapabilities();
     try std.testing.expectEqual(kitty.Support.unsupported, capabilities.kitty_graphics);
@@ -6553,10 +6554,27 @@ test "capability expiry commits fallback state and presents only by model versio
 
     const version = client.model.version();
     const pending_after = client.presenter.pending_updates;
-    try client.handleCapabilityTimeoutEvent({});
+    _ = try host_capabilities.handleExpiry(client, {});
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+}
+
+test "failed capability deadline changes no host state" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const capabilities = client.model.hostCapabilities();
+    const version = client.model.version();
+
+    try std.testing.expectError(
+        error.CapabilityDeadlineFailed,
+        host_capabilities.handleExpiry(client, error.CapabilityDeadlineFailed),
+    );
+
+    try std.testing.expectEqualDeep(capabilities, client.model.hostCapabilities());
+    try std.testing.expectEqualDeep(version, client.model.version());
 }
 
 test "capability effect failure retains the committed fallback" {
@@ -6569,7 +6587,7 @@ test "capability effect failure retains the committed fallback" {
 
     try std.testing.expectError(
         error.KittyGraphicsUnsupported,
-        client.handleCapabilityTimeoutEvent({}),
+        host_capabilities.handleExpiry(client, {}),
     );
 
     try std.testing.expectEqual(kitty.Support.unsupported, client.model.hostCapabilities().kitty_graphics);

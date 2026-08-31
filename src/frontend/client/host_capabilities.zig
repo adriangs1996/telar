@@ -13,6 +13,26 @@ const host_capability = client_application.host_capabilities;
 const kitty = graphics.kitty;
 const term = presentation.screen;
 
+/// Registers the capability-probe deadline for this client.
+///
+/// ```zig
+/// try scheduleExpiry(client);
+/// ```
+pub fn scheduleExpiry(client: *Client) !void {
+    try client.select.concurrent(.capability_timeout, waitExpiry, .{client.io});
+}
+
+/// Applies probe fallbacks after the registered deadline completes.
+///
+/// ```zig
+/// _ = try handleExpiry(client, result);
+/// ```
+pub fn handleExpiry(client: *Client, result: anyerror!void) !?client_model.HostCommit {
+    try result;
+
+    return expire(client);
+}
+
 /// Commits one recognized terminal response and projects changed resources.
 ///
 /// ```zig
@@ -34,6 +54,15 @@ pub fn expire(client: *Client) !?client_model.HostCommit {
     var use_case = handler(client);
 
     return use_case.expire();
+}
+
+fn waitExpiry(io: std.Io) anyerror!void {
+    const now_ns = Client.monotonic(io);
+    const deadline = std.Io.Timestamp.fromNanoseconds(
+        @intCast(now_ns +| kitty.capability_timeout_ns),
+    ).withClock(.awake);
+
+    try deadline.wait(io);
 }
 
 fn handler(client: *Client) host_capability.Handler {

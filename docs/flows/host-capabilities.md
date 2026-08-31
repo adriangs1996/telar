@@ -31,9 +31,7 @@ Presenter
 ```text
 250 ms probe deadline
        |
-Client.handleCapabilityTimeoutEvent
-       |
-host_capabilities.expire
+host_capabilities.handleExpiry
        |
 HostCapabilities.Handler.expire
        |
@@ -99,6 +97,10 @@ The presenter folds a changed version into its paced frame and records the
 version it painted. A repeated reply or deadline on an already settled model
 schedules no frame.
 
+`host_capabilities.scheduleExpiry` registers the deadline during bootstrap.
+`host_capabilities.handleExpiry` validates its completion before applying the
+fallback, so a failed timer changes no capability state.
+
 ## Proof
 
 - `src/frontend/client/model.zig` proves independent probes, selective expiry,
@@ -106,8 +108,8 @@ schedules no frame.
 - `src/frontend/client/application/host_capabilities.zig` proves
   commit-before-effect ordering, no-op suppression and retained commits after
   an effect failure.
-- `src/frontend/client/host_capabilities.zig` owns terminal reply translation
-  and resource projection.
+- `src/frontend/client/host_capabilities.zig` owns terminal reply translation,
+  probe expiry and resource projection.
 - `src/frontend/client/client_test.zig` proves fallback reconciliation,
   presenter-owned scheduling, timeout idempotence and retained state after a
   real resource failure.

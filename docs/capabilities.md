@@ -111,7 +111,7 @@ entrypoints below.
 | Host terminal bytes | [`host_inputs.handleRead`](flows/host-input-to-screen.md) |
 | Input parser deadline | [`host_inputs.handleInputTimeout`](flows/host-input-to-screen.md) |
 | Partial binding deadline | [`host_inputs.handleBindingTimeout`](flows/host-input-to-screen.md) |
-| Host capability deadline | [`Client.handleCapabilityTimeoutEvent`](flows/host-capabilities.md) |
+| Host capability deadline | [`host_capabilities.handleExpiry`](flows/host-capabilities.md) |
 | Host resize | [`host_resizes.handle`](flows/host-resize.md) |
 | Runtime socket read | [`runtime_transport.handleRead`](flows/runtime-transport.md) |
 | Completed socket write | [`runtime_transport.handleSent`](flows/runtime-transport.md) |

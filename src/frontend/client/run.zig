@@ -18,6 +18,7 @@ const Client = @import("client.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const client_telemetry = @import("telemetry.zig");
 const config_reloads = @import("config_reloads.zig");
+const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
@@ -101,7 +102,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
 
     try host_resizes.schedule(client, &watcher);
     try runtime_transport.scheduleRead(client);
-    try client.select.concurrent(.capability_timeout, Client.waitCapabilityTimeout, .{io});
+    try host_capabilities.scheduleExpiry(client);
     try client_telemetry.start(client);
     try config_reloads.schedule(client);
 
@@ -113,7 +114,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             .input => |result| if (try host_inputs.handleRead(client, result)) return 0,
             .input_timeout => |result| if (try host_inputs.handleInputTimeout(client, result)) return 0,
             .binding_timeout => |result| if (try host_inputs.handleBindingTimeout(client, result)) return 0,
-            .capability_timeout => |result| try client.handleCapabilityTimeoutEvent(result),
+            .capability_timeout => |result| _ = try host_capabilities.handleExpiry(client, result),
             .resized => |result| _ = try host_resizes.handle(client, result, .{
                 .tty = &tty,
                 .watcher = &watcher,
