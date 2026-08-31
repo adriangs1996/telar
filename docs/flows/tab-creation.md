@@ -57,7 +57,7 @@ identity.
 ```text
 tab_created(create_tab continuation)
         |
-validate requested workspace
+tab_creations.apply
         |
 ConfirmTabCreationHandler
         |
@@ -68,10 +68,15 @@ detach previous tab -> synchronize root-pane focus
 Presenter.observeModel -> paced presentation
 ```
 
-The dispatcher requires the response workspace to match the typed
-continuation. It uses the terminal size sent with the request, not the current
-workbench. A host resize while the request is in flight therefore cannot give
-the client root pane different initial dimensions from the runtime.
+`tab_creations.apply` consumes the typed continuation once and requires the
+response workspace to match it. The controller translates `schema.TabCreated`
+into the confirmation command and uses the terminal size sent with the request,
+not the current workbench. A host resize while the request is in flight cannot
+give the client root pane different initial dimensions from the runtime.
+
+The command has no request ID. Its label is borrowed only during the
+synchronous commit; the workspace model copies it into bounded tab storage
+before the handler returns.
 
 `ClientModel.createTab` constructs and inserts the confirmed tab before
 publishing it as active. Rejection preserves the existing tab and every model
@@ -90,12 +95,16 @@ for the changed model dimensions.
 
 A correlated `request_failed` consumes the continuation, preserves the current
 projection and shows the runtime message as a notification. It no longer ends
-the client. A response for another workspace or a duplicate tab is rejected
-without detaching the active tab.
+the client. An unknown request ID, incompatible continuation or response for
+another workspace is a protocol error. Every known continuation is consumed
+before rejection. A duplicate tab fails in the model without detaching the
+active tab.
 
 - `src/frontend/client/application/create_tab.zig` proves request gating,
   label validation, exact planning, no provisional mutation,
   commit-before-effects and post-commit failure behavior.
+- `src/frontend/client/tab_creations.zig` owns response correlation and
+  wire-to-command translation.
 - `src/frontend/client/model.zig` proves attached-source planning,
   transactional insertion, identity checks and exact version changes.
 - `src/frontend/client/outbox.zig` proves queued creation owns its label and

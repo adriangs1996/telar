@@ -39,7 +39,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_opened => |opened| _ = try pane_openings.apply(client, opened),
         .tab_snapshot => |snapshot| _ = try tab_snapshots.apply(client, snapshot),
         .workspace_snapshot => |snapshot| try workspace_snapshots.apply(client, snapshot),
-        .tab_created => |created| try handleTabCreated(client, created),
+        .tab_created => |created| _ = try tab_creations.apply(client, created),
         .tab_renamed => |renamed| try handleTabRenamed(client, renamed),
         .tab_closed => |closed| return handleTabClosed(client, closed),
         .tab_moved => |moved| try handleTabMoved(client, moved),
@@ -125,18 +125,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// A created tab becomes active; the previous one detaches.
-fn handleTabCreated(client: *Client, created: schema.TabCreated) !void {
-    const continuation = client.requests.take(created.request_id) orelse
-        return error.UnexpectedTabCreated;
-    if (continuation != .create_tab or
-        !std.meta.eql(continuation.create_tab.workspace, created.location.workspace))
-        return error.UnexpectedTabCreated;
-
-    var use_case = tab_creations.confirmationHandler(client);
-    _ = try use_case.execute(tab_creations.confirmation(created, continuation.create_tab.size));
 }
 
 /// A confirmed tab rename.

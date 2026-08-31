@@ -27,6 +27,7 @@ const pane_openings = @import("pane_openings.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_creations = @import("tab_creations.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const InputChunk = Client.InputChunk;
@@ -2468,6 +2469,87 @@ test "a failed workspace creation preserves the current projection" {
     try std.testing.expect(client.notification_tick_pending);
 }
 
+test "an unexpected tab creation is rejected without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const request_count_before = client.requests.count;
+    const pending_updates_before = client.presenter.pending_updates;
+    const created: schema.TabCreated = .{
+        .request_id = @enumFromInt(99),
+        .location = .{
+            .workspace = TestHarness.bootstrap_location.workspace,
+            .tab_id = @enumFromInt(2),
+        },
+        .position = 1,
+        .label = "second",
+        .root_pane_id = @enumFromInt(20),
+    };
+
+    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+
+    try std.testing.expectEqual(request_count_before, client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab creation consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .notification);
+    const created: schema.TabCreated = .{
+        .request_id = request_id,
+        .location = .{
+            .workspace = TestHarness.bootstrap_location.workspace,
+            .tab_id = @enumFromInt(2),
+        },
+        .position = 1,
+        .label = "second",
+        .root_pane_id = @enumFromInt(20),
+    };
+
+    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab creation consumes a mismatched workspace before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .{ .create_tab = .{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .size = .{ .cols = 80, .rows = 20 },
+    } });
+    const created: schema.TabCreated = .{
+        .request_id = request_id,
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(2) },
+            .tab_id = @enumFromInt(2),
+        },
+        .position = 1,
+        .label = "second",
+        .root_pane_id = @enumFromInt(20),
+    };
+
+    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
 test "tab lifecycle: created, renamed, moved, closed" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -2500,11 +2582,15 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .label = "second",
         .root_pane_id = @enumFromInt(20),
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(created));
+    const creation = try tab_creations.apply(client, (try schema.decodeServer(created)).tab_created);
+    @memset(&payload, 'x');
 
     try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, creation.previous);
+    try std.testing.expectEqualDeep(second_location, creation.created);
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expectEqual(second_location.tab_id, client.model.workspace.active().?.location.tab_id);
+    try std.testing.expectEqualStrings("second", client.model.workspace.active().?.labelSlice());
     try std.testing.expectEqual(version_before_creation.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_creation.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
@@ -2630,6 +2716,7 @@ test "rejected tab creation leaves the active tab attached" {
     const client = harness.client;
     const version_before_creation = client.model.version();
     const pending_updates_before_creation = client.presenter.pending_updates;
+    const request_count_before_creation = client.requests.count;
     try client.requests.add(@enumFromInt(4), .{
         .create_tab = .{
             .workspace = TestHarness.bootstrap_location.workspace,
@@ -2644,12 +2731,15 @@ test "rejected tab creation leaves the active tab attached" {
         .label = "duplicate",
         .root_pane_id = @enumFromInt(20),
     });
+    const response = (try schema.decodeServer(duplicate)).tab_created;
 
     try std.testing.expectError(
         error.TabAlreadyExists,
-        server_messages.handleServerMessage(client, try schema.decodeServer(duplicate)),
+        tab_creations.apply(client, response),
     );
 
+    try std.testing.expectEqual(request_count_before_creation, client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, response));
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);

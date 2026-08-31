@@ -33,32 +33,36 @@ pub fn requestHandler(client: *Client) create_tab.RequestTabCreationHandler {
     };
 }
 
-/// Maps one canonical runtime response and its requested geometry into the
-/// confirmation command consumed by the application handler.
+/// Consumes one correlated response and commits the canonical tab creation.
 ///
 /// ```zig
-/// const command = confirmation(created, requested_size);
+/// const creation = try apply(client, created);
 /// ```
-pub fn confirmation(created: schema.TabCreated, requested_size: schema.TerminalSize) create_tab.ConfirmTabCreation {
-    return .{
+pub fn apply(client: *Client, created: schema.TabCreated) !client_model.TabCreation {
+    const continuation = client.requests.take(created.request_id) orelse
+        return error.UnexpectedTabCreated;
+    const requested = switch (continuation) {
+        .create_tab => |creation| creation,
+        else => return error.UnexpectedTabCreated,
+    };
+    if (!std.meta.eql(requested.workspace, created.location.workspace)) {
+        return error.UnexpectedTabCreated;
+    }
+
+    var use_case = confirmationHandler(client);
+
+    return use_case.execute(.{
         .created = .{
             .location = created.location,
             .position = created.position,
             .label = created.label,
             .root_pane_id = created.root_pane_id,
         },
-        .size = requested_size,
-    };
+        .size = requested.size,
+    });
 }
 
-/// Wires a correlated runtime confirmation to one model commit followed by
-/// attachment synchronization.
-///
-/// ```zig
-/// var handler = confirmationHandler(client);
-/// _ = try handler.execute(command);
-/// ```
-pub fn confirmationHandler(client: *Client) create_tab.ConfirmTabCreationHandler {
+fn confirmationHandler(client: *Client) create_tab.ConfirmTabCreationHandler {
     return .{
         .model = &client.model,
         .effects = .{
