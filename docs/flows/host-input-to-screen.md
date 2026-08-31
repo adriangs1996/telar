@@ -19,7 +19,7 @@ keybind.Router.feed -> term.parse -> Router.routeKey
       +---------------- configured sequence ----------------+
       |                                                      |
       v                                                      v
-InputHandler.key / forward                         InputHandler.action
+InputHandler.key / forward / mouse                 InputHandler.action
       |                                                      |
 pane_inputs adapter                               native / Lua / plugin action
       |                                                      |
@@ -145,6 +145,35 @@ passes through `PanePasteHandler`, which captures one pane and then reuses pane
 input for every chunk and marker. Prompts, copy mode and an active paste keep
 their exact input ownership. See [Pane input](pane-input.md) for target,
 session, viewport, failure and telemetry policy.
+
+## 2C. Pointer interaction branch
+
+`InputHandler.mouse` converts host pixel coordinates to cells and gives copy
+mode first refusal. It then asks `View.handleMouse` for one
+`view_interaction.Command`. The command contains one exclusive semantic intent
+plus redraw, layout and pointer-capture facts. The view does not select tabs,
+focus panes, start prompts or navigate notifications.
+
+`view_interactions.apply` wires that command to
+`DispatchViewInteractionHandler`. The application handler applies the semantic
+intent before layout synchronization and returns `Outcome`. The adapter maps
+the intent to the existing sidebar, workspace-list, agent-navigation,
+tab-selection, pane-focus, name-prompt, workspace-handoff or notification use
+case. A layout change invalidates physical graphics placements and offers the
+original active model's attached pane geometry only after the intent succeeds.
+
+Tab selection and agent navigation consume the triggering pointer event.
+Explicitly consumed view chrome does the same. Pane focus remains routable so
+the newly focused child receives the press after focus resources commit. If an
+effect fails, dispatch stops before later effects and `InputHandler` does not
+forward the event. Otherwise `InputHandler` forwards only events that remain
+inside the workbench and follows the focused pane's current SGR mouse modes.
+
+The command and handler use fixed value types and allocate no memory. Unit
+tests in `application/view_interaction.zig` prove intent-before-layout order,
+failure short-circuiting and capture policy. View tests prove hit-to-intent
+translation. Client tests prove sidebar-agent handoff, notification activation
+and focus-before-press forwarding through the complete input entrypoint.
 
 ### Modified Enter
 

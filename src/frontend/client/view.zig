@@ -7,6 +7,7 @@ const attachments = @import("../attachments/root.zig");
 const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
+const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const name_prompt = @import("name_prompt.zig");
 const diff = presentation.diff;
@@ -26,6 +27,7 @@ const schema = core.schema;
 const empty_agent_snapshot: agents.Snapshot = .{};
 const empty_notifications: notifications.Center = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
+const view_interaction = client_application.view_interaction;
 
 pub const sidebar_width = widgets.layout.sidebar_width;
 pub const minimum_sidebar_width = widgets.layout.minimum_sidebar_width;
@@ -35,26 +37,8 @@ pub const Action = widgets.Action;
 
 const Hits = widgets.Hits;
 
-pub const NotificationIntent = union(enum) {
-    activate: notifications.Id,
-    dismiss: notifications.Id,
-};
-
-pub const Interaction = struct {
-    redraw: bool = false,
-    layout_changed: bool = false,
-    consumed: bool = false,
-    toggle_sidebar: bool = false,
-    toggle_workspace_list: bool = false,
-    focus_pane: ?schema.PaneId = null,
-    select_tab: ?schema.TabId = null,
-    select_workspace: ?schema.WorkspaceId = null,
-    focus_agent: ?agents.AgentKey = null,
-    /// Intent only: the client model owns prompt creation; the view never
-    /// enters the editor on its own.
-    rename_tab: ?schema.TabId = null,
-    notification: ?NotificationIntent = null,
-};
+pub const InteractionIntent = view_interaction.Intent;
+pub const Interaction = view_interaction.Command;
 
 pub const RenderStats = struct {
     scanned: usize = 0,
@@ -411,30 +395,30 @@ pub const State = struct {
         if (mouse.kind != .press) return result;
         const action = hovered orelse return result;
         switch (action) {
-            .toggle_sidebar => result.toggle_sidebar = true,
-            .focus_pane => |pane_id| result.focus_pane = pane_id,
+            .toggle_sidebar => result.intent = .toggle_sidebar,
+            .focus_pane => |pane_id| result.intent = .{ .focus_pane = pane_id },
             .select_tab => |tab_id| {
                 switch (mouse.button & 0b11) {
-                    0 => result.select_tab = tab_id,
-                    2 => result.rename_tab = tab_id,
+                    0 => result.intent = .{ .select_tab = tab_id },
+                    2 => result.intent = .{ .rename_tab = tab_id },
                     else => {},
                 }
             },
             .active_workspace => {},
-            .select_workspace => |workspace| result.select_workspace = workspace,
-            .toggle_workspace_list => result.toggle_workspace_list = true,
-            .sidebar_focus_agent => |key| result.focus_agent = key,
+            .select_workspace => |workspace| result.intent = .{ .select_workspace = workspace },
+            .toggle_workspace_list => result.intent = .toggle_workspace_list,
+            .sidebar_focus_agent => |key| result.intent = .{ .focus_agent = key },
             .sidebar_scroll_to => |row| {
                 state.sidebar.scroll = row;
                 state.dirty = true;
                 result.redraw = true;
             },
             .notification_activate => |id| {
-                result.notification = .{ .activate = id };
+                result.intent = .{ .notification_activate = id };
                 result.consumed = true;
             },
             .notification_dismiss => |id| {
-                result.notification = .{ .dismiss = id };
+                result.intent = .{ .notification_dismiss = id };
                 result.consumed = true;
             },
             .attachment_open => |id| {
@@ -749,7 +733,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     click.kind = .press;
     const interaction = state.handleMouse(click);
 
-    try std.testing.expectEqual(second, interaction.focus_pane.?);
+    try std.testing.expectEqualDeep(InteractionIntent{ .focus_pane = second }, interaction.intent);
     try std.testing.expect(!interaction.redraw);
     try std.testing.expect(!interaction.layout_changed);
     try std.testing.expectEqual(first, model.layout.focused().?);
@@ -795,7 +779,7 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     try std.testing.expect(!state.handleMouse(first_row).redraw);
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(click);
-    try std.testing.expectEqualDeep(agent_entries[0].key, interaction.focus_agent.?);
+    try std.testing.expectEqualDeep(InteractionIntent{ .focus_agent = agent_entries[0].key }, interaction.intent);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
 }
 
@@ -988,7 +972,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     );
     const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press });
     try std.testing.expect(interaction.redraw);
-    try std.testing.expectEqualDeep(agent_entries[0].key, interaction.focus_agent.?);
+    try std.testing.expectEqualDeep(InteractionIntent{ .focus_agent = agent_entries[0].key }, interaction.intent);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());
 }
@@ -1186,8 +1170,8 @@ test "clickable toast restores pane cells after its exit animation" {
         .kind = .press,
     });
     try std.testing.expectEqualDeep(
-        NotificationIntent{ .activate = notification_id },
-        interaction.notification.?,
+        InteractionIntent{ .notification_activate = notification_id },
+        interaction.intent,
     );
     const target = center.activate(notification_id, 200).?;
     try std.testing.expectEqual(location.tab_id, target.select_tab);
@@ -1239,7 +1223,10 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     // last sixteen columns of the bottom row.
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
     const interaction = state.handleMouse(click);
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
+    try std.testing.expectEqualDeep(
+        InteractionIntent{ .select_tab = @enumFromInt(4) },
+        interaction.intent,
+    );
 
     // A right click only reports the intent: entering the rename prompt is
     // a mode change the client owns.
@@ -1249,8 +1236,10 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .kind = .press,
         .button = 2,
     });
-    try std.testing.expect(rename.select_tab == null);
-    try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), rename.rename_tab.?);
+    try std.testing.expectEqualDeep(
+        InteractionIntent{ .rename_tab = @enumFromInt(4) },
+        rename.intent,
+    );
 }
 
 test "the top bar lists open workspaces and clicking one requests a switch" {
@@ -1283,7 +1272,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
 
     const sidebar_requested = state.sidebar_requested;
     const sidebar_toggle = state.handleMouse(.{ .x = 0, .y = 0, .kind = .press });
-    try std.testing.expect(sidebar_toggle.toggle_sidebar);
+    try std.testing.expect(sidebar_toggle.intent == .toggle_sidebar);
     try std.testing.expectEqual(sidebar_requested, state.sidebar_requested);
 
     // Locate hits on the top row instead of pinning glyph widths.
@@ -1304,9 +1293,9 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .y = 0,
         .kind = .press,
     });
-    try std.testing.expectEqual(
-        @as(schema.WorkspaceId, @enumFromInt(2)),
-        interaction.select_workspace.?,
+    try std.testing.expectEqualDeep(
+        InteractionIntent{ .select_workspace = @enumFromInt(2) },
+        interaction.intent,
     );
 
     const workspace_list_toggle = state.handleMouse(.{
@@ -1314,6 +1303,6 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .y = 0,
         .kind = .press,
     });
-    try std.testing.expect(workspace_list_toggle.toggle_workspace_list);
+    try std.testing.expect(workspace_list_toggle.intent == .toggle_workspace_list);
     try std.testing.expect(!state.workspace_list_collapsed);
 }

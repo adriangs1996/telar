@@ -7,20 +7,17 @@ const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
-const agent_navigation = @import("agent_navigation.zig");
 const client_actions = @import("actions.zig");
 const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const lua_actions = @import("lua_actions.zig");
-const pane_geometry = @import("pane_geometry.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_pastes = @import("pane_pastes.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
-const notification_flow = @import("notifications.zig");
-const workspace_handoffs = @import("workspace_handoffs.zig");
+const view_interactions = @import("view_interactions.zig");
 const action_mod = input_capability.action;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
@@ -196,40 +193,9 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     }
 
     const interaction = handler.client.view.handleMouse(cell_event);
-    if (interaction.toggle_sidebar) {
-        _ = try client_actions.apply(handler.client, .toggle_sidebar);
-    }
-    if (interaction.toggle_workspace_list) {
-        _ = try client_actions.apply(handler.client, .toggle_workspace_list);
-    }
-    if (interaction.focus_agent) |agent_key| {
-        _ = try agent_navigation.apply(handler.client, agent_key);
-    }
-    if (interaction.select_tab) |tab_id| {
-        try client_actions.selectTab(handler.client, .{ .tab_id = tab_id });
-    }
-    if (interaction.focus_pane) |pane_id| {
-        try client_actions.focusPane(handler.client, .{ .pane_id = pane_id });
-    }
-    if (interaction.rename_tab) |tab_id| {
-        _ = name_prompts.beginTabRename(handler.client, tab_id);
-    }
-    if (interaction.select_workspace) |workspace| {
-        _ = try workspace_handoffs.selectWorkspace(handler.client, .{ .workspace = workspace });
-    }
-    if (interaction.notification) |intent| {
-        switch (intent) {
-            .activate => |id| _ = try notification_flow.activateNow(handler.client, id),
-            .dismiss => |id| _ = try notification_flow.dismissNow(handler.client, id),
-        }
-    }
-    if (interaction.layout_changed) {
-        handler.client.graphics_store.invalidatePlacements();
-        try pane_geometry.offerAttached(handler.client, model, handler.client.view.workbench());
-    }
-    handler.redraw = handler.redraw or interaction.redraw;
-    if (interaction.consumed or interaction.select_tab != null or
-        interaction.focus_agent != null or
+    const interaction_outcome = try view_interactions.apply(handler.client, model, interaction);
+    handler.redraw = handler.redraw or interaction_outcome.redraw;
+    if (interaction_outcome.consume_pane_input or
         !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
     const wheel_delta: ?i32 = switch (cell_event.kind) {
         .scroll_up => -3,

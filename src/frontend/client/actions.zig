@@ -89,23 +89,13 @@ pub fn apply(client: *Client, value: Action) !keybind.Control {
     return .continue_routing;
 }
 
-/// Selects one tab through the same use case for every action source.
-///
-/// ```zig
-/// try selectTab(client, .{ .position = 1 });
-/// ```
-pub fn selectTab(client: *Client, target: tab_selections.Target) !void {
+fn selectTab(client: *Client, target: tab_selections.Target) !void {
     var use_case = tab_selections.selectionHandler(client);
 
     _ = try use_case.execute(.{ .target = target });
 }
 
-/// Focuses one pane and synchronizes focus and fullscreen resources.
-///
-/// ```zig
-/// try focusPane(client, .{ .direction = .left });
-/// ```
-pub fn focusPane(client: *Client, target: pane_focus.Target) !void {
+fn focusPane(client: *Client, target: pane_focus.Target) !void {
     var use_case = pane_focus.handler(client);
 
     _ = try use_case.execute(.{

@@ -101,6 +101,7 @@ test {
     _ = @import("run.zig");
     _ = @import("telemetry.zig");
     _ = @import("view.zig");
+    _ = @import("view_interactions.zig");
     _ = @import("requests.zig");
     _ = @import("request_failures.zig");
     _ = @import("resync_requirements.zig");
