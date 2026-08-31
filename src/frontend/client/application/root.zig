@@ -9,6 +9,7 @@ pub const config_reload = @import("config_reload.zig");
 pub const copy_mode = @import("copy_mode.zig");
 pub const create_tab = @import("create_tab.zig");
 pub const create_workspace = @import("create_workspace.zig");
+pub const host_capabilities = @import("host_capabilities.zig");
 pub const host_resize = @import("host_resize.zig");
 pub const focus_pane = @import("focus_pane.zig");
 pub const move_tab = @import("move_tab.zig");
@@ -46,6 +47,7 @@ test {
     _ = copy_mode;
     _ = create_tab;
     _ = create_workspace;
+    _ = host_capabilities;
     _ = host_resize;
     _ = focus_pane;
     _ = move_tab;

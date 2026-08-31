@@ -270,15 +270,16 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         return;
     }
 
-    const cell_size = client.capabilities.cellSize(presenter.screen.back.w, presenter.screen.back.h);
+    const capabilities = client.model.hostCapabilities();
+    const host_size = client.model.hostSize();
     const layout_snapshot = model.layoutSnapshot(client.view.workbench());
-    client.graphics_store.setHostZlib(client.capabilities.kitty_zlib == .supported);
+    client.graphics_store.setHostZlib(capabilities.kitty_zlib == .supported);
     var graphics_writer: CombinedGraphicsWriter = .{
         .panes = .{
             .store = &client.graphics_store,
             .layout_snapshot = layout_snapshot,
-            .cell_width = cell_size.width,
-            .cell_height = cell_size.height,
+            .cell_width = host_size.cell_width_px,
+            .cell_height = host_size.cell_height_px,
             .budget = kitty.transmission_budget_per_frame,
         },
         .sidebar = client.view.kittySidebar(),
@@ -320,7 +321,7 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
 fn mediaWorkPending(presenter: *const Presenter, client: *Client) bool {
     _ = presenter;
     return client.view.kittyAttachments().cleanupPending() or
-        (client.capabilities.kitty_graphics == .supported and
+        (client.model.hostCapabilities().kitty_graphics == .supported and
             (client.view.graphicsPreparationPending() or client.graphics_store.damage or
                 client.view.kittySidebar().damaged() or client.view.kittyIcons().damaged() or
                 client.view.kittyToasts().damaged() or client.view.kittyModal().damaged() or

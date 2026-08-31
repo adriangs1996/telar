@@ -2,14 +2,12 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const graphics = @import("../graphics/root.zig");
 const platform = @import("../platform/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const host_resize = client_application.host_resize;
-const kitty = graphics.kitty;
 const schema = core.schema;
 
 const pixel_queries = "\x1b[14t\x1b[16t";
@@ -24,7 +22,7 @@ pub const Source = struct {
 /// ```zig
 /// _ = try handle(client, result, source);
 /// ```
-pub fn handle(client: *Client, result: anyerror!void, source: Source) !?client_model.HostResizeCommit {
+pub fn handle(client: *Client, result: anyerror!void, source: Source) !?client_model.HostCommit {
     try result;
     const commit = try apply(client, source.tty.size());
     try queryPixels(client);
@@ -38,21 +36,13 @@ pub fn handle(client: *Client, result: anyerror!void, source: Source) !?client_m
 /// ```zig
 /// const commit = try apply(client, measurement);
 /// ```
-pub fn apply(client: *Client, measurement: platform.Size) !?client_model.HostResizeCommit {
-    var capabilities = client.capabilities;
-    const size = resolve(&capabilities, measurement);
-    try size.validate();
-    client.capabilities = capabilities;
+pub fn apply(client: *Client, measurement: platform.Size) !?client_model.HostCommit {
+    const update = resolve(client.model.hostCapabilities(), measurement);
 
-    return applyResolved(client, size);
+    return applyUpdate(client, update);
 }
 
-/// Applies geometry already resolved by another host-capability event.
-///
-/// ```zig
-/// const commit = try applyResolved(client, size);
-/// ```
-pub fn applyResolved(client: *Client, size: schema.TerminalSize) !?client_model.HostResizeCommit {
+fn applyUpdate(client: *Client, update: client_model.HostUpdate) !?client_model.HostCommit {
     var use_case: host_resize.ResizeHostHandler = .{
         .model = &client.model,
         .effects = .{
@@ -60,8 +50,7 @@ pub fn applyResolved(client: *Client, size: schema.TerminalSize) !?client_model.
             .sync = syncResources,
         },
     };
-
-    return use_case.execute(size);
+    return use_case.execute(update);
 }
 
 /// Resolves the first platform measurement before a client model exists.
@@ -70,12 +59,11 @@ pub fn applyResolved(client: *Client, size: schema.TerminalSize) !?client_model.
 /// const size = initialSize(tty.size());
 /// ```
 pub fn initialSize(measurement: platform.Size) schema.TerminalSize {
-    var capabilities: kitty.TerminalCapabilities = .{};
-
-    return resolve(&capabilities, measurement);
+    return resolve(.{}, measurement).size;
 }
 
-fn resolve(capabilities: *kitty.TerminalCapabilities, measurement: platform.Size) schema.TerminalSize {
+fn resolve(current: client_model.HostCapabilities, measurement: platform.Size) client_model.HostUpdate {
+    var capabilities = current;
     const cols = if (measurement.cols == 0) 80 else measurement.cols;
     const rows = if (measurement.rows == 0) 24 else measurement.rows;
     if (measurement.width_px != 0) {
@@ -87,15 +75,29 @@ fn resolve(capabilities: *kitty.TerminalCapabilities, measurement: platform.Size
     const cell_size = capabilities.cellSize(cols, rows);
 
     return .{
-        .cols = cols,
-        .rows = rows,
-        .cell_width_px = cell_size.width,
-        .cell_height_px = cell_size.height,
+        .capabilities = capabilities,
+        .size = .{
+            .cols = cols,
+            .rows = rows,
+            .cell_width_px = cell_size.width,
+            .cell_height_px = cell_size.height,
+        },
     };
 }
 
-fn syncResources(raw_context: *anyopaque, commit: client_model.HostResizeCommit) !void {
+fn syncResources(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
+    const resize = commit.resize orelse return;
+
+    try sync(client, resize);
+}
+
+/// Synchronizes physical geometry after an already committed host resize.
+///
+/// ```zig
+/// try sync(client, resize);
+/// ```
+pub fn sync(client: *Client, commit: client_model.HostResizeCommit) !void {
     if (commit.grid_changed) {
         try client.presenter.resize(commit.current.cols, commit.current.rows);
         try client.view.resize(commit.current.cols, commit.current.rows);
@@ -104,7 +106,7 @@ fn syncResources(raw_context: *anyopaque, commit: client_model.HostResizeCommit)
     if (commit.cell_size_changed) {
         try client.view.configureSidebar(
             client.sidebar_rendering,
-            client.capabilities.kitty_graphics,
+            client.model.hostCapabilities().kitty_graphics,
             commit.current.cell_width_px,
             commit.current.cell_height_px,
         );

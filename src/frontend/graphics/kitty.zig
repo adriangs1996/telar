@@ -1,4 +1,4 @@
-//! Client-side Kitty graphics capability detection, storage, and emission.
+//! Client-side Kitty graphics resource storage and host-protocol emission.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -7,7 +7,6 @@ const workspace = @import("../workspace/root.zig");
 const layout = workspace.layout;
 const multiplexer = workspace.multiplexer;
 const capability_mod = @import("capabilities.zig");
-const term = @import("../presentation/root.zig").screen;
 
 const Io = std.Io;
 const schema = core.schema;
@@ -24,10 +23,10 @@ pub fn clientSupportsSharedMemory() bool {
 }
 
 pub const query_image_id = capability_mod.query_image_id;
+pub const zlib_query_image_id = capability_mod.zlib_query_image_id;
 pub const capability_timeout_ns = capability_mod.timeout_ns;
 pub const capability_query = capability_mod.query;
 pub const Support = capability_mod.Support;
-pub const TerminalCapabilities = capability_mod.TerminalCapabilities;
 pub const SidebarRendering = capability_mod.SidebarRendering;
 pub const ResolvedSidebarRendering = capability_mod.ResolvedSidebarRendering;
 
@@ -2166,24 +2165,15 @@ fn providerAtlasSourceCount() u32 {
     return KittySidebarRenderer.provider_count;
 }
 
-test "capability query and replies are exact" {
+test "capability query and probe identities are exact" {
     try std.testing.expectEqualStrings(
         "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" ++
             "\x1b_Gi=32,s=1,v=1,a=q,t=d,f=24,o=z;eJxjYGAAAAADAAE=\x1b\\" ++
             "\x1b[14t\x1b[16t\x1b[?1016$p\x1b[c",
         capability_query,
     );
-    var capabilities: TerminalCapabilities = .{};
-    try std.testing.expect(capabilities.observe(.{ .kitty_graphics = .{
-        .image_id = 31,
-        .supported = true,
-    } }));
-    try std.testing.expectEqual(Support.supported, capabilities.kitty_graphics);
-    try std.testing.expect(capabilities.observe(.{ .kitty_graphics = .{
-        .image_id = 32,
-        .supported = true,
-    } }));
-    try std.testing.expectEqual(Support.supported, capabilities.kitty_zlib);
+    try std.testing.expectEqual(@as(u32, 31), query_image_id);
+    try std.testing.expectEqual(@as(u32, 32), zlib_query_image_id);
 }
 
 test "automatic sidebar renderer falls back while capability is absent" {
@@ -2207,17 +2197,6 @@ test "direct transmission chunks payload without changing pixels" {
     }, &pixels);
     try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "\x1b_Ga=t,f=32,s=3073,v=1,t=d,i=9,q=2,m=1;"));
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b\\\x1b_Gm=0;") != null);
-}
-
-test "simulated exterior terminal selects support or timeout fallback" {
-    var supported: TerminalCapabilities = .{};
-    const event = term.parse("\x1b_Gi=31;OK\x1b\\").?.event.terminal_response;
-    try std.testing.expect(supported.observe(event));
-    try std.testing.expectEqual(Support.supported, supported.kitty_graphics);
-
-    var silent: TerminalCapabilities = .{};
-    try std.testing.expect(silent.expire());
-    try std.testing.expectEqual(Support.unsupported, silent.kitty_graphics);
 }
 
 test "exterior IDs do not collide across panes with identical child IDs" {

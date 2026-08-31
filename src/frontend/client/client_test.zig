@@ -5,6 +5,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
+const graphics = @import("../graphics/root.zig");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const notifications = @import("../notifications/root.zig");
@@ -13,6 +14,7 @@ const plugin_broker = @import("../plugins/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const keybind = input_capability.keybind;
+const kitty = graphics.kitty;
 
 const Io = std.Io;
 const File = Io.File;
@@ -49,6 +51,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.host, actual.host);
+    try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -70,6 +73,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.host, actual.host);
+    try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -91,6 +95,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.host, actual.host);
+    try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -111,6 +116,7 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.host, actual.host);
+    try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -4676,7 +4682,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.capabilities.kitty_graphics = .unsupported;
+    _ = try client.model.observeHostCapability(.{ .kitty_graphics = .unsupported });
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
 
@@ -4713,7 +4719,7 @@ test "presenter observes physical graphics without a semantic fallback" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.capabilities.kitty_graphics = .supported;
+    _ = try client.model.observeHostCapability(.{ .kitty_graphics = .supported });
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
 
@@ -4977,7 +4983,7 @@ test "host resize commits before resources and presents by model version" {
         .height_px = 600,
     };
 
-    const commit = (try host_resizes.apply(client, measurement)).?;
+    const commit = (try host_resizes.apply(client, measurement)).?.resize.?;
 
     const expected: schema.TerminalSize = .{
         .cols = 100,
@@ -4989,6 +4995,7 @@ test "host resize commits before resources and presents by model version" {
     try std.testing.expectEqualDeep(expected, client.model.hostSize());
     try std.testing.expectEqual(client_model.Version{
         .host = 1,
+        .host_capabilities = 1,
         .workspace = 1,
         .tabs = 1,
         .active_tab = 1,
@@ -5052,6 +5059,7 @@ test "host resize retains committed geometry after outbox backpressure" {
         .cell_height_px = 20,
     }, client.model.hostSize());
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
+    try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
     try std.testing.expect(client.presenter.screen.sizeMatches(90, 28));
     try std.testing.expectEqual(@as(u16, 90), client.view.scratch.w);
     try std.testing.expectEqual(@as(u16, 28), client.view.scratch.h);
@@ -5065,7 +5073,7 @@ test "oversized host measurement changes neither model nor capabilities" {
     defer harness.deinit();
     const client = harness.client;
     const host_size = client.model.hostSize();
-    const capabilities = client.capabilities;
+    const capabilities = client.model.hostCapabilities();
 
     try std.testing.expectError(error.ScreenTooLarge, host_resizes.apply(client, .{
         .cols = std.math.maxInt(u16),
@@ -5075,7 +5083,7 @@ test "oversized host measurement changes neither model nor capabilities" {
     }));
 
     try std.testing.expectEqualDeep(host_size, client.model.hostSize());
-    try std.testing.expectEqualDeep(capabilities, client.capabilities);
+    try std.testing.expectEqualDeep(capabilities, client.model.hostCapabilities());
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
@@ -5102,6 +5110,7 @@ test "terminal pixel response keeps model host geometry authoritative" {
         .cell_height_px = 24,
     }, client.model.hostSize());
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
+    try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
     const active = client.model.workspace.active().?;
     try std.testing.expectEqual(@as(u16, 12), active.model.cell_width_px);
     try std.testing.expectEqual(@as(u16, 24), active.model.cell_height_px);
@@ -5122,13 +5131,96 @@ test "input timer expiries with nothing pending are a no-op" {
     try std.testing.expect(!harness.client.binding_timeout_pending);
 }
 
-test "a capability expiry reconfigures the sidebar without a tab" {
+test "a Kitty capability response commits before fallback projection and presentation" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
 
-    try harness.client.handleCapabilityTimeoutEvent({});
-    try harness.settle();
+    var payload: [256]u8 = undefined;
+    const encoded = try schema.encodeGraphicsImage(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.terminalResponse(.{ .kitty_graphics = .{
+        .image_id = kitty.query_image_id,
+        .supported = true,
+    } });
+
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(kitty.Support.supported, client.model.hostCapabilities().kitty_graphics);
+    try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
+    try std.testing.expectEqual(version.host_capabilities + 1, client.model.version().host_capabilities);
+    try std.testing.expectEqual(version.pane_graphics + 1, client.model.version().pane_graphics);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+}
+
+test "capability expiry commits fallback state and presents only by model version" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const pending_updates = client.presenter.pending_updates;
+
+    try client.handleCapabilityTimeoutEvent({});
+
+    const capabilities = client.model.hostCapabilities();
+    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.kitty_graphics);
+    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.kitty_zlib);
+    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.mouse_pixels);
+    try std.testing.expectEqual(client_model.Version{
+        .host_capabilities = 1,
+    }, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+
+    const version = client.model.version();
+    const pending_after = client.presenter.pending_updates;
+    try client.handleCapabilityTimeoutEvent({});
+    try client.observeModel();
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+}
+
+test "capability effect failure retains the committed fallback" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.sidebar_rendering = .kitty_hybrid;
+    const pending_updates = client.presenter.pending_updates;
+
+    try std.testing.expectError(
+        error.KittyGraphicsUnsupported,
+        client.handleCapabilityTimeoutEvent({}),
+    );
+
+    try std.testing.expectEqual(kitty.Support.unsupported, client.model.hostCapabilities().kitty_graphics);
+    try std.testing.expectEqual(client_model.Version{
+        .host_capabilities = 1,
+    }, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 }
 
 test "pane viewport intent commits before IPC and presenter-owned recomposition" {

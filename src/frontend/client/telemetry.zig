@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_outbox = @import("outbox.zig");
+const client_model = @import("model.zig");
 const kitty = @import("../graphics/root.zig").kitty;
 const pace = @import("../presentation/root.zig").pace;
 
@@ -77,7 +78,7 @@ pub const Snapshot = struct {
     draw_pending: bool,
     media_pending: bool,
     outbox: *const client_outbox.Outbox,
-    capabilities: *const kitty.TerminalCapabilities,
+    capabilities: client_model.HostCapabilities,
     sidebar_rendering: kitty.ResolvedSidebarRendering,
     lua_used: usize,
     lua_limit: usize,
@@ -253,7 +254,7 @@ pub fn format(
 test "client telemetry reports lua kitty and heap retained bytes" {
     const io = std.testing.io;
     var outbox: client_outbox.Outbox = .{};
-    const capabilities: kitty.TerminalCapabilities = .{};
+    const capabilities: client_model.HostCapabilities = .{};
     const pacer: pace.Pacer = .{};
     const metrics: Metrics = .{ .started_ns = 0 };
     var buffer: [8192]u8 = undefined;
@@ -268,7 +269,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
         .draw_pending = false,
         .media_pending = true,
         .outbox = &outbox,
-        .capabilities = &capabilities,
+        .capabilities = capabilities,
         .sidebar_rendering = .cells,
         .lua_used = 123,
         .lua_limit = 1024,

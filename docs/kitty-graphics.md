@@ -13,9 +13,10 @@ generations, placements, quotas, incomplete uploads, and replies written back
 to the PTY. This state survives client disconnection. A reconnecting client
 requests an incremental graphics snapshot.
 
-The client owns exterior capability detection, pixel geometry, exterior IDs,
-physical placements, layout clipping, pending exterior deletes, and the hybrid
-sidebar framebuffers. Pane exterior IDs use the low range below `0x40000000`.
+`ClientModel` owns exterior capability state and resolved pixel geometry. The
+client's graphics resources own exterior IDs, physical placements, layout
+clipping, pending exterior deletes, and the hybrid sidebar framebuffers. Pane
+exterior IDs use the low range below `0x40000000`.
 Telar UI images use the high range beginning at `0x80000001`; child z-indices
 are clamped to `[-1000, 1000]`, while sidebar layers use `-10` through `-8`.
 
@@ -24,14 +25,18 @@ and schema messages. It contains no parser, allocator, PTY, or terminal writer.
 
 ## Capability detection
 
-On client startup Telar sends the direct-data KGP query for image ID 31, the
-window-pixel query (`CSI 14 t`), the cell-pixel query (`CSI 16 t`), and primary
+On client startup Telar sends direct-data KGP probes for raw image support and
+zlib support using image IDs 31 and 32. It also sends the window-pixel query
+(`CSI 14 t`), the cell-pixel query (`CSI 16 t`), the mode 1016 query and primary
 device attributes. APC and CSI replies are consumed by the client input parser
-and never reach the focused pane. The KGP state is `unknown`, `supported`, or
-`unsupported`; `unknown` expires after 250 ms without blocking input. Pixel
+and never reach the focused pane. Each support state is `unknown`, `supported`
+or `unsupported`; `unknown` expires after 250 ms without blocking input. Pixel
 queries are repeated after resize.
-The [host resize flow](flows/host-resize.md) records the geometry commit,
-placement invalidation and query-rearm order.
+
+The [host capability flow](flows/host-capabilities.md) records response
+translation, model ownership, expiry and resource fallback. The
+[host resize flow](flows/host-resize.md) records geometry effects, placement
+invalidation and query-rearm order.
 
 `automatic` renders cells while support is unknown, selects `kitty-hybrid` on
 success, and stays on cells on rejection or timeout. Explicit `kitty-hybrid`
@@ -194,8 +199,8 @@ It writes its machine-readable result to
   page loaded, terminal-browser produced an image and placement, Telar emitted
   pane and hybrid-sidebar graphics, and response drops were zero.
 - Silent and responding simulated exteriors in the parser/client tests: timeout
-  selects cells; APC, pixel-size, and mode-1016 replies select KGP and update
-  client capabilities.
+  commits the cell fallback; APC, pixel-size and mode-1016 replies update the
+  client model before presenter observation.
 
 The real run also uses Ghostty's scripting API to send keyboard and pixel-mouse
 input to the exact verification terminal; the page preload records the

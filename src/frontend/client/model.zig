@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
+const graphics = @import("../graphics/root.zig");
 const input_capability = @import("../input/root.zig");
 const notifications = @import("../notifications/root.zig");
 const name_prompt = @import("name_prompt.zig");
@@ -10,6 +11,7 @@ const workspace_capability = @import("../workspace/root.zig");
 
 const copy_mode = input_capability.copy_mode;
 const keybind = input_capability.keybind;
+const kitty = graphics.kitty;
 const schema = core.schema;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
@@ -21,6 +23,7 @@ pub const Version = struct {
     workspace: u64 = 0,
     configuration: u64 = 0,
     host: u64 = 0,
+    host_capabilities: u64 = 0,
     workspace_list: u64 = 0,
     agents: u64 = 0,
     proxy_status: u64 = 0,
@@ -168,6 +171,119 @@ pub const InitialClientState = struct {
     pane_gaps: bool,
     configuration_generation: u64 = 0,
     host_size: schema.TerminalSize = .{ .cols = 80, .rows = 24 },
+    host_capabilities: HostCapabilities = .{},
+};
+
+pub const HostCapabilities = struct {
+    kitty_graphics: kitty.Support = .unknown,
+    kitty_zlib: kitty.Support = .unknown,
+    window_width_px: u32 = 0,
+    window_height_px: u32 = 0,
+    cell_width_px: u32 = 0,
+    cell_height_px: u32 = 0,
+    mouse_pixels: kitty.Support = .unknown,
+
+    /// Resolves one cell size, preferring the host's explicit cell report.
+    ///
+    /// ```zig
+    /// const cell_size = capabilities.cellSize(80, 24);
+    /// ```
+    pub fn cellSize(capabilities: *const HostCapabilities, cols: u16, rows: u16) struct { width: u16, height: u16 } {
+        const width = if (capabilities.cell_width_px != 0)
+            capabilities.cell_width_px
+        else if (cols != 0)
+            capabilities.window_width_px / cols
+        else
+            0;
+        const height = if (capabilities.cell_height_px != 0)
+            capabilities.cell_height_px
+        else if (rows != 0)
+            capabilities.window_height_px / rows
+        else
+            0;
+
+        return .{
+            .width = std.math.cast(u16, width) orelse 0,
+            .height = std.math.cast(u16, height) orelse 0,
+        };
+    }
+
+    /// Returns the complete capability value after one recognized reply.
+    ///
+    /// ```zig
+    /// const next = capabilities.withObservation(.{ .mouse_pixels = .supported });
+    /// ```
+    pub fn withObservation(capabilities: HostCapabilities, observation: HostCapabilityObservation) HostCapabilities {
+        var next = capabilities;
+        switch (observation) {
+            .kitty_graphics => |support| next.kitty_graphics = observedSupport(support),
+            .kitty_zlib => |support| next.kitty_zlib = observedSupport(support),
+            .window_pixels => |size| {
+                next.window_width_px = size.width;
+                next.window_height_px = size.height;
+            },
+            .cell_pixels => |size| {
+                next.cell_width_px = size.width;
+                next.cell_height_px = size.height;
+            },
+            .mouse_pixels => |support| next.mouse_pixels = observedSupport(support),
+        }
+
+        return next;
+    }
+
+    /// Returns the complete capability value after unanswered probes expire.
+    ///
+    /// ```zig
+    /// const next = capabilities.withExpiredProbes();
+    /// ```
+    pub fn withExpiredProbes(capabilities: HostCapabilities) HostCapabilities {
+        var next = capabilities;
+        if (next.kitty_graphics == .unknown) {
+            next.kitty_graphics = .unsupported;
+        }
+        if (next.kitty_zlib == .unknown) {
+            next.kitty_zlib = .unsupported;
+        }
+        if (next.mouse_pixels == .unknown) {
+            next.mouse_pixels = .unsupported;
+        }
+
+        return next;
+    }
+};
+
+pub const HostCapabilitySupport = enum { unsupported, supported };
+
+pub const HostCapabilityObservation = union(enum) {
+    kitty_graphics: HostCapabilitySupport,
+    kitty_zlib: HostCapabilitySupport,
+    window_pixels: PixelSize,
+    cell_pixels: PixelSize,
+    mouse_pixels: HostCapabilitySupport,
+};
+
+fn observedSupport(support: HostCapabilitySupport) kitty.Support {
+    return switch (support) {
+        .unsupported => .unsupported,
+        .supported => .supported,
+    };
+}
+
+pub const PixelSize = struct {
+    width: u32,
+    height: u32,
+};
+
+pub const HostUpdate = struct {
+    capabilities: HostCapabilities,
+    size: schema.TerminalSize,
+};
+
+pub const HostCapabilitiesChange = struct {
+    previous: HostCapabilities,
+    current: HostCapabilities,
+    host_capabilities_revision: u64,
 };
 
 pub const HostResizeCommit = struct {
@@ -176,6 +292,11 @@ pub const HostResizeCommit = struct {
     grid_changed: bool,
     cell_size_changed: bool,
     host_revision: u64,
+};
+
+pub const HostCommit = struct {
+    capabilities: ?HostCapabilitiesChange,
+    resize: ?HostResizeCommit,
 };
 
 pub const WorkspaceListCollapse = struct {
@@ -555,6 +676,8 @@ pub const Model = struct {
     configuration_revision: u64 = 0,
     host_size: schema.TerminalSize,
     host_revision: u64 = 0,
+    host_capabilities: HostCapabilities,
+    host_capabilities_revision: u64 = 0,
     workspace_list_snapshot: workspace_list_mod.Snapshot = .{},
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
@@ -607,6 +730,12 @@ pub const Model = struct {
     /// ```
     pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientState) Model {
         initial.host_size.validate() catch unreachable;
+        const cell_size = initial.host_capabilities.cellSize(
+            initial.host_size.cols,
+            initial.host_size.rows,
+        );
+        std.debug.assert(initial.host_size.cell_width_px == cell_size.width);
+        std.debug.assert(initial.host_size.cell_height_px == cell_size.height);
         var workspace = tabs_mod.Model.init(gpa);
         workspace.setPaneGaps(initial.pane_gaps);
         workspace.setCellSize(initial.host_size.cell_width_px, initial.host_size.cell_height_px);
@@ -615,6 +744,7 @@ pub const Model = struct {
             .workspace = workspace,
             .configuration_generation = initial.configuration_generation,
             .host_size = initial.host_size,
+            .host_capabilities = initial.host_capabilities,
         };
     }
 
@@ -637,6 +767,7 @@ pub const Model = struct {
             .workspace = model.workspace_revision,
             .configuration = model.configuration_revision,
             .host = model.host_revision,
+            .host_capabilities = model.host_capabilities_revision,
             .workspace_list = model.workspace_list_revision,
             .agents = model.agent_revision,
             .proxy_status = model.proxy_status_revision,
@@ -683,18 +814,100 @@ pub const Model = struct {
         return model.host_size;
     }
 
-    /// Commits one resolved host geometry and updates every tab's cell size.
+    /// Returns the host features and raw pixel measurements observed so far.
     ///
     /// ```zig
-    /// const commit = try model.resizeHost(size) orelse return;
+    /// const capabilities = model.hostCapabilities();
     /// ```
-    pub fn resizeHost(model: *Model, size: schema.TerminalSize) !?HostResizeCommit {
-        try size.validate();
+    pub fn hostCapabilities(model: *const Model) HostCapabilities {
+        return model.host_capabilities;
+    }
 
-        if (std.meta.eql(model.host_size, size)) {
+    /// Atomically reconciles raw host capabilities and resolved geometry.
+    ///
+    /// ```zig
+    /// const commit = try model.reconcileHost(update) orelse return;
+    /// ```
+    pub fn reconcileHost(model: *Model, update: HostUpdate) !?HostCommit {
+        try update.size.validate();
+        const cell_size = update.capabilities.cellSize(update.size.cols, update.size.rows);
+        if (update.size.cell_width_px != cell_size.width or
+            update.size.cell_height_px != cell_size.height)
+        {
+            return error.InconsistentHostGeometry;
+        }
+
+        const capabilities_changed = !std.meta.eql(model.host_capabilities, update.capabilities);
+        const size_changed = !std.meta.eql(model.host_size, update.size);
+        if (!capabilities_changed and !size_changed) {
             return null;
         }
 
+        const capabilities = if (capabilities_changed) changed: {
+            const previous = model.host_capabilities;
+            model.host_capabilities = update.capabilities;
+            model.host_capabilities_revision +%= 1;
+
+            break :changed HostCapabilitiesChange{
+                .previous = previous,
+                .current = update.capabilities,
+                .host_capabilities_revision = model.host_capabilities_revision,
+            };
+        } else null;
+        const resize = if (size_changed) model.commitHostResize(update.size) else null;
+
+        return .{
+            .capabilities = capabilities,
+            .resize = resize,
+        };
+    }
+
+    /// Commits one semantic capability observation and its resolved geometry.
+    ///
+    /// ```zig
+    /// const commit = try model.observeHostCapability(observation) orelse return;
+    /// ```
+    pub fn observeHostCapability(model: *Model, observation: HostCapabilityObservation) !?HostCommit {
+        const capabilities = model.host_capabilities.withObservation(observation);
+        if (std.meta.eql(model.host_capabilities, capabilities)) {
+            return null;
+        }
+
+        return model.reconcileHost(.{
+            .capabilities = capabilities,
+            .size = model.resolveHostSize(capabilities),
+        });
+    }
+
+    /// Settles every unanswered support probe as unsupported.
+    ///
+    /// ```zig
+    /// const commit = try model.expireHostCapabilities() orelse return;
+    /// ```
+    pub fn expireHostCapabilities(model: *Model) !?HostCommit {
+        const capabilities = model.host_capabilities.withExpiredProbes();
+        if (std.meta.eql(model.host_capabilities, capabilities)) {
+            return null;
+        }
+
+        return model.reconcileHost(.{
+            .capabilities = capabilities,
+            .size = model.resolveHostSize(capabilities),
+        });
+    }
+
+    fn resolveHostSize(model: *const Model, capabilities: HostCapabilities) schema.TerminalSize {
+        const cell_size = capabilities.cellSize(model.host_size.cols, model.host_size.rows);
+
+        return .{
+            .cols = model.host_size.cols,
+            .rows = model.host_size.rows,
+            .cell_width_px = cell_size.width,
+            .cell_height_px = cell_size.height,
+        };
+    }
+
+    fn commitHostResize(model: *Model, size: schema.TerminalSize) HostResizeCommit {
         const previous = model.host_size;
         model.workspace.setCellSize(size.cell_width_px, size.cell_height_px);
         model.host_size = size;
@@ -3883,12 +4096,16 @@ test "host resize commits resolved geometry once" {
     const initial: schema.TerminalSize = .{
         .cols = 80,
         .rows = 24,
-        .cell_width_px = 8,
-        .cell_height_px = 16,
+        .cell_width_px = 10,
+        .cell_height_px = 20,
     };
     var model = Model.initWithState(std.testing.allocator, .{
         .pane_gaps = true,
         .host_size = initial,
+        .host_capabilities = .{
+            .cell_width_px = 10,
+            .cell_height_px = 20,
+        },
     });
     defer model.deinit();
     const resized: schema.TerminalSize = .{
@@ -3898,16 +4115,22 @@ test "host resize commits resolved geometry once" {
         .cell_height_px = 20,
     };
 
-    const commit = (try model.resizeHost(resized)).?;
+    const commit = (try model.reconcileHost(.{
+        .capabilities = model.hostCapabilities(),
+        .size = resized,
+    })).?.resize.?;
 
     try std.testing.expectEqualDeep(initial, commit.previous);
     try std.testing.expectEqualDeep(resized, commit.current);
     try std.testing.expect(commit.grid_changed);
-    try std.testing.expect(commit.cell_size_changed);
+    try std.testing.expect(!commit.cell_size_changed);
     try std.testing.expectEqual(@as(u64, 1), commit.host_revision);
     try std.testing.expectEqualDeep(resized, model.hostSize());
     try std.testing.expectEqual(Version{ .host = 1 }, model.version());
-    try std.testing.expect((try model.resizeHost(resized)) == null);
+    try std.testing.expect((try model.reconcileHost(.{
+        .capabilities = model.hostCapabilities(),
+        .size = resized,
+    })) == null);
     try std.testing.expectEqual(Version{ .host = 1 }, model.version());
 }
 
@@ -3917,16 +4140,110 @@ test "host resize rejects invalid and oversized grids without partial state" {
     const size = model.hostSize();
     const version = model.version();
 
-    try std.testing.expectError(error.InvalidTerminalSize, model.resizeHost(.{
-        .cols = 0,
-        .rows = 24,
+    try std.testing.expectError(error.InvalidTerminalSize, model.reconcileHost(.{
+        .capabilities = model.hostCapabilities(),
+        .size = .{ .cols = 0, .rows = 24 },
     }));
-    try std.testing.expectError(error.ScreenTooLarge, model.resizeHost(.{
-        .cols = std.math.maxInt(u16),
-        .rows = std.math.maxInt(u16),
+    try std.testing.expectError(error.ScreenTooLarge, model.reconcileHost(.{
+        .capabilities = model.hostCapabilities(),
+        .size = .{
+            .cols = std.math.maxInt(u16),
+            .rows = std.math.maxInt(u16),
+        },
     }));
 
     try std.testing.expectEqualDeep(size, model.hostSize());
+    try std.testing.expectEqualDeep(version, model.version());
+}
+
+test "host support probes commit independently and expiry settles only unknown values" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const graphics_commit = (try model.observeHostCapability(.{
+        .kitty_graphics = .supported,
+    })).?;
+    try std.testing.expect(graphics_commit.resize == null);
+    try std.testing.expectEqual(kitty.Support.supported, model.hostCapabilities().kitty_graphics);
+    try std.testing.expectEqual(kitty.Support.unknown, model.hostCapabilities().kitty_zlib);
+
+    _ = try model.observeHostCapability(.{ .kitty_zlib = .unsupported });
+    const expired = (try model.expireHostCapabilities()).?;
+
+    try std.testing.expect(expired.resize == null);
+    try std.testing.expectEqual(kitty.Support.supported, model.hostCapabilities().kitty_graphics);
+    try std.testing.expectEqual(kitty.Support.unsupported, model.hostCapabilities().kitty_zlib);
+    try std.testing.expectEqual(kitty.Support.unsupported, model.hostCapabilities().mouse_pixels);
+    try std.testing.expectEqual(Version{ .host_capabilities = 3 }, model.version());
+    try std.testing.expect((try model.expireHostCapabilities()) == null);
+    try std.testing.expectEqual(Version{ .host_capabilities = 3 }, model.version());
+}
+
+test "host pixel observations commit raw measurements and resolved geometry atomically" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const window = (try model.observeHostCapability(.{ .window_pixels = .{
+        .width = 800,
+        .height = 480,
+    } })).?;
+
+    try std.testing.expectEqual(schema.TerminalSize{
+        .cols = 80,
+        .rows = 24,
+        .cell_width_px = 10,
+        .cell_height_px = 20,
+    }, model.hostSize());
+    try std.testing.expect(window.capabilities != null);
+    try std.testing.expect(window.resize != null);
+    try std.testing.expectEqual(Version{
+        .host = 1,
+        .host_capabilities = 1,
+    }, model.version());
+
+    const cell = (try model.observeHostCapability(.{ .cell_pixels = .{
+        .width = 12,
+        .height = 24,
+    } })).?;
+    try std.testing.expect(cell.resize != null);
+    try std.testing.expectEqual(@as(u16, 12), model.hostSize().cell_width_px);
+    try std.testing.expectEqual(@as(u16, 24), model.hostSize().cell_height_px);
+
+    const later_window = (try model.observeHostCapability(.{ .window_pixels = .{
+        .width = 1600,
+        .height = 960,
+    } })).?;
+    try std.testing.expect(later_window.resize == null);
+    try std.testing.expectEqual(@as(u16, 12), model.hostSize().cell_width_px);
+    try std.testing.expectEqual(@as(u16, 24), model.hostSize().cell_height_px);
+    try std.testing.expectEqual(Version{
+        .host = 2,
+        .host_capabilities = 3,
+    }, model.version());
+}
+
+test "host reconciliation validates geometry before publishing capabilities" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var capabilities = model.hostCapabilities();
+    capabilities.window_width_px = 1200;
+    const size = model.hostSize();
+    const version = model.version();
+
+    try std.testing.expectError(error.InconsistentHostGeometry, model.reconcileHost(.{
+        .capabilities = capabilities,
+        .size = size,
+    }));
+    try std.testing.expectError(error.ScreenTooLarge, model.reconcileHost(.{
+        .capabilities = capabilities,
+        .size = .{
+            .cols = std.math.maxInt(u16),
+            .rows = std.math.maxInt(u16),
+        },
+    }));
+
+    try std.testing.expectEqualDeep(size, model.hostSize());
+    try std.testing.expectEqualDeep(HostCapabilities{}, model.hostCapabilities());
     try std.testing.expectEqualDeep(version, model.version());
 }
 

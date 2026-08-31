@@ -40,12 +40,12 @@ defect in a leaf capability unless an invariant requires it.
 
 | Capability | Root | Owns |
 | --- | --- | --- |
-| Client | `src/frontend/client/root.zig` | Client event loop and cross-capability orchestration |
+| Client | `src/frontend/client/root.zig` | Client event loop, disposable semantic state and cross-capability orchestration |
 | Agents | `src/frontend/agents/root.zig` | Agent identities and the bounded client replica of runtime agent state |
 | Input | `src/frontend/input/root.zig` | Host input parsing, key routing, semantic actions and editing |
 | Workspace | `src/frontend/workspace/root.zig` | Disposable tabs, pane layout and cell composition |
 | Presentation | `src/frontend/presentation/root.zig` | Host screen diff, frame application and pacing |
-| Graphics | `src/frontend/graphics/root.zig` | Host graphics capabilities, transfer state and overlays |
+| Graphics | `src/frontend/graphics/root.zig` | Host graphics transfer state, renderer policy and overlays |
 | UI | `src/frontend/ui/root.zig` | Client-only focus, hits and theme values |
 | Widgets | `src/frontend/widgets/root.zig` | Chrome and interaction surfaces |
 | Config | `src/frontend/config/root.zig` | Typed configuration and the client-owned Lua generation |
@@ -105,10 +105,10 @@ All client handlers are in `src/frontend/client/root.zig`.
 
 | Event | Entrypoint |
 | --- | --- |
-| Host terminal bytes | `Client.handleHostInput` |
+| Host terminal bytes | [`Client.handleHostInput`](flows/host-input-to-screen.md) |
 | Input parser deadline | `Client.handleInputTimeoutEvent` |
 | Partial binding deadline | `Client.handleBindingTimeoutEvent` |
-| Host capability deadline | `Client.handleCapabilityTimeoutEvent` |
+| Host capability deadline | [`Client.handleCapabilityTimeoutEvent`](flows/host-capabilities.md) |
 | Host resize | [`Client.handleResizeEvent`](flows/host-resize.md) |
 | Runtime socket read | `Client.handleServerEvent` |
 | Completed socket write | `Client.handleSentEvent` |

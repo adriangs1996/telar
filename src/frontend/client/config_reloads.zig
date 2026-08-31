@@ -24,7 +24,7 @@ pub const Outcome = union(enum) {
 pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Outcome {
     const reload = try result;
     const outcome: Outcome = switch (reload_worker.resolve(&client.reload, client.gpa, reload, .{
-        .kitty_support = client.capabilities.kitty_graphics,
+        .kitty_support = client.model.hostCapabilities().kitty_graphics,
         .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
         .current_sidebar = client.sidebar_rendering,
     })) {
@@ -125,7 +125,7 @@ fn applyAdoption(raw_context: *anyopaque, commit: client_model.ConfigurationComm
     const host_size = client.model.hostSize();
     try client.view.configureSidebar(
         client.sidebar_rendering,
-        client.capabilities.kitty_graphics,
+        client.model.hostCapabilities().kitty_graphics,
         host_size.cell_width_px,
         host_size.cell_height_px,
     );

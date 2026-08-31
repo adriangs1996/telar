@@ -11,11 +11,10 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
-const host_resizes = @import("host_resizes.zig");
+const host_capabilities = @import("host_capabilities.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
-const pane_graphics = @import("pane_graphics.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_splits = @import("pane_splits.zig");
 const pane_viewports = @import("pane_viewports.zig");
@@ -258,17 +257,15 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         return;
     }
 
-    const cell_size = handler.client.capabilities.cellSize(
-        handler.client.view.scratch.w,
-        handler.client.view.scratch.h,
-    );
-    const exterior_pixels = handler.client.capabilities.mouse_pixels == .supported and
-        cell_size.width != 0 and cell_size.height != 0;
+    const capabilities = handler.client.model.hostCapabilities();
+    const host_size = handler.client.model.hostSize();
+    const exterior_pixels = capabilities.mouse_pixels == .supported and
+        host_size.cell_width_px != 0 and host_size.cell_height_px != 0;
     var cell_event = event;
     if (exterior_pixels) {
-        cell_event.x = std.math.cast(u16, event.raw_x / cell_size.width) orelse
+        cell_event.x = std.math.cast(u16, event.raw_x / host_size.cell_width_px) orelse
             std.math.maxInt(u16);
-        cell_event.y = std.math.cast(u16, event.raw_y / cell_size.height) orelse
+        cell_event.y = std.math.cast(u16, event.raw_y / host_size.cell_height_px) orelse
             std.math.maxInt(u16);
     }
     const model = handler.activeModel() orelse return;
@@ -349,11 +346,11 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     if (!pane.mouse.sgr or !mouseTracked(pane.mouse.tracking, cell_event.kind)) return;
     var encoded: [64]u8 = undefined;
     const exact_x: ?u32 = if (pane.mouse.pixels and exterior_pixels)
-        event.raw_x - @as(u32, pane_view.content.x) * cell_size.width
+        event.raw_x - @as(u32, pane_view.content.x) * host_size.cell_width_px
     else
         null;
     const exact_y: ?u32 = if (pane.mouse.pixels and exterior_pixels)
-        event.raw_y - @as(u32, pane_view.content.y) * cell_size.height
+        event.raw_y - @as(u32, pane_view.content.y) * host_size.cell_height_px
     else
         null;
     const bytes = try encodeSgrMouse(
@@ -362,8 +359,8 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         cell_event.x - pane_view.content.x,
         cell_event.y - pane_view.content.y,
         pane.mouse.pixels,
-        cell_size.width,
-        cell_size.height,
+        host_size.cell_width_px,
+        host_size.cell_height_px,
         exact_x,
         exact_y,
     );
@@ -404,31 +401,7 @@ fn copyModeMouse(handler: *InputHandler, event: term.Event.Mouse, model: *multip
 /// try handler.terminalResponse(response);
 /// ```
 pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalResponse) !void {
-    if (!handler.client.capabilities.observe(response)) return;
-    const host_size = handler.client.model.hostSize();
-    const cell_size = handler.client.capabilities.cellSize(
-        host_size.cols,
-        host_size.rows,
-    );
-    var resolved = host_size;
-    resolved.cell_width_px = cell_size.width;
-    resolved.cell_height_px = cell_size.height;
-    const geometry_changed = try host_resizes.applyResolved(handler.client, resolved) != null;
-    pane_graphics.syncFallbacks(handler.client);
-    if (!geometry_changed) {
-        handler.client.graphics_store.invalidatePlacements();
-        try handler.client.view.configureSidebar(
-            handler.client.sidebar_rendering,
-            handler.client.capabilities.kitty_graphics,
-            cell_size.width,
-            cell_size.height,
-        );
-        if (handler.client.model.workspace.active()) |active| {
-            try handler.client.resizeAttached(&active.model, handler.client.view.workbench());
-        }
-        handler.client.view.invalidate();
-        handler.redraw = true;
-    }
+    _ = try host_capabilities.observe(handler.client, response);
 }
 
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {

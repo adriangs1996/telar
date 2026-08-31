@@ -7,6 +7,8 @@ const std = @import("std");
 const input_capability = @import("../input/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_view = @import("view.zig");
+const client_model = @import("model.zig");
+const host_capability_adapter = @import("host_capabilities.zig");
 const lua_config = @import("../config/root.zig");
 const action_mod = input_capability.action;
 const keybind = input_capability.keybind;
@@ -22,6 +24,10 @@ pub const View = client_view.State;
 pub const sidebar_width = client_view.sidebar_width;
 pub const ConfiguredBinding = lua_config.ConfiguredBinding;
 pub const trustWatchFingerprint = @import("config_reload.zig").trustWatchFingerprint;
+pub const HostCapabilities = client_model.HostCapabilities;
+pub const HostCapabilityObservation = client_model.HostCapabilityObservation;
+pub const HostCapabilitySupport = client_model.HostCapabilitySupport;
+pub const translateHostCapability = host_capability_adapter.translate;
 
 const InputRouter = Client.InputRouter;
 const defaultBindings = lua_config.loadDefaultBindings;
@@ -37,6 +43,7 @@ test {
     _ = @import("config_reload.zig");
     _ = @import("config_reloads.zig");
     _ = @import("copy_modes.zig");
+    _ = @import("host_capabilities.zig");
     _ = @import("host_resizes.zig");
     _ = @import("model.zig");
     _ = @import("name_prompt.zig");

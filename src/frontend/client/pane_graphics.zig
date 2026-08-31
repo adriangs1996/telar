@@ -32,7 +32,7 @@ pub fn apply(client: *Client, command: pane_graphics.Command) !pane_graphics.Out
 /// syncFallbacks(client);
 /// ```
 pub fn syncFallbacks(client: *Client) void {
-    const fallback_required = client.capabilities.kitty_graphics != .supported;
+    const fallback_required = client.model.hostCapabilities().kitty_graphics != .supported;
     var tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         var panes = tab.model.paneIterator();
@@ -48,7 +48,7 @@ pub fn syncFallbacks(client: *Client) void {
 fn handler(client: *Client) pane_graphics.ReconcilePaneGraphicsHandler {
     return .{
         .model = &client.model,
-        .fallback_required = client.capabilities.kitty_graphics != .supported,
+        .fallback_required = client.model.hostCapabilities().kitty_graphics != .supported,
         .effects = .{
             .context = client,
             .apply = applyResources,

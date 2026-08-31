@@ -23,6 +23,7 @@ const term = frontend.term;
 const kitty = frontend.kitty;
 const platform = frontend.platform;
 const multiplexer = frontend.multiplexer;
+const HostCapabilities = frontend.client.HostCapabilities;
 
 pub const std_options: std.Options = .{ .log_level = .err };
 
@@ -56,7 +57,7 @@ fn centeredFrame(cols: u16, rows: u16) !FrameGeometry {
 
 fn paneTerminalSize(
     frame: FrameGeometry,
-    capabilities: *const kitty.TerminalCapabilities,
+    capabilities: *const HostCapabilities,
 ) schema.TerminalSize {
     const cell = capabilities.cellSize(0, 0);
     return .{
@@ -68,7 +69,7 @@ fn paneTerminalSize(
 }
 
 fn observePlatformPixels(
-    capabilities: *kitty.TerminalCapabilities,
+    capabilities: *HostCapabilities,
     size: platform.Size,
 ) void {
     if (size.width_px != 0) capabilities.window_width_px = size.width_px;
@@ -369,7 +370,7 @@ const HostInput = struct {
         input: *HostInput,
         io: Io,
         session: *pty.Session,
-        capabilities: *kitty.TerminalCapabilities,
+        capabilities: *HostCapabilities,
         bytes: []const u8,
     ) !Result {
         if (bytes.len > input.pending.len - input.len) return error.HostInputOverflow;
@@ -383,7 +384,7 @@ const HostInput = struct {
             const raw = input.pending[0..parsed.len];
             switch (parsed.event) {
                 .terminal_response => |response| {
-                    result.capabilities_changed = capabilities.observe(response) or
+                    result.capabilities_changed = observeHostCapability(capabilities, response) or
                         result.capabilities_changed;
                 },
                 // Unknown host responses are not child input.
@@ -412,6 +413,27 @@ const HostInput = struct {
         input.len -= count;
     }
 };
+
+fn observeHostCapability(capabilities: *HostCapabilities, response: term.Event.TerminalResponse) bool {
+    const observation = frontend.client.translateHostCapability(response) orelse return false;
+    const next = capabilities.withObservation(observation);
+    if (std.meta.eql(capabilities.*, next)) {
+        return false;
+    }
+
+    capabilities.* = next;
+    return true;
+}
+
+fn expireHostCapabilities(capabilities: *HostCapabilities) bool {
+    const next = capabilities.withExpiredProbes();
+    if (std.meta.eql(capabilities.*, next)) {
+        return false;
+    }
+
+    capabilities.* = next;
+    return true;
+}
 
 const InputChunk = struct {
     bytes: [512]u8 = undefined,
@@ -557,7 +579,7 @@ fn present(
     graphics_store: *kitty.Store,
     model: *multiplexer.Model,
     frame: FrameGeometry,
-    capabilities: *const kitty.TerminalCapabilities,
+    capabilities: *const HostCapabilities,
 ) !void {
     _ = try mirror.sync(emulator, graphics_store);
     const cell = capabilities.cellSize(0, 0);
@@ -579,7 +601,7 @@ fn present(
 }
 
 fn graphicsReady(
-    capabilities: *const kitty.TerminalCapabilities,
+    capabilities: *const HostCapabilities,
     emulator: *const Emulator,
     mirror: *const GraphicsMirror,
     store: *const kitty.Store,
@@ -597,7 +619,7 @@ fn applyPaneGeometry(
     model: *multiplexer.Model,
     graphics_store: *kitty.Store,
     frame: FrameGeometry,
-    capabilities: *const kitty.TerminalCapabilities,
+    capabilities: *const HostCapabilities,
 ) !bool {
     _ = io;
     const next = paneTerminalSize(frame, capabilities);
@@ -670,7 +692,7 @@ pub fn main(init: std.process.Init) !void {
     var host_size = tty.size();
     if (host_size.cols == 0) host_size.cols = 80;
     if (host_size.rows == 0) host_size.rows = 24;
-    var capabilities: kitty.TerminalCapabilities = .{};
+    var capabilities: HostCapabilities = .{};
     observePlatformPixels(&capabilities, host_size);
     var frame = try centeredFrame(host_size.cols, host_size.rows);
     const initial_size = paneTerminalSize(frame, &capabilities);
@@ -812,7 +834,9 @@ pub fn main(init: std.process.Init) !void {
                 redraw_cells = true;
             },
             .capability_timeout => {
-                if (capabilities.expire()) redraw_cells = true;
+                if (expireHostCapabilities(&capabilities)) {
+                    redraw_cells = true;
+                }
             },
             .child_closed => child_closed = true,
         };

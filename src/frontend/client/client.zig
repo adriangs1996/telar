@@ -103,9 +103,9 @@ pub const InputChunk = struct {
 const InputHandler = @import("input_handler.zig");
 const config_reload = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
+const host_capabilities = @import("host_capabilities.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
-const pane_graphics = @import("pane_graphics.zig");
 const presenter_mod = @import("presenter.zig");
 const server_messages = @import("server_messages.zig");
 
@@ -183,7 +183,6 @@ view: client_view.State,
 model: client_model.Model,
 navigation_history: navigation.History = .{},
 graphics_store: kitty.Store,
-capabilities: kitty.TerminalCapabilities,
 input_file: File,
 input_router: InputRouter,
 input_timeout_pending: bool = false,
@@ -221,7 +220,7 @@ pub fn init(params: Params) !*Client {
     const gpa = params.gpa;
     const client = try gpa.create(Client);
     errdefer gpa.destroy(client);
-    var capabilities: kitty.TerminalCapabilities = .{
+    var capabilities: client_model.HostCapabilities = .{
         .window_width_px = params.window_width_px,
         .window_height_px = params.window_height_px,
     };
@@ -255,6 +254,7 @@ pub fn init(params: Params) !*Client {
         .pane_gaps = params.options.pane_gaps,
         .configuration_generation = configuration_generation,
         .host_size = host_size,
+        .host_capabilities = capabilities,
     });
     errdefer model.deinit();
     _ = model.setSidebarVisible(params.options.sidebar_visible);
@@ -284,7 +284,6 @@ pub fn init(params: Params) !*Client {
         .view = view,
         .model = model,
         .graphics_store = graphics_store,
-        .capabilities = capabilities,
         .input_file = params.input_file,
         .input_router = input_router,
         .lua_generation = params.options.lua_generation,
@@ -749,17 +748,7 @@ pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
 /// Entrypoint for the capability-probe deadline: settle what the host never answered.
 pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !void {
     try result;
-    if (!client.capabilities.expire()) return;
-    const host_size = client.model.hostSize();
-    try client.view.configureSidebar(
-        client.sidebar_rendering,
-        client.capabilities.kitty_graphics,
-        host_size.cell_width_px,
-        host_size.cell_height_px,
-    );
-    pane_graphics.syncFallbacks(client);
-    client.view.invalidate();
-    try client.presenter.requestDraw();
+    _ = try host_capabilities.expire(client);
 }
 
 /// Entrypoint for a host terminal resize: remeasure, reflow, and re-offer sizes.
@@ -865,7 +854,7 @@ pub fn handleTelemetryTickEvent(
             .draw_pending = client.presenter.draw_pending,
             .media_pending = client.presenter.media_tick_pending,
             .outbox = &client.outbox,
-            .capabilities = &client.capabilities,
+            .capabilities = client.model.hostCapabilities(),
             .sidebar_rendering = client.view.sidebar_rendering,
             .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
             .lua_limit = if (client.lua_generation) |generation| generation.vm.meter.limit else 0,
