@@ -1,11 +1,37 @@
 //! Connects notification use cases to the client timer infrastructure.
 
+const core = @import("telar-core");
 const notification_capability = @import("../notifications/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const notification_use_cases = client_application.notifications;
+const schema = core.schema;
+
+pub const DeliveryOutcome = notification_use_cases.DeliveryOutcome;
+
+/// Consumes one correlated runtime delivery report and applies its policy.
+///
+/// ```zig
+/// const outcome = try applyDeliveryReport(client, shown);
+/// ```
+pub fn applyDeliveryReport(client: *Client, shown: schema.NotificationShown) !DeliveryOutcome {
+    const continuation = client.requests.take(shown.request_id) orelse
+        return error.UnexpectedNotificationReply;
+    if (continuation != .notification) {
+        return error.UnexpectedNotificationReply;
+    }
+
+    var use_case: notification_use_cases.HandleNotificationDeliveryHandler = .{
+        .effects = .{
+            .context = client,
+            .publish = publishDeliveryNotification,
+        },
+    };
+
+    return use_case.execute(.{ .delivered_clients = shown.delivered_clients });
+}
 
 /// Publishes one owned notice through the application boundary.
 ///
@@ -71,4 +97,10 @@ fn reschedule(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try client.scheduleNotificationTick();
+}
+
+fn publishDeliveryNotification(context: *anyopaque, input: notification_capability.Input) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try client.notify(input);
 }

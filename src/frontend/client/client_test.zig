@@ -23,6 +23,7 @@ const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const name_prompts = @import("name_prompts.zig");
+const notification_flow = @import("notifications.zig");
 const pane_openings = @import("pane_openings.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
@@ -4022,6 +4023,76 @@ test "a failed snapshot request is fatal after consuming its continuation" {
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
 }
 
+test "an unexpected notification delivery report is rejected without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const shown: schema.NotificationShown = .{
+        .request_id = @enumFromInt(99),
+        .delivered_clients = 1,
+    };
+
+    try std.testing.expectError(
+        error.UnexpectedNotificationReply,
+        notification_flow.applyDeliveryReport(client, shown),
+    );
+
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
+    try std.testing.expect(!client.notification_tick_pending);
+}
+
+test "notification delivery consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(90);
+    try client.requests.add(request_id, .{ .move_tab = TestHarness.bootstrap_location });
+    const shown: schema.NotificationShown = .{
+        .request_id = request_id,
+        .delivered_clients = 1,
+    };
+
+    try std.testing.expectError(
+        error.UnexpectedNotificationReply,
+        notification_flow.applyDeliveryReport(client, shown),
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(
+        error.UnexpectedNotificationReply,
+        notification_flow.applyDeliveryReport(client, shown),
+    );
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
+    try std.testing.expect(!client.notification_tick_pending);
+}
+
+test "a delivered notification report consumes correlation without model effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(90);
+    const version_before = client.model.version();
+    try client.requests.add(request_id, .notification);
+
+    try std.testing.expectEqual(
+        notification_flow.DeliveryOutcome.delivered,
+        try notification_flow.applyDeliveryReport(client, .{
+            .request_id = request_id,
+            .delivered_clients = 2,
+        }),
+    );
+
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
+    try std.testing.expect(!client.notification_tick_pending);
+}
+
 test "runtime notifications and delivery failures reach the toasts" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -4032,6 +4103,7 @@ test "runtime notifications and delivery failures reach the toasts" {
     const notification = try schema.encodeNotification(&payload, .{ .title = "hello" });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(notification));
     try std.testing.expect(client.notification_tick_pending);
+    const version_after_runtime = client.model.version();
 
     try client.requests.add(@enumFromInt(2), .notification);
     const shown = try schema.encodeNotificationShown(&payload, .{
@@ -4039,6 +4111,16 @@ test "runtime notifications and delivery failures reach the toasts" {
         .delivered_clients = 0,
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(shown));
+    const snapshot = client.model.notificationSnapshot();
+
+    try std.testing.expectEqual(version_after_runtime.notifications + 1, client.model.version().notifications);
+    try std.testing.expectEqual(@as(u8, 2), snapshot.count);
+    try std.testing.expectEqualStrings("Notification not delivered", snapshot.itemAt(0).?.title());
+    try std.testing.expectEqualStrings(
+        "No connected client could accept the notification",
+        snapshot.itemAt(0).?.message(),
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
 
     const unexpected = try schema.encodeNotificationShown(&payload, .{
         .request_id = @enumFromInt(9),

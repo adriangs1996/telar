@@ -38,6 +38,33 @@ keeps at most four items, refreshes an equivalent active item and replaces the
 oldest item at capacity. Invalid UTF-8 is replaced before storage. Publication
 does not request a frame directly.
 
+## Runtime delivery report
+
+```text
+show_notification request + notification continuation
+                         |
+                  runtime fan-out
+                         |
+                 notification_shown
+                         |
+       notifications.applyDeliveryReport
+                         |
+       HandleNotificationDeliveryHandler
+                         |
+         delivered or local failure publication
+```
+
+The client adapter removes the request identity by consuming its continuation,
+then requires the exact `notification` type. The application handler owns
+delivery policy. A positive client count returns `delivered` without changing
+the model or timer. A zero count publishes one local failure through the normal
+owned notification flow and returns `undelivered`.
+
+An unknown request or a continuation from another operation becomes
+`UnexpectedNotificationReply`. Once found, the continuation is consumed before
+type validation or publication, so a rejected or replayed report cannot finish
+another request later.
+
 ## Time and presentation
 
 The notification timer asks `ClientModel.nextNotificationDeadline` for the
@@ -103,8 +130,10 @@ new notifications after reconciliation.
 - `src/frontend/client/model.zig` proves isolated notification versioning and
   immutable snapshot access.
 - `src/frontend/client/application/notifications.zig` proves commit-before-
-  timer ordering, stale interaction behavior and retained commits when timer
-  scheduling fails.
+  timer ordering, delivery policy, stale interaction behavior and retained
+  commits when timer scheduling fails.
+- `src/frontend/client/notifications.zig` proves delivery correlation and
+  connects every application notification use case to client infrastructure.
 - `src/frontend/client/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
 - `src/frontend/client/client_test.zig` proves wire and local producers,

@@ -19,6 +19,20 @@ pub const InteractionCommand = struct {
     now_ns: u64,
 };
 
+pub const DeliveryReport = struct {
+    delivered_clients: u8,
+};
+
+pub const DeliveryOutcome = enum {
+    delivered,
+    undelivered,
+};
+
+pub const DeliveryEffects = struct {
+    context: *anyopaque,
+    publish: *const fn (*anyopaque, notification_capability.Input) anyerror!void,
+};
+
 pub const PublishNotificationHandler = struct {
     model: *client_model.Model,
     effects: TimerEffects,
@@ -87,6 +101,29 @@ pub const DismissNotificationHandler = struct {
     }
 };
 
+pub const HandleNotificationDeliveryHandler = struct {
+    effects: DeliveryEffects,
+
+    /// Publishes a local failure only when the runtime reached no clients.
+    ///
+    /// ```zig
+    /// const outcome = try handler.execute(report);
+    /// ```
+    pub fn execute(handler: *HandleNotificationDeliveryHandler, report: DeliveryReport) !DeliveryOutcome {
+        if (report.delivered_clients != 0) {
+            return .delivered;
+        }
+
+        try handler.effects.publish(handler.effects.context, .{
+            .level = .failure,
+            .title = "Notification not delivered",
+            .message = "No connected client could accept the notification",
+        });
+
+        return .undelivered;
+    }
+};
+
 const EffectsCapture = struct {
     model: *const client_model.Model,
     expected_revision: u64 = 0,
@@ -108,6 +145,51 @@ const EffectsCapture = struct {
         }
     }
 };
+
+const DeliveryCapture = struct {
+    calls: usize = 0,
+    input: ?notification_capability.Input = null,
+    failure: ?anyerror = null,
+
+    fn effects(capture: *DeliveryCapture) DeliveryEffects {
+        return .{ .context = capture, .publish = publish };
+    }
+
+    fn publish(context: *anyopaque, input: notification_capability.Input) !void {
+        const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
+        capture.calls += 1;
+        capture.input = input;
+
+        if (capture.failure) |failure| {
+            return failure;
+        }
+    }
+};
+
+test "notification delivery publishes a failure only when every target rejected it" {
+    var capture: DeliveryCapture = .{};
+    var handler: HandleNotificationDeliveryHandler = .{ .effects = capture.effects() };
+
+    try std.testing.expectEqual(DeliveryOutcome.delivered, try handler.execute(.{ .delivered_clients = 2 }));
+    try std.testing.expectEqual(@as(usize, 0), capture.calls);
+
+    try std.testing.expectEqual(DeliveryOutcome.undelivered, try handler.execute(.{ .delivered_clients = 0 }));
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+    try std.testing.expectEqual(notification_capability.Level.failure, capture.input.?.level);
+    try std.testing.expectEqualStrings("Notification not delivered", capture.input.?.title);
+    try std.testing.expectEqualStrings(
+        "No connected client could accept the notification",
+        capture.input.?.message,
+    );
+}
+
+test "notification delivery propagates publication failure" {
+    var capture: DeliveryCapture = .{ .failure = error.PublicationFailed };
+    var handler: HandleNotificationDeliveryHandler = .{ .effects = capture.effects() };
+
+    try std.testing.expectError(error.PublicationFailed, handler.execute(.{ .delivered_clients = 0 }));
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+}
 
 test "notification handlers commit publication interaction and time before timer effects" {
     var model = client_model.Model.init(std.testing.allocator, true);

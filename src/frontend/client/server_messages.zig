@@ -15,6 +15,7 @@ const diagnostics = core.diagnostics;
 const client_mod = @import("client.zig");
 const Client = client_mod;
 const agent_snapshots = @import("agent_snapshots.zig");
+const notifications = @import("notifications.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
 const pane_graphics = @import("pane_graphics.zig");
@@ -53,7 +54,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_exited => |exited| try handlePaneExited(client, exited),
         .request_failed => |failure| _ = try request_failures.apply(client, failure),
         .notification => |notification| try handleRuntimeNotification(client, notification),
-        .notification_shown => |shown| try handleNotificationShown(client, shown),
+        .notification_shown => |shown| _ = try notifications.applyDeliveryReport(client, shown),
         .agent_sound => |sound| try handleAgentSound(client, sound),
         .resync_required => |required| {
             if (try resync_requirements.apply(client, required) == .exit) {
@@ -114,19 +115,6 @@ fn handleRuntimeNotification(client: *Client, notification: schema.Notification)
             .workspace => |workspace_id| .{ .select_workspace = workspace_id },
         },
         .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
-    });
-}
-
-/// Entrypoint for the delivery report of a notification this client asked
-/// the runtime to fan out.
-fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !void {
-    const continuation = client.requests.take(shown.request_id) orelse
-        return error.UnexpectedNotificationReply;
-    if (continuation != .notification) return error.UnexpectedNotificationReply;
-    if (shown.delivered_clients == 0) try client.notify(.{
-        .level = .failure,
-        .title = "Notification not delivered",
-        .message = "No connected client could accept the notification",
     });
 }
 
