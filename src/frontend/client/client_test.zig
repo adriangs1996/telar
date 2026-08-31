@@ -6124,6 +6124,9 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    var previous_diagnostic: lua_config.Diagnostic = .{};
+    previous_diagnostic.set("previous configuration failed", .{});
+    _ = try client.model.replaceDiagnostic(previous_diagnostic);
     const initial = try testingConfigAdoption(1, false);
     const initial_generation = initial.generation;
 
@@ -6132,6 +6135,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expectEqual(@as(u64, 1), first.generation);
     try std.testing.expect(client.lua_generation == initial_generation);
     try std.testing.expectEqual(@as(u64, 1), client.model.configurationGeneration());
+    try std.testing.expect(client.model.diagnostic() == null);
 
     try std.testing.expectEqualDeep(
         sound_capability.RequestOutcome{ .start = .ready },
@@ -6175,6 +6179,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
     try std.testing.expectEqual(client_model.Version{
         .configuration = 2,
+        .diagnostic = 2,
         .notifications = 2,
         .panes = 1,
         .chrome = 1,

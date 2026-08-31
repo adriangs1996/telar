@@ -89,14 +89,22 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
         .model = &client.model,
         .effects = .{
             .context = &context,
-            .apply = applyAdoption,
+            .adopt_resources = adoptResources,
+            .project_appearance = projectAppearance,
+            .configure_sidebar = configureSidebar,
+            .apply_sidebar = applySidebar,
+            .sync_pane_layout = syncPaneLayout,
+            .publish_success = publishSuccess,
         },
     };
     const snapshot = &adoption.generation.snapshot;
     const commit = try use_case.execute(.{
-        .generation = adoption.generation.number,
-        .sidebar_visible = snapshot.sidebar_visible,
-        .pane_gaps = snapshot.pane_gaps,
+        .configuration = .{
+            .generation = adoption.generation.number,
+            .sidebar_visible = snapshot.sidebar_visible,
+            .pane_gaps = snapshot.pane_gaps,
+        },
+        .theme_locked = client.options.theme_locked,
     });
     std.debug.assert(context.consumed);
 
@@ -127,7 +135,6 @@ const AdoptionContext = struct {
         client.host_input.replaceRouter(client.io, context.adoption.router);
         client.sidebar_rendering = context.adoption.sidebar_rendering;
         client.sound_playback.configure(snapshot.sound);
-        _ = client_diagnostics.clear(client);
         context.consumed = true;
 
         if (previous_generation) |generation| {
@@ -142,34 +149,52 @@ const AdoptionContext = struct {
     }
 };
 
-fn applyAdoption(raw_context: *anyopaque, commit: client_model.ConfigurationCommit) !void {
+fn adoptResources(raw_context: *anyopaque, commit: client_model.ConfigurationCommit) void {
+    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
+    std.debug.assert(context.adoption.generation.number == commit.generation);
+    context.swap();
+}
+
+fn projectAppearance(raw_context: *anyopaque, apply_theme: bool) void {
+    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
+    const snapshot = &context.adoption.generation.snapshot;
+
+    if (apply_theme) {
+        context.client.view.setTheme(snapshot.theme);
+    }
+    context.client.view.setIconTheme(snapshot.icon_theme);
+}
+
+fn configureSidebar(raw_context: *anyopaque) !void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
     const client = context.client;
-    const snapshot = &context.adoption.generation.snapshot;
-    context.swap();
-
-    if (!client.options.theme_locked) {
-        client.view.setTheme(snapshot.theme);
-    }
-    client.view.setIconTheme(snapshot.icon_theme);
     const host_size = client.model.hostSize();
+
     try client.view.configureSidebar(
         client.sidebar_rendering,
         client.model.hostCapabilities().kitty_graphics,
         host_size.cell_width_px,
         host_size.cell_height_px,
     );
+}
 
-    if (commit.sidebar) |change| {
-        try sidebar_projection.apply(client, change);
-    } else if (commit.pane_gaps_changed) {
-        client.graphics_store.invalidatePlacements();
-        if (client.model.workspace.active()) |active| {
-            try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
-        }
+fn applySidebar(raw_context: *anyopaque, change: client_model.SidebarVisibility) !void {
+    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
+    try sidebar_projection.apply(context.client, change);
+}
+
+fn syncPaneLayout(raw_context: *anyopaque) !void {
+    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
+    const client = context.client;
+    client.graphics_store.invalidatePlacements();
+    if (client.model.workspace.active()) |active| {
+        try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
     }
+}
 
-    try notification_flow.publishNow(client, .{
+fn publishSuccess(raw_context: *anyopaque) !void {
+    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
+    try notification_flow.publishNow(context.client, .{
         .level = .success,
         .title = "Configuration reloaded",
         .message = "The new settings are active",
