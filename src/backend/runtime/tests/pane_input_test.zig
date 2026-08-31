@@ -5,8 +5,8 @@ const core = @import("telar-core");
 const agent_mod = @import("../../agent/root.zig");
 const pane_mod = @import("../../pane/root.zig");
 const attachment_mod = @import("../attachment/root.zig");
-const pane_input_commands = @import("../commands/pane_input.zig");
-const pane_input_controller = @import("../controllers/pane_input.zig");
+const pane_input_commands = @import("../application/commands/pane_input.zig");
+const pane_input_controller = @import("../entrypoints/requests/pane_input.zig");
 const test_support = @import("support.zig");
 const telemetry_mod = @import("../observability/root.zig").telemetry;
 

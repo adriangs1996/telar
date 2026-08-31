@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const pane_viewport_commands = @import("../commands/pane_viewport.zig");
-const pane_viewport_controller = @import("../controllers/pane_viewport.zig");
+const pane_viewport_commands = @import("../application/commands/pane_viewport.zig");
+const pane_viewport_controller = @import("../entrypoints/requests/pane_viewport.zig");
 const test_support = @import("support.zig");
 
 const schema = core.schema;

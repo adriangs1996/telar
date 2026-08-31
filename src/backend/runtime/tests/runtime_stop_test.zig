@@ -1,8 +1,8 @@
 //! Vertical contract tests for runtime-stop authority and notification.
 
 const std = @import("std");
-const runtime_stop_commands = @import("../commands/runtime_stop.zig");
-const runtime_stop_controller = @import("../controllers/runtime_stop.zig");
+const runtime_stop_commands = @import("../application/commands/runtime_stop.zig");
+const runtime_stop_controller = @import("../entrypoints/requests/runtime_stop.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const shutdown_mod = @import("../lifecycle/root.zig").shutdown_authority;
 

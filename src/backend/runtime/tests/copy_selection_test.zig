@@ -1,8 +1,8 @@
 //! Vertical tests for bounded terminal selection and clipboard delivery.
 
 const std = @import("std");
-const copy_selection_commands = @import("../commands/copy_selection.zig");
-const copy_selection_controller = @import("../controllers/copy_selection.zig");
+const copy_selection_commands = @import("../application/commands/copy_selection.zig");
+const copy_selection_controller = @import("../entrypoints/requests/copy_selection.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const test_support = @import("support.zig");
 

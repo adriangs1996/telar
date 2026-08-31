@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const pane = @import("../pane/root.zig");
-const pane_launcher = @import("pane_events/root.zig").launcher;
-const proxy_runtime = @import("proxy/root.zig").runtime;
+const pane_launcher = @import("application/pane_launcher.zig");
+const proxy_resource = @import("resources/proxy.zig");
 
 const Io = std.Io;
 
@@ -20,7 +20,7 @@ pub const AgentDescriptionOptions = struct {
     timeout_ms: u32,
 };
 
-pub const ProxyOptions = proxy_runtime.Config;
+pub const ProxyOptions = proxy_resource.Config;
 
 pub const Options = struct {
     endpoint: []const u8,

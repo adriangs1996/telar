@@ -3,8 +3,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 const attachment_mod = @import("../attachment/root.zig");
-const pane_resize_commands = @import("../commands/pane_resize.zig");
-const pane_resize_controller = @import("../controllers/pane_resize.zig");
+const pane_resize_commands = @import("../application/commands/pane_resize.zig");
+const pane_resize_controller = @import("../entrypoints/requests/pane_resize.zig");
 const test_support = @import("support.zig");
 const telemetry_mod = @import("../observability/root.zig").telemetry;
 

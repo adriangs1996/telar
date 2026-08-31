@@ -6,8 +6,8 @@ const agent_mod = @import("../../agent/root.zig");
 const pane_mod = @import("../../pane/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 const delivery_mod = @import("../delivery/root.zig");
-const graphics_credit_commands = @import("../commands/graphics_credit.zig");
-const graphics_credit_controller = @import("../controllers/graphics_credit.zig");
+const graphics_credit_commands = @import("../application/commands/graphics_credit.zig");
+const graphics_credit_controller = @import("../entrypoints/requests/graphics_credit.zig");
 const system_metrics_mod = @import("../observability/root.zig").system_metrics;
 const test_support = @import("support.zig");
 

@@ -7,7 +7,7 @@ const runtime_config = @import("config.zig");
 const runtime_event = @import("event.zig");
 const runtime_loop = @import("event_loop.zig");
 const runtime_shutdown_mod = @import("lifecycle/root.zig").shutdown_coordinator;
-const runtime_resources = @import("resources.zig");
+const runtime_resources = @import("resources/root.zig");
 
 const Io = std.Io;
 const diagnostics = core.diagnostics;

@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const show_notification_commands = @import("../commands/show_notification.zig");
-const show_notification_controller = @import("../controllers/show_notification.zig");
+const show_notification_commands = @import("../application/commands/show_notification.zig");
+const show_notification_controller = @import("../entrypoints/requests/show_notification.zig");
 const delivery_mod = @import("../delivery/root.zig");
 
 const schema = core.schema;

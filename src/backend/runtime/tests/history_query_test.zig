@@ -3,8 +3,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 const history_mod = @import("../../history/root.zig");
-const history_query = @import("../queries/history.zig");
-const history_query_controller = @import("../controllers/history_query.zig");
+const history_query = @import("../application/queries/history.zig");
+const history_query_controller = @import("../entrypoints/requests/history_query.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const telemetry_mod = @import("../observability/root.zig").telemetry;
 

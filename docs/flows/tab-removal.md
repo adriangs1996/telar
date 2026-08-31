@@ -64,11 +64,11 @@ predecessor needed for resynchronization.
 - Unit tests in `workspace/events.zig` and `workspace/commands.zig` cover event
   invariants, repository mutation, missing targets and workspace predecessor
   selection.
-- Unit tests in `runtime/commands/close_tab.zig` cover commit ordering, pane
+- Unit tests in `runtime/application/commands/close_tab.zig` cover commit ordering, pane
   effects, event publication, final-workspace removal and repeated commands.
-- Unit tests in `runtime/controllers/close_tab.zig` cover protocol translation,
+- Unit tests in `runtime/entrypoints/requests/close_tab.zig` cover protocol translation,
   expected failure mapping and unexpected errors.
-- `runtime/close_tab_test.zig` proves that response backpressure does not undo
+- `runtime/tests/close_tab_test.zig` proves that response backpressure does not undo
   a committed removal or suppress its event.
 - `runtime owns the complete tab lifecycle`, `runtime destroys a pane after its
   shell exits` and `the last pane closes only its tab when the workspace has

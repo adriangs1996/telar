@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const tab_snapshot_query = @import("../queries/tab_snapshot.zig");
-const tab_snapshot_controller = @import("../controllers/tab_snapshot.zig");
+const tab_snapshot_query = @import("../application/queries/tab_snapshot.zig");
+const tab_snapshot_controller = @import("../entrypoints/requests/tab_snapshot.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 

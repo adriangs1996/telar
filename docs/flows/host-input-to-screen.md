@@ -34,9 +34,9 @@ Pane input queue -> writePaneInput -> child PTY
       |
       | child emits output
       v
-Bindings.handle(.pane_output) -> pane_events.output.Pipeline -> Pane.ingest
+Bindings.handle(.pane_output) -> pane output Pipeline -> Pane.ingest
       |
-Bindings.handle(.pane_ingested) -> pane_events.ingest.Coordinator -> Application.pump
+Bindings.handle(.pane_ingested) -> pane ingest Coordinator -> Application.pump
       |
 Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
@@ -172,7 +172,9 @@ The child may echo the input, repaint, emit unrelated output, or emit nothing.
 There is no assumption that one key produces one frame.
 
 `readPane` completes as `.pane_output`, which delegates to
-`pane_events.output.Pipeline.handle` through the actor bindings. The pipeline:
+`Pipeline.handle` in
+`src/backend/runtime/entrypoints/events/pane/output.zig` through the actor
+bindings. The pipeline:
 
 1. marks EOF or failure as completed output;
 2. feeds copies to the observation and media queues;
@@ -183,9 +185,10 @@ the bytes to its `vt.Terminal`, snapshots child input modes and marks its cell
 projection dirty. VT is the only component that interprets child escape
 sequences.
 
-The `.pane_ingested` completion delegates to
-`pane_events.ingest.Coordinator`. It applies deferred resize state, schedules
-terminal responses and the next PTY read, then calls `Application.pumpAll`.
+The `.pane_ingested` completion delegates to `Coordinator` in
+`src/backend/runtime/entrypoints/events/pane/ingest.zig`. It applies deferred
+resize state, schedules terminal responses and the next PTY read, then calls
+`Application.pumpAll`.
 
 ## 5. Runtime frame publication
 

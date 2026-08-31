@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const frame_ack_commands = @import("../commands/frame_ack.zig");
-const frame_ack_controller = @import("../controllers/frame_ack.zig");
+const frame_ack_commands = @import("../application/commands/frame_ack.zig");
+const frame_ack_controller = @import("../entrypoints/requests/frame_ack.zig");
 const test_support = @import("support.zig");
 
 const schema = core.schema;

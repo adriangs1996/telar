@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const request_snapshot_commands = @import("../commands/request_snapshot.zig");
-const request_snapshot_controller = @import("../controllers/request_snapshot.zig");
+const request_snapshot_commands = @import("../application/commands/request_snapshot.zig");
+const request_snapshot_controller = @import("../entrypoints/requests/request_snapshot.zig");
 const test_support = @import("support.zig");
 
 const schema = core.schema;

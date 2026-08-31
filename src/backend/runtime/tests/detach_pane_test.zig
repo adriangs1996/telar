@@ -3,8 +3,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 const attachment_mod = @import("../attachment/root.zig");
-const detach_pane_commands = @import("../commands/detach_pane.zig");
-const detach_pane_controller = @import("../controllers/detach_pane.zig");
+const detach_pane_commands = @import("../application/commands/detach_pane.zig");
+const detach_pane_controller = @import("../entrypoints/requests/detach_pane.zig");
 
 const schema = core.schema;
 

@@ -3,13 +3,13 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agent_mod = @import("../../agent/root.zig");
-const runtime_agent = @import("../agent/root.zig");
-const agent_description_coordinator = runtime_agent.description_coordinator;
-const agent_maintenance_coordinator = runtime_agent.maintenance_coordinator;
+const coordinators = @import("coordinators/root.zig");
+const agent_description_coordinator = coordinators.agent_description;
+const agent_maintenance_coordinator = coordinators.agent_maintenance;
 const agent_process = @import("../../process/root.zig");
 const history = @import("../../history/root.zig");
-const runtime_history = @import("../history/root.zig");
-const history_response_controller = runtime_history.response_controller;
+const event_entrypoints = @import("../entrypoints/events/root.zig");
+const history_response_controller = event_entrypoints.history_response;
 const attachment_mod = @import("../attachment/root.zig");
 const client_runtime = @import("../client/root.zig");
 const client_admission = client_runtime.admission;
@@ -21,9 +21,9 @@ const runtime_config = @import("../config.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const runtime_event = @import("../event.zig");
 const request_dispatch = @import("request_dispatch.zig");
-const pane_events = @import("../pane_events/root.zig");
+const pane_events = event_entrypoints.pane;
 const media_projection = pane_events.media_projection;
-const pane_launcher_mod = pane_events.launcher;
+const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_exit_coordinator = pane_events.exit;
 const pane_ingest_coordinator = pane_events.ingest;
 const pane_input_pump = pane_events.input;
@@ -36,9 +36,8 @@ const media_mod = @import("../../media/root.zig");
 const lifecycle = @import("../lifecycle/root.zig");
 const stop_signal_mod = lifecycle.stop_signal;
 const proxy_mod = @import("../../proxy/root.zig");
-const runtime_proxy = @import("../proxy/root.zig");
-const proxy_observation_adapter = runtime_proxy.observation_adapter;
-const proxy_runtime_mod = runtime_proxy.runtime;
+const proxy_observation_adapter = event_entrypoints.proxy_observation;
+const proxy_resource = @import("../resources/proxy.zig");
 const observability = @import("../observability/root.zig");
 const system_metrics_mod = observability.system_metrics;
 const system_metrics_coordinator = observability.system_metrics_coordinator;
@@ -230,7 +229,7 @@ pub fn Bindings(comptime Application: type) type {
             listener: *transport.local.LocalListener,
             stop_signal: *stop_signal_mod.Coordinator,
             history_service: *history.Service,
-            proxy_runtime: *proxy_runtime_mod.Runtime,
+            proxy_runtime: *proxy_resource.Runtime,
             telemetry_available: bool,
 
             /// Arms every long-lived source that can produce the first event.
@@ -882,7 +881,7 @@ pub fn Bindings(comptime Application: type) type {
             io: Io,
             select: *Io.Select(RuntimeEvent),
 
-            fn scheduler(context: *ProxyScheduleContext) proxy_runtime_mod.ObservationScheduler {
+            fn scheduler(context: *ProxyScheduleContext) proxy_resource.ObservationScheduler {
                 return .{ .context = context, .schedule_fn = schedule };
             }
 

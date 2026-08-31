@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const create_workspace_commands = @import("../commands/create_workspace.zig");
-const create_workspace_controller = @import("../controllers/create_workspace.zig");
+const create_workspace_commands = @import("../application/commands/create_workspace.zig");
+const create_workspace_controller = @import("../entrypoints/requests/create_workspace.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 

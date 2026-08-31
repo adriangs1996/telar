@@ -6,7 +6,8 @@ const agent = @import("../agent/root.zig");
 const history = @import("../history/root.zig");
 const proxy = @import("../proxy/root.zig");
 const client_session = @import("client/root.zig").session;
-const pane_events = @import("pane_events/root.zig");
+const pane_events = @import("entrypoints/events/pane/root.zig");
+const pane_launcher = @import("application/pane_launcher.zig");
 
 const diagnostics = core.diagnostics;
 
@@ -28,11 +29,11 @@ pub const Event = union(enum) {
     history_response: anyerror!history.Response,
     pane_input_written: pane_events.input.Completion,
     pane_response_written: pane_events.response.Completion,
-    pane_output: pane_events.launcher.PaneOutputEvent,
+    pane_output: pane_launcher.PaneOutputEvent,
     pane_ingested: pane_events.ingest.Completion,
     pane_observed: pane_events.observation.Completion,
     pane_media: pane_events.media.Completion,
-    pane_exit: pane_events.launcher.PaneExitEvent,
+    pane_exit: pane_launcher.PaneExitEvent,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     proxy_event: anyerror!proxy.Observation,

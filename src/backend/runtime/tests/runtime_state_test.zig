@@ -7,7 +7,7 @@ const pane_mod = @import("../../pane/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 const attachment_mod = @import("../attachment/root.zig");
 const delivery_mod = @import("../delivery/root.zig");
-const runtime_state_controller = @import("../controllers/runtime_state.zig");
+const runtime_state_controller = @import("../entrypoints/requests/runtime_state.zig");
 const system_metrics_mod = @import("../observability/root.zig").system_metrics;
 const telemetry_mod = @import("../observability/root.zig").telemetry;
 

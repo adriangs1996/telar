@@ -2,19 +2,20 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agent_description_coordinator = @import("../agent/root.zig").description_coordinator;
+const coordinators = @import("coordinators/root.zig");
+const agent_description_coordinator = coordinators.agent_description;
 const history = @import("../../history/root.zig");
 const attachment_mod = @import("../attachment/root.zig");
 const client_mod = @import("../client/root.zig");
 const runtime_config = @import("../config.zig");
 const delivery = @import("../delivery/root.zig");
 const runtime_event = @import("../event.zig");
-const pane_events = @import("../pane_events/root.zig");
+const pane_launcher = @import("pane_launcher.zig");
 const pane_mod = @import("../../pane/root.zig");
-const model = @import("../model/root.zig");
+const model = @import("model.zig");
 const pty = @import("../../pty/root.zig");
 const shutdown = @import("../lifecycle/root.zig").shutdown_authority;
-const proxy_runtime = @import("../proxy/root.zig").runtime;
+const proxy_resource = @import("../resources/proxy.zig");
 const observability = @import("../observability/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 const actor_bindings = @import("actor_bindings.zig");
@@ -24,7 +25,7 @@ const Io = std.Io;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
 const Pane = pane_mod.Pane;
-const PaneLauncher = pane_events.launcher.PaneLauncher;
+const PaneLauncher = pane_launcher.PaneLauncher;
 const WorkspaceRepository = workspace_mod.Repository;
 const RuntimeModel = model.RuntimeModel;
 const ClientAdmissionState = client_mod.admission.State(core.transport.SocketChannel);
@@ -57,7 +58,7 @@ pub const Initialization = struct {
     history_service: *history.Service,
     child_environment: *const pty.Environment,
     inherited_environment: std.process.Environ,
-    proxy_runtime: *proxy_runtime.Runtime,
+    proxy_runtime: *proxy_resource.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
@@ -84,7 +85,7 @@ pub const Application = struct {
     history_service: *history.Service,
     child_environment: *const pty.Environment,
     inherited_environment: std.process.Environ,
-    proxy_runtime: *proxy_runtime.Runtime,
+    proxy_runtime: *proxy_resource.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
     agent_description_state: agent_description_coordinator.State = .{},
     launch_fault: ?*LaunchTestFault,
@@ -206,7 +207,7 @@ pub const Application = struct {
     /// ```zig
     /// const pane = try application.launchPane(request);
     /// ```
-    pub fn launchPane(application: *Application, request: pane_events.launcher.LaunchRequest) !*Pane {
+    pub fn launchPane(application: *Application, request: pane_launcher.LaunchRequest) !*Pane {
         var launcher: PaneLauncher(RuntimeEvent) = .{
             .io = application.io,
             .gpa = application.gpa,

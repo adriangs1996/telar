@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const attachment_mod = @import("../attachment/root.zig");
-const graphics_configuration_commands = @import("../commands/graphics_configuration.zig");
-const graphics_configuration_controller = @import("../controllers/graphics_configuration.zig");
+const graphics_configuration_commands = @import("../application/commands/graphics_configuration.zig");
+const graphics_configuration_controller = @import("../entrypoints/requests/graphics_configuration.zig");
 const test_support = @import("support.zig");
 
 const AttachmentStore = attachment_mod.AttachmentStore;

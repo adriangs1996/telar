@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const create_pane_commands = @import("../commands/create_pane.zig");
-const create_pane_controller = @import("../controllers/create_pane.zig");
+const create_pane_commands = @import("../application/commands/create_pane.zig");
+const create_pane_controller = @import("../entrypoints/requests/create_pane.zig");
 const pane_mod = @import("../../pane/root.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");

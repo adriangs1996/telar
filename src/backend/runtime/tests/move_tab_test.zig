@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const move_tab_commands = @import("../commands/move_tab.zig");
-const move_tab_controller = @import("../controllers/move_tab.zig");
+const move_tab_commands = @import("../application/commands/move_tab.zig");
+const move_tab_controller = @import("../entrypoints/requests/move_tab.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 
