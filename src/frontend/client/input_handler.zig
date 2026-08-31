@@ -5,12 +5,10 @@
 const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
-const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const agent_navigation = @import("agent_navigation.zig");
 const client_actions = @import("actions.zig");
-const client_clock = @import("clock.zig");
 const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const lua_actions = @import("lua_actions.zig");
@@ -23,7 +21,6 @@ const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
-const view_mod = @import("view.zig");
 const action_mod = input_capability.action;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
@@ -36,7 +33,6 @@ const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
 const Action = action_mod.Action;
-const monotonic = client_clock.monotonic;
 const encodeSgrMouse = mouse_protocol.encodeSgr;
 const mouseTracked = mouse_protocol.tracked;
 
@@ -54,26 +50,6 @@ fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
 
 pub fn capturesKeys(handler: *const InputHandler) bool {
     return handler.client.model.name_prompt.active() or handler.client.view.hasAttachmentModal();
-}
-
-fn applyNotificationIntent(handler: *InputHandler, intent: view_mod.NotificationIntent, now_ns: u64) !void {
-    switch (intent) {
-        .activate => |id| {
-            const activation = try notification_flow.activate(handler.client, id, now_ns) orelse return;
-
-            try handler.followNotificationTarget(activation.target);
-        },
-        .dismiss => |id| _ = try notification_flow.dismiss(handler.client, id, now_ns),
-    }
-}
-
-fn followNotificationTarget(handler: *InputHandler, target: notifications.Target) !void {
-    switch (target) {
-        .none => {},
-        .select_tab => |tab_id| try client_actions.selectTab(handler.client, .{ .tab_id = tab_id }),
-        .select_workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(handler.client, .{ .workspace = workspace }),
-        .focus_pane => |pane_id| try client_actions.focusPane(handler.client, .{ .pane_id = pane_id }),
-    }
 }
 
 pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
@@ -242,7 +218,10 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         _ = try workspace_handoffs.selectWorkspace(handler.client, .{ .workspace = workspace });
     }
     if (interaction.notification) |intent| {
-        try handler.applyNotificationIntent(intent, monotonic(handler.client.io));
+        switch (intent) {
+            .activate => |id| _ = try notification_flow.activateNow(handler.client, id),
+            .dismiss => |id| _ = try notification_flow.dismissNow(handler.client, id),
+        }
     }
     if (interaction.layout_changed) {
         handler.client.graphics_store.invalidatePlacements();

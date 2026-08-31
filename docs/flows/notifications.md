@@ -140,14 +140,16 @@ ActivateNotificationHandler or DismissNotificationHandler
       |
 ClientModel commit + timer reschedule
       |
-optional tab, workspace or pane navigation
+notification adapter -> optional tab, workspace or pane navigation
 ```
 
 The view returns only the notification ID and consumes the click. Activation
-starts the exit transition before the input adapter follows its semantic
-target. Dismissal starts the same transition without navigation. Missing IDs
-and IDs already exiting are stale no-ops, so a repeated hit cannot repeat its
-action or click through into a pane.
+starts the exit transition and rearms its timer before the notification adapter
+follows the semantic target through the tab, workspace or pane use case.
+Dismissal starts the same transition without navigation. Missing IDs and IDs
+already exiting are stale no-ops, so a repeated hit cannot repeat its action or
+click through into a pane. Timer failure prevents navigation; navigation
+failure retains both the committed exit and the rearmed timer.
 
 ## Bounds and recovery
 
@@ -173,8 +175,8 @@ new notifications after reconciliation.
 - `src/frontend/client/model.zig` proves isolated notification versioning and
   immutable snapshot access.
 - `src/frontend/client/application/notifications.zig` proves commit-before-
-  timer ordering, delivery policy, stale interaction behavior and retained
-  commits when timer scheduling fails.
+  timer-before-navigation ordering, delivery policy, stale interaction
+  behavior and retained commits after effect failures.
 - `src/frontend/client/notifications.zig` owns local timestamp acquisition,
   diagnostic publication, outbound action translation, delivery correlation
   and timer event ordering.

@@ -9,6 +9,12 @@ pub const TimerEffects = struct {
     reschedule: *const fn (*anyopaque) anyerror!void,
 };
 
+pub const ActivationEffects = struct {
+    timers: TimerEffects,
+    context: *anyopaque,
+    navigate: *const fn (*anyopaque, notification_capability.Target) anyerror!void,
+};
+
 pub const PublishCommand = struct {
     now_ns: u64,
     input: notification_capability.Input,
@@ -69,9 +75,9 @@ pub const AdvanceNotificationsHandler = struct {
 
 pub const ActivateNotificationHandler = struct {
     model: *client_model.Model,
-    effects: TimerEffects,
+    effects: ActivationEffects,
 
-    /// Commits an exit transition before returning the navigation target.
+    /// Commits an exit transition, rearms time and then follows its target.
     ///
     /// ```zig
     /// const activation = try handler.execute(command) orelse return;
@@ -79,7 +85,11 @@ pub const ActivateNotificationHandler = struct {
     pub fn execute(handler: *ActivateNotificationHandler, command: InteractionCommand) !?client_model.NotificationActivation {
         const activation = handler.model.activateNotification(command.id, command.now_ns) orelse return null;
 
-        try handler.effects.reschedule(handler.effects.context);
+        try handler.effects.timers.reschedule(handler.effects.timers.context);
+        switch (activation.target) {
+            .none => {},
+            else => try handler.effects.navigate(handler.effects.context, activation.target),
+        }
         return activation;
     }
 };
@@ -166,6 +176,30 @@ const DeliveryCapture = struct {
     }
 };
 
+const NavigationCapture = struct {
+    calls: usize = 0,
+    target: ?notification_capability.Target = null,
+    fail: bool = false,
+
+    fn effects(capture: *NavigationCapture, timers: TimerEffects) ActivationEffects {
+        return .{
+            .timers = timers,
+            .context = capture,
+            .navigate = navigate,
+        };
+    }
+
+    fn navigate(context: *anyopaque, target: notification_capability.Target) !void {
+        const capture: *NavigationCapture = @ptrCast(@alignCast(context));
+        capture.calls += 1;
+        capture.target = target;
+
+        if (capture.fail) {
+            return error.NavigationFailed;
+        }
+    }
+};
+
 test "notification delivery publishes a failure only when every target rejected it" {
     var capture: DeliveryCapture = .{};
     var handler: HandleNotificationDeliveryHandler = .{ .effects = capture.effects() };
@@ -211,7 +245,11 @@ test "notification handlers commit publication interaction and time before timer
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
 
     capture.expected_revision = 2;
-    var activate: ActivateNotificationHandler = .{ .model = &model, .effects = effects };
+    var navigation: NavigationCapture = .{};
+    var activate: ActivateNotificationHandler = .{
+        .model = &model,
+        .effects = navigation.effects(effects),
+    };
     const activation = (try activate.execute(.{
         .id = publication.id,
         .now_ns = notification_capability.transition_duration_ns,
@@ -221,11 +259,14 @@ test "notification handlers commit publication interaction and time before timer
     try std.testing.expectEqual(@as(notification_capability.Target, .{ .select_tab = @enumFromInt(7) }), activation.target);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 2), capture.calls);
+    try std.testing.expectEqual(@as(usize, 1), navigation.calls);
+    try std.testing.expectEqualDeep(activation.target, navigation.target.?);
     try std.testing.expect((try activate.execute(.{
         .id = publication.id,
         .now_ns = notification_capability.transition_duration_ns,
     })) == null);
     try std.testing.expectEqual(@as(usize, 2), capture.calls);
+    try std.testing.expectEqual(@as(usize, 1), navigation.calls);
 
     capture.expected_revision = 3;
     var advance: AdvanceNotificationsHandler = .{ .model = &model, .effects = effects };
@@ -257,6 +298,42 @@ test "notification publication remains committed after timer failure" {
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(client_model.Version{ .notifications = 1 }, model.version());
     try std.testing.expectEqualStrings("Failed", model.notificationSnapshot().itemAt(0).?.title());
+}
+
+test "notification activation preserves its commit and effect order on failure" {
+    inline for (.{
+        .{ .timer = true, .navigation = false, .navigation_calls = 0 },
+        .{ .timer = false, .navigation = true, .navigation_calls = 1 },
+    }) |scenario| {
+        var model = client_model.Model.init(std.testing.allocator, true);
+        defer model.deinit();
+        const publication = model.publishNotification(0, .{
+            .title = "Ready",
+            .message = "Open pane",
+            .target = .{ .focus_pane = @enumFromInt(7) },
+        });
+        var timers: EffectsCapture = .{
+            .model = &model,
+            .expected_revision = 2,
+            .fail = scenario.timer,
+        };
+        var navigation: NavigationCapture = .{ .fail = scenario.navigation };
+        var handler: ActivateNotificationHandler = .{
+            .model = &model,
+            .effects = navigation.effects(timers.port()),
+        };
+
+        const expected = if (scenario.timer) error.TimerScheduleFailed else error.NavigationFailed;
+        try std.testing.expectError(expected, handler.execute(.{
+            .id = publication.id,
+            .now_ns = notification_capability.transition_duration_ns,
+        }));
+
+        try std.testing.expect(timers.observed_commit);
+        try std.testing.expectEqual(client_model.Version{ .notifications = 2 }, model.version());
+        try std.testing.expectEqual(@as(usize, 1), timers.calls);
+        try std.testing.expectEqual(@as(usize, scenario.navigation_calls), navigation.calls);
+    }
 }
 
 test "notification dismissal commits before its timer effect" {
