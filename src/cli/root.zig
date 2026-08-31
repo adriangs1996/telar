@@ -1,6 +1,7 @@
 //! Public command-line grammar for the Telar executable.
 
 const parser = @import("parser.zig");
+const runtime_connection = @import("runtime_connection.zig");
 
 pub const Cli = parser.Cli;
 pub const ConfigCheckOptions = parser.ConfigCheckOptions;
@@ -11,6 +12,8 @@ pub const PluginCommand = parser.PluginCommand;
 pub const PluginOptions = parser.PluginOptions;
 pub const PluginWorkerOptions = parser.PluginWorkerOptions;
 pub const RunOptions = parser.RunOptions;
+pub const RuntimeConfigSelection = runtime_connection.RuntimeConfigSelection;
+pub const RuntimeConnector = runtime_connection.RuntimeConnector;
 pub const ServerAction = parser.ServerAction;
 pub const ServerMode = parser.ServerMode;
 pub const ServerOptions = parser.ServerOptions;

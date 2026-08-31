@@ -9,8 +9,6 @@ const File = Io.File;
 const pty = backend.pty;
 
 const version = "0.0.0";
-const runtime_start_attempts = 200;
-const runtime_start_interval_ms = 10;
 
 // Library warnings cannot be written over a live frame. A later runtime can
 // route them to its log; the bootstrap keeps stderr out of the drawing path.
@@ -24,87 +22,22 @@ const NotificationOptions = cli_mod.NotificationOptions;
 const PluginCommand = cli_mod.PluginCommand;
 const PluginOptions = cli_mod.PluginOptions;
 const RunOptions = cli_mod.RunOptions;
+const RuntimeConfigSelection = cli_mod.RuntimeConfigSelection;
+const RuntimeConnector = cli_mod.RuntimeConnector;
 const ServerAction = cli_mod.ServerAction;
 const ServerMode = cli_mod.ServerMode;
 const ServerOptions = cli_mod.ServerOptions;
-fn resolveEndpoint(
-    init: std.process.Init,
-    override: ?[*:0]const u8,
-) !core.endpoint.Local {
-    if (override) |path| return core.endpoint.Local.explicit(std.mem.span(path));
-
-    if (std.process.Environ.getPosix(init.minimal.environ, "TELAR_SOCKET")) |path| {
-        if (path.len != 0) return core.endpoint.Local.explicit(path);
-    }
-
-    if (std.process.Environ.getPosix(init.minimal.environ, "XDG_RUNTIME_DIR")) |base| {
-        if (base.len != 0) return core.endpoint.Local.managed(base, "telar");
-    }
-
-    var directory_name_buffer: [32]u8 = undefined;
-    const directory_name = try std.fmt.bufPrint(
-        &directory_name_buffer,
-        "telar-{d}",
-        .{std.c.getuid()},
-    );
-    if (std.process.Environ.getPosix(init.minimal.environ, "TMPDIR")) |base| {
-        if (base.len != 0) return core.endpoint.Local.managed(base, directory_name);
-    }
-    return core.endpoint.Local.managed("/tmp", directory_name);
-}
-
-fn prepareManagedDirectory(io: Io, endpoint: *const core.endpoint.Local) !void {
-    const directory = endpoint.managedDirectory() orelse return;
-    const permissions = File.Permissions.fromMode(0o700);
-    Io.Dir.createDirAbsolute(io, directory, permissions) catch |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => |other| return other,
-    };
-
-    const stat = try Io.Dir.cwd().statFile(io, directory, .{ .follow_symlinks = false });
-    if (stat.kind != .directory) return error.InvalidRuntimeDirectory;
-
-    // Socket directories reject wrong owners explicitly instead of relying on
-    // a later chmod failing with EPERM. `Io.File.Stat` carries no uid, so ask
-    // libc directly.
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch
-        return error.NameTooLong;
-    var native_stat: std.c.Stat = undefined;
-    if (std.c.fstatat(
-        std.c.AT.FDCWD,
-        directory_z,
-        &native_stat,
-        std.c.AT.SYMLINK_NOFOLLOW,
-    ) != 0) return error.InvalidRuntimeDirectory;
-    try checkRuntimeDirectoryOwner(native_stat.uid, std.c.getuid());
-
-    try Io.Dir.cwd().setFilePermissions(
-        io,
-        directory,
-        permissions,
-        .{ .follow_symlinks = false },
-    );
-}
-
-fn checkRuntimeDirectoryOwner(owner: std.c.uid_t, me: std.c.uid_t) error{WrongOwner}!void {
-    if (owner != me) return error.WrongOwner;
-}
-
-fn executablePath(io: Io, buffer: []u8) ![]const u8 {
-    return buffer[0..try std.process.executablePath(io, buffer)];
-}
 
 fn launchDaemon(
     init: std.process.Init,
-    endpoint: *const core.endpoint.Local,
+    endpoint_path: []const u8,
     graphics: backend.runtime.GraphicsLimits,
     config: RuntimeConfigSelection,
 ) !void {
     if (std.c.setsid() < 0) return error.DetachFailed;
 
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const executable = try executablePath(init.io, &executable_buffer);
+    const executable = executable_buffer[0..try std.process.executablePath(init.io, &executable_buffer)];
     var pane_mib_buffer: [32]u8 = undefined;
     const pane_mib = try std.fmt.bufPrint(
         &pane_mib_buffer,
@@ -124,7 +57,7 @@ fn launchDaemon(
         "server",
         "--daemonized",
         "--socket",
-        endpoint.path(),
+        endpoint_path,
         "--graphics-pane-mib",
         pane_mib,
         "--graphics-global-mib",
@@ -154,96 +87,6 @@ fn launchDaemon(
         .stderr = .ignore,
     });
     _ = daemon;
-}
-
-const RuntimeConfigSelection = struct {
-    path: ?[*:0]const u8 = null,
-    disabled: bool = false,
-    profile: ?[*:0]const u8 = null,
-};
-
-fn startRuntime(
-    init: std.process.Init,
-    endpoint: *const core.endpoint.Local,
-    config: RuntimeConfigSelection,
-) !void {
-    var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const executable = try executablePath(init.io, &executable_buffer);
-    var argv: [9][]const u8 = undefined;
-    var argc: usize = 0;
-    for ([_][]const u8{ executable, "server", "--background", "--socket", endpoint.path() }) |arg| {
-        argv[argc] = arg;
-        argc += 1;
-    }
-    if (config.path) |path| {
-        argv[argc] = "--config";
-        argv[argc + 1] = std.mem.span(path);
-        argc += 2;
-    } else if (config.disabled) {
-        argv[argc] = "--no-config";
-        argc += 1;
-    }
-    if (config.profile) |profile| {
-        argv[argc] = "--profile";
-        argv[argc + 1] = std.mem.span(profile);
-        argc += 2;
-    }
-    var launcher = try std.process.spawn(init.io, .{
-        .argv = argv[0..argc],
-        .stdin = .ignore,
-        .stdout = .ignore,
-        .stderr = .ignore,
-    });
-    const result = try launcher.wait(init.io);
-    switch (result) {
-        .exited => |status| if (status != 0) return error.RuntimeStartFailed,
-        else => return error.RuntimeStartFailed,
-    }
-}
-
-fn finishHandshake(io: Io, connection: core.transport.SocketChannel) !core.transport.SocketChannel {
-    var result = connection;
-    errdefer result.deinit(io);
-
-    const response = try frontend.transport.handshake.perform(io, &result);
-    switch (response) {
-        .accepted => return result,
-        .rejected => |rejected| {
-            std.debug.print(
-                "telar protocol mismatch: runtime expects schema {s}\n",
-                .{&rejected.expected_schema},
-            );
-            return error.IncompatibleSchema;
-        },
-    }
-}
-
-fn connectRuntime(
-    init: std.process.Init,
-    endpoint: *const core.endpoint.Local,
-    config: RuntimeConfigSelection,
-) !core.transport.SocketChannel {
-    const first = frontend.transport.local.connect(init.io, endpoint.path()) catch |err| switch (err) {
-        error.PermissionDenied,
-        error.NotDir,
-        error.SymLinkLoop,
-        error.RelativePath,
-        error.NameTooLong,
-        => return err,
-        else => null,
-    };
-    if (first) |connection| return finishHandshake(init.io, connection);
-
-    try prepareManagedDirectory(init.io, endpoint);
-    try startRuntime(init, endpoint, config);
-    for (0..runtime_start_attempts) |_| {
-        if (frontend.transport.local.connect(init.io, endpoint.path())) |connection| {
-            return finishHandshake(init.io, connection);
-        } else |_| {
-            init.io.sleep(.fromMilliseconds(runtime_start_interval_ms), .awake) catch {};
-        }
-    }
-    return error.RuntimeUnavailable;
 }
 
 const HistoryPath = struct {
@@ -354,8 +197,8 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     var description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined;
     var agent_description_options: ?backend.runtime.AgentDescriptionOptions = null;
     defer if (configured_proxy_directory) |directory| init.gpa.free(directory);
-    const endpoint = try resolveEndpoint(init, options.socket);
-    if (options.action == .stop) return stopRuntime(init, &endpoint);
+    const connector = try RuntimeConnector.init(init, options.socket);
+    if (options.action == .stop) return stopRuntime(init, &connector);
 
     var config_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const config_generation = try loadConfigGeneration(
@@ -402,7 +245,7 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     try resolved_options.graphics.validate();
 
     switch (resolved_options.mode) {
-        .background_launcher => return launchDaemon(init, &endpoint, resolved_options.graphics, .{
+        .background_launcher => return launchDaemon(init, connector.endpointPath(), resolved_options.graphics, .{
             .path = resolved_options.config,
             .disabled = resolved_options.no_config,
             .profile = resolved_options.profile,
@@ -410,7 +253,7 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
         .foreground, .daemonized => {},
     }
 
-    try prepareManagedDirectory(init.io, &endpoint);
+    try connector.prepareServerDirectory();
     var history_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const history_path: HistoryPath = if (configured_history_path) |path|
         .{ .path = path, .managed_directory = null }
@@ -446,7 +289,7 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
             .allocator = init.gpa,
         },
         .options = .{
-            .endpoint = endpoint.path(),
+            .endpoint = connector.endpointPath(),
             .graphics = resolved_options.graphics,
             .environment = init.minimal.environ,
             .history_path = history_path.path,
@@ -459,15 +302,14 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     try runtime.run();
 }
 
-fn stopRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !void {
-    const raw_connection = frontend.transport.local.connect(init.io, endpoint.path()) catch |err| switch (err) {
+fn stopRuntime(init: std.process.Init, connector: *const RuntimeConnector) !void {
+    var connection = connector.connect() catch |err| switch (err) {
         error.FileNotFound, error.ConnectionRefused => {
             try File.stdout().writeStreamingAll(init.io, "telar runtime is not running\n");
             return;
         },
         else => |other| return other,
     };
-    var connection = try finishHandshake(init.io, raw_connection);
     defer connection.deinit(init.io);
 
     var send_buffer: [1]u8 = undefined;
@@ -841,8 +683,8 @@ fn writeTrustStore(
 }
 
 fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
-    const endpoint = try resolveEndpoint(init, options.socket);
-    var connection = try connectRuntime(init, &endpoint, .{});
+    const connector = try RuntimeConnector.init(init, options.socket);
+    var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
 
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -883,15 +725,14 @@ fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
 }
 
 fn runNotification(init: std.process.Init, options: NotificationOptions) !void {
-    const endpoint = try resolveEndpoint(init, options.socket);
-    const raw_connection = frontend.transport.local.connect(init.io, endpoint.path()) catch |err| switch (err) {
+    const connector = try RuntimeConnector.init(init, options.socket);
+    var connection = connector.connect() catch |err| switch (err) {
         error.FileNotFound, error.ConnectionRefused => {
             std.debug.print("telar notification: runtime is not running\n", .{});
             return error.RuntimeNotRunning;
         },
         else => |other| return other,
     };
-    var connection = try finishHandshake(init.io, raw_connection);
     defer connection.deinit(init.io);
 
     var send_buffer: [
@@ -1111,25 +952,18 @@ pub fn main(init: std.process.Init) !void {
         ),
         .plugin => |options| try runPluginCommand(init, options),
         .run => |options| {
-            const endpoint = try resolveEndpoint(init, null);
-            var connection = try connectRuntime(init, &endpoint, .{
+            const connector = try RuntimeConnector.init(init, null);
+            var connection = try connector.connectOrStart(.{
                 .path = options.config,
                 .disabled = options.no_config,
                 .profile = options.profile,
             });
             defer connection.deinit(init.io);
 
-            const code = try runClient(init, &connection, &options, endpoint.path());
+            const code = try runClient(init, &connection, &options, connector.endpointPath());
             std.process.exit(code);
         },
     }
-}
-
-test "the runtime directory must belong to the current user" {
-    // Regression test for the new check: an attacker-owned directory on the
-    // socket path is rejected explicitly rather than via a later EPERM.
-    try checkRuntimeDirectoryOwner(1000, 1000);
-    try std.testing.expectError(error.WrongOwner, checkRuntimeDirectoryOwner(0, 1000));
 }
 
 test "history fields escape terminal control bytes" {
