@@ -1,46 +1,60 @@
-//! Synchronizes client-owned pane attachments during tab lifecycle changes.
+//! Adapts tab attachment retirement to transport, requests and graphics.
 
-const workspace_capability = @import("../workspace/root.zig");
+const core = @import("telar-core");
+const client_application = @import("application/root.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_pastes = @import("pane_pastes.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const runtime_transport = @import("runtime_transport.zig");
-const tabs_mod = workspace_capability.tabs;
+const schema = core.schema;
+const tab_attachment_retirement = client_application.tab_attachment_retirement;
 
 /// Finishes a captured paste, clears reported focus and then detaches every
 /// attached or in-flight pane in protocol order.
 ///
 /// ```zig
-/// try detach(client, tab);
+/// try detach(client, location);
 /// ```
-pub fn detach(client: *Client, tab: *tabs_mod.Tab) !void {
-    if (client.model.panePasteSession()) |session| {
-        if (tab.model.findConst(session.pane_id) != null) {
-            _ = try pane_pastes.finish(client);
-        }
-    }
+pub fn detach(client: *Client, location: schema.TabLocation) !void {
+    var use_case: tab_attachment_retirement.RetireTabAttachmentsHandler = .{
+        .model = &client.model,
+        .paste_effects = pane_pastes.effects(client),
+        .focus_effects = pane_focus_reports.effects(client),
+        .effects = attachmentEffects(client),
+    };
 
-    if (client.model.reportedPaneFocus()) |reported| {
-        if (tab.model.findConst(reported.pane_id) != null) {
-            // Focus-out must leave before its pane detaches. Keeping both
-            // operations here prevents callers from violating that order.
-            _ = try pane_focus_reports.clear(client);
-        }
-    }
+    try use_case.execute(location);
+}
 
-    var panes = tab.model.paneIterator();
-    while (panes.next()) |pane| {
-        const attachment_pending = request_lifecycle.hasPane(client, .attachment, pane.id);
-        if (!pane.attached and !attachment_pending) {
-            continue;
-        }
+fn attachmentEffects(client: *Client) tab_attachment_retirement.Effects {
+    return .{
+        .context = client,
+        .attachment_pending = attachmentPending,
+        .detach_pane = detachPane,
+        .retire_attachment = retireAttachment,
+        .hide_graphics = hideGraphics,
+    };
+}
 
-        try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane.id } });
-        _ = request_lifecycle.ignoreAttachment(client, pane.id);
-        try client.graphics_store.setPaneVisible(pane.id, false);
-    }
+fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-    tabs_mod.Model.detachAll(tab);
+    return request_lifecycle.hasPane(client, .attachment, pane_id);
+}
+
+fn detachPane(context: *anyopaque, pane_id: schema.PaneId) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane_id } });
+}
+
+fn retireAttachment(context: *anyopaque, pane_id: schema.PaneId) void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    _ = request_lifecycle.ignoreAttachment(client, pane_id);
+}
+
+fn hideGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try client.graphics_store.setPaneVisible(pane_id, false);
 }

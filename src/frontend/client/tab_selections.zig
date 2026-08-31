@@ -51,7 +51,7 @@ fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !vo
         return error.UnexpectedTabSelection;
     }
 
-    try tab_attachments.detach(client, previous);
+    try tab_attachments.detach(client, previous.location);
 
     var visible = selected.model.paneIterator();
     while (visible.next()) |pane| {

@@ -42,11 +42,12 @@ failed handoff cannot restore identity that no longer exists.
 The adapter checks that the fixed outbox has room for a required paste-closing
 marker, focus-out, every detach and the final open before it changes attachment
 state. It reserves focus-out only when the reported pane still exists,
-remains attached and has focus events enabled. The request handler closes the
-paste and delivers detaches before `open_pane`; socket order prevents the new
-attachment from preceding retirement of the old ones. A local detach or open
-failure does not commit departure and requests a canonical tab snapshot to
-repair any provisional attachment effects.
+remains attached and has focus events enabled. The request handler delegates
+each tab to `RetireTabAttachmentsHandler`, which closes the paste and delivers
+detaches before `open_pane`; socket order prevents the new attachment from
+preceding retirement of the old ones. A local detach or open failure does not
+commit departure and requests a canonical tab snapshot to repair any
+provisional attachment effects.
 
 Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused

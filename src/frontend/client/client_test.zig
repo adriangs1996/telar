@@ -3076,7 +3076,7 @@ test "tab detachment retires an in-flight pane attachment" {
     const discovered: schema.PaneId = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
-    try tab_attachments.detach(client, client.model.workspace.active().?);
+    try tab_attachments.detach(client, client.model.workspace.active().?.location);
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -3127,7 +3127,7 @@ test "tab detachment closes a captured bracketed paste before the pane detaches"
     try std.testing.expect(opening == .pane_input);
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
 
-    try tab_attachments.detach(client, client.model.workspace.active().?);
+    try tab_attachments.detach(client, client.model.workspace.active().?.location);
 
     try std.testing.expect(!client.model.panePasteActive());
     try harness.settle();
@@ -3154,7 +3154,7 @@ test "tab detachment sends focus-out before the pane detaches" {
     try std.testing.expect(focus_in == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
 
-    try tab_attachments.detach(client, client.model.workspace.active().?);
+    try tab_attachments.detach(client, client.model.workspace.active().?.location);
 
     try std.testing.expect(client.model.reportedPaneFocus() == null);
     try harness.settle();
@@ -3187,7 +3187,7 @@ test "tab detachment preserves focus reported by another tab" {
     tab.model.find(inactive_pane).?.attached = true;
     const reported = client.model.reportedPaneFocus().?;
 
-    try tab_attachments.detach(client, tab);
+    try tab_attachments.detach(client, tab.location);
 
     try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus().?);
     try harness.settle();

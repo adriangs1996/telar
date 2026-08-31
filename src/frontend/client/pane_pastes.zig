@@ -44,10 +44,19 @@ pub fn finish(client: *Client) !Outcome {
 fn handler(client: *Client) pane_paste.PanePasteHandler {
     return .{
         .model = &client.model,
-        .effects = .{
-            .context = client,
-            .deliver = deliver,
-        },
+        .effects = effects(client),
+    };
+}
+
+/// Returns the pane-paste delivery port reused by compound application flows.
+///
+/// ```zig
+/// const paste_effects = effects(client);
+/// ```
+pub fn effects(client: *Client) pane_paste.Effects {
+    return .{
+        .context = client,
+        .deliver = deliver,
     };
 }
 

@@ -45,14 +45,15 @@ overflow for the full `isize` input range.
 
 ## Resource effects and presentation
 
-A committed selection advances only `ClientModel.Version.active_tab`. The
-selection adapter first closes any bracketed paste captured by the previous
-tab. If that tab owns `ClientModel.reported_pane_focus`, it sends focus-out and
-clears the state before every `detach_pane`. Detaching another tab cannot clear
-the active owner's report state. The adapter hides old graphics and marks those
-panes detached. It then makes the selected tab's graphics visible,
-synchronizes attachment geometry and focus reporting, and enqueues one
-`request_tab_snapshot` for the exact selected location.
+A committed selection advances only `ClientModel.Version.active_tab`.
+`RetireTabAttachmentsHandler` closes any bracketed paste captured by the
+previous tab. If that tab owns `ClientModel.reported_pane_focus`, it sends
+focus-out and clears the state before every `detach_pane`. Detaching another
+tab cannot clear the active owner's report state. The handler hides old
+graphics and commits their operational detachment. The selection adapter then
+makes the selected tab's graphics visible, synchronizes attachment geometry
+and focus reporting, and enqueues one `request_tab_snapshot` for the exact
+selected location.
 
 The runtime dispatches `detach_pane` through `detach_pane.Controller` and
 `DetachPaneHandler`. It dispatches `request_tab_snapshot` through
@@ -82,6 +83,8 @@ session.
   resolution plus exact version changes.
 - `src/frontend/client/application/select_tab.zig` proves snapshot gating,
   commit ordering, no-op behavior and post-commit effect failure.
+- `src/frontend/client/application/tab_attachment_retirement.zig` proves
+  exact previous-tab authority and attachment retirement.
 - `src/frontend/client/client_test.zig` proves native position and offset
   entrypoints, attachment order, snapshot delivery and presenter observation.
 - `src/backend/runtime/controllers/detach_pane.zig` and

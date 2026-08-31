@@ -153,9 +153,7 @@ fn prepareClose(context: *anyopaque, location: schema.TabLocation) !void {
 
 fn detachForClose(context: *anyopaque, location: schema.TabLocation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const tab = findTab(&client.model.workspace, location) orelse return error.UnexpectedTabClosure;
-
-    try tab_attachments.detach(client, tab);
+    try tab_attachments.detach(client, location);
 }
 
 fn sendClose(context: *anyopaque, intent: close_tab.TabCloseIntent) !void {

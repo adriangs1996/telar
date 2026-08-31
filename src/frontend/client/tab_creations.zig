@@ -105,7 +105,7 @@ fn applyConfirmation(context: *anyopaque, creation: client_model.TabCreation) !v
         return error.UnexpectedTabCreation;
     }
 
-    try tab_attachments.detach(client, previous);
+    try tab_attachments.detach(client, previous.location);
     try pane_focus.syncResources(client);
 }
 

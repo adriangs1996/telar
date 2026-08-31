@@ -82,11 +82,12 @@ before the handler returns.
 publishing it as active. Rejection preserves the existing tab and every model
 revision. A successful commit advances only the tab and active-tab versions.
 
-Attachment effects run after the commit. They detach the tab that was active
-immediately before confirmation, closing its captured paste and reported focus
-before its panes detach. They then synchronize attachment geometry and focus
-reporting with the new root pane. An effect failure preserves the confirmed tab
-because the runtime already owns it.
+Attachment effects run after the commit. `RetireTabAttachmentsHandler`
+detaches the tab that was active immediately before confirmation, closing its
+captured paste and reported focus before its panes detach and committing their
+operational flags last. The adapter then synchronizes attachment geometry and
+focus reporting with the new root pane. An effect failure preserves the
+confirmed tab because the runtime already owns it.
 
 The use cases do not invalidate the view or request a draw. `client_events`
 publishes `ClientModel.Version` to `Presenter`, which schedules one paced frame

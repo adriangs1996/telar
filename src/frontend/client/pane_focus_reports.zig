@@ -47,10 +47,19 @@ pub fn retire(client: *Client) Outcome {
 fn handler(client: *Client) pane_focus_reporting.PaneFocusReportingHandler {
     return .{
         .model = &client.model,
-        .effects = .{
-            .context = client,
-            .deliver = deliver,
-        },
+        .effects = effects(client),
+    };
+}
+
+/// Returns the focus-report delivery port reused by compound application flows.
+///
+/// ```zig
+/// const focus_effects = effects(client);
+/// ```
+pub fn effects(client: *Client) pane_focus_reporting.Effects {
+    return .{
+        .context = client,
+        .deliver = deliver,
     };
 }
 

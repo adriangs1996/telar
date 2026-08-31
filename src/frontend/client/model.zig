@@ -118,6 +118,28 @@ pub const PaneAttachmentConfirmation = enum {
     stale,
 };
 
+pub const TabDetachmentPlan = struct {
+    location: schema.TabLocation,
+    panes: [multiplexer.max_panes]Pane = undefined,
+    len: u8 = 0,
+    owns_paste: bool = false,
+    owns_reported_focus: bool = false,
+
+    pub const Pane = struct {
+        pane_id: schema.PaneId,
+        attached: bool,
+    };
+
+    /// Returns the exact panes captured for one synchronous tab detachment.
+    ///
+    /// ```zig
+    /// for (plan.slice()) |pane| detach(pane.pane_id);
+    /// ```
+    pub fn slice(plan: *const TabDetachmentPlan) []const Pane {
+        return plan.panes[0..plan.len];
+    }
+};
+
 pub const PaneFocusTarget = union(enum) {
     pane_id: schema.PaneId,
     direction: layout_mod.Direction,
@@ -2543,6 +2565,70 @@ pub const Model = struct {
         return std.meta.eql(pane.location, attachment.location) and !pane.attached;
     }
 
+    /// Captures one exact tab's operational attachments and whether it owns
+    /// the current paste or reported focus authority.
+    ///
+    /// ```zig
+    /// const plan = try model.planTabDetachment(location);
+    /// ```
+    pub fn planTabDetachment(model: *const Model, location: schema.TabLocation) !TabDetachmentPlan {
+        const tab = findTabConst(&model.workspace, location) orelse return error.UnexpectedTab;
+        var plan: TabDetachmentPlan = .{ .location = location };
+
+        for (&tab.model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            plan.panes[plan.len] = .{
+                .pane_id = pane.id,
+                .attached = pane.attached,
+            };
+            plan.len += 1;
+        }
+
+        if (model.pane_paste) |session| {
+            plan.owns_paste = tab.model.findConst(session.pane_id) != null;
+        }
+
+        if (model.reported_pane_focus) |reported| {
+            plan.owns_reported_focus = tab.model.findConst(reported.pane_id) != null;
+        }
+
+        return plan;
+    }
+
+    /// Clears only the operational attachments captured by an unchanged
+    /// synchronous plan. This transition advances no presentation revision.
+    ///
+    /// ```zig
+    /// try model.commitTabDetachment(plan);
+    /// ```
+    pub fn commitTabDetachment(model: *Model, plan: TabDetachmentPlan) !void {
+        if (plan.len > multiplexer.max_panes) {
+            return error.InvalidTabDetachment;
+        }
+
+        const tab = findTab(&model.workspace, plan.location) orelse return error.StaleTabDetachment;
+        if (tab.model.pane_count != plan.len) {
+            return error.StaleTabDetachment;
+        }
+
+        for (plan.slice(), 0..) |planned, index| {
+            for (plan.slice()[0..index]) |previous| {
+                if (previous.pane_id == planned.pane_id) {
+                    return error.InvalidTabDetachment;
+                }
+            }
+
+            const pane = tab.model.find(planned.pane_id) orelse return error.StaleTabDetachment;
+            if (pane.attached != planned.attached) {
+                return error.StaleTabDetachment;
+            }
+        }
+
+        for (plan.slice()) |planned| {
+            detachPane(tab.model.find(planned.pane_id).?);
+        }
+    }
+
     /// Changes focus inside the active tab and reports the committed identity.
     /// Repeated, missing and directionless targets leave every version intact.
     ///
@@ -3043,6 +3129,16 @@ fn detachPane(pane: *multiplexer.Pane) void {
 
 fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
     const tab = workspace.find(location.tab_id) orelse return null;
+    if (!std.meta.eql(tab.location, location)) {
+        return null;
+    }
+
+    return tab;
+}
+
+fn findTabConst(workspace: *const tabs_mod.Model, location: schema.TabLocation) ?*const tabs_mod.Tab {
+    const index = workspace.indexOf(location.tab_id) orelse return null;
+    const tab = &workspace.items[index].?;
     if (!std.meta.eql(tab.location, location)) {
         return null;
     }
@@ -4340,6 +4436,70 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
     try std.testing.expect(!model.needsPaneAttachment(wrong_location));
     try std.testing.expect(!model.workspace.findPane(discovered).?.attached);
     try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "tab detachment plans exact operational state before a silent commit" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const root: schema.PaneId = @enumFromInt(1);
+    const sibling: schema.PaneId = @enumFromInt(2);
+    try model.workspace.bootstrap(root, first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.active().?.model.split(root, sibling, first, .horizontal, .{ .w = 40, .h = 10 });
+    try std.testing.expect(model.workspace.active().?.model.focusPane(root));
+    const root_pane = model.workspace.findPane(root).?;
+    const sibling_pane = model.workspace.findPane(sibling).?;
+    root_pane.input_modes.bracketed_paste = true;
+    root_pane.input_modes.focus_events = true;
+    root_pane.pending_frame_id = 7;
+    sibling_pane.attached = false;
+    sibling_pane.pending_frame_id = 9;
+    _ = model.beginPanePaste().?;
+    _ = model.syncReportedPaneFocus().?;
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(3),
+    }, .{ .cols = 20, .rows = 5 });
+
+    const plan = try model.planTabDetachment(first);
+
+    try std.testing.expectEqual(@as(usize, 2), plan.slice().len);
+    try std.testing.expectEqualDeep(TabDetachmentPlan.Pane{ .pane_id = root, .attached = true }, plan.slice()[0]);
+    try std.testing.expectEqualDeep(TabDetachmentPlan.Pane{ .pane_id = sibling, .attached = false }, plan.slice()[1]);
+    try std.testing.expect(plan.owns_paste);
+    try std.testing.expect(plan.owns_reported_focus);
+
+    var invalid = plan;
+    invalid.panes[1] = invalid.panes[0];
+    try std.testing.expectError(error.InvalidTabDetachment, model.commitTabDetachment(invalid));
+
+    var unbounded = plan;
+    unbounded.len = multiplexer.max_panes + 1;
+    try std.testing.expectError(error.InvalidTabDetachment, model.commitTabDetachment(unbounded));
+
+    root_pane.attached = false;
+    try std.testing.expectError(error.StaleTabDetachment, model.commitTabDetachment(plan));
+    root_pane.attached = true;
+
+    try model.commitTabDetachment(plan);
+
+    try std.testing.expect(!root_pane.attached);
+    try std.testing.expect(!sibling_pane.attached);
+    try std.testing.expectEqual(@as(u64, 0), root_pane.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 0), sibling_pane.pending_frame_id);
+    try std.testing.expect(model.panePasteActive());
+    try std.testing.expect(model.reportedPaneFocus() != null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+
+    try std.testing.expectError(error.UnexpectedTab, model.planTabDetachment(.{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(9),
+    }));
 }
 
 test "tab position commits version semantic changes only" {

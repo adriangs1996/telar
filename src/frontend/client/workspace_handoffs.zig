@@ -212,7 +212,7 @@ fn detachCurrent(context: *anyopaque) !void {
 
     var tabs = client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
-        try tab_attachments.detach(client, tab);
+        try tab_attachments.detach(client, tab.location);
     }
 }
 
