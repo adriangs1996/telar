@@ -11,6 +11,7 @@ const Client = @import("client.zig");
 const create_workspace = client_application.create_workspace;
 const multiplexer = workspace_capability.multiplexer;
 const schema = core.schema;
+const workspace_creation_delivery = client_application.workspace_creation_delivery;
 
 /// Wires a creation prompt to the client's continuation tracker and owned
 /// outbox storage.
@@ -56,7 +57,7 @@ pub fn confirmation(client: *Client, opened: schema.PaneOpened, requested_size: 
 pub fn confirmationHandler(client: *Client) create_workspace.ConfirmWorkspaceCreationHandler {
     return .{
         .model = &client.model,
-        .effects = .{
+        .delivery = .{
             .context = client,
             .deliver = deliverReplacement,
         },
@@ -85,6 +86,11 @@ fn sendCreation(context: *anyopaque, creation: create_workspace.WorkspaceCreatio
 
 fn deliverReplacement(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    workspace_transitions.release(client, &replacement.departure);
-    try workspace_transitions.activate(client, replacement.activation);
+    var use_case: workspace_creation_delivery.DeliverWorkspaceCreationHandler = .{
+        .model = &client.model,
+        .release_effects = workspace_transitions.releaseEffects(client),
+        .activation_effects = workspace_transitions.activationEffects(client),
+    };
+
+    try use_case.execute(replacement);
 }

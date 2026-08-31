@@ -134,6 +134,13 @@ pub const WorkspaceActivation = struct {
 pub const WorkspaceReplacement = struct {
     departure: WorkspaceDeparture,
     activation: WorkspaceActivation,
+    workspace_revision_before: u64,
+    tabs_revision_before: u64,
+    active_tab_revision_before: u64,
+    panes_revision_before: u64,
+    copy_revision_before: u64,
+    copy_released: bool,
+    copy_revision: u64,
 };
 
 pub const PaneAttachment = struct {
@@ -2471,6 +2478,11 @@ pub const Model = struct {
     /// ```
     pub fn replaceWorkspace(model: *Model, arrival: WorkspaceArrival) !WorkspaceReplacement {
         const departure = captureWorkspace(model);
+        const workspace_revision_before = model.workspace_revision;
+        const tabs_revision_before = model.tabs_revision;
+        const active_tab_revision_before = model.active_tab_revision;
+        const panes_revision_before = model.panes_revision;
+        const copy_revision_before = model.copy_revision;
         if (departure.source) |source| {
             if (std.meta.eql(source, arrival.location.workspace)) {
                 return error.WorkspaceAlreadyActive;
@@ -2495,6 +2507,13 @@ pub const Model = struct {
         return .{
             .departure = departure,
             .activation = model.workspaceActivation(arrival.pane_id, arrival.location),
+            .workspace_revision_before = workspace_revision_before,
+            .tabs_revision_before = tabs_revision_before,
+            .active_tab_revision_before = active_tab_revision_before,
+            .panes_revision_before = panes_revision_before,
+            .copy_revision_before = copy_revision_before,
+            .copy_released = model.copy_revision != copy_revision_before,
+            .copy_revision = model.copy_revision,
         };
     }
 
@@ -4281,6 +4300,13 @@ test "workspace replacement commits the confirmed root and captures retired stat
         .active_tab_revision = 1,
         .panes_revision = 1,
     }, committed.activation);
+    try std.testing.expectEqual(@as(u64, 0), committed.workspace_revision_before);
+    try std.testing.expectEqual(@as(u64, 0), committed.tabs_revision_before);
+    try std.testing.expectEqual(@as(u64, 0), committed.active_tab_revision_before);
+    try std.testing.expectEqual(@as(u64, 0), committed.panes_revision_before);
+    try std.testing.expectEqual(@as(u64, 0), committed.copy_revision_before);
+    try std.testing.expect(!committed.copy_released);
+    try std.testing.expectEqual(@as(u64, 0), committed.copy_revision);
     try std.testing.expectEqualDeep(replacement, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
     try std.testing.expect(model.workspace.findPane(first) == null);
@@ -4291,6 +4317,33 @@ test "workspace replacement commits the confirmed root and captures retired stat
         .active_tab = 1,
         .panes = 1,
     }, model.version());
+}
+
+test "workspace replacement captures invalid copy-mode release" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const previous: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const replacement: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .tab_id = @enumFromInt(2),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), previous, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.enterCopyMode());
+    const version_before = model.version();
+
+    const committed = try model.replaceWorkspace(.{
+        .pane_id = @enumFromInt(2),
+        .location = replacement,
+        .size = .{ .cols = 30, .rows = 8 },
+    });
+
+    try std.testing.expect(committed.copy_released);
+    try std.testing.expectEqual(version_before.copy, committed.copy_revision_before);
+    try std.testing.expectEqual(version_before.copy +% 1, committed.copy_revision);
+    try std.testing.expect(!model.copyModeActive());
 }
 
 test "rejected workspace replacement preserves the occupied projection" {

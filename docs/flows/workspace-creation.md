@@ -68,6 +68,10 @@ capture departure + construct new root before retiring old projection
         |
 one version commit
         |
+WorkspaceReplacement
+        |
+DeliverWorkspaceCreationHandler
+        |
 ReleaseWorkspaceResourcesHandler
         |
 ActivateWorkspaceHandler
@@ -92,11 +96,20 @@ publishes the new workspace, so allocation or validation failure preserves the
 old projection and every revision.
 
 The successful replacement advances workspace, tabs, active-tab and panes
-exactly once and returns a `WorkspaceActivation` carrying all four committed
-revisions. There is no intermediate empty model and therefore no empty frame
-between the old and new workspace. This differs deliberately from a normal
-workspace handoff, whose departure is visible while it waits for an existing
-runtime target.
+exactly once. `WorkspaceReplacement` carries the captured departure, the
+`WorkspaceActivation`, every pre-commit semantic revision and the exact copy
+revision transition. There is no intermediate empty model and therefore no
+empty frame between the old and new workspace. This differs deliberately from
+a normal workspace handoff, whose departure is visible while it waits for an
+existing runtime target.
+
+`DeliverWorkspaceCreationHandler` validates the complete replacement before
+the first cleanup effect. The created root and activation revisions must still
+match the model; every semantic revision must be exactly one step after its
+captured predecessor; and copy release must match its captured delta. The
+departure must name a different workspace, contain unique pane identities now
+absent from the model and carry a coherent bookmark. An empty source remains a
+valid recovery case only when it has no fabricated departure resources.
 
 `ReleaseWorkspaceResourcesHandler` retains the navigation bookmark, releases
 copy, paste, reported-focus and graphics resources for every retired pane, and
@@ -108,6 +121,9 @@ workspace and tab snapshots.
 sending focus-out or detach for runtime attachments that were already replaced.
 `RetireReportedPaneFocusHandler` then removes any remaining stale reporting
 context before root activation. Effect failure preserves the committed model.
+Creation delivery always validates activation before release, then completes
+release before the first activation effect. A later activation failure retains
+both the replacement commit and all completed cleanup.
 
 Neither creation use case invalidates the view nor requests a draw. The client
 runtime publishes `ClientModel.Version` to `Presenter`; the presenter compares
@@ -124,7 +140,10 @@ still install the confirmed root, which keeps recovery deterministic.
 
 - `src/frontend/client/application/create_workspace.zig` proves request
   gating, validation, no provisional mutation, response validation,
-  commit-before-effects and post-commit failure behavior.
+  commit-before-delivery and post-commit failure behavior.
+- `src/frontend/client/application/workspace_creation_delivery.zig` proves
+  exact replacement validation, release-before-activation order, empty-source
+  recovery and partial failure semantics.
 - `src/frontend/client/application/workspace_transition_delivery.zig` proves
   release order, exact activation validation, snapshot order and partial
   failures.

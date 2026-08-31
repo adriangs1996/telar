@@ -61,6 +61,7 @@ pub const toggle_pane_fullscreen = @import("toggle_pane_fullscreen.zig");
 pub const toggle_sidebar = @import("toggle_sidebar.zig");
 pub const toggle_workspace_list = @import("toggle_workspace_list.zig");
 pub const view_interaction = @import("view_interaction.zig");
+pub const workspace_creation_delivery = @import("workspace_creation_delivery.zig");
 pub const workspace_handoff = @import("workspace_handoff.zig");
 pub const workspace_snapshot_delivery = @import("workspace_snapshot_delivery.zig");
 pub const workspace_transition_delivery = @import("workspace_transition_delivery.zig");
@@ -129,6 +130,7 @@ test {
     _ = toggle_sidebar;
     _ = toggle_workspace_list;
     _ = view_interaction;
+    _ = workspace_creation_delivery;
     _ = workspace_handoff;
     _ = workspace_snapshot_delivery;
     _ = workspace_transition_delivery;

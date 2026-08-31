@@ -77,11 +77,21 @@ pub const ActivateWorkspaceHandler = struct {
         try handler.effects.request_tab_snapshot(handler.effects.context, activation.location);
     }
 
-    fn validate(handler: *const ActivateWorkspaceHandler, activation: client_model.WorkspaceActivation) !void {
+    /// Rejects an activation that no longer names the exact committed root
+    /// and semantic revisions. Compound flows may validate before cleanup.
+    ///
+    /// ```zig
+    /// try handler.validate(activation);
+    /// ```
+    pub fn validate(handler: *const ActivateWorkspaceHandler, activation: client_model.WorkspaceActivation) !void {
         const active = handler.model.workspace.activeConst() orelse return error.StaleWorkspaceActivation;
+        const root = active.model.findConst(activation.pane_id) orelse return error.StaleWorkspaceActivation;
         const version = handler.model.version();
         if (!std.meta.eql(active.location, activation.location) or
-            active.model.findConst(activation.pane_id) == null or
+            active.model.pane_count != 1 or
+            active.model.layout.focused() != activation.pane_id or
+            !std.meta.eql(root.location, activation.location) or
+            !root.attached or
             version.workspace != activation.workspace_revision or
             version.tabs != activation.tabs_revision or
             version.active_tab != activation.active_tab_revision or

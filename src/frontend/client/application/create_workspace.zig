@@ -59,17 +59,17 @@ pub const ConfirmWorkspaceCreation = struct {
     arrival: client_model.WorkspaceArrival,
 };
 
-pub const WorkspaceCreationEffects = struct {
+pub const WorkspaceCreationDelivery = struct {
     context: *anyopaque,
     deliver: *const fn (*anyopaque, *const client_model.WorkspaceReplacement) anyerror!void,
 };
 
 pub const ConfirmWorkspaceCreationHandler = struct {
     model: *client_model.Model,
-    effects: WorkspaceCreationEffects,
+    delivery: WorkspaceCreationDelivery,
 
-    /// Replaces the current projection in one commit before delivering client
-    /// resources. Effect failure never restores the retired workspace.
+    /// Replaces the current projection in one commit before delegating its
+    /// exact result. Delivery failure never restores the retired workspace.
     ///
     /// ```zig
     /// const replacement = try handler.execute(command);
@@ -80,7 +80,7 @@ pub const ConfirmWorkspaceCreationHandler = struct {
         }
 
         const replacement = try handler.model.replaceWorkspace(command.arrival);
-        try handler.effects.deliver(handler.effects.context, &replacement);
+        try handler.delivery.deliver(handler.delivery.context, &replacement);
 
         return replacement;
     }
@@ -176,24 +176,34 @@ const RequestCapture = struct {
     }
 };
 
-const ConfirmationCapture = struct {
+const DeliveryCapture = struct {
     model: *const client_model.Model,
     expected: schema.TabLocation,
     calls: usize = 0,
     observed_commit: bool = false,
     fail: bool = false,
 
-    fn effects(capture: *ConfirmationCapture) WorkspaceCreationEffects {
+    fn delivery(capture: *DeliveryCapture) WorkspaceCreationDelivery {
         return .{ .context = capture, .deliver = deliver };
     }
 
     fn deliver(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
-        const capture: *ConfirmationCapture = @ptrCast(@alignCast(context));
+        const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
+        const version = capture.model.version();
         capture.calls += 1;
         capture.observed_commit = std.meta.eql(capture.model.activeTabLocation(), capture.expected) and
             std.meta.eql(replacement.activation.location, capture.expected) and
             replacement.departure.source != null and
-            capture.model.version().workspace == 1;
+            version.workspace == replacement.activation.workspace_revision and
+            version.tabs == replacement.activation.tabs_revision and
+            version.active_tab == replacement.activation.active_tab_revision and
+            version.panes == replacement.activation.panes_revision and
+            version.copy == replacement.copy_revision and
+            replacement.workspace_revision_before +% 1 == replacement.activation.workspace_revision and
+            replacement.tabs_revision_before +% 1 == replacement.activation.tabs_revision and
+            replacement.active_tab_revision_before +% 1 == replacement.activation.active_tab_revision and
+            replacement.panes_revision_before +% 1 == replacement.activation.panes_revision and
+            replacement.copy_revision_before +% @intFromBool(replacement.copy_released) == replacement.copy_revision;
 
         if (capture.fail) {
             return error.CreationSyncFailed;
@@ -278,13 +288,13 @@ test "workspace creation confirmation replaces the projection before delivery" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     const arrival = testing.arrival();
-    var capture: ConfirmationCapture = .{
+    var capture: DeliveryCapture = .{
         .model = testing.model,
         .expected = arrival.location,
     };
     var handler: ConfirmWorkspaceCreationHandler = .{
         .model = testing.model,
-        .effects = capture.effects(),
+        .delivery = capture.delivery(),
     };
 
     const replacement = try handler.execute(.{ .created = true, .arrival = arrival });
@@ -298,13 +308,13 @@ test "workspace creation confirmation rejects an uncreated response before mutat
     var testing = try TestingModel.init();
     defer testing.deinit();
     const arrival = testing.arrival();
-    var capture: ConfirmationCapture = .{
+    var capture: DeliveryCapture = .{
         .model = testing.model,
         .expected = arrival.location,
     };
     var handler: ConfirmWorkspaceCreationHandler = .{
         .model = testing.model,
-        .effects = capture.effects(),
+        .delivery = capture.delivery(),
     };
 
     try std.testing.expectError(error.UnexpectedRequest, handler.execute(.{
@@ -317,18 +327,18 @@ test "workspace creation confirmation rejects an uncreated response before mutat
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "workspace creation confirmation rejects model failures before effects" {
+test "workspace creation confirmation rejects model failures before delivery" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var arrival = testing.arrival();
     arrival.location.workspace = testing.location.workspace;
-    var capture: ConfirmationCapture = .{
+    var capture: DeliveryCapture = .{
         .model = testing.model,
         .expected = arrival.location,
     };
     var handler: ConfirmWorkspaceCreationHandler = .{
         .model = testing.model,
-        .effects = capture.effects(),
+        .delivery = capture.delivery(),
     };
 
     try std.testing.expectError(error.WorkspaceAlreadyActive, handler.execute(.{
@@ -341,18 +351,18 @@ test "workspace creation confirmation rejects model failures before effects" {
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "workspace creation confirmation preserves its commit after effect failure" {
+test "workspace creation confirmation preserves its commit after delivery failure" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     const arrival = testing.arrival();
-    var capture: ConfirmationCapture = .{
+    var capture: DeliveryCapture = .{
         .model = testing.model,
         .expected = arrival.location,
         .fail = true,
     };
     var handler: ConfirmWorkspaceCreationHandler = .{
         .model = testing.model,
-        .effects = capture.effects(),
+        .delivery = capture.delivery(),
     };
 
     try std.testing.expectError(error.CreationSyncFailed, handler.execute(.{

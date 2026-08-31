@@ -41,11 +41,7 @@ pub fn arrival(client: *Client, opened: schema.PaneOpened, size: schema.Terminal
 pub fn release(client: *Client, departure: *const client_model.WorkspaceDeparture) void {
     var use_case: workspace_transition_delivery.ReleaseWorkspaceResourcesHandler = .{
         .model = &client.model,
-        .effects = .{
-            .context = client,
-            .remember_bookmark = rememberBookmark,
-            .clear_pane_graphics = clearPaneGraphics,
-        },
+        .effects = releaseEffects(client),
     };
 
     use_case.execute(departure);
@@ -60,16 +56,38 @@ pub fn release(client: *Client, departure: *const client_model.WorkspaceDepartur
 pub fn activate(client: *Client, activation: client_model.WorkspaceActivation) !void {
     var use_case: workspace_transition_delivery.ActivateWorkspaceHandler = .{
         .model = &client.model,
-        .effects = .{
-            .context = client,
-            .synchronize_active_resources = synchronizeActiveResources,
-            .schedule_host_input = scheduleHostInput,
-            .request_workspace_snapshot = requestWorkspaceSnapshot,
-            .request_tab_snapshot = requestTabSnapshot,
-        },
+        .effects = activationEffects(client),
     };
 
     try use_case.execute(activation);
+}
+
+/// Returns release ports reused by compound workspace transitions.
+///
+/// ```zig
+/// const effects = releaseEffects(client);
+/// ```
+pub fn releaseEffects(client: *Client) workspace_transition_delivery.ReleaseEffects {
+    return .{
+        .context = client,
+        .remember_bookmark = rememberBookmark,
+        .clear_pane_graphics = clearPaneGraphics,
+    };
+}
+
+/// Returns activation ports reused by compound workspace transitions.
+///
+/// ```zig
+/// const effects = activationEffects(client);
+/// ```
+pub fn activationEffects(client: *Client) workspace_transition_delivery.ActivationEffects {
+    return .{
+        .context = client,
+        .synchronize_active_resources = synchronizeActiveResources,
+        .schedule_host_input = scheduleHostInput,
+        .request_workspace_snapshot = requestWorkspaceSnapshot,
+        .request_tab_snapshot = requestTabSnapshot,
+    };
 }
 
 fn rememberBookmark(raw_context: *anyopaque, bookmark: client_model.WorkspaceBookmark) void {
