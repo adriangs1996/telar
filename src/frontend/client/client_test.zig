@@ -42,6 +42,7 @@ const pane_openings = @import("pane_openings.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
+const sidebar_animations = @import("sidebar_animations.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -66,6 +67,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
@@ -89,6 +91,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
@@ -112,6 +115,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
@@ -134,6 +138,7 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
@@ -216,7 +221,10 @@ const TestHarness = struct {
             switch (try harness.client.select.await()) {
                 .sent => |result| try harness.client.handleSentEvent(result),
                 .draw => |result| try harness.client.handleDrawEvent(result),
-                .sidebar_animation_tick => |result| try harness.client.handleSidebarAnimationEvent(result),
+                .sidebar_animation_tick => |result| {
+                    _ = try sidebar_animations.handleTick(harness.client, result);
+                    try harness.client.observeModel();
+                },
                 .notification_tick => |result| try harness.client.handleNotificationTickEvent(result),
                 else => return error.UnexpectedEvent,
             }
@@ -224,7 +232,7 @@ const TestHarness = struct {
     }
 
     fn settleModelPresentation(harness: *TestHarness) !void {
-        const target = harness.client.model.version();
+        var target = harness.client.model.version();
         const graphics_target = harness.client.graphics_store.ingressVersion();
         const attachment_target = harness.client.view.kittyAttachments().ingressVersion();
         while (!std.meta.eql(harness.client.presenter.presented_model_version, target) or
@@ -235,7 +243,11 @@ const TestHarness = struct {
                 .draw => |result| try harness.client.handleDrawEvent(result),
                 .sent => |result| try harness.client.handleSentEvent(result),
                 .media_tick => |result| try harness.client.handleMediaTickEvent(result),
-                .sidebar_animation_tick => |result| try harness.client.handleSidebarAnimationEvent(result),
+                .sidebar_animation_tick => |result| {
+                    _ = try sidebar_animations.handleTick(harness.client, result);
+                    try harness.client.observeModel();
+                    target = harness.client.model.version();
+                },
                 .notification_tick => |result| try harness.client.handleNotificationTickEvent(result),
                 else => return error.UnexpectedEvent,
             }
@@ -4954,6 +4966,42 @@ test "an agent snapshot replaces the sidebar replica" {
         harness.client.model.version(),
         harness.client.presenter.presented_model_version,
     );
+}
+
+test "sidebar animation commits model state before the presenter observes it" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var payload: [512]u8 = undefined;
+    const snapshot = try encodeTestingAgentSnapshot(&payload, 1, .working);
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    const pending_updates = client.presenter.pending_updates;
+
+    try std.testing.expect(client.sidebar_animation_scheduler.pending);
+    try std.testing.expectEqual(@as(u8, 0), client.model.sidebarAnimationFrame());
+    switch (try client.select.await()) {
+        .sidebar_animation_tick => |result| {
+            const change = (try sidebar_animations.handleTick(client, result)).?;
+
+            try std.testing.expectEqual(@as(u8, 1), change.frame);
+            try std.testing.expectEqual(@as(u64, 1), change.sidebar_animation_revision);
+        },
+        else => return error.UnexpectedEvent,
+    }
+
+    try std.testing.expect(client.sidebar_animation_scheduler.pending);
+    try std.testing.expectEqual(client_model.Version{
+        .agents = 1,
+        .sidebar_animation = 1,
+    }, client.model.version());
+    try std.testing.expectEqual(@as(u8, 1), client.model.sidebarAnimationFrame());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
 }
 
 test "agent snapshot transitions raise bounded presentation alerts only once" {

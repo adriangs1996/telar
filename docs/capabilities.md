@@ -113,7 +113,7 @@ All client handlers are in `src/frontend/client/root.zig`.
 | Runtime socket read | `Client.handleServerEvent` |
 | Completed socket write | `Client.handleSentEvent` |
 | Scheduled draw | `Client.handleDrawEvent` -> `Client.presentDue` |
-| Sidebar animation tick | `Client.handleSidebarAnimationEvent` |
+| Sidebar animation tick | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
 | Notification tick | `Client.handleNotificationTickEvent` |
 | Agent sound completion | `Client.handleSoundPlayedEvent` |
 | Telemetry tick/write | `Client.handleTelemetryTickEvent`, `Client.handleTelemetryWrittenEvent` |

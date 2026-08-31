@@ -13,6 +13,7 @@ const multiplexer = workspace_capability.multiplexer;
 const Io = std.Io;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
+const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
 const host_resizes = @import("host_resizes.zig");
@@ -139,7 +140,7 @@ pub fn run(
             .sent => |result| try client.handleSentEvent(result),
             .draw => |result| try client.handleDrawEvent(result),
             .media_tick => |result| try client.handleMediaTickEvent(result),
-            .sidebar_animation_tick => |result| try client.handleSidebarAnimationEvent(result),
+            .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
             .notification_tick => |result| try client.handleNotificationTickEvent(result),
             .sound_played => |result| try client.handleSoundPlayedEvent(result),
             .telemetry_tick => |result| client.handleTelemetryTickEvent(result, &telemetry, heap.snapshot()),

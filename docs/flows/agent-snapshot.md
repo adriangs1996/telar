@@ -25,6 +25,8 @@ agents.Snapshot + Version.agents
              |
 attachment sync + actionable alerts
              |
+SidebarAnimationHandler.synchronize
+             |
 Client.observeModel
              |
 Presenter -> View.render(agents)
@@ -54,8 +56,9 @@ existed. New agents do not look like transitions.
 
 The model also exposes bounded semantic queries. Input asks for an
 `AgentNavigationPlan`, attachment capture asks for the focused eligible agent,
-animation asks whether any agent is working, and sound validation asks whether
-an exact identity exists. None of those callers reads snapshot storage.
+the sidebar animation use case asks whether animation is active, and sound
+validation asks whether an exact identity exists. None of those callers reads
+snapshot storage.
 
 ## Effects and presentation
 
@@ -63,6 +66,11 @@ After the commit, the application handler first synchronizes attachment shelf
 resources. It then emits at most the notification center capacity of
 transitions to `blocked`, `ready` or `failed`. Failure in an effect does not
 roll back the committed runtime state.
+
+The adapter then invokes the separate sidebar-animation use case. A working
+agent ensures that one future tick is armed; a snapshot does not advance the
+visible animation frame. Animation ownership and timer failure are documented
+in [Sidebar animation](sidebar-animation.md).
 
 The snapshot itself does not request a draw. At the event boundary,
 `Client.observeModel` publishes the current version. `Presenter` compares
@@ -99,6 +107,9 @@ usable replica and its local version.
 - `src/frontend/client/application/agent_snapshot.zig` proves commit-before-
   effect ordering, actionable filtering, alert bounds and retained commits on
   effect failure.
+- `src/frontend/client/application/sidebar_animation.zig` and
+  `src/frontend/client/sidebar_animations.zig` separate active-state policy
+  from the single pending timer.
 - `src/frontend/client/application/agent_sound.zig` proves exact-identity
   gating, stale suppression and effect-error propagation.
 - `src/frontend/client/agent_sounds.zig` connects protocol translation to the

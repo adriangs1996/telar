@@ -153,6 +153,8 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.workspace_list;
     const agents_changed = presenter.presented_model_version.agents !=
         presenter.observed_model_version.agents;
+    const sidebar_animation_changed = presenter.presented_model_version.sidebar_animation !=
+        presenter.observed_model_version.sidebar_animation;
     const proxy_status_changed = presenter.presented_model_version.proxy_status !=
         presenter.observed_model_version.proxy_status;
     const system_metrics_changed = presenter.presented_model_version.system_metrics !=
@@ -197,9 +199,10 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         client.view.clearHover();
     }
     if (workspace_changed or configuration_changed or diagnostic_changed or host_changed or
-        workspace_list_changed or agents_changed or proxy_status_changed or system_metrics_changed or
-        notifications_changed or tabs_changed or active_tab_changed or panes_changed or
-        pane_metadata_changed or chrome_changed or prompt_changed or copy_status_changed)
+        workspace_list_changed or agents_changed or sidebar_animation_changed or
+        proxy_status_changed or system_metrics_changed or notifications_changed or tabs_changed or
+        active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
+        prompt_changed or copy_status_changed)
     {
         client.view.invalidate();
     }
@@ -379,6 +382,7 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
         .tabs = &client.model.workspace,
         .model = model,
         .agents = client.model.agentSnapshot(),
+        .sidebar_animation_frame = client.model.sidebarAnimationFrame(),
         .notifications = client.model.notificationSnapshot(),
         .workspaces = client.model.workspaceListSnapshot(),
         .prompt = client.model.name_prompt.current(),

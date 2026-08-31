@@ -65,6 +65,7 @@ pub const RenderInput = struct {
     tabs: ?*const tabs_mod.Model = null,
     model: *multiplexer.Model,
     agents: *const agents.Snapshot = &empty_agent_snapshot,
+    sidebar_animation_frame: u8 = 0,
     notifications: *const notifications.Center = &empty_notifications,
     workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
@@ -95,7 +96,6 @@ pub const State = struct {
     sidebar_requested: bool = true,
     hovered: ?Action = null,
     sidebar: widgets.sidebar.State = .{},
-    sidebar_animation_frame: u8 = 0,
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
@@ -239,18 +239,6 @@ pub const State = struct {
     /// ```
     pub fn resetSidebarScroll(state: *State) void {
         state.sidebar.scroll = 0;
-    }
-
-    /// Advances time-driven sidebar presentation state. The client model
-    /// decides whether a working agent warrants an animation tick.
-    ///
-    /// ```zig
-    /// _ = view.advanceSidebarAnimation();
-    /// ```
-    pub fn advanceSidebarAnimation(state: *State) bool {
-        state.sidebar_animation_frame +%= 1;
-        state.dirty = true;
-        return true;
     }
 
     pub fn configureSidebar(
@@ -541,7 +529,7 @@ pub const State = struct {
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
             .sidebar_rounded_focus = focused_card_color != null,
-            .sidebar_animation_frame = state.sidebar_animation_frame,
+            .sidebar_animation_frame = input.sidebar_animation_frame,
             .proxy_tls_active = input.proxy_tls_active,
             .system_metrics = if (input.system_metrics) |metrics| .{
                 .cpu_percent = metrics.cpu_percent,

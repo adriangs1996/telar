@@ -110,6 +110,7 @@ const notification_flow = @import("notifications.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
 const server_messages = @import("server_messages.zig");
+const sidebar_animations = @import("sidebar_animations.zig");
 
 pub const ClientEvent = union(enum) {
     input: anyerror!InputChunk,
@@ -202,7 +203,7 @@ clipboard_capture_resources: attachments.CaptureResources = .{},
 input_read_pending: bool = false,
 next_request_id: u64 = 2,
 requests: client_requests.Tracker = .{},
-sidebar_animation_pending: bool = false,
+sidebar_animation_scheduler: sidebar_animations.Scheduler = .{},
 notification_tick_pending: bool = false,
 notification_timer: NotificationTimer = .{},
 sound_pending: bool = false,
@@ -447,21 +448,6 @@ pub fn scheduleInputRead(client: *Client) !void {
     client.input_read_pending = true;
 }
 
-pub fn scheduleSidebarAnimation(client: *Client) !void {
-    if (client.sidebar_animation_pending or !client.model.hasWorkingAgent()) {
-        return;
-    }
-    const deadline_ns = monotonic(client.io) + 120 * std.time.ns_per_ms;
-    client.sidebar_animation_pending = true;
-    client.select.concurrent(.sidebar_animation_tick, waitUntil, .{
-        client.io,
-        deadline_ns,
-    }) catch |err| {
-        client.sidebar_animation_pending = false;
-        return err;
-    };
-}
-
 pub fn notify(client: *Client, input: notification_capability.Input) !void {
     _ = try notification_flow.publish(client, monotonic(client.io), input);
 }
@@ -657,17 +643,6 @@ pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
 pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
     try result;
     try client.presenter.presentMedia(client);
-}
-
-/// Entrypoint for the sidebar animation tick.
-pub fn handleSidebarAnimationEvent(client: *Client, result: anyerror!void) !void {
-    try result;
-    client.sidebar_animation_pending = false;
-    if (client.model.hasWorkingAgent()) {
-        _ = client.view.advanceSidebarAnimation();
-        try client.presenter.requestDraw();
-    }
-    try client.scheduleSidebarAnimation();
 }
 
 /// Entrypoint for the notification timer: advance and rearm.

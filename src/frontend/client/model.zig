@@ -29,6 +29,7 @@ pub const Version = struct {
     host_capabilities: u64 = 0,
     workspace_list: u64 = 0,
     agents: u64 = 0,
+    sidebar_animation: u64 = 0,
     proxy_status: u64 = 0,
     system_metrics: u64 = 0,
     notifications: u64 = 0,
@@ -166,6 +167,11 @@ pub const TogglePaneFullscreenRequest = struct {
 pub const SidebarVisibility = struct {
     visible: bool,
     chrome_revision: u64,
+};
+
+pub const SidebarAnimationChange = struct {
+    frame: u8,
+    sidebar_animation_revision: u64,
 };
 
 pub const ConfigurationInput = struct {
@@ -729,6 +735,8 @@ pub const Model = struct {
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
     agent_revision: u64 = 0,
+    sidebar_animation_frame: u8 = 0,
+    sidebar_animation_revision: u64 = 0,
     proxy_tls_active: bool = false,
     proxy_status_revision: u64 = 0,
     system_metrics: ?SystemMetrics = null,
@@ -820,6 +828,7 @@ pub const Model = struct {
             .host_capabilities = model.host_capabilities_revision,
             .workspace_list = model.workspace_list_revision,
             .agents = model.agent_revision,
+            .sidebar_animation = model.sidebar_animation_revision,
             .proxy_status = model.proxy_status_revision,
             .system_metrics = model.system_metrics_revision,
             .notifications = model.notifications_revision,
@@ -1531,10 +1540,40 @@ pub const Model = struct {
     /// Reports whether the latest runtime state requires sidebar animation.
     ///
     /// ```zig
-    /// if (model.hasWorkingAgent()) scheduleTick();
+    /// if (model.sidebarAnimationActive()) scheduleTick();
     /// ```
-    pub fn hasWorkingAgent(model: *const Model) bool {
+    pub fn sidebarAnimationActive(model: *const Model) bool {
         return model.agent_snapshot.hasWorkingAgent();
+    }
+
+    /// Returns the current model-owned animation frame rendered by the
+    /// sidebar.
+    ///
+    /// ```zig
+    /// const frame = model.sidebarAnimationFrame();
+    /// ```
+    pub fn sidebarAnimationFrame(model: *const Model) u8 {
+        return model.sidebar_animation_frame;
+    }
+
+    /// Advances the visible sidebar animation only while a working agent
+    /// exists and publishes one dedicated presenter revision.
+    ///
+    /// ```zig
+    /// const change = model.advanceSidebarAnimation() orelse return;
+    /// ```
+    pub fn advanceSidebarAnimation(model: *Model) ?SidebarAnimationChange {
+        if (!model.sidebarAnimationActive()) {
+            return null;
+        }
+
+        model.sidebar_animation_frame +%= 1;
+        model.sidebar_animation_revision +%= 1;
+
+        return .{
+            .frame = model.sidebar_animation_frame,
+            .sidebar_animation_revision = model.sidebar_animation_revision,
+        };
     }
 
     /// Resolves a sidebar identity into local focus or a runtime handoff
@@ -5246,7 +5285,7 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(Version{ .agents = 1 }, model.version());
     try std.testing.expectEqualStrings("first", model.agentSnapshot().find(key).?.sessionTitle());
     try std.testing.expect(model.knowsAgent(key));
-    try std.testing.expect(model.hasWorkingAgent());
+    try std.testing.expect(model.sidebarAnimationActive());
 
     agent.session_title = "second";
     agent.status = .ready;
@@ -5263,12 +5302,47 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(schema.AgentStatus.ready, change.current);
     try std.testing.expectEqual(@as(u16, 3), change.pane_index);
     try std.testing.expectEqual(schema.AgentProvider.codex, change.provider);
-    try std.testing.expect(!model.hasWorkingAgent());
+    try std.testing.expect(!model.sidebarAnimationActive());
     try std.testing.expect((try model.reconcileAgentSnapshot(.{
         .revision = 5,
         .agents = &.{agent},
     })) == null);
     try std.testing.expectEqual(Version{ .agents = 2 }, model.version());
+}
+
+test "sidebar animation advances its own revision only while active" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var agent: agents.AgentInput = .{
+        .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .ready,
+    };
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{agent} });
+
+    try std.testing.expect(model.advanceSidebarAnimation() == null);
+    try std.testing.expectEqual(@as(u8, 0), model.sidebarAnimationFrame());
+    try std.testing.expectEqual(Version{ .agents = 1 }, model.version());
+
+    agent.status = .working;
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{agent} });
+    const first = model.advanceSidebarAnimation().?;
+    const second = model.advanceSidebarAnimation().?;
+
+    try std.testing.expectEqual(@as(u8, 1), first.frame);
+    try std.testing.expectEqual(@as(u64, 1), first.sidebar_animation_revision);
+    try std.testing.expectEqual(@as(u8, 2), second.frame);
+    try std.testing.expectEqual(@as(u64, 2), second.sidebar_animation_revision);
+    try std.testing.expectEqual(@as(u8, 2), model.sidebarAnimationFrame());
+    try std.testing.expectEqual(Version{
+        .agents = 2,
+        .sidebar_animation = 2,
+    }, model.version());
 }
 
 test "rejected agent reconciliation preserves replica and version" {

@@ -32,6 +32,7 @@ pub const rename_workspace = @import("rename_workspace.zig");
 pub const resize_pane = @import("resize_pane.zig");
 pub const select_tab = @import("select_tab.zig");
 pub const set_pane_viewport = @import("set_pane_viewport.zig");
+pub const sidebar_animation = @import("sidebar_animation.zig");
 pub const split_pane = @import("split_pane.zig");
 pub const system_metrics = @import("system_metrics.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
@@ -75,6 +76,7 @@ test {
     _ = resize_pane;
     _ = select_tab;
     _ = set_pane_viewport;
+    _ = sidebar_animation;
     _ = split_pane;
     _ = system_metrics;
     _ = tab_snapshot;

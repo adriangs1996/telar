@@ -7,13 +7,14 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const attachment_targets = @import("attachment_targets.zig");
 const notifications = @import("../notifications/root.zig");
+const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
 const agent_snapshot = client_application.agent_snapshot;
 const schema = core.schema;
 
-/// Maps one validated wire view into bounded agent inputs, commits it through
-/// the application handler and keeps animation scheduling outside the use case.
+/// Maps one validated wire view into bounded agent inputs and synchronizes
+/// dependent client slices after the application handler commits it.
 ///
 /// ```zig
 /// _ = try apply(client, snapshot);
@@ -47,7 +48,7 @@ pub fn apply(client: *Client, snapshot: schema.AgentSnapshotView) !?client_model
         .revision = snapshot.revision,
         .agents = entries[0..count],
     });
-    try client.scheduleSidebarAnimation();
+    _ = try sidebar_animations.synchronize(client);
 
     return commit;
 }

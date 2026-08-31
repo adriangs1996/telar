@@ -71,6 +71,7 @@ test {
     _ = @import("presenter.zig");
     _ = @import("proxy_status.zig");
     _ = @import("server_messages.zig");
+    _ = @import("sidebar_animations.zig");
     _ = @import("sidebar_toggles.zig");
     _ = @import("system_metrics.zig");
     _ = @import("tab_attachments.zig");
