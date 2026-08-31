@@ -15,7 +15,10 @@ fn collectArgs(init: std.process.Init, storage: *[cli_mod.max_args][*:0]const u8
     var iterator = init.minimal.args.iterate();
     var len: usize = 0;
     while (iterator.next()) |arg| {
-        if (len == storage.len) return error.TooManyArguments;
+        if (len == storage.len) {
+            return error.TooManyArguments;
+        }
+
         storage[len] = arg.ptr;
         len += 1;
     }

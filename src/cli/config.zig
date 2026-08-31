@@ -27,7 +27,13 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
 
     const selected = try resolveSelection(init.minimal.environ, selection, path_buffer);
     Io.Dir.cwd().access(init.io, selected.path, .{}) catch |err| switch (err) {
-        error.FileNotFound => if (selected.explicit) return err else return null,
+        error.FileNotFound => {
+            if (selected.explicit) {
+                return err;
+            }
+
+            return null;
+        },
         else => |other| return other,
     };
     var diagnostic: frontend.config.Diagnostic = .{};

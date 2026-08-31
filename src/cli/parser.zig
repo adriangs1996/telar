@@ -49,10 +49,15 @@ pub const NotificationOptions = struct {
     socket: ?[*:0]const u8 = null,
 
     fn parse(args: []const [*:0]const u8) !NotificationOptions {
-        if (args.len < 2 or !std.mem.eql(u8, std.mem.span(args[0]), "show"))
+        if (args.len < 2 or !std.mem.eql(u8, std.mem.span(args[0]), "show")) {
             return error.MissingNotificationShow;
+        }
+
         var options: NotificationOptions = .{ .title = args[1] };
-        if (std.mem.span(options.title).len == 0) return error.EmptyNotificationTitle;
+        if (std.mem.span(options.title).len == 0) {
+            return error.EmptyNotificationTitle;
+        }
+
         var target_set = false;
         var level_set = false;
         var duration_set = false;
@@ -60,13 +65,23 @@ pub const NotificationOptions = struct {
         while (index < args.len) {
             const arg = std.mem.span(args[index]);
             if (std.mem.eql(u8, arg, "--body")) {
-                if (options.body != null) return error.DuplicateNotificationBody;
-                if (index + 1 >= args.len) return error.MissingNotificationBody;
+                if (options.body != null) {
+                    return error.DuplicateNotificationBody;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingNotificationBody;
+                }
+
                 options.body = args[index + 1];
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--level")) {
-                if (level_set) return error.DuplicateNotificationLevel;
-                if (index + 1 >= args.len) return error.MissingNotificationLevel;
+                if (level_set) {
+                    return error.DuplicateNotificationLevel;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingNotificationLevel;
+                }
+
                 const level = std.mem.span(args[index + 1]);
                 options.level = if (std.mem.eql(u8, level, "info"))
                     .info
@@ -81,8 +96,13 @@ pub const NotificationOptions = struct {
                 level_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--duration")) {
-                if (duration_set) return error.DuplicateNotificationDuration;
-                if (index + 1 >= args.len) return error.MissingNotificationDuration;
+                if (duration_set) {
+                    return error.DuplicateNotificationDuration;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingNotificationDuration;
+                }
+
                 options.duration_ms = try std.fmt.parseUnsigned(
                     u32,
                     std.mem.span(args[index + 1]),
@@ -90,12 +110,20 @@ pub const NotificationOptions = struct {
                 );
                 if (options.duration_ms < core.schema.min_notification_duration_ms or
                     options.duration_ms > core.schema.max_notification_duration_ms)
+                {
                     return error.InvalidNotificationDuration;
+                }
+
                 duration_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--pane")) {
-                if (target_set) return error.ConflictingNotificationTargets;
-                if (index + 1 >= args.len) return error.MissingPaneId;
+                if (target_set) {
+                    return error.ConflictingNotificationTargets;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingPaneId;
+                }
+
                 options.target = .{ .pane = try core.schema.id.pane(try std.fmt.parseUnsigned(
                     u64,
                     std.mem.span(args[index + 1]),
@@ -104,8 +132,13 @@ pub const NotificationOptions = struct {
                 target_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--tab")) {
-                if (target_set) return error.ConflictingNotificationTargets;
-                if (index + 1 >= args.len) return error.MissingTabId;
+                if (target_set) {
+                    return error.ConflictingNotificationTargets;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingTabId;
+                }
+
                 options.target = .{ .tab = try core.schema.id.tab(try std.fmt.parseUnsigned(
                     u64,
                     std.mem.span(args[index + 1]),
@@ -114,8 +147,13 @@ pub const NotificationOptions = struct {
                 target_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--workspace")) {
-                if (target_set) return error.ConflictingNotificationTargets;
-                if (index + 1 >= args.len) return error.MissingWorkspaceId;
+                if (target_set) {
+                    return error.ConflictingNotificationTargets;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingWorkspaceId;
+                }
+
                 options.target = .{ .workspace = try core.schema.id.workspace(try std.fmt.parseUnsigned(
                     u64,
                     std.mem.span(args[index + 1]),
@@ -124,8 +162,13 @@ pub const NotificationOptions = struct {
                 target_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--socket")) {
-                if (options.socket != null) return error.DuplicateSocketOption;
-                if (index + 1 >= args.len) return error.MissingSocketPath;
+                if (options.socket != null) {
+                    return error.DuplicateSocketOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingSocketPath;
+                }
+
                 options.socket = args[index + 1];
                 index += 2;
             } else {
@@ -155,33 +198,52 @@ pub const Cli = union(enum) {
     /// const command = try Cli.parse(&args, .empty);
     /// ```
     pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !Cli {
-        if (args.len == 0) return error.MissingArgvZero;
-        if (args.len == 1) return .{ .run = .{ .command = try defaultShell(environ) } };
+        if (args.len == 0) {
+            return error.MissingArgvZero;
+        }
+        if (args.len == 1) {
+            return .{ .run = .{ .command = try defaultShell(environ) } };
+        }
 
         const first = std.mem.span(args[1]);
-        if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h"))
+        if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h")) {
             return .help;
-        if (std.mem.eql(u8, first, "--version") or std.mem.eql(u8, first, "-V"))
+        }
+        if (std.mem.eql(u8, first, "--version") or std.mem.eql(u8, first, "-V")) {
             return .version;
-        if (std.mem.eql(u8, first, "server"))
+        }
+        if (std.mem.eql(u8, first, "server")) {
             return .{ .server = try ServerOptions.parse(args[2..]) };
-        if (std.mem.eql(u8, first, "history"))
+        }
+        if (std.mem.eql(u8, first, "history")) {
             return .{ .history = try HistoryOptions.parse(args[2..]) };
-        if (std.mem.eql(u8, first, "notification"))
+        }
+        if (std.mem.eql(u8, first, "notification")) {
             return .{ .notification = try NotificationOptions.parse(args[2..]) };
+        }
         if (std.mem.eql(u8, first, "config")) {
-            if (args.len < 3 or !std.mem.eql(u8, std.mem.span(args[2]), "check"))
+            if (args.len < 3 or !std.mem.eql(u8, std.mem.span(args[2]), "check")) {
                 return error.UnknownConfigAction;
+            }
+
             var check: ConfigCheckOptions = .{};
             var check_index: usize = 3;
             while (check_index < args.len) {
                 if (std.mem.eql(u8, std.mem.span(args[check_index]), "--profile")) {
-                    if (check.profile != null) return error.DuplicateProfileOption;
-                    if (check_index + 1 >= args.len) return error.MissingProfileName;
+                    if (check.profile != null) {
+                        return error.DuplicateProfileOption;
+                    }
+                    if (check_index + 1 >= args.len) {
+                        return error.MissingProfileName;
+                    }
+
                     check.profile = args[check_index + 1];
                     check_index += 2;
                 } else {
-                    if (check.path != null) return error.TooManyConfigArguments;
+                    if (check.path != null) {
+                        return error.TooManyConfigArguments;
+                    }
+
                     check.path = args[check_index];
                     check_index += 1;
                 }
@@ -189,7 +251,10 @@ pub const Cli = union(enum) {
             return .{ .config_check = check };
         }
         if (std.mem.eql(u8, first, "plugin-worker")) {
-            if (args.len != 9) return error.InvalidPluginWorkerArguments;
+            if (args.len != 9) {
+                return error.InvalidPluginWorkerArguments;
+            }
+
             return .{ .plugin_worker = .{
                 .entry = args[2],
                 .action = args[3],
@@ -203,7 +268,10 @@ pub const Cli = union(enum) {
             } };
         }
         if (std.mem.eql(u8, first, "plugin")) {
-            if (args.len < 4) return error.MissingPluginArguments;
+            if (args.len < 4) {
+                return error.MissingPluginArguments;
+            }
+
             var plugin_options: PluginOptions = .{
                 .command = if (std.mem.eql(u8, std.mem.span(args[2]), "inspect"))
                     .inspect
@@ -218,16 +286,23 @@ pub const Cli = union(enum) {
             var plugin_arg: usize = 4;
             while (plugin_arg < args.len) {
                 if (!std.mem.eql(u8, std.mem.span(args[plugin_arg]), "--capability") or
-                    plugin_arg + 1 >= args.len) return error.InvalidPluginArguments;
-                if (plugin_options.capability_count == plugin_options.capabilities.len)
+                    plugin_arg + 1 >= args.len)
+                {
+                    return error.InvalidPluginArguments;
+                }
+                if (plugin_options.capability_count == plugin_options.capabilities.len) {
                     return error.TooManyPluginCapabilities;
+                }
+
                 plugin_options.capabilities[plugin_options.capability_count] =
                     try core.plugin.Capability.parse(std.mem.span(args[plugin_arg + 1]));
                 plugin_options.capability_count += 1;
                 plugin_arg += 2;
             }
-            if (plugin_options.command != .trust and plugin_options.capability_count != 0)
+            if (plugin_options.command != .trust and plugin_options.capability_count != 0) {
                 return error.InvalidPluginArguments;
+            }
+
             return .{ .plugin = plugin_options };
         }
 
@@ -244,8 +319,13 @@ pub const Cli = union(enum) {
                 break;
             }
             if (std.mem.eql(u8, arg, "--theme")) {
-                if (theme_set) return error.DuplicateThemeOption;
-                if (command_start + 1 >= args.len) return error.MissingThemeName;
+                if (theme_set) {
+                    return error.DuplicateThemeOption;
+                }
+                if (command_start + 1 >= args.len) {
+                    return error.MissingThemeName;
+                }
+
                 options.theme = frontend.theme.fromName(std.mem.span(args[command_start + 1])) orelse
                     return error.UnknownTheme;
                 theme_set = true;
@@ -254,7 +334,10 @@ pub const Cli = union(enum) {
                 continue;
             }
             if (std.mem.startsWith(u8, arg, "--theme=")) {
-                if (theme_set) return error.DuplicateThemeOption;
+                if (theme_set) {
+                    return error.DuplicateThemeOption;
+                }
+
                 options.theme = frontend.theme.fromName(arg["--theme=".len..]) orelse
                     return error.UnknownTheme;
                 theme_set = true;
@@ -263,8 +346,13 @@ pub const Cli = union(enum) {
                 continue;
             }
             if (std.mem.eql(u8, arg, "--sidebar-renderer")) {
-                if (sidebar_renderer_set) return error.DuplicateSidebarRendererOption;
-                if (command_start + 1 >= args.len) return error.MissingSidebarRenderer;
+                if (sidebar_renderer_set) {
+                    return error.DuplicateSidebarRendererOption;
+                }
+                if (command_start + 1 >= args.len) {
+                    return error.MissingSidebarRenderer;
+                }
+
                 options.sidebar_rendering = try frontend.kitty.SidebarRendering.parse(
                     std.mem.span(args[command_start + 1]),
                 );
@@ -274,7 +362,10 @@ pub const Cli = union(enum) {
                 continue;
             }
             if (std.mem.startsWith(u8, arg, "--sidebar-renderer=")) {
-                if (sidebar_renderer_set) return error.DuplicateSidebarRendererOption;
+                if (sidebar_renderer_set) {
+                    return error.DuplicateSidebarRendererOption;
+                }
+
                 options.sidebar_rendering = try frontend.kitty.SidebarRendering.parse(
                     arg["--sidebar-renderer=".len..],
                 );
@@ -284,54 +375,91 @@ pub const Cli = union(enum) {
                 continue;
             }
             if (std.mem.eql(u8, arg, "--config")) {
-                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
-                if (command_start + 1 >= args.len) return error.MissingConfigPath;
+                if (options.config != null or options.no_config) {
+                    return error.DuplicateConfigOption;
+                }
+                if (command_start + 1 >= args.len) {
+                    return error.MissingConfigPath;
+                }
+
                 options.config = args[command_start + 1];
                 command_start += 2;
                 continue;
             }
             if (std.mem.startsWith(u8, arg, "--config=")) {
-                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
-                if (arg["--config=".len..].len == 0) return error.MissingConfigPath;
+                if (options.config != null or options.no_config) {
+                    return error.DuplicateConfigOption;
+                }
+                if (arg["--config=".len..].len == 0) {
+                    return error.MissingConfigPath;
+                }
+
                 options.config = args[command_start] + "--config=".len;
                 command_start += 1;
                 continue;
             }
             if (std.mem.eql(u8, arg, "--no-config")) {
-                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
+                if (options.config != null or options.no_config) {
+                    return error.DuplicateConfigOption;
+                }
+
                 options.no_config = true;
                 command_start += 1;
                 continue;
             }
             if (std.mem.eql(u8, arg, "--profile")) {
-                if (options.profile != null) return error.DuplicateProfileOption;
-                if (command_start + 1 >= args.len) return error.MissingProfileName;
+                if (options.profile != null) {
+                    return error.DuplicateProfileOption;
+                }
+                if (command_start + 1 >= args.len) {
+                    return error.MissingProfileName;
+                }
+
                 options.profile = args[command_start + 1];
                 command_start += 2;
                 continue;
             }
             if (std.mem.startsWith(u8, arg, "--profile=")) {
-                if (options.profile != null) return error.DuplicateProfileOption;
-                if (arg["--profile=".len..].len == 0) return error.MissingProfileName;
+                if (options.profile != null) {
+                    return error.DuplicateProfileOption;
+                }
+                if (arg["--profile=".len..].len == 0) {
+                    return error.MissingProfileName;
+                }
+
                 options.profile = args[command_start] + "--profile=".len;
                 command_start += 1;
                 continue;
             }
             break;
         }
-        options.command = if (command_start == args.len)
-            if (delimiter_seen) return error.MissingCommand else try defaultShell(environ)
-        else
-            try pty.Command.fromArgv(args[command_start..]);
-        if (options.no_config and options.profile != null) return error.ProfileWithoutConfig;
+        if (command_start == args.len) {
+            if (delimiter_seen) {
+                return error.MissingCommand;
+            }
+
+            options.command = try defaultShell(environ);
+        } else {
+            options.command = try pty.Command.fromArgv(args[command_start..]);
+        }
+
+        if (options.no_config and options.profile != null) {
+            return error.ProfileWithoutConfig;
+        }
+
         return .{ .run = options };
     }
 };
 
 fn parseWorkerBool(value: [*:0]const u8) !bool {
     const text = std.mem.span(value);
-    if (std.mem.eql(u8, text, "0")) return false;
-    if (std.mem.eql(u8, text, "1")) return true;
+    if (std.mem.eql(u8, text, "0")) {
+        return false;
+    }
+    if (std.mem.eql(u8, text, "1")) {
+        return true;
+    }
+
     return error.InvalidPluginWorkerArguments;
 }
 
@@ -351,12 +479,18 @@ pub const HistoryOptions = struct {
     socket: ?[*:0]const u8 = null,
 
     fn parse(args: []const [*:0]const u8) !HistoryOptions {
-        if (args.len == 0) return error.MissingHistoryAction;
+        if (args.len == 0) {
+            return error.MissingHistoryAction;
+        }
+
         const action_text = std.mem.span(args[0]);
         var options: HistoryOptions = if (std.mem.eql(u8, action_text, "list"))
             .{ .action = .list }
         else if (std.mem.eql(u8, action_text, "search")) search: {
-            if (args.len < 2) return error.MissingHistoryQuery;
+            if (args.len < 2) {
+                return error.MissingHistoryQuery;
+            }
+
             break :search .{ .action = .search, .query = args[1] };
         } else return error.UnknownHistoryAction;
 
@@ -367,11 +501,17 @@ pub const HistoryOptions = struct {
                 try options.setScope(.cwd, null);
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--workspace")) {
-                if (index + 1 >= args.len) return error.MissingWorkspacePath;
+                if (index + 1 >= args.len) {
+                    return error.MissingWorkspacePath;
+                }
+
                 try options.setScope(.workspace, args[index + 1]);
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--pane")) {
-                if (index + 1 >= args.len) return error.MissingPaneId;
+                if (index + 1 >= args.len) {
+                    return error.MissingPaneId;
+                }
+
                 const raw = try std.fmt.parseInt(u64, std.mem.span(args[index + 1]), 10);
                 options.pane_id = try core.schema.id.pane(raw);
                 try options.setScope(.pane, null);
@@ -380,14 +520,24 @@ pub const HistoryOptions = struct {
                 options.failed_only = true;
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--limit")) {
-                if (index + 1 >= args.len) return error.MissingHistoryLimit;
+                if (index + 1 >= args.len) {
+                    return error.MissingHistoryLimit;
+                }
+
                 options.limit = try std.fmt.parseInt(u16, std.mem.span(args[index + 1]), 10);
-                if (options.limit == 0 or options.limit > core.schema.max_history_results)
+                if (options.limit == 0 or options.limit > core.schema.max_history_results) {
                     return error.InvalidHistoryLimit;
+                }
+
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--socket")) {
-                if (index + 1 >= args.len) return error.MissingSocketPath;
-                if (options.socket != null) return error.DuplicateSocketOption;
+                if (index + 1 >= args.len) {
+                    return error.MissingSocketPath;
+                }
+                if (options.socket != null) {
+                    return error.DuplicateSocketOption;
+                }
+
                 options.socket = args[index + 1];
                 index += 2;
             } else {
@@ -397,12 +547,11 @@ pub const HistoryOptions = struct {
         return options;
     }
 
-    fn setScope(
-        options: *HistoryOptions,
-        scope: core.schema.HistoryScope,
-        value: ?[*:0]const u8,
-    ) !void {
-        if (options.scope != .global) return error.ConflictingHistoryScopes;
+    fn setScope(options: *HistoryOptions, scope: core.schema.HistoryScope, value: ?[*:0]const u8) !void {
+        if (options.scope != .global) {
+            return error.ConflictingHistoryScopes;
+        }
+
         options.scope = scope;
         options.scope_value = value;
     }
@@ -437,54 +586,91 @@ pub const ServerOptions = struct {
         while (index < args.len) {
             const arg = std.mem.span(args[index]);
             if (std.mem.eql(u8, arg, "stop")) {
-                if (action_explicit) return error.DuplicateServerAction;
+                if (action_explicit) {
+                    return error.DuplicateServerAction;
+                }
+
                 options.action = .stop;
                 action_explicit = true;
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--background")) {
-                if (options.mode != .foreground) return error.ConflictingServerModes;
+                if (options.mode != .foreground) {
+                    return error.ConflictingServerModes;
+                }
+
                 options.mode = .background_launcher;
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--daemonized")) {
-                if (options.mode != .foreground) return error.ConflictingServerModes;
+                if (options.mode != .foreground) {
+                    return error.ConflictingServerModes;
+                }
+
                 options.mode = .daemonized;
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--socket")) {
-                if (options.socket != null) return error.DuplicateSocketOption;
-                if (index + 1 >= args.len) return error.MissingSocketPath;
+                if (options.socket != null) {
+                    return error.DuplicateSocketOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingSocketPath;
+                }
+
                 options.socket = args[index + 1];
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--graphics-pane-mib")) {
-                if (index + 1 >= args.len) return error.MissingGraphicsPaneLimit;
+                if (index + 1 >= args.len) {
+                    return error.MissingGraphicsPaneLimit;
+                }
+
                 options.graphics.pane_bytes = try parseMebibytes(args[index + 1]);
                 options.graphics_pane_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--graphics-global-mib")) {
-                if (index + 1 >= args.len) return error.MissingGraphicsGlobalLimit;
+                if (index + 1 >= args.len) {
+                    return error.MissingGraphicsGlobalLimit;
+                }
+
                 options.graphics.global_bytes = try parseMebibytes(args[index + 1]);
                 options.graphics_global_set = true;
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--config")) {
-                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
-                if (index + 1 >= args.len) return error.MissingConfigPath;
+                if (options.config != null or options.no_config) {
+                    return error.DuplicateConfigOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingConfigPath;
+                }
+
                 options.config = args[index + 1];
                 index += 2;
             } else if (std.mem.eql(u8, arg, "--no-config")) {
-                if (options.config != null or options.no_config) return error.DuplicateConfigOption;
+                if (options.config != null or options.no_config) {
+                    return error.DuplicateConfigOption;
+                }
+
                 options.no_config = true;
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--profile")) {
-                if (options.profile != null) return error.DuplicateProfileOption;
-                if (index + 1 >= args.len) return error.MissingProfileName;
+                if (options.profile != null) {
+                    return error.DuplicateProfileOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingProfileName;
+                }
+
                 options.profile = args[index + 1];
                 index += 2;
             } else {
                 return error.UnknownServerOption;
             }
         }
-        if (options.action == .stop and options.mode != .foreground)
+        if (options.action == .stop and options.mode != .foreground) {
             return error.ConflictingServerAction;
-        if (options.no_config and options.profile != null) return error.ProfileWithoutConfig;
+        }
+        if (options.no_config and options.profile != null) {
+            return error.ProfileWithoutConfig;
+        }
+
         try options.graphics.validate();
         return options;
     }
@@ -499,7 +685,10 @@ fn defaultShell(environ: std.process.Environ) !pty.Command {
     const fallback: [*:0]const u8 = "/bin/sh";
     const configured = environ.getPosix("SHELL") orelse
         return pty.Command.fromArgv(&.{fallback});
-    if (configured.len == 0) return pty.Command.fromArgv(&.{fallback});
+    if (configured.len == 0) {
+        return pty.Command.fromArgv(&.{fallback});
+    }
+
     return pty.Command.fromArgv(&.{configured.ptr});
 }
 

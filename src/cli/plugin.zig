@@ -185,14 +185,18 @@ fn writeStore(io: Io, path: []const u8, store: *const core.plugin.TrustStore) !v
     var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const temp = try std.fmt.bufPrint(&temp_buffer, "{s}.tmp-{s}", .{ path, &nonce_hex });
     var committed = false;
-    defer if (!committed) Io.Dir.cwd().deleteFile(io, temp) catch {};
+    defer if (!committed) {
+        Io.Dir.cwd().deleteFile(io, temp) catch {};
+    };
 
     var file = try Io.Dir.cwd().createFile(io, temp, .{
         .truncate = true,
         .permissions = File.Permissions.fromMode(0o600),
     });
     var file_open = true;
-    defer if (file_open) file.close(io);
+    defer if (file_open) {
+        file.close(io);
+    };
     var output_buffer: [4096]u8 = undefined;
     var output = file.writer(io, &output_buffer);
     try store.writeJson(&output.interface);
