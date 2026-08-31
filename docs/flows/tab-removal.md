@@ -109,6 +109,10 @@ ApplyTabRemovalHandler
         |
 ClientModel.removeTab
         |
+TabRemovalCommit
+        |
+DeliverTabRemovalHandler
+        |
 retire requests -> release pane resources
         |
 stay, hand off to predecessor, or exit
@@ -123,24 +127,31 @@ A terminal response for a request already retired by canonical reconciliation
 is consumed and returns `ignored`. The slice removes protocol-only fields and
 calls `ApplyTabRemovalHandler`.
 
-The application handler owns the client policy. It validates the workspace
-transition and commits the canonical fact through `ClientModel.removeTab`.
-Requested removals must still exist. Repeated or stale lifecycle facts are
-idempotent and only retire obsolete continuations.
+`ApplyTabRemovalHandler` validates the workspace transition and commits the
+canonical fact through `ClientModel.removeTab`. The model always returns an
+exact `TabRemovalCommit`: `removed` captures pane identities, active successor,
+successor layout, pre/post active-tab revision and the workspace, tab, pane and
+copy revisions; `stale` captures whether the workspace or tab is absent plus
+the unchanged revisions. Requested removals must still exist. Repeated or
+stale lifecycle facts remain valid idempotent deliveries.
 
-After a commit, the handler retires requests for the removed tab and gives
-each pane identity to `ReleasePaneResourcesHandler`. Removing an inactive tab
-leaves the active report owner untouched. Removing the active tab retires any
-remaining stale reporting context through
+`DeliverTabRemovalHandler` validates that commit before any cleanup. A stale
+commit only retires obsolete continuations. A removed commit retires requests
+for the tab and gives each pane identity to `ReleasePaneResourcesHandler`.
+Removing an inactive tab leaves the active report owner untouched. Removing
+the active tab retires any remaining stale reporting context through
 `RetireReportedPaneFocusHandler`, exposes its successor, synchronizes
 attachment geometry and focus reporting, and requests that tab's canonical
-snapshot. Canonical retirement emits no focus-out.
+snapshot unless one is already in flight. Canonical retirement emits no
+focus-out.
 
 If the last tab removed the workspace, the handler forgets its navigation
 bookmark. It starts a workspace handoff when the runtime supplied a canonical
 predecessor. The projection is already empty, so continuations retired by the
 removal cannot block this runtime-directed handoff. With no surviving
-predecessor the handler returns an exit directive. The slice translates the
+predecessor the delivery handler returns an exit directive. The
+`tab_closures` adapter supplies request-lifecycle, graphics, active-resource,
+snapshot, navigation and workspace-handoff ports. The slice translates the
 application directive into `applied` or `exit`; the dispatcher only maps
 `exit` to process status `0`.
 
@@ -156,10 +167,14 @@ new client rebuilds its disposable model through workspace and tab snapshots.
 ## Proof
 
 - `src/frontend/client/tab_closures.zig` proves explicit correlation,
-  lifecycle classification, retired-response handling and wire translation.
+  lifecycle classification, retired-response handling, wire translation and
+  physical port wiring.
 - `src/frontend/client/application/close_tab.zig` proves request ordering,
-  failure recovery, commit-before-effects, lifecycle idempotence, workspace
-  transition policy and post-commit failures.
+  failure recovery, commit-before-delivery, lifecycle classification,
+  workspace transition policy and committed-delivery failure.
+- `src/frontend/client/application/tab_removal_delivery.zig` proves all four
+  dispositions, exact revisions and successor layout, stale-state validation,
+  effect order, snapshot coalescence and partial failure semantics.
 - `src/frontend/client/model.zig` proves exact location and workspace-removal
   validation, captured pane identities and model version changes.
 - `src/frontend/client/client_test.zig` proves bounded request delivery,

@@ -717,6 +717,33 @@ pub const TabRemoval = struct {
     was_active: bool,
     active: ?schema.TabLocation,
     workspace_removed: bool,
+    active_layout_revision: u64,
+    active_tab_revision_before: u64,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
+    copy_revision: u64,
+};
+
+pub const TabRemovalAbsence = enum {
+    workspace,
+    tab,
+};
+
+pub const StaleTabRemoval = struct {
+    location: schema.TabLocation,
+    absence: TabRemovalAbsence,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
+    copy_revision: u64,
+};
+
+pub const TabRemovalCommit = union(enum) {
+    removed: TabRemoval,
+    stale: StaleTabRemoval,
 };
 
 pub const TabReconciliation = struct {
@@ -3064,19 +3091,21 @@ pub const Model = struct {
         };
     }
 
-    /// Removes a runtime-confirmed tab after validating workspace closure.
-    /// Missing tabs return null so lifecycle adapters can remain idempotent.
+    /// Removes a runtime-confirmed tab after validating workspace closure and
+    /// captures missing workspace or tab identities as an exact stale commit.
     ///
     /// ```zig
-    /// const removal = try model.removeTab(command) orelse return;
+    /// const commit = try model.removeTab(command);
     /// ```
-    pub fn removeTab(model: *Model, command: RemoveTab) !?TabRemoval {
-        const workspace = model.workspace.workspace orelse return null;
+    pub fn removeTab(model: *Model, command: RemoveTab) !TabRemovalCommit {
+        const workspace = model.workspace.workspace orelse
+            return model.staleTabRemoval(command.location, .workspace);
         if (!std.meta.eql(workspace, command.location.workspace)) {
-            return error.UnexpectedWorkspace;
+            return model.staleTabRemoval(command.location, .workspace);
         }
 
-        const closing = model.workspace.find(command.location.tab_id) orelse return null;
+        const closing = model.workspace.find(command.location.tab_id) orelse
+            return model.staleTabRemoval(command.location, .tab);
         if (!std.meta.eql(closing.location, command.location)) {
             return error.UnexpectedTab;
         }
@@ -3088,6 +3117,7 @@ pub const Model = struct {
 
         const was_active = model.workspace.active_index ==
             model.workspace.indexOf(command.location.tab_id).?;
+        const active_tab_revision_before = model.active_tab_revision;
         var panes: RemovedPanes = .{};
         var iterator = closing.model.paneIterator();
         while (iterator.next()) |pane| {
@@ -3102,13 +3132,35 @@ pub const Model = struct {
         }
         releaseInvalidCopyMode(model);
 
-        return .{
+        return .{ .removed = .{
             .removed = command.location,
             .panes = panes,
             .was_active = was_active,
             .active = active,
             .workspace_removed = workspace_removed,
-        };
+            .active_layout_revision = if (model.workspace.activeConst()) |tab|
+                tab.model.layout.currentRevision()
+            else
+                0,
+            .active_tab_revision_before = active_tab_revision_before,
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
+            .copy_revision = model.copy_revision,
+        } };
+    }
+
+    fn staleTabRemoval(model: *const Model, location: schema.TabLocation, absence: TabRemovalAbsence) TabRemovalCommit {
+        return .{ .stale = .{
+            .location = location,
+            .absence = absence,
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
+            .copy_revision = model.copy_revision,
+        } };
     }
 
     /// Resolves one semantic target and returns the committed identity change.
@@ -4895,18 +4947,32 @@ test "active tab removal advances collection and active identity revisions" {
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model.enterCopyMode());
+    const version_before_removal = model.version();
 
     const removal = (try model.removeTab(.{
         .location = first,
         .workspace_removed = false,
-    })).?;
+    })).removed;
 
     try std.testing.expectEqualDeep(first, removal.removed);
     try std.testing.expect(removal.was_active);
     try std.testing.expectEqualDeep(second, removal.active.?);
     try std.testing.expectEqualSlices(schema.PaneId, &.{@enumFromInt(1)}, removal.panes.slice());
+    try std.testing.expectEqual(
+        model.workspace.activeConst().?.model.layout.currentRevision(),
+        removal.active_layout_revision,
+    );
+    try std.testing.expectEqual(@as(u64, 0), removal.active_tab_revision_before);
+    try std.testing.expectEqual(model.version().workspace, removal.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, removal.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, removal.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, removal.panes_revision);
+    try std.testing.expectEqual(model.version().copy, removal.copy_revision);
+    try std.testing.expect(!model.copyModeActive());
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+    try std.testing.expectEqual(version_before_removal.copy +% 1, model.version().copy);
 }
 
 test "inactive tab removal preserves the active identity revision" {
@@ -4934,10 +5000,20 @@ test "inactive tab removal preserves the active identity revision" {
     const removal = (try model.removeTab(.{
         .location = second,
         .workspace_removed = false,
-    })).?;
+    })).removed;
 
     try std.testing.expect(!removal.was_active);
     try std.testing.expectEqualDeep(first, removal.active.?);
+    try std.testing.expectEqual(
+        model.workspace.activeConst().?.model.layout.currentRevision(),
+        removal.active_layout_revision,
+    );
+    try std.testing.expectEqual(removal.active_tab_revision_before, removal.active_tab_revision);
+    try std.testing.expectEqual(model.version().workspace, removal.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, removal.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, removal.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, removal.panes_revision);
+    try std.testing.expectEqual(model.version().copy, removal.copy_revision);
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 0), model.version().active_tab);
 }
@@ -4962,14 +5038,64 @@ test "workspace closure is validated before the last tab is removed" {
     const removal = (try model.removeTab(.{
         .location = location,
         .workspace_removed = true,
-    })).?;
+    })).removed;
 
     try std.testing.expect(removal.workspace_removed);
     try std.testing.expect(removal.was_active);
     try std.testing.expect(removal.active == null);
+    try std.testing.expectEqual(@as(u64, 0), removal.active_layout_revision);
+    try std.testing.expectEqual(@as(u64, 0), removal.active_tab_revision_before);
+    try std.testing.expectEqual(model.version().workspace, removal.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, removal.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, removal.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, removal.panes_revision);
+    try std.testing.expectEqual(model.version().copy, removal.copy_revision);
     try std.testing.expectEqual(@as(usize, 0), model.workspace.count);
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+}
+
+test "missing tab removal captures exact tab and workspace absence" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    const missing: schema.TabLocation = .{
+        .workspace = location.workspace,
+        .tab_id = @enumFromInt(9),
+    };
+
+    const missing_tab = try model.removeTab(.{
+        .location = missing,
+        .workspace_removed = false,
+    });
+
+    try std.testing.expect(missing_tab == .stale);
+    try std.testing.expectEqualDeep(missing, missing_tab.stale.location);
+    try std.testing.expectEqual(TabRemovalAbsence.tab, missing_tab.stale.absence);
+    try std.testing.expectEqual(model.version().workspace, missing_tab.stale.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, missing_tab.stale.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, missing_tab.stale.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, missing_tab.stale.panes_revision);
+    try std.testing.expectEqual(model.version().copy, missing_tab.stale.copy_revision);
+
+    const foreign: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .tab_id = location.tab_id,
+    };
+    const missing_workspace = try model.removeTab(.{
+        .location = foreign,
+        .workspace_removed = true,
+    });
+
+    try std.testing.expect(missing_workspace == .stale);
+    try std.testing.expectEqualDeep(foreign, missing_workspace.stale.location);
+    try std.testing.expectEqual(TabRemovalAbsence.workspace, missing_workspace.stale.absence);
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "tab selection resolves identity position and wrapping offset" {

@@ -52,6 +52,7 @@ pub const sidebar_animation = @import("sidebar_animation.zig");
 pub const split_pane = @import("split_pane.zig");
 pub const system_metrics = @import("system_metrics.zig");
 pub const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
+pub const tab_removal_delivery = @import("tab_removal_delivery.zig");
 pub const tab_selection_delivery = @import("tab_selection_delivery.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
 pub const tab_snapshot_delivery = @import("tab_snapshot_delivery.zig");
@@ -118,6 +119,7 @@ test {
     _ = split_pane;
     _ = system_metrics;
     _ = tab_attachment_retirement;
+    _ = tab_removal_delivery;
     _ = tab_selection_delivery;
     _ = tab_snapshot;
     _ = tab_snapshot_delivery;

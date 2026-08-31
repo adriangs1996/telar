@@ -104,22 +104,18 @@ pub const TabRemovalDirective = enum {
     exit,
 };
 
-pub const RemovalEffects = struct {
+pub const RemovalDelivery = struct {
     context: *anyopaque,
-    retire_requests: *const fn (*anyopaque, schema.TabLocation) void,
-    release_resources: *const fn (*anyopaque, client_model.TabRemoval) anyerror!void,
-    forget_workspace: *const fn (*anyopaque, schema.WorkspaceLocation) void,
-    request_workspace: *const fn (*anyopaque, schema.WorkspaceId) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.TabRemovalCommit, ?schema.WorkspaceId) anyerror!TabRemovalDirective,
 };
 
 pub const ApplyTabRemovalHandler = struct {
     model: *client_model.Model,
-    effects: RemovalEffects,
+    delivery: RemovalDelivery,
 
-    /// Applies one canonical tab-removal fact and completes its client
-    /// lifecycle. Repeated lifecycle facts are ignored; a missing requested
-    /// removal is rejected. The final workspace either starts a handoff or
-    /// asks the client loop to exit.
+    /// Validates and commits one canonical tab-removal fact before delegating
+    /// its exact removed or stale result. Requested absence is rejected while
+    /// lifecycle absence remains an idempotent delivery.
     ///
     /// ```zig
     /// const directive = try handler.execute(command);
@@ -127,35 +123,23 @@ pub const ApplyTabRemovalHandler = struct {
     pub fn execute(handler: *ApplyTabRemovalHandler, command: ApplyTabRemoval) !TabRemovalDirective {
         try validateWorkspaceTransition(command);
 
-        const removal = handler.model.removeTab(.{
+        const commit = try handler.model.removeTab(.{
             .location = command.location,
             .workspace_removed = command.workspace_removed,
-        }) catch |err| switch (err) {
-            error.UnexpectedWorkspace => if (command.trigger == .lifecycle) null else return err,
-            else => return err,
-        };
+        });
 
-        const committed = removal orelse {
-            if (command.trigger == .requested) {
-                return error.UnexpectedTab;
-            }
-
-            handler.effects.retire_requests(handler.effects.context, command.location);
-            return .continue_running;
-        };
-
-        handler.effects.retire_requests(handler.effects.context, committed.removed);
-        try handler.effects.release_resources(handler.effects.context, committed);
-
-        if (!committed.workspace_removed) {
-            return .continue_running;
+        if (commit == .stale and command.trigger == .requested) {
+            return switch (commit.stale.absence) {
+                .workspace => error.UnexpectedWorkspace,
+                .tab => error.UnexpectedTab,
+            };
         }
 
-        handler.effects.forget_workspace(handler.effects.context, committed.removed.workspace);
-        const previous = command.previous_workspace orelse return .exit;
-        try handler.effects.request_workspace(handler.effects.context, previous);
-
-        return .continue_running;
+        return handler.delivery.deliver(
+            handler.delivery.context,
+            commit,
+            command.previous_workspace,
+        );
     }
 };
 
@@ -258,74 +242,51 @@ const RequestCapture = struct {
     }
 };
 
-const RemovalStep = enum {
-    retire_requests,
-    release_resources,
-    forget_workspace,
-    request_workspace,
-};
-
 const RemovalCapture = struct {
     model: *const client_model.Model,
-    steps: [4]RemovalStep = undefined,
-    step_count: u8 = 0,
-    retired: ?schema.TabLocation = null,
-    forgotten: ?schema.WorkspaceLocation = null,
-    requested: ?schema.WorkspaceId = null,
+    calls: usize = 0,
+    commit: ?client_model.TabRemovalCommit = null,
+    previous_workspace: ?schema.WorkspaceId = null,
+    directive: TabRemovalDirective = .continue_running,
     observed_commit: bool = false,
-    release_failure: ?anyerror = null,
-    request_failure: ?anyerror = null,
+    failure: ?anyerror = null,
 
-    fn port(capture: *RemovalCapture) RemovalEffects {
+    fn port(capture: *RemovalCapture) RemovalDelivery {
         return .{
             .context = capture,
-            .retire_requests = retireRequests,
-            .release_resources = releaseResources,
-            .forget_workspace = forgetWorkspace,
-            .request_workspace = requestWorkspace,
+            .deliver = deliver,
         };
     }
 
-    fn retireRequests(context: *anyopaque, location: schema.TabLocation) void {
+    fn deliver(context: *anyopaque, commit: client_model.TabRemovalCommit, previous_workspace: ?schema.WorkspaceId) !TabRemovalDirective {
         const capture: *RemovalCapture = @ptrCast(@alignCast(context));
-        capture.record(.retire_requests);
-        capture.retired = location;
-    }
-
-    fn releaseResources(context: *anyopaque, removal: client_model.TabRemoval) !void {
-        const capture: *RemovalCapture = @ptrCast(@alignCast(context));
-        capture.record(.release_resources);
-        capture.observed_commit = capture.model.tabLocation(removal.removed.tab_id) == null and
-            (capture.model.workspaceLocation() == null) == removal.workspace_removed;
-
-        if (capture.release_failure) |failure| {
+        capture.calls += 1;
+        capture.commit = commit;
+        capture.previous_workspace = previous_workspace;
+        capture.observed_commit = capture.observesCommit(commit);
+        if (capture.failure) |failure| {
             return failure;
         }
+
+        return capture.directive;
     }
 
-    fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
-        const capture: *RemovalCapture = @ptrCast(@alignCast(context));
-        capture.record(.forget_workspace);
-        capture.forgotten = workspace;
-    }
-
-    fn requestWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
-        const capture: *RemovalCapture = @ptrCast(@alignCast(context));
-        capture.record(.request_workspace);
-        capture.requested = workspace;
-
-        if (capture.request_failure) |failure| {
-            return failure;
-        }
-    }
-
-    fn record(capture: *RemovalCapture, step: RemovalStep) void {
-        capture.steps[capture.step_count] = step;
-        capture.step_count += 1;
-    }
-
-    fn recorded(capture: *const RemovalCapture) []const RemovalStep {
-        return capture.steps[0..capture.step_count];
+    fn observesCommit(capture: *const RemovalCapture, commit: client_model.TabRemovalCommit) bool {
+        const version = capture.model.version();
+        return switch (commit) {
+            .removed => |removal| capture.model.tabLocation(removal.removed.tab_id) == null and
+                (capture.model.workspaceLocation() == null) == removal.workspace_removed and
+                version.workspace == removal.workspace_revision and
+                version.tabs == removal.tabs_revision and
+                version.active_tab == removal.active_tab_revision and
+                version.panes == removal.panes_revision and
+                version.copy == removal.copy_revision,
+            .stale => |stale| version.workspace == stale.workspace_revision and
+                version.tabs == stale.tabs_revision and
+                version.active_tab == stale.active_tab_revision and
+                version.panes == stale.panes_revision and
+                version.copy == stale.copy_revision,
+        };
     }
 };
 
@@ -457,13 +418,13 @@ test "close rejection restores only the still-active tab" {
     try std.testing.expectEqualSlices(RequestStep, &.{.restore}, capture.recorded());
 }
 
-test "tab removal commits before retiring requests and resources" {
+test "tab removal commits before delivery" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .delivery = capture.port(),
     };
 
     const directive = try handler.execute(.{
@@ -474,7 +435,9 @@ test "tab removal commits before retiring requests and resources" {
     });
 
     try std.testing.expectEqual(TabRemovalDirective.continue_running, directive);
-    try std.testing.expectEqualSlices(RemovalStep, &.{ .retire_requests, .release_resources }, capture.recorded());
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+    try std.testing.expect(capture.commit.? == .removed);
+    try std.testing.expect(capture.previous_workspace == null);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(testing.second, testing.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(u64, 1), testing.model.version().tabs);
@@ -487,7 +450,7 @@ test "requested tab removal rejects invalid or missing canonical state" {
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .delivery = capture.port(),
     };
 
     try std.testing.expectError(error.UnexpectedPreviousWorkspace, handler.execute(.{
@@ -512,18 +475,18 @@ test "requested tab removal rejects invalid or missing canonical state" {
         .trigger = .requested,
     }));
 
-    try std.testing.expectEqual(@as(usize, 0), capture.recorded().len);
+    try std.testing.expectEqual(@as(usize, 0), capture.calls);
     try std.testing.expectEqual(@as(usize, 2), testing.model.workspace.count);
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "repeated lifecycle tab removal retires stale requests without mutation" {
+test "repeated lifecycle tab removal delivers an exact stale commit without mutation" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .delivery = capture.port(),
     };
     const missing: schema.TabLocation = .{
         .workspace = testing.first.workspace,
@@ -537,8 +500,11 @@ test "repeated lifecycle tab removal retires stale requests without mutation" {
         .trigger = .lifecycle,
     }));
 
-    try std.testing.expectEqualSlices(RemovalStep, &.{.retire_requests}, capture.recorded());
-    try std.testing.expectEqualDeep(missing, capture.retired.?);
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+    try std.testing.expect(capture.commit.? == .stale);
+    try std.testing.expectEqualDeep(missing, capture.commit.?.stale.location);
+    try std.testing.expectEqual(client_model.TabRemovalAbsence.tab, capture.commit.?.stale.absence);
+    try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 2), testing.model.workspace.count);
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
@@ -555,7 +521,7 @@ test "stale lifecycle tab removal from a departed workspace is ignored" {
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .delivery = capture.port(),
     };
     const version = testing.model.version();
 
@@ -566,21 +532,27 @@ test "stale lifecycle tab removal from a departed workspace is ignored" {
         .trigger = .lifecycle,
     }));
 
-    try std.testing.expectEqualSlices(RemovalStep, &.{.retire_requests}, capture.recorded());
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+    try std.testing.expect(capture.commit.? == .stale);
+    try std.testing.expectEqual(client_model.TabRemovalAbsence.workspace, capture.commit.?.stale.absence);
+    try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(version, testing.model.version());
 }
 
-test "removing the final workspace chooses exit or canonical predecessor" {
+test "final workspace removal propagates the delivery directive and predecessor" {
     inline for (.{
-        .{ .previous = @as(?schema.WorkspaceId, null), .expected = TabRemovalDirective.exit, .handoff = false },
-        .{ .previous = @as(?schema.WorkspaceId, @enumFromInt(9)), .expected = TabRemovalDirective.continue_running, .handoff = true },
+        .{ .previous = @as(?schema.WorkspaceId, null), .expected = TabRemovalDirective.exit },
+        .{ .previous = @as(?schema.WorkspaceId, @enumFromInt(9)), .expected = TabRemovalDirective.continue_running },
     }) |scenario| {
         var testing = try TestingModel.init(false);
         defer testing.deinit();
-        var capture: RemovalCapture = .{ .model = testing.model };
+        var capture: RemovalCapture = .{
+            .model = testing.model,
+            .directive = scenario.expected,
+        };
         var handler: ApplyTabRemovalHandler = .{
             .model = testing.model,
-            .effects = capture.port(),
+            .delivery = capture.port(),
         };
 
         try std.testing.expectEqual(scenario.expected, try handler.execute(.{
@@ -590,28 +562,24 @@ test "removing the final workspace chooses exit or canonical predecessor" {
             .trigger = .lifecycle,
         }));
 
-        const expected_steps: []const RemovalStep = if (scenario.handoff)
-            &.{ .retire_requests, .release_resources, .forget_workspace, .request_workspace }
-        else
-            &.{ .retire_requests, .release_resources, .forget_workspace };
-        try std.testing.expectEqualSlices(RemovalStep, expected_steps, capture.recorded());
+        try std.testing.expectEqual(@as(usize, 1), capture.calls);
+        try std.testing.expect(capture.commit.? == .removed);
         try std.testing.expect(capture.observed_commit);
-        try std.testing.expectEqualDeep(testing.first.workspace, capture.forgotten.?);
-        try std.testing.expectEqual(scenario.previous, capture.requested);
+        try std.testing.expectEqual(scenario.previous, capture.previous_workspace);
         try std.testing.expect(testing.model.workspaceLocation() == null);
     }
 }
 
-test "tab removal preserves its commit after resource failure" {
+test "tab removal preserves its commit after delivery failure" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     var capture: RemovalCapture = .{
         .model = testing.model,
-        .release_failure = error.ResourceSyncFailed,
+        .failure = error.ResourceSyncFailed,
     };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .delivery = capture.port(),
     };
 
     try std.testing.expectError(error.ResourceSyncFailed, handler.execute(.{
@@ -621,21 +589,21 @@ test "tab removal preserves its commit after resource failure" {
         .trigger = .requested,
     }));
 
-    try std.testing.expectEqualSlices(RemovalStep, &.{ .retire_requests, .release_resources }, capture.recorded());
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(testing.second, testing.model.activeTabLocation().?);
 }
 
-test "workspace handoff failure retains removal and forgotten navigation" {
+test "final removal preserves its commit after delivery failure" {
     var testing = try TestingModel.init(false);
     defer testing.deinit();
     var capture: RemovalCapture = .{
         .model = testing.model,
-        .request_failure = error.HandoffFailed,
+        .failure = error.HandoffFailed,
     };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .delivery = capture.port(),
     };
 
     try std.testing.expectError(error.HandoffFailed, handler.execute(.{
@@ -645,13 +613,8 @@ test "workspace handoff failure retains removal and forgotten navigation" {
         .trigger = .lifecycle,
     }));
 
-    try std.testing.expectEqualSlices(
-        RemovalStep,
-        &.{ .retire_requests, .release_resources, .forget_workspace, .request_workspace },
-        capture.recorded(),
-    );
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.observed_commit);
-    try std.testing.expectEqualDeep(testing.first.workspace, capture.forgotten.?);
-    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(9)), capture.requested.?);
+    try std.testing.expectEqual(@as(?schema.WorkspaceId, @enumFromInt(9)), capture.previous_workspace);
     try std.testing.expect(testing.model.workspaceLocation() == null);
 }
