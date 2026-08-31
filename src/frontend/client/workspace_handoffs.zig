@@ -104,11 +104,16 @@ fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.Reque
             .context = client,
             .pending = if (ignore_pending) neverPending else requestPending,
         },
+        .restoration = .{ .effects = .{
+            .context = client,
+            .show_pane_graphics = showPaneGraphics,
+            .tab_snapshot_pending = tabSnapshotPending,
+            .request_tab_snapshot = requestTabSnapshot,
+        } },
         .effects = .{
             .context = client,
             .detach = detachCurrent,
             .send = sendHandoff,
-            .restore = restoreCurrent,
             .release = releaseDeparture,
         },
     };
@@ -229,17 +234,22 @@ fn sendHandoff(context: *anyopaque, command: workspace_handoff.WorkspaceHandoff)
     });
 }
 
-fn restoreCurrent(context: *anyopaque) !void {
+fn showPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const active = client.model.workspace.active() orelse return;
-    var panes = active.model.paneIterator();
-    while (panes.next()) |pane| {
-        try client.graphics_store.setPaneVisible(pane.id, true);
-    }
 
-    if (!request_lifecycle.has(client, .tab_snapshot)) {
-        try request_lifecycle.requestTabSnapshot(client, active.location);
-    }
+    try client.graphics_store.setPaneVisible(pane_id, true);
+}
+
+fn tabSnapshotPending(context: *anyopaque) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return request_lifecycle.has(client, .tab_snapshot);
+}
+
+fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try request_lifecycle.requestTabSnapshot(client, location);
 }
 
 fn releaseDeparture(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {

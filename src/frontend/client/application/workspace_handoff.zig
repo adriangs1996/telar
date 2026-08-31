@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../model.zig");
+const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
 
 const schema = core.schema;
 
@@ -74,13 +75,13 @@ pub const HandoffRequestEffects = struct {
     context: *anyopaque,
     detach: *const fn (*anyopaque) anyerror!void,
     send: *const fn (*anyopaque, WorkspaceHandoff) anyerror!void,
-    restore: *const fn (*anyopaque) anyerror!void,
     release: *const fn (*anyopaque, *const client_model.WorkspaceDeparture) void,
 };
 
 pub const RequestWorkspaceHandoffHandler = struct {
     model: *client_model.Model,
     gate: WorkspaceHandoffGate,
+    restoration: workspace_handoff_restoration.RestoreWorkspaceHandoffHandler,
     effects: HandoffRequestEffects,
 
     /// Delivers every detach before the open request, then commits departure.
@@ -96,11 +97,11 @@ pub const RequestWorkspaceHandoffHandler = struct {
         }
 
         handler.effects.detach(handler.effects.context) catch |err| {
-            handler.effects.restore(handler.effects.context) catch {};
+            _ = handler.restoration.execute(handler.model) catch {};
             return err;
         };
         handler.effects.send(handler.effects.context, command) catch |err| {
-            handler.effects.restore(handler.effects.context) catch {};
+            _ = handler.restoration.execute(handler.model) catch {};
             return err;
         };
 
@@ -312,7 +313,9 @@ test "SelectWorkspaceHandler permits base workspace selection from a worktree" {
 const RequestEvent = enum {
     detach,
     send,
-    restore,
+    restore_graphics,
+    restore_snapshot_pending,
+    restore_snapshot,
     release,
 };
 
@@ -321,7 +324,8 @@ const RequestCapture = struct {
     blocked: bool = false,
     fail_detach: bool = false,
     fail_send: bool = false,
-    events: [4]RequestEvent = undefined,
+    fail_restore: bool = false,
+    events: [6]RequestEvent = undefined,
     event_count: usize = 0,
     command: ?WorkspaceHandoff = null,
     departure: ?client_model.WorkspaceDeparture = null,
@@ -336,9 +340,17 @@ const RequestCapture = struct {
             .context = capture,
             .detach = detach,
             .send = send,
-            .restore = restore,
             .release = release,
         };
+    }
+
+    fn restoration(capture: *RequestCapture) workspace_handoff_restoration.RestoreWorkspaceHandoffHandler {
+        return .{ .effects = .{
+            .context = capture,
+            .show_pane_graphics = showPaneGraphics,
+            .tab_snapshot_pending = tabSnapshotPending,
+            .request_tab_snapshot = requestTabSnapshot,
+        } };
     }
 
     fn pending(context: *anyopaque) bool {
@@ -368,9 +380,24 @@ const RequestCapture = struct {
         }
     }
 
-    fn restore(context: *anyopaque) !void {
+    fn showPaneGraphics(context: *anyopaque, _: schema.PaneId) !void {
         const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        capture.record(.restore);
+        capture.record(.restore_graphics);
+        if (capture.fail_restore) {
+            return error.RestoreFailed;
+        }
+    }
+
+    fn tabSnapshotPending(context: *anyopaque) bool {
+        const capture: *RequestCapture = @ptrCast(@alignCast(context));
+        capture.record(.restore_snapshot_pending);
+
+        return false;
+    }
+
+    fn requestTabSnapshot(context: *anyopaque, _: schema.TabLocation) !void {
+        const capture: *RequestCapture = @ptrCast(@alignCast(context));
+        capture.record(.restore_snapshot);
     }
 
     fn release(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {
@@ -397,6 +424,7 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
+        .restoration = capture.restoration(),
         .effects = capture.port(),
     };
     const command = testingHandoff();
@@ -417,6 +445,7 @@ test "RequestWorkspaceHandoffHandler gates without effects or model mutation" {
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
+        .restoration = capture.restoration(),
         .effects = capture.port(),
     };
 
@@ -429,8 +458,27 @@ test "RequestWorkspaceHandoffHandler gates without effects or model mutation" {
 
 test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
     inline for (.{
-        .{ .detach = true, .send = false, .expected = error.DetachFailed, .events = &[_]RequestEvent{ .detach, .restore } },
-        .{ .detach = false, .send = true, .expected = error.SendFailed, .events = &[_]RequestEvent{ .detach, .send, .restore } },
+        .{
+            .detach = true,
+            .send = false,
+            .restore = false,
+            .expected = error.DetachFailed,
+            .events = &[_]RequestEvent{ .detach, .restore_graphics, .restore_snapshot_pending, .restore_snapshot },
+        },
+        .{
+            .detach = false,
+            .send = true,
+            .restore = false,
+            .expected = error.SendFailed,
+            .events = &[_]RequestEvent{ .detach, .send, .restore_graphics, .restore_snapshot_pending, .restore_snapshot },
+        },
+        .{
+            .detach = true,
+            .send = false,
+            .restore = true,
+            .expected = error.DetachFailed,
+            .events = &[_]RequestEvent{ .detach, .restore_graphics },
+        },
     }) |scenario| {
         var testing = try TestingModel.init(true);
         defer testing.deinit();
@@ -438,10 +486,12 @@ test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
             .model = testing.model,
             .fail_detach = scenario.detach,
             .fail_send = scenario.send,
+            .fail_restore = scenario.restore,
         };
         var handler: RequestWorkspaceHandoffHandler = .{
             .model = testing.model,
             .gate = capture.gate(),
+            .restoration = capture.restoration(),
             .effects = capture.port(),
         };
 

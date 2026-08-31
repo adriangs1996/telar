@@ -59,6 +59,12 @@ only outbox capacity and the physical paste, focus, attachment and graphics
 ports. A local detach or open failure does not commit departure and requests a
 canonical tab snapshot to repair any provisional attachment effects.
 
+`RestoreWorkspaceHandoffHandler` owns that local recovery. It captures the
+still-active tab, restores graphics for its panes in stable order and then
+coalesces an existing tab snapshot or requests one canonical repair. A
+restoration failure preserves completed physical effects but never replaces
+the original detach or open error returned by the handoff request.
+
 Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused
 pane, client-owned layout and every pane identity in fixed-capacity values,
@@ -152,6 +158,9 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
 - `src/frontend/client/application/workspace_handoff_preparation.zig` checks
   complete capacity accounting, pending attachments, preflight-before-effects,
   multi-tab retirement order and partial detach failures.
+- `src/frontend/client/application/workspace_handoff_restoration.zig` checks
+  active-pane graphics order, snapshot coalescence and partial recovery
+  failures.
 - `src/frontend/client/application/workspace_transition_delivery.zig` checks
   resource retirement, exact activation validation, ordered snapshot requests
   and partial failures.
