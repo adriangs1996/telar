@@ -49,6 +49,10 @@ HandlePaneExitHandler
         |
 ClientModel.retirePane
         |
+PaneExit
+        |
+DeliverPaneClosureHandler
+        |
 ReleasePaneResourcesHandler + focus and size synchronization
         |
 presentation_lifecycle.observe
@@ -65,17 +69,24 @@ cleanup; process lifecycle remains runtime-owned. The slice returns the
 resulting `retired` or `stale` transition for direct observation.
 
 `ClientModel.retirePane` locates the pane globally by stable identity and
-removes it from its exact tab. Retirement in the active tab advances the pane
-revision once. Retirement in an inactive tab changes stored membership but no
-visible revision. A missing or repeated identity is stale and changes nothing.
+removes it from its exact tab. The resulting commit captures the workspace,
+tab, active-tab and pane revisions. A retirement also captures its exact tab
+identity, activity, emptiness and tab-local layout revision. Retirement in the
+active tab advances the pane revision once. Retirement in an inactive tab
+changes stored membership but no visible revision, so its layout revision is
+what prevents an ABA delivery. A missing or repeated identity produces a
+stale commit with unchanged revisions.
 
-After the model commit, `pane_closures` completes a matching close
-continuation, retires a pending attachment, and delegates copy, paste,
-reported-focus and graphics cleanup to `ReleasePaneResourcesHandler`. Report
-release is silent because the authoritative exit means no child remains to
-receive focus-out.
+After the model commit, `DeliverPaneClosureHandler` validates that exact state,
+retires a pending attachment, completes a matching close continuation, and
+delegates copy, paste, reported-focus and graphics cleanup to
+`ReleasePaneResourcesHandler`. Report release is silent because the
+authoritative exit means no child remains to receive focus-out.
 Active-tab retirement then synchronizes the new focused pane and re-offers
-attached sizes. Inactive and stale exits do not touch active focus or geometry.
+attached sizes using the workbench produced by resource synchronization.
+Inactive and stale exits do not touch active focus or geometry. The
+`pane_closures` adapter supplies only request-lifecycle, graphics, focus and
+runtime-resize ports.
 
 The handler neither invalidates the view nor requests a draw. The presenter
 observes the model revision independently and folds an active retirement into
@@ -104,9 +115,12 @@ the existing singleton `pane_operation` slot, and resize effects use the
 coalescing outbox.
 
 - `frontend/client/application/close_pane.zig` checks request gating, pure
-  planning, commit-before-effects, stale cleanup and committed-effect failure.
-- `frontend/client/pane_closures.zig` checks wire translation and owns request,
-  resource, focus and geometry effects after the application transition.
+  planning, commit-before-delivery and committed-delivery failure.
+- `frontend/client/application/pane_closure_delivery.zig` checks exact active,
+  inactive and stale commits, effect order, tab-local ABA rejection and partial
+  failure semantics.
+- `frontend/client/pane_closures.zig` translates wire events and implements the
+  delivery ports.
 - `frontend/client/model.zig` checks active, inactive and repeated retirement
   plus presentation revision ownership.
 - `frontend/client/requests.zig` checks exact close completion and attachment

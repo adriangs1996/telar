@@ -659,11 +659,24 @@ pub const PaneRetirement = struct {
     location: schema.TabLocation,
     active: bool,
     tab_empty: bool,
+    layout_revision: u64,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
+};
+
+pub const StalePaneExit = struct {
+    pane_id: schema.PaneId,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
 };
 
 pub const PaneExit = union(enum) {
     retired: PaneRetirement,
-    stale: schema.PaneId,
+    stale: StalePaneExit,
 };
 
 pub const RemoveTab = struct {
@@ -2946,10 +2959,10 @@ pub const Model = struct {
     /// const transition = model.retirePane(pane_id);
     /// ```
     pub fn retirePane(model: *Model, pane_id: schema.PaneId) PaneExit {
-        const tab = model.workspace.tabForPane(pane_id) orelse return .{ .stale = pane_id };
-        const pane = tab.model.find(pane_id) orelse return .{ .stale = pane_id };
+        const tab = model.workspace.tabForPane(pane_id) orelse return model.stalePaneExit(pane_id);
+        const pane = tab.model.find(pane_id) orelse return model.stalePaneExit(pane_id);
         if (!std.meta.eql(pane.location, tab.location)) {
-            return .{ .stale = pane_id };
+            return model.stalePaneExit(pane_id);
         }
 
         const active = if (model.workspace.activeConst()) |current|
@@ -2967,6 +2980,21 @@ pub const Model = struct {
             .location = location,
             .active = active,
             .tab_empty = tab.model.pane_count == 0,
+            .layout_revision = tab.model.layout.currentRevision(),
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
+        } };
+    }
+
+    fn stalePaneExit(model: *const Model, pane_id: schema.PaneId) PaneExit {
+        return .{ .stale = .{
+            .pane_id = pane_id,
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
         } };
     }
 
@@ -5962,6 +5990,14 @@ test "active pane retirement advances the visible pane revision once" {
     try std.testing.expectEqualDeep(location, retirement.retired.location);
     try std.testing.expect(retirement.retired.active);
     try std.testing.expect(!retirement.retired.tab_empty);
+    try std.testing.expectEqual(
+        model.workspace.activeConst().?.model.layout.currentRevision(),
+        retirement.retired.layout_revision,
+    );
+    try std.testing.expectEqual(model.version().workspace, retirement.retired.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, retirement.retired.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, retirement.retired.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, retirement.retired.panes_revision);
     try std.testing.expect(model.workspace.findPane(second) == null);
     try std.testing.expectEqual(first, model.workspace.active().?.model.layout.focused().?);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
@@ -5969,7 +6005,11 @@ test "active pane retirement advances the visible pane revision once" {
     const repeated = model.retirePane(second);
 
     try std.testing.expect(repeated == .stale);
-    try std.testing.expectEqual(second, repeated.stale);
+    try std.testing.expectEqual(second, repeated.stale.pane_id);
+    try std.testing.expectEqual(model.version().workspace, repeated.stale.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, repeated.stale.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, repeated.stale.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, repeated.stale.panes_revision);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
 }
 
@@ -5995,6 +6035,14 @@ test "inactive pane retirement changes membership without a visible revision" {
     try std.testing.expect(retirement == .retired);
     try std.testing.expect(!retirement.retired.active);
     try std.testing.expect(retirement.retired.tab_empty);
+    try std.testing.expectEqual(
+        model.workspace.find(inactive.tab_id).?.model.layout.currentRevision(),
+        retirement.retired.layout_revision,
+    );
+    try std.testing.expectEqual(model.version().workspace, retirement.retired.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, retirement.retired.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, retirement.retired.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, retirement.retired.panes_revision);
     try std.testing.expect(model.workspace.findPane(inactive_pane) == null);
     try std.testing.expectEqualDeep(active, model.activeTabLocation().?);
     try std.testing.expectEqualDeep(Version{}, model.version());

@@ -44,7 +44,7 @@ pub const RequestClosePaneHandler = struct {
 
 pub const PaneExitEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, PaneExit) anyerror!void,
+    deliver: *const fn (*anyopaque, PaneExit) anyerror!void,
 };
 
 pub const HandlePaneExitHandler = struct {
@@ -59,7 +59,7 @@ pub const HandlePaneExitHandler = struct {
     /// ```
     pub fn execute(handler: *HandlePaneExitHandler, pane_id: schema.PaneId) !PaneExit {
         const transition = handler.model.retirePane(pane_id);
-        try handler.effects.apply(handler.effects.context, transition);
+        try handler.effects.deliver(handler.effects.context, transition);
 
         return transition;
     }
@@ -129,10 +129,10 @@ const ExitCapture = struct {
     fail: bool = false,
 
     fn port(capture: *ExitCapture) PaneExitEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, transition: PaneExit) !void {
+    fn deliver(context: *anyopaque, transition: PaneExit) !void {
         const capture: *ExitCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.observed_commit = capture.model.workspace.activeConst().?.model.findConst(capture.pane_id) == null;
@@ -142,8 +142,8 @@ const ExitCapture = struct {
                     retired.pane_id == capture.pane_id and
                     capture.model.version().panes == 1;
             },
-            .stale => |pane_id| {
-                capture.observed_commit = capture.observed_commit and pane_id == capture.pane_id;
+            .stale => |stale| {
+                capture.observed_commit = capture.observed_commit and stale.pane_id == capture.pane_id;
             },
         }
 
@@ -263,7 +263,7 @@ test "HandlePaneExitHandler applies idempotent cleanup to stale exits" {
     const transition = try handler.execute(testing.pane_id);
 
     try std.testing.expect(transition == .stale);
-    try std.testing.expectEqual(testing.pane_id, transition.stale);
+    try std.testing.expectEqual(testing.pane_id, transition.stale.pane_id);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualDeep(version_before, testing.model.version());
 }

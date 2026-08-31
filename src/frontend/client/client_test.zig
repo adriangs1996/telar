@@ -4933,7 +4933,7 @@ test "close pane request waits for the authoritative exit before committing" {
 
     const repeated = try pane_closures.applyExit(client, (try schema.decodeServer(exited)).pane_exited);
     try std.testing.expect(repeated == .stale);
-    try std.testing.expectEqual(closing_pane, repeated.stale);
+    try std.testing.expectEqual(closing_pane, repeated.stale.pane_id);
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
