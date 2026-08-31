@@ -205,6 +205,11 @@ pub const ProxySample = struct {
     tls_upstream_handshake_failures: u64 = 0,
     tls_downstream_handshake_failures: u64 = 0,
     tls_mint_failures: u64 = 0,
+    claude_inference_requests: u64 = 0,
+    claude_sse_payload_fragments: u64 = 0,
+    claude_turn_completions: u64 = 0,
+    claude_successful_responses: u64 = 0,
+    claude_failure_observations: u64 = 0,
 };
 
 pub const Sample = struct {
@@ -462,7 +467,12 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             "\"proxy_tls_context_failures\":{d}," ++
             "\"proxy_tls_upstream_handshake_failures\":{d}," ++
             "\"proxy_tls_downstream_handshake_failures\":{d}," ++
-            "\"proxy_tls_mint_failures\":{d},",
+            "\"proxy_tls_mint_failures\":{d}," ++
+            "\"proxy_claude_inference_requests\":{d}," ++
+            "\"proxy_claude_sse_payload_fragments\":{d}," ++
+            "\"proxy_claude_turn_completions\":{d}," ++
+            "\"proxy_claude_successful_responses\":{d}," ++
+            "\"proxy_claude_failure_observations\":{d},",
         .{
             metrics.agent_process_inspections,
             metrics.agent_process_misses,
@@ -483,6 +493,11 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             proxy.tls_upstream_handshake_failures,
             proxy.tls_downstream_handshake_failures,
             proxy.tls_mint_failures,
+            proxy.claude_inference_requests,
+            proxy.claude_sse_payload_fragments,
+            proxy.claude_turn_completions,
+            proxy.claude_successful_responses,
+            proxy.claude_failure_observations,
         },
     );
     try output.print("\"history_available\":{d},\"sqlite_open_failures\":{d}," ++
@@ -644,6 +659,11 @@ test "runtime telemetry reports retained memory domains" {
                 .tls_upstream_handshake_failures = 67,
                 .tls_downstream_handshake_failures = 71,
                 .tls_mint_failures = 73,
+                .claude_inference_requests = 79,
+                .claude_sse_payload_fragments = 83,
+                .claude_turn_completions = 89,
+                .claude_successful_responses = 97,
+                .claude_failure_observations = 101,
             },
             .heap = &heap,
         });
@@ -689,6 +709,11 @@ test "runtime telemetry reports retained memory domains" {
             "\"proxy_tls_upstream_handshake_failures\":67",
             "\"proxy_tls_downstream_handshake_failures\":71",
             "\"proxy_tls_mint_failures\":73",
+            "\"proxy_claude_inference_requests\":79",
+            "\"proxy_claude_sse_payload_fragments\":83",
+            "\"proxy_claude_turn_completions\":89",
+            "\"proxy_claude_successful_responses\":97",
+            "\"proxy_claude_failure_observations\":101",
         };
 
         for (expected_fields) |field| {

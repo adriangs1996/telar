@@ -121,10 +121,11 @@ The frontend message handler:
 Detection remains on the observation path. Snapshot rendering and input
 routing perform no filesystem, process, JSON, network, or plugin work.
 
-Proxy request start and response activity mark an agent as working; completion
-marks it ready, while failures visible to the protocol observer mark it failed.
-This includes HTTP/1.1 and HPACK-decoded HTTP/2 response statuses of 400 or
-greater, plus HTTP/2 stream resets.
+Proxy request start and response activity mark an agent as working. A verified
+provider turn completion marks it ready once no other model exchange remains;
+successful transport completion alone leaves it working. Failures visible to
+the protocol observer mark it failed. This includes HTTP/1.1 and HPACK-decoded
+HTTP/2 response statuses of 400 or greater, plus HTTP/2 stream resets.
 HTTP/2 activity is keyed by connection and stream. Completing one multiplexed
 stream leaves the agent working while another stream is active; a
 connection-level failure settles every remaining stream for that connection.

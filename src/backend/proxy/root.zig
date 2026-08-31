@@ -52,6 +52,11 @@ pub const MetricsSnapshot = struct {
     tls_upstream_handshake_failures: u64 = 0,
     tls_downstream_handshake_failures: u64 = 0,
     tls_mint_failures: u64 = 0,
+    claude_inference_requests: u64 = 0,
+    claude_sse_payload_fragments: u64 = 0,
+    claude_turn_completions: u64 = 0,
+    claude_successful_responses: u64 = 0,
+    claude_failure_observations: u64 = 0,
 };
 
 /// Ephemeral child environment. Its proxy credential is scrubbed by
@@ -221,6 +226,11 @@ pub const Proxy = struct {
             .tls_upstream_handshake_failures = service.tls_upstream_handshake_failures.load(.monotonic),
             .tls_downstream_handshake_failures = service.tls_downstream_handshake_failures.load(.monotonic),
             .tls_mint_failures = service.tls_mint_failures.load(.monotonic),
+            .claude_inference_requests = service.claude_inference_requests.load(.monotonic),
+            .claude_sse_payload_fragments = service.claude_sse_payload_fragments.load(.monotonic),
+            .claude_turn_completions = service.claude_turn_completions.load(.monotonic),
+            .claude_successful_responses = service.claude_successful_responses.load(.monotonic),
+            .claude_failure_observations = service.claude_failure_observations.load(.monotonic),
         };
     }
 };

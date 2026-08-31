@@ -967,6 +967,11 @@ pub fn Bindings(comptime Application: type) type {
                     .tls_upstream_handshake_failures = proxy_metrics.tls_upstream_handshake_failures,
                     .tls_downstream_handshake_failures = proxy_metrics.tls_downstream_handshake_failures,
                     .tls_mint_failures = proxy_metrics.tls_mint_failures,
+                    .claude_inference_requests = proxy_metrics.claude_inference_requests,
+                    .claude_sse_payload_fragments = proxy_metrics.claude_sse_payload_fragments,
+                    .claude_turn_completions = proxy_metrics.claude_turn_completions,
+                    .claude_successful_responses = proxy_metrics.claude_successful_responses,
+                    .claude_failure_observations = proxy_metrics.claude_failure_observations,
                 },
                 .heap = application.heap,
             });

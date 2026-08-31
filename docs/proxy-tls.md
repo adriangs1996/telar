@@ -145,12 +145,19 @@ while a graceful duplicate sentinel after all streams completed does not
 overwrite their result. Both the protocol observer and agent store track at
 most 128 concurrent streams per bounded record.
 
+For a successful, identity-encoded SSE response, the proxy inspects forwarded
+payload fragments without retaining them. A Claude `message_delta` whose JSON
+type also equals `message_delta` and whose `stop_reason` is `end_turn` publishes
+`provider_turn_completed`. The agent becomes `ready` only after every active
+model exchange has produced that outcome. Truncated or malformed events and
+continuation outcomes such as `tool_use` do not complete the turn.
+
 Network evidence cannot see a terminal permission dialog, so the observation
 worker also recognizes bounded presentation hints found in Codex, Claude Code,
 and herdr behavior. Permission and confirmation prompts produce `blocked` and
 override proxy activity. Working text overrides an early response completion.
-Claude becomes `ready` only when the emulated terminal's current screen has a
-visible cursor immediately after its `❯` input prompt. The raw PTY byte stream
+Claude's emulated terminal screen can independently confirm `ready` when it has
+a visible cursor immediately after its `❯` input prompt. The raw PTY byte stream
 cannot establish that state because a later terminal control sequence may have
 erased or moved the glyph. Claude identity must already be known from the
 foreground process, proxy, or branding; a bare `❯` never establishes it.
@@ -174,6 +181,23 @@ connections. Observation metrics expose reserved delivery depth, its high-water
 mark, and publications lost to capacity or closure. Rejected and subsequently
 revoked credentials do not increment the loss counter because they were never
 eligible for delivery. No metric retains the destination hostname or payload.
+
+Runtime telemetry exposes five Claude-specific counters without retaining
+headers or response data:
+
+- `proxy_claude_inference_requests` counts classified `/v1/messages` starts.
+- `proxy_claude_sse_payload_fragments` counts eligible SSE payload fragments
+  delivered to the provider interpreter.
+- `proxy_claude_turn_completions` counts verified `end_turn` outcomes.
+- `proxy_claude_successful_responses` counts successful transport completions.
+- `proxy_claude_failure_observations` counts published failure outcomes.
+
+If requests increase but SSE fragments do not, inspect response status,
+`Content-Type`, `Content-Encoding`, and HTTP/2 decode failures. If fragments
+increase without turn completions, the received SSE did not contain a valid,
+non-truncated Claude `end_turn`. If turn completions increase while the agent
+remains `working`, compare observation queue loss and active concurrent model
+exchanges; the provider interpretation has already succeeded.
 
 ## Lua middleware boundary
 

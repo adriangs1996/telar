@@ -124,6 +124,11 @@ pub const Service = struct {
     tls_upstream_handshake_failures: std.atomic.Value(u64) = .init(0),
     tls_downstream_handshake_failures: std.atomic.Value(u64) = .init(0),
     tls_mint_failures: std.atomic.Value(u64) = .init(0),
+    claude_inference_requests: std.atomic.Value(u64) = .init(0),
+    claude_sse_payload_fragments: std.atomic.Value(u64) = .init(0),
+    claude_turn_completions: std.atomic.Value(u64) = .init(0),
+    claude_successful_responses: std.atomic.Value(u64) = .init(0),
+    claude_failure_observations: std.atomic.Value(u64) = .init(0),
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
     pub fn create(io: Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
@@ -415,6 +420,20 @@ const TunnelContext = struct {
     }
 
     fn publishStatus(context: *TunnelContext, observation: StatusObservation) void {
+        if (context.provider == .claude) {
+            const counter = switch (observation.phase) {
+                .request_started => &context.service.claude_inference_requests,
+                .provider_turn_completed => &context.service.claude_turn_completions,
+                .response_finished => &context.service.claude_successful_responses,
+                .request_failed => &context.service.claude_failure_observations,
+                .auxiliary_request_started, .response_activity => null,
+            };
+
+            if (counter) |selected| {
+                _ = selected.fetchAdd(1, .monotonic);
+            }
+        }
+
         context.service.pipeline.publish(context.service.io, .{
             .credential = context.credential,
             .provider = context.provider,
@@ -518,8 +537,12 @@ const H2EventObserver = struct {
             .response_body => |body| {
                 const responses = observer.responses orelse return;
 
-                if (shouldInspectH2Body(body) and responses.feed(body.stream_id, body.bytes)) {
-                    observer.context.publishStatus(.{ .phase = .provider_turn_completed, .stream_id = body.stream_id, .status_code = 0 });
+                if (shouldInspectH2Body(body)) {
+                    _ = observer.context.service.claude_sse_payload_fragments.fetchAdd(1, .monotonic);
+
+                    if (responses.feed(body.stream_id, body.bytes)) {
+                        observer.context.publishStatus(.{ .phase = .provider_turn_completed, .stream_id = body.stream_id, .status_code = 0 });
+                    }
                 }
             },
         }
@@ -849,8 +872,14 @@ const HttpResponseObserver = struct {
             observer.context.publish(.response_activity, 0);
         }
 
-        if (observer.inspect_payload and fragment.payload.len != 0 and observer.response.feed(fragment.payload)) {
-            observer.context.publish(.provider_turn_completed, 0);
+        if (observer.inspect_payload and fragment.payload.len != 0) {
+            if (observer.response.provider == .claude) {
+                _ = observer.context.service.claude_sse_payload_fragments.fetchAdd(1, .monotonic);
+            }
+
+            if (observer.response.feed(fragment.payload)) {
+                observer.context.publish(.provider_turn_completed, 0);
+            }
         }
     }
 
@@ -1050,6 +1079,11 @@ test "HTTP1 Claude SSE publishes provider turn completion after forwarding" {
 
     try std.testing.expectEqualStrings(session.child_input, session.originOutput());
     try std.testing.expectEqualStrings(response, session.childOutput());
+    try std.testing.expectEqual(@as(u64, 1), service.claude_inference_requests.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.claude_sse_payload_fragments.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.claude_turn_completions.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.claude_successful_responses.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.claude_failure_observations.load(.monotonic));
 }
 
 test "HTTP2 final DATA publishes Claude completion before transport completion" {
@@ -1108,6 +1142,45 @@ test "HTTP2 final DATA publishes Claude completion before transport completion" 
         .{ .phase = .provider_turn_completed, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
         .{ .phase = .response_finished, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
     });
+    try std.testing.expectEqual(@as(u64, 1), service.claude_inference_requests.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.claude_sse_payload_fragments.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.claude_turn_completions.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.claude_successful_responses.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.claude_failure_observations.load(.monotonic));
+}
+
+test "Claude lifecycle counters ignore auxiliary traffic and other providers" {
+    const io = std.testing.io;
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator);
+    defer fixture.deinit();
+    const service = fixture.service.?;
+
+    const credential: identity.Credential = .{
+        .pane_id = try schema.id.pane(37),
+        .pane_generation = 41,
+        .token = .{0x18} ** identity.token_bytes,
+    };
+    try service.registerCredential(&credential);
+    var context: TunnelContext = .{
+        .service = service,
+        .credential = credential,
+        .provider = .claude,
+        .connection_id = 43,
+        .protocol = .http11,
+    };
+
+    context.publish(.auxiliary_request_started, 0);
+    context.publish(.request_failed, 0);
+    context.provider = .codex;
+    context.publish(.request_started, 0);
+    context.publish(.provider_turn_completed, 0);
+
+    try std.testing.expectEqual(@as(u64, 0), service.claude_inference_requests.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.claude_sse_payload_fragments.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.claude_turn_completions.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.claude_successful_responses.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.claude_failure_observations.load(.monotonic));
 }
 
 test "HTTP response metadata preserves final routing semantics" {
