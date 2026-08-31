@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
 const name_prompt = @import("name_prompt.zig");
 const workspace_capability = @import("../workspace/root.zig");
@@ -18,6 +19,7 @@ const ui = core.ui;
 pub const Version = struct {
     workspace: u64 = 0,
     workspace_list: u64 = 0,
+    agents: u64 = 0,
     tabs: u64 = 0,
     active_tab: u64 = 0,
     panes: u64 = 0,
@@ -150,6 +152,56 @@ pub const WorkspaceListCommit = struct {
     runtime_revision: u64,
     count: usize,
     workspace_list_revision: u64,
+};
+
+pub const AgentStatusChange = struct {
+    key: agents.AgentKey,
+    pane_index: u16,
+    provider: schema.AgentProvider,
+    previous: schema.AgentStatus,
+    current: schema.AgentStatus,
+};
+
+pub const AgentStatusChanges = struct {
+    items: [agents.max_agents]AgentStatusChange = undefined,
+    count: u8 = 0,
+
+    fn append(changes: *AgentStatusChanges, change: AgentStatusChange) void {
+        std.debug.assert(changes.count < changes.items.len);
+        changes.items[changes.count] = change;
+        changes.count += 1;
+    }
+
+    /// Borrows status transitions detected during one atomic reconciliation.
+    ///
+    /// ```zig
+    /// for (commit.status_changes.slice()) |change| alert(change);
+    /// ```
+    pub fn slice(changes: *const AgentStatusChanges) []const AgentStatusChange {
+        return changes.items[0..changes.count];
+    }
+};
+
+pub const AgentSnapshotCommit = struct {
+    runtime_revision: u64,
+    count: usize,
+    status_changes: AgentStatusChanges,
+    agent_revision: u64,
+};
+
+pub const LocalAgentNavigation = struct {
+    pane_id: schema.PaneId,
+    select_tab: ?schema.TabId,
+};
+
+pub const AgentHandoff = struct {
+    pane_id: schema.PaneId,
+    fallback_workspace: ?schema.WorkspaceId,
+};
+
+pub const AgentNavigationPlan = union(enum) {
+    local: LocalAgentNavigation,
+    handoff: AgentHandoff,
 };
 
 pub const PaneInputTarget = union(enum) {
@@ -424,6 +476,8 @@ pub const Model = struct {
     workspace_revision: u64 = 0,
     workspace_list_snapshot: workspace_list_mod.Snapshot = .{},
     workspace_list_revision: u64 = 0,
+    agent_snapshot: agents.Snapshot = .{},
+    agent_revision: u64 = 0,
     tabs_revision: u64 = 0,
     active_tab_revision: u64 = 0,
     panes_revision: u64 = 0,
@@ -467,6 +521,7 @@ pub const Model = struct {
         return .{
             .workspace = model.workspace_revision,
             .workspace_list = model.workspace_list_revision,
+            .agents = model.agent_revision,
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
@@ -601,6 +656,121 @@ pub const Model = struct {
     /// ```
     pub fn workspaceAtPosition(model: *const Model, position: usize) ?schema.WorkspaceId {
         return model.workspace_list_snapshot.workspaceAtPosition(position);
+    }
+
+    /// Reconciles one newer runtime agent snapshot and records only status
+    /// transitions for identities already present in the previous revision.
+    ///
+    /// ```zig
+    /// const commit = try model.reconcileAgentSnapshot(input) orelse return;
+    /// ```
+    pub fn reconcileAgentSnapshot(model: *Model, input: agents.SnapshotInput) !?AgentSnapshotCommit {
+        if (input.revision <= model.agent_snapshot.revision) {
+            return null;
+        }
+        if (input.agents.len > agents.max_agents) {
+            return error.TooManyAgents;
+        }
+
+        var status_changes: AgentStatusChanges = .{};
+        for (input.agents) |agent| {
+            const previous = model.agent_snapshot.find(agent.key) orelse continue;
+            if (previous.status == agent.status) {
+                continue;
+            }
+
+            status_changes.append(.{
+                .key = agent.key,
+                .pane_index = agent.pane_index,
+                .provider = agent.provider,
+                .previous = previous.status,
+                .current = agent.status,
+            });
+        }
+
+        const replaced = try model.agent_snapshot.replace(input);
+        std.debug.assert(replaced);
+        model.agent_revision +%= 1;
+
+        return .{
+            .runtime_revision = model.agent_snapshot.revision,
+            .count = model.agent_snapshot.count,
+            .status_changes = status_changes,
+            .agent_revision = model.agent_revision,
+        };
+    }
+
+    /// Borrows the immutable agent projection owned by this client model.
+    ///
+    /// ```zig
+    /// const snapshot = model.agentSnapshot();
+    /// ```
+    pub fn agentSnapshot(model: *const Model) *const agents.Snapshot {
+        return &model.agent_snapshot;
+    }
+
+    /// Reports whether one exact pane generation is current.
+    ///
+    /// ```zig
+    /// if (!model.knowsAgent(key)) discardNotification();
+    /// ```
+    pub fn knowsAgent(model: *const Model, key: agents.AgentKey) bool {
+        return model.agent_snapshot.find(key) != null;
+    }
+
+    /// Reports whether the latest runtime state requires sidebar animation.
+    ///
+    /// ```zig
+    /// if (model.hasWorkingAgent()) scheduleTick();
+    /// ```
+    pub fn hasWorkingAgent(model: *const Model) bool {
+        return model.agent_snapshot.hasWorkingAgent();
+    }
+
+    /// Resolves a sidebar identity into local focus or a runtime handoff
+    /// without exposing agent replica storage to the input adapter.
+    ///
+    /// ```zig
+    /// const plan = model.planAgentNavigation(key) orelse return;
+    /// ```
+    pub fn planAgentNavigation(model: *Model, key: agents.AgentKey) ?AgentNavigationPlan {
+        const agent = model.agent_snapshot.find(key) orelse return null;
+        if (model.workspace.tabForPane(key.pane_id)) |tab| {
+            const active = model.workspace.activeConst() orelse return null;
+
+            return .{ .local = .{
+                .pane_id = key.pane_id,
+                .select_tab = if (active.location.tab_id == tab.location.tab_id)
+                    null
+                else
+                    tab.location.tab_id,
+            } };
+        }
+
+        return .{ .handoff = .{
+            .pane_id = key.pane_id,
+            .fallback_workspace = switch (agent.location.workspace) {
+                .workspace => |workspace| workspace,
+                .worktree => null,
+            },
+        } };
+    }
+
+    /// Resolves the focused pane to an attachment-capable agent identity.
+    /// Unknown providers do not support the local image shelf.
+    ///
+    /// ```zig
+    /// const key = model.focusedAttachmentAgent() orelse return;
+    /// ```
+    pub fn focusedAttachmentAgent(model: *const Model) ?agents.AgentKey {
+        const active = model.workspace.activeConst() orelse return null;
+        const pane_id = active.model.layout.focused() orelse return null;
+        const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
+        const agent = model.agent_snapshot.find(key).?;
+        switch (agent.provider) {
+            .claude, .codex => return key,
+            .unknown => return null,
+        }
     }
 
     /// Resolves one user-input target without exposing pane storage. Prompts
@@ -3304,6 +3474,160 @@ test "workspace list reconciliation owns navigation state and one isolated revis
     }));
     try std.testing.expectEqual(Version{ .workspace_list = 1 }, model.version());
     try std.testing.expectEqualStrings("telar", model.workspaceListSnapshot().nameAt(0));
+}
+
+test "agent reconciliation owns labels versions and existing status transitions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const key: agents.AgentKey = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    var title = [_]u8{ 'f', 'i', 'r', 's', 't' };
+    var agent: agents.AgentInput = .{
+        .key = key,
+        .location = location,
+        .pane_index = 3,
+        .session_title = &title,
+        .provider = .codex,
+        .status = .working,
+    };
+
+    const first = (try model.reconcileAgentSnapshot(.{
+        .revision = 4,
+        .agents = &.{agent},
+    })).?;
+    title[0] = 'x';
+
+    try std.testing.expectEqual(@as(u64, 4), first.runtime_revision);
+    try std.testing.expectEqual(@as(usize, 1), first.count);
+    try std.testing.expectEqual(@as(usize, 0), first.status_changes.slice().len);
+    try std.testing.expectEqual(Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqualStrings("first", model.agentSnapshot().find(key).?.sessionTitle());
+    try std.testing.expect(model.knowsAgent(key));
+    try std.testing.expect(model.hasWorkingAgent());
+
+    agent.session_title = "second";
+    agent.status = .ready;
+    const second = (try model.reconcileAgentSnapshot(.{
+        .revision = 5,
+        .agents = &.{agent},
+    })).?;
+    const change = second.status_changes.slice()[0];
+
+    try std.testing.expectEqual(@as(u64, 2), second.agent_revision);
+    try std.testing.expectEqual(@as(usize, 1), second.status_changes.slice().len);
+    try std.testing.expectEqualDeep(key, change.key);
+    try std.testing.expectEqual(schema.AgentStatus.working, change.previous);
+    try std.testing.expectEqual(schema.AgentStatus.ready, change.current);
+    try std.testing.expectEqual(@as(u16, 3), change.pane_index);
+    try std.testing.expectEqual(schema.AgentProvider.codex, change.provider);
+    try std.testing.expect(!model.hasWorkingAgent());
+    try std.testing.expect((try model.reconcileAgentSnapshot(.{
+        .revision = 5,
+        .agents = &.{agent},
+    })) == null);
+    try std.testing.expectEqual(Version{ .agents = 2 }, model.version());
+}
+
+test "rejected agent reconciliation preserves replica and version" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const agent: agents.AgentInput = .{
+        .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+    };
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{agent} });
+
+    try std.testing.expectError(error.DuplicateAgent, model.reconcileAgentSnapshot(.{
+        .revision = 2,
+        .agents = &.{ agent, agent },
+    }));
+    const oversized: [agents.max_agents + 1]agents.AgentInput = @splat(agent);
+    try std.testing.expectError(error.TooManyAgents, model.reconcileAgentSnapshot(.{
+        .revision = 3,
+        .agents = &oversized,
+    }));
+
+    try std.testing.expectEqual(Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqual(@as(u64, 1), model.agentSnapshot().revision);
+    try std.testing.expect(model.knowsAgent(agent.key));
+}
+
+test "agent navigation and focused attachments derive from committed client state" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const first: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const second: schema.TabLocation = .{
+        .workspace = first.workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    const local_key: agents.AgentKey = .{
+        .pane_id = @enumFromInt(1),
+        .pane_generation = 4,
+    };
+    const remote_key: agents.AgentKey = .{
+        .pane_id = @enumFromInt(9),
+        .pane_generation = 3,
+    };
+    try model.workspace.bootstrap(local_key.pane_id, first, .{ .cols = 20, .rows = 5 });
+    const agent_entries = [_]agents.AgentInput{
+        .{
+            .key = local_key,
+            .location = first,
+            .pane_index = 1,
+            .provider = .claude,
+            .status = .ready,
+        },
+        .{
+            .key = remote_key,
+            .location = .{
+                .workspace = .{ .workspace = @enumFromInt(3) },
+                .tab_id = @enumFromInt(6),
+            },
+            .pane_index = 2,
+            .provider = .codex,
+            .status = .working,
+        },
+    };
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &agent_entries });
+
+    try std.testing.expectEqualDeep(local_key, model.focusedAttachmentAgent().?);
+    try std.testing.expectEqualDeep(LocalAgentNavigation{
+        .pane_id = local_key.pane_id,
+        .select_tab = null,
+    }, model.planAgentNavigation(local_key).?.local);
+    try std.testing.expectEqualDeep(AgentHandoff{
+        .pane_id = remote_key.pane_id,
+        .fallback_workspace = @enumFromInt(3),
+    }, model.planAgentNavigation(remote_key).?.handoff);
+
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+
+    try std.testing.expect(model.focusedAttachmentAgent() == null);
+    try std.testing.expectEqualDeep(LocalAgentNavigation{
+        .pane_id = local_key.pane_id,
+        .select_tab = first.tab_id,
+    }, model.planAgentNavigation(local_key).?.local);
+    try std.testing.expect(model.planAgentNavigation(.{
+        .pane_id = remote_key.pane_id,
+        .pane_generation = remote_key.pane_generation + 1,
+    }) == null);
 }
 
 test "pane focus resolves identity and direction through one visible revision" {

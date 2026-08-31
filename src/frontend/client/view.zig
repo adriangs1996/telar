@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const agents = @import("../agents/root.zig");
 const attachments = @import("../attachments/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
@@ -20,6 +21,7 @@ const ui = @import("../ui/root.zig");
 const widgets = @import("../widgets/root.zig");
 
 const schema = core.schema;
+const empty_agent_snapshot: agents.Snapshot = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
 
 pub const sidebar_width = widgets.layout.sidebar_width;
@@ -39,7 +41,7 @@ pub const Interaction = struct {
     focus_pane: ?schema.PaneId = null,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
-    focus_agent: ?widgets.sidebar.AgentKey = null,
+    focus_agent: ?agents.AgentKey = null,
     /// Intent only: the client model owns prompt creation; the view never
     /// enters the editor on its own.
     rename_tab: ?schema.TabId = null,
@@ -54,6 +56,7 @@ pub const RenderStats = struct {
 pub const RenderInput = struct {
     tabs: ?*const tabs_mod.Model = null,
     model: *multiplexer.Model,
+    agents: *const agents.Snapshot = &empty_agent_snapshot,
     workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
     status_mode: widgets.status_bar.Mode = .normal,
@@ -80,12 +83,8 @@ pub const State = struct {
     hits: Hits = .{},
     sidebar_requested: bool = true,
     hovered: ?Action = null,
-    sidebar_snapshot: widgets.sidebar.Snapshot = .{},
     sidebar: widgets.sidebar.State = .{},
     sidebar_animation_frame: u8 = 0,
-    sidebar_index_location: ?schema.TabLocation = null,
-    sidebar_index_layout_revision: u64 = 0,
-    sidebar_index_agent_revision: u64 = 0,
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
@@ -259,22 +258,23 @@ pub const State = struct {
         state.dirty = true;
     }
 
-    pub fn replaceSidebarSnapshot(
-        state: *State,
-        input: widgets.sidebar.SnapshotInput,
-    ) !bool {
-        if (!try state.sidebar_snapshot.replace(input)) return false;
+    /// Resets transient sidebar position when the presenter observes a new
+    /// semantic agent revision.
+    ///
+    /// ```zig
+    /// view.resetSidebarScroll();
+    /// ```
+    pub fn resetSidebarScroll(state: *State) void {
         state.sidebar.scroll = 0;
-        state.dirty = true;
-        return true;
     }
 
-    pub fn sidebarNeedsAnimation(state: *const State) bool {
-        return state.sidebar_snapshot.hasWorkingAgent();
-    }
-
+    /// Advances time-driven sidebar presentation state. The client model
+    /// decides whether a working agent warrants an animation tick.
+    ///
+    /// ```zig
+    /// _ = view.advanceSidebarAnimation();
+    /// ```
     pub fn advanceSidebarAnimation(state: *State) bool {
-        if (!state.sidebarNeedsAnimation()) return false;
         state.sidebar_animation_frame +%= 1;
         state.dirty = true;
         return true;
@@ -327,29 +327,14 @@ pub const State = struct {
         return &state.attachment_store;
     }
 
-    pub fn focusedAttachmentTarget(
-        state: *const State,
-        model: *const multiplexer.Model,
-    ) ?attachments.Target {
-        const location = model.location orelse return null;
-        const pane_id = model.layout.focused() orelse return null;
-        const key = state.sidebar_snapshot.keyForPane(location, pane_id) orelse return null;
-        const agent = state.sidebar_snapshot.find(key) orelse return null;
-        switch (agent.provider) {
-            .claude, .codex => {},
-            .unknown => return null,
-        }
-        return .{
-            .pane_id = key.pane_id,
-            .pane_generation = key.pane_generation,
-        };
-    }
-
-    pub fn syncAttachmentTarget(
-        state: *State,
-        model: *const multiplexer.Model,
-    ) bool {
-        const change = state.attachment_store.setTarget(state.focusedAttachmentTarget(model));
+    /// Applies an already resolved attachment identity and reports whether
+    /// the shelf changed client layout.
+    ///
+    /// ```zig
+    /// const layout_changed = view.syncAttachmentTarget(target);
+    /// ```
+    pub fn syncAttachmentTarget(state: *State, target: ?attachments.Target) bool {
+        const change = state.attachment_store.setTarget(target);
         if (!change.changed) return false;
         if (change.layout_changed)
             state.recalculateRegions(state.scratch.w, state.scratch.h);
@@ -536,17 +521,6 @@ pub const State = struct {
     }
 
     pub fn render(state: *State, screen: *term.Screen, input: RenderInput) !RenderStats {
-        if (!std.meta.eql(state.sidebar_index_location, input.model.location) or
-            state.sidebar_index_layout_revision != input.model.layout.currentRevision() or
-            state.sidebar_index_agent_revision != state.sidebar_snapshot.revision)
-        {
-            var panes = input.model.paneIterator();
-            while (panes.next()) |pane| if (input.model.displayIndex(pane.id)) |pane_index|
-                state.sidebar_snapshot.setPaneIndex(pane.id, pane_index);
-            state.sidebar_index_location = input.model.location;
-            state.sidebar_index_layout_revision = input.model.layout.currentRevision();
-            state.sidebar_index_agent_revision = state.sidebar_snapshot.revision;
-        }
         // The banner must survive every present — pane composition may have
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, input.diagnostic);
@@ -579,7 +553,7 @@ pub const State = struct {
             .model = input.model,
             .rename_field = if (input.prompt) |prompt| &prompt.field else null,
             .rename_kind = promptKind(input.prompt),
-            .sidebar_snapshot = &state.sidebar_snapshot,
+            .sidebar_snapshot = input.agents,
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
             .sidebar_rounded_focus = focused_card_color != null,
@@ -826,25 +800,26 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
         state.workbench(),
     );
     try std.testing.expect(model.toggleFullscreen());
-    const agents = [_]widgets.sidebar.AgentInput{.{
+    const agent_entries = [_]agents.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
         .location = location,
         .pane_index = 1,
         .provider = .codex,
         .status = .blocked,
     }};
-    try std.testing.expect(try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents }));
+    var snapshot: agents.Snapshot = .{};
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
     try std.testing.expect(state.handleMouse(first_row, 0).redraw);
     try std.testing.expect(!state.handleMouse(first_row, 0).redraw);
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(click, 0);
-    try std.testing.expectEqualDeep(agents[0].key, interaction.focus_agent.?);
+    try std.testing.expectEqualDeep(agent_entries[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
 }
 
@@ -860,16 +835,20 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
     try model.addRoot(pane_id, location, .{ .cols = 38, .rows = 27 });
-    const agents = [_]widgets.sidebar.AgentInput{.{
+    const agent_entries = [_]agents.AgentInput{.{
         .key = .{ .pane_id = pane_id, .pane_generation = 4 },
         .location = location,
         .pane_index = 1,
         .provider = .codex,
         .status = .ready,
     }};
-    _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
-    try std.testing.expect(!state.syncAttachmentTarget(&model));
-    const target = state.focusedAttachmentTarget(&model).?;
+    var snapshot: agents.Snapshot = .{};
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
+    const target: attachments.Target = .{
+        .pane_id = agent_entries[0].key.pane_id,
+        .pane_generation = agent_entries[0].key.pane_generation,
+    };
+    try std.testing.expect(!state.syncAttachmentTarget(target));
     const capture = try gpa.create(attachments.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1 },
@@ -883,7 +862,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
     var open_point: ?struct { x: u16, y: u16 } = null;
     for (state.hits.registered()) |entry| switch (entry.action) {
         .attachment_open => {
@@ -901,7 +880,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
     try std.testing.expect(opened.consumed);
     try std.testing.expect(state.hasAttachmentModal());
 
-    _ = try state.render(&screen, .{ .model = &model });
+    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot });
     const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,
         .y = state.regions.workbench.y,
@@ -950,7 +929,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     defer second_model.deinit();
     try second_model.addRoot(workspace_pane, second_location, .{ .cols = 38, .rows = 27 });
 
-    const agents = [_]widgets.sidebar.AgentInput{
+    const agent_entries = [_]agents.AgentInput{
         .{
             .key = .{ .pane_id = first_pane, .pane_generation = 1 },
             .location = first_location,
@@ -973,29 +952,30 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
             .status = .ready,
         },
     };
-    _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
+    var snapshot: agents.Snapshot = .{};
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     const palette = state.palette();
 
-    _ = try state.render(&screen, .{ .model = &first_model, .force = true });
+    _ = try state.render(&screen, .{ .model = &first_model, .agents = &snapshot, .force = true });
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
 
     try std.testing.expect(first_model.focusPane(second_pane));
     state.invalidate();
-    _ = try state.render(&screen, .{ .model = &first_model });
+    _ = try state.render(&screen, .{ .model = &first_model, .agents = &snapshot });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 7).?.style.bg);
 
     try std.testing.expect(first_model.focusPane(shell_pane));
     state.invalidate();
-    _ = try state.render(&screen, .{ .model = &first_model });
+    _ = try state.render(&screen, .{ .model = &first_model, .agents = &snapshot });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
 
     state.invalidate();
-    _ = try state.render(&screen, .{ .model = &second_model });
+    _ = try state.render(&screen, .{ .model = &second_model, .agents = &snapshot });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 10).?.style.bg);
@@ -1012,26 +992,27 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 30, .rows = 20 });
-    const agents = [_]widgets.sidebar.AgentInput{.{
+    const agent_entries = [_]agents.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 4 },
         .location = location,
         .pane_index = 1,
         .provider = .claude,
         .status = .ready,
     }};
-    _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
+    var snapshot: agents.Snapshot = .{};
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
     _ = try state.prepareGraphics(true);
     try std.testing.expect(state.kittySidebar().focused_card != null);
     try std.testing.expectEqualDeep(
-        Action{ .sidebar_focus_agent = agents[0].key },
+        Action{ .sidebar_focus_agent = agent_entries[0].key },
         state.hits.at(4, 4).?,
     );
     const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press }, 0);
     try std.testing.expect(interaction.redraw);
-    try std.testing.expectEqualDeep(agents[0].key, interaction.focus_agent.?);
+    try std.testing.expectEqualDeep(agent_entries[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());
 }

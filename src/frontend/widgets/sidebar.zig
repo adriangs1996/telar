@@ -7,17 +7,18 @@
 const std = @import("std");
 const core = @import("telar-core");
 const widget = @import("context.zig");
-const model = @import("sidebar_model.zig");
+const agents = @import("../agents/root.zig");
+const workspace_capability = @import("../workspace/root.zig");
 const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
+const multiplexer = workspace_capability.multiplexer;
 
-pub const Snapshot = model.Snapshot;
-pub const SnapshotInput = model.SnapshotInput;
-pub const AgentInput = model.AgentInput;
-pub const AgentKey = model.AgentKey;
+const Snapshot = agents.Snapshot;
+const AgentInput = agents.AgentInput;
+const AgentKey = agents.AgentKey;
 
-pub const max_provider_marks = model.max_agents;
+pub const max_provider_marks = agents.max_agents;
 const rows_per_agent = 3;
 const minions_icon = "\u{2687}";
 
@@ -61,6 +62,7 @@ pub const Input = struct {
     area: ui.Rect,
     snapshot: *const Snapshot,
     state: *State,
+    active_model: ?*const multiplexer.Model = null,
     focused_agent: ?AgentKey = null,
     transparent: bool,
     rounded_focus: bool = false,
@@ -153,7 +155,7 @@ fn drawAgentLine(
     input: Input,
     semantic: *Semantic,
     y: u16,
-    agent: *const model.Agent,
+    agent: *const agents.Agent,
     line: u2,
     background: ui.Color,
 ) void {
@@ -204,7 +206,12 @@ fn drawAgentLine(
     if (line == 0) {
         drawAgentTitle(context, input, semantic, body, agent, row_bg);
     } else if (line == 1) {
-        drawAgentLocation(context, body, agent, row_bg);
+        drawAgentLocation(context, .{
+            .area = body,
+            .agent = agent,
+            .pane_index = projectedPaneIndex(input, agent),
+            .background = row_bg,
+        });
     } else {
         drawAgentMeta(context, body, agent, row_bg);
     }
@@ -216,7 +223,7 @@ fn drawAgentTitle(
     input: Input,
     semantic: *Semantic,
     area: ui.Rect,
-    agent: *const model.Agent,
+    agent: *const agents.Agent,
     background: ui.Color,
 ) void {
     if (area.w == 0) return;
@@ -244,45 +251,57 @@ fn drawAgentTitle(
     drawStatus(context, area, agent.status, input.animation_frame, background);
 }
 
-fn drawAgentLocation(
-    context: *widget.Context,
+const AgentLocationInput = struct {
     area: ui.Rect,
-    agent: *const model.Agent,
+    agent: *const agents.Agent,
+    pane_index: u16,
     background: ui.Color,
-) void {
+};
+
+fn drawAgentLocation(context: *widget.Context, input: AgentLocationInput) void {
     var location_buffer: [256]u8 = undefined;
-    const workspace = agent.workspaceLabel();
-    const tab = agent.tabLabel();
-    const location = if (workspace.len != 0 and tab.len != 0)
+    const workspace_label = input.agent.workspaceLabel();
+    const tab = input.agent.tabLabel();
+    const location = if (workspace_label.len != 0 and tab.len != 0)
         std.fmt.bufPrint(
             &location_buffer,
             "{s} › {s} › pane {d}",
-            .{ workspace, tab, agent.pane_index },
+            .{ workspace_label, tab, input.pane_index },
         ) catch ""
-    else if (workspace.len != 0)
+    else if (workspace_label.len != 0)
         std.fmt.bufPrint(
             &location_buffer,
             "{s} › pane {d}",
-            .{ workspace, agent.pane_index },
+            .{ workspace_label, input.pane_index },
         ) catch ""
     else if (tab.len != 0)
         std.fmt.bufPrint(
             &location_buffer,
             "{s} › pane {d}",
-            .{ tab, agent.pane_index },
+            .{ tab, input.pane_index },
         ) catch ""
     else
-        std.fmt.bufPrint(&location_buffer, "pane {d}", .{agent.pane_index}) catch "";
-    _ = context.buffer.writeTruncated(area, area.x + 3, area.y, location, area.w -| 3, .{
+        std.fmt.bufPrint(&location_buffer, "pane {d}", .{input.pane_index}) catch "";
+    _ = context.buffer.writeTruncated(input.area, input.area.x + 3, input.area.y, location, input.area.w -| 3, .{
         .fg = context.palette.overlay0,
-        .bg = background,
+        .bg = input.background,
     });
+}
+
+fn projectedPaneIndex(input: Input, agent: *const agents.Agent) u16 {
+    const active = input.active_model orelse return agent.pane_index;
+    const location = active.location orelse return agent.pane_index;
+    if (!std.meta.eql(location, agent.location)) {
+        return agent.pane_index;
+    }
+
+    return active.displayIndex(agent.key.pane_id) orelse agent.pane_index;
 }
 
 fn drawAgentMeta(
     context: *widget.Context,
     area: ui.Rect,
-    agent: *const model.Agent,
+    agent: *const agents.Agent,
     background: ui.Color,
 ) void {
     if (area.w <= 3) return;
@@ -486,7 +505,7 @@ test "empty snapshot renders the minions header" {
 
 test "agent snapshot renders compact selectable rows and status" {
     var snapshot: Snapshot = .{};
-    const agents = [_]AgentInput{.{
+    const agent_entries = [_]AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -502,7 +521,7 @@ test "agent snapshot renders compact selectable rows and status" {
         .provider = .codex,
         .status = .blocked,
     }};
-    _ = try snapshot.replace(.{ .revision = 1, .agents = &agents });
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var buffer = try ui.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -518,17 +537,51 @@ test "agent snapshot renders compact selectable rows and status" {
         .area = buffer.area(),
         .snapshot = &snapshot,
         .state = &state,
-        .focused_agent = agents[0].key,
+        .focused_agent = agent_entries[0].key,
         .transparent = false,
     });
     try std.testing.expectEqual(@as(u16, 3), output.focused_card.?.h);
     try std.testing.expectEqualDeep(
-        widget.Action{ .sidebar_focus_agent = agents[0].key },
+        widget.Action{ .sidebar_focus_agent = agent_entries[0].key },
         hits.at(4, output.focused_card.?.y).?,
     );
     try std.testing.expectEqualStrings("I", buffer.at(6, output.focused_card.?.y).?.text());
     try std.testing.expectEqualStrings("t", buffer.at(6, output.focused_card.?.y + 1).?.text());
     try std.testing.expectEqualStrings("C", buffer.at(6, output.focused_card.?.y + 2).?.text());
+}
+
+test "active layout projects pane indices without mutating runtime agent state" {
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const first: schema.PaneId = @enumFromInt(41);
+    const second: schema.PaneId = @enumFromInt(42);
+    var active = multiplexer.Model.init(std.testing.allocator);
+    defer active.deinit();
+    try active.addRoot(first, location, .{ .cols = 80, .rows = 24 });
+    try active.split(first, second, location, .horizontal, .{ .w = 80, .h = 24 });
+    var snapshot: Snapshot = .{};
+    const agent: AgentInput = .{
+        .key = .{ .pane_id = second, .pane_generation = 1 },
+        .location = location,
+        .pane_index = 9,
+        .provider = .codex,
+        .status = .ready,
+    };
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
+    var state: State = .{};
+    const input: Input = .{
+        .area = .{},
+        .snapshot = &snapshot,
+        .state = &state,
+        .active_model = &active,
+        .transparent = false,
+    };
+
+    try std.testing.expectEqual(@as(u16, 2), projectedPaneIndex(input, &snapshot.slice()[0]));
+    try std.testing.expectEqual(@as(u16, 9), snapshot.slice()[0].pane_index);
+    try std.testing.expectEqual(@as(u64, 1), snapshot.revision);
 }
 
 test "agent without pane focus remains unhighlighted" {
@@ -569,7 +622,7 @@ test "agent without pane focus remains unhighlighted" {
 
 test "transparent Codex row publishes an official provider mark" {
     var snapshot: Snapshot = .{};
-    const agents = [_]AgentInput{.{
+    const agent_entries = [_]AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -579,7 +632,7 @@ test "transparent Codex row publishes an official provider mark" {
         .provider = .codex,
         .status = .ready,
     }};
-    _ = try snapshot.replace(.{ .revision = 1, .agents = &agents });
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var buffer = try ui.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -604,7 +657,7 @@ test "transparent Codex row publishes an official provider mark" {
 
 test "graphical focus exposes only the four rounded card corners" {
     var snapshot: Snapshot = .{};
-    const agents = [_]AgentInput{.{
+    const agent_entries = [_]AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -614,7 +667,7 @@ test "graphical focus exposes only the four rounded card corners" {
         .provider = .codex,
         .status = .ready,
     }};
-    _ = try snapshot.replace(.{ .revision = 1, .agents = &agents });
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var buffer = try ui.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -630,7 +683,7 @@ test "graphical focus exposes only the four rounded card corners" {
         .area = buffer.area(),
         .snapshot = &snapshot,
         .state = &state,
-        .focused_agent = agents[0].key,
+        .focused_agent = agent_entries[0].key,
         .transparent = true,
         .rounded_focus = true,
     });
@@ -684,7 +737,7 @@ test "hover covers the complete three-row agent card" {
 }
 
 test "partial card scroll preserves visible rows and hit targets" {
-    const agents = [_]AgentInput{
+    const agent_entries = [_]AgentInput{
         .{
             .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
             .location = .{
@@ -710,7 +763,7 @@ test "partial card scroll preserves visible rows and hit targets" {
         },
     };
     var snapshot: Snapshot = .{};
-    _ = try snapshot.replace(.{ .revision = 1, .agents = &agents });
+    _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var buffer = try ui.Buffer.init(std.testing.allocator, 48, 7);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -726,7 +779,7 @@ test "partial card scroll preserves visible rows and hit targets" {
         .area = buffer.area(),
         .snapshot = &snapshot,
         .state = &state,
-        .focused_agent = agents[0].key,
+        .focused_agent = agent_entries[0].key,
         .transparent = false,
         .rounded_focus = true,
     });
@@ -735,11 +788,11 @@ test "partial card scroll preserves visible rows and hit targets" {
     try std.testing.expectEqualStrings("t", buffer.at(6, 2).?.text());
     try std.testing.expectEqualStrings("C", buffer.at(6, 3).?.text());
     try std.testing.expectEqualDeep(
-        widget.Action{ .sidebar_focus_agent = agents[0].key },
+        widget.Action{ .sidebar_focus_agent = agent_entries[0].key },
         hits.at(10, 2).?,
     );
     try std.testing.expectEqualDeep(
-        widget.Action{ .sidebar_focus_agent = agents[1].key },
+        widget.Action{ .sidebar_focus_agent = agent_entries[1].key },
         hits.at(10, 4).?,
     );
 }

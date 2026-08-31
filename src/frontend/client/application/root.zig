@@ -1,6 +1,7 @@
 //! Client application use cases.
 
 pub const attach_pane = @import("attach_pane.zig");
+pub const agent_snapshot = @import("agent_snapshot.zig");
 pub const close_pane = @import("close_pane.zig");
 pub const close_tab = @import("close_tab.zig");
 pub const copy_mode = @import("copy_mode.zig");
@@ -28,6 +29,7 @@ pub const workspace_snapshot = @import("workspace_snapshot.zig");
 
 test {
     _ = attach_pane;
+    _ = agent_snapshot;
     _ = close_pane;
     _ = close_tab;
     _ = copy_mode;

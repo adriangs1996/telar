@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const presentation = @import("../presentation/root.zig");
@@ -29,6 +30,7 @@ const initial_request_id = Client.initial_request_id;
 fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
+    try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -43,6 +45,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
 fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
+    try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -57,6 +60,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
 fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
+    try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -70,6 +74,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
 fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
+    try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -262,6 +267,34 @@ const TestHarness = struct {
         try std.testing.expect(continuation == .tab_snapshot);
     }
 };
+
+fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: schema.AgentStatus) ![]const u8 {
+    return schema.encodeAgentSnapshot(buffer, .{
+        .revision = revision,
+        .entries = &.{.{
+            .pane_id = TestHarness.bootstrap_pane,
+            .pane_generation = 1,
+            .location = TestHarness.bootstrap_location,
+            .pane_index = 3,
+            .process_id = 42,
+            .session_id = @splat(0),
+            .workspace_label = "telar",
+            .tab_label = "main",
+            .session_title = "Test agent",
+            .title_source = .generated,
+            .title_state = .ready,
+            .cwd_label = "~/sandbox/telar",
+            .provider = .claude,
+            .status = status,
+            .source = .screen,
+            .authority = .active,
+            .confidence = 1,
+            .sequence = revision,
+            .observed_at_ms = @intCast(revision),
+            .expires_at_ms = @intCast(revision + 1),
+        }},
+    });
+}
 
 test "host input arriving while no tab exists is dropped, not a crash" {
     // The workspace-handoff window: `tabs.deinit()` has run and the new
@@ -485,7 +518,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
     client.requests = .{};
 
     const agent_pane: schema.PaneId = @enumFromInt(91);
-    const agent = widgets.sidebar.AgentInput{
+    const agent = agents.AgentInput{
         .key = .{ .pane_id = agent_pane, .pane_generation = 2 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(3) },
@@ -506,7 +539,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .pane_id = agent_pane,
         .tab_layout = saved_layout,
     });
-    _ = try client.view.replaceSidebarSnapshot(.{
+    _ = try client.model.reconcileAgentSnapshot(.{
         .revision = 1,
         .agents = &.{agent},
     });
@@ -514,6 +547,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
     _ = try client.view.render(&client.presenter.screen, .{
         .tabs = &client.model.workspace,
         .model = model,
+        .agents = client.model.agentSnapshot(),
         .force = true,
     });
     var handler: InputHandler = .{ .client = client };
@@ -3506,8 +3540,10 @@ test "an agent snapshot replaces the sidebar replica" {
             .expires_at_ms = 2,
         }},
     });
+    const pending_updates = harness.client.presenter.pending_updates;
+    harness.client.view.sidebar.scroll = 7;
     _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
-    const agent = harness.client.view.sidebar_snapshot.find(.{
+    const agent = harness.client.model.agentSnapshot().find(.{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
     }).?;
@@ -3515,7 +3551,79 @@ test "an agent snapshot replaces the sidebar replica" {
     try std.testing.expectEqualStrings("test-2", agent.tabLabel());
     try std.testing.expectEqualStrings("Improve agent sidebar", agent.sessionTitle());
     try std.testing.expectEqualStrings("~/sandbox/telar", agent.cwdLabel());
-    try harness.settle();
+    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, harness.client.model.version());
+    try std.testing.expectEqual(pending_updates, harness.client.presenter.pending_updates);
+
+    try harness.client.observeModel();
+    try harness.settleModelPresentation();
+
+    try std.testing.expectEqual(@as(u16, 0), harness.client.view.sidebar.scroll);
+    try std.testing.expectEqual(
+        harness.client.model.version(),
+        harness.client.presenter.presented_model_version,
+    );
+}
+
+test "agent snapshot transitions raise bounded presentation alerts only once" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var payload: [512]u8 = undefined;
+
+    const initial = try encodeTestingAgentSnapshot(&payload, 1, .ready);
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(initial));
+
+    try std.testing.expectEqual(@as(u8, 0), client.view.notifications.count);
+    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, client.model.version());
+
+    const changed = try encodeTestingAgentSnapshot(&payload, 2, .blocked);
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(changed));
+    const notification = client.view.notifications.itemAt(0).?;
+
+    try std.testing.expectEqual(client_model.Version{ .agents = 2 }, client.model.version());
+    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
+    try std.testing.expectEqual(widgets.notification.Level.warning, notification.level);
+    try std.testing.expectEqualStrings("Agent needs input", notification.title());
+    try std.testing.expectEqualStrings("Claude in pane 3 is waiting for input", notification.message());
+    try std.testing.expectEqualDeep(
+        widgets.notification.Target{ .focus_pane = TestHarness.bootstrap_pane },
+        notification.target,
+    );
+
+    const stale = try encodeTestingAgentSnapshot(&payload, 1, .failed);
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
+
+    try std.testing.expectEqual(client_model.Version{ .agents = 2 }, client.model.version());
+    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
+}
+
+test "agent sounds validate exact identity against the client model" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var payload: [512]u8 = undefined;
+    const snapshot = try encodeTestingAgentSnapshot(&payload, 1, .ready);
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+
+    const unknown = try schema.encodeAgentSound(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .pane_generation = 2,
+        .sound = .ready,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unknown));
+
+    try std.testing.expect(!client.sound_pending);
+
+    const known = try schema.encodeAgentSound(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .pane_generation = 1,
+        .sound = .ready,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(known));
+
+    try std.testing.expect(client.sound_pending);
 }
 
 test "a graphics revision break requests a graphics snapshot" {

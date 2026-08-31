@@ -4,6 +4,7 @@
 //! its region, its order, and the only conditional replacement in the frame.
 
 const workspace = @import("../workspace/root.zig");
+const agents = @import("../agents/root.zig");
 const multiplexer = workspace.multiplexer;
 const tabs_mod = workspace.tabs;
 const workspace_list = workspace.workspace_list;
@@ -23,7 +24,7 @@ pub const Input = struct {
     model: *multiplexer.Model,
     rename_field: ?*tab_rename.Field,
     rename_kind: tab_rename.Kind,
-    sidebar_snapshot: *const sidebar.Snapshot,
+    sidebar_snapshot: *const agents.Snapshot,
     sidebar_state: *sidebar.State,
     sidebar_transparent: bool,
     sidebar_rounded_focus: bool,
@@ -60,6 +61,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .area = input.regions.sidebar,
         .snapshot = input.sidebar_snapshot,
         .state = input.sidebar_state,
+        .active_model = input.model,
         .focused_agent = focused_agent,
         .transparent = input.sidebar_transparent,
         .rounded_focus = input.sidebar_rounded_focus,

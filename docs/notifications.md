@@ -15,8 +15,8 @@ interception indicator remain visible.
 Agent transition sounds use a separate bounded semantic event. The runtime,
 which owns agent truth, emits it only for `working -> ready` and
 `working -> blocked`. The event carries the pane ID and generation. A client
-discards it when that identity is absent from its current agent snapshot, then
-applies its local `client.sound` policy.
+discards it when that identity is absent from `ClientModel`'s current agent
+snapshot, then applies its local `client.sound` policy.
 
 The runtime offers the event to every active UI client. Each client validates
 the pane identity and applies its own profile, so a remote profile can mute

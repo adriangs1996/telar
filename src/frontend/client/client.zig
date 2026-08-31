@@ -436,7 +436,9 @@ pub fn scheduleInputRead(client: *Client) !void {
 }
 
 pub fn scheduleSidebarAnimation(client: *Client) !void {
-    if (client.sidebar_animation_pending or !client.view.sidebarNeedsAnimation()) return;
+    if (client.sidebar_animation_pending or !client.model.hasWorkingAgent()) {
+        return;
+    }
     const deadline_ns = monotonic(client.io) + 120 * std.time.ns_per_ms;
     client.sidebar_animation_pending = true;
     client.select.concurrent(.sidebar_animation_tick, waitUntil, .{
@@ -524,8 +526,9 @@ pub fn syncSidebarVisibility(client: *Client, change: client_model.SidebarVisibi
 }
 
 pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
-    if (client.view.syncAttachmentTarget(model))
+    if (client.view.syncAttachmentTarget(client.focusedAttachmentTarget())) {
         try client.resizeAttached(model, client.view.workbench());
+    }
     const next_id = model.layout.focused();
     const next = if (next_id) |pane_id| model.find(pane_id) else null;
     const next_reports = if (next) |pane|
@@ -544,6 +547,37 @@ pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
     client.reported_focus = next_id;
     client.reported_focus_events = next_reports;
     if (next_reports) try client.enqueueInput(next_id.?, "\x1b[I");
+}
+
+/// Resolves the model's focused attachment-capable agent into the local
+/// preview identity used by platform and view adapters.
+///
+/// ```zig
+/// const target = client.focusedAttachmentTarget() orelse return;
+/// ```
+pub fn focusedAttachmentTarget(client: *const Client) ?attachments.Target {
+    const key = client.model.focusedAttachmentAgent() orelse return null;
+
+    return .{
+        .pane_id = key.pane_id,
+        .pane_generation = key.pane_generation,
+    };
+}
+
+/// Reconciles attachment resources after an agent snapshot commit. Any shelf
+/// geometry change is applied to the currently active pane model.
+///
+/// ```zig
+/// try client.syncAgentSnapshotResources();
+/// ```
+pub fn syncAgentSnapshotResources(client: *Client) !void {
+    const layout_changed = client.view.syncAttachmentTarget(client.focusedAttachmentTarget());
+    if (!layout_changed) {
+        return;
+    }
+
+    const active = client.model.workspace.active() orelse return;
+    try client.resizeAttached(&active.model, client.view.workbench());
 }
 
 pub fn scheduleAttachmentCapture(client: *Client, target: attachments.Target) !void {
@@ -585,7 +619,7 @@ pub fn handleClipboardImageEvent(
         capture.deinit(client.gpa);
         return;
     };
-    const target = client.view.focusedAttachmentTarget(&active.model) orelse {
+    const target = client.focusedAttachmentTarget() orelse {
         capture.deinit(client.gpa);
         return;
     };
@@ -786,7 +820,10 @@ pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
 pub fn handleSidebarAnimationEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.sidebar_animation_pending = false;
-    if (client.view.advanceSidebarAnimation()) try client.presenter.requestDraw();
+    if (client.model.hasWorkingAgent()) {
+        _ = client.view.advanceSidebarAnimation();
+        try client.presenter.requestDraw();
+    }
     try client.scheduleSidebarAnimation();
 }
 

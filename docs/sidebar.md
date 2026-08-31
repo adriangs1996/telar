@@ -8,10 +8,10 @@ scrolling, hit targets, or physical KGP placements.
 ## Ownership
 
 The runtime owns agent truth and publishes stable `(pane_id, generation)` task
-identity. The client keeps one disposable `widgets.sidebar.Snapshot` replica
-and all visible interaction state in `widgets.sidebar.State`. Killing the
-client loses the selected tab, pane focus, search text, scope expansion, and
-scroll offset. It does not alter any runtime task or agent.
+identity. `ClientModel` keeps one disposable `agents.Snapshot` replica.
+`widgets.sidebar.State` keeps only visible interaction state such as scroll
+position. Killing the client loses the selected tab, pane focus and scroll
+offset. It does not alter any runtime task or agent.
 
 Each entry carries workspace and tab labels, one-based pane position, a reduced
 cwd label, and a session title in addition to provider and status. The runtime
@@ -19,8 +19,10 @@ resolves all of them against the same `(pane_id, generation)` immediately
 before encoding. Workspace rename, tab rename, cwd changes, and pane topology
 advance the agent revision.
 
-`Snapshot.replace` is the client adapter boundary. An observation or IPC
-handler supplies a revision and `AgentInput` values. Replacement:
+`agent_snapshots.apply` is the protocol adapter. It maps borrowed wire entries
+to `AgentInput` values and invokes `ApplyAgentSnapshotHandler`.
+`ClientModel.reconcileAgentSnapshot` owns the transaction, while
+`agents.Snapshot.replace` performs atomic bounded storage. Replacement:
 
 - rejects revisions older than or equal to the current revision;
 - rejects duplicate `(id, generation)` task keys;
@@ -30,7 +32,8 @@ handler supplies a revision and `AgentInput` values. Replacement:
 
 Task keys carry a generation so a delayed action cannot target a new task that
 reused an old numeric ID. A task may carry a `pane_id`; selecting it then uses
-the existing semantic pane-focus operation.
+`ClientModel.planAgentNavigation`, which returns either local tab and pane
+focus or a runtime pane handoff. Input code never reads replica storage.
 
 ## Session titles
 
@@ -55,8 +58,8 @@ discarded.
 
 ## Focus projection
 
-The focused pane is the sole source of truth for the agent highlight. The
-client projects the active tab's focused pane through the current agent
+The focused pane is the sole source of truth for the agent highlight. Sidebar
+composition projects the active tab's focused pane through the current agent
 snapshot and highlights the matching agent. It highlights no agent when the
 focused pane has no matching agent.
 
@@ -73,11 +76,10 @@ applying focus. Every successful transition, including workspace creation,
 bookmarks the workspace being left before destroying its client-side tab
 models.
 
-Buttons whose runtime behavior does not exist yet return a typed
-`SidebarIntent` from `client_ui.State.handleMouse`. The current client does not
-turn those intents into runtime messages. Adding detection must not smuggle in
-approval, creation, or review behavior; each intent needs its own explicit
-runtime command and authority check.
+The runtime pane position remains immutable in `agents.Snapshot`. When the
+active client layout has a different local display order, the sidebar derives
+that pane index while rendering. Neither `View.render` nor a widget rewrites
+the runtime replica.
 
 ## Rendering boundary
 
@@ -115,8 +117,22 @@ The frontend message handler:
 
 1. validates the runtime message and its revision;
 2. maps runtime agent records to bounded `AgentInput` values;
-3. calls `client_ui.State.replaceSidebarSnapshot`;
-4. requests one client redraw when replacement succeeds.
+3. invokes `ApplyAgentSnapshotHandler`;
+4. commits the replica and `Version.agents` in `ClientModel`;
+5. synchronizes attachment resources and emits bounded actionable alerts;
+6. lets `Presenter` observe the version and pass the immutable snapshot to
+   `View.render` on the next paced frame.
+
+The snapshot path never requests a draw for the replica itself. `Presenter`
+compares the model version with the last version it painted, resets transient
+sidebar scroll, invalidates chrome and renders the latest snapshot. Several
+runtime revisions inside one frame interval therefore fold into one projection.
+
+Only status changes for identities present in the previous revision can emit
+an alert. Transitions to `blocked`, `ready` and `failed` are actionable, and
+the use case caps them to the notification center's fixed capacity. Agent
+sounds remain separate runtime decisions; the client accepts a sound only
+when its exact pane generation exists in `ClientModel`.
 
 Detection remains on the observation path. Snapshot rendering and input
 routing perform no filesystem, process, JSON, network, or plugin work.

@@ -41,6 +41,7 @@ defect in a leaf capability unless an invariant requires it.
 | Capability | Root | Owns |
 | --- | --- | --- |
 | Client | `src/frontend/client/root.zig` | Client event loop and cross-capability orchestration |
+| Agents | `src/frontend/agents/root.zig` | Agent identities and the bounded client replica of runtime agent state |
 | Input | `src/frontend/input/root.zig` | Host input parsing, key routing, semantic actions and editing |
 | Workspace | `src/frontend/workspace/root.zig` | Disposable tabs, pane layout and cell composition |
 | Presentation | `src/frontend/presentation/root.zig` | Host screen diff, frame application and pacing |
@@ -74,10 +75,11 @@ frontend capability roots          backend capability roots
 The important current edges are:
 
 ```text
-frontend/client       -> input, workspace, presentation, graphics, ui,
+frontend/client       -> agents, input, workspace, presentation, graphics, ui,
                          widgets, config, plugins, platform, transport
 frontend/input        -> presentation
 frontend/workspace    -> input, presentation, ui
+frontend/widgets      -> agents, workspace, attachments, ui
 frontend/graphics     -> workspace, presentation, ui, widgets
 frontend/config       -> input, graphics, ui
 frontend/plugins      -> input, config

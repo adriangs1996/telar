@@ -7,6 +7,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 
 | Flow | Trigger | Visible result | Proof |
 | --- | --- | --- | --- |
+| [Agent snapshot](agent-snapshot.md) | Runtime agent evidence changes | The client commits one bounded replica, emits actionable transitions and the presenter projects the latest revision | Storage, model, effect-order, protocol and presenter tests |
 | [Copy mode](copy-mode.md) | User enters scrollback, moves or selects text | Model-owned copy state is projected on a paced frame, and an accepted selection reaches the runtime | Pure-state, model, effect-order, backpressure and presenter tests |
 | [Host input to screen](host-input-to-screen.md) | Bytes arrive from the host TTY | A Telar action is consumed, or child output is presented | Input router unit tests and transport integration tests |
 | [Name prompt](name-prompt.md) | User opens, edits, cancels or submits a naming prompt | One model-owned editor is presented, or its accepted intent reaches the matching request use case | State, effect-order, input-adapter and presenter tests |

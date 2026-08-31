@@ -17,6 +17,7 @@ const diagnostics = core.diagnostics;
 
 const client_mod = @import("client.zig");
 const Client = client_mod;
+const agent_snapshots = @import("agent_snapshots.zig");
 const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
@@ -86,29 +87,6 @@ fn workspaceNotificationTarget(location: schema.WorkspaceLocation) widgets.notif
     };
 }
 
-fn agentProviderName(provider: schema.AgentProvider) []const u8 {
-    return switch (provider) {
-        .unknown => "Agent",
-        .claude => "Claude",
-        .codex => "Codex",
-    };
-}
-
-fn agentStatusName(status: schema.AgentStatus) []const u8 {
-    return switch (status) {
-        .blocked => "waiting for input",
-        .ready => "ready",
-        .failed => "failed",
-        .unknown, .working => "active",
-    };
-}
-
-fn shouldNotifyAgentStatus(previous: ?schema.AgentStatus, current: schema.AgentStatus) bool {
-    const before = previous orelse return false;
-    if (before == current) return false;
-    return current == .blocked or current == .ready or current == .failed;
-}
-
 /// Routes one decoded message from the runtime.
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
     switch (message) {
@@ -132,7 +110,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .runtime_stopping => return 0,
         .history_results => return error.UnexpectedHistoryResults,
         .proxy_status => |status| try handleProxyStatus(client, status),
-        .agent_snapshot => |snapshot| try handleAgentSnapshot(client, snapshot),
+        .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| try handleSystemMetrics(client, metrics),
         .workspace_list => |list| _ = try workspace_lists.apply(client, list),
         .graphics_snapshot,
@@ -148,10 +126,13 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
 }
 
 fn handleAgentSound(client: *Client, notification: schema.AgentSoundNotification) !void {
-    if (client.view.sidebar_snapshot.find(.{
+    if (!client.model.knowsAgent(.{
         .pane_id = notification.pane_id,
         .pane_generation = notification.pane_generation,
-    }) == null) return;
+    })) {
+        return;
+    }
+
     try client.scheduleAgentSound(notification.sound);
 }
 
@@ -231,84 +212,6 @@ fn handleProxyStatus(client: *Client, status: schema.ProxyStatus) !void {
         else
             widgets.notification.default_duration_ns,
     });
-}
-
-/// Replaces the sidebar agent replica and raises actionable status alerts.
-fn handleAgentSnapshot(client: *Client, snapshot: schema.AgentSnapshotView) !void {
-    var agents: [schema.max_agent_snapshot_entries]widgets.sidebar.AgentInput = undefined;
-    var alerts: [widgets.notification.max_items]widgets.sidebar.AgentInput = undefined;
-    var alert_count: usize = 0;
-    var count: usize = 0;
-    var iterator = snapshot.entries();
-    while (try iterator.next()) |entry| {
-        agents[count] = .{
-            .key = .{
-                .pane_id = entry.pane_id,
-                .pane_generation = entry.pane_generation,
-            },
-            .location = entry.location,
-            .pane_index = entry.pane_index,
-            .workspace_label = entry.workspace_label,
-            .tab_label = entry.tab_label,
-            .session_title = entry.session_title,
-            .title_source = entry.title_source,
-            .title_state = entry.title_state,
-            .cwd_label = entry.cwd_label,
-            .provider = entry.provider,
-            .status = entry.status,
-        };
-        const previous = client.view.sidebar_snapshot.find(agents[count].key);
-        if (shouldNotifyAgentStatus(
-            if (previous) |agent| agent.status else null,
-            entry.status,
-        ) and alert_count < alerts.len) {
-            alerts[alert_count] = agents[count];
-            alert_count += 1;
-        }
-        count += 1;
-    }
-    const replaced = try client.view.replaceSidebarSnapshot(.{
-        .revision = snapshot.revision,
-        .agents = agents[0..count],
-    });
-    if (replaced) {
-        if (client.model.workspace.active()) |active| try client.syncPaneFocus(&active.model);
-        if (alert_count == 0) {
-            try client.presenter.requestDraw();
-        } else for (alerts[0..alert_count]) |agent| {
-            var message_buffer: [64]u8 = undefined;
-            const message = std.fmt.bufPrint(
-                &message_buffer,
-                "{s} in pane {d} is {s}",
-                .{
-                    agentProviderName(agent.provider),
-                    agent.pane_index,
-                    agentStatusName(agent.status),
-                },
-            ) catch "Agent status changed";
-            try client.notify(.{
-                .level = switch (agent.status) {
-                    .blocked => .warning,
-                    .ready => .success,
-                    .failed => .failure,
-                    else => unreachable,
-                },
-                .title = switch (agent.status) {
-                    .blocked => "Agent needs input",
-                    .ready => "Agent ready",
-                    .failed => "Agent failed",
-                    else => unreachable,
-                },
-                .message = message,
-                .target = .{ .focus_pane = agent.key.pane_id },
-                .duration_ns = if (agent.status == .failed)
-                    7 * std.time.ns_per_s
-                else
-                    widgets.notification.default_duration_ns,
-            });
-        }
-    }
-    try client.scheduleSidebarAnimation();
 }
 
 /// Host health for the status bar.
@@ -615,13 +518,4 @@ test "workspace closure exits only when no predecessor survives" {
         WorkspaceClosureAction{ .switch_to = @enumFromInt(7) },
         workspaceClosureAction(true, @enumFromInt(7)),
     );
-}
-
-test "agent notifications report only actionable status transitions" {
-    try std.testing.expect(!shouldNotifyAgentStatus(null, .blocked));
-    try std.testing.expect(!shouldNotifyAgentStatus(.working, .working));
-    try std.testing.expect(!shouldNotifyAgentStatus(.ready, .working));
-    try std.testing.expect(shouldNotifyAgentStatus(.working, .blocked));
-    try std.testing.expect(shouldNotifyAgentStatus(.working, .ready));
-    try std.testing.expect(shouldNotifyAgentStatus(.working, .failed));
 }

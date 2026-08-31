@@ -143,9 +143,9 @@ remain cells. Hover does not enter the KGP preparation contract and therefore
 cannot dirty graphical pixels or placements. Both renderers consume the same
 semantic frame, so hit testing does not depend on KGP.
 
-The client renders an empty bounded task snapshot until runtime agent detection
-exists. The adapter and ownership rules for later data are recorded in
-[`sidebar.md`](sidebar.md).
+The cell widget renders the immutable bounded snapshot supplied by the
+presenter. Agent storage, local pane-index projection and adapter ownership are
+recorded in [`sidebar.md`](sidebar.md).
 
 `kitty-full` is an experimental alias of the hybrid backend. It intentionally
 does not rasterize text yet.

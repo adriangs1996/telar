@@ -4,12 +4,12 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
-const widgets = @import("../widgets/root.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
@@ -99,26 +99,30 @@ pub fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.Workspa
     _ = try workspace_handoffs.requestWorkspace(handler.client, workspace);
 }
 
-fn focusSidebarAgent(
-    handler: *InputHandler,
-    agent_key: widgets.sidebar.AgentKey,
-) !bool {
-    const agent = handler.client.view.sidebar_snapshot.find(agent_key) orelse return false;
-    if (handler.client.model.workspace.tabForPane(agent_key.pane_id)) |tab| {
-        if (handler.client.model.workspace.activeConst().?.location.tab_id != tab.location.tab_id) {
-            try handler.selectTab(.{ .tab_id = tab.location.tab_id });
-        }
+fn focusSidebarAgent(handler: *InputHandler, agent_key: agents.AgentKey) !bool {
+    const plan = handler.client.model.planAgentNavigation(agent_key) orelse return false;
+    switch (plan) {
+        .local => |local| {
+            if (local.select_tab) |tab_id| {
+                try handler.selectTab(.{ .tab_id = tab_id });
+            }
 
-        try handler.focusPane(.{ .pane_id = agent_key.pane_id });
-        return false;
+            try handler.focusPane(.{ .pane_id = local.pane_id });
+            return false;
+        },
+        .handoff => |handoff| {
+            if (handler.client.requests.count != 0) {
+                return false;
+            }
+
+            _ = try workspace_handoffs.requestPane(
+                handler.client,
+                handoff.pane_id,
+                handoff.fallback_workspace,
+            );
+            return true;
+        },
     }
-    if (handler.client.requests.count != 0) return false;
-    const fallback = switch (agent.location.workspace) {
-        .workspace => |workspace| workspace,
-        .worktree => null,
-    };
-    _ = try workspace_handoffs.requestPane(handler.client, agent_key.pane_id, fallback);
-    return true;
 }
 
 pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
@@ -163,9 +167,9 @@ pub fn key(handler: *InputHandler, value: keybind.Key) !void {
         .payload = .{ .key = value },
     }) orelse return;
     if (isClipboardImagePasteKey(value)) {
-        const model = handler.activeModel() orelse return;
-        if (handler.client.view.focusedAttachmentTarget(model)) |target|
+        if (handler.client.focusedAttachmentTarget()) |target| {
             handler.client.scheduleAttachmentCapture(target) catch {};
+        }
     }
 }
 

@@ -129,6 +129,8 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.workspace;
     const workspace_list_changed = presenter.presented_model_version.workspace_list !=
         presenter.observed_model_version.workspace_list;
+    const agents_changed = presenter.presented_model_version.agents !=
+        presenter.observed_model_version.agents;
     const tabs_changed = presenter.presented_model_version.tabs !=
         presenter.observed_model_version.tabs;
     const active_tab_changed = presenter.presented_model_version.active_tab !=
@@ -160,10 +162,13 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         client.view.setSidebarVisible(client.model.sidebarVisible());
         client.view.setWorkspaceListCollapsed(client.model.workspaceListCollapsed());
     }
+    if (agents_changed) {
+        client.view.resetSidebarScroll();
+    }
     if (prompt_changed) {
         client.view.clearHover();
     }
-    if (workspace_changed or workspace_list_changed or tabs_changed or active_tab_changed or
+    if (workspace_changed or workspace_list_changed or agents_changed or tabs_changed or active_tab_changed or
         panes_changed or pane_metadata_changed or chrome_changed or prompt_changed or
         copy_status_changed)
     {
@@ -340,6 +345,7 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
     const chrome = try client.view.render(&presenter.screen, .{
         .tabs = &client.model.workspace,
         .model = model,
+        .agents = client.model.agentSnapshot(),
         .workspaces = client.model.workspaceListSnapshot(),
         .prompt = client.model.name_prompt.current(),
         .status_mode = client.statusMode(),
