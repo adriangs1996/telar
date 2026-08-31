@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const attachments = @import("../attachments/root.zig");
+const lua_config = @import("../config/root.zig");
 const graphics = @import("../graphics/root.zig");
 const input_capability = @import("../input/root.zig");
 const notifications = @import("../notifications/root.zig");
@@ -23,6 +24,7 @@ const ui = core.ui;
 pub const Version = struct {
     workspace: u64 = 0,
     configuration: u64 = 0,
+    diagnostic: u64 = 0,
     host: u64 = 0,
     host_capabilities: u64 = 0,
     workspace_list: u64 = 0,
@@ -695,6 +697,8 @@ pub const Model = struct {
     workspace_revision: u64 = 0,
     configuration_generation: u64 = 0,
     configuration_revision: u64 = 0,
+    client_diagnostic: lua_config.Diagnostic = .{},
+    diagnostic_revision: u64 = 0,
     plugin_execution: ?PluginExecution = null,
     next_plugin_execution_id: u64 = 1,
     clipboard_capture: ?ClipboardCapture = null,
@@ -791,6 +795,7 @@ pub const Model = struct {
         return .{
             .workspace = model.workspace_revision,
             .configuration = model.configuration_revision,
+            .diagnostic = model.diagnostic_revision,
             .host = model.host_revision,
             .host_capabilities = model.host_capabilities_revision,
             .workspace_list = model.workspace_list_revision,
@@ -819,6 +824,100 @@ pub const Model = struct {
     /// ```
     pub fn configurationGeneration(model: *const Model) u64 {
         return model.configuration_generation;
+    }
+
+    /// Returns the bounded client diagnostic currently shown in the chrome.
+    ///
+    /// ```zig
+    /// const message = model.diagnostic() orelse return;
+    /// ```
+    pub fn diagnostic(model: *const Model) ?[]const u8 {
+        if (model.client_diagnostic.len == 0) {
+            return null;
+        }
+
+        return model.client_diagnostic.message();
+    }
+
+    /// Replaces the visible diagnostic after validating its bounded text.
+    ///
+    /// ```zig
+    /// _ = try model.replaceDiagnostic(diagnostic);
+    /// ```
+    pub fn replaceDiagnostic(model: *Model, diagnostic_value: lua_config.Diagnostic) !Change {
+        if (diagnostic_value.len > diagnostic_value.buffer.len) {
+            return error.InvalidClientDiagnostic;
+        }
+
+        const message = diagnostic_value.buffer[0..diagnostic_value.len];
+        if (!std.unicode.utf8ValidateSlice(message)) {
+            return error.InvalidClientDiagnostic;
+        }
+
+        if (message.len == 0) {
+            return model.clearDiagnostic();
+        }
+
+        if (model.diagnostic()) |current| {
+            if (std.mem.eql(u8, current, message)) {
+                return .unchanged;
+            }
+        }
+
+        model.client_diagnostic = diagnostic_value;
+        model.diagnostic_revision +%= 1;
+        return .changed;
+    }
+
+    /// Formats and commits one bounded client diagnostic.
+    ///
+    /// ```zig
+    /// _ = try model.setDiagnostic("callback failed: {s}", .{@errorName(err)});
+    /// ```
+    pub fn setDiagnostic(model: *Model, comptime format: []const u8, args: anytype) !Change {
+        var diagnostic_value: lua_config.Diagnostic = .{};
+        diagnostic_value.set(format, args);
+
+        return model.replaceDiagnostic(diagnostic_value);
+    }
+
+    /// Clears the diagnostic only when visible text exists.
+    ///
+    /// ```zig
+    /// _ = model.clearDiagnostic();
+    /// ```
+    pub fn clearDiagnostic(model: *Model) Change {
+        if (model.client_diagnostic.len == 0) {
+            return .unchanged;
+        }
+
+        model.client_diagnostic.len = 0;
+        model.diagnostic_revision +%= 1;
+        return .changed;
+    }
+
+    /// Builds the immutable value snapshot passed to one configured action.
+    ///
+    /// ```zig
+    /// const context = model.callbackContext();
+    /// ```
+    pub fn callbackContext(model: *const Model) lua_config.CallbackContext {
+        const active = model.workspace.activeConst() orelse return .{
+            .sidebar_visible = model.sidebar_visible,
+            .tab_count = 0,
+            .active_tab_index = 0,
+            .pane_count = 0,
+            .focused_pane_id = 0,
+        };
+        const focused = active.model.layout.focused();
+
+        return .{
+            .sidebar_visible = model.sidebar_visible,
+            .tab_count = @intCast(model.workspace.count),
+            .active_tab_index = @intCast(model.workspace.activeIndex() orelse 0),
+            .pane_count = @intCast(active.model.pane_count),
+            .focused_pane_id = if (focused) |pane_id| schema.id.raw(pane_id) else 0,
+        };
     }
 
     /// Returns the single plugin execution currently owned by the client.
@@ -4226,6 +4325,60 @@ test "configuration adoption rejects an old generation without partial state" {
     try std.testing.expect(model.sidebarVisible());
     try std.testing.expect(model.paneGaps());
     try std.testing.expectEqualDeep(version, model.version());
+}
+
+test "client diagnostics publish only changed valid text" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    try std.testing.expect(model.diagnostic() == null);
+    try std.testing.expectEqual(Change.changed, try model.setDiagnostic("Lua failed: {s}", .{"boom"}));
+    try std.testing.expectEqualStrings("Lua failed: boom", model.diagnostic().?);
+    try std.testing.expectEqual(Version{ .diagnostic = 1 }, model.version());
+    try std.testing.expectEqual(Change.unchanged, try model.setDiagnostic("Lua failed: {s}", .{"boom"}));
+    try std.testing.expectEqual(Version{ .diagnostic = 1 }, model.version());
+
+    var invalid: lua_config.Diagnostic = .{};
+    invalid.buffer[0] = 0xff;
+    invalid.len = 1;
+    try std.testing.expectError(error.InvalidClientDiagnostic, model.replaceDiagnostic(invalid));
+    invalid.len = invalid.buffer.len + 1;
+    try std.testing.expectError(error.InvalidClientDiagnostic, model.replaceDiagnostic(invalid));
+    try std.testing.expectEqualStrings("Lua failed: boom", model.diagnostic().?);
+
+    try std.testing.expectEqual(Change.changed, model.clearDiagnostic());
+    try std.testing.expect(model.diagnostic() == null);
+    try std.testing.expectEqual(Change.unchanged, model.clearDiagnostic());
+    try std.testing.expectEqual(Version{ .diagnostic = 2 }, model.version());
+}
+
+test "callback context is a value projection of committed client state" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    try std.testing.expectEqualDeep(lua_config.CallbackContext{
+        .sidebar_visible = true,
+        .tab_count = 0,
+        .active_tab_index = 0,
+        .pane_count = 0,
+        .focused_pane_id = 0,
+    }, model.callbackContext());
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .tab_id = @enumFromInt(5),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(7);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    _ = model.toggleSidebar();
+
+    try std.testing.expectEqualDeep(lua_config.CallbackContext{
+        .sidebar_visible = false,
+        .tab_count = 1,
+        .active_tab_index = 0,
+        .pane_count = 1,
+        .focused_pane_id = schema.id.raw(pane_id),
+    }, model.callbackContext());
 }
 
 test "plugin execution is single flight and completion matches its exact identity" {

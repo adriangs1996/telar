@@ -57,7 +57,7 @@ pub fn start(client: *Client, requested: input.action.PluginAction, callback_con
     const outcome = use_case.execute() catch |err| switch (err) {
         error.PluginRegistryUnavailable => return .unavailable,
         error.PluginNotConfigured, error.UnknownPluginAction => {
-            client.config_diagnostic.set(
+            _ = try client.model.setDiagnostic(
                 "plugin action cannot be resolved: {s}",
                 .{@errorName(err)},
             );
@@ -147,7 +147,7 @@ fn authorize(raw_context: *anyopaque, result: plugin_action.PluginResult) !void 
 
 fn applyBatch(raw_context: *anyopaque, batch: *const config.EffectBatch) !plugin_action.BatchDisposition {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    client.config_diagnostic.len = 0;
+    _ = client.model.clearDiagnostic();
     for (batch.slice()) |effect| {
         if (try client_actions.apply(client, effect) == .stop) {
             return .exit_client;
@@ -163,19 +163,19 @@ fn handleOutcome(client: *Client, outcome: plugin_action.CompletionOutcome) !boo
         .exit => return true,
         .stale, .ignored => return false,
         .worker_failed => |err| {
-            client.config_diagnostic.set("plugin worker failed: {s}", .{@errorName(err)});
+            _ = try client.model.setDiagnostic("plugin worker failed: {s}", .{@errorName(err)});
             try client.notifyDiagnostic("Plugin failed");
             return false;
         },
         .authorization_failed => |err| {
             const title = if (err == error.PluginRegistryUnavailable) failed: {
-                client.config_diagnostic.set(
+                _ = try client.model.setDiagnostic(
                     "plugin registry changed while action was running",
                     .{},
                 );
                 break :failed "Plugin failed";
             } else denied: {
-                client.config_diagnostic.set("plugin effect denied: {s}", .{@errorName(err)});
+                _ = try client.model.setDiagnostic("plugin effect denied: {s}", .{@errorName(err)});
                 break :denied "Plugin denied";
             };
             try client.notifyDiagnostic(title);

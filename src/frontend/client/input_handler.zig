@@ -9,10 +9,10 @@ const input_capability = @import("../input/root.zig");
 const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
-const lua_config = @import("../config/root.zig");
 const client_actions = @import("actions.zig");
 const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
+const lua_actions = @import("lua_actions.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const plugin_actions = @import("plugin_actions.zig");
@@ -29,7 +29,6 @@ const multiplexer = workspace_capability.multiplexer;
 const term = presentation.screen;
 
 const Io = std.Io;
-const schema = core.schema;
 const diagnostics = core.diagnostics;
 
 const client_mod = @import("client.zig");
@@ -359,72 +358,18 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
 }
 
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
-    if (handler.client.model.name_prompt.active()) return .continue_routing;
+    if (handler.client.model.name_prompt.active()) {
+        return .continue_routing;
+    }
+
     switch (value) {
-        .lua_callback => |reference| {
-            const generation = handler.client.lua_generation orelse
-                return .continue_routing;
-            const batch = generation.invokeCallback(
-                reference,
-                handler.callbackContext(),
-                &handler.client.config_diagnostic,
-            ) catch {
-                handler.redraw = true;
-                return .continue_routing;
-            };
-            for (batch.slice()) |effect| switch (effect) {
-                .plugin => |requested| {
-                    const registry = handler.client.plugin_registry orelse {
-                        handler.client.config_diagnostic.set(
-                            "Lua callback referenced a plugin but no registry is active",
-                            .{},
-                        );
-                        handler.redraw = true;
-                        return .continue_routing;
-                    };
-                    _ = registry.resolve(requested) catch |err| {
-                        handler.client.config_diagnostic.set(
-                            "Lua callback returned an invalid plugin action: {s}",
-                            .{@errorName(err)},
-                        );
-                        handler.redraw = true;
-                        return .continue_routing;
-                    };
-                },
-                else => {},
-            };
-            handler.client.config_diagnostic.len = 0;
-            for (batch.slice()) |effect|
-                if (try handler.action(effect) == .stop) return .stop;
-            return .continue_routing;
-        },
-        .lua_expr => |reference| {
-            const generation = handler.client.lua_generation orelse
-                return .continue_routing;
-            const decision = generation.invokeExpression(
-                reference,
-                handler.callbackContext(),
-                &handler.client.config_diagnostic,
-            ) catch {
-                handler.redraw = true;
-                return .continue_routing;
-            };
-            handler.client.config_diagnostic.len = 0;
-            switch (decision) {
-                .consume => {},
-                .forward_binding => |keys| for (keys.slice()) |key_value|
-                    try handler.key(key_value),
-                .keys => |keys| for (keys.slice()) |key_value|
-                    try handler.key(key_value),
-                .paste => |paste| try handler.sendPaste(paste.slice()),
-            }
-            return .continue_routing;
-        },
+        .lua_callback => |reference| return handler.applyLuaAction(.{ .callback = reference }),
+        .lua_expr => |reference| return handler.applyLuaAction(.{ .expression = reference }),
         .plugin => |requested| {
             _ = try plugin_actions.start(
                 handler.client,
                 requested,
-                handler.callbackContext(),
+                handler.client.model.callbackContext(),
             );
             return .continue_routing;
         },
@@ -432,22 +377,21 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
     }
 }
 
-fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
-    const model = handler.activeModel() orelse return .{
-        .sidebar_visible = handler.client.model.sidebarVisible(),
-        .tab_count = 0,
-        .active_tab_index = 0,
-        .pane_count = 0,
-        .focused_pane_id = 0,
-    };
-    const focused = model.focusedPane();
-    return .{
-        .sidebar_visible = handler.client.model.sidebarVisible(),
-        .tab_count = @intCast(handler.client.model.workspace.count),
-        .active_tab_index = @intCast(handler.client.model.workspace.activeIndex() orelse 0),
-        .pane_count = @intCast(model.pane_count),
-        .focused_pane_id = if (focused) |pane| schema.id.raw(pane.id) else 0,
-    };
+fn applyLuaAction(handler: *InputHandler, command: lua_actions.Command) !keybind.Control {
+    const outcome = try lua_actions.execute(handler.client, command);
+    switch (outcome) {
+        .applied, .unavailable, .invocation_failed, .validation_failed => return .continue_routing,
+        .exit => return .stop,
+        .input => |decision| switch (decision) {
+            .consume => {},
+            .forward_binding, .keys => |keys| for (keys.slice()) |key_value| {
+                try handler.key(key_value);
+            },
+            .paste => |paste| try handler.sendPaste(paste.slice()),
+        },
+    }
+
+    return .continue_routing;
 }
 
 test "only an unmodified control-v triggers local image inspection" {

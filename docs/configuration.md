@@ -117,8 +117,8 @@ keymap while the mode is active.
 Use `telar.bind_global` and `telar.bind_expr_global` for sequences that must not
 use the prefix. A prefixed binding accepts one to four suffix keys. A global
 binding accepts one to five keys. `client.keybindings` extends the default
-keymap. A configured binding replaces every default it conflicts with — the
-same key sequence, or a sequence that is a prefix of the other, since the
+keymap. A configured binding replaces every conflicting default. A conflict is
+the same key sequence, or a sequence that is a prefix of the other, since the
 keymap refuses ambiguous prefixes. Defaults free of conflicts remain active.
 `telar config check` compiles the merged keymap and reports conflicts between
 configured bindings. `client.input.sequence_timeout_ms` applies only to partial
@@ -215,6 +215,9 @@ diagnostic banner.
 The client encodes the result for the focused pane's current cursor, keypad,
 and bracketed-paste modes. Raw terminal escape sequences are not part of the
 Lua API.
+
+See [Lua action](flows/lua-action.md) for VM ownership, validate-before-apply
+ordering, model-owned diagnostics and the semantic input path.
 
 ## Environment and reload
 

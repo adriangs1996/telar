@@ -39,7 +39,8 @@ without touching the active client. `config_reload.resolve` checks the sidebar
 renderer against host capabilities, compiles the input router, clears the
 worker's orphan slots and transfers one `Adoption` to the adapter. Rejection
 frees all three owned objects in one place. A load or validation failure keeps
-the previous generation active and publishes its bounded diagnostic.
+the previous generation active and publishes its bounded diagnostic through
+`ClientModel`.
 
 ## Model transaction
 
@@ -50,6 +51,10 @@ infallible transition. Every accepted generation advances
 changed pane-gap preference updates every current tab and advances
 `Version.panes`. Repeated semantic values do not advance those narrower
 versions.
+
+The model also owns the diagnostic banner and `Version.diagnostic`. A rejected
+generation replaces that bounded text without changing the active generation.
+An accepted generation clears an older diagnostic during the resource swap.
 
 `ApplyConfigHandler` invokes the concrete effect only after this commit. A
 stale generation invokes no effect, and `config_reloads.apply` releases the
@@ -76,10 +81,11 @@ resources without reviving the old Lua generation.
 ## Presentation
 
 The config use case never requests a draw. After the event returns, the loop
-publishes `ClientModel.Version`. `Presenter` compares the configuration version
-with the version it last painted, invalidates the view and folds all accepted
-changes into one paced frame. Configuration-only changes therefore present
-without depending on the success notification as an accidental draw trigger.
+publishes `ClientModel.Version`. `Presenter` compares configuration and
+diagnostic revisions with the version it last painted, invalidates the view and
+folds accepted changes into one paced frame. A rejection presents its
+diagnostic without depending on the failure notification as an accidental draw
+trigger.
 
 ## Proof
 

@@ -53,6 +53,7 @@ const initial_request_id = Client.initial_request_id;
 fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
     try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
@@ -75,6 +76,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
 fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
     try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
@@ -97,6 +99,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
 fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
     try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
@@ -118,6 +121,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
 fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
     try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.host_capabilities, actual.host_capabilities);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
@@ -378,6 +382,11 @@ fn testingConfigAdoption(number: u64, changed: bool) !config_reloads.Adoption {
         \\local telar = require("telar")
         \\return telar.config({ api_version = 2 })
     ;
+
+    return testingConfigAdoptionSource(number, source);
+}
+
+fn testingConfigAdoptionSource(number: u64, source: []const u8) !config_reloads.Adoption {
     var diagnostic: lua_config.Diagnostic = .{};
     const generation = try lua_config.Generation.loadSource(
         std.testing.allocator,
@@ -408,6 +417,15 @@ fn testingConfigAdoption(number: u64, changed: bool) !config_reloads.Adoption {
         .router = router,
         .sidebar_rendering = generation.snapshot.sidebar_rendering,
     };
+}
+
+fn installTestingLuaBinding(client: *Client, source: []const u8) !input_capability.action.Action {
+    const adoption = try testingConfigAdoptionSource(1, source);
+    std.debug.assert(adoption.generation.snapshot.binding_count == 1);
+    const configured = adoption.generation.snapshot.bindings[0].action;
+    _ = try config_reloads.apply(client, adoption);
+
+    return configured;
 }
 
 const TestingPlugin = struct {
@@ -4959,7 +4977,7 @@ test "config reload outcomes that carry no new generation" {
     } });
     try std.testing.expectEqual(@as(i128, 7), client.reload.mtime_ns);
     try std.testing.expect(client.notification_tick_pending);
-    try std.testing.expect(client.config_diagnostic.len != 0);
+    try std.testing.expect(client.model.diagnostic() != null);
     try harness.settle();
 }
 
@@ -5131,7 +5149,7 @@ test "plugin completion from an old configuration is consumed without effects" {
     try std.testing.expect(client.model.pluginExecution() == null);
     try std.testing.expect(!client.model.workspaceListCollapsed());
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
-    try std.testing.expectEqual(@as(u16, 0), client.config_diagnostic.len);
+    try std.testing.expect(client.model.diagnostic() == null);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 }
 
@@ -5166,7 +5184,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     try std.testing.expect(client.model.version().notifications > version_before.notifications);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.config_diagnostic.message(),
+        client.model.diagnostic().?,
         "CapabilityNotGranted",
     ) != null);
     try std.testing.expect(client.notification_tick_pending);
@@ -5188,7 +5206,7 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
         .result = error.TestPluginWorkerFailure,
     }));
     try std.testing.expectEqualDeep(execution, client.model.pluginExecution().?);
-    try std.testing.expectEqual(@as(u16, 0), client.config_diagnostic.len);
+    try std.testing.expect(client.model.diagnostic() == null);
 
     try std.testing.expect(!try client.handlePluginResultEvent(.{
         .execution_id = execution.id,
@@ -5197,7 +5215,7 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
     try std.testing.expect(client.model.pluginExecution() == null);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.config_diagnostic.message(),
+        client.model.diagnostic().?,
         "TestPluginWorkerFailure",
     ) != null);
     try std.testing.expect(client.notification_tick_pending);
@@ -5227,9 +5245,188 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
     try std.testing.expect(client.notification_tick_pending);
     try std.testing.expect(std.mem.indexOf(
         u8,
-        client.config_diagnostic.message(),
+        client.model.diagnostic().?,
         "UnknownPluginAction",
     ) != null);
+}
+
+test "Lua callback applies a validated batch through model observation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const configured = try installTestingLuaBinding(client,
+        \\local telar = require("telar")
+        \\return {
+        \\  api_version = 2,
+        \\  client = { keybindings = {
+        \\    telar.bind({ "x" }, function(ctx)
+        \\      if ctx.tab_count ~= 1 or ctx.pane_count ~= 1 or ctx.focused_pane_id ~= 10 then
+        \\        error("bad callback context")
+        \\      end
+        \\      return telar.action.toggle_workspace_list()
+        \\    end),
+        \\  } },
+        \\}
+    );
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    _ = try client.model.setDiagnostic("old diagnostic", .{});
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    const control = try handler.action(configured);
+
+    try std.testing.expect(control == .continue_routing);
+    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expect(client.model.diagnostic() == null);
+    var expected = version_before;
+    expected.chrome += 1;
+    expected.diagnostic += 1;
+    try std.testing.expectEqualDeep(expected, client.model.version());
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(client.view.workspace_list_collapsed);
+    try std.testing.expectEqual(expected.diagnostic, client.presenter.presented_model_version.diagnostic);
+}
+
+test "Lua callback validates every plugin reference before native effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const configured = try installTestingLuaBinding(client,
+        \\local telar = require("telar")
+        \\return {
+        \\  api_version = 2,
+        \\  client = { keybindings = {
+        \\    telar.bind({ "x" }, function(ctx)
+        \\      return {
+        \\        telar.action.toggle_sidebar(),
+        \\        telar.action.plugin({ plugin = "missing.plugin", action = "run" }),
+        \\      }
+        \\    end),
+        \\  } },
+        \\}
+    );
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    const control = try handler.action(configured);
+
+    try std.testing.expect(control == .continue_routing);
+    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        client.model.diagnostic().?,
+        "PluginNotConfigured",
+    ) != null);
+    var expected = version_before;
+    expected.diagnostic += 1;
+    try std.testing.expectEqualDeep(expected, client.model.version());
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(client.view.sidebar_requested);
+}
+
+test "Lua expression emits semantic keys through pane input" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const configured = try installTestingLuaBinding(client,
+        \\local telar = require("telar")
+        \\return {
+        \\  api_version = 2,
+        \\  client = { keybindings = {
+        \\    telar.bind_expr({ "x" }, function(ctx)
+        \\      return telar.input.keys({ "left", "enter" })
+        \\    end),
+        \\  } },
+        \\}
+    );
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    const control = try handler.action(configured);
+
+    try std.testing.expect(control == .continue_routing);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const left = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(left == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, left.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[D", left.pane_input.bytes);
+    const enter = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(enter == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, enter.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\r", enter.pane_input.bytes);
+}
+
+test "Lua callback failure commits one diagnostic without direct presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const configured = try installTestingLuaBinding(client,
+        \\local telar = require("telar")
+        \\return {
+        \\  api_version = 2,
+        \\  client = { keybindings = {
+        \\    telar.bind({ "x" }, function(ctx)
+        \\      error("callback exploded")
+        \\    end),
+        \\  } },
+        \\}
+    );
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    const control = try handler.action(configured);
+
+    try std.testing.expect(control == .continue_routing);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        client.model.diagnostic().?,
+        "callback exploded",
+    ) != null);
+    var expected = version_before;
+    expected.diagnostic += 1;
+    try std.testing.expectEqualDeep(expected, client.model.version());
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(expected.diagnostic, client.presenter.presented_model_version.diagnostic);
 }
 
 test "control-v reaches the pane when no clipboard preview target exists" {

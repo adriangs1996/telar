@@ -47,6 +47,7 @@ test {
     _ = @import("copy_modes.zig");
     _ = @import("host_capabilities.zig");
     _ = @import("host_resizes.zig");
+    _ = @import("lua_actions.zig");
     _ = @import("model.zig");
     _ = @import("name_prompt.zig");
     _ = @import("name_prompts.zig");

@@ -192,7 +192,6 @@ binding_timeout_pending: bool = false,
 telemetry_buffer: [8192]u8 = undefined,
 telemetry_write_pending: bool = false,
 lua_generation: ?*lua_config.Generation,
-config_diagnostic: lua_config.Diagnostic = .{},
 plugin_registry: ?*plugin_broker.Registry,
 trust_store: ?*core.plugin.TrustStore,
 reload: config_reload.State,
@@ -471,10 +470,12 @@ pub fn notify(client: *Client, input: notification_capability.Input) !void {
 }
 
 pub fn notifyDiagnostic(client: *Client, title: []const u8) !void {
+    const message = client.model.diagnostic() orelse return error.ClientDiagnosticMissing;
+
     try client.notify(.{
         .level = .failure,
         .title = title,
-        .message = client.config_diagnostic.message(),
+        .message = message,
         .duration_ns = 7 * std.time.ns_per_s,
     });
 }

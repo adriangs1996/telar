@@ -1,6 +1,7 @@
 //! Adapts asynchronous configuration reloads to one client's application state.
 
 const std = @import("std");
+const lua_config = @import("../config/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 
@@ -30,7 +31,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     })) {
         .unchanged => .unchanged,
         .rejected => |diagnostic| rejected: {
-            client.config_diagnostic = diagnostic;
+            try publishDiagnostic(client, diagnostic);
             try client.notifyDiagnostic("Configuration rejected");
             break :rejected .rejected;
         },
@@ -39,6 +40,15 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     try client.scheduleConfigReload();
 
     return outcome;
+}
+
+fn publishDiagnostic(client: *Client, diagnostic: lua_config.Diagnostic) !void {
+    _ = client.model.replaceDiagnostic(diagnostic) catch |err| switch (err) {
+        error.InvalidClientDiagnostic => try client.model.setDiagnostic(
+            "configuration reload failed: invalid diagnostic text",
+            .{},
+        ),
+    };
 }
 
 /// Adopts one validated generation through the client application boundary.
@@ -97,7 +107,7 @@ const AdoptionContext = struct {
         if (!client.sound_config.enabled) {
             client.queued_sound = null;
         }
-        client.config_diagnostic.len = 0;
+        _ = client.model.clearDiagnostic();
         context.consumed = true;
 
         if (previous_generation) |generation| {

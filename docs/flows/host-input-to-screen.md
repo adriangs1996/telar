@@ -87,14 +87,18 @@ A complete configured sequence returns `.action` from `Router.routeKey`.
 `Router.drain` calls `InputHandler.action` in
 `src/frontend/client/input_handler.zig`; it does not forward the matched bytes.
 
-`InputHandler.action` separates three action sources:
+`InputHandler.action` classifies three action sources:
 
 - built-in actions go to the shared `client_actions.apply` dispatcher;
-- explicit Lua callbacks run in the bounded client-owned config VM and return
-  semantic effects;
+- explicit Lua callbacks go through `lua_actions` and `LuaActionHandler`, then
+  return semantic effects or semantic input;
 - plugin actions enter `plugin_actions.start`, then apply a current authorized
   semantic batch through the same dispatcher after `.plugin_result`. See
   [Plugin action](plugin-action.md) for its lifecycle and authority checks.
+
+The Lua branch does not expose the VM, registry or diagnostic storage to input
+routing. See [Lua action](lua-action.md) for callback context, complete batch
+validation, expression routing and failure presentation.
 
 Actions may mutate disposable client state or enqueue a typed runtime request.
 They never call runtime internals. The unit test `a configured sequence runs

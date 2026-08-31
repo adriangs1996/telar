@@ -71,7 +71,8 @@ For a current successful result, the adapter re-resolves authority through the
 current `Registry.authorizeBatch`. That check verifies package position,
 stable plugin ID, exact digest, declared capabilities and digest-bound grants
 for every effect before any effect runs. Worker failures and authorization
-failures publish bounded client notifications after consuming the execution.
+failures commit the shared `ClientModel` diagnostic and publish bounded client
+notifications after consuming the execution.
 
 Authorized effects enter `client_actions.apply`, the shared dispatcher for
 native semantic actions regardless of whether they came from host input, Lua
@@ -92,7 +93,8 @@ presenter compare versions and schedule at most the required paced frame.
   application is sequential, not transactional: a later runtime outbox error
   is returned after any earlier committed effect.
 - A worker error, denial or rejected action reports through notification model
-  state. It does not mutate presenter-owned state directly.
+  state and `Version.diagnostic`. It does not mutate presenter-owned state
+  directly.
 - Client shutdown cancels outstanding select work and then destroys the
   disposable model, so no plugin execution must survive the client.
 
