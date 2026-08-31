@@ -23,6 +23,7 @@ const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const name_prompts = @import("name_prompts.zig");
+const pane_openings = @import("pane_openings.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
@@ -357,6 +358,74 @@ test "bootstrap answers the initial open with both snapshot requests" {
         harness.client.model.version(),
         harness.client.presenter.presented_model_version,
     );
+}
+
+test "pane opening rejects an unknown request without client effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+
+    try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, .{
+        .request_id = @enumFromInt(99),
+        .pane_id = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .created = true,
+    }));
+
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+}
+
+test "pane opening consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    const opened: schema.PaneOpened = .{
+        .request_id = request_id,
+        .pane_id = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .created = true,
+    };
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    try client.requests.add(request_id, .notification);
+
+    try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, opened));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, opened));
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+}
+
+test "pane opening consumes an ignored continuation without client effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    try client.requests.add(request_id, .ignored);
+
+    try std.testing.expectEqual(pane_openings.Outcome.ignored, try pane_openings.apply(client, .{
+        .request_id = request_id,
+        .pane_id = TestHarness.bootstrap_pane,
+        .location = TestHarness.bootstrap_location,
+        .created = false,
+    }));
+
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
 
 test "new tab request captures launch source geometry and continuation without mutation" {

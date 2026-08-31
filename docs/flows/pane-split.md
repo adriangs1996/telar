@@ -22,6 +22,8 @@ launch pane -> attach client -> PendingPaneOpened
         |
 schema.pane_opened -> client socket
         |
+pane_openings.apply
+        |
 ConfirmPaneSplitHandler
         |
 ClientModel.commitPaneSplit
@@ -39,7 +41,8 @@ a host resize while launch is in flight cannot invalidate accepted geometry.
 `RequestPaneSplitHandler` owns the provisional protocol conversation. It sends
 the target resize before `create_pane`; any local delivery failure restores the
 pre-request size. The request tracker stores the exact target, tab, axis and
-request-time workbench.
+request-time workbench. `pane_openings.apply` consumes that continuation once
+and translates the successful protocol response into the confirmation command.
 
 ## Runtime confirmation
 

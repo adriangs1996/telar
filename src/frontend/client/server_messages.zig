@@ -15,12 +15,11 @@ const diagnostics = core.diagnostics;
 const client_mod = @import("client.zig");
 const Client = client_mod;
 const agent_snapshots = @import("agent_snapshots.zig");
-const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
 const pane_graphics = @import("pane_graphics.zig");
 const pane_metadata = @import("pane_metadata.zig");
-const pane_splits = @import("pane_splits.zig");
+const pane_openings = @import("pane_openings.zig");
 const proxy_status = @import("proxy_status.zig");
 const request_failures = @import("request_failures.zig");
 const resync_requirements = @import("resync_requirements.zig");
@@ -30,8 +29,6 @@ const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
 const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
-const workspace_creations = @import("workspace_creations.zig");
-const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_lists = @import("workspace_lists.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
@@ -39,7 +36,7 @@ const monotonic = client_mod.monotonic;
 /// Routes one decoded message from the runtime.
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
     switch (message) {
-        .pane_opened => |opened| try handlePaneOpened(client, opened),
+        .pane_opened => |opened| _ = try pane_openings.apply(client, opened),
         .tab_snapshot => |snapshot| try handleTabSnapshot(client, snapshot),
         .workspace_snapshot => |snapshot| try handleWorkspaceSnapshot(client, snapshot),
         .tab_created => |created| try handleTabCreated(client, created),
@@ -128,56 +125,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// An open-pane reply: routed by the continuation that asked for it.
-fn handlePaneOpened(client: *Client, opened: schema.PaneOpened) !void {
-    const continuation = client.requests.take(opened.request_id) orelse
-        return error.UnexpectedRequest;
-    switch (continuation) {
-        .initial_open => {
-            var use_case = workspace_handoffs.confirmationHandler(client);
-            try use_case.execute(try workspace_handoffs.arrival(client, opened));
-            return;
-        },
-        .create_workspace => |requested_size| {
-            var use_case = workspace_creations.confirmationHandler(client);
-            _ = try use_case.execute(workspace_creations.confirmation(client, opened, requested_size));
-            return;
-        },
-        .split => |split| {
-            var use_case = pane_splits.confirmationHandler(client);
-            _ = try use_case.execute(.{
-                .requested = .{
-                    .target_pane = split.target_pane,
-                    .location = split.location,
-                    .axis = split.axis,
-                    .area = split.area,
-                },
-                .confirmed_pane = opened.pane_id,
-                .confirmed_location = opened.location,
-                .created = opened.created,
-            });
-            return;
-        },
-        .attach_pane => |attachment| {
-            var use_case = pane_attachments.confirmationHandler(client);
-            _ = try use_case.execute(.{
-                .requested = .{
-                    .pane_id = attachment.pane_id,
-                    .location = attachment.location,
-                },
-                .confirmed = .{
-                    .pane_id = opened.pane_id,
-                    .location = opened.location,
-                },
-                .created = opened.created,
-            });
-            return;
-        },
-        .ignored => return,
-        else => return error.UnexpectedRequest,
-    }
 }
 
 /// Applies one correlated canonical tab snapshot.

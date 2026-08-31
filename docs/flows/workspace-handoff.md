@@ -57,6 +57,8 @@ open_pane.Controller -> OpenPaneHandler
         |
 schema.pane_opened -> client socket
         |
+pane_openings.apply
+        |
 ConfirmWorkspaceHandoffHandler
         |
 ClientModel.arriveWorkspace
@@ -66,9 +68,10 @@ focus sync -> input read -> workspace snapshot -> tab snapshot
 Presenter.observeModel -> present arrived workspace
 ```
 
-The `initial_open` continuation correlates the runtime response. Before the
-commit, the adapter copies a saved layout only when its exact tab identity
-matches the confirmed location.
+The `initial_open` continuation correlates the runtime response.
+`pane_openings.apply` consumes it once and delivers the translated arrival to
+the handoff use case. Before the commit, the adapter copies a saved layout only
+when its exact tab identity matches the confirmed location.
 
 `ClientModel.arriveWorkspace` accepts only an empty model. The tab store builds
 the root tab and confirmed pane transactionally before publishing them, then

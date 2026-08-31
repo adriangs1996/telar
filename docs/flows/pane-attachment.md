@@ -19,7 +19,7 @@ prepare view -> attach client -> PendingPaneOpened
         |
 schema.pane_opened -> client socket
         |
-handlePaneOpened -> ConfirmPaneAttachmentHandler
+pane_openings.apply -> ConfirmPaneAttachmentHandler
         |
 ClientModel.confirmPaneAttachment
 ```
@@ -27,7 +27,8 @@ ClientModel.confirmPaneAttachment
 `tab_snapshots.applyReconciliation` sends at most one attachment request per
 pane. The request tracker stores the pane ID and exact tab location. A matching
 `pane_opened` response must identify the same existing pane, the same location
-and `created = false`.
+and `created = false`. `pane_openings.apply` consumes that correlation once,
+translates the protocol response and delivers only the attachment command.
 
 ## Client commit
 
@@ -44,8 +45,8 @@ the client flag. Pane exit retires the pending attachment for the same reason.
 
 Attachment confirmation advances no `ClientModel.Version`. The pane already
 entered the visible layout through its canonical tab snapshot. Confirmation
-only permits subsequent frame messages, so `handlePaneOpened` does not request
-a draw and the presenter observes no model change.
+only permits subsequent frame messages, so neither the response controller nor
+the use case requests a draw and the presenter observes no model change.
 
 ## Failure and recovery
 

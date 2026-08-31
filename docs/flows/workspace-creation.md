@@ -58,6 +58,8 @@ replaced.
 ```text
 pane_opened(create_workspace continuation)
         |
+pane_openings.apply
+        |
 ConfirmWorkspaceCreationHandler
         |
 ClientModel.replaceWorkspace
@@ -74,8 +76,10 @@ Presenter.observeModel -> paced presentation
 The continuation retains the nonzero terminal size sent to the runtime, so a
 host resize cannot replace valid construction geometry with a zero-sized
 workbench while the response is in flight. The `created` flag is checked before
-mutation. The adapter also stages a remembered layout only when its exact
-workspace and tab identity matches the runtime confirmation.
+mutation. `pane_openings.apply` consumes the correlation once and combines the
+response with that retained size before delivery. The adapter also stages a
+remembered layout only when its exact workspace and tab identity matches the
+runtime confirmation.
 
 `ClientModel.replaceWorkspace` captures the previous workspace, focused-pane
 bookmark, layout and bounded pane identities. The tab store constructs the new
