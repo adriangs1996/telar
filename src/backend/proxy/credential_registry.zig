@@ -64,7 +64,7 @@ pub const Registry = struct {
         }
     }
 
-    /// Revokes the capability owned by one exact pane generation while
+    /// Revokes every capability owned by one exact pane generation while
     /// preserving credentials for reused pane IDs.
     ///
     /// ```zig
@@ -81,7 +81,6 @@ pub const Registry = struct {
             }
 
             erase(slot, existing);
-            return;
         }
     }
 
@@ -141,18 +140,21 @@ test "register, lookup, exact revocation, and duplicate rejection" {
     try std.testing.expect(!registry.contains(io, &credential));
 }
 
-test "pane revocation removes only that generation" {
+test "pane revocation removes every credential for only that generation" {
     const io = std.testing.io;
     var registry: Registry = .{};
-    const current = try testCredential(7, 2, 0x5a);
-    const next = try testCredential(7, 3, 0x6b);
+    const current_a = try testCredential(7, 2, 0x5a);
+    const current_b = try testCredential(7, 2, 0x6b);
+    const next = try testCredential(7, 3, 0x7c);
 
-    try registry.register(io, &current);
+    try registry.register(io, &current_a);
+    try registry.register(io, &current_b);
     try registry.register(io, &next);
 
-    registry.removePane(io, .{ .id = current.pane_id, .generation = current.pane_generation });
+    registry.removePane(io, .{ .id = current_a.pane_id, .generation = current_a.pane_generation });
 
-    try std.testing.expect(!registry.contains(io, &current));
+    try std.testing.expect(!registry.contains(io, &current_a));
+    try std.testing.expect(!registry.contains(io, &current_b));
     try std.testing.expect(registry.contains(io, &next));
 }
 
