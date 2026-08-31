@@ -175,7 +175,7 @@ test "a running pane exit retires agent and credential before lifecycle effects"
     var panes: PaneStore = .{};
     try beginFixtureExit(&fixture, &panes);
     const identity = agent_mod.Identity.fromPane(fixture.pane);
-    const shell_id = std.math.cast(u32, fixture.pane.session.pid).?;
+    const shell_id = std.math.cast(u32, fixture.pane.session.processId()).?;
     const process_id = if (shell_id == std.math.maxInt(u32)) shell_id - 1 else shell_id + 1;
     try std.testing.expect(fixture.agents.observeProcess(.{
         .identity = identity,

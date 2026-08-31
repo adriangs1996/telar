@@ -1119,7 +1119,7 @@ pub const Pane = struct {
         return .{
             .previous_process = previous_process,
             .cwd_changed = cwd_changed,
-            .shell_foreground = agent_process.shellForeground(process_cache, pane.session.pid),
+            .shell_foreground = agent_process.shellForeground(process_cache, pane.session.processId()),
         };
     }
 
@@ -1141,7 +1141,7 @@ pub const Pane = struct {
     /// ```
     pub fn processHistoryObservation(pane: *Pane, current_size: schema.TerminalSize, stats: *history.observer.Stats) void {
         var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const cwd = pane.session.cwd(&cwd_buffer);
+        const cwd = agent_process.cwd(pane.session.processId(), &cwd_buffer);
         var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
         pane.history_observer.processSealed(.{
             .cwd = cwd,

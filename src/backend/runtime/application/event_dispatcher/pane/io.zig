@@ -93,7 +93,7 @@ pub fn Dispatcher(comptime Application: type) type {
             return .{
                 .pane = write.pane.key(),
                 .started_ns = write.started_ns,
-                .result = write.pane.session.file().writeStreamingAll(write.io, write.bytes),
+                .result = write.pane.session.writeAll(write.io, write.bytes),
             };
         }
 
@@ -125,7 +125,7 @@ pub fn Dispatcher(comptime Application: type) type {
 
             return .{
                 .pane = write.pane.key(),
-                .result = write.pane.session.file().writeStreamingAll(write.io, write.bytes),
+                .result = write.pane.session.writeAll(write.io, write.bytes),
             };
         }
 

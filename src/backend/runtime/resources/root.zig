@@ -28,7 +28,7 @@ pub const Resources = struct {
     dependencies: config.Dependencies,
     heap: diagnostics.Heap,
     gpa: std.mem.Allocator,
-    child_environment: pty.Environment,
+    child_environment: pty.ChildEnvironment,
     proxy: proxy_runtime.Runtime,
     listener: transport.local.LocalListener,
     telemetry: telemetry.State,
@@ -54,7 +54,7 @@ pub const Resources = struct {
         try initialization.options.graphics.validate();
         attachment.initSharedFreezeNonce(resources.io());
 
-        resources.child_environment = try pty.Environment.init(resources.gpa, initialization.options.environment, "telar");
+        resources.child_environment = try pty.ChildEnvironment.init(resources.gpa, initialization.options.environment, "telar");
         errdefer resources.child_environment.deinit();
         try checkpoint(fail_after, .child_environment);
 

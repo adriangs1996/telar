@@ -4,10 +4,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Exit = @import("exit.zig").Exit;
 
-const mac = if (builtin.os.tag == .macos) @cImport({
-    @cInclude("libproc.h");
-}) else struct {};
-
 const TIOC = switch (builtin.os.tag) {
     .macos => struct {
         const SWINSZ: c_int = @bitCast(@as(u32, 0x80087467));
@@ -124,14 +120,6 @@ pub fn setWindowSize(master: std.c.fd_t, window: *const std.posix.winsize) !void
     }
 }
 
-pub fn processCwd(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
-    return switch (builtin.os.tag) {
-        .macos => cwdMacos(pid, buffer),
-        .linux => cwdLinux(pid, buffer),
-        else => null,
-    };
-}
-
 pub fn flushPty(master: std.c.fd_t) void {
     switch (builtin.os.tag) {
         .macos => {
@@ -197,26 +185,6 @@ pub fn terminateAndReap(pid: std.c.pid_t) void {
 
 pub fn terminate(pid: std.c.pid_t) void {
     _ = std.c.kill(pid, .KILL);
-}
-
-fn cwdMacos(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
-    if (comptime builtin.os.tag != .macos) return null;
-    var info: mac.struct_proc_vnodepathinfo = undefined;
-    const size: c_int = @intCast(@sizeOf(@TypeOf(info)));
-    if (mac.proc_pidinfo(pid, mac.PROC_PIDVNODEPATHINFO, 0, &info, size) != size) return null;
-    const source = std.mem.sliceTo(&info.pvi_cdir.vip_path, 0);
-    if (source.len == 0 or source.len > buffer.len) return null;
-    @memcpy(buffer[0..source.len], source);
-    return buffer[0..source.len];
-}
-
-fn cwdLinux(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
-    if (comptime builtin.os.tag != .linux) return null;
-    var path_buffer: [64]u8 = undefined;
-    const path = std.fmt.bufPrintZ(&path_buffer, "/proc/{d}/cwd", .{pid}) catch return null;
-    const result = std.c.readlinkat(std.posix.AT.FDCWD, path.ptr, buffer.ptr, buffer.len);
-    if (result < 0) return null;
-    return buffer[0..@intCast(result)];
 }
 
 test "close-on-exec setup reports invalid descriptors" {

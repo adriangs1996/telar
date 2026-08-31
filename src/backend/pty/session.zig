@@ -8,7 +8,7 @@ const native = @import("native.zig");
 const spawn_mod = @import("spawn.zig");
 
 const Command = command_mod.Command;
-const Environment = environment_mod.Environment;
+const ChildEnvironment = environment_mod.ChildEnvironment;
 const File = std.Io.File;
 
 pub const Exit = exit_mod.Exit;
@@ -43,7 +43,34 @@ pub const Session = struct {
         return .{ .master = spawned.master, .pid = spawned.pid };
     }
 
-    pub fn file(session: *const Session) File {
+    /// Returns the process identifier of the session leader.
+    ///
+    /// ```zig
+    /// const pid = session.processId();
+    /// ```
+    pub fn processId(session: *const Session) std.c.pid_t {
+        return session.pid;
+    }
+
+    /// Reads child output from the PTY master into the caller's buffer.
+    ///
+    /// ```zig
+    /// const len = try session.read(io, &buffer);
+    /// ```
+    pub fn read(session: *const Session, io: std.Io, buffer: []u8) !usize {
+        return session.file().readStreaming(io, &.{buffer});
+    }
+
+    /// Writes the complete input slice to the child through the PTY master.
+    ///
+    /// ```zig
+    /// try session.writeAll(io, "git status\n");
+    /// ```
+    pub fn writeAll(session: *const Session, io: std.Io, bytes: []const u8) !void {
+        return session.file().writeStreamingAll(io, bytes);
+    }
+
+    fn file(session: *const Session) File {
         return .{
             .handle = session.master,
             .flags = .{ .nonblocking = false },
@@ -57,7 +84,10 @@ pub const Session = struct {
     /// const shell_is_foreground = session.shellForeground() orelse false;
     /// ```
     pub fn shellForeground(session: *const Session) ?bool {
-        if (session.master < 0) return null;
+        if (session.master < 0) {
+            return null;
+        }
+
         const foreground = native.foregroundProcessGroup(session.master) orelse return null;
         return foreground == session.pid;
     }
@@ -70,17 +100,11 @@ pub const Session = struct {
     /// const process_group = session.foregroundProcessGroup() orelse return;
     /// ```
     pub fn foregroundProcessGroup(session: *const Session) ?std.c.pid_t {
-        if (session.master < 0) return null;
-        return native.foregroundProcessGroup(session.master);
-    }
+        if (session.master < 0) {
+            return null;
+        }
 
-    /// Reads the session leader's cwd without asking the shell to publish it.
-    ///
-    /// ```zig
-    /// const path = session.cwd(&buffer) orelse return;
-    /// ```
-    pub fn cwd(session: *const Session, buffer: []u8) ?[]const u8 {
-        return native.processCwd(session.pid, buffer);
+        return native.foregroundProcessGroup(session.master);
     }
 
     /// Resizing the master updates the kernel's PTY state and sends SIGWINCH
@@ -212,7 +236,7 @@ test "PTY child receives the explicit terminal environment" {
     const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
     defer inherited_block.deinit(std.testing.allocator);
 
-    var environment = try Environment.init(std.testing.allocator, .{ .block = inherited_block }, "telar");
+    var environment = try ChildEnvironment.init(std.testing.allocator, .{ .block = inherited_block }, "telar");
     defer environment.deinit();
 
     const args = [_][*:0]const u8{
@@ -226,7 +250,7 @@ test "PTY child receives the explicit terminal environment" {
     defer session.deinit();
 
     var output: [128]u8 = undefined;
-    const len = try session.file().readStreaming(std.testing.io, &.{&output});
+    const len = try session.read(std.testing.io, &output);
     try std.testing.expectEqual(Exit{ .exited = 0 }, try session.wait());
     try std.testing.expectEqualStrings("xterm-256color|telar|unset", output[0..len]);
 }
@@ -290,7 +314,7 @@ test "spawn preserves execvp shell fallback semantics" {
     defer session.deinit();
 
     var output: [32]u8 = undefined;
-    const len = try session.file().readStreaming(io, &.{&output});
+    const len = try session.read(io, &output);
 
     try std.testing.expectEqualStrings("fallback-ok", output[0..len]);
     try std.testing.expectEqual(Exit{ .exited = 0 }, try session.wait());

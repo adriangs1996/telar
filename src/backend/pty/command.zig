@@ -1,7 +1,7 @@
 //! Borrowed process command passed across the pane-launch boundary.
 
 const std = @import("std");
-const Environment = @import("environment.zig").Environment;
+const ChildEnvironment = @import("environment.zig").ChildEnvironment;
 
 pub const max_args = 64;
 
@@ -10,7 +10,7 @@ pub const Command = struct {
     file: [*:0]const u8,
     argv: [max_args:null]?[*:0]const u8 = @splat(null),
     cwd: ?[*:0]const u8 = null,
-    environment: ?*const Environment = null,
+    environment: ?*const ChildEnvironment = null,
 
     pub fn fromArgv(args: []const [*:0]const u8) !Command {
         if (args.len == 0) return error.MissingCommand;

@@ -332,7 +332,7 @@ fn processCache(provider: schema.AgentProvider, process_id: u32, executable: []c
 }
 
 fn nonShellProcessId(pane: *const Pane) u32 {
-    const shell = std.math.cast(u32, pane.session.pid) orelse 1;
+    const shell = std.math.cast(u32, pane.session.processId()) orelse 1;
     return if (shell == std.math.maxInt(u32)) shell - 1 else shell + 1;
 }
 
@@ -443,7 +443,7 @@ test "shell foreground removes the agent and ignores screen readiness" {
         .process_id = process_id,
         .observed_at_ms = 1,
     }));
-    const shell_id = std.math.cast(u32, fixture.pane.session.pid).?;
+    const shell_id = std.math.cast(u32, fixture.pane.session.processId()).?;
 
     try coordinator.handle(.{
         .pane = fixture.pane.key(),

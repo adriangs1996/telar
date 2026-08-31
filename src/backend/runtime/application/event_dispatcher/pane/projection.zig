@@ -115,7 +115,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             var stats: history.observer.Stats = .{};
             const process_probe = agent_process.probe(
                 work.pane.session.foregroundProcessGroup(),
-                work.pane.session.pid,
+                work.pane.session.processId(),
                 work.process_cache,
             );
             work.pane.processHistoryObservation(work.current_size, &stats);

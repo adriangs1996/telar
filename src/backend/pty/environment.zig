@@ -5,7 +5,7 @@ const std = @import("std");
 /// The immutable environment presented by Telar's terminal to every child.
 /// It is built before pane launches enter the interactive path and borrowed
 /// by `Command` while the child is spawned.
-pub const Environment = struct {
+pub const ChildEnvironment = struct {
     block: std.process.Environ.PosixBlock,
     gpa: std.mem.Allocator,
 
@@ -19,7 +19,7 @@ pub const Environment = struct {
         overrides: []const Override,
     };
 
-    pub fn init(gpa: std.mem.Allocator, inherited: std.process.Environ, term_program: []const u8) !Environment {
+    pub fn init(gpa: std.mem.Allocator, inherited: std.process.Environ, term_program: []const u8) !ChildEnvironment {
         return initWithOverrides(gpa, inherited, .{ .term_program = term_program, .overrides = &.{} });
     }
 
@@ -27,9 +27,9 @@ pub const Environment = struct {
     /// authority and applying bounded pane-specific overrides.
     ///
     /// ```zig
-    /// var environment = try Environment.initWithOverrides(gpa, inherited, .{ .term_program = "telar", .overrides = overrides });
+    /// var environment = try ChildEnvironment.initWithOverrides(gpa, inherited, .{ .term_program = "telar", .overrides = overrides });
     /// ```
-    pub fn initWithOverrides(gpa: std.mem.Allocator, inherited: std.process.Environ, configuration: Configuration) !Environment {
+    pub fn initWithOverrides(gpa: std.mem.Allocator, inherited: std.process.Environ, configuration: Configuration) !ChildEnvironment {
         var map = try inherited.createMap(gpa);
         defer map.deinit();
 
@@ -49,7 +49,7 @@ pub const Environment = struct {
         };
     }
 
-    pub fn deinit(environment: *Environment) void {
+    pub fn deinit(environment: *ChildEnvironment) void {
         for (environment.block.slice) |entry| {
             const bytes = std.mem.span(@constCast(entry.?));
             std.crypto.secureZero(u8, bytes);
@@ -72,7 +72,7 @@ test "terminal child environment removes inherited Ghostty identity" {
     const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
     defer inherited_block.deinit(std.testing.allocator);
 
-    var environment = try Environment.init(std.testing.allocator, .{ .block = inherited_block }, "telar");
+    var environment = try ChildEnvironment.init(std.testing.allocator, .{ .block = inherited_block }, "telar");
     defer environment.deinit();
     const child: std.process.Environ = .{ .block = environment.block };
 
@@ -89,7 +89,7 @@ test "terminal child environment applies bounded proxy overrides" {
     try inherited_map.put("HTTPS_PROXY", "http://old.invalid");
     const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
     defer inherited_block.deinit(std.testing.allocator);
-    var environment = try Environment.initWithOverrides(std.testing.allocator, .{ .block = inherited_block }, .{
+    var environment = try ChildEnvironment.initWithOverrides(std.testing.allocator, .{ .block = inherited_block }, .{
         .term_program = "telar",
         .overrides = &.{
             .{ .name = "HTTPS_PROXY", .value = "http://127.0.0.1:45100" },

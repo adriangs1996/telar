@@ -11,7 +11,7 @@ const session = @import("session.zig");
 
 pub const max_args = command.max_args;
 pub const Command = command.Command;
-pub const Environment = environment.Environment;
+pub const ChildEnvironment = environment.ChildEnvironment;
 pub const Exit = exit.Exit;
 pub const Size = session.Size;
 pub const Session = session.Session;

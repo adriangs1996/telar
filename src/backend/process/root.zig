@@ -9,6 +9,15 @@ const builtin = @import("builtin");
 const core = @import("telar-core");
 
 const schema = core.schema;
+const process_cwd = @import("cwd.zig");
+
+/// Reads a process working directory into caller-owned storage without
+/// allocating.
+///
+/// ```zig
+/// const path = cwd(pid, &buffer) orelse return;
+/// ```
+pub const cwd = process_cwd.read;
 
 const Native = if (builtin.os.tag == .macos) struct {
     const c = @cImport({

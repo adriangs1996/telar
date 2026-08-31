@@ -31,7 +31,7 @@ pub const Identity = struct {
     pub fn fromPane(pane: *const Pane) Identity {
         return .{
             .key = pane.key(),
-            .process_id = std.math.cast(u32, pane.session.pid) orelse 0,
+            .process_id = std.math.cast(u32, pane.session.processId()) orelse 0,
             .session_id = pane.history_session_id,
         };
     }

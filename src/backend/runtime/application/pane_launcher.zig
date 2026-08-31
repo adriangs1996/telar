@@ -44,7 +44,7 @@ const CommandInitialization = struct {
     gpa: std.mem.Allocator,
     launch: schema.LaunchView,
     cwd_path: []const u8,
-    environment: *const pty.Environment,
+    environment: *const pty.ChildEnvironment,
 };
 
 /// One-shot integration seam for post-spawn launch recovery.
@@ -67,7 +67,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         gpa: std.mem.Allocator,
         select: *Io.Select(RuntimeEvent),
         history_service: *history.Service,
-        child_environment: *const pty.Environment,
+        child_environment: *const pty.ChildEnvironment,
         inherited_environment: std.process.Environ,
         proxy: ?*proxy_mod.Proxy,
         panes: *PaneStore,
@@ -235,7 +235,7 @@ const OwnedCommand = struct {
 };
 
 pub fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
-    const len = pane.session.file().readStreaming(io, &.{&pane.output_buffer}) catch |err|
+    const len = pane.session.read(io, &pane.output_buffer) catch |err|
         return .{ .pane = pane.key(), .result = err };
     return .{ .pane = pane.key(), .result = @intCast(len) };
 }

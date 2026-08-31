@@ -39,16 +39,16 @@ pub const Observation = struct {
 pub const MetricsSnapshot = metrics_mod.Snapshot;
 
 /// Ephemeral child environment. Its proxy credential is scrubbed by
-/// `pty.Environment.deinit`; the runtime must not retain or inspect it.
+/// `pty.ChildEnvironment.deinit`; the runtime must not retain or inspect it.
 pub const PaneEnvironment = struct {
-    value: pty.Environment,
+    value: pty.ChildEnvironment,
 
     /// Borrows the environment while this owner remains alive.
     ///
     /// ```zig
     /// const child_environment = pane_environment.environment();
     /// ```
-    pub fn environment(pane_environment: *const PaneEnvironment) *const pty.Environment {
+    pub fn environment(pane_environment: *const PaneEnvironment) *const pty.ChildEnvironment {
         return &pane_environment.value;
     }
 
@@ -134,7 +134,7 @@ pub const Proxy = struct {
             client.certificate_path,
             client.bundle_path,
         );
-        return .{ .value = try pty.Environment.initWithOverrides(proxy.gpa, inherited, .{
+        return .{ .value = try pty.ChildEnvironment.initWithOverrides(proxy.gpa, inherited, .{
             .term_program = "telar",
             .overrides = &overrides,
         }) };
@@ -191,7 +191,7 @@ pub const Proxy = struct {
 
 const environment_override_count = 11;
 
-fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]pty.Environment.Override {
+fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]pty.ChildEnvironment.Override {
     return .{
         .{ .name = "HTTPS_PROXY", .value = proxy_url },
         .{ .name = "https_proxy", .value = proxy_url },

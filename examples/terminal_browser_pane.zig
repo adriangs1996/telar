@@ -392,7 +392,7 @@ const HostInput = struct {
                     if (raw.len == 1 and raw[0] == 0x1d) {
                         result.stop = true;
                     } else {
-                        try session.file().writeStreamingAll(io, raw);
+                        try session.writeAll(io, raw);
                     }
                 },
             }
@@ -446,10 +446,10 @@ fn inputActor(io: Io, file: File, queue: *Io.Queue(Message)) Io.Cancelable!void 
     }
 }
 
-fn outputActor(io: Io, file: File, queue: *Io.Queue(Message)) Io.Cancelable!void {
+fn outputActor(io: Io, session: *pty.Session, queue: *Io.Queue(Message)) Io.Cancelable!void {
     while (true) {
         var chunk: OutputChunk = .{};
-        const len = file.readStreaming(io, &.{&chunk.bytes}) catch |err| switch (err) {
+        const len = session.read(io, &chunk.bytes) catch |err| switch (err) {
             error.Canceled => |cancelled| return cancelled,
             else => {
                 queue.putOne(io, .child_closed) catch {};
@@ -532,7 +532,7 @@ fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
 fn drainResponses(io: Io, session: *pty.Session, emulator: *Emulator) !void {
     if (emulator.responses.overflowed) return error.PtyResponseOverflow;
     while (emulator.responses.peek()) |response| {
-        try session.file().writeStreamingAll(io, response);
+        try session.writeAll(io, response);
         emulator.responses.pop();
     }
 }
@@ -640,7 +640,7 @@ fn monotonic(io: Io) u64 {
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
-    var child_environment = try pty.Environment.init(
+    var child_environment = try pty.ChildEnvironment.init(
         gpa,
         init.minimal.environ,
         "telar-pane-example",
@@ -706,7 +706,7 @@ pub fn main(init: std.process.Init) !void {
     var queue: Io.Queue(Message) = .init(&queue_storage);
     var actors: Io.Group = .init;
     try actors.concurrent(io, inputActor, .{ io, tty.readHandle(), &queue });
-    try actors.concurrent(io, outputActor, .{ io, session.file(), &queue });
+    try actors.concurrent(io, outputActor, .{ io, &session, &queue });
     try actors.concurrent(io, resizeActor, .{ io, &watcher, &queue });
     try actors.concurrent(io, capabilityTimeoutActor, .{ io, &queue });
     defer {
