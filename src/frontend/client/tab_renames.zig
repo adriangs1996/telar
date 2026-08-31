@@ -1,7 +1,9 @@
 //! Wires tab-rename use cases to one client's protocol state.
 
+const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
+const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const rename_tab = client_application.rename_tab;
@@ -29,25 +31,31 @@ pub fn requestHandler(client: *Client) rename_tab.RequestRenameTabHandler {
     };
 }
 
-/// Removes protocol-only correlation data from one canonical response.
+/// Consumes one correlated response and commits the canonical tab label.
 ///
 /// ```zig
-/// const command = confirmation(renamed);
+/// const change = try apply(client, renamed);
 /// ```
-pub fn confirmation(renamed: schema.TabRenamed) rename_tab.ConfirmTabRename {
-    return .{
+pub fn apply(client: *Client, renamed: schema.TabRenamed) !client_model.Change {
+    const continuation = client.requests.take(renamed.request_id) orelse
+        return error.UnexpectedTabRenamed;
+    const expected_location = switch (continuation) {
+        .rename_tab => |location| location,
+        else => return error.UnexpectedTabRenamed,
+    };
+    if (!std.meta.eql(expected_location, renamed.location)) {
+        return error.UnexpectedTabRenamed;
+    }
+
+    var use_case = confirmationHandler(client);
+
+    return use_case.execute(.{
         .location = renamed.location,
         .label = renamed.label,
-    };
+    }) catch return error.UnexpectedTabRenamed;
 }
 
-/// Wires a correlated runtime response to the passive client model.
-///
-/// ```zig
-/// var handler = confirmationHandler(client);
-/// _ = try handler.execute(command);
-/// ```
-pub fn confirmationHandler(client: *Client) rename_tab.ConfirmTabRenameHandler {
+fn confirmationHandler(client: *Client) rename_tab.ConfirmTabRenameHandler {
     return .{ .model = &client.model };
 }
 

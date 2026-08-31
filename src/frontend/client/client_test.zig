@@ -28,6 +28,7 @@ const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_creations = @import("tab_creations.zig");
+const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const InputChunk = Client.InputChunk;
@@ -4881,6 +4882,105 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try std.testing.expect(!client.model.name_prompt.active());
 }
 
+test "an unexpected tab rename is rejected without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    const renamed: schema.TabRenamed = .{
+        .request_id = @enumFromInt(99),
+        .location = TestHarness.bootstrap_location,
+        .label = "canonical",
+    };
+
+    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab rename consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const request_id: schema.RequestId = @enumFromInt(90);
+    const version_before = client.model.version();
+    try client.requests.add(request_id, .notification);
+    const renamed: schema.TabRenamed = .{
+        .request_id = request_id,
+        .location = TestHarness.bootstrap_location,
+        .label = "canonical",
+    };
+
+    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
+}
+
+test "tab rename consumes a mismatched location before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const request_id: schema.RequestId = @enumFromInt(90);
+    const version_before = client.model.version();
+    try client.requests.add(request_id, .{ .rename_tab = TestHarness.bootstrap_location });
+    const renamed: schema.TabRenamed = .{
+        .request_id = request_id,
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(9) },
+            .tab_id = TestHarness.bootstrap_location.tab_id,
+        },
+        .label = "canonical",
+    };
+
+    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
+}
+
+test "tab rename consumes a canonical response rejected by the model" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const request_id: schema.RequestId = @enumFromInt(90);
+    const missing: schema.TabLocation = .{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .tab_id = @enumFromInt(9),
+    };
+    const version_before = client.model.version();
+    try client.requests.add(request_id, .{ .rename_tab = missing });
+    const renamed: schema.TabRenamed = .{
+        .request_id = request_id,
+        .location = missing,
+        .label = "canonical",
+    };
+
+    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabRenamed, tab_renames.apply(client, renamed));
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
+}
+
 test "tab rename separates prompt submission canonical commit and presentation" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -4923,6 +5023,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
         .label = "canonical",
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(renamed));
+    @memset(&payload, 'x');
 
     try std.testing.expectEqualStrings("canonical", client.model.workspace.activeConst().?.labelSlice());
     try std.testing.expectEqual(version_before_request.tabs + 1, client.model.version().tabs);

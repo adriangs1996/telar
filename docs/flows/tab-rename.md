@@ -67,6 +67,8 @@ identity.
 ```text
 tab_renamed(rename_tab continuation)
         |
+tab_renames.apply
+        |
 validate exact TabLocation
         |
 ConfirmTabRenameHandler
@@ -76,10 +78,13 @@ ClientModel.renameTab
 Presenter.observeModel
 ```
 
-The dispatcher consumes the continuation and requires an exact location match.
-The adapter removes the request identity before it invokes
+The dispatcher only delegates the decoded response. `tab_renames.apply`
+consumes the continuation, requires its `rename_tab` type and verifies the
+exact location before translating the wire payload into a confirmation. The
+adapter removes the request identity before it invokes
 `ConfirmTabRenameHandler`. The handler applies the runtime label, which may
-differ from the candidate sent by the prompt.
+differ from the candidate sent by the prompt, and the model copies it before
+the borrowed response storage is released.
 
 A changed label advances only `tabs_revision`. An identical canonical label is
 a semantic no-op and changes no version. Neither case changes active-tab
@@ -95,13 +100,18 @@ open. A local enqueue failure also leaves the prompt open and removes any
 provisional continuation.
 
 A correlated `request_failed` preserves the current label and model version,
-then reports the runtime message through the notification flow. A response for
-another tab is a protocol error and cannot mutate the replica. Reconnection
-rebuilds labels from the canonical workspace snapshot, so the client never
-replays a rename.
+then reports the runtime message through the notification flow. An unknown
+request, a continuation of another type, a response for another tab or a
+canonical payload the model cannot accept becomes `UnexpectedTabRenamed` and
+cannot mutate the replica. Once found, the continuation is consumed before
+these checks, so a rejected or replayed response cannot be applied later.
+Reconnection rebuilds labels from the canonical workspace snapshot, so the
+client never replays a rename.
 
 ## Proof
 
+- `src/frontend/client/tab_renames.zig` proves one-time response correlation,
+  exact identity validation, wire translation and protocol error mapping.
 - `src/frontend/client/application/rename_tab.zig` proves local validation,
   gating, exact target resolution, delivery failure and canonical confirmation.
 - `src/frontend/client/name_prompt.zig`,

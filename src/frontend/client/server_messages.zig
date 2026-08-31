@@ -40,7 +40,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .tab_snapshot => |snapshot| _ = try tab_snapshots.apply(client, snapshot),
         .workspace_snapshot => |snapshot| try workspace_snapshots.apply(client, snapshot),
         .tab_created => |created| _ = try tab_creations.apply(client, created),
-        .tab_renamed => |renamed| try handleTabRenamed(client, renamed),
+        .tab_renamed => |renamed| _ = try tab_renames.apply(client, renamed),
         .tab_closed => |closed| return handleTabClosed(client, closed),
         .tab_moved => |moved| try handleTabMoved(client, moved),
         .pane_frame => |frame| _ = try pane_frames.apply(client, frame),
@@ -125,18 +125,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// A confirmed tab rename.
-fn handleTabRenamed(client: *Client, renamed: schema.TabRenamed) !void {
-    const continuation = client.requests.take(renamed.request_id) orelse
-        return error.UnexpectedTabRenamed;
-    if (continuation != .rename_tab or !std.meta.eql(continuation.rename_tab, renamed.location)) {
-        return error.UnexpectedTabRenamed;
-    }
-
-    var use_case = tab_renames.confirmationHandler(client);
-    _ = use_case.execute(tab_renames.confirmation(renamed)) catch return error.UnexpectedTabRenamed;
 }
 
 /// A canonical tab-removal response or lifecycle fact.
