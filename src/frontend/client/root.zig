@@ -43,6 +43,7 @@ test {
     _ = @import("attachment_targets.zig");
     _ = @import("client.zig");
     _ = @import("client_events.zig");
+    _ = @import("client_startup.zig");
     _ = @import("client_detachments.zig");
     _ = @import("client_test.zig");
     _ = @import("clipboard_images.zig");

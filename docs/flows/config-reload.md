@@ -32,8 +32,9 @@ config, local module, plugin or trust-store fingerprint changes
                        Presenter
 ```
 
-`config_reloads.schedule` starts the watcher during bootstrap and rearms it
-after every handled outcome. The worker loads a new Lua VM, typed snapshot,
+`client_startup` asks `config_reloads.schedule` to start the watcher after the
+runtime handshake. The adapter rearms it after every handled outcome. The
+worker loads a new Lua VM, typed snapshot,
 plugin registry and trust store without touching the active client.
 `config_reload.resolve` checks the sidebar
 renderer against host capabilities, compiles the input router, clears the

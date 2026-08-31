@@ -97,7 +97,8 @@ version. The presenter folds a changed version into its paced frame and records
 the version it painted. A repeated reply or deadline on an already settled
 model schedules no frame.
 
-`host_capabilities.scheduleExpiry` registers the deadline during bootstrap.
+`client_startup` registers the deadline through
+`host_capabilities.scheduleExpiry` after the runtime handshake.
 `host_capabilities.handleExpiry` validates its completion before applying the
 fallback, so a failed timer changes no capability state.
 

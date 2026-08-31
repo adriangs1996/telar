@@ -70,7 +70,8 @@ latest-value outbox policy.
 
 ## Platform lifecycle and presentation
 
-`host_resizes.schedule` registers the initial observation during bootstrap.
+`client_startup` registers the initial observation through
+`host_resizes.schedule` after the runtime handshake.
 After successful synchronization, `host_resizes.handle` writes `CSI 14 t` and
 `CSI 16 t`. These queries refresh window and cell pixels after a font or
 display-scale change. It then rearms the same `ResizeWatcher`. Neither the

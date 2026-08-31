@@ -30,8 +30,9 @@ release token or finish deferred sink shutdown
 
 `Client` owns one `telemetry.State`. That object owns the metrics epoch, the
 diagnostics sink, the fixed 8192-byte line buffer and the single in-flight
-write token. `run` starts the flow; `client_events` dispatches its two events.
-Neither constructs file names, formats JSON or manages write lifetime.
+write token. `client_startup` starts the flow; `client_events` dispatches its
+two events. Neither constructs file names, formats JSON or manages write
+lifetime.
 
 ## Snapshot boundary
 

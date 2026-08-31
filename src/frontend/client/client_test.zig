@@ -31,6 +31,7 @@ const agent_sounds = @import("agent_sounds.zig");
 const attachment_targets = @import("attachment_targets.zig");
 const client_application = @import("application/root.zig");
 const client_events = @import("client_events.zig");
+const client_startup = @import("client_startup.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const client_telemetry = @import("telemetry.zig");
@@ -731,6 +732,58 @@ test "request delivery rolls correlation back when transport is full" {
     }));
     try std.testing.expect(request_lifecycle.consume(client, request_id) == null);
     try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+}
+
+test "client startup validates geometry before request registration" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    try client.view.resize(1, 1);
+
+    try std.testing.expectError(error.TerminalTooSmall, client_startup.start(client, .{
+        .resize_watcher = undefined,
+        .launch = .{ .cwd = "/work", .arguments = &.{} },
+    }));
+
+    try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+    try std.testing.expect(!client.runtime_transport.receive_pending);
+}
+
+test "client startup registers its handshake before arming event sources" {
+    var tty: platform.Tty = undefined;
+    var watcher = try platform.ResizeWatcher.init(&tty);
+    defer watcher.deinit();
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const expected_size = workspace_capability.multiplexer.rectSize(client.view.workbench()).?;
+
+    try client_startup.start(client, .{
+        .resize_watcher = &watcher,
+        .launch = .{ .cwd = "/work", .arguments = &.{ "/bin/sh", "-l" } },
+    });
+
+    try std.testing.expect(request_lifecycle.has(client, .initial_open));
+    try std.testing.expect(client.runtime_transport.receive_pending);
+    var buffer: [256]u8 = undefined;
+    const configure = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(configure == .configure_graphics);
+    try std.testing.expectEqual(
+        kitty.clientSupportsSharedMemory(),
+        configure.configure_graphics.shared,
+    );
+    try std.testing.expect((try harness.nextClientMessage(&buffer)) == .request_runtime_state);
+    const open = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(open == .open_pane);
+    try std.testing.expectEqual(initial_request_id, open.open_pane.request_id);
+    try std.testing.expectEqualDeep(expected_size, open.open_pane.size);
+    try std.testing.expectEqualStrings("/work", open.open_pane.launch.?.cwd);
+    var arguments = open.open_pane.launch.?.arguments();
+    try std.testing.expectEqualStrings("/bin/sh", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("-l", (try arguments.next()).?);
+    try std.testing.expect((try arguments.next()) == null);
 }
 
 test "bootstrap answers the initial open with both snapshot requests" {

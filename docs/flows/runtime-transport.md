@@ -22,17 +22,17 @@ delivery, bounded storage and I/O ordering. See
 
 ## Bootstrap
 
-Before the event loop starts its first read, `State.bootstrap` sends these
-frames synchronously through the same send buffer:
+Before the event loop starts its first read, `client_startup` registers the
+initial continuation and asks `State.bootstrap` to send these frames
+synchronously through the same send buffer:
 
 1. `configure_graphics`, so the runtime knows whether it may offer shared
    memory resources;
 2. `request_runtime_state`, so reconnectable replicas can be rebuilt;
 3. `open_pane`, which starts or attaches the initial pane transaction.
 
-The request lifecycle records the initial continuation before bootstrap sends
-these frames. After all three writes finish, `runtime_transport.scheduleRead`
-reserves the only receive token.
+After all three writes finish, `client_startup` asks
+`runtime_transport.scheduleRead` to reserve the only receive token.
 
 ## Outbound path
 

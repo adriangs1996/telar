@@ -1,27 +1,20 @@
-//! Client bootstrap: opens the real terminal, performs the runtime handshake
-//! and lends each completed event to the client event dispatcher.
+//! Client process adapter: opens the real terminal, constructs and starts one
+//! client, then lends each completed event to the dispatcher.
 
 const std = @import("std");
 const core = @import("telar-core");
 const graphics = @import("../graphics/root.zig");
-const workspace_capability = @import("../workspace/root.zig");
 const platform = @import("../platform/root.zig");
 const kitty = graphics.kitty;
-const multiplexer = workspace_capability.multiplexer;
 
 const Io = std.Io;
 const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
 const client_events = @import("client_events.zig");
-const client_telemetry = @import("telemetry.zig");
-const config_reloads = @import("config_reloads.zig");
-const host_capabilities = @import("host_capabilities.zig");
+const client_startup = @import("client_startup.zig");
 const host_resizes = @import("host_resizes.zig");
-const request_lifecycle = @import("request_lifecycle.zig");
-const runtime_transport = @import("runtime_transport.zig");
 const Options = Client.Options;
-const rectSize = multiplexer.rectSize;
 
 pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, options: Options) !u8 {
     const io = init.io;
@@ -82,24 +75,13 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     // itself is torn down.
     defer client.deinit();
 
-    const initial_request_id = try request_lifecycle.registerInitial(client);
-    try client.runtime_transport.bootstrap(io, .{
-        .graphics_shared = kitty.clientSupportsSharedMemory(),
-        .open = .{
-            .request_id = initial_request_id,
-            .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-            .launch = .{
-                .cwd = options.cwd,
-                .arguments = options.arguments,
-            },
+    try client_startup.start(client, .{
+        .resize_watcher = &watcher,
+        .launch = .{
+            .cwd = options.cwd,
+            .arguments = options.arguments,
         },
     });
-
-    try host_resizes.schedule(client, &watcher);
-    try runtime_transport.scheduleRead(client);
-    try host_capabilities.scheduleExpiry(client);
-    try client_telemetry.start(client);
-    try config_reloads.schedule(client);
 
     while (true) {
         const event = try client.select.await();

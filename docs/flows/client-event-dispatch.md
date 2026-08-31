@@ -6,8 +6,9 @@ state, or when that event terminates the disposable client.
 
 ## Boundary
 
-`run` owns platform setup, the runtime handshake, resource lifetime and the
-blocking `select.await`. It does not know which adapter handles each event.
+`run` owns platform setup, resource lifetime and the blocking `select.await`.
+`client_startup` owns the runtime handshake. Neither knows which adapter handles
+each event.
 
 `client_events.handle` is the single entrypoint for a completed `ClientEvent`.
 It owns three policies:
