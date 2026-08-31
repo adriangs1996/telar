@@ -15,24 +15,22 @@ const agent_event_dispatcher = @import("event_dispatcher/agent.zig");
 const client_event_dispatcher = @import("event_dispatcher/client.zig");
 const history_event_dispatcher = @import("event_dispatcher/history.zig");
 const observability_event_dispatcher = @import("event_dispatcher/observability.zig");
+const pane_io_event_dispatcher = @import("event_dispatcher/pane/io.zig");
 const request_dispatch = @import("request_dispatch.zig");
 const pane_events = event_entrypoints.pane;
 const media_projection = pane_events.media_projection;
 const pane_launcher_mod = @import("pane_launcher.zig");
 const pane_exit_coordinator = pane_events.exit;
 const pane_ingest_coordinator = pane_events.ingest;
-const pane_input_pump = pane_events.input;
 const pane_media_coordinator = pane_events.media;
 const pane_observation_coordinator = pane_events.observation;
 const pane_output_pipeline = pane_events.output;
-const pane_response_pump = pane_events.response;
 const pane_mod = @import("../../pane/root.zig");
 const media_mod = @import("../../media/root.zig");
 const observability = @import("../observability/root.zig");
 const telemetry_mod = observability.telemetry;
 const transport = @import("../../transport/root.zig");
 
-const Io = std.Io;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
 
@@ -47,8 +45,6 @@ const RuntimeEvent = runtime_event.Event;
 const PaneIngestEvent = pane_ingest_coordinator.Completion;
 const PaneObservationEvent = pane_observation_coordinator.Completion;
 const PaneMediaEvent = pane_media_coordinator.Completion;
-const PaneInputEvent = pane_input_pump.Completion;
-const PaneResponseEvent = pane_response_pump.Completion;
 const ClientSession = client_session.Session;
 
 /// Builds the zero-allocation actor bindings for one application type.
@@ -61,6 +57,7 @@ pub fn Bindings(comptime Application: type) type {
     const ClientEvents = client_event_dispatcher.Dispatcher(Application);
     const HistoryEvents = history_event_dispatcher.Dispatcher(Application);
     const ObservabilityEvents = observability_event_dispatcher.Dispatcher(Application);
+    const PaneIoEvents = pane_io_event_dispatcher.Dispatcher(Application);
 
     return struct {
         pub const EventResources = struct {
@@ -101,12 +98,10 @@ pub fn Bindings(comptime Application: type) type {
                     try ObservabilityEvents.handleMetricsTick(application, result);
                 },
                 .pane_input_written => |value| {
-                    var input_pump = paneInputPump(application);
-                    try input_pump.complete(value);
+                    try PaneIoEvents.handleInputWritten(application, value);
                 },
                 .pane_response_written => |value| {
-                    var response_pump = paneResponsePump(application);
-                    try response_pump.complete(value);
+                    try PaneIoEvents.handleResponseWritten(application, value);
                 },
                 .pane_output => |value| {
                     var context: PaneOutputRuntime = .{ .application = application, .ingest_gate = resources.ingest_gate };
@@ -149,78 +144,8 @@ pub fn Bindings(comptime Application: type) type {
             return ClientEvents.startSend(application, session, payload);
         }
 
-        const pane_input_runtime_port: pane_input_pump.RuntimePort(Application) = .{
-            .start = startPaneInputWrite,
-            .collect = collectPaneLifecycle,
-        };
-
-        const RuntimePaneInputPump = pane_input_pump.Pump(Application, pane_input_runtime_port);
-
-        fn paneInputPump(application: *Application) RuntimePaneInputPump {
-            return RuntimePaneInputPump.init(application, .{
-                .io = application.io,
-                .panes = &application.model.panes,
-                .metrics = &application.metrics,
-            });
-        }
-
-        fn startPaneInputWrite(application: *Application, write: pane_input_pump.Write) !void {
-            try application.select.concurrent(.pane_input_written, writePaneInput, .{write});
-        }
-
         fn collectPaneLifecycle(application: *Application) void {
             application.collect();
-        }
-
-        fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {
-            const path = diagnostics.enter(.interactive);
-            defer path.restore();
-
-            write.pane.pty_write_mutex.lockUncancelable(write.io);
-            defer write.pane.pty_write_mutex.unlock(write.io);
-
-            return .{
-                .pane = write.pane.key(),
-                .started_ns = write.started_ns,
-                .result = write.pane.session.file().writeStreamingAll(write.io, write.bytes),
-            };
-        }
-
-        const pane_response_runtime_port: pane_response_pump.RuntimePort(Application) = .{
-            .start = startPaneResponseWrite,
-            .collect = collectPaneLifecycle,
-        };
-
-        const RuntimePaneResponsePump = pane_response_pump.Pump(Application, pane_response_runtime_port);
-
-        fn paneResponsePump(application: *Application) RuntimePaneResponsePump {
-            return RuntimePaneResponsePump.init(application, .{
-                .io = application.io,
-                .panes = &application.model.panes,
-                .metrics = &application.metrics,
-            });
-        }
-
-        fn schedulePaneResponse(application: *Application, pane: *Pane) !void {
-            var response_pump = paneResponsePump(application);
-            return response_pump.schedule(pane);
-        }
-
-        fn startPaneResponseWrite(application: *Application, write: pane_response_pump.Write) !void {
-            try application.select.concurrent(.pane_response_written, writePaneResponse, .{write});
-        }
-
-        fn writePaneResponse(write: pane_response_pump.Write) PaneResponseEvent {
-            const path = diagnostics.enter(.interactive);
-            defer path.restore();
-
-            write.pane.pty_write_mutex.lockUncancelable(write.io);
-            defer write.pane.pty_write_mutex.unlock(write.io);
-
-            return .{
-                .pane = write.pane.key(),
-                .result = write.pane.session.file().writeStreamingAll(write.io, write.bytes),
-            };
         }
 
         const PaneOutputRuntime = struct {
@@ -310,7 +235,7 @@ pub fn Bindings(comptime Application: type) type {
             .schedule_observation = scheduleIngestObservation,
             .schedule_media = scheduleIngestMedia,
             .refresh_clients = refreshPaneClients,
-            .schedule_response = schedulePaneResponse,
+            .schedule_response = PaneIoEvents.scheduleResponse,
             .start_read = startNextPaneRead,
             .collect = collectPaneLifecycle,
             .pump_clients = pumpRuntimeClients,
@@ -424,7 +349,7 @@ pub fn Bindings(comptime Application: type) type {
             .start = startPaneMedia,
             .enforce_quotas = enforcePaneGraphicsQuotas,
             .synchronize_clients = synchronizeMediaClients,
-            .schedule_response = schedulePaneResponse,
+            .schedule_response = PaneIoEvents.scheduleResponse,
             .pump_clients = pumpRuntimeClients,
             .collect = collectPaneLifecycle,
         };
@@ -476,14 +401,9 @@ pub fn Bindings(comptime Application: type) type {
         pub const request_runtime_port: request_dispatch.RuntimePort(Application) = .{
             .schedule_observation = schedulePaneObservation,
             .schedule_media = schedulePaneMedia,
-            .schedule_response = schedulePaneResponse,
-            .schedule_input = schedulePaneInput,
+            .schedule_response = PaneIoEvents.scheduleResponse,
+            .schedule_input = PaneIoEvents.scheduleInput,
         };
-
-        fn schedulePaneInput(application: *Application, pane: *Pane) !void {
-            var input_pump = paneInputPump(application);
-            return input_pump.schedule(pane);
-        }
     };
 }
 
