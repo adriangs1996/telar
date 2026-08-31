@@ -12,15 +12,13 @@ const event_entrypoints = @import("../entrypoints/events/root.zig");
 const history_response_controller = event_entrypoints.history_response;
 const attachment_mod = @import("../attachment/root.zig");
 const client_runtime = @import("../client/root.zig");
-const client_admission = client_runtime.admission;
-const client_request_router = client_runtime.request_router;
 const client_session = client_runtime.session;
-const client_send_coordinator = client_runtime.send_coordinator;
 const client_store = client_runtime.store;
 const runtime_config = @import("../config.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const runtime_event = @import("../event.zig");
 const event_sources = @import("../event_sources.zig");
+const client_event_dispatcher = @import("event_dispatcher/client.zig");
 const request_dispatch = @import("request_dispatch.zig");
 const pane_events = event_entrypoints.pane;
 const media_projection = pane_events.media_projection;
@@ -57,16 +55,12 @@ const ResponseQueue = delivery_mod.ResponseQueue;
 const IngestTestGate = runtime_config.IngestTestGate;
 const ClientKey = client_session.Key;
 const RuntimeEvent = runtime_event.Event;
-const ClientMessageEvent = runtime_event.ClientMessage;
-const ClientSentEvent = runtime_event.ClientSent;
 const PaneIngestEvent = pane_ingest_coordinator.Completion;
 const PaneObservationEvent = pane_observation_coordinator.Completion;
 const PaneMediaEvent = pane_media_coordinator.Completion;
 const PaneInputEvent = pane_input_pump.Completion;
 const PaneResponseEvent = pane_response_pump.Completion;
 const ClientSession = client_session.Session;
-const SessionWrite = client_session.Write;
-const SessionRead = client_session.Read;
 
 /// Builds the zero-allocation actor bindings for one application type.
 ///
@@ -74,6 +68,8 @@ const SessionRead = client_session.Read;
 /// const Actors = Bindings(Application);
 /// ```
 pub fn Bindings(comptime Application: type) type {
+    const ClientEvents = client_event_dispatcher.Dispatcher(Application);
+
     return struct {
         pub const EventResources = struct {
             listener: *transport.local.LocalListener,
@@ -90,19 +86,13 @@ pub fn Bindings(comptime Application: type) type {
             switch (event) {
                 .stopped => unreachable,
                 .accepted => |result| {
-                    var runtime: ClientAdmissionRuntime = .{ .application = application, .listener = resources.listener };
-                    var coordinator = acceptedClientCoordinator(&runtime);
-                    try coordinator.handle(result);
+                    try ClientEvents.handleAccepted(application, result, resources.listener);
                 },
                 .handshaken => |result| {
-                    var coordinator = handshakenClientCoordinator(application);
-                    coordinator.handle(result);
+                    ClientEvents.handleHandshaken(application, result);
                 },
-                .client_message => |value| return handleClientMessageEvent(application, value),
-                .client_sent => |value| {
-                    var coordinator = clientSendCoordinator(application);
-                    return coordinator.handle(.{ .client = value.client, .result = value.result });
-                },
+                .client_message => |value| return ClientEvents.handleMessage(application, value),
+                .client_sent => |value| return ClientEvents.handleSent(application, value),
                 .history_response => |result| {
                     var controller = historyResponseController(application);
                     try controller.handle(result);
@@ -165,61 +155,6 @@ pub fn Bindings(comptime Application: type) type {
             return false;
         }
 
-        fn handleClientMessageEvent(application: *Application, event: ClientMessageEvent) !bool {
-            const session = application.clients.resolve(event.client) orelse {
-                application.metrics.stale_client_messages += 1;
-                return false;
-            };
-
-            session.read_pending = false;
-
-            if (session.closing) {
-                application.finalizeClient(event.client);
-                return false;
-            }
-
-            const payload = event.result catch {
-                application.dropClient(event.client);
-                return false;
-            };
-            const decode_started = diagnostics.now(application.io);
-            const message = schema.decodeClient(payload) catch {
-                application.dropClient(event.client);
-                return false;
-            };
-
-            if (comptime diagnostics.enabled) {
-                application.metrics.client_messages += 1;
-                application.metrics.decode.observe(
-                    diagnostics.elapsed(decode_started, diagnostics.now(application.io)),
-                );
-            }
-
-            if (session.role == .undecided) {
-                session.role = switch (client_request_router.classify(std.meta.activeTag(message))) {
-                    .ui => .ui,
-                    .control => .control,
-                };
-            }
-
-            application.dispatchClientMessage(session, message) catch {
-                application.dropClient(event.client);
-                return false;
-            };
-            application.pump(session) catch {
-                application.dropClient(event.client);
-                return false;
-            };
-
-            if (!application.shutdown.isRequested()) {
-                startSessionRead(application, session) catch application.dropClient(event.client);
-                return false;
-            }
-
-            application.pumpAll();
-            return application.shutdownDelivered();
-        }
-
         fn queueFailure(responses: *ResponseQueue, failure: delivery_mod.PendingFailure) !void {
             try responses.push(.{ .request_failed = .{
                 .request_id = failure.request_id,
@@ -234,187 +169,11 @@ pub fn Bindings(comptime Application: type) type {
         /// try Actors.startSessionSend(&application, session, payload);
         /// ```
         pub fn startSessionSend(application: *Application, session: *ClientSession, payload: []const u8) !void {
-            std.debug.assert(!session.send_pending);
-            session.send_pending = true;
-            application.select.concurrent(.client_sent, sendSession, .{SessionWrite{
-                .io = application.io,
-                .key = session.key,
-                .connection = &session.connection,
-                .payload = payload,
-            }}) catch |err| {
-                session.send_pending = false;
-                return err;
-            };
-        }
-
-        fn sendSession(write: SessionWrite) ClientSentEvent {
-            return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
+            return ClientEvents.startSend(application, session, payload);
         }
 
         fn writeDiagnostics(io: Io, state: *TelemetryState, bytes: []const u8) anyerror!void {
             try state.write(io, bytes);
-        }
-
-        const ClientAdmissionRuntime = struct {
-            application: *Application,
-            listener: *transport.local.LocalListener,
-        };
-
-        const client_accept_runtime_port: client_admission.AcceptPort(ClientAdmissionRuntime, core.transport.SocketChannel) = .{
-            .stopping = clientAdmissionStopping,
-            .rearm_accept = rearmClientAccept,
-            .has_capacity = clientAdmissionHasCapacity,
-            .shutdown_connection = shutdownAdmissionConnection,
-            .deinit_connection = deinitAdmissionConnection,
-            .start_handshake = startClientHandshake,
-        };
-
-        const RuntimeAcceptedClientCoordinator = client_admission.AcceptCoordinator(ClientAdmissionRuntime, core.transport.SocketChannel, client_accept_runtime_port);
-
-        fn acceptedClientCoordinator(runtime: *ClientAdmissionRuntime) RuntimeAcceptedClientCoordinator {
-            return RuntimeAcceptedClientCoordinator.init(runtime, &runtime.application.client_admission);
-        }
-
-        fn clientAdmissionStopping(runtime: *ClientAdmissionRuntime) bool {
-            return runtime.application.shutdown.isRequested();
-        }
-
-        fn rearmClientAccept(runtime: *ClientAdmissionRuntime) !void {
-            var sources = eventSources(runtime.application);
-            try sources.acceptClient(runtime.listener);
-        }
-
-        fn clientAdmissionHasCapacity(runtime: *ClientAdmissionRuntime) bool {
-            return runtime.application.clients.hasCapacity();
-        }
-
-        fn shutdownAdmissionConnection(runtime: *ClientAdmissionRuntime, connection: *core.transport.SocketChannel) void {
-            connection.shutdown(runtime.application.io);
-        }
-
-        fn deinitAdmissionConnection(runtime: *ClientAdmissionRuntime, connection: *core.transport.SocketChannel) void {
-            connection.deinit(runtime.application.io);
-        }
-
-        fn startClientHandshake(runtime: *ClientAdmissionRuntime, connection: *core.transport.SocketChannel) !void {
-            try runtime.application.select.concurrent(.handshaken, handshakeClient, .{ runtime.application.io, connection });
-        }
-
-        const ClientHandshakeTypes = struct {
-            pub const Connection = core.transport.SocketChannel;
-            pub const Session = *ClientSession;
-        };
-
-        const client_handshake_runtime_port: client_admission.HandshakePort(Application, ClientHandshakeTypes) = .{
-            .stopping = clientHandshakeStopping,
-            .deinit_connection = deinitNegotiatedConnection,
-            .admit = admitNegotiatedClient,
-            .start_receive = startNegotiatedClientRead,
-            .drop_session = dropAdmittedClient,
-        };
-
-        const RuntimeHandshakenClientCoordinator = client_admission.HandshakeCoordinator(Application, ClientHandshakeTypes, client_handshake_runtime_port);
-
-        fn handshakenClientCoordinator(application: *Application) RuntimeHandshakenClientCoordinator {
-            return RuntimeHandshakenClientCoordinator.init(application, &application.client_admission);
-        }
-
-        fn clientHandshakeStopping(application: *Application) bool {
-            return application.shutdown.isRequested();
-        }
-
-        fn deinitNegotiatedConnection(application: *Application, connection: *core.transport.SocketChannel) void {
-            connection.deinit(application.io);
-        }
-
-        fn admitNegotiatedClient(application: *Application, connection: core.transport.SocketChannel) !*ClientSession {
-            return application.clients.add(application.gpa, connection);
-        }
-
-        fn startNegotiatedClientRead(application: *Application, session: *ClientSession) !void {
-            try startSessionRead(application, session);
-        }
-
-        fn dropAdmittedClient(application: *Application, session: *ClientSession) void {
-            application.dropClient(session.key);
-        }
-
-        const ClientSendTypes = struct {
-            pub const Client = ClientKey;
-            pub const Session = *ClientSession;
-            pub const Completion = delivery_mod.Completion;
-            pub const Detach = schema.PaneId;
-        };
-
-        const client_send_runtime_port: client_send_coordinator.RuntimePort(Application, ClientSendTypes) = .{
-            .resolve = resolveSentClient,
-            .record_stale = recordStaleClientSend,
-            .release_send = releaseClientSend,
-            .is_closing = sentClientIsClosing,
-            .finalize = finalizeSentClient,
-            .complete_delivery = completeClientDelivery,
-            .drop_client = dropSentClient,
-            .detach_after_send = detachAfterClientSend,
-            .should_close_after_reply = sentClientShouldCloseAfterReply,
-            .stopping = clientSendRuntimeStopping,
-            .pump_client = pumpSentClient,
-            .pump_all = pumpRuntimeClients,
-            .shutdown_delivered = clientSendShutdownDelivered,
-        };
-
-        const RuntimeClientSendCoordinator = client_send_coordinator.Coordinator(Application, ClientSendTypes, client_send_runtime_port);
-
-        fn clientSendCoordinator(application: *Application) RuntimeClientSendCoordinator {
-            return RuntimeClientSendCoordinator.init(application);
-        }
-
-        fn resolveSentClient(application: *Application, client: ClientKey) ?*ClientSession {
-            return application.clients.resolve(client);
-        }
-
-        fn recordStaleClientSend(application: *Application) void {
-            application.metrics.stale_client_messages += 1;
-        }
-
-        fn releaseClientSend(_: *Application, session: *ClientSession) void {
-            session.send_pending = false;
-        }
-
-        fn sentClientIsClosing(_: *Application, session: *ClientSession) bool {
-            return session.closing;
-        }
-
-        fn finalizeSentClient(application: *Application, client: ClientKey) void {
-            application.finalizeClient(client);
-        }
-
-        fn completeClientDelivery(_: *Application, session: *ClientSession, result: anyerror!void) delivery_mod.Completion {
-            return session.delivery.complete(result);
-        }
-
-        fn dropSentClient(application: *Application, client: ClientKey) void {
-            application.dropClient(client);
-        }
-
-        fn detachAfterClientSend(application: *Application, session: *ClientSession, pane: schema.PaneId) void {
-            _ = session.attachments.detach(pane);
-            application.collect();
-        }
-
-        fn sentClientShouldCloseAfterReply(_: *Application, session: *ClientSession) bool {
-            return session.delivery.shouldCloseAfterReply();
-        }
-
-        fn clientSendRuntimeStopping(application: *Application) bool {
-            return application.shutdown.isRequested();
-        }
-
-        fn pumpSentClient(application: *Application, session: *ClientSession) !void {
-            try application.pump(session);
-        }
-
-        fn clientSendShutdownDelivered(application: *Application) bool {
-            return application.shutdownDelivered();
         }
 
         const history_response_runtime_port: history_response_controller.RuntimePort(Application, *ClientSession) = .{
@@ -535,32 +294,6 @@ pub fn Bindings(comptime Application: type) type {
                 .pane = write.pane.key(),
                 .result = write.pane.session.file().writeStreamingAll(write.io, write.bytes),
             };
-        }
-
-        fn handshakeClient(io: Io, connection: *core.transport.SocketChannel) anyerror!void {
-            const response = try transport.handshake.perform(io, connection);
-
-            if (response == .rejected) {
-                return error.IncompatibleProtocol;
-            }
-        }
-
-        fn startSessionRead(application: *Application, session: *ClientSession) !void {
-            std.debug.assert(!session.read_pending);
-            session.read_pending = true;
-            application.select.concurrent(.client_message, receiveSession, .{SessionRead{
-                .io = application.io,
-                .key = session.key,
-                .connection = &session.connection,
-                .buffer = session.receive_buffer,
-            }}) catch |err| {
-                session.read_pending = false;
-                return err;
-            };
-        }
-
-        fn receiveSession(read: SessionRead) ClientMessageEvent {
-            return .{ .client = read.key, .result = read.connection.receive(read.io, read.buffer) };
         }
 
         const PaneOutputRuntime = struct {
