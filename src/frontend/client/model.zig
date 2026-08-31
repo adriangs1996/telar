@@ -12,10 +12,12 @@ const schema = core.schema;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
+const workspace_list_mod = workspace_capability.workspace_list;
 const ui = core.ui;
 
 pub const Version = struct {
     workspace: u64 = 0,
+    workspace_list: u64 = 0,
     tabs: u64 = 0,
     active_tab: u64 = 0,
     panes: u64 = 0,
@@ -142,6 +144,12 @@ pub const SidebarVisibility = struct {
 pub const WorkspaceListCollapse = struct {
     collapsed: bool,
     chrome_revision: u64,
+};
+
+pub const WorkspaceListCommit = struct {
+    runtime_revision: u64,
+    count: usize,
+    workspace_list_revision: u64,
 };
 
 pub const PaneInputTarget = union(enum) {
@@ -414,6 +422,8 @@ pub const Model = struct {
     workspace: tabs_mod.Model,
     name_prompt: name_prompt.State = .{},
     workspace_revision: u64 = 0,
+    workspace_list_snapshot: workspace_list_mod.Snapshot = .{},
+    workspace_list_revision: u64 = 0,
     tabs_revision: u64 = 0,
     active_tab_revision: u64 = 0,
     panes_revision: u64 = 0,
@@ -456,6 +466,7 @@ pub const Model = struct {
     pub fn version(model: *const Model) Version {
         return .{
             .workspace = model.workspace_revision,
+            .workspace_list = model.workspace_list_revision,
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
@@ -543,6 +554,53 @@ pub const Model = struct {
     /// ```
     pub fn toggleWorkspaceList(model: *Model) WorkspaceListCollapse {
         return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
+    }
+
+    /// Commits one newer runtime workspace-list replica atomically. Stale
+    /// revisions preserve both the stored snapshot and its model version.
+    ///
+    /// ```zig
+    /// const commit = try model.reconcileWorkspaceList(input) orelse return;
+    /// ```
+    pub fn reconcileWorkspaceList(model: *Model, input: workspace_list_mod.SnapshotInput) !?WorkspaceListCommit {
+        if (!try model.workspace_list_snapshot.replace(input)) {
+            return null;
+        }
+
+        model.workspace_list_revision +%= 1;
+
+        return .{
+            .runtime_revision = model.workspace_list_snapshot.revision,
+            .count = model.workspace_list_snapshot.count,
+            .workspace_list_revision = model.workspace_list_revision,
+        };
+    }
+
+    /// Borrows the immutable workspace-list projection for one presentation.
+    ///
+    /// ```zig
+    /// const workspaces = model.workspaceListSnapshot();
+    /// ```
+    pub fn workspaceListSnapshot(model: *const Model) *const workspace_list_mod.Snapshot {
+        return &model.workspace_list_snapshot;
+    }
+
+    /// Reports whether the latest runtime list contains one workspace.
+    ///
+    /// ```zig
+    /// if (!model.knowsWorkspace(workspace)) return;
+    /// ```
+    pub fn knowsWorkspace(model: *const Model, workspace: schema.WorkspaceId) bool {
+        return model.workspace_list_snapshot.indexOf(workspace) != null;
+    }
+
+    /// Resolves one zero-based workspace position from committed client state.
+    ///
+    /// ```zig
+    /// const workspace = model.workspaceAtPosition(0) orelse return;
+    /// ```
+    pub fn workspaceAtPosition(model: *const Model, position: usize) ?schema.WorkspaceId {
+        return model.workspace_list_snapshot.workspaceAtPosition(position);
     }
 
     /// Resolves one user-input target without exposing pane storage. Prompts
@@ -3200,6 +3258,52 @@ test "workspace list collapse advances only the chrome revision" {
     try std.testing.expect(!model.workspaceListCollapsed());
     try std.testing.expectEqual(@as(u64, 2), expanded.chrome_revision);
     try std.testing.expectEqual(Version{ .chrome = 2 }, model.version());
+}
+
+test "workspace list reconciliation owns navigation state and one isolated revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var first_name = [_]u8{ 't', 'e', 'l', 'a', 'r' };
+    var first_path = [_]u8{ '/', 'w', '/', 't', 'e', 'l', 'a', 'r' };
+    const entries = [_]workspace_list_mod.EntryInput{
+        .{ .workspace = @enumFromInt(1), .name = &first_name, .path = &first_path, .tab_count = 2 },
+        .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
+    };
+
+    const commit = (try model.reconcileWorkspaceList(.{
+        .revision = 7,
+        .entries = &entries,
+    })).?;
+    @memset(&first_name, 'x');
+    @memset(&first_path, 'x');
+
+    try std.testing.expectEqual(@as(u64, 7), commit.runtime_revision);
+    try std.testing.expectEqual(@as(usize, 2), commit.count);
+    try std.testing.expectEqual(@as(u64, 1), commit.workspace_list_revision);
+    try std.testing.expectEqual(Version{ .workspace_list = 1 }, model.version());
+    try std.testing.expectEqualStrings("telar", model.workspaceListSnapshot().nameAt(0));
+    try std.testing.expectEqualStrings("/w/telar", model.workspaceListSnapshot().pathAt(0));
+    try std.testing.expect(model.knowsWorkspace(@enumFromInt(1)));
+    try std.testing.expect(!model.knowsWorkspace(@enumFromInt(9)));
+    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(2)), model.workspaceAtPosition(1).?);
+    try std.testing.expect(model.workspaceAtPosition(2) == null);
+
+    try std.testing.expect((try model.reconcileWorkspaceList(.{
+        .revision = 6,
+        .entries = &entries,
+    })) == null);
+    try std.testing.expectEqual(Version{ .workspace_list = 1 }, model.version());
+
+    const duplicate = [_]workspace_list_mod.EntryInput{
+        .{ .workspace = @enumFromInt(3), .name = "one", .path = "/one", .tab_count = 1 },
+        .{ .workspace = @enumFromInt(3), .name = "two", .path = "/two", .tab_count = 1 },
+    };
+    try std.testing.expectError(error.DuplicateWorkspace, model.reconcileWorkspaceList(.{
+        .revision = 8,
+        .entries = &duplicate,
+    }));
+    try std.testing.expectEqual(Version{ .workspace_list = 1 }, model.version());
+    try std.testing.expectEqualStrings("telar", model.workspaceListSnapshot().nameAt(0));
 }
 
 test "pane focus resolves identity and direction through one visible revision" {

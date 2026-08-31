@@ -8,7 +8,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const widget = @import("context.zig");
-const workspace_model = @import("workspace_model.zig");
+const workspace_list = @import("../workspace/root.zig").workspace_list;
 const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
@@ -18,7 +18,7 @@ pub const Input = struct {
     sidebar_visible: bool,
     location: ?schema.TabLocation,
     workspace_name: []const u8,
-    workspaces: *const workspace_model.Snapshot,
+    workspaces: *const workspace_list.Snapshot,
     collapsed: bool,
     proxy_tls_active: bool,
 };
@@ -205,7 +205,7 @@ fn renderList(
 
 fn drawWorkspace(
     context: *widget.Context,
-    snapshot: *const workspace_model.Snapshot,
+    snapshot: *const workspace_list.Snapshot,
     index: usize,
     active_index: ?usize,
     active_name: []const u8,
@@ -213,7 +213,7 @@ fn drawWorkspace(
     row_end: u16,
     y: u16,
 ) u16 {
-    var label_buffer: [workspace_model.max_name_bytes + 2]u8 = undefined;
+    var label_buffer: [workspace_list.max_name_bytes + 2]u8 = undefined;
     const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
         workspaceNameAt(snapshot, index, active_index, active_name),
     }) catch
@@ -271,7 +271,7 @@ fn renderFallback(
 }
 
 fn listFits(
-    snapshot: *const workspace_model.Snapshot,
+    snapshot: *const workspace_list.Snapshot,
     active_index: ?usize,
     active_name: []const u8,
     available: u16,
@@ -280,7 +280,7 @@ fn listFits(
 }
 
 fn listWidth(
-    snapshot: *const workspace_model.Snapshot,
+    snapshot: *const workspace_list.Snapshot,
     active_index: ?usize,
     active_name: []const u8,
 ) u16 {
@@ -292,13 +292,13 @@ fn listWidth(
 }
 
 fn workspaceNameAt(
-    snapshot: *const workspace_model.Snapshot,
+    snapshot: *const workspace_list.Snapshot,
     index: usize,
     active_index: ?usize,
     active_name: []const u8,
 ) []const u8 {
     if (active_name.len != 0 and active_index != null and active_index.? == index)
-        return workspace_model.truncateName(active_name);
+        return workspace_list.truncateName(active_name);
     return snapshot.nameAt(index);
 }
 
@@ -359,8 +359,8 @@ test "worktree locations fall back to their id and missing locations to a dash" 
 }
 
 test "the list collapses when the row cannot fit every workspace" {
-    var snapshot: workspace_model.Snapshot = .{};
-    const entries = [_]workspace_model.EntryInput{
+    var snapshot: workspace_list.Snapshot = .{};
+    const entries = [_]workspace_list.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -371,8 +371,8 @@ test "the list collapses when the row cannot fit every workspace" {
 }
 
 test "the active name replaces only the active workspace snapshot name" {
-    var snapshot: workspace_model.Snapshot = .{};
-    const entries = [_]workspace_model.EntryInput{
+    var snapshot: workspace_list.Snapshot = .{};
+    const entries = [_]workspace_list.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -398,7 +398,7 @@ test "sidebar toggle publishes the matching Nerd Font action icon" {
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
     };
-    const workspaces: workspace_model.Snapshot = .{};
+    const workspaces: workspace_list.Snapshot = .{};
     const input: Input = .{
         .area = buffer.area(),
         .sidebar_visible = true,
@@ -431,8 +431,8 @@ test "workspace navigation is centered independently of the sidebar toggle" {
         .palette = &ui.theme.default_theme.palette,
         .hovered = null,
     };
-    var workspaces: workspace_model.Snapshot = .{};
-    const entries = [_]workspace_model.EntryInput{
+    var workspaces: workspace_list.Snapshot = .{};
+    const entries = [_]workspace_list.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
     };
     _ = try workspaces.replace(.{ .revision = 1, .entries = &entries });

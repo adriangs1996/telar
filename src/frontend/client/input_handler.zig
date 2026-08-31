@@ -83,7 +83,9 @@ fn focusPane(handler: *InputHandler, target: pane_focus.Target) !void {
 fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
     const client = handler.client;
     if (client.requests.count != 0) return;
-    if (client.view.workspace_list.indexOf(workspace) == null) return;
+    if (!client.model.knowsWorkspace(workspace)) {
+        return;
+    }
     if (client.model.workspace.workspace) |current| switch (current) {
         .workspace => |id| if (id == workspace) return,
         .worktree => {},
@@ -616,8 +618,7 @@ fn createTab(handler: *InputHandler) !void {
 }
 
 fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
-    const workspaces = &handler.client.view.workspace_list;
-    const workspace = workspaces.workspaceAtPosition(position) orelse return;
+    const workspace = handler.client.model.workspaceAtPosition(position) orelse return;
     try handler.switchWorkspace(workspace);
 }
 

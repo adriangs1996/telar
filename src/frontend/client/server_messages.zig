@@ -29,6 +29,7 @@ const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
+const workspace_lists = @import("workspace_lists.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
 
@@ -133,7 +134,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .proxy_status => |status| try handleProxyStatus(client, status),
         .agent_snapshot => |snapshot| try handleAgentSnapshot(client, snapshot),
         .system_metrics => |metrics| try handleSystemMetrics(client, metrics),
-        .workspace_list => |list| try handleWorkspaceList(client, list),
+        .workspace_list => |list| _ = try workspace_lists.apply(client, list),
         .graphics_snapshot,
         .graphics_image,
         .graphics_shared_image,
@@ -318,30 +319,6 @@ fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
         .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
     });
     try client.presenter.requestDraw();
-}
-
-/// Replaces the workspace-list replica at the runtime's revision.
-fn handleWorkspaceList(client: *Client, list: schema.WorkspaceListView) !void {
-    var entries: [schema.max_workspace_list_entries]widgets.workspace_model.EntryInput = undefined;
-    var count: usize = 0;
-    var iterator = list.entries();
-    while (try iterator.next()) |entry| {
-        entries[count] = .{
-            .workspace = entry.workspace,
-            .name = entry.name,
-            .path = entry.path,
-            .tab_count = entry.tab_count,
-        };
-        count += 1;
-    }
-    // A snapshot the fixed-capacity replica cannot hold is dropped rather
-    // than fatal: the bar keeps showing the previous list, and the next
-    // revision gets another chance.
-    const replaced = client.view.replaceWorkspaceList(.{
-        .revision = list.revision,
-        .entries = entries[0..count],
-    }) catch return;
-    if (replaced) try client.presenter.requestDraw();
 }
 
 /// An open-pane reply: routed by the continuation that asked for it.

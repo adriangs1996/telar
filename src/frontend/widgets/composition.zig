@@ -6,11 +6,11 @@
 const workspace = @import("../workspace/root.zig");
 const multiplexer = workspace.multiplexer;
 const tabs_mod = workspace.tabs;
+const workspace_list = workspace.workspace_list;
 const context_mod = @import("context.zig");
 const layout = @import("layout.zig");
 const sidebar = @import("sidebar.zig");
 const status_bar = @import("status_bar.zig");
-const workspace_model = @import("workspace_model.zig");
 const tab_bar = @import("tab_bar.zig");
 const tab_rename = @import("tab_rename.zig");
 const top_bar = @import("top_bar.zig");
@@ -31,7 +31,7 @@ pub const Input = struct {
     proxy_tls_active: bool,
     system_metrics: ?status_bar.Metrics,
     status_mode: status_bar.Mode,
-    workspaces: *const workspace_model.Snapshot,
+    workspaces: *const workspace_list.Snapshot,
     workspace_list_collapsed: bool,
 };
 

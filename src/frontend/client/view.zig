@@ -12,6 +12,7 @@ const kitty = @import("../graphics/root.zig").kitty;
 const modal_graphics = @import("../graphics/root.zig").modal;
 const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
+const workspace_list = workspace_capability.workspace_list;
 const term = presentation.screen;
 const theme_mod = @import("../ui/root.zig").theme;
 const toast_graphics = @import("../graphics/root.zig").toast;
@@ -19,6 +20,7 @@ const ui = @import("../ui/root.zig");
 const widgets = @import("../widgets/root.zig");
 
 const schema = core.schema;
+const empty_workspace_list: workspace_list.Snapshot = .{};
 
 pub const sidebar_width = widgets.layout.sidebar_width;
 pub const minimum_sidebar_width = widgets.layout.minimum_sidebar_width;
@@ -52,6 +54,7 @@ pub const RenderStats = struct {
 pub const RenderInput = struct {
     tabs: ?*const tabs_mod.Model = null,
     model: *multiplexer.Model,
+    workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
     status_mode: widgets.status_bar.Mode = .normal,
     force: bool = false,
@@ -83,7 +86,6 @@ pub const State = struct {
     sidebar_index_location: ?schema.TabLocation = null,
     sidebar_index_layout_revision: u64 = 0,
     sidebar_index_agent_revision: u64 = 0,
-    workspace_list: widgets.workspace_model.Snapshot = .{},
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
@@ -238,15 +240,6 @@ pub const State = struct {
 
     pub fn advanceNotifications(state: *State, now_ns: u64) bool {
         if (!state.notifications.advance(now_ns)) return false;
-        state.dirty = true;
-        return true;
-    }
-
-    pub fn replaceWorkspaceList(
-        state: *State,
-        input: widgets.workspace_model.SnapshotInput,
-    ) !bool {
-        if (!try state.workspace_list.replace(input)) return false;
         state.dirty = true;
         return true;
     }
@@ -594,7 +587,7 @@ pub const State = struct {
             .proxy_tls_active = state.proxy_tls_active,
             .system_metrics = state.system_metrics,
             .status_mode = input.status_mode,
-            .workspaces = &state.workspace_list,
+            .workspaces = input.workspaces,
             .workspace_list_collapsed = state.workspace_list_collapsed,
         });
         const attachment_snapshot = state.attachment_store.snapshot();
@@ -1305,17 +1298,22 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 27 });
-    const entries = [_]widgets.workspace_model.EntryInput{
+    var workspaces: workspace_list.Snapshot = .{};
+    const entries = [_]workspace_list.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
-    try std.testing.expect(try state.replaceWorkspaceList(.{
+    try std.testing.expect(try workspaces.replace(.{
         .revision = 1,
         .entries = &entries,
     }));
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .workspaces = &workspaces,
+        .force = true,
+    });
 
     const sidebar_requested = state.sidebar_requested;
     const sidebar_toggle = state.handleMouse(.{ .x = 0, .y = 0, .kind = .press }, 0);

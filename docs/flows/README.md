@@ -31,6 +31,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | [Workspace snapshot reconciliation](workspace-reconciliation.md) | User renames a workspace, or the runtime requests resync | The client commits the latest workspace replica and repairs disposable resources | Request, model, capacity, resource and presenter tests |
 | [Workspace creation](workspace-creation.md) | User submits the new-workspace prompt | The runtime creates one workspace and the client replaces its projection in one semantic commit | Transaction, ownership, model, protocol and presenter tests |
 | [Workspace handoff](workspace-handoff.md) | User navigation or runtime lifecycle selects another workspace | The client presents one empty departure and one atomically confirmed arrival | Ordering, model, recovery, resource and presenter tests |
+| [Workspace list snapshot](workspace-list-snapshot.md) | Runtime workspace membership, order, name or tab count changes | The client commits one bounded navigation replica and the presenter projects the latest revision | Storage, model, protocol and presenter tests |
 | [Workspace list toggle](workspace-list-toggle.md) | User, Lua, plugin or top bar collapses the workspace list | The client commits chrome state and the presenter alone updates its view projection | Model, intent and presenter tests |
 
 Add a flow when a behavior crosses an asynchronous boundary, a process

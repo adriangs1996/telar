@@ -28,6 +28,7 @@ const initial_request_id = Client.initial_request_id;
 
 fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -41,6 +42,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
 
 fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -54,6 +56,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
 
 fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -66,6 +69,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
 
 fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -3382,23 +3386,93 @@ test "system metrics schedule a redraw" {
     try harness.settle();
 }
 
-test "the workspace list replica follows the runtime revision" {
+test "workspace list snapshots commit before presenter-owned projection" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+
+    var payload: [512]u8 = undefined;
+    const list = try schema.encodeWorkspaceList(&payload, .{
+        .revision = 7,
+        .entries = &.{
+            .{ .workspace = @enumFromInt(1), .name = "main", .path = "/work/main", .tab_count = 1 },
+            .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 2 },
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(list));
+
+    try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(1)));
+    try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(2)));
+    try std.testing.expectEqualStrings("/work/api", client.model.workspaceListSnapshot().pathAt(1));
+    try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(!client.view.dirty);
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(list));
+    try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    var found_second = false;
+    for (0..client.presenter.screen.front.w) |x| {
+        const action = client.view.hits.at(@intCast(x), 0) orelse continue;
+        if (action == .select_workspace and action.select_workspace == @as(schema.WorkspaceId, @enumFromInt(2))) {
+            found_second = true;
+            break;
+        }
+    }
+    try std.testing.expect(found_second);
+}
+
+test "workspace position navigation resolves the committed client model" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
 
     var payload: [512]u8 = undefined;
     const list = try schema.encodeWorkspaceList(&payload, .{
         .revision = 1,
         .entries = &.{
-            .{ .workspace = @enumFromInt(1), .name = "main", .path = "/w", .tab_count = 1 },
+            .{ .workspace = @enumFromInt(1), .name = "main", .path = "/work/main", .tab_count = 1 },
+            .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
         },
     });
-    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(list));
-    try std.testing.expect(
-        harness.client.view.workspace_list.indexOf(@enumFromInt(1)) != null,
-    );
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(list));
+    const pending_updates_before = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.{ .select_workspace = 1 });
+
+    try std.testing.expect(client.model.workspaceLocation() == null);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
     try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    var target: ?schema.PaneTarget = null;
+    while (target == null) {
+        switch (try harness.nextClientMessage(&message_buffer)) {
+            .detach_pane => {},
+            .open_pane => |open| target = open.target,
+            else => return error.UnexpectedClientMessage,
+        }
+    }
+
+    try std.testing.expectEqualDeep(
+        schema.PaneTarget{ .workspace = @enumFromInt(2) },
+        target.?,
+    );
 }
 
 test "an agent snapshot replaces the sidebar replica" {

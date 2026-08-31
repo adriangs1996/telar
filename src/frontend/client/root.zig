@@ -60,6 +60,7 @@ test {
     _ = @import("tab_snapshots.zig");
     _ = @import("workspace_creations.zig");
     _ = @import("workspace_handoffs.zig");
+    _ = @import("workspace_lists.zig");
     _ = @import("workspace_list_toggles.zig");
     _ = @import("workspace_renames.zig");
     _ = @import("workspace_snapshots.zig");
