@@ -21,16 +21,6 @@ pub const NamePromptHandler = struct {
     prompt: *name_prompt.State,
     effects: SubmitEffects,
 
-    /// Opens or replaces the bounded prompt without performing an external
-    /// effect.
-    ///
-    /// ```zig
-    /// handler.begin(.create_workspace);
-    /// ```
-    pub fn begin(handler: *NamePromptHandler, command: name_prompt.Begin) void {
-        handler.prompt.begin(command);
-    }
-
     /// Applies one editor command and closes the prompt only after its submit
     /// effect accepts the borrowed submission.
     ///
@@ -95,7 +85,7 @@ test "accepted submission stays borrowed and active until the effect returns" {
         .prompt = &prompt,
         .effects = capture.port(),
     };
-    handler.begin(.create_workspace);
+    prompt.begin(.create_workspace);
     _ = try handler.execute(.{ .insert = "agents" });
 
     try std.testing.expect(try handler.execute(.submit) == .finished);
@@ -116,7 +106,7 @@ test "blocked and failed submissions retain the prompt" {
         .prompt = &prompt,
         .effects = capture.port(),
     };
-    handler.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(1), .label = "main" } });
+    prompt.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(1), .label = "main" } });
 
     try std.testing.expect(try handler.execute(.submit) == .blocked);
     try std.testing.expect(prompt.active());
@@ -135,7 +125,7 @@ test "editor and cancellation transitions never call submit effects" {
         .prompt = &prompt,
         .effects = capture.port(),
     };
-    handler.begin(.create_workspace);
+    prompt.begin(.create_workspace);
 
     try std.testing.expect(try handler.execute(.{ .insert = "a" }) == .changed);
     try std.testing.expect(try handler.execute(.cancel) == .cancelled);

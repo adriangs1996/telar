@@ -16,7 +16,7 @@ native action or tab-bar intent
         |
 name_prompts.begin*
         |
-NamePromptHandler.begin
+OpenNamePromptHandler
         |
 name_prompt.State.begin
         |
@@ -38,6 +38,13 @@ semantic Command
         |
 NamePromptHandler.execute -> name_prompt.State.apply
 ```
+
+`OpenNamePromptHandler` owns opening eligibility and canonical initialization.
+It rejects every intent while copy mode or a pane paste owns input, resolves
+the current workspace or requested tab and copies its canonical name into the
+bounded field. Workspace creation also requires no pending request and an
+attached focused pane that can supply the launch directory. The adapter only
+translates native or tab-bar intent and reports whether a request is pending.
 
 `ClientModel` owns prompt, copy-mode and pane-paste authority. For streamed
 paste, `paste_routing` snapshots those modes plus the attachment modal and
@@ -102,6 +109,8 @@ latest model state.
   cancellation and exact-target completion.
 - `src/frontend/client/application/name_prompt.zig` proves effect ordering and
   prompt retention after blocked or failed submissions.
+- `src/frontend/client/application/name_prompt_opening.zig` proves input
+  authority, workspace-creation gating, target resolution and canonical text.
 - `src/frontend/client/name_prompts.zig` proves terminal parsing, bracketed
   paste handling and the zero-length incomplete-sequence regression.
 - `src/frontend/client/application/paste_routing.zig` proves exclusive prompt

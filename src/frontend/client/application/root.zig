@@ -27,6 +27,7 @@ pub const key_routing = @import("key_routing.zig");
 pub const lua_action = @import("lua_action.zig");
 pub const move_tab = @import("move_tab.zig");
 pub const name_prompt = @import("name_prompt.zig");
+pub const name_prompt_opening = @import("name_prompt_opening.zig");
 pub const native_action = @import("native_action.zig");
 pub const notifications = @import("notifications.zig");
 pub const pane_closure_delivery = @import("pane_closure_delivery.zig");
@@ -106,6 +107,7 @@ test {
     _ = lua_action;
     _ = move_tab;
     _ = name_prompt;
+    _ = name_prompt_opening;
     _ = native_action;
     _ = notifications;
     _ = pane_closure_delivery;

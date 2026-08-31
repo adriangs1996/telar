@@ -13,6 +13,7 @@ const workspace_renames = @import("workspace_renames.zig");
 
 const Client = @import("client.zig");
 const name_prompt = client_application.name_prompt;
+const name_prompt_opening = client_application.name_prompt_opening;
 const schema = core.schema;
 const term = presentation.screen;
 
@@ -23,15 +24,9 @@ const term = presentation.screen;
 /// if (beginWorkspaceCreate(client)) return;
 /// ```
 pub fn beginWorkspaceCreate(client: *Client) bool {
-    if (client.model.copyModeActive() or client.model.panePasteActive() or request_lifecycle.busy(client) or
-        client.model.planWorkspaceCreation() == null)
-    {
-        return false;
-    }
+    var use_case = openingHandler(client);
 
-    var use_case = handler(client);
-    use_case.begin(.create_workspace);
-    return true;
+    return use_case.execute(.create_workspace);
 }
 
 /// Starts renaming the attached workspace from its canonical name.
@@ -40,17 +35,9 @@ pub fn beginWorkspaceCreate(client: *Client) bool {
 /// _ = beginWorkspaceRename(client);
 /// ```
 pub fn beginWorkspaceRename(client: *Client) bool {
-    if (client.model.copyModeActive() or client.model.panePasteActive()) {
-        return false;
-    }
+    var use_case = openingHandler(client);
 
-    const workspace = client.model.workspaceLocation() orelse return false;
-    var use_case = handler(client);
-    use_case.begin(.{ .rename_workspace = .{
-        .workspace = workspace,
-        .name = client.model.workspace.workspaceName(),
-    } });
-    return true;
+    return use_case.execute(.rename_workspace);
 }
 
 /// Starts renaming the active tab when one exists.
@@ -59,9 +46,9 @@ pub fn beginWorkspaceRename(client: *Client) bool {
 /// _ = beginActiveTabRename(client);
 /// ```
 pub fn beginActiveTabRename(client: *Client) bool {
-    const active = client.model.workspace.activeConst() orelse return false;
+    var use_case = openingHandler(client);
 
-    return beginTabRename(client, active.location.tab_id);
+    return use_case.execute(.rename_active_tab);
 }
 
 /// Starts renaming one exact tab from its canonical label.
@@ -70,17 +57,9 @@ pub fn beginActiveTabRename(client: *Client) bool {
 /// _ = beginTabRename(client, tab_id);
 /// ```
 pub fn beginTabRename(client: *Client, tab_id: schema.TabId) bool {
-    if (client.model.copyModeActive() or client.model.panePasteActive()) {
-        return false;
-    }
+    var use_case = openingHandler(client);
 
-    const tab = client.model.workspace.find(tab_id) orelse return false;
-    var use_case = handler(client);
-    use_case.begin(.{ .rename_tab = .{
-        .tab_id = tab_id,
-        .label = tab.labelSlice(),
-    } });
-    return true;
+    return use_case.execute(.{ .rename_tab = tab_id });
 }
 
 /// Parses one host-input chunk into bounded prompt commands. Accepted
@@ -104,6 +83,22 @@ fn handler(client: *Client) name_prompt.NamePromptHandler {
             .submit = submit,
         },
     };
+}
+
+fn openingHandler(client: *Client) name_prompt_opening.OpenNamePromptHandler {
+    return .{
+        .model = &client.model,
+        .workspace_creation = .{
+            .context = client,
+            .pending = workspaceCreationPending,
+        },
+    };
+}
+
+fn workspaceCreationPending(context: *anyopaque) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return request_lifecycle.busy(client);
 }
 
 fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
