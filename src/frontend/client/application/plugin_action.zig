@@ -17,31 +17,54 @@ pub const StartEffects = struct {
 pub const StartOutcome = union(enum) {
     started: client_model.PluginExecution,
     busy,
+    unavailable,
+    rejected: anyerror,
+};
+
+pub const StartDelivery = struct {
+    context: *anyopaque,
+    deliver: *const fn (*anyopaque, StartOutcome) anyerror!void,
 };
 
 pub const StartPluginActionHandler = struct {
     model: *client_model.Model,
     effects: StartEffects,
+    delivery: StartDelivery,
 
-    /// Prepares one invocation, commits its identity, then starts the worker.
+    /// Prepares one invocation, starts its worker under one committed identity,
+    /// then delivers the classified start outcome.
     ///
     /// ```zig
     /// const outcome = try handler.execute();
     /// ```
     pub fn execute(handler: *StartPluginActionHandler) !StartOutcome {
         if (handler.model.pluginExecution() != null) {
-            return .busy;
+            return handler.deliver(.busy);
         }
 
-        try handler.effects.prepare(handler.effects.context);
-        const execution = (try handler.model.beginPluginExecution()) orelse return .busy;
-        errdefer {
-            const rolled_back = handler.model.finishPluginExecution(execution.id);
-            std.debug.assert(rolled_back != null);
+        handler.effects.prepare(handler.effects.context) catch |err| switch (err) {
+            error.PluginRegistryUnavailable => return handler.deliver(.unavailable),
+            error.PluginNotConfigured, error.UnknownPluginAction => return handler.deliver(.{ .rejected = err }),
+            else => return err,
+        };
+        const execution = (try handler.model.beginPluginExecution()) orelse
+            return handler.deliver(.busy);
+        {
+            errdefer {
+                const rolled_back = handler.model.finishPluginExecution(execution.id);
+                std.debug.assert(rolled_back != null);
+            }
+
+            try handler.effects.schedule(handler.effects.context, execution);
         }
 
-        try handler.effects.schedule(handler.effects.context, execution);
-        return .{ .started = execution };
+        return handler.deliver(.{ .started = execution });
+    }
+
+    fn deliver(handler: *StartPluginActionHandler, outcome: StartOutcome) !StartOutcome {
+        try handler.delivery.deliver(handler.delivery.context, outcome);
+
+        return outcome;
     }
 };
 
@@ -151,10 +174,13 @@ const StartCapture = struct {
     model: *const client_model.Model,
     prepare_calls: usize = 0,
     schedule_calls: usize = 0,
+    delivery_calls: usize = 0,
     prepared_before_commit: bool = false,
     scheduled_after_commit: bool = false,
-    fail_prepare: bool = false,
+    prepare_error: ?anyerror = null,
     fail_schedule: bool = false,
+    fail_delivery: bool = false,
+    delivered_outcome: ?StartOutcome = null,
 
     fn port(capture: *StartCapture) StartEffects {
         return .{
@@ -164,12 +190,16 @@ const StartCapture = struct {
         };
     }
 
+    fn delivery(capture: *StartCapture) StartDelivery {
+        return .{ .context = capture, .deliver = deliver };
+    }
+
     fn prepare(raw_context: *anyopaque) !void {
         const capture: *StartCapture = @ptrCast(@alignCast(raw_context));
         capture.prepare_calls += 1;
         capture.prepared_before_commit = capture.model.pluginExecution() == null;
-        if (capture.fail_prepare) {
-            return error.PluginPreparationFailed;
+        if (capture.prepare_error) |err| {
+            return err;
         }
     }
 
@@ -184,6 +214,16 @@ const StartCapture = struct {
             return error.PluginScheduleFailed;
         }
     }
+
+    fn deliver(raw_context: *anyopaque, outcome: StartOutcome) !void {
+        const capture: *StartCapture = @ptrCast(@alignCast(raw_context));
+        capture.delivery_calls += 1;
+        capture.delivered_outcome = outcome;
+
+        if (capture.fail_delivery) {
+            return error.PluginStartDeliveryFailed;
+        }
+    }
 };
 
 test "StartPluginActionHandler prepares before commit and schedules after commit" {
@@ -193,6 +233,7 @@ test "StartPluginActionHandler prepares before commit and schedules after commit
     var handler: StartPluginActionHandler = .{
         .model = &model,
         .effects = capture.port(),
+        .delivery = capture.delivery(),
     };
 
     const started = try handler.execute();
@@ -202,6 +243,7 @@ test "StartPluginActionHandler prepares before commit and schedules after commit
     try std.testing.expect(capture.scheduled_after_commit);
     try std.testing.expectEqual(@as(usize, 1), capture.prepare_calls);
     try std.testing.expectEqual(@as(usize, 1), capture.schedule_calls);
+    try std.testing.expectEqual(@as(usize, 1), capture.delivery_calls);
     try std.testing.expectEqual(@as(u64, 4), execution.configuration_generation);
 
     const busy = try handler.execute();
@@ -209,27 +251,69 @@ test "StartPluginActionHandler prepares before commit and schedules after commit
     try std.testing.expect(busy == .busy);
     try std.testing.expectEqual(@as(usize, 1), capture.prepare_calls);
     try std.testing.expectEqual(@as(usize, 1), capture.schedule_calls);
+    try std.testing.expectEqual(@as(usize, 2), capture.delivery_calls);
+    try std.testing.expect(capture.delivered_outcome.? == .busy);
 }
 
-test "StartPluginActionHandler leaves no reservation when preparation or scheduling fails" {
+test "StartPluginActionHandler rolls back only an unscheduled reservation" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: StartCapture = .{
         .model = &model,
-        .fail_prepare = true,
+        .prepare_error = error.PluginPreparationFailed,
     };
     var handler: StartPluginActionHandler = .{
         .model = &model,
         .effects = capture.port(),
+        .delivery = capture.delivery(),
     };
 
     try std.testing.expectError(error.PluginPreparationFailed, handler.execute());
     try std.testing.expect(model.pluginExecution() == null);
     try std.testing.expectEqual(@as(usize, 0), capture.schedule_calls);
+    try std.testing.expectEqual(@as(usize, 0), capture.delivery_calls);
 
-    capture.fail_prepare = false;
+    capture.prepare_error = null;
     capture.fail_schedule = true;
     try std.testing.expectError(error.PluginScheduleFailed, handler.execute());
+    try std.testing.expect(model.pluginExecution() == null);
+    try std.testing.expectEqual(@as(usize, 0), capture.delivery_calls);
+
+    capture.fail_schedule = false;
+    capture.fail_delivery = true;
+    try std.testing.expectError(error.PluginStartDeliveryFailed, handler.execute());
+    try std.testing.expect(model.pluginExecution() != null);
+    try std.testing.expectEqual(@as(usize, 1), capture.delivery_calls);
+}
+
+test "StartPluginActionHandler classifies known preparation failures before reservation" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var capture: StartCapture = .{
+        .model = &model,
+        .prepare_error = error.PluginRegistryUnavailable,
+    };
+    var handler: StartPluginActionHandler = .{
+        .model = &model,
+        .effects = capture.port(),
+        .delivery = capture.delivery(),
+    };
+
+    try std.testing.expect(try handler.execute() == .unavailable);
+
+    capture.prepare_error = error.PluginNotConfigured;
+    const not_configured = try handler.execute();
+
+    try std.testing.expectEqual(error.PluginNotConfigured, not_configured.rejected);
+
+    capture.prepare_error = error.UnknownPluginAction;
+    const unknown_action = try handler.execute();
+
+    try std.testing.expectEqual(error.UnknownPluginAction, unknown_action.rejected);
+    try std.testing.expectEqual(@as(usize, 3), capture.prepare_calls);
+    try std.testing.expectEqual(@as(usize, 0), capture.schedule_calls);
+    try std.testing.expectEqual(@as(usize, 3), capture.delivery_calls);
+    try std.testing.expectEqual(error.UnknownPluginAction, capture.delivered_outcome.?.rejected);
     try std.testing.expect(model.pluginExecution() == null);
 }
 

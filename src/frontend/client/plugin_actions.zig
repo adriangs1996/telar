@@ -10,7 +10,6 @@ const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
 const client_actions = @import("actions.zig");
-const client_diagnostics = @import("client_diagnostics.zig");
 const notification_flow = @import("notifications.zig");
 const plugin_action = client_application.plugin_action;
 const plugin_action_delivery = client_application.plugin_action_delivery;
@@ -20,12 +19,7 @@ pub const Completion = struct {
     result: anyerror!plugin_broker.WorkerResult,
 };
 
-pub const StartOutcome = union(enum) {
-    started: client_model.PluginExecution,
-    busy,
-    unavailable,
-    rejected,
-};
+pub const StartOutcome = plugin_action.StartOutcome;
 
 const Job = struct {
     execution_id: client_model.PluginExecutionId,
@@ -57,25 +51,13 @@ pub fn start(client: *Client, requested: input.action.PluginAction, callback_con
             .prepare = prepare,
             .schedule = schedule,
         },
-    };
-    const outcome = use_case.execute() catch |err| switch (err) {
-        error.PluginRegistryUnavailable => return .unavailable,
-        error.PluginNotConfigured, error.UnknownPluginAction => {
-            _ = try client_diagnostics.set(
-                client,
-                "plugin action cannot be resolved: {s}",
-                .{@errorName(err)},
-            );
-            try notification_flow.publishDiagnostic(client, "Plugin action rejected");
-            return .rejected;
+        .delivery = .{
+            .context = client,
+            .deliver = deliverStartOutcome,
         },
-        else => return err,
     };
 
-    return switch (outcome) {
-        .started => |execution| .{ .started = execution },
-        .busy => .busy,
-    };
+    return use_case.execute();
 }
 
 /// Consumes one worker completion and applies its authorized action batch.
@@ -140,6 +122,19 @@ fn executeWorker(io: std.Io, gpa: std.mem.Allocator, job: Job) Completion {
         .execution_id = job.execution_id,
         .result = plugin_broker.executeWorker(io, gpa, job.request),
     };
+}
+
+fn deliverStartOutcome(raw_context: *anyopaque, outcome: plugin_action.StartOutcome) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+    var use_case: plugin_action_delivery.DeliverPluginActionStartHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .publish_notification = publishNotification,
+        },
+    };
+
+    try use_case.execute(outcome);
 }
 
 fn authorize(raw_context: *anyopaque, result: plugin_action.PluginResult) !void {

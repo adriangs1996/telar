@@ -6399,7 +6399,7 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
         .action = core.plugin.stableId("missing"),
     }, testing_plugin_context);
 
-    try std.testing.expect(rejected == .rejected);
+    try std.testing.expectEqual(error.UnknownPluginAction, rejected.rejected);
     try std.testing.expect(client.model.pluginExecution() == null);
     try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expect(std.mem.indexOf(

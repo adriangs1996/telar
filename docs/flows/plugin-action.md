@@ -22,6 +22,8 @@ ClientModel.beginPluginExecution { id, configuration_generation }
         |
 Io.Select.concurrent -> isolated one-shot worker
         |
+DeliverPluginActionStartHandler
+        |
 ClientEvent.plugin_result { execution_id, result }
         |
 plugin_actions.complete
@@ -61,6 +63,14 @@ invalid action leaves the model idle. If worker scheduling fails after the
 commit, `errdefer` removes only that exact reservation. The event loop remains
 the sole writer of `ClientModel`; the worker receives copied request data and
 returns through `ClientEvent.plugin_result`.
+
+Every classified start outcome crosses an explicit delivery boundary.
+`DeliverPluginActionStartHandler` keeps active, busy and unavailable outcomes
+quiet. For an invalid configured action, it commits the bounded diagnostic and
+constructs its failure notification. The adapter supplies only registry
+resolution, worker scheduling and physical notification publication. An
+unexpected preparation error or a scheduling failure remains an error and does
+not cross the delivery boundary.
 
 The execution reservation is lifecycle state, not render state. Beginning or
 finishing it does not advance `ClientModel.Version` and cannot schedule an
@@ -131,6 +141,7 @@ presenter compare versions and schedule at most the required paced frame.
   plugin values select only the asynchronous start port.
 - `src/frontend/client/client_test.zig` proves authorized application through
   presenter observation, stale-result suppression, capability denial, worker
-  failure, unmatched identities and busy-start behavior on a real client.
+  failure, unmatched identities, and busy and rejected start behavior on a
+  real client.
 - `src/frontend/plugins/root.zig` proves digest-bound capability checks and
   rejects invalid or recursive effect batches.
