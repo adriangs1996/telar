@@ -324,8 +324,10 @@ capacity and socket failure policy.
 The `.pane_frame` case delegates through the `pane_frames` adapter and
 `ApplyPaneFrameHandler` to `ClientModel.applyPaneFrame`. The model validates the
 base, applies spans to the disposable workspace, reconciles scroll, input modes
-and copy state, then publishes `ClientModel.Version.frame`. A broken base
-requests a fresh snapshot without changing state.
+and copy state, then publishes `ClientModel.Version.frame`. The exact commit
+passes through `DeliverPaneFrameHandler` before the adapter updates graphics
+and active-pane resources. A broken base requests a fresh snapshot without
+changing state.
 
 After dispatch, `client_events` calls `presentation_lifecycle.observe`.
 `Presenter` detects the new frame revision and schedules the paced draw; the

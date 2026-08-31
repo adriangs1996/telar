@@ -1,6 +1,5 @@
-//! Adapts committed pane frames to recovery, graphics, focus and telemetry.
+//! Adapts runtime pane frames to recovery, resource delivery and telemetry.
 
-const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
@@ -9,6 +8,7 @@ const active_pane_resources = @import("active_pane_resources.zig");
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
 const pane_frame = client_application.pane_frame;
+const pane_frame_delivery = client_application.pane_frame_delivery;
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 
@@ -42,7 +42,7 @@ fn handler(client: *Client) pane_frame.ApplyPaneFrameHandler {
         .effects = .{
             .context = client,
             .recover = requestSnapshot,
-            .apply = applyResources,
+            .deliver = deliverResources,
         },
     };
 }
@@ -56,29 +56,35 @@ fn requestSnapshot(context: *anyopaque, recovery: client_model.PaneFrameRecovery
     } });
 }
 
-fn applyResources(context: *anyopaque, commit: client_model.PaneFrameCommit) !void {
+fn deliverResources(context: *anyopaque, commit: client_model.PaneFrameCommit) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const tab = client.model.workspace.find(commit.location.tab_id) orelse
-        return error.UnexpectedPaneFrame;
-    if (!std.meta.eql(tab.location, commit.location)) {
-        return error.UnexpectedPaneFrame;
-    }
+    var use_case: pane_frame_delivery.DeliverPaneFrameHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .pane_graphics_visible = paneGraphicsVisible,
+            .set_pane_graphics_visible = setPaneGraphicsVisible,
+            .synchronize_active_resources = synchronizeActiveResources,
+        },
+    };
 
-    const pane = tab.model.find(commit.pane_id) orelse return error.UnexpectedPaneFrame;
-    const active = client.model.workspace.active();
-    const graphics_visible = pane.scroll.atBottom(pane.buffer.h) and
-        active != null and std.meta.eql(active.?.location, tab.location);
-    if (!pane.attached or pane.applied_frame_id != commit.frame_id or
-        client.model.version().frame != commit.frame_revision or
-        graphics_visible != commit.graphics_visible)
-    {
-        return error.UnexpectedPaneFrame;
-    }
+    try use_case.execute(commit);
+}
 
-    if (client.graphics_store.paneVisible(commit.pane_id) != commit.graphics_visible) {
-        try client.graphics_store.setPaneVisible(commit.pane_id, commit.graphics_visible);
-    }
-    if (active != null) {
-        try active_pane_resources.synchronize(client);
-    }
+fn paneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return client.graphics_store.paneVisible(pane_id);
+}
+
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try client.graphics_store.setPaneVisible(pane_id, visible);
+}
+
+fn synchronizeActiveResources(context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try active_pane_resources.synchronize(client);
 }

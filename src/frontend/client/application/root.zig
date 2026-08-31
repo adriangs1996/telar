@@ -25,6 +25,7 @@ pub const move_tab = @import("move_tab.zig");
 pub const name_prompt = @import("name_prompt.zig");
 pub const notifications = @import("notifications.zig");
 pub const pane_frame = @import("pane_frame.zig");
+pub const pane_frame_delivery = @import("pane_frame_delivery.zig");
 pub const pane_focus_reporting = @import("pane_focus_reporting.zig");
 pub const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
 pub const pane_graphics = @import("pane_graphics.zig");
@@ -85,6 +86,7 @@ test {
     _ = name_prompt;
     _ = notifications;
     _ = pane_frame;
+    _ = pane_frame_delivery;
     _ = pane_focus_reporting;
     _ = pane_geometry_delivery;
     _ = pane_graphics;

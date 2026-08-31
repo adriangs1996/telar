@@ -10,7 +10,7 @@ const ui = core.ui;
 pub const PaneFrameEffects = struct {
     context: *anyopaque,
     recover: *const fn (*anyopaque, client_model.PaneFrameRecovery) anyerror!void,
-    apply: *const fn (*anyopaque, client_model.PaneFrameCommit) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.PaneFrameCommit) anyerror!void,
 };
 
 pub const ApplyPaneFrameHandler = struct {
@@ -29,7 +29,7 @@ pub const ApplyPaneFrameHandler = struct {
         switch (outcome) {
             .detached => {},
             .resync => |recovery| try handler.effects.recover(handler.effects.context, recovery),
-            .applied => |commit| try handler.effects.apply(handler.effects.context, commit),
+            .applied => |commit| try handler.effects.deliver(handler.effects.context, commit),
         }
 
         return outcome;
@@ -90,7 +90,7 @@ fn testingFrame(buffer: []u8, input: TestingFrame) !schema.frame.FrameView {
 
 const EffectEvent = enum {
     recover,
-    apply,
+    deliver,
 };
 
 const EffectsCapture = struct {
@@ -101,13 +101,13 @@ const EffectsCapture = struct {
     commit: ?client_model.PaneFrameCommit = null,
     observed_commit: bool = false,
     fail_recovery: bool = false,
-    fail_apply: bool = false,
+    fail_delivery: bool = false,
 
     fn port(capture: *EffectsCapture) PaneFrameEffects {
         return .{
             .context = capture,
             .recover = recover,
-            .apply = apply,
+            .deliver = deliver,
         };
     }
 
@@ -126,21 +126,21 @@ const EffectsCapture = struct {
         }
     }
 
-    fn apply(context: *anyopaque, commit: client_model.PaneFrameCommit) !void {
+    fn deliver(context: *anyopaque, commit: client_model.PaneFrameCommit) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         const pane = capture.model.workspace.findPane(commit.pane_id).?;
-        capture.record(.apply);
+        capture.record(.deliver);
         capture.commit = commit;
         capture.observed_commit = pane.applied_frame_id == commit.frame_id and
             capture.model.version().frame == commit.frame_revision;
 
-        if (capture.fail_apply) {
+        if (capture.fail_delivery) {
             return error.ResourceSyncFailed;
         }
     }
 };
 
-test "ApplyPaneFrameHandler commits before applying client resources" {
+test "ApplyPaneFrameHandler commits before delivering client resources" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: EffectsCapture = .{ .model = testing.model };
@@ -158,7 +158,7 @@ test "ApplyPaneFrameHandler commits before applying client resources" {
     }));
 
     try std.testing.expect(outcome == .applied);
-    try std.testing.expectEqualSlices(EffectEvent, &.{.apply}, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualSlices(EffectEvent, &.{.deliver}, capture.events[0..capture.event_count]);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(outcome.applied, capture.commit.?);
 }
@@ -207,10 +207,10 @@ test "ApplyPaneFrameHandler suppresses frames made stale by detach" {
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "ApplyPaneFrameHandler preserves commits after resource effect failure" {
+test "ApplyPaneFrameHandler preserves commits after resource delivery failure" {
     var testing = try TestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model, .fail_apply = true };
+    var capture: EffectsCapture = .{ .model = testing.model, .fail_delivery = true };
     var handler: ApplyPaneFrameHandler = .{
         .model = testing.model,
         .effects = capture.port(),

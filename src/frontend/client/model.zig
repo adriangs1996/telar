@@ -493,6 +493,10 @@ pub const PaneFrameCommit = struct {
     snapshot: bool,
     spans: u64,
     cells: u64,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
     frame_revision: u64,
 };
 
@@ -1966,6 +1970,10 @@ pub const Model = struct {
             .snapshot = frame.base_frame_id == 0,
             .spans = applied.spans,
             .cells = applied.cells,
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
             .frame_revision = model.frame_revision,
         } };
     }
@@ -3451,6 +3459,10 @@ test "pane frame application commits screen copy state and one frame revision" {
     try std.testing.expect(commit.snapshot);
     try std.testing.expectEqual(@as(u64, 1), commit.spans);
     try std.testing.expectEqual(@as(u64, 4), commit.cells);
+    try std.testing.expectEqual(model.version().workspace, commit.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, commit.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, commit.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, commit.panes_revision);
     try std.testing.expectEqual(@as(u64, 1), commit.frame_revision);
     try std.testing.expectEqualStrings("x", pane.buffer.cells[0].text());
     try std.testing.expect(pane.input_modes.cursor_keys);

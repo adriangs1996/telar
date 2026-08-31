@@ -25,9 +25,13 @@ PaneFrameOutcome
        |
        +-- detached -> no effects
        +-- resync   -> request_snapshot
-       +-- applied  -> graphics, reported-focus sync and telemetry
+       +-- applied  -> ClientModel.Version.frame
                               |
-                    ClientModel.Version.frame
+                    DeliverPaneFrameHandler
+                              |
+                    validate exact commit
+                              |
+                    graphics + active resources + telemetry
                               |
                     presentation_lifecycle.observe
                               |
@@ -43,7 +47,8 @@ A valid frame applies cells, cursor, mouse mode, input modes and scroll state
 through `multiplexer.Model.applyFrame`. It also reconciles active copy state
 against retained-history pruning before publishing one frame revision. The
 returned commit contains values only: pane and tab identity, frame id,
-visibility, snapshot status, applied work and the committed revision.
+visibility, snapshot status, applied work and the exact workspace, tab,
+active-tab, pane and frame revisions.
 
 Every successfully applied frame advances `ClientModel.Version.frame`, even
 when it changes no visible cell. The revision represents an acknowledgement
@@ -54,11 +59,14 @@ detached frames do not advance it.
 
 `ApplyPaneFrameHandler` runs recovery or post-commit effects according to the
 model outcome. The `pane_frames` adapter maps a broken base to
-`request_snapshot`. After a valid commit it synchronizes pane graphics
-visibility, delegates terminal focus modes to `PaneFocusReportingHandler` and
-records frame telemetry against the committed state. A focused pane that has
-just enabled focus events receives one focus-in. Report state advances no
-presentation revision.
+`request_snapshot`. After a valid commit it delegates to
+`DeliverPaneFrameHandler`, which rejects stale identity, topology, frame and
+visibility state before ordering physical graphics visibility and active-pane
+resource synchronization. The adapter implements those ports through the
+graphics store and `DeliverActivePaneResourcesHandler`, then records frame
+telemetry against the committed state. A focused pane that has just enabled
+focus events receives one focus-in. Report state advances no presentation
+revision.
 
 No use case or protocol adapter requests a draw. If a resource effect fails,
 the applied frame and copy-state reconciliation remain committed. Rolling them
@@ -87,6 +95,9 @@ reached the host terminal.
   behavior.
 - `src/frontend/client/application/pane_frame.zig` proves effect selection,
   commit-before-effect ordering and failure policy.
+- `src/frontend/client/application/pane_frame_delivery.zig` proves exact
+  post-commit validation, graphics idempotence, resource ordering and partial
+  failure semantics.
 - `src/frontend/client/client_test.zig` proves recovery IPC, resource
   synchronization, presenter-owned scheduling and acknowledgement after
   presentation.
