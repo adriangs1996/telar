@@ -106,6 +106,7 @@ const config_reload = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const host_resizes = @import("host_resizes.zig");
+const notification_timers = @import("notification_timers.zig");
 const notification_flow = @import("notifications.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
@@ -130,21 +131,6 @@ pub const ClientEvent = union(enum) {
     config_reload: anyerror!config_reload.ConfigReload,
     plugin_result: plugin_actions.Completion,
     clipboard_image: clipboard_images.Completion,
-};
-
-const NotificationTimer = struct {
-    deadline_ns: std.atomic.Value(u64) = .init(std.math.maxInt(u64)),
-    wake: Io.Event = .unset,
-};
-
-const NotificationTimerEvent = union(enum) {
-    deadline: anyerror!void,
-    rescheduled: anyerror!void,
-};
-
-const NotificationTimerResult = enum {
-    deadline,
-    rescheduled,
 };
 
 /// The request that opens the first pane; everything else is numbered by
@@ -204,8 +190,7 @@ input_read_pending: bool = false,
 next_request_id: u64 = 2,
 requests: client_requests.Tracker = .{},
 sidebar_animation_scheduler: sidebar_animations.Scheduler = .{},
-notification_tick_pending: bool = false,
-notification_timer: NotificationTimer = .{},
+notification_scheduler: notification_timers.Scheduler = .{},
 sound_pending: bool = false,
 queued_sound: ?sound_mod.Kind = null,
 
@@ -463,31 +448,6 @@ pub fn notifyDiagnostic(client: *Client, title: []const u8) !void {
     });
 }
 
-pub fn scheduleNotificationTick(client: *Client) !void {
-    const now_ns = monotonic(client.io);
-    const deadline_ns = client.model.nextNotificationDeadline(
-        now_ns,
-        client.presenter.pacer.interval,
-    ) orelse return;
-    client.notification_timer.deadline_ns.store(deadline_ns, .release);
-    if (client.notification_tick_pending) {
-        client.notification_timer.wake.set(client.io);
-        return;
-    }
-
-    // The previous timer has returned, so no waiter can observe this reset.
-    // Its deadline is replaced from the authoritative notification state.
-    client.notification_timer.wake.reset();
-    client.notification_tick_pending = true;
-    client.select.concurrent(.notification_tick, waitForNotificationTick, .{
-        client.io,
-        &client.notification_timer,
-    }) catch |err| {
-        client.notification_tick_pending = false;
-        return err;
-    };
-}
-
 /// Synchronizes a committed sidebar preference with disposable view,
 /// graphics and runtime geometry resources.
 ///
@@ -643,13 +603,6 @@ pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
 pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
     try result;
     try client.presenter.presentMedia(client);
-}
-
-/// Entrypoint for the notification timer: advance and rearm.
-pub fn handleNotificationTickEvent(client: *Client, result: anyerror!void) !void {
-    try result;
-    client.notification_tick_pending = false;
-    _ = try notification_flow.advance(client, monotonic(client.io));
 }
 
 pub fn scheduleAgentSound(client: *Client, kind: sound_mod.Kind) !void {
@@ -883,43 +836,6 @@ fn scheduleInputTimers(client: *Client) !void {
 fn waitUntil(io: Io, deadline_ns: u64) anyerror!void {
     const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
     try deadline.wait(io);
-}
-
-fn waitForNotificationTick(io: Io, timer: *NotificationTimer) anyerror!void {
-    while (true) {
-        const deadline_ns = timer.deadline_ns.load(.acquire);
-        if (monotonic(io) >= deadline_ns) return;
-        switch (try waitForNotificationTimerEvent(io, timer, deadline_ns)) {
-            .deadline => return,
-            .rescheduled => timer.wake.reset(),
-        }
-    }
-}
-
-fn waitForNotificationTimerEvent(
-    io: Io,
-    timer: *NotificationTimer,
-    deadline_ns: u64,
-) anyerror!NotificationTimerResult {
-    var storage: [2]NotificationTimerEvent = undefined;
-    var select = Io.Select(NotificationTimerEvent).init(io, &storage);
-    defer select.cancelDiscard();
-    try select.concurrent(.deadline, waitUntil, .{ io, deadline_ns });
-    try select.concurrent(.rescheduled, waitForNotificationReschedule, .{ io, &timer.wake });
-    return switch (try select.await()) {
-        .deadline => |result| blk: {
-            try result;
-            break :blk .deadline;
-        },
-        .rescheduled => |result| blk: {
-            try result;
-            break :blk .rescheduled;
-        },
-    };
-}
-
-fn waitForNotificationReschedule(io: Io, event: *Io.Event) anyerror!void {
-    try event.wait(io);
 }
 
 pub fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {

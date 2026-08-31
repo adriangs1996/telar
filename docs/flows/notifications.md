@@ -23,7 +23,7 @@ wire-to-client translation                    |
                          |
        notifications.Center + Version.notifications
                          |
-                  timer reschedule
+             notification_timers.reschedule
                          |
                  Client.observeModel
                          |
@@ -73,12 +73,18 @@ another request later.
 
 ## Time and presentation
 
-The notification timer asks `ClientModel.nextNotificationDeadline` for the
-next useful wakeup. Moving items wake at the presenter's frame interval, while
-stable items sleep until expiry. A timer event executes
-`AdvanceNotificationsHandler`, which advances the center from elapsed
-monotonic time, commits `Version.notifications` only when state changed and
-always rearms the next deadline.
+`notification_timers.Scheduler` asks
+`ClientModel.nextNotificationDeadline` for the next useful wakeup. Moving
+items wake at the presenter's frame interval, while stable items sleep until
+expiry. The scheduler owns one atomic deadline, one wake event and one pending
+client select task. Replacing a pending deadline sets the wake event rather
+than adding another task. Its fixed two-way select discards whichever wait
+loses the race.
+
+`notifications.handleTick` releases the completed task before checking its
+result. It then executes `AdvanceNotificationsHandler`, which advances the
+center from elapsed monotonic time, commits `Version.notifications` only when
+state changed and rearms the next deadline.
 
 The client run loop calls `Client.observeModel` after the event. `Presenter`
 compares the notification version with the last version it painted, invalidates
@@ -121,7 +127,10 @@ The center allocates nothing in steady state. Titles, messages and the four
 slots are fixed-size values. Entering and exiting transitions last 200 ms in
 wall-clock time; presentation cadence only selects samples from that curve.
 The timer stores one replaceable deadline, so obsolete animation work does not
-build a queue.
+build a queue. Scheduling failure clears the pending token. Timer-task failure
+also clears it before the event error reaches the client loop. Application
+tests prove that scheduling failure leaves an earlier notification commit
+intact. Scheduler tests prove that every task completion releases its token.
 
 Notifications do not survive client death or reconnect. A new disposable
 client starts with an empty center. Runtime-owned facts that must survive, such
@@ -139,9 +148,11 @@ new notifications after reconciliation.
   timer ordering, delivery policy, stale interaction behavior and retained
   commits when timer scheduling fails.
 - `src/frontend/client/notifications.zig` proves runtime wire translation,
-  delivery correlation and connection of application use cases to client
-  infrastructure.
+  delivery correlation, timer event ordering and connection of application use
+  cases to client infrastructure.
+- `src/frontend/client/notification_timers.zig` proves deadline replacement
+  and pending-token release after successful and failed completions.
 - `src/frontend/client/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
-- `src/frontend/client/client_test.zig` proves wire and local producers,
-  presenter-owned projection and bounded agent alerts.
+- `src/frontend/client/client_test.zig` proves wire and local producers, a real
+  lifecycle tick, presenter-owned projection and bounded agent alerts.

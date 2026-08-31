@@ -17,6 +17,7 @@ const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
 const host_resizes = @import("host_resizes.zig");
+const notification_flow = @import("notifications.zig");
 const Options = Client.Options;
 const rectSize = multiplexer.rectSize;
 
@@ -141,7 +142,7 @@ pub fn run(
             .draw => |result| try client.handleDrawEvent(result),
             .media_tick => |result| try client.handleMediaTickEvent(result),
             .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
-            .notification_tick => |result| try client.handleNotificationTickEvent(result),
+            .notification_tick => |result| _ = try notification_flow.handleTick(client, result),
             .sound_played => |result| try client.handleSoundPlayedEvent(result),
             .telemetry_tick => |result| client.handleTelemetryTickEvent(result, &telemetry, heap.snapshot()),
             .telemetry_written => |result| client.handleTelemetryWrittenEvent(result, &telemetry),

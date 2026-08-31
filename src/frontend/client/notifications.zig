@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const notification_capability = @import("../notifications/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const notification_timers = @import("notification_timers.zig");
 
 const client_mod = @import("client.zig");
 const Client = client_mod;
@@ -88,6 +89,18 @@ pub fn advance(client: *Client, now_ns: u64) !?client_model.NotificationChange {
     return use_case.execute(now_ns);
 }
 
+/// Completes one physical timer before advancing and rearming notification
+/// state through the application handler.
+///
+/// ```zig
+/// _ = try handleTick(client, result);
+/// ```
+pub fn handleTick(client: *Client, result: anyerror!void) !?client_model.NotificationChange {
+    try notification_timers.complete(client, result);
+
+    return advance(client, client_mod.monotonic(client.io));
+}
+
 /// Activates one current notification identity at most once.
 ///
 /// ```zig
@@ -123,7 +136,7 @@ fn timerEffects(client: *Client) notification_use_cases.TimerEffects {
 fn reschedule(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.scheduleNotificationTick();
+    try notification_timers.reschedule(client);
 }
 
 fn publishDeliveryNotification(context: *anyopaque, input: notification_capability.Input) !void {

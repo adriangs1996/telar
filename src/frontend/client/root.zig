@@ -52,8 +52,9 @@ test {
     _ = @import("model.zig");
     _ = @import("name_prompt.zig");
     _ = @import("name_prompts.zig");
-    _ = @import("pane_pastes.zig");
+    _ = @import("notification_timers.zig");
     _ = @import("notifications.zig");
+    _ = @import("pane_pastes.zig");
     _ = @import("pane_attachments.zig");
     _ = @import("pane_closures.zig");
     _ = @import("pane_focus.zig");

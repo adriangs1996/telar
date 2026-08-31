@@ -225,7 +225,10 @@ const TestHarness = struct {
                     _ = try sidebar_animations.handleTick(harness.client, result);
                     try harness.client.observeModel();
                 },
-                .notification_tick => |result| try harness.client.handleNotificationTickEvent(result),
+                .notification_tick => |result| {
+                    _ = try notification_flow.handleTick(harness.client, result);
+                    try harness.client.observeModel();
+                },
                 else => return error.UnexpectedEvent,
             }
         }
@@ -248,7 +251,11 @@ const TestHarness = struct {
                     try harness.client.observeModel();
                     target = harness.client.model.version();
                 },
-                .notification_tick => |result| try harness.client.handleNotificationTickEvent(result),
+                .notification_tick => |result| {
+                    _ = try notification_flow.handleTick(harness.client, result);
+                    try harness.client.observeModel();
+                    target = harness.client.model.version();
+                },
                 else => return error.UnexpectedEvent,
             }
         }
@@ -2614,7 +2621,7 @@ test "a missing pane attachment keeps local membership until a canonical snapsho
     const recovery = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(recovery == .request_tab_snapshot);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, recovery.request_tab_snapshot.location);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
 }
 
 test "an internal pane attachment failure waits for a later resync" {
@@ -2641,7 +2648,7 @@ test "an internal pane attachment failure waits for a later resync" {
     try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.requests.has(.tab_snapshot));
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
 }
 
 test "a late pane attachment confirmation retired by a snapshot is ignored" {
@@ -2699,7 +2706,7 @@ test "a late failed pane attachment does not notify or draw" {
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
 
     try std.testing.expectEqual(pending_updates_before_failure, client.presenter.pending_updates);
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
 
@@ -2741,7 +2748,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
 
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
     try std.testing.expectEqualDeep(
         @as(?schema.WorkspaceLocation, new_location.workspace),
         client.model.workspace.workspace,
@@ -2855,7 +2862,7 @@ test "a failed workspace creation preserves the current projection" {
     try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) != null);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
 }
 
 test "an unexpected tab creation is rejected without effects" {
@@ -2974,7 +2981,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     const creation = try tab_creations.apply(client, (try schema.decodeServer(created)).tab_created);
     @memset(&payload, 'x');
 
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, creation.previous);
     try std.testing.expectEqualDeep(second_location, creation.created);
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
@@ -3017,7 +3024,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(version_before_rename.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_rename.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_rename, client.presenter.pending_updates);
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
 
     try client.observeModel();
 
@@ -3159,7 +3166,7 @@ test "a failed tab creation preserves the current projection and notifies" {
     try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
 }
 
 test "an unexpected tab move is rejected without effects" {
@@ -3399,7 +3406,7 @@ test "a failed tab move preserves order and notifies" {
     try std.testing.expectEqualDeep(active_before_failure, client.model.activeTabLocation().?);
     try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.requests.has(.tab_operation));
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
 }
 
 test "select tab closes captured paste before detaching and requesting the target snapshot" {
@@ -3556,7 +3563,7 @@ test "close tab request detaches before delivery and rejection requests restorat
         TestHarness.bootstrap_location,
         recovery.request_tab_snapshot.location,
     );
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
     try expectOnlyNotificationVersionChanged(version_before_request, client.model.version());
 }
 
@@ -4300,7 +4307,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
 
     try client.observeModel();
 
@@ -4359,7 +4366,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expectEqual(@as(?schema.PaneId, null), reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
 
     try client.observeModel();
 
@@ -4444,7 +4451,7 @@ test "a failed request surfaces as a notification" {
     try harness.settle();
     const notification = client.model.notificationSnapshot().itemAt(0).?;
 
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expectEqualStrings("Could not close pane", notification.title());
     try std.testing.expectEqualStrings("no such pane", notification.message());
     try std.testing.expectEqualDeep(
@@ -4526,7 +4533,42 @@ test "a runtime notification translates and owns its wire payload" {
     );
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
+}
+
+test "notification timer commits lifecycle state before presenter observation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const now_ns = Client.monotonic(client.io);
+    _ = try notification_flow.publish(client, now_ns, .{
+        .title = "Building",
+        .message = "Lifecycle tick",
+    });
+    const pending_updates = client.presenter.pending_updates;
+
+    try std.testing.expect(client.notification_scheduler.pending);
+    switch (try client.select.await()) {
+        .notification_tick => |result| {
+            const change = (try notification_flow.handleTick(client, result)).?;
+
+            try std.testing.expectEqual(
+                client.model.version().notifications,
+                change.notifications_revision,
+            );
+        },
+        else => return error.UnexpectedEvent,
+    }
+
+    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expectEqual(@as(u64, 2), client.model.version().notifications);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
 }
 
 test "an unexpected notification delivery report is rejected without effects" {
@@ -4548,7 +4590,7 @@ test "an unexpected notification delivery report is rejected without effects" {
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
 }
 
 test "notification delivery consumes an incompatible continuation before rejection" {
@@ -4573,7 +4615,7 @@ test "notification delivery consumes an incompatible continuation before rejecti
         notification_flow.applyDeliveryReport(client, shown),
     );
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
 }
 
 test "a delivered notification report consumes correlation without model effects" {
@@ -4596,7 +4638,7 @@ test "a delivered notification report consumes correlation without model effects
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expect(!client.notification_tick_pending);
+    try std.testing.expect(!client.notification_scheduler.pending);
 }
 
 test "runtime notifications and delivery failures reach the toasts" {
@@ -4608,7 +4650,7 @@ test "runtime notifications and delivery failures reach the toasts" {
     var payload: [256]u8 = undefined;
     const notification = try schema.encodeNotification(&payload, .{ .title = "hello" });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(notification));
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
     const version_after_runtime = client.model.version();
 
     try client.requests.add(@enumFromInt(2), .notification);
@@ -4742,7 +4784,11 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(enabled_version, client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqual(
+        enabled_version.proxy_status,
+        client.presenter.presented_model_version.proxy_status,
+    );
     const badge_index = @as(usize, client.presenter.screen.front.w) - 2;
     try std.testing.expectEqualStrings("\u{26e8}", client.presenter.screen.front.cells[badge_index].text());
 
@@ -4765,7 +4811,11 @@ test "proxy status commits before announcement and presenter-owned projection" {
     const disabled_version = client.model.version();
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(disabled_version, client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqual(
+        disabled_version.proxy_status,
+        client.presenter.presented_model_version.proxy_status,
+    );
     try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", client.presenter.screen.front.cells[badge_index].text()));
 }
 
@@ -5290,7 +5340,7 @@ test "config reload outcomes that carry no new generation" {
         .mtime_ns = 7,
     } });
     try std.testing.expectEqual(@as(i128, 7), client.reload.mtime_ns);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expect(client.model.diagnostic() != null);
     try harness.settle();
 }
@@ -5501,7 +5551,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
         client.model.diagnostic().?,
         "CapabilityNotGranted",
     ) != null);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
     try client.observeModel();
@@ -5532,7 +5582,7 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
         client.model.diagnostic().?,
         "TestPluginWorkerFailure",
     ) != null);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
 }
 
 test "busy plugin start skips resolution and a rejected action leaves no run" {
@@ -5556,7 +5606,7 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
 
     try std.testing.expect(rejected == .rejected);
     try std.testing.expect(client.model.pluginExecution() == null);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expect(std.mem.indexOf(
         u8,
         client.model.diagnostic().?,
@@ -5860,7 +5910,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
 
     try std.testing.expect(client.model.clipboardCapture() == null);
     try std.testing.expect(client.model.version().notifications > version_before_large.notifications);
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
     const invalid = (try client.model.beginClipboardCapture(target)).?;
@@ -6706,7 +6756,7 @@ test "a failed tab rename preserves the label and notifies" {
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
     try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.requests.has(.tab_operation));
-    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(client.notification_scheduler.pending);
 }
 
 test "pending tab operation keeps the rename prompt without sending" {
