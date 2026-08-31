@@ -7,6 +7,7 @@ const ca = @import("../ca.zig");
 const connection_admission = @import("../connection_admission.zig");
 const credential_registry = @import("../credential_registry.zig");
 const identity = @import("../identity.zig");
+const listener_mod = @import("listener.zig");
 const metrics_mod = @import("../metrics.zig");
 const middleware = @import("../middleware.zig");
 const observation_queue = @import("../observation_queue.zig");
@@ -19,8 +20,6 @@ const Io = std.Io;
 const net = Io.net;
 const schema = core.schema;
 
-pub const first_port: u16 = 45100;
-pub const port_attempts: u16 = 128;
 pub const max_connections: u32 = 64;
 pub const event_capacity = observation_queue.capacity;
 
@@ -47,8 +46,7 @@ pub const Worker = Io.Future(anyerror!void);
 pub const Service = struct {
     io: Io,
     gpa: std.mem.Allocator,
-    listener: net.Server,
-    port: u16,
+    listener: listener_mod.Listener,
     authority: ca.Authority,
     roots: tls.Roots,
     certificate_path: []const u8,
@@ -75,15 +73,14 @@ pub const Service = struct {
         try authority.writeBundle(ca_resources, paths.bundle);
         var roots = try tls.Roots.load(io, gpa);
         errdefer roots.deinit(gpa);
-        var bound = try listen(io);
-        errdefer bound.listener.deinit(io);
+        var listener = try listener_mod.Listener.bind(io);
+        errdefer listener.deinit(io);
         const service = try gpa.create(Service);
         errdefer gpa.destroy(service);
         service.* = .{
             .io = io,
             .gpa = gpa,
-            .listener = bound.listener,
-            .port = bound.port,
+            .listener = listener,
             .authority = authority,
             .roots = roots,
             .certificate_path = paths.certificate,
@@ -153,7 +150,7 @@ pub const Service = struct {
     /// ```
     pub fn clientConfiguration(service: *const Service) ClientConfiguration {
         return .{
-            .port = service.port,
+            .port = service.listener.port(),
             .certificate_path = service.certificate_path,
             .bundle_path = service.bundle_path,
         };
@@ -204,7 +201,7 @@ pub const Service = struct {
     /// const url = try service.credentialUrl(&buffer, &credential);
     /// ```
     pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const identity.Credential) ![]const u8 {
-        return identity.formatUrl(buffer, service.port, credential);
+        return identity.formatUrl(buffer, service.listener.port(), credential);
     }
 
     /// Creates and registers a fresh capability for one pane generation. The
@@ -339,30 +336,6 @@ fn observationCredentialIsLive(context: *anyopaque, credential: *const identity.
     return service.credentials.contains(service.io, credential);
 }
 
-const Bound = struct { listener: net.Server, port: u16 };
-
-fn listen(io: Io) !Bound {
-    var port = first_port;
-    while (port < first_port + port_attempts) : (port += 1) {
-        const address = net.IpAddress.parse("127.0.0.1", port) catch unreachable;
-        const listener = address.listen(io, .{}) catch |err| switch (err) {
-            error.AddressInUse => continue,
-            else => |other| return other,
-        };
-        return .{ .listener = listener, .port = port };
-    }
-    return error.ProxyPortUnavailable;
-}
-
-test "proxy listeners own distinct loopback ports" {
-    const io = std.testing.io;
-    var first = try listen(io);
-    defer first.listener.deinit(io);
-    var second = try listen(io);
-    defer second.listener.deinit(io);
-    try std.testing.expect(first.port != second.port);
-}
-
 const TestServiceFixture = struct {
     temp: std.testing.TmpDir = undefined,
     key: [std.fs.max_path_bytes]u8 = undefined,
@@ -463,7 +436,9 @@ fn rejectTlsHandshake(io: Io, listener: *net.Server) !void {
     try writer.interface.flush();
 }
 
-fn listenTestOrigin(io: Io) !Bound {
+const TestOrigin = struct { listener: net.Server, port: u16 };
+
+fn listenTestOrigin(io: Io) !TestOrigin {
     var port: u16 = 49_152;
     while (port < 49_280) : (port += 1) {
         const address = net.IpAddress.parse("127.0.0.1", port) catch unreachable;
@@ -530,7 +505,7 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
     var worker = try service.start();
     defer service.cancel(&worker);
 
-    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.port);
+    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
     defer client.close(io);
     var write_buffer: [512]u8 = undefined;
@@ -600,7 +575,7 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     var worker = try service.start();
     defer service.cancel(&worker);
 
-    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.port);
+    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
     defer client.close(io);
     var write_buffer: [512]u8 = undefined;
@@ -722,7 +697,7 @@ test "loopback service maps CONNECT authentication and target rejections" {
     var worker = try service.start();
     defer service.cancel(&worker);
 
-    const address = try net.IpAddress.parse("127.0.0.1", service.port);
+    const address = try net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try address.connect(io, .{ .mode = .stream });
     defer client.close(io);
     var write_buffer: [256]u8 = undefined;
