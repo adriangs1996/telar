@@ -15,8 +15,6 @@ const version = "0.0.0";
 pub const std_options: std.Options = .{ .log_level = .err };
 
 const Cli = cli_mod.Cli;
-const PluginCommand = cli_mod.PluginCommand;
-const PluginOptions = cli_mod.PluginOptions;
 const RunOptions = cli_mod.RunOptions;
 const RuntimeConfigSelection = cli_mod.RuntimeConfigSelection;
 const RuntimeConnector = cli_mod.RuntimeConnector;
@@ -368,14 +366,14 @@ fn runClient(
     var trust_path: ?[]const u8 = null;
     if (generation) |value| {
         var trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const resolved_trust_path = resolveTrustPath(
+        const resolved_trust_path = cli_mod.plugin.trustPath(
             init.minimal.environ,
             &trust_path_buffer,
         ) catch |err| {
             value.deinit();
             return err;
         };
-        const loaded_trust = loadTrustStore(
+        const loaded_trust = cli_mod.plugin.loadTrustStore(
             init,
             resolved_trust_path,
         ) catch |err| {
@@ -458,153 +456,6 @@ fn runClient(
         .trust_path = trust_path,
         .profile = if (options.profile) |value| std.mem.span(value) else null,
     });
-}
-
-fn runPluginCommand(init: std.process.Init, options: PluginOptions) !void {
-    const package = try frontend.plugins.inspectPackage(
-        init.gpa,
-        init.io,
-        std.mem.span(options.path),
-    );
-    switch (options.command) {
-        .inspect => {
-            var buffer: [4096]u8 = undefined;
-            var output = File.stdout().writerStreaming(init.io, &buffer);
-            const writer = &output.interface;
-            try writer.print("id: {s}\nversion: {s}\nsource: {s}\nrevision: {s}\ndigest: ", .{
-                package.manifest.id(),
-                package.manifest.version(),
-                package.manifest.source(),
-                package.manifest.revision(),
-            });
-            for (package.digest) |byte| try writer.print("{x:0>2}", .{byte});
-            try writer.writeAll("\nactions:");
-            for (package.manifest.actions[0..package.manifest.action_count]) |*action|
-                try writer.print(" {s}", .{action.slice()});
-            try writer.writeAll("\ncapabilities:");
-            var iterator = package.manifest.capabilities.iterator();
-            while (iterator.next()) |capability|
-                try writer.print(" {s}", .{capability.canonicalName()});
-            try writer.writeByte('\n');
-            try writer.flush();
-        },
-        .install => {
-            var base_buffer: [std.fs.max_path_bytes]u8 = undefined;
-            const base = try resolvePluginInstallBase(init.minimal.environ, &base_buffer);
-            const digest_hex = std.fmt.bytesToHex(package.digest, .lower);
-            var destination_buffer: [std.fs.max_path_bytes]u8 = undefined;
-            const destination = try std.fmt.bufPrint(
-                &destination_buffer,
-                "{s}/{s}/{s}",
-                .{ base, package.manifest.id(), &digest_hex },
-            );
-            try frontend.plugins.installPackage(
-                init.gpa,
-                init.io,
-                &package,
-                destination,
-            );
-            var output_buffer: [std.fs.max_path_bytes + 64]u8 = undefined;
-            const output = try std.fmt.bufPrint(
-                &output_buffer,
-                "telar plugin installed: {s}\n",
-                .{destination},
-            );
-            try File.stdout().writeStreamingAll(init.io, output);
-        },
-        .trust => {
-            var granted = core.plugin.CapabilitySet.initEmpty();
-            if (options.capability_count == 0) {
-                granted = package.manifest.capabilities;
-            } else for (options.capabilities[0..options.capability_count]) |capability| {
-                if (!package.manifest.capabilities.contains(capability))
-                    return error.CapabilityNotDeclared;
-                if (granted.contains(capability)) return error.DuplicateCapability;
-                granted.insert(capability);
-            }
-            var trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-            const trust_path = try resolveTrustPath(init.minimal.environ, &trust_path_buffer);
-            var store = try loadTrustStore(init, trust_path);
-            try store.upsert(&package.manifest, package.digest, granted);
-            try writeTrustStore(init, trust_path, &store);
-            try File.stdout().writeStreamingAll(init.io, "telar plugin trust updated\n");
-        },
-    }
-}
-
-fn resolvePluginInstallBase(environ: std.process.Environ, buffer: []u8) ![]const u8 {
-    if (environ.getPosix("XDG_DATA_HOME")) |base| {
-        if (base.len != 0) return std.fmt.bufPrint(buffer, "{s}/telar/plugins", .{base});
-    }
-    const home = environ.getPosix("HOME") orelse return error.HomeDirectoryUnavailable;
-    if (home.len == 0) return error.HomeDirectoryUnavailable;
-    return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/plugins", .{home});
-}
-
-fn resolveTrustPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
-    if (environ.getPosix("XDG_CONFIG_HOME")) |base| {
-        if (base.len != 0) return std.fmt.bufPrint(buffer, "{s}/telar/trust.json", .{base});
-    }
-    const home = environ.getPosix("HOME") orelse return error.HomeDirectoryUnavailable;
-    if (home.len == 0) return error.HomeDirectoryUnavailable;
-    return std.fmt.bufPrint(buffer, "{s}/.config/telar/trust.json", .{home});
-}
-
-fn loadTrustStore(init: std.process.Init, path: []const u8) !core.plugin.TrustStore {
-    const stat = Io.Dir.cwd().statFile(init.io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
-        error.FileNotFound => return .{},
-        else => |other| return other,
-    };
-    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0)
-        return error.InsecureTrustStore;
-    const source = try Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(64 * 1024));
-    defer init.gpa.free(source);
-    return core.plugin.TrustStore.parse(init.gpa, source);
-}
-
-fn writeTrustStore(
-    init: std.process.Init,
-    path: []const u8,
-    store: *const core.plugin.TrustStore,
-) !void {
-    const directory = std.fs.path.dirname(path) orelse return error.InvalidTrustStorePath;
-    _ = try Io.Dir.cwd().createDirPathStatus(
-        init.io,
-        directory,
-        File.Permissions.fromMode(0o700),
-    );
-    try Io.Dir.cwd().setFilePermissions(
-        init.io,
-        directory,
-        File.Permissions.fromMode(0o700),
-        .{ .follow_symlinks = false },
-    );
-    var nonce: [16]u8 = undefined;
-    try init.io.randomSecure(&nonce);
-    const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
-    var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const temp = try std.fmt.bufPrint(
-        &temp_buffer,
-        "{s}.tmp-{s}",
-        .{ path, &nonce_hex },
-    );
-    var committed = false;
-    defer if (!committed) Io.Dir.cwd().deleteFile(init.io, temp) catch {};
-    var file = try Io.Dir.cwd().createFile(init.io, temp, .{
-        .truncate = true,
-        .permissions = File.Permissions.fromMode(0o600),
-    });
-    var file_open = true;
-    defer if (file_open) file.close(init.io);
-    var output_buffer: [4096]u8 = undefined;
-    var output = file.writer(init.io, &output_buffer);
-    try store.writeJson(&output.interface);
-    try output.interface.flush();
-    try file.sync(init.io);
-    file.close(init.io);
-    file_open = false;
-    try Io.Dir.cwd().rename(temp, Io.Dir.cwd(), path, init.io);
-    committed = true;
 }
 
 const usage =
@@ -702,7 +553,7 @@ pub fn main(init: std.process.Init) !void {
             std.mem.span(options.action),
             options.context,
         ),
-        .plugin => |options| try runPluginCommand(init, options),
+        .plugin => |options| try cli_mod.plugin.run(init, options),
         .run => |options| {
             const connector = try RuntimeConnector.init(init, null);
             var connection = try connector.connectOrStart(.{

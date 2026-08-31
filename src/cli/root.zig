@@ -6,6 +6,7 @@ const runtime_connection = @import("runtime_connection.zig");
 pub const config = @import("config.zig");
 pub const history = @import("history.zig");
 pub const notification = @import("notification.zig");
+pub const plugin = @import("plugin.zig");
 
 pub const Cli = parser.Cli;
 pub const ConfigCheckOptions = parser.ConfigCheckOptions;
