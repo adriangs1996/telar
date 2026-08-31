@@ -44,7 +44,7 @@ defect in a leaf capability unless an invariant requires it.
 | Agents | `src/frontend/agents/root.zig` | Agent identities and the bounded client replica of runtime agent state |
 | Sound | `src/frontend/sound/root.zig` | Bounded host-audio playback policy, queue and platform worker |
 | Input | `src/frontend/input/root.zig` | Host input parsing, key routing, semantic actions and editing |
-| Workspace | `src/frontend/workspace/root.zig` | Disposable tabs, pane layout and cell composition |
+| Workspace | `src/frontend/workspace/root.zig` | Disposable tabs, pane layout and immutable pane composition primitives |
 | Presentation | `src/frontend/presentation/root.zig` | Host screen diff, frame application and pacing |
 | Graphics | `src/frontend/graphics/root.zig` | Host graphics transfer state, renderer policy and overlays |
 | UI | `src/frontend/ui/root.zig` | Client-only focus, hits and theme values |
@@ -56,6 +56,11 @@ defect in a leaf capability unless an invariant requires it.
 
 The client root is an orchestrator. Capability code must not import it to get
 at client state.
+
+The client-internal `presentation_projection` adapter is the only concrete
+`Client` to `Presenter` boundary. `Presenter` receives immutable semantic
+inputs and explicit presentation resources; its compositor owns every
+last-painted cache.
 
 ## Dependency direction
 

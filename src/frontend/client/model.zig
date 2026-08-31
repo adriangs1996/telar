@@ -858,6 +858,33 @@ pub const Model = struct {
         return &active.model;
     }
 
+    /// Borrows the active tab model for one immutable presentation projection.
+    ///
+    /// ```zig
+    /// const active = model.activeTabModelConst() orelse return;
+    /// ```
+    pub fn activeTabModelConst(model: *const Model) ?*const multiplexer.Model {
+        const active = model.workspace.activeConst() orelse return null;
+
+        return &active.model;
+    }
+
+    /// Retires the exact pane damage and frame identifiers included in a
+    /// successful host presentation without advancing semantic versions.
+    ///
+    /// ```zig
+    /// model.commitPresentation(commit);
+    /// ```
+    pub fn commitPresentation(model: *Model, commit: multiplexer.PresentationCommit) void {
+        const location = commit.location orelse return;
+        const tab = model.workspace.find(location.tab_id) orelse return;
+        if (!std.meta.eql(tab.location, location)) {
+            return;
+        }
+
+        tab.model.commitPresentation(commit);
+    }
+
     /// Returns the active configuration generation owned by this client.
     ///
     /// ```zig
@@ -3391,20 +3418,16 @@ test "pane graphics fallback versions only semantic changes" {
     const pane_id: schema.PaneId = @enumFromInt(1);
     try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
     const tab = model.workspace.active().?;
-    tab.model.composition_invalidated = false;
 
     const shown = model.setPaneGraphicsFallback(pane_id, true).?;
 
     try std.testing.expect(shown.visible);
     try std.testing.expectEqual(@as(u64, 1), shown.pane_graphics_revision);
     try std.testing.expect(tab.model.find(pane_id).?.graphics_placeholder);
-    try std.testing.expect(tab.model.composition_invalidated);
     try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
 
-    tab.model.composition_invalidated = false;
     try std.testing.expect(model.setPaneGraphicsFallback(pane_id, true) == null);
     try std.testing.expect(model.setPaneGraphicsFallback(@enumFromInt(9), true) == null);
-    try std.testing.expect(!tab.model.composition_invalidated);
     try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
 
     const hidden = model.setPaneGraphicsFallback(pane_id, false).?;
@@ -3425,7 +3448,6 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     const pane_id: schema.PaneId = @enumFromInt(1);
     try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
     const tab = model.workspace.active().?;
-    tab.model.composition_invalidated = false;
 
     const visible = (try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
@@ -3438,7 +3460,6 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     try std.testing.expectEqual(@as(u64, 0), visible.pane_foreground_revision);
     try std.testing.expectEqualStrings("/work/telar", tab.model.find(pane_id).?.cwdSlice());
     try std.testing.expectEqualDeep(Version{ .pane_metadata = 1 }, model.version());
-    try std.testing.expect(!tab.model.composition_invalidated);
 
     const stored = (try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
@@ -3465,7 +3486,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     try std.testing.expectEqualDeep(Version{ .pane_metadata = 2 }, model.version());
 }
 
-test "pane foreground metadata versions display and composition independently" {
+test "pane foreground metadata versions display changes independently" {
     var model = Model.init(std.testing.allocator, true);
     defer model.deinit();
     const location: schema.TabLocation = .{
@@ -3475,7 +3496,6 @@ test "pane foreground metadata versions display and composition independently" {
     const pane_id: schema.PaneId = @enumFromInt(1);
     try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
     const tab = model.workspace.active().?;
-    tab.model.composition_invalidated = false;
 
     const first = (try model.updatePaneMetadata(.{ .foreground = .{
         .pane_id = pane_id,
@@ -3491,7 +3511,6 @@ test "pane foreground metadata versions display and composition independently" {
         .pane_metadata = 1,
         .pane_foreground = 1,
     }, model.version());
-    try std.testing.expect(!tab.model.composition_invalidated);
     try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{
         .pane_id = pane_id,
         .name = "zsh",

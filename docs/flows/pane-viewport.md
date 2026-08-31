@@ -70,17 +70,15 @@ inside copy mode while leaving graphics and IPC knowledge in one adapter.
 
 The event loop publishes `ClientModel.Version` after the input event.
 `Presenter` compares the viewport revision with the version it last painted.
-When it changes, the presenter invalidates each bounded tab composition cache
-and renders only the active tab. Invalidating every cache is deliberate. A
-single host read may fold movements from different panes, or restore a pane
-and select another tab before the next 60 Hz frame. An inactive tab must not
-retain cells composed for an older offset.
+When it changes, the presenter renders only the active tab. The single
+presenter-owned compositor detects the active pane's projected scroll offset
+and rebuilds its composition. Inactive tabs retain no last-painted cache.
 
 Neither the viewport model transition nor its application handler touches
-`composition_invalidated` or `InputHandler.redraw`. Runtime `pane_frame`
-messages remain a separate reconciliation path. Applying a frame replaces the
-pane's scroll projection, records rendering damage and advances the frame
-revision; the presenter observes that revision and schedules presentation.
+presentation caches or `InputHandler.redraw`. Runtime `pane_frame` messages
+remain a separate reconciliation path. Applying a frame replaces the pane's
+scroll projection, records rendering damage and advances the frame revision;
+the presenter observes that revision and schedules presentation.
 
 ## Runtime projection
 
@@ -110,7 +108,6 @@ death drops the attachment projection without changing the PTY or terminal.
 - `src/frontend/client/application/set_pane_viewport.zig` proves commit-before-
   effect ordering and the failure policy.
 - `src/frontend/client/client_test.zig` proves graphics visibility, folded
-  revisions, presenter-owned cache invalidation and wire ordering before pane
-  input.
+  revisions, presenter-owned composition and wire ordering before pane input.
 - `src/backend/runtime/attachment/cell.zig` proves attachment-local viewport
   pinning and return to the live screen.

@@ -332,15 +332,17 @@ frame use case does not decide whether to paint. See
 coalescence, task tokens and media pacing.
 
 The `.draw` event calls `presentation_lifecycle.handleDraw`, then
-`Presenter.presentDue` and `Presenter.present`:
+captures an immutable `presentation_projection` and calls
+`Presenter.presentDue`:
 
-1. `workspace.multiplexer.Model.renderThemed` composes panes into the screen
-   back buffer;
+1. the presenter-owned `workspace.multiplexer.Compositor` composes the
+   immutable active-tab model into the screen back buffer;
 2. `client.View.render` composes Telar chrome;
 3. `flushScreen` calls `presentation.Screen.flush` in
    `src/frontend/presentation/screen.zig`;
 4. the screen emits the minimal terminal diff and flushes the host writer;
-5. the client enqueues `.frame_ack` only after presentation.
+5. the lifecycle commits the exact presented pane damage;
+6. the client enqueues `.frame_ack` only after presentation.
 
 ## Proof
 

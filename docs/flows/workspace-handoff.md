@@ -97,8 +97,8 @@ bookmarked pane set; otherwise normal deterministic display order wins. Effect
 failure does not roll the confirmed model back.
 
 The dispatcher does not draw the arrival. The presenter observes its new
-version independently, invalidates the affected composition dimensions and
-folds the result into the paced frame loop.
+version independently. Its compositor detects the new immutable source and
+dimensions and folds one complete composition into the paced frame loop.
 
 ## Stale bookmark recovery
 

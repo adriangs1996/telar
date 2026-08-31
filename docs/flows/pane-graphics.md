@@ -54,9 +54,10 @@ pass that must precede media work even when no fallback changes.
 
 The fallback flag is semantic client state because cell composition reads it.
 Only `ClientModel.setPaneGraphicsFallback` may change it. A real change
-advances `Version.pane_graphics` and invalidates the owning tab composition;
-unknown panes and repeated values are no-ops. Capability negotiation
-reconciles all bounded panes through the same model operation.
+advances `Version.pane_graphics`; unknown panes and repeated values are no-ops.
+The presenter-owned compositor detects the changed immutable pane projection.
+Capability negotiation reconciles all bounded panes through the same model
+operation.
 
 ## Ordering and recovery
 
@@ -88,8 +89,8 @@ dedicated media queue is a separate scheduling change.
 
 - `src/frontend/graphics/kitty.zig` proves quotas, revision recovery, stale
   suppression, snapshot validation and exact ingress versions.
-- `src/frontend/client/model.zig` proves fallback ownership, no-op behavior,
-  composition invalidation and isolated semantic versions.
+- `src/frontend/client/model.zig` proves fallback ownership, no-op behavior and
+  isolated semantic versions.
 - `src/frontend/client/application/pane_graphics.zig` proves resource-before-
   model ordering, recovery selection, downgrade ordering and failure policy.
 - `src/frontend/client/client_test.zig` proves protocol recovery, physical-only

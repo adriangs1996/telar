@@ -7,8 +7,8 @@ one media task scheduled.
 
 ## Boundary
 
-`Presenter` owns the host screen buffers, observed and presented revisions,
-frame pacing, draw and media scheduling tokens, copy-mode projection and the
+`Presenter` owns the host screen buffers, pane compositor, observed and
+presented revisions, frame pacing, draw and media scheduling tokens and the
 last presented timestamp. It decides whether a revision needs a frame. Client
 use cases never schedule a frame; visible changes reach the presenter through
 the observation boundary.
@@ -29,9 +29,9 @@ Presenter.observe -> one paced draw task
         |
 ClientEvent.draw -> presentation_lifecycle.handleDraw
         |
-Presenter.presentDue -> cell flush
+presentation_projection -> Presenter.presentDue -> cell flush
         |
-graphics credits -> frame_ack messages -> optional media task
+PresentationCommit -> graphics credits -> frame_ack messages -> optional media task
         |
 ClientEvent.media_tick -> presentation_lifecycle.handleMediaTick
         |
@@ -51,17 +51,32 @@ same draw task. Once no draw task is pending, an observation newer than the
 last successful presentation schedules one task. The pacer emits an idle frame
 immediately and limits burst presentation to one frame per `1 / 60` second.
 
-The model query `ClientModel.activeTabModel` returns null during bootstrap and
-workspace handoff. A due draw then flushes an explicit empty screen instead of
-unwrapping a missing tab.
+The `presentation_projection` adapter captures one bounded immutable projection
+from the concrete client aggregate. It includes the model version, immutable
+semantic snapshots, active tab model and copy-mode value. It separately exposes
+the mutable view, graphics store and host writer that presentation owns.
+`Presenter` imports neither `Client` nor its event union; an opaque scheduling
+port arms the client-owned draw and media tasks.
+
+`ClientModel.activeTabModelConst` returns null during bootstrap and workspace
+handoff. A due draw then flushes an explicit empty screen instead of unwrapping
+a missing tab.
 
 ## Cell and media passes
 
 The draw adapter releases `draw_pending` before checking the worker result.
-`Presenter.presentDue` projects changed model revisions into disposable view
-state, composes the active tab and chrome, and flushes the terminal cell diff.
+`Presenter.presentDue` compares changed model revisions, projects disposable
+view state, asks its `multiplexer.Compositor` to compose the immutable active
+tab, composes chrome and flushes the terminal cell diff. The compositor owns
+the last-painted cells, layout snapshot and copy projection. Copy selection
+changes patch only their affected visible ranges.
+
 Only a successful flush advances the presented revisions and clears
-`pending_updates`.
+`pending_updates`. The returned `PresentationCommit` describes the exact pane
+damage and pending frame identifiers safe to retire after that flush, including
+panes intentionally hidden by fullscreen layout. The lifecycle adapter applies
+it to `ClientModel` before enqueueing acknowledgements. Exact frame matching
+prevents an obsolete commit from consuming newer pane work.
 
 The presenter returns a fixed array of at most `multiplexer.max_panes` frame
 acknowledgements. The adapter first flushes graphics flow-control credits, then
@@ -76,9 +91,10 @@ activity can delay graphical toasts, but it does not delay pane cells.
 ## Failure and lifetime
 
 Draw and media completion release their tokens before propagating a worker
-error. A failed cell composition or flush leaves the observed version newer
-than the presented version. The current event loop treats that error as fatal
-and destroys the disposable client. Transport failure after a successful host
+error. A failed cell composition or flush leaves semantic damage and pending
+frame identifiers uncommitted, and leaves the observed version newer than the
+presented version. The current event loop treats that error as fatal and
+destroys the disposable client. Transport failure after a successful host
 flush has the same policy. The runtime remains canonical and a new client
 rebuilds its projection.
 
@@ -88,10 +104,16 @@ one draw task, one media task and the latest revisions.
 
 ## Proof
 
+- `src/frontend/client/presentation_projection.zig` is the concrete-client to
+  immutable-presentation boundary.
 - `src/frontend/client/presenter.zig` owns comparison, pacing, composition,
-  fixed frame acknowledgements and independent media scheduling.
+  fixed frame acknowledgements and independent media scheduling without a
+  `Client` dependency.
 - `src/frontend/client/presentation_lifecycle.zig` proves the event entrypoints
-  and post-flush transport ordering.
+  and post-flush model-commit and transport ordering.
+- `composition damage retires only after its presentation commits`, `stale
+  presentation commits preserve newer pane work` and `fullscreen presentation
+  commits include hidden panes` prove bounded commit semantics.
 - `presentation folds repeated observations into one draw task` proves that an
   identical observation adds no work and newer revisions share one task.
 - `presentation flushes an explicit empty model before bootstrap` proves the

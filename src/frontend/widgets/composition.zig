@@ -5,6 +5,7 @@
 
 const workspace = @import("../workspace/root.zig");
 const agents = @import("../agents/root.zig");
+const layout_mod = workspace.layout;
 const multiplexer = workspace.multiplexer;
 const tabs_mod = workspace.tabs;
 const workspace_list = workspace.workspace_list;
@@ -21,7 +22,8 @@ const workbench = @import("workbench.zig");
 pub const Input = struct {
     regions: layout.Regions,
     tabs: ?*const tabs_mod.Model,
-    model: *multiplexer.Model,
+    model: *const multiplexer.Model,
+    layout: *const layout_mod.Snapshot,
     rename_field: ?*tab_rename.Field,
     rename_kind: tab_rename.Kind,
     sidebar_snapshot: *const agents.Snapshot,
@@ -87,7 +89,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         },
     };
 
-    workbench.register(context, input.regions.workbench, input.model);
+    workbench.register(context, input.layout);
     return .{
         .sidebar = sidebar_output,
         .cursor = if (cursor) |value| value else sidebar_output.cursor,

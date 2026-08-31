@@ -70,8 +70,9 @@ accepted; reconnect or canonical reconciliation repairs disposable resources.
 After each event, the client loop publishes the latest model version through
 `presentation_lifecycle.observe`. `Presenter` compares that value with the
 version it last observed and folds all pending revisions into one paced draw.
-Frame application already records pane damage and composition invalidation in the multiplexer,
-so the presenter only decides when to paint.
+Frame application records only semantic pane damage in the multiplexer. The
+presenter-owned compositor decides whether the immutable projection needs full
+or incremental composition.
 
 `Presenter.presentDue` composes the active model and flushes the terminal cell
 diff. Only after that flush succeeds does it consume each attached pane's

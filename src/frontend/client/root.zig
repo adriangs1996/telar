@@ -80,6 +80,7 @@ test {
     _ = @import("plugin_actions.zig");
     _ = @import("pointer_routing.zig");
     _ = @import("presentation_lifecycle.zig");
+    _ = @import("presentation_projection.zig");
     _ = @import("presenter.zig");
     _ = @import("proxy_status.zig");
     _ = @import("request_lifecycle.zig");

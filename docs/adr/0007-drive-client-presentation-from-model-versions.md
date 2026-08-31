@@ -30,16 +30,26 @@ revision for presentation without moving its resources into `ClientModel`.
 The target presentation boundary reads an immutable projection of
 `ClientModel`; rendering does not perform semantic mutations.
 
+`presentation_projection` is the only adapter that translates the concrete
+`Client` aggregate into that bounded immutable input and the mutable resources
+owned by presentation. `Presenter` neither imports nor receives `Client`.
+Scheduling is an opaque port supplied by the composition root, so pacing does
+not depend on the client event-union representation.
+
+Pane composition caches belong to `multiplexer.Compositor`, which is owned by
+`Presenter`. The workspace model contains semantic pane cells, damage and
+layout, but no last-painted buffer, copy projection or invalidation flag. The
+compositor detects changes between immutable projections and returns a bounded
+`PresentationCommit`. Only after the host cell flush succeeds does
+`presentation_lifecycle` apply that commit to retire the exact pane damage and
+frame identifiers that reached the host. A stale commit cannot retire a newer
+frame.
+
 `moveTab` is the first vertical slice. The action records a continuation and
 emits the runtime request without reordering locally. The canonical runtime
 reply commits the position through `ClientModel`; the handler does not request
 a draw. The presenter observes the resulting version at the client-loop
 boundary.
-
-Existing direct draw requests and direct workspace borrows may remain only for
-flows not yet migrated. The current workspace model still contains composition
-bookkeeping used by the legacy renderer, so embedding it in `ClientModel` is a
-transitional ownership step, not the final immutable projection boundary.
 
 ## Considered options
 
@@ -53,7 +63,7 @@ nothing when the resulting screen matches the host projection. Application
 tests can distinguish command delivery, semantic commit and presentation as
 three separate boundaries.
 
-The first slice establishes the version signal and removes presentation policy
-from `moveTab`. It does not remove legacy draw requests or finish extracting
-composition state from the workspace projection; later slices must migrate
-those responsibilities explicitly.
+The immutable projection borrows bounded model snapshots only for the duration
+of one synchronous presentation call. It adds no allocation or queue to the
+interactive path. Copy-mode selection deltas update only affected cell ranges;
+model damage remains reserved for runtime frame changes.

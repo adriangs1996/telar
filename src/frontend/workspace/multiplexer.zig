@@ -3,9 +3,9 @@
 const std = @import("std");
 const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
-const input = @import("../input/root.zig");
+const input_capability = @import("../input/root.zig");
 const diff = presentation.diff;
-const copy_mode = input.copy_mode;
+const copy_mode = input_capability.copy_mode;
 const frame_apply = presentation.frame;
 const layout_mod = @import("layout.zig");
 const term = presentation.screen;
@@ -43,7 +43,6 @@ pub const Pane = struct {
     mouse: schema.frame.Mouse = .{},
     input_modes: schema.frame.InputModes = .{},
     scroll: schema.frame.Scroll,
-    copy_view: ?copy_mode.View = null,
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
     graphics_placeholder: bool = false,
@@ -105,14 +104,6 @@ pub const Pane = struct {
 
     pub fn cwdName(pane: *const Pane) []const u8 {
         return displayCwdName(pane.cwd);
-    }
-
-    /// Returns the frame id awaiting acknowledgement and clears it; zero
-    /// when nothing is pending.
-    pub fn takePendingFrame(pane: *Pane) u64 {
-        const frame_id = pane.pending_frame_id;
-        pane.pending_frame_id = 0;
-        return frame_id;
     }
 
     pub fn cwdSlice(pane: *const Pane) []const u8 {
@@ -207,6 +198,462 @@ pub const RenderStats = struct {
     full: bool = false,
 };
 
+pub const PresentationCommit = struct {
+    location: ?schema.TabLocation = null,
+    panes: [max_panes]PaneCommit = undefined,
+    len: u8 = 0,
+
+    pub const PaneCommit = struct {
+        pane_id: schema.PaneId,
+        frame_id: u64,
+        attached: bool,
+    };
+
+    /// Returns the panes whose damage and pending frame are safe to retire
+    /// after one successful host presentation.
+    ///
+    /// ```zig
+    /// for (commit.slice()) |pane| acknowledge(pane);
+    /// ```
+    pub fn slice(commit: *const PresentationCommit) []const PaneCommit {
+        return commit.panes[0..commit.len];
+    }
+
+    fn append(commit: *PresentationCommit, pane: *const Pane) void {
+        commit.panes[commit.len] = .{
+            .pane_id = pane.id,
+            .frame_id = pane.pending_frame_id,
+            .attached = pane.attached,
+        };
+        commit.len += 1;
+    }
+};
+
+pub const CopyProjection = struct {
+    pane_id: schema.PaneId,
+    view: copy_mode.View,
+};
+
+pub const CompositionInput = struct {
+    area: ui.Rect,
+    palette: *const theme.Palette,
+    copy: ?CopyProjection = null,
+    force: bool = false,
+};
+
+pub const Composition = struct {
+    model: *const Model,
+    screen: *term.Screen,
+    input: CompositionInput,
+};
+
+pub const CompositionResult = struct {
+    stats: RenderStats,
+    commit: PresentationCommit,
+};
+
+/// Presentation-owned cache for one active tab. It borrows an immutable
+/// multiplexer model during composition and returns the exact model work that
+/// may be committed only after the host flush succeeds.
+pub const Compositor = struct {
+    gpa: std.mem.Allocator,
+    composed: ?ui.Buffer = null,
+    area: ui.Rect = .{},
+    source: ?schema.TabLocation = null,
+    border_theme: ?BorderTheme = null,
+    copy: ?CopyProjection = null,
+    layout_snapshot: layout_mod.Snapshot = .{},
+    panes: [max_panes]PaneProjection = undefined,
+    pane_count: u8 = 0,
+    invalidated: bool = true,
+
+    /// Creates an empty composition cache. Buffer allocation is deferred
+    /// until the first frame.
+    ///
+    /// ```zig
+    /// var compositor = Compositor.init(gpa);
+    /// ```
+    pub fn init(gpa: std.mem.Allocator) Compositor {
+        return .{ .gpa = gpa };
+    }
+
+    /// Releases the presentation-owned cell cache.
+    ///
+    /// ```zig
+    /// defer compositor.deinit();
+    /// ```
+    pub fn deinit(compositor: *Compositor) void {
+        if (compositor.composed) |*buffer| {
+            buffer.deinit();
+        }
+
+        compositor.composed = null;
+    }
+
+    /// Forces the next frame to rebuild the complete active composition.
+    ///
+    /// ```zig
+    /// compositor.invalidate();
+    /// ```
+    pub fn invalidate(compositor: *Compositor) void {
+        compositor.invalidated = true;
+    }
+
+    /// Composes an immutable tab model into the host screen and records which
+    /// pane work the caller may retire after a successful flush.
+    ///
+    /// ```zig
+    /// const result = try compositor.render(composition);
+    /// ```
+    pub fn render(compositor: *Compositor, composition: Composition) !CompositionResult {
+        const model = composition.model;
+        const screen = composition.screen;
+        const options = composition.input;
+        const previous_copy = compositor.copy;
+        const copy_changed = !std.meta.eql(previous_copy, options.copy);
+        const border_theme: BorderTheme = .{
+            .focused = options.palette.accent,
+            .unfocused = options.palette.overlay0,
+        };
+        if (compositor.border_theme == null or !std.meta.eql(compositor.border_theme.?, border_theme)) {
+            compositor.border_theme = border_theme;
+            compositor.invalidated = true;
+        }
+        if (try compositor.ensureComposed(screen.back.w, screen.back.h)) {
+            compositor.invalidated = true;
+        }
+        if (!std.meta.eql(compositor.area, options.area)) {
+            compositor.area = options.area;
+            compositor.invalidated = true;
+        }
+        if (!std.meta.eql(compositor.source, model.location)) {
+            compositor.source = model.location;
+            compositor.invalidated = true;
+        }
+        compositor.copy = options.copy;
+        if (options.force) {
+            compositor.invalidated = true;
+        }
+
+        if (compositor.layout_snapshot.revision != model.layout.currentRevision()) {
+            compositor.invalidated = true;
+        }
+        model.layout.snapshot(options.area, &compositor.layout_snapshot);
+        if (compositor.paneProjectionChanged(model)) {
+            compositor.invalidated = true;
+        }
+        const target = &compositor.composed.?;
+        var commit: PresentationCommit = .{ .location = model.location };
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            commit.append(pane);
+        }
+        const stats = if (compositor.invalidated) full: {
+            target.clear(.{});
+            screen.cursor = null;
+            var full_stats: RenderStats = .{ .full = true };
+            for (compositor.layout_snapshot.views(), 0..) |view, index| {
+                const pane = model.findConst(view.pane_id) orelse continue;
+                full_stats.panes += 1;
+                if (model.layout.count() > 1 and !model.layout.isFullscreen()) {
+                    drawBorder(target, .{
+                        .view = view,
+                        .foreground_name = pane.foregroundName(),
+                        .pane_index = index + 1,
+                        .palette = options.palette,
+                    });
+                }
+
+                target.pushClip(view.content);
+                defer target.popClip();
+                const rows = @min(view.content.h, pane.buffer.h);
+                const cols = @min(view.content.w, pane.buffer.w);
+                var y: u16 = 0;
+                while (y < rows) : (y += 1) {
+                    var x: u16 = 0;
+                    while (x < cols) : (x += 1) {
+                        const source = &pane.buffer.cells[@as(usize, y) * pane.buffer.w + x];
+                        var style = source.style;
+                        if (copyView(options.copy, pane.id)) |copy| {
+                            const absolute_y = pane.scroll.offset + y;
+                            if (copy.selected(x, absolute_y)) {
+                                style.flags.inverse = !style.flags.inverse;
+                            }
+                        }
+
+                        target.setCell(
+                            view.content.x + x,
+                            view.content.y + y,
+                            source.text(),
+                            source.width,
+                            style,
+                        );
+                        full_stats.cells += 1;
+                    }
+                }
+                if (view.focused) {
+                    setPaneCursor(screen, pane, .{
+                        .content = view.content,
+                        .copy = copyView(options.copy, pane.id),
+                    });
+                }
+                if (pane.graphics_placeholder) {
+                    drawGraphicsPlaceholder(target, view.content, options.palette);
+                }
+            }
+            full_stats.damaged_cells = try syncComposed(screen, target);
+            break :full full_stats;
+        } else incremental: {
+            var context: IncrementalComposition = .{
+                .model = model,
+                .screen = screen,
+                .target = target,
+                .previous_copy = previous_copy,
+                .copy_changed = copy_changed,
+            };
+            break :incremental try compositor.composeIncremental(&context);
+        };
+
+        compositor.invalidated = false;
+        return .{ .stats = stats, .commit = commit };
+    }
+
+    /// Restores an overlay region from the last pane composition without
+    /// reading or mutating semantic client state.
+    ///
+    /// ```zig
+    /// compositor.copyArea(destination, area);
+    /// ```
+    pub fn copyArea(compositor: *const Compositor, destination: *ui.Buffer, area: ui.Rect) void {
+        const source = if (compositor.composed) |*buffer| buffer else return;
+        if (source.w != destination.w or source.h != destination.h) {
+            return;
+        }
+
+        const clipped = area.intersect(source.area());
+        var y = clipped.y;
+        while (y < clipped.y + clipped.h) : (y += 1) {
+            const row_start = @as(usize, y) * source.w + clipped.x;
+            @memcpy(
+                destination.cells[row_start..][0..clipped.w],
+                source.cells[row_start..][0..clipped.w],
+            );
+        }
+    }
+
+    /// Returns the immutable geometry used for the last pane composition.
+    ///
+    /// ```zig
+    /// const layout = compositor.layoutSnapshot();
+    /// ```
+    pub fn layoutSnapshot(compositor: *const Compositor) *const layout_mod.Snapshot {
+        return &compositor.layout_snapshot;
+    }
+
+    fn ensureComposed(compositor: *Compositor, width: u16, height: u16) !bool {
+        if (compositor.composed) |*buffer| {
+            if (buffer.w == width and buffer.h == height) {
+                return false;
+            }
+
+            try buffer.resize(width, height);
+            return true;
+        }
+
+        compositor.composed = try .init(compositor.gpa, width, height);
+        return true;
+    }
+
+    fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition) !RenderStats {
+        var stats: RenderStats = .{};
+        context.screen.cursor = null;
+        for (compositor.layout_snapshot.views()) |view| {
+            const pane = context.model.findConst(view.pane_id) orelse continue;
+            stats.panes += 1;
+            const rows = @min(view.content.h, pane.buffer.h);
+            const cols = @min(view.content.w, pane.buffer.w);
+            if (context.copy_changed) {
+                try compositor.composeCopyChange(context, .{
+                    .pane = pane,
+                    .view = view,
+                    .rows = rows,
+                    .cols = cols,
+                    .stats = &stats,
+                });
+            }
+            var y: u16 = 0;
+            while (y < rows) : (y += 1) {
+                const damage = pane.damage_rows[y];
+                if (!damage.dirty()) {
+                    continue;
+                }
+
+                const start = @min(damage.start, cols);
+                const end = @min(damage.end, cols);
+                if (start >= end) {
+                    continue;
+                }
+
+                stats.cells += end - start;
+                stats.damaged_cells += try syncPaneRange(.{
+                    .screen = context.screen,
+                    .composed = context.target,
+                    .pane = pane,
+                    .destination_x = view.content.x,
+                    .destination_y = view.content.y + y,
+                    .source_y = y,
+                    .start = start,
+                    .end = end,
+                    .copy = copyView(compositor.copy, pane.id),
+                });
+            }
+            if (view.focused) {
+                setPaneCursor(context.screen, pane, .{
+                    .content = view.content,
+                    .copy = copyView(compositor.copy, pane.id),
+                });
+            }
+        }
+
+        return stats;
+    }
+
+    fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
+        const previous = copyView(context.previous_copy, input.pane.id);
+        const next = copyView(compositor.copy, input.pane.id);
+        if (std.meta.eql(previous, next)) {
+            return;
+        }
+
+        var source_y: u16 = 0;
+        while (source_y < input.rows) : (source_y += 1) {
+            const absolute_y = input.pane.scroll.offset + source_y;
+            const before = copySelectionRange(previous, absolute_y, input.cols);
+            const after = copySelectionRange(next, absolute_y, input.cols);
+            if (std.meta.eql(before, after)) {
+                continue;
+            }
+
+            const start = @min(
+                if (before) |range| range.start else input.cols,
+                if (after) |range| range.start else input.cols,
+            );
+            const end = @max(
+                if (before) |range| range.end else 0,
+                if (after) |range| range.end else 0,
+            );
+            if (start >= end) {
+                continue;
+            }
+
+            input.stats.cells += end - start;
+            input.stats.damaged_cells += try syncPaneRange(.{
+                .screen = context.screen,
+                .composed = context.target,
+                .pane = input.pane,
+                .destination_x = input.view.content.x,
+                .destination_y = input.view.content.y + source_y,
+                .source_y = source_y,
+                .start = start,
+                .end = end,
+                .copy = next,
+            });
+        }
+    }
+
+    fn paneProjectionChanged(compositor: *Compositor, model: *const Model) bool {
+        var next: [max_panes]PaneProjection = undefined;
+        var next_count: u8 = 0;
+        for (compositor.layout_snapshot.views()) |view| {
+            const pane = model.findConst(view.pane_id) orelse continue;
+            next[next_count] = .{
+                .pane_id = pane.id,
+                .cols = pane.buffer.w,
+                .rows = pane.buffer.h,
+                .scroll_offset = pane.scroll.offset,
+                .graphics_placeholder = pane.graphics_placeholder,
+            };
+            next_count += 1;
+        }
+
+        var changed = compositor.pane_count != next_count;
+        if (!changed) {
+            for (compositor.panes[0..compositor.pane_count], next[0..next_count]) |previous, current| {
+                if (!std.meta.eql(previous, current)) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        @memcpy(compositor.panes[0..next_count], next[0..next_count]);
+        compositor.pane_count = next_count;
+        return changed;
+    }
+};
+
+const PaneProjection = struct {
+    pane_id: schema.PaneId,
+    cols: u16,
+    rows: u16,
+    scroll_offset: u32,
+    graphics_placeholder: bool,
+};
+
+const IncrementalComposition = struct {
+    model: *const Model,
+    screen: *term.Screen,
+    target: *ui.Buffer,
+    previous_copy: ?CopyProjection,
+    copy_changed: bool,
+};
+
+const CopyChangeComposition = struct {
+    pane: *const Pane,
+    view: layout_mod.View,
+    rows: u16,
+    cols: u16,
+    stats: *RenderStats,
+};
+
+fn copyView(copy: ?CopyProjection, pane_id: schema.PaneId) ?copy_mode.View {
+    const projection = copy orelse return null;
+    return if (projection.pane_id == pane_id) projection.view else null;
+}
+
+const CopySelectionRange = struct {
+    start: u16,
+    end: u16,
+};
+
+fn copySelectionRange(view: ?copy_mode.View, y: u32, cols: u16) ?CopySelectionRange {
+    if (cols == 0) {
+        return null;
+    }
+
+    const copy = view orelse return null;
+    const anchor = copy.anchor orelse return null;
+    if (copy.linewise) {
+        const first_y = @min(anchor.y, copy.cursor.y);
+        const last_y = @max(anchor.y, copy.cursor.y);
+        return if (y >= first_y and y <= last_y)
+            .{ .start = 0, .end = cols }
+        else
+            null;
+    }
+
+    const anchor_first = anchor.y < copy.cursor.y or
+        (anchor.y == copy.cursor.y and anchor.x <= copy.cursor.x);
+    const first = if (anchor_first) anchor else copy.cursor;
+    const last = if (anchor_first) copy.cursor else anchor;
+    if (y < first.y or y > last.y) {
+        return null;
+    }
+
+    const start: u16 = if (y == first.y) @min(first.x, cols) else 0;
+    const end: u16 = if (y == last.y) @min(last.x +| 1, cols) else cols;
+    return if (start < end) .{ .start = start, .end = end } else null;
+}
+
 pub const Model = struct {
     gpa: std.mem.Allocator,
     layout: layout_mod.Layout = .{},
@@ -214,10 +661,6 @@ pub const Model = struct {
     pane_index: PaneIndex = .{},
     pane_count: usize = 0,
     location: ?schema.TabLocation = null,
-    composed: ?ui.Buffer = null,
-    composition_area: ui.Rect = .{},
-    composition_invalidated: bool = true,
-    border_theme: ?BorderTheme = null,
     cell_width_px: u16 = 0,
     cell_height_px: u16 = 0,
     layout_snapshot: layout_mod.Snapshot = .{},
@@ -231,15 +674,12 @@ pub const Model = struct {
             if (slot.*) |*pane| pane.deinit();
             slot.* = null;
         }
-        if (model.composed) |*buffer| buffer.deinit();
-        model.composed = null;
         model.pane_count = 0;
         model.pane_index.reset();
     }
 
     pub fn setPaneGaps(model: *Model, enabled: bool) void {
-        if (!model.layout.setPaneGaps(enabled)) return;
-        model.composition_invalidated = true;
+        _ = model.layout.setPaneGaps(enabled);
     }
 
     /// Iterates the live panes without exposing the slot array.
@@ -259,15 +699,6 @@ pub const Model = struct {
 
     pub fn paneIterator(model: *Model) PaneIterator {
         return .{ .panes = &model.panes };
-    }
-
-    /// Projects the copy-mode selection onto a pane. Selection changes mark
-    /// only the affected visible ranges; clearing passes null.
-    pub fn setPaneCopyView(model: *Model, pane_id: schema.PaneId, view: ?copy_mode.View) void {
-        const pane = model.find(pane_id) orelse return;
-        if (std.meta.eql(pane.copy_view, view)) return;
-        markCopyViewDamage(pane, pane.copy_view, view);
-        pane.copy_view = view;
     }
 
     pub fn focusedPane(model: *Model) ?*Pane {
@@ -333,7 +764,6 @@ pub const Model = struct {
         errdefer _ = model.removePane(pane_id);
         try model.layout.addRoot(pane_id);
         model.location = location;
-        model.composition_invalidated = true;
     }
 
     pub fn split(
@@ -350,7 +780,6 @@ pub const Model = struct {
         try model.insertPane(new_pane, location, size, true);
         errdefer _ = model.removePane(new_pane);
         try model.layout.split(existing_pane, new_pane, axis);
-        model.composition_invalidated = true;
     }
 
     /// Adds panes discovered in a location snapshot. Reconstructed layouts are
@@ -369,7 +798,6 @@ pub const Model = struct {
             errdefer _ = model.removePane(pane_id);
             try model.layout.addRoot(pane_id);
             model.location = location;
-            model.composition_invalidated = true;
             return;
         };
         const prospective = model.prospectiveSplit(focused, .horizontal, area) orelse
@@ -378,7 +806,6 @@ pub const Model = struct {
         try model.insertPane(pane_id, location, size, false);
         errdefer _ = model.removePane(pane_id);
         try model.layout.split(focused, pane_id, .horizontal);
-        model.composition_invalidated = true;
     }
 
     pub fn restoreDisplayOrder(
@@ -390,7 +817,6 @@ pub const Model = struct {
         for (pane_ids) |pane_id|
             if (model.find(pane_id) == null) return error.PaneNotFound;
         try model.layout.restoreDisplayOrder(pane_ids, focused_pane);
-        model.composition_invalidated = true;
     }
 
     pub fn restoreSavedLayout(
@@ -403,7 +829,6 @@ pub const Model = struct {
         for (pane_ids) |pane_id|
             if (model.find(pane_id) == null) return false;
         if (!model.layout.restoreSaved(saved, pane_ids, focused_pane)) return false;
-        model.composition_invalidated = true;
         return true;
     }
 
@@ -426,14 +851,11 @@ pub const Model = struct {
         if (removed) model.pane_index.remove(schema.id.raw(pane_id));
         _ = model.layout.remove(pane_id);
         if (model.pane_count == 0) model.location = null;
-        if (removed) model.composition_invalidated = true;
         return removed;
     }
 
     pub fn focusPane(model: *Model, pane_id: schema.PaneId) bool {
-        const previous = model.layout.focused();
         if (!model.layout.focusPane(pane_id)) return false;
-        if (previous != pane_id) model.composition_invalidated = true;
         return true;
     }
 
@@ -442,9 +864,8 @@ pub const Model = struct {
         direction: layout_mod.Direction,
         area: ui.Rect,
     ) ?schema.PaneId {
-        const previous = model.layout.focused() orelse return null;
+        _ = model.layout.focused() orelse return null;
         const focused = model.layout.focusDirection(direction, area) orelse return null;
-        if (previous != focused) model.composition_invalidated = true;
         return focused;
     }
 
@@ -454,13 +875,11 @@ pub const Model = struct {
         area: ui.Rect,
     ) bool {
         if (!model.layout.resizeFocused(direction, area)) return false;
-        model.composition_invalidated = true;
         return true;
     }
 
     pub fn toggleFullscreen(model: *Model) bool {
         if (!model.layout.toggleFullscreen()) return false;
-        model.composition_invalidated = true;
         return true;
     }
 
@@ -480,13 +899,11 @@ pub const Model = struct {
         const applied = try frame_apply.applyBuffer(&pane.buffer, &pane.cursor, frame);
         pane.mouse = frame.mouse;
         pane.input_modes = frame.input_modes;
-        if (!std.meta.eql(pane.scroll, frame.scroll)) model.composition_invalidated = true;
         pane.scroll = frame.scroll;
         if (replacement_damage) |rows| {
             @memset(rows, .{});
             model.gpa.free(pane.damage_rows);
             pane.damage_rows = rows;
-            model.composition_invalidated = true;
         } else {
             var spans = frame.spans();
             while (try spans.next()) |span| pane.markSpan(span.start, span.cell_count);
@@ -561,24 +978,6 @@ pub const Model = struct {
         return &model.layout_snapshot;
     }
 
-    /// Restores a client overlay region from the pane composition cache.
-    /// Toasts draw into the terminal screen but never mutate this cache, so
-    /// removing one costs only its bounded rectangle instead of recomposing
-    /// the complete workbench.
-    pub fn copyComposedArea(model: *const Model, destination: *ui.Buffer, area: ui.Rect) void {
-        const source = if (model.composed) |*buffer| buffer else return;
-        if (source.w != destination.w or source.h != destination.h) return;
-        const clipped = area.intersect(source.area());
-        var y = clipped.y;
-        while (y < clipped.y + clipped.h) : (y += 1) {
-            const row_start = @as(usize, y) * source.w + clipped.x;
-            @memcpy(
-                destination.cells[row_start..][0..clipped.w],
-                source.cells[row_start..][0..clipped.w],
-            );
-        }
-    }
-
     pub fn prospectiveSplit(
         model: *Model,
         pane_id: schema.PaneId,
@@ -588,137 +987,10 @@ pub const Model = struct {
         return model.layoutSnapshot(area).prospectiveSplit(pane_id, axis, model.pane_count);
     }
 
-    pub fn render(model: *Model, screen: *term.Screen, area: ui.Rect) !RenderStats {
-        return model.renderThemed(screen, area, &theme.default_theme.palette);
-    }
-
-    pub fn renderThemed(
-        model: *Model,
-        screen: *term.Screen,
-        area: ui.Rect,
-        palette: *const theme.Palette,
-    ) !RenderStats {
-        const border_theme: BorderTheme = .{
-            .focused = palette.accent,
-            .unfocused = palette.overlay0,
-        };
-        if (model.border_theme == null or !std.meta.eql(model.border_theme.?, border_theme)) {
-            model.border_theme = border_theme;
-            model.composition_invalidated = true;
-        }
-        if (try model.ensureComposed(screen.back.w, screen.back.h))
-            model.composition_invalidated = true;
-        if (!std.meta.eql(model.composition_area, area)) {
-            model.composition_area = area;
-            model.composition_invalidated = true;
-        }
-        const target = &model.composed.?;
-        if (!model.composition_invalidated) {
-            const stats = try model.composeIncremental(
-                screen,
-                target,
-                model.layoutSnapshot(area),
-            );
-            model.clearPaneDamage();
-            return stats;
-        }
-
-        target.clear(.{});
-        screen.cursor = null;
-        var stats: RenderStats = .{ .full = true };
-        const snapshot = model.layoutSnapshot(area);
-        for (snapshot.views(), 0..) |view, index| {
-            const pane = model.find(view.pane_id) orelse continue;
-            stats.panes += 1;
-            if (model.layout.count() > 1 and !model.layout.isFullscreen())
-                drawBorder(target, view, pane.foregroundName(), index + 1, palette);
-            target.pushClip(view.content);
-            defer target.popClip();
-            const rows = @min(view.content.h, pane.buffer.h);
-            const cols = @min(view.content.w, pane.buffer.w);
-            var y: u16 = 0;
-            while (y < rows) : (y += 1) {
-                var x: u16 = 0;
-                while (x < cols) : (x += 1) {
-                    const source = &pane.buffer.cells[
-                        @as(usize, y) * pane.buffer.w + x
-                    ];
-                    var style = source.style;
-                    if (pane.copy_view) |copy| {
-                        const absolute_y = pane.scroll.offset + y;
-                        if (copy.selected(x, absolute_y)) style.flags.inverse = !style.flags.inverse;
-                    }
-                    target.setCell(
-                        view.content.x + x,
-                        view.content.y + y,
-                        source.text(),
-                        source.width,
-                        style,
-                    );
-                    stats.cells += 1;
-                }
-            }
-            if (view.focused) setPaneCursor(screen, pane, view.content);
-            if (pane.graphics_placeholder) drawGraphicsPlaceholder(target, view.content, palette);
-        }
-        stats.damaged_cells = try syncComposed(screen, target);
-        model.composition_invalidated = false;
-        model.clearPaneDamage();
-        return stats;
-    }
-
-    fn ensureComposed(model: *Model, width: u16, height: u16) !bool {
-        if (model.composed) |*buffer| {
-            if (buffer.w == width and buffer.h == height) return false;
-            try buffer.resize(width, height);
-            return true;
-        }
-        model.composed = try .init(model.gpa, width, height);
-        return true;
-    }
-
-    fn composeIncremental(
-        model: *Model,
-        screen: *term.Screen,
-        target: *ui.Buffer,
-        snapshot: *const layout_mod.Snapshot,
-    ) !RenderStats {
-        var stats: RenderStats = .{};
-        screen.cursor = null;
-        for (snapshot.views()) |view| {
-            const pane = model.find(view.pane_id) orelse continue;
-            stats.panes += 1;
-            const rows = @min(view.content.h, pane.buffer.h);
-            const cols = @min(view.content.w, pane.buffer.w);
-            var y: u16 = 0;
-            while (y < rows) : (y += 1) {
-                const damage = pane.damage_rows[y];
-                if (!damage.dirty()) continue;
-                const start = @min(damage.start, cols);
-                const end = @min(damage.end, cols);
-                if (start >= end) continue;
-                stats.cells += end - start;
-                stats.damaged_cells += try syncPaneRange(
-                    screen,
-                    target,
-                    pane,
-                    view.content.x,
-                    view.content.y + y,
-                    y,
-                    start,
-                    end,
-                );
-            }
-            if (view.focused) setPaneCursor(screen, pane, view.content);
-        }
-        return stats;
-    }
-
     pub fn setCellSize(model: *Model, width: u16, height: u16) void {
         if (model.cell_width_px == width and model.cell_height_px == height) return;
         model.cell_width_px = width;
         model.cell_height_px = height;
-        model.composition_invalidated = true;
     }
 
     /// Sets one pane's cell fallback and reports whether composition changed.
@@ -730,15 +1002,29 @@ pub const Model = struct {
         const pane = model.find(pane_id) orelse return false;
         if (pane.graphics_placeholder == visible) return false;
         pane.graphics_placeholder = visible;
-        model.composition_invalidated = true;
 
         return true;
     }
 
-    fn clearPaneDamage(model: *Model) void {
-        for (&model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
+    /// Retires only the damage and frame identifiers included in a successful
+    /// host presentation. A stale commit cannot consume newer pane work.
+    ///
+    /// ```zig
+    /// model.commitPresentation(commit);
+    /// ```
+    pub fn commitPresentation(model: *Model, commit: PresentationCommit) void {
+        if (!std.meta.eql(model.location, commit.location)) {
+            return;
+        }
+
+        for (commit.slice()) |presented| {
+            const pane = model.find(presented.pane_id) orelse continue;
+            if (pane.pending_frame_id != presented.frame_id) {
+                continue;
+            }
+
             pane.clearDamage();
+            pane.pending_frame_id = 0;
         }
     }
 
@@ -783,7 +1069,7 @@ const ComposeSink = struct {
     }
 };
 
-fn syncPaneRange(
+const PaneRange = struct {
     screen: *term.Screen,
     composed: *ui.Buffer,
     pane: *const Pane,
@@ -792,33 +1078,36 @@ fn syncPaneRange(
     source_y: u16,
     start: u16,
     end: u16,
-) !usize {
-    std.debug.assert(start < end);
-    const source_row = pane.buffer.cells[@as(usize, source_y) * pane.buffer.w ..];
-    const destination_base = @as(usize, destination_y) * composed.w + destination_x;
-    if (pane.copy_view) |copy| {
-        const composed_row = composed.cells[destination_base..];
-        const absolute_y = pane.scroll.offset + source_y;
+    copy: ?copy_mode.View,
+};
+
+fn syncPaneRange(range: PaneRange) !usize {
+    std.debug.assert(range.start < range.end);
+    const source_row = range.pane.buffer.cells[@as(usize, range.source_y) * range.pane.buffer.w ..];
+    const destination_base = @as(usize, range.destination_y) * range.composed.w + range.destination_x;
+    if (range.copy) |selection| {
+        const composed_row = range.composed.cells[destination_base..];
+        const absolute_y = range.pane.scroll.offset + range.source_y;
         var copied: usize = 0;
-        var x = start;
-        while (x < end) {
+        var x = range.start;
+        while (x < range.end) {
             var projected = source_row[x];
-            if (copy.selected(x, absolute_y))
+            if (selection.selected(x, absolute_y))
                 projected.style.flags.inverse = !projected.style.flags.inverse;
             if (projected.eqlPublic(&composed_row[x])) {
                 x += 1;
                 continue;
             }
             const run_start = x;
-            while (x < end) : (x += 1) {
+            while (x < range.end) : (x += 1) {
                 projected = source_row[x];
-                if (copy.selected(x, absolute_y))
+                if (selection.selected(x, absolute_y))
                     projected.style.flags.inverse = !projected.style.flags.inverse;
                 if (projected.eqlPublic(&composed_row[x])) break;
                 composed_row[x] = projected;
             }
             const count: u16 = x - run_start;
-            const destination = try screen.patchCells(
+            const destination = try range.screen.patchCells(
                 @intCast(destination_base + run_start),
                 count,
             );
@@ -828,80 +1117,32 @@ fn syncPaneRange(
         return copied;
     }
     var sink: ComposeSink = .{
-        .patch = .{ .screen = screen, .source_row = source_row, .base = destination_base },
-        .composed_row = composed.cells[destination_base..],
+        .patch = .{ .screen = range.screen, .source_row = source_row, .base = destination_base },
+        .composed_row = range.composed.cells[destination_base..],
     };
-    return diff.syncRow(source_row, sink.composed_row, start, end, &sink);
+    return diff.syncRow(source_row, sink.composed_row, range.start, range.end, &sink);
 }
 
-const CopySelectionRange = struct {
-    start: u16,
-    end: u16,
+const PaneCursor = struct {
+    content: ui.Rect,
+    copy: ?copy_mode.View,
 };
 
-fn copySelectionRange(view: ?copy_mode.View, y: u32, cols: u16) ?CopySelectionRange {
-    if (cols == 0) return null;
-    const copy = view orelse return null;
-    const anchor = copy.anchor orelse return null;
-    if (copy.linewise) {
-        const first_y = @min(anchor.y, copy.cursor.y);
-        const last_y = @max(anchor.y, copy.cursor.y);
-        return if (y >= first_y and y <= last_y)
-            .{ .start = 0, .end = cols }
-        else
-            null;
-    }
-    const anchor_first = anchor.y < copy.cursor.y or
-        (anchor.y == copy.cursor.y and anchor.x <= copy.cursor.x);
-    const first = if (anchor_first) anchor else copy.cursor;
-    const last = if (anchor_first) copy.cursor else anchor;
-    if (y < first.y or y > last.y) return null;
-    const start: u16 = if (y == first.y) @min(first.x, cols) else 0;
-    const end: u16 = if (y == last.y)
-        @min(last.x +| 1, cols)
-    else
-        cols;
-    return if (start < end) .{ .start = start, .end = end } else null;
-}
-
-fn markCopyViewDamage(
-    pane: *Pane,
-    previous: ?copy_mode.View,
-    next: ?copy_mode.View,
-) void {
-    var source_y: u16 = 0;
-    while (source_y < pane.buffer.h) : (source_y += 1) {
-        const absolute_y = pane.scroll.offset + source_y;
-        const before = copySelectionRange(previous, absolute_y, pane.buffer.w);
-        const after = copySelectionRange(next, absolute_y, pane.buffer.w);
-        if (std.meta.eql(before, after)) continue;
-        const start = @min(
-            if (before) |range| range.start else pane.buffer.w,
-            if (after) |range| range.start else pane.buffer.w,
-        );
-        const end = @max(
-            if (before) |range| range.end else 0,
-            if (after) |range| range.end else 0,
-        );
-        if (start < end) pane.damage_rows[source_y].mark(start, end);
-    }
-}
-
-fn setPaneCursor(screen: *term.Screen, pane: *const Pane, content: ui.Rect) void {
-    if (pane.copy_view) |copy| {
-        if (copy.cursor.y < pane.scroll.offset or copy.cursor.x >= content.w) return;
-        const visible_y = copy.cursor.y - pane.scroll.offset;
-        if (visible_y >= content.h) return;
+fn setPaneCursor(screen: *term.Screen, pane: *const Pane, projection: PaneCursor) void {
+    if (projection.copy) |selection| {
+        if (selection.cursor.y < pane.scroll.offset or selection.cursor.x >= projection.content.w) return;
+        const visible_y = selection.cursor.y - pane.scroll.offset;
+        if (visible_y >= projection.content.h) return;
         screen.cursor = .{
-            .x = content.x + copy.cursor.x,
-            .y = content.y + @as(u16, @intCast(visible_y)),
+            .x = projection.content.x + selection.cursor.x,
+            .y = projection.content.y + @as(u16, @intCast(visible_y)),
         };
         return;
     }
-    if (!pane.cursor.visible or pane.cursor.x >= content.w or pane.cursor.y >= content.h) return;
+    if (!pane.cursor.visible or pane.cursor.x >= projection.content.w or pane.cursor.y >= projection.content.h) return;
     screen.cursor = .{
-        .x = content.x + pane.cursor.x,
-        .y = content.y + pane.cursor.y,
+        .x = projection.content.x + pane.cursor.x,
+        .y = projection.content.y + pane.cursor.y,
     };
 }
 
@@ -933,24 +1174,25 @@ pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
     return .{ .cols = rect.w, .rows = rect.h };
 }
 
-fn drawBorder(
-    buffer: *ui.Buffer,
+const BorderInput = struct {
     view: layout_mod.View,
     foreground_name: []const u8,
     pane_index: usize,
     palette: *const theme.Palette,
-) void {
-    const style: ui.Style = if (view.focused)
-        .{ .fg = palette.accent, .flags = .{ .bold = true } }
+};
+
+fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
+    const style: ui.Style = if (input.view.focused)
+        .{ .fg = input.palette.accent, .flags = .{ .bold = true } }
     else
-        .{ .fg = palette.overlay0 };
+        .{ .fg = input.palette.overlay0 };
     var title_buffer: [schema.max_foreground_name_bytes + 32]u8 = undefined;
     const text = std.fmt.bufPrint(
         &title_buffer,
         " {d} {s} ",
-        .{ pane_index, if (foreground_name.len == 0) "shell" else foreground_name },
+        .{ input.pane_index, if (input.foreground_name.len == 0) "shell" else input.foreground_name },
     ) catch " pane ";
-    buffer.box(view.outer, style, text);
+    buffer.box(input.view.outer, style, text);
 }
 
 fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const theme.Palette) void {
@@ -963,6 +1205,38 @@ fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const th
         .fg = palette.yellow,
         .bg = palette.surface_dim,
         .flags = .{ .bold = true },
+    });
+}
+
+const TestingComposition = struct {
+    model: *Model,
+    screen: *term.Screen,
+    area: ui.Rect,
+    palette: *const theme.Palette = &theme.default_theme.palette,
+    copy: ?CopyProjection = null,
+    force: bool = false,
+};
+
+fn testingRender(compositor: *Compositor, composition: TestingComposition) !RenderStats {
+    const rendered = try compositor.render(.{
+        .model = composition.model,
+        .screen = composition.screen,
+        .input = .{
+            .area = composition.area,
+            .palette = composition.palette,
+            .copy = composition.copy,
+            .force = composition.force,
+        },
+    });
+    composition.model.commitPresentation(rendered.commit);
+    return rendered.stats;
+}
+
+fn testingRenderDefault(compositor: *Compositor, model: *Model, screen: *term.Screen) !RenderStats {
+    return testingRender(compositor, .{
+        .model = model,
+        .screen = screen,
+        .area = screen.back.area(),
     });
 }
 
@@ -987,7 +1261,9 @@ test "two pane buffers compose into their layout rectangles" {
 
     var screen = try term.Screen.init(gpa, 40, 7);
     defer screen.deinit();
-    const stats = try model.render(&screen, screen.back.area());
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    const stats = try testingRenderDefault(&compositor, &model, &screen);
 
     try std.testing.expectEqual(@as(usize, 2), stats.panes);
     try std.testing.expectEqualStrings("a", screen.back.cells[40 + 1].text());
@@ -1013,15 +1289,22 @@ test "copy mode highlights an absolute scrollback selection" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 4, .rows = 2 });
     const pane = model.find(@enumFromInt(1)).?;
     pane.scroll = .{ .total_rows = 12, .offset = 10 };
-    pane.copy_view = .{
+    const copy: CopyProjection = .{ .pane_id = pane.id, .view = .{
         .anchor = .{ .x = 1, .y = 10 },
         .cursor = .{ .x = 2, .y = 11 },
         .linewise = false,
-    };
+    } };
 
     var screen = try term.Screen.init(gpa, 4, 2);
     defer screen.deinit();
-    _ = try model.render(&screen, screen.back.area());
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    _ = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .copy = copy,
+    });
 
     try std.testing.expect(!screen.back.cells[0].style.flags.inverse);
     try std.testing.expect(screen.back.cells[1].style.flags.inverse);
@@ -1030,7 +1313,7 @@ test "copy mode highlights an absolute scrollback selection" {
     try std.testing.expectEqual(term.Screen.Position{ .x = 2, .y = 1 }, screen.cursor.?);
 }
 
-test "copy mode updates selection and cursor without full composition" {
+test "copy mode projection stays outside the multiplexer model" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
@@ -1042,39 +1325,62 @@ test "copy mode updates selection and cursor without full composition" {
     try model.addRoot(pane_id, location, .{ .cols = 4, .rows = 2 });
     var screen = try term.Screen.init(gpa, 4, 2);
     defer screen.deinit();
-    try std.testing.expect((try model.render(&screen, screen.back.area())).full);
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
 
-    model.setPaneCopyView(pane_id, .{
+    const cursor: CopyProjection = .{ .pane_id = pane_id, .view = .{
         .anchor = null,
         .cursor = .{ .x = 2, .y = 1 },
         .linewise = false,
+    } };
+    const cursor_only = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .copy = cursor,
     });
-    const cursor_only = try model.render(&screen, screen.back.area());
     try std.testing.expect(!cursor_only.full);
     try std.testing.expectEqual(@as(usize, 0), cursor_only.cells);
     try std.testing.expectEqual(term.Screen.Position{ .x = 2, .y = 1 }, screen.cursor.?);
 
-    model.setPaneCopyView(pane_id, .{
+    const selection: CopyProjection = .{ .pane_id = pane_id, .view = .{
         .anchor = .{ .x = 1, .y = 0 },
         .cursor = .{ .x = 2, .y = 0 },
         .linewise = false,
+    } };
+    const selected = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .copy = selection,
     });
-    const selected = try model.render(&screen, screen.back.area());
     try std.testing.expect(!selected.full);
     try std.testing.expectEqual(@as(usize, 2), selected.cells);
+    try std.testing.expectEqual(@as(usize, 2), selected.damaged_cells);
     try std.testing.expect(screen.back.cells[1].style.flags.inverse);
     try std.testing.expect(screen.back.cells[2].style.flags.inverse);
 
     const pane = model.find(pane_id).?;
     pane.buffer.setCell(1, 0, "x", 1, .{});
     pane.markSpan(1, 1);
-    const patched = try model.render(&screen, screen.back.area());
+    const patched = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .copy = selection,
+    });
     try std.testing.expect(!patched.full);
     try std.testing.expectEqual(@as(usize, 1), patched.cells);
     try std.testing.expectEqualStrings("x", screen.back.cells[1].text());
     try std.testing.expect(screen.back.cells[1].style.flags.inverse);
 
-    const idle = try model.render(&screen, screen.back.area());
+    const idle = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .copy = selection,
+    });
     try std.testing.expect(!idle.full);
     try std.testing.expectEqual(@as(usize, 0), idle.cells);
 }
@@ -1102,7 +1408,13 @@ test "fullscreen composes only the focused pane across the whole tab" {
     try std.testing.expectEqual(@as(?schema.TerminalSize, null), model.contentSize(@enumFromInt(2), area));
     var screen = try term.Screen.init(gpa, area.w, area.h);
     defer screen.deinit();
-    const stats = try model.render(&screen, area);
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    const stats = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = area,
+    });
     try std.testing.expectEqual(@as(usize, 1), stats.panes);
     try std.testing.expectEqualStrings("x", screen.back.cells[0].text());
 
@@ -1134,7 +1446,14 @@ test "pane borders use the selected theme without coloring pane contents" {
     const selected = theme.builtin(.tokyo_night);
     var screen = try term.Screen.init(gpa, 20, 4);
     defer screen.deinit();
-    _ = try model.renderThemed(&screen, screen.back.area(), &selected.palette);
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    _ = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .palette = &selected.palette,
+    });
 
     try std.testing.expectEqualDeep(selected.palette.accent, screen.back.cells[10].style.fg);
     try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[21].style.bg);
@@ -1144,7 +1463,12 @@ test "pane borders use the selected theme without coloring pane contents" {
     try std.testing.expectEqualStrings("C", screen.back.at(15, 0).?.text());
 
     const replacement = theme.builtin(.catppuccin);
-    const replaced = try model.renderThemed(&screen, screen.back.area(), &replacement.palette);
+    const replaced = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .palette = &replacement.palette,
+    });
     try std.testing.expect(replaced.full);
     try std.testing.expectEqualDeep(replacement.palette.accent, screen.back.cells[10].style.fg);
 }
@@ -1162,7 +1486,9 @@ test "one pane has no telar border" {
 
     var screen = try term.Screen.init(gpa, 12, 3);
     defer screen.deinit();
-    _ = try model.render(&screen, screen.back.area());
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    _ = try testingRenderDefault(&compositor, &model, &screen);
 
     try std.testing.expectEqualStrings("x", screen.back.cells[0].text());
     try std.testing.expect(!screen.back.cells[0].style.flags.inverse);
@@ -1203,6 +1529,105 @@ test "frame state and pending acknowledgements stay per pane" {
     try std.testing.expectEqual(@as(u64, 1), model.find(@enumFromInt(2)).?.pending_frame_id);
 }
 
+test "composition damage retires only after its presentation commits" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(pane_id, location, .{ .cols = 2, .rows = 1 });
+    const pane = model.find(pane_id).?;
+    pane.pending_frame_id = 7;
+    pane.damage_rows[0].mark(0, 1);
+
+    var screen = try term.Screen.init(gpa, 2, 1);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    const composed = try compositor.render(.{
+        .model = &model,
+        .screen = &screen,
+        .input = .{ .area = screen.back.area(), .palette = &theme.default_theme.palette },
+    });
+
+    try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
+    try std.testing.expect(pane.damage_rows[0].dirty());
+    try std.testing.expectEqual(@as(u64, 7), composed.commit.slice()[0].frame_id);
+
+    model.commitPresentation(composed.commit);
+
+    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
+    try std.testing.expect(!pane.damage_rows[0].dirty());
+}
+
+test "stale presentation commits preserve newer pane work" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(pane_id, location, .{ .cols = 2, .rows = 1 });
+    const pane = model.find(pane_id).?;
+    pane.pending_frame_id = 7;
+    pane.damage_rows[0].mark(0, 1);
+
+    var screen = try term.Screen.init(gpa, 2, 1);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    const stale = try compositor.render(.{
+        .model = &model,
+        .screen = &screen,
+        .input = .{ .area = screen.back.area(), .palette = &theme.default_theme.palette },
+    });
+    pane.pending_frame_id = 8;
+    pane.damage_rows[0].mark(1, 2);
+
+    model.commitPresentation(stale.commit);
+
+    try std.testing.expectEqual(@as(u64, 8), pane.pending_frame_id);
+    try std.testing.expect(pane.damage_rows[0].dirty());
+    try std.testing.expectEqual(@as(u16, 0), pane.damage_rows[0].start);
+    try std.testing.expectEqual(@as(u16, 2), pane.damage_rows[0].end);
+}
+
+test "fullscreen presentation commits include hidden panes" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const area: ui.Rect = .{ .w = 20, .h = 4 };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 9, .rows = 3 });
+    try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+    try std.testing.expect(model.focusPane(@enumFromInt(1)));
+    try std.testing.expect(model.toggleFullscreen());
+    model.find(@enumFromInt(1)).?.pending_frame_id = 3;
+    model.find(@enumFromInt(2)).?.pending_frame_id = 4;
+
+    var screen = try term.Screen.init(gpa, area.w, area.h);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    const composed = try compositor.render(.{
+        .model = &model,
+        .screen = &screen,
+        .input = .{ .area = area, .palette = &theme.default_theme.palette },
+    });
+
+    try std.testing.expectEqual(@as(usize, 2), composed.commit.slice().len);
+    try std.testing.expectEqual(@as(u64, 3), composed.commit.slice()[0].frame_id);
+    try std.testing.expectEqual(@as(u64, 4), composed.commit.slice()[1].frame_id);
+}
+
 test "snapshot discovery does not imply a runtime attachment" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
@@ -1235,8 +1660,10 @@ test "unchanged composition produces no terminal damage" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 8, .rows = 3 });
     var screen = try term.Screen.init(gpa, 8, 3);
     defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
 
-    const first = try model.render(&screen, screen.back.area());
+    const first = try testingRenderDefault(&compositor, &model, &screen);
     var output: [4096]u8 = undefined;
     var initial_writer = std.Io.Writer.fixed(&output);
     _ = try screen.flush(&initial_writer);
@@ -1257,11 +1684,11 @@ test "unchanged composition produces no terminal damage" {
         .spans = &snapshot_spans,
     });
     _ = try model.applyFrame((try schema.decodeServer(snapshot_payload)).pane_frame);
-    const snapshot = try model.render(&screen, screen.back.area());
+    const snapshot = try testingRenderDefault(&compositor, &model, &screen);
     var snapshot_writer = std.Io.Writer.fixed(&output);
     _ = try screen.flush(&snapshot_writer);
 
-    const second = try model.render(&screen, screen.back.area());
+    const second = try testingRenderDefault(&compositor, &model, &screen);
     var unchanged_writer = std.Io.Writer.fixed(&output);
     const unchanged_flush = try screen.flush(&unchanged_writer);
     try std.testing.expectEqual(@as(usize, 0), first.damaged_cells);
@@ -1284,7 +1711,7 @@ test "unchanged composition produces no terminal damage" {
         .spans = &patch_spans,
     });
     _ = try model.applyFrame((try schema.decodeServer(patch_payload)).pane_frame);
-    const changed = try model.render(&screen, screen.back.area());
+    const changed = try testingRenderDefault(&compositor, &model, &screen);
     var changed_writer = std.Io.Writer.fixed(&output);
     const changed_flush = try screen.flush(&changed_writer);
     try std.testing.expectEqual(@as(usize, 1), changed.cells);
@@ -1292,7 +1719,7 @@ test "unchanged composition produces no terminal damage" {
     try std.testing.expectEqual(@as(usize, 1), changed_flush.scanned);
 }
 
-test "focus changes invalidate titles but stable focus stays incremental" {
+test "compositor detects focus changes while stable focus stays incremental" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
@@ -1310,12 +1737,43 @@ test "focus changes invalidate titles but stable focus stays incremental" {
     );
     var screen = try term.Screen.init(gpa, 40, 6);
     defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
 
-    try std.testing.expect((try model.render(&screen, screen.back.area())).full);
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    try std.testing.expect((try model.render(&screen, screen.back.area())).full);
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    const stable = try model.render(&screen, screen.back.area());
+    const stable = try testingRenderDefault(&compositor, &model, &screen);
+    try std.testing.expect(!stable.full);
+    try std.testing.expectEqual(@as(usize, 0), stable.cells);
+}
+
+test "compositor detects pane projection changes without model cache flags" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(pane_id, location, .{ .cols = 24, .rows = 3 });
+    const pane = model.find(pane_id).?;
+
+    var screen = try term.Screen.init(gpa, 24, 3);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
+
+    pane.scroll = .{ .total_rows = 4, .offset = 1 };
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
+
+    pane.graphics_placeholder = true;
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
+
+    const stable = try testingRenderDefault(&compositor, &model, &screen);
     try std.testing.expect(!stable.full);
     try std.testing.expectEqual(@as(usize, 0), stable.cells);
 }

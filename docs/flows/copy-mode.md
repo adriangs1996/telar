@@ -123,20 +123,20 @@ runtime response.
 ## Presentation
 
 Neither the input adapter nor the application handler requests a draw or
-writes a pane's `copy_view`. After the client event, the loop publishes the
+writes presentation state. After the client event, the loop publishes the
 model version. `Presenter` compares the `copy` revision with its last presented
-version, projects the latest immutable `CopyModeProjection` into the
-multiplexer damage cache and folds it into the paced frame.
+version and folds the latest immutable `CopyModeProjection` into the paced
+frame.
 
 When copy movement also changes the viewport, `Presenter` observes the
-independent viewport revision and invalidates tab composition caches. The copy
-use case does not mutate rendering caches.
+independent viewport revision. Its compositor detects the changed scroll
+projection; the copy use case does not mutate rendering caches.
 
-The presenter retains only the projection it last painted. It clears the old
-pane when the target changes or copy mode exits. Entering and leaving invalidate
-the status bar; cursor and selection movement use exact pane damage instead of
-invalidating all chrome. `multiplexer.Pane.copy_view` is therefore a rendering
-cache, never semantic authority.
+The presenter-owned compositor retains only the projection it last painted.
+It clears the old pane when the target changes or copy mode exits. Entering and
+leaving invalidate the status bar; cursor and selection movement patch exact
+visible ranges without mutating multiplexer pane damage. Copy projection is
+presentation state, never semantic authority inside `multiplexer.Pane`.
 
 ## Proof
 
@@ -157,5 +157,5 @@ cache, never semantic authority.
 - `src/frontend/client/client_test.zig` proves key and pointer routing,
   outside-wheel consumption, missing-target exit, backpressure, clipboard
   delivery and presenter-only projection through the real client boundary.
-- `src/frontend/client/presenter.zig` is the only client component that writes
-  `multiplexer.Pane.copy_view`.
+- `src/frontend/workspace/multiplexer.zig` proves that copy deltas belong to
+  `Compositor` and patch exact visible ranges without pane-model mutation.

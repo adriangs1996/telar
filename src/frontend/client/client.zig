@@ -224,11 +224,31 @@ pub fn init(params: Params) !*Client {
     // only exist once the client does.
     client.presenter = .{
         .io = params.io,
-        .select = &client.select,
+        .scheduler = .{
+            .context = client,
+            .draw = scheduleDraw,
+            .media = scheduleMedia,
+        },
         .metrics = &client.telemetry.metrics,
         .screen = screen,
+        .compositor = .init(gpa),
     };
     return client;
+}
+
+fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try client.select.concurrent(.draw, waitForPresentation, .{ client.io, deadline_ns });
+}
+
+fn scheduleMedia(context: *anyopaque, deadline_ns: u64) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try client.select.concurrent(.media_tick, waitForPresentation, .{ client.io, deadline_ns });
+}
+
+fn waitForPresentation(io: Io, deadline_ns: u64) anyerror!void {
+    const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
+    try deadline.wait(io);
 }
 
 /// Cancels every in-flight select task first — the reload task publishes

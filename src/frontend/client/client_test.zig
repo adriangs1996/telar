@@ -2451,7 +2451,6 @@ test "pane resize publishes committed geometry before presentation" {
     try std.testing.expectEqual(version_before.tabs, client.model.version().tabs);
     try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expect(model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expect(!handler.redraw);
 
@@ -2520,7 +2519,6 @@ test "pane fullscreen publishes visible geometry without direct redraw" {
     try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w, .rows = area.h }, fullscreen_size);
     try std.testing.expectEqual(version_before_enter.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_enter, client.presenter.pending_updates);
-    try std.testing.expect(model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expect(!handler.redraw);
 
@@ -3954,8 +3952,6 @@ test "select tab closes captured paste before detaching and requesting the targe
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
     const second_pane: schema.PaneId = @enumFromInt(20);
     const second = try harness.addInactiveTab(@enumFromInt(2), second_pane);
-    const selected_model = &client.model.workspace.find(second.tab_id).?.model;
-    selected_model.composition_invalidated = false;
     const version_before_selection = client.model.version();
     const pending_updates_before_selection = client.presenter.pending_updates;
 
@@ -3966,7 +3962,6 @@ test "select tab closes captured paste before detaching and requesting the targe
     try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_selection, client.presenter.pending_updates);
     try std.testing.expect(!handler.redraw);
-    try std.testing.expect(!selected_model.composition_invalidated);
     try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expect(!client.model.workspace.findPane(second_pane).?.attached);
     try std.testing.expect(!client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
@@ -4654,8 +4649,6 @@ test "pane cwd commits before presenter-owned metadata projection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const active = client.model.workspace.active().?;
-    active.model.composition_invalidated = false;
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
 
@@ -4673,14 +4666,12 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
     try std.testing.expectEqual(version.pane_foreground, client.model.version().pane_foreground);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-    try std.testing.expect(!active.model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(!active.model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 
@@ -4708,17 +4699,13 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expectEqualDeep(presented_version, client.model.version());
 }
 
-test "pane foreground invalidates compositions only when the presenter observes it" {
+test "pane foreground reaches presentation only after version observation" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const inactive_location = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
-    const active = client.model.workspace.active().?;
-    const inactive = client.model.workspace.find(inactive_location.tab_id).?;
-    active.model.composition_invalidated = false;
-    inactive.model.composition_invalidated = false;
+    _ = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
 
@@ -4739,20 +4726,15 @@ test "pane foreground invalidates compositions only when the presenter observes 
     try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
     try std.testing.expectEqual(version.pane_foreground + 1, client.model.version().pane_foreground);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-    try std.testing.expect(!active.model.composition_invalidated);
-    try std.testing.expect(!inactive.model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(!active.model.composition_invalidated);
-    try std.testing.expect(inactive.model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 
-    inactive.model.composition_invalidated = false;
     const presented_version = client.model.version();
     const presented_updates = client.presenter.pending_updates;
     _ = try server_messages.handleServerMessage(
@@ -4763,7 +4745,6 @@ test "pane foreground invalidates compositions only when the presenter observes 
 
     try std.testing.expectEqualDeep(presented_version, client.model.version());
     try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
-    try std.testing.expect(!inactive.model.composition_invalidated);
 }
 
 test "close pane request waits for the authoritative exit before committing" {
@@ -5343,9 +5324,18 @@ test "toast activation commits by id before following its navigation target" {
     const visible_at_ns = item.transition_updated_ns + notifications.transition_duration_ns;
     _ = client.model.advanceNotifications(visible_at_ns);
 
-    _ = try active.render(&client.presenter.screen, client.view.workbench());
+    const composed = try client.presenter.compositor.render(.{
+        .model = active,
+        .screen = &client.presenter.screen,
+        .input = .{
+            .area = client.view.workbench(),
+            .palette = client.view.palette(),
+        },
+    });
+    active.commitPresentation(composed.commit);
     _ = try client.view.render(&client.presenter.screen, .{
         .model = active,
+        .compositor = &client.presenter.compositor,
         .notifications = client.model.notificationSnapshot(),
         .force = true,
     });
@@ -7024,15 +7014,12 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try harness.bootstrap();
     const client = harness.client;
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
-    const inactive_location = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
-    const inactive = client.model.workspace.find(inactive_location.tab_id).?;
+    _ = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const active = client.model.workspace.active().?;
     pane.scroll = .{
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 10,
     };
-    active.model.composition_invalidated = false;
-    inactive.model.composition_invalidated = false;
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
     const pane_view = active.model.viewForPane(pane.id, client.view.workbench()).?;
@@ -7053,8 +7040,6 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
     try std.testing.expect(!client.graphics_store.paneVisible(pane.id));
     try std.testing.expect(!handler.redraw);
-    try std.testing.expect(!active.model.composition_invalidated);
-    try std.testing.expect(!inactive.model.composition_invalidated);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
     try handler.key(try keybind.parseKey("x"));
@@ -7064,8 +7049,6 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expectEqual(version.viewport + 2, client.model.version().viewport);
     try expectNonViewportVersionEqual(version, client.model.version());
     try std.testing.expect(!handler.redraw);
-    try std.testing.expect(!active.model.composition_invalidated);
-    try std.testing.expect(!inactive.model.composition_invalidated);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
     try harness.settle();
@@ -7086,7 +7069,6 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(inactive.model.composition_invalidated);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
@@ -7146,15 +7128,18 @@ test "copy mode round trip: enter, select, copy, leave" {
     try expectNonCopyVersionEqual(version_before, client.model.version());
     try std.testing.expectEqual(version_before.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expect(pane.copy_view == null);
+    try std.testing.expect(client.presenter.compositor.copy == null);
     try std.testing.expect(!handler.redraw);
 
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(pane.copy_view != null);
-    try std.testing.expectEqualDeep(client.model.copyModeProjection(), client.presenter.presented_copy_mode);
-    const painted_cursor_y = pane.copy_view.?.cursor.y;
+    try std.testing.expect(client.presenter.compositor.copy != null);
+    try std.testing.expectEqualDeep(
+        client.model.copyModeProjection().?.view,
+        client.presenter.compositor.copy.?.view,
+    );
+    const painted_cursor_y = client.presenter.compositor.copy.?.view.cursor.y;
 
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
@@ -7176,18 +7161,18 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(mouse_version.viewport + 1, client.model.version().viewport);
     try expectNonCopyOrViewportVersionEqual(mouse_version, client.model.version());
     try std.testing.expectEqual(painted_cursor_y - 3, client.model.copyModeProjection().?.view.cursor.y);
-    try std.testing.expectEqual(painted_cursor_y, pane.copy_view.?.cursor.y);
+    try std.testing.expectEqual(painted_cursor_y, client.presenter.compositor.copy.?.view.cursor.y);
     try std.testing.expect(!handler.redraw);
 
     // While in copy mode, keys route to the selection, not the pane.
     try handler.key(try keybind.parseKey("v"));
     try handler.key(try keybind.parseKey("l"));
-    try std.testing.expectEqual(@as(u16, 0), pane.copy_view.?.cursor.x);
+    try std.testing.expectEqual(@as(u16, 0), client.presenter.compositor.copy.?.view.cursor.x);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u16, 1), pane.copy_view.?.cursor.x);
-    try std.testing.expect(pane.copy_view.?.anchor != null);
+    try std.testing.expectEqual(@as(u16, 1), client.presenter.compositor.copy.?.view.cursor.x);
+    try std.testing.expect(client.presenter.compositor.copy.?.view.anchor != null);
 
     const version_before_copy = client.model.version();
     try handler.key(try keybind.parseKey("enter"));
@@ -7195,11 +7180,10 @@ test "copy mode round trip: enter, select, copy, leave" {
     try expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(version_before_copy.viewport + 1, client.model.version().viewport);
-    try std.testing.expect(pane.copy_view != null);
+    try std.testing.expect(client.presenter.compositor.copy != null);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expect(pane.copy_view == null);
-    try std.testing.expect(client.presenter.presented_copy_mode == null);
+    try std.testing.expect(client.presenter.compositor.copy == null);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
     try harness.settle();
 

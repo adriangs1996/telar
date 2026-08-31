@@ -6,6 +6,7 @@ const core = @import("telar-core");
 const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
+const presentation_projection = @import("presentation_projection.zig");
 const runtime_transport = @import("runtime_transport.zig");
 
 /// Publishes every revision the presenter uses after one client event commits.
@@ -14,11 +15,7 @@ const runtime_transport = @import("runtime_transport.zig");
 /// try presentation_lifecycle.observe(client);
 /// ```
 pub fn observe(client: *Client) !void {
-    try client.presenter.observe(.{
-        .model = client.model.version(),
-        .graphics_ingress = client.graphics_store.ingressVersion(),
-        .attachment_ingress = client.view.kittyAttachments().ingressVersion(),
-    });
+    try client.presenter.observe(presentation_projection.observation(client));
 }
 
 /// Completes one paced draw, then delivers credits and frame acknowledgements
@@ -29,8 +26,12 @@ pub fn observe(client: *Client) !void {
 /// ```
 pub fn handleDraw(client: *Client, result: anyerror!void) !void {
     try client.presenter.completeDraw(result);
-    const delivery = try client.presenter.presentDue(client) orelse return;
+    const delivery = try client.presenter.presentDue(
+        presentation_projection.projection(client),
+        presentation_projection.resources(client),
+    ) orelse return;
 
+    client.model.commitPresentation(delivery.commit);
     try runtime_transport.flushGraphicsCredits(client);
     for (delivery.frame_acks.slice()) |ack| {
         const ack_started = diagnostics.now(client.io);
@@ -54,5 +55,8 @@ pub fn handleDraw(client: *Client, result: anyerror!void) !void {
 /// ```
 pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
     try client.presenter.completeMediaTick(result);
-    try client.presenter.presentMedia(client);
+    try client.presenter.presentMedia(
+        presentation_projection.projection(client),
+        presentation_projection.resources(client),
+    );
 }

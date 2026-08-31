@@ -70,10 +70,10 @@ After the server event, the client loop calls `presentation_lifecycle.observe`. 
 metadata handler calls `requestDraw`.
 
 `Presenter.presentDue` maps the metadata revision to client-view invalidation.
-A foreground revision also invalidates every bounded tab composition before
-rendering the active tab. Invalidating all tab compositions is intentional:
-several foreground reports can fold into one 60 Hz presentation, and an
-inactive tab must not retain a border composed from an older process name.
+A foreground revision forces the single presenter-owned compositor to rebuild
+the active tab. Inactive tabs retain no composition cache; switching tabs
+changes the compositor source and rebuilds the selected tab from current
+metadata.
 
 An exact repeat or a CWD move that retains the same display name publishes no
 revision, schedules no frame and performs no cache work.
@@ -98,7 +98,7 @@ foreground revisions again.
 - `src/frontend/client/application/pane_metadata.zig` proves both messages use
   the same model transaction.
 - `src/frontend/client/client_test.zig` proves the dispatcher commits before
-  presentation, requests no direct draw and leaves cache invalidation to the
+  presentation, requests no direct draw and leaves composition policy to the
   presenter.
 - `src/backend/runtime/attachment.zig` proves per-client delivery cursors for
   both runtime-owned facts.

@@ -47,7 +47,8 @@ pub const RenderStats = struct {
 
 pub const RenderInput = struct {
     tabs: ?*const tabs_mod.Model = null,
-    model: *multiplexer.Model,
+    model: *const multiplexer.Model,
+    compositor: ?*const multiplexer.Compositor = null,
     agents: *const agents.Snapshot = &empty_agent_snapshot,
     sidebar_animation_frame: u8 = 0,
     notifications: *const notifications.Center = &empty_notifications,
@@ -503,10 +504,18 @@ pub const State = struct {
             else
                 null,
         };
+        var fallback_layout: workspace_capability.layout.Snapshot = .{};
+        const layout = if (input.compositor) |compositor|
+            compositor.layoutSnapshot()
+        else layout: {
+            input.model.layout.snapshot(state.workbench(), &fallback_layout);
+            break :layout &fallback_layout;
+        };
         const composed = widgets.composition.render(&context, .{
             .regions = state.regions,
             .tabs = input.tabs,
             .model = input.model,
+            .layout = layout,
             .rename_field = if (input.prompt) |prompt| &prompt.field else null,
             .rename_kind = promptKind(input.prompt),
             .sidebar_snapshot = input.agents,
@@ -535,16 +544,23 @@ pub const State = struct {
         else
             ui.Rect{};
         const graphical_modal = state.graphicalModalCovers(current_modal_area);
-        if (!state.modal_overlay_area.isEmpty())
-            input.model.copyComposedArea(&state.scratch, state.modal_overlay_area);
-        if (!current_modal_area.isEmpty() and
-            !std.meta.eql(current_modal_area, state.modal_overlay_area))
-            input.model.copyComposedArea(&state.scratch, current_modal_area);
+        if (input.compositor) |compositor| {
+            if (!state.modal_overlay_area.isEmpty()) {
+                compositor.copyArea(&state.scratch, state.modal_overlay_area);
+            }
+            if (!current_modal_area.isEmpty() and
+                !std.meta.eql(current_modal_area, state.modal_overlay_area))
+            {
+                compositor.copyArea(&state.scratch, current_modal_area);
+            }
+        }
         const toast_area = widgets.toast.overlayArea(state.regions.workbench);
         const has_toasts = input.notifications.hasItems() and !toast_area.isEmpty();
         const graphical_toasts = state.kitty_toasts.covers(input.notifications);
         if (has_toasts or state.toast_overlay_drawn) {
-            input.model.copyComposedArea(&state.scratch, toast_area);
+            if (input.compositor) |compositor| {
+                compositor.copyArea(&state.scratch, toast_area);
+            }
             if (has_toasts) {
                 if (graphical_toasts)
                     widgets.toast.registerHits(&context, toast_area, input.notifications)
@@ -658,6 +674,25 @@ fn syncRegion(screen: *term.Screen, source: *const ui.Buffer, area: ui.Rect) !Re
     return stats;
 }
 
+const TestingComposition = struct {
+    model: *multiplexer.Model,
+    screen: *term.Screen,
+    area: ui.Rect,
+    palette: *const theme_mod.Palette = &theme_mod.default_theme.palette,
+};
+
+fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingComposition) !void {
+    const rendered = try compositor.render(.{
+        .model = composition.model,
+        .screen = composition.screen,
+        .input = .{
+            .area = composition.area,
+            .palette = composition.palette,
+        },
+    });
+    composition.model.commitPresentation(rendered.commit);
+}
+
 test "visible regions reserve top bottom sidebar and workbench" {
     const regions = Regions.calculate(120, 40, true);
     try std.testing.expectEqual(ui.Rect{ .w = 120, .h = 1 }, regions.top);
@@ -717,8 +752,18 @@ test "workbench clicks return focus intent without mutating pane layout" {
     try std.testing.expect(model.focusPane(first));
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
-    _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .force = true,
+    });
     const second_view = model.layoutSnapshot(state.workbench()).find(second).?;
     const point = term.Event.Mouse{
         .x = second_view.content.x,
@@ -771,8 +816,19 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .agents = &snapshot,
+        .force = true,
+    });
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
     try std.testing.expect(state.handleMouse(first_row).redraw);
@@ -821,8 +877,19 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
 
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .agents = &snapshot,
+        .force = true,
+    });
     var open_point: ?struct { x: u16, y: u16 } = null;
     for (state.hits.registered()) |entry| switch (entry.action) {
         .attachment_open => {
@@ -840,7 +907,11 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
     try std.testing.expect(opened.consumed);
     try std.testing.expect(state.hasAttachmentModal());
 
-    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .agents = &snapshot,
+    });
     const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,
         .y = state.regions.workbench.y,
@@ -1060,9 +1131,16 @@ test "cell rendering leaves toast rasterization to the media pass" {
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
-    _ = try model.render(&screen, state.workbench());
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
     _ = try state.render(&screen, .{
         .model = &model,
+        .compositor = &compositor,
         .notifications = &center,
         .force = true,
     });
@@ -1094,8 +1172,18 @@ test "client chrome uses Vesper by default" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 50, .rows = 22 });
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
-    _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .force = true,
+    });
 
     try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[0].style.bg);
     try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[0].style.fg);
@@ -1116,8 +1204,19 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 50, .rows = 22 });
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
-    _ = try model.renderThemed(&screen, state.workbench(), state.palette());
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = state.workbench(),
+        .palette = state.palette(),
+    });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .force = true,
+    });
 
     try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[0].style.bg);
     // The bottom-left corner is the status region, which stays on the host
@@ -1161,8 +1260,18 @@ test "clickable toast restores pane cells after its exit animation" {
     );
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
-    _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .notifications = &center });
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .notifications = &center,
+    });
 
     const interaction = state.handleMouse(.{
         .x = click_x,
@@ -1177,7 +1286,11 @@ test "clickable toast restores pane cells after its exit animation" {
     try std.testing.expectEqual(location.tab_id, target.select_tab);
     try std.testing.expect(center.advance(200 + notifications.transition_duration_ns));
     try std.testing.expect(!center.hasItems());
-    _ = try state.render(&screen, .{ .model = &model, .notifications = &center });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .notifications = &center,
+    });
 
     const restored = screen.back.cells[@as(usize, click_y) * screen.back.w + click_x];
     try std.testing.expectEqualStrings("u", restored.text());
@@ -1216,8 +1329,19 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     const model = &tabs.active().?.model;
-    _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .tabs = &tabs, .model = model, .force = true });
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
+    _ = try state.render(&screen, .{
+        .tabs = &tabs,
+        .model = model,
+        .compositor = &compositor,
+        .force = true,
+    });
 
     // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
     // last sixteen columns of the bottom row.
