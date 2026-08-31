@@ -7,7 +7,9 @@
 const std = @import("std");
 const core = @import("telar-core");
 const claude = @import("claude.zig");
+const claude_transport = @import("claude_transport.zig");
 const request = @import("request.zig");
+const request_body = @import("request_body.zig");
 const sse = @import("../sse.zig");
 
 pub const AgentProvider = core.schema.AgentProvider;
@@ -16,6 +18,10 @@ pub const Request = request.Request;
 pub const RequestClass = request.RequestClass;
 pub const identify = request.identify;
 pub const classify = request.classify;
+pub const RequestObserver = request_body.Observer;
+pub const RequestFragment = request_body.Fragment;
+pub const RequestStreams = request_body.Streams;
+pub const claudeRequestTransformer = claude_transport.requestTransformer;
 
 pub const max_concurrent_responses = 128;
 

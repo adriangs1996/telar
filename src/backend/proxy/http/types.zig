@@ -22,10 +22,12 @@ pub const BodyPlan = union(enum) {
     }
 };
 
-/// Why Telar observed the request.
+/// Route-level request classification.
 ///
 /// Classification refers to the request received from the child, before any
 /// configured header transformation changes the forwarded method or target.
+/// A Claude inference route remains only a candidate until its body is
+/// classified by the provider layer.
 pub const RequestClass = provider.RequestClass;
 
 /// Information from the forwarded request needed to parse its response.

@@ -126,10 +126,14 @@ capability.
 ## Agent state
 
 Hosts below `anthropic.com` identify Claude Code and hosts below `openai.com`
-or `chatgpt.com` identify Codex. Only `POST /v1/messages` belongs to Claude;
-only `POST /v1/responses` and `POST /backend-api/codex/responses` belong to
-Codex. Queries do not change route ownership. Cross-provider routes, unknown
-hosts, and other requests are auxiliary and do not drive agent lifecycle.
+or `chatgpt.com` identify Codex. `POST /v1/messages` is a Claude inference
+candidate. Telar publishes it as an inference request only when its complete
+JSON body has top-level `stream: true` and a non-empty top-level `tools` array.
+Claude Code also sends startup probes and helper requests to that route, so the
+route cannot establish `working` by itself. Only `POST /v1/responses` and
+`POST /backend-api/codex/responses` belong to Codex. Queries do not change
+route ownership. Cross-provider routes, unknown hosts, and other requests are
+auxiliary and do not drive agent lifecycle.
 
 An inference request start, response data, or successful response completion
 means `working`: one completed model exchange may be followed by local tool
@@ -145,12 +149,20 @@ while a graceful duplicate sentinel after all streams completed does not
 overwrite their result. Both the protocol observer and agent store track at
 most 128 concurrent streams per bounded record.
 
-For a successful, identity-encoded SSE response, the proxy inspects forwarded
-payload fragments without retaining them. A Claude `message_delta` whose JSON
-type also equals `message_delta` and whose `stop_reason` is `end_turn` publishes
-`provider_turn_completed`. The agent becomes `ready` only after every active
-model exchange has produced that outcome. Truncated or malformed events and
-continuation outcomes such as `tool_use` do not complete the turn.
+For a successful candidate response, the proxy inspects forwarded payload
+fragments without retaining them. A native request transform replaces
+`Accept-Encoding` with `identity` for Claude `POST /v1/messages`, allowing the
+SSE decoder to inspect the forwarded representation directly without a second
+decompression path. The transform preserves all other routes, other
+providers, response heads, and bodies. Successful response headers must still
+describe identity-encoded `text/event-stream`; an origin that ignores the
+negotiation remains unobservable.
+
+A Claude `message_delta` whose JSON type also equals `message_delta` and whose
+`stop_reason` is `end_turn` publishes `provider_turn_completed`. The agent
+becomes `ready` only after every active model exchange has produced that
+outcome. Truncated or malformed events and continuation outcomes such as
+`tool_use` do not complete the turn.
 
 Network evidence cannot see a terminal permission dialog, so the observation
 worker also recognizes bounded presentation hints found in Codex, Claude Code,
@@ -185,19 +197,21 @@ eligible for delivery. No metric retains the destination hostname or payload.
 Runtime telemetry exposes five Claude-specific counters without retaining
 headers or response data:
 
-- `proxy_claude_inference_requests` counts classified `/v1/messages` starts.
-- `proxy_claude_sse_payload_fragments` counts eligible SSE payload fragments
-  delivered to the provider interpreter.
+- `proxy_claude_inference_requests` counts body-classified `/v1/messages`
+  starts.
+- `proxy_claude_sse_payload_fragments` counts response payload fragments
+  examined by the SSE interpreter.
 - `proxy_claude_turn_completions` counts verified `end_turn` outcomes.
 - `proxy_claude_successful_responses` counts successful transport completions.
 - `proxy_claude_failure_observations` counts published failure outcomes.
 
-If requests increase but SSE fragments do not, inspect response status,
-`Content-Type`, `Content-Encoding`, and HTTP/2 decode failures. If fragments
-increase without turn completions, the received SSE did not contain a valid,
-non-truncated Claude `end_turn`. If turn completions increase while the agent
-remains `working`, compare observation queue loss and active concurrent model
-exchanges; the provider interpretation has already succeeded.
+If requests increase but SSE fragments do not, inspect response status, body
+framing, content coding, and HTTP/2 decode failures; the origin may have ignored
+identity negotiation. If fragments increase without turn completions, the
+received SSE did not contain a valid, non-truncated Claude `end_turn`. If turn
+completions increase while the agent remains `working`, compare observation
+queue loss and active concurrent model exchanges; provider interpretation has
+already succeeded.
 
 ## Lua middleware boundary
 

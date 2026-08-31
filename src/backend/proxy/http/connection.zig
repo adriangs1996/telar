@@ -91,7 +91,7 @@ pub fn Port(comptime Context: type) type {
     return struct {
         read_request: *const fn (*Context) ?types.RequestHead,
         exchange: *const fn (*Context, types.RequestHead) ExchangeOutcome,
-        publish_request: *const fn (*Context, types.RequestClass) void,
+        publish_request: *const fn (*Context, types.RequestHead) void,
         publish_response: *const fn (*Context, types.ResponseHead) void,
         publish_failure: *const fn (*Context) void,
         upgrade: *const fn (*Context) void,
@@ -116,7 +116,7 @@ pub fn Connection(comptime Context: type, comptime port: anytype) type {
         /// ```
         pub fn run(context: *Context) void {
             while (port.read_request(context)) |request| {
-                port.publish_request(context, request.classification);
+                port.publish_request(context, request);
 
                 switch (port.exchange(context, request)) {
                     .failed => {
@@ -410,9 +410,9 @@ const ConnectionCapture = struct {
         return capture.outcomes[capture.outcome_index];
     }
 
-    fn publishRequest(capture: *ConnectionCapture, classification: types.RequestClass) void {
+    fn publishRequest(capture: *ConnectionCapture, request: types.RequestHead) void {
         capture.record(.publish_request);
-        capture.published_class = classification;
+        capture.published_class = request.classification;
     }
 
     fn publishResponse(capture: *ConnectionCapture, final: types.ResponseHead) void {

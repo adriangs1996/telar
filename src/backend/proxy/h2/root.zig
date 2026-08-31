@@ -11,6 +11,8 @@ pub const Direction = relay_mod.Direction;
 pub const client_preface = relay_mod.client_preface;
 pub const Stats = relay_mod.Stats;
 pub const Lifecycle = relay_mod.Lifecycle;
+pub const RequestBody = relay_mod.RequestBody;
+pub const RequestFinished = relay_mod.RequestFinished;
 pub const ResponseBody = relay_mod.ResponseBody;
 pub const Event = relay_mod.Event;
 pub const PeerSettings = relay_mod.PeerSettings;
@@ -256,7 +258,7 @@ const IntegrationContext = struct {
             .lifecycle => |observed| if (observed.stream_id == 1) {
                 context.request_phase = observed.phase;
             },
-            .response_body => {},
+            .request_body, .request_finished, .response_body => {},
         }
     }
 };

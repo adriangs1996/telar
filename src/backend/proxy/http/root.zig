@@ -333,8 +333,8 @@ const ConnectionIntegration = struct {
         return IntegrationExchange.execute(context, request);
     }
 
-    fn publishRequest(context: *ConnectionIntegration, classification: RequestClass) void {
-        context.request_classes[context.request_count] = classification;
+    fn publishRequest(context: *ConnectionIntegration, request: RequestHead) void {
+        context.request_classes[context.request_count] = request.classification;
         context.request_count += 1;
     }
 

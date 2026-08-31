@@ -33,7 +33,8 @@ pub fn identify(host: []const u8) AgentProvider {
     return .unknown;
 }
 
-/// Classifies a request only when its method and route belong to `provider`.
+/// Classifies a request route for `provider`. For Claude, `.inference` is a
+/// candidate which the request-body observer must refine before publication.
 /// Query parameters do not change route ownership. Unknown providers and
 /// cross-provider routes are always auxiliary.
 ///

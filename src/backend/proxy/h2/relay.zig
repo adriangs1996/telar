@@ -44,6 +44,15 @@ pub const Lifecycle = struct {
     status_code: u16,
 };
 
+pub const RequestBody = struct {
+    stream_id: u32,
+    bytes: []const u8,
+};
+
+pub const RequestFinished = struct {
+    stream_id: u32,
+};
+
 pub const ResponseBody = struct {
     stream_id: u32,
     status_code: u16,
@@ -54,6 +63,8 @@ pub const ResponseBody = struct {
 /// One borrowed observation produced while relaying HTTP/2 frames.
 pub const Event = union(enum) {
     lifecycle: Lifecycle,
+    request_body: RequestBody,
+    request_finished: RequestFinished,
     response_body: ResponseBody,
 };
 
@@ -179,8 +190,9 @@ const Observer = struct {
         observer.stream_id = streamId(&observer.header);
         observer.padding = 0;
 
-        if (observer.frame_type == frame_headers or observer.frame_type == frame_push_promise)
+        if (observer.frame_type == frame_headers or observer.frame_type == frame_push_promise) {
             observer.block_end_stream = observer.flags & flag_end_stream != 0;
+        }
 
         if (observer.failed) {
             if (observer.frame_type == frame_headers and observer.continuation_stream == 0) {
@@ -212,21 +224,29 @@ const Observer = struct {
     }
 
     fn observePayload(observer: *Observer, payload: []const u8, sink: anytype) void {
-        if (observer.direction == .response and observer.frame_type == frame_data and payload.len != 0) {
-            sink.emit(.{ .lifecycle = .{
-                .phase = .response_activity,
-                .stream_id = observer.stream_id,
-                .status_code = observer.streams.status(observer.stream_id),
-            } });
+        if (observer.frame_type == frame_data and payload.len != 0) {
+            if (observer.direction == .response) {
+                sink.emit(.{ .lifecycle = .{
+                    .phase = .response_activity,
+                    .stream_id = observer.stream_id,
+                    .status_code = observer.streams.status(observer.stream_id),
+                } });
+            }
 
-            if (observer.responseBodyFragment(payload)) |fragment| {
+            if (observer.dataBodyFragment(payload)) |fragment| {
                 if (fragment.len != 0) {
-                    sink.emit(.{ .response_body = .{
-                        .stream_id = observer.stream_id,
-                        .status_code = observer.streams.status(observer.stream_id),
-                        .sse_body = observer.hasObservableSseBody(observer.stream_id),
-                        .bytes = fragment,
-                    } });
+                    switch (observer.direction) {
+                        .request => sink.emit(.{ .request_body = .{
+                            .stream_id = observer.stream_id,
+                            .bytes = fragment,
+                        } }),
+                        .response => sink.emit(.{ .response_body = .{
+                            .stream_id = observer.stream_id,
+                            .status_code = observer.streams.status(observer.stream_id),
+                            .sse_body = observer.hasObservableSseBody(observer.stream_id),
+                            .bytes = fragment,
+                        } }),
+                    }
                 }
             }
         }
@@ -284,6 +304,7 @@ const Observer = struct {
                             }
 
                             if (observer.block_end_stream) {
+                                sink.emit(.{ .request_finished = .{ .stream_id = observer.block_stream } });
                                 observer.streams.finishRequest(observer.block_stream);
                             }
                         },
@@ -350,6 +371,7 @@ const Observer = struct {
             completed_stream != 0 and
             completed_flags & flag_end_stream != 0)
         {
+            sink.emit(.{ .request_finished = .{ .stream_id = completed_stream } });
             observer.streams.finishRequest(completed_stream);
         }
 
@@ -359,7 +381,7 @@ const Observer = struct {
         observer.payload_offset = 0;
     }
 
-    fn responseBodyFragment(observer: *Observer, payload: []const u8) ?[]const u8 {
+    fn dataBodyFragment(observer: *Observer, payload: []const u8) ?[]const u8 {
         const prefix: usize = @intFromBool(observer.flags & flag_padded != 0);
 
         if (prefix != 0 and observer.payload_offset == 0) {
@@ -681,21 +703,29 @@ const Transcoder = struct {
                 transcoder.failed = true;
                 return false;
             }
-            if (transcoder.configuration.direction == .response and transcoder.frame_type == frame_data and payload.len != 0) {
-                port.emit(.{ .lifecycle = .{
-                    .phase = .response_activity,
-                    .stream_id = transcoder.stream_id,
-                    .status_code = transcoder.streams.status(transcoder.stream_id),
-                } });
+            if (transcoder.frame_type == frame_data and payload.len != 0) {
+                if (transcoder.configuration.direction == .response) {
+                    port.emit(.{ .lifecycle = .{
+                        .phase = .response_activity,
+                        .stream_id = transcoder.stream_id,
+                        .status_code = transcoder.streams.status(transcoder.stream_id),
+                    } });
+                }
 
-                if (transcoder.responseBodyFragment(payload)) |fragment| {
+                if (transcoder.dataBodyFragment(payload)) |fragment| {
                     if (fragment.len != 0) {
-                        port.emit(.{ .response_body = .{
-                            .stream_id = transcoder.stream_id,
-                            .status_code = transcoder.streams.status(transcoder.stream_id),
-                            .sse_body = transcoder.hasObservableSseBody(transcoder.stream_id),
-                            .bytes = fragment,
-                        } });
+                        switch (transcoder.configuration.direction) {
+                            .request => port.emit(.{ .request_body = .{
+                                .stream_id = transcoder.stream_id,
+                                .bytes = fragment,
+                            } }),
+                            .response => port.emit(.{ .response_body = .{
+                                .stream_id = transcoder.stream_id,
+                                .status_code = transcoder.streams.status(transcoder.stream_id),
+                                .sse_body = transcoder.hasObservableSseBody(transcoder.stream_id),
+                                .bytes = fragment,
+                            } }),
+                        }
                     }
                 }
             }
@@ -876,7 +906,10 @@ const Transcoder = struct {
         }
 
         if (transcoder.block_flags & flag_end_stream != 0) switch (direction) {
-            .request => transcoder.streams.finishRequest(transcoder.block_stream),
+            .request => {
+                port.emit(.{ .request_finished = .{ .stream_id = transcoder.block_stream } });
+                transcoder.streams.finishRequest(transcoder.block_stream);
+            },
             .response => {
                 const final_status = transcoder.streams.status(transcoder.block_stream);
                 port.emit(.{ .lifecycle = .{
@@ -1031,10 +1064,13 @@ const Transcoder = struct {
         }
         if (direction == .request and frame_type == frame_data and
             frame_stream != 0 and frame_flags & flag_end_stream != 0)
+        {
+            port.emit(.{ .request_finished = .{ .stream_id = frame_stream } });
             transcoder.streams.finishRequest(frame_stream);
+        }
     }
 
-    fn responseBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
+    fn dataBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
         const prefix: usize = @intFromBool(transcoder.flags & flag_padded != 0);
 
         if (prefix != 0 and transcoder.payload_offset == 0) {
@@ -1369,6 +1405,8 @@ fn writeFrameHeader(buffer: *[frame_header_len]u8, header: FrameHeader) void {
 fn lifecycle(event: Event) ?Lifecycle {
     return switch (event) {
         .lifecycle => |value| value,
+        .request_body => null,
+        .request_finished => null,
         .response_body => null,
     };
 }
@@ -1382,6 +1420,8 @@ const BodyCollector = struct {
     activity: usize = 0,
     finished: usize = 0,
     finished_before_body: bool = false,
+    request_body: bool = false,
+    request_finished: usize = 0,
 
     fn emit(collector: *BodyCollector, event: Event) void {
         switch (event) {
@@ -1393,6 +1433,14 @@ const BodyCollector = struct {
                 },
                 else => {},
             },
+            .request_body => |body| {
+                std.debug.assert(body.bytes.len <= collector.bytes.len - collector.len);
+                @memcpy(collector.bytes[collector.len..][0..body.bytes.len], body.bytes);
+                collector.len += body.bytes.len;
+                collector.stream_id = body.stream_id;
+                collector.request_body = true;
+            },
+            .request_finished => collector.request_finished += 1,
             .response_body => |body| {
                 std.debug.assert(body.bytes.len <= collector.bytes.len - collector.len);
                 @memcpy(collector.bytes[collector.len..][0..body.bytes.len], body.bytes);
@@ -1408,6 +1456,51 @@ const BodyCollector = struct {
         return collector.bytes[0..collector.len];
     }
 };
+
+test "HTTP2 observer exposes request DATA across every two-chunk split" {
+    const payload = "{\"stream\":true}";
+    var wire: [frame_header_len + payload.len]u8 = undefined;
+    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 5 });
+    @memcpy(wire[frame_header_len..], payload);
+
+    for (0..wire.len + 1) |split| {
+        var collector: BodyCollector = .{};
+        var observer = Observer.init(.claude, .request);
+        defer observer.deinit();
+
+        observer.observe(wire[0..split], &collector);
+        observer.observe(wire[split..], &collector);
+
+        try std.testing.expect(!observer.failed);
+        try std.testing.expectEqualStrings(payload, collector.payloadSlice());
+        try std.testing.expectEqual(@as(u32, 5), collector.stream_id);
+        try std.testing.expect(collector.request_body);
+        try std.testing.expectEqual(@as(usize, 1), collector.request_finished);
+        try std.testing.expectEqual(@as(usize, 0), collector.activity);
+        try std.testing.expectEqual(@as(usize, 0), collector.finished);
+    }
+}
+
+test "HTTP2 observer finishes a bodyless request across every two-chunk split" {
+    const block = "\x83\x04\x0c/v1/messages";
+    var wire: [frame_header_len + block.len]u8 = undefined;
+    writeFrameHeader(wire[0..frame_header_len], .{ .length = block.len, .frame_type = frame_headers, .flags = flag_end_headers | flag_end_stream, .stream_id = 5 });
+    @memcpy(wire[frame_header_len..], block);
+
+    for (0..wire.len + 1) |split| {
+        var collector: BodyCollector = .{};
+        var observer = Observer.init(.claude, .request);
+        defer observer.deinit();
+
+        observer.observe(wire[0..split], &collector);
+        observer.observe(wire[split..], &collector);
+
+        try std.testing.expect(!observer.failed);
+        try std.testing.expectEqualStrings("", collector.payloadSlice());
+        try std.testing.expect(!collector.request_body);
+        try std.testing.expectEqual(@as(usize, 1), collector.request_finished);
+    }
+}
 
 test "HTTP2 observer exposes DATA payload across every two-chunk split" {
     const payload = "event: message_delta\ndata: payload\n\n";
@@ -2242,6 +2335,48 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
         try std.testing.expectEqualStrings(payload, collector.payloadSlice());
         try std.testing.expectEqual(@as(u32, 13), collector.stream_id);
         try std.testing.expectEqual(@as(usize, 1), collector.finished);
+    }
+}
+
+test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
+    const Identity = struct {
+        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+            return .apply;
+        }
+    };
+    var ignored: u8 = 0;
+    var pipeline: middleware.TransformPipeline = .{};
+    try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
+
+    const payload = "{\"stream\":true}";
+    var wire: [frame_header_len + payload.len]u8 = undefined;
+    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 21 });
+    @memcpy(wire[frame_header_len..], payload);
+
+    for (0..wire.len + 1) |split| {
+        var collector: BodyCollector = .{};
+        var session: FakeWriteSession = .{};
+        var source_settings: PeerSettings = .{};
+        var target_settings: PeerSettings = .{};
+        var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+        defer transcoder.deinit();
+
+        try std.testing.expect(transcoder.process(
+            wire[0..split],
+            transcodePort(&session, &collector),
+        ));
+        try std.testing.expect(transcoder.process(
+            wire[split..],
+            transcodePort(&session, &collector),
+        ));
+
+        try std.testing.expectEqualSlices(u8, &wire, session.output[0..session.len]);
+        try std.testing.expectEqualStrings(payload, collector.payloadSlice());
+        try std.testing.expectEqual(@as(u32, 21), collector.stream_id);
+        try std.testing.expect(collector.request_body);
+        try std.testing.expectEqual(@as(usize, 1), collector.request_finished);
+        try std.testing.expectEqual(@as(usize, 0), collector.activity);
+        try std.testing.expectEqual(@as(usize, 0), collector.finished);
     }
 }
 
