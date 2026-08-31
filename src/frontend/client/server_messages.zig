@@ -1,11 +1,8 @@
-//! Reconciliation of every message the runtime sends: the dispatcher and
-//! one named entrypoint per message, operating on the client the way the
-//! input handler does. Nothing here owns state — the client does; this
-//! file owns the protocol conversation.
+//! Routes decoded runtime messages to client slice adapters.
+//! State transitions, resource effects and correlation stay in those adapters.
+//! This dispatcher only maps their control outcomes to the client loop.
 
 const core = @import("telar-core");
-const presentation = @import("../presentation/root.zig");
-const term = presentation.screen;
 
 const schema = core.schema;
 
@@ -13,6 +10,7 @@ const Client = @import("client.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const agent_snapshots = @import("agent_snapshots.zig");
 const notifications = @import("notifications.zig");
+const pane_clipboards = @import("pane_clipboards.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
 const pane_graphics = @import("pane_graphics.zig");
@@ -46,7 +44,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_frame => |frame| _ = try pane_frames.apply(client, frame),
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
-        .pane_clipboard => |clipboard| try handlePaneClipboard(client, clipboard),
+        .pane_clipboard => |clipboard| try pane_clipboards.apply(client, clipboard),
         .pane_exited => |exited| _ = try pane_closures.applyExit(client, exited),
         .request_failed => |failure| _ = try request_failures.apply(client, failure),
         .notification => |notification| _ = try notifications.applyRuntime(client, notification),
@@ -72,12 +70,4 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .graphics_delete_placement => |deleted| _ = try pane_graphics.apply(client, .{ .delete_placement = deleted }),
     }
     return null;
-}
-
-/// Entrypoint for a clipboard write a pane requested via OSC 52: the bytes
-/// go straight to the host terminal, never through the cell diff.
-fn handlePaneClipboard(client: *Client, clipboard: schema.PaneClipboard) !void {
-    if (clipboard.pane_id == .invalid) return error.UnexpectedPane;
-    try term.writeClipboard(client.writer, clipboard.bytes);
-    try client.writer.flush();
 }

@@ -25,6 +25,7 @@ const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
+const pane_clipboards = @import("pane_clipboards.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_openings = @import("pane_openings.zig");
 const resync_requirements = @import("resync_requirements.zig");
@@ -4760,7 +4761,25 @@ test "a pane clipboard write reaches the host terminal" {
         .bytes = "copied",
     });
     _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(clipboard));
-    try std.testing.expect(harness.sink.fullCount() > before);
+
+    try std.testing.expectEqual(
+        @as(u64, "\x1b]52;c;Y29waWVk\x07".len),
+        harness.sink.fullCount() - before,
+    );
+}
+
+test "an invalid pane clipboard writes no host bytes" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const before = harness.sink.fullCount();
+
+    try std.testing.expectError(error.UnexpectedPane, pane_clipboards.apply(harness.client, .{
+        .pane_id = .invalid,
+        .bytes = "rejected",
+    }));
+
+    try std.testing.expectEqual(before, harness.sink.fullCount());
 }
 
 test "config reload outcomes that carry no new generation" {

@@ -53,6 +53,31 @@ frame repairs the operational projection. Copy mode uses the same
 `PaneViewportChange` effect port as normal scrolling, so graphics and
 `set_pane_viewport` policy stay in `pane_viewports`.
 
+## Clipboard delivery
+
+```text
+runtime-selected bytes -> schema.pane_clipboard
+                              |
+                    server_messages dispatcher
+                              |
+                    pane_clipboards.apply
+                              |
+                    screen.writeClipboard
+                              |
+                      host writer flush
+```
+
+`pane_clipboards.apply` is a terminal adapter, not an application use case.
+The event neither reads nor changes `ClientModel`; the runtime already selected
+the requested text. The schema decoder rejects an invalid pane identity, and
+the adapter keeps the same check for direct callers. It writes the bounded
+borrowed payload as OSC 52 and flushes it without retaining the decoded buffer.
+A pane may exit after the copy request without cancelling the user's completed
+copy.
+
+Clipboard output bypasses the cell diff and does not advance a model version or
+schedule presentation. The schema and terminal writer share the 64 KiB bound.
+
 ## Runtime frames and pane retirement
 
 ```text
@@ -108,9 +133,12 @@ cache, never semantic authority.
 - `src/frontend/client/application/copy_mode.zig` proves copy-before-exit and
   viewport-after-commit ordering, including both failure policies.
 - `src/frontend/client/copy_modes.zig` owns the selection outbox adapter.
+- `src/frontend/presentation/screen.zig` proves exact OSC 52 encoding,
+  multi-chunk payloads and the terminal-side size bound.
 - `src/frontend/client/pane_viewports.zig` owns graphics visibility and
   runtime viewport synchronization for both normal input and copy mode.
-- `src/frontend/client/client_test.zig` proves routing, backpressure and
-  presenter-only projection through the real client boundary.
+- `src/frontend/client/client_test.zig` proves routing, backpressure,
+  clipboard delivery and presenter-only projection through the real client
+  boundary.
 - `src/frontend/client/presenter.zig` is the only client component that writes
   `multiplexer.Pane.copy_view`.
