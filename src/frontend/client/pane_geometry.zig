@@ -20,13 +20,22 @@ const ui = core.ui;
 /// ```
 pub fn offerAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
     var use_case: pane_geometry_delivery.OfferPaneGeometryHandler = .{
-        .effects = .{
-            .context = client,
-            .deliver_resize = deliverResize,
-        },
+        .effects = offerEffects(client),
     };
 
     _ = try use_case.execute(model, area);
+}
+
+/// Returns the runtime resize port reused by compound geometry deliveries.
+///
+/// ```zig
+/// const effects = offerEffects(client);
+/// ```
+pub fn offerEffects(client: *Client) pane_geometry_delivery.OfferEffects {
+    return .{
+        .context = client,
+        .deliver_resize = deliverResize,
+    };
 }
 
 /// Wires pane edge resizing to the shared geometry effect.

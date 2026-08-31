@@ -27,7 +27,11 @@ workspace_snapshots.apply -> ApplyWorkspaceSnapshotHandler
         |
 ClientModel.reconcileWorkspace -> tabs.Model.reconcileWorkspace
         |
-ReconciliationEffects -> client resource synchronization
+WorkspaceReconciliation commit
+        |
+DeliverWorkspaceSnapshotHandler
+        |
+retirement -> active resources -> snapshot or geometry recovery
         |
 presentation_lifecycle.observe -> Presenter
 ```
@@ -64,18 +68,24 @@ retained tab layouts, then classifies the committed result:
 - Losing the active tab increments `active_tab_revision` once.
 - An identical snapshot changes no revision.
 
+The reconciliation captures those three revisions, the current pane revision
+and the active tab's exact `snapshot_loaded` state. Delivery rejects the commit
+if topology or recovery state changed before any disposable resource is
+touched.
+
 A pane-count mismatch marks the corresponding tab snapshot stale. That is a
 synchronization requirement, not a visible model change, so it does not advance
 a presentation revision.
 
 The result holds at most 64 removed tabs and 4096 removed pane IDs. The
 reconciliation allocates no unbounded storage. After the commit, the client
-adapter ignores requests for removed tabs and gives each pane identity to
-`ReleasePaneResourcesHandler`. When the active tab changes,
+delivery handler ignores requests for removed tabs and gives each pane identity
+to `ReleasePaneResourcesHandler`. When the active tab changes,
 `RetireReportedPaneFocusHandler` silently forgets the previous reporting
-context before the adapter synchronizes the new active tab. The adapter then
-requests a tab snapshot when needed. An otherwise current active tab re-offers
-its size to recover a lost geometry lease.
+context before the handler synchronizes the new active tab. It then preserves
+an existing tab-snapshot request, requests one when needed, or delegates exact
+attached-pane sizing to `OfferPaneGeometryHandler`. The adapter implements only
+request tracking, graphics, active-resource and runtime-resize ports.
 
 The resource effects still run for an identical workspace snapshot because a
 resync may be about attachments or geometry. The presenter receives only model
@@ -107,8 +117,11 @@ a later resync or reconnect rebuilds the disposable resources.
   `frontend/client/name_prompts.zig` prove editor ownership and submit ordering.
 - `frontend/client/application/workspace_snapshot.zig` proves commit-before-
   effects ordering and post-commit failure semantics.
+- `frontend/client/application/workspace_snapshot_delivery.zig` proves exact
+  validation, retirement and activation ordering, request coalescence,
+  geometry recovery and partial failure semantics.
 - `frontend/client/workspace_snapshots.zig` owns correlation and wire-to-domain
-  translation.
+  translation plus concrete client ports.
 - `frontend/client/application/resync_required.zig` proves resync validation,
   coalescence and absence of direct model or presentation work.
 - `frontend/client/model.zig` proves independent workspace, tab and active-tab

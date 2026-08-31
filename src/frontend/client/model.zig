@@ -748,6 +748,11 @@ pub const WorkspaceReconciliation = struct {
     workspace_changed: bool = false,
     tabs_changed: bool = false,
     active_tab_changed: bool = false,
+    active_snapshot_loaded: bool = false,
+    workspace_revision: u64 = 0,
+    tabs_revision: u64 = 0,
+    active_tab_revision: u64 = 0,
+    panes_revision: u64 = 0,
 };
 
 pub const Model = struct {
@@ -2502,6 +2507,13 @@ pub const Model = struct {
         }
         releaseInvalidCopyMode(model);
 
+        const active = model.workspace.activeConst() orelse return error.WorkspaceHasNoTabs;
+        reconciliation.active_snapshot_loaded = active.snapshot_loaded;
+        reconciliation.workspace_revision = model.workspace_revision;
+        reconciliation.tabs_revision = model.tabs_revision;
+        reconciliation.active_tab_revision = model.active_tab_revision;
+        reconciliation.panes_revision = model.panes_revision;
+
         return reconciliation;
     }
 
@@ -4245,6 +4257,11 @@ test "workspace reconciliation versions semantic dimensions independently" {
     try std.testing.expectEqualSlices(schema.TabLocation, &.{second}, active_change.removed_tabs.slice());
     try std.testing.expectEqualSlices(schema.PaneId, &.{@enumFromInt(2)}, active_change.removed_panes.slice());
     try std.testing.expectEqualDeep(Version{ .workspace = 1, .tabs = 2, .active_tab = 1 }, model.version());
+    try std.testing.expectEqual(model.version().workspace, active_change.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, active_change.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, active_change.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, active_change.panes_revision);
+    try std.testing.expectEqual(model.workspace.activeConst().?.snapshot_loaded, active_change.active_snapshot_loaded);
 }
 
 test "rejected workspace snapshots preserve state and revisions" {

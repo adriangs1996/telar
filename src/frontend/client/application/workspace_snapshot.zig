@@ -6,16 +6,16 @@ const client_model = @import("../model.zig");
 
 const schema = core.schema;
 
-pub const ReconciliationEffects = struct {
+pub const Effects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, *const client_model.WorkspaceReconciliation) anyerror!void,
+    deliver: *const fn (*anyopaque, *const client_model.WorkspaceReconciliation) anyerror!void,
 };
 
 pub const ApplyWorkspaceSnapshotHandler = struct {
     model: *client_model.Model,
-    effects: ReconciliationEffects,
+    effects: Effects,
 
-    /// Commits a canonical snapshot before reconciling client resources.
+    /// Commits a canonical snapshot before delivering client resources.
     /// Model failures have no effects; effect failures preserve the commit.
     ///
     /// ```zig
@@ -23,7 +23,7 @@ pub const ApplyWorkspaceSnapshotHandler = struct {
     /// ```
     pub fn execute(handler: *ApplyWorkspaceSnapshotHandler, snapshot: client_model.WorkspaceSnapshot) !void {
         const reconciliation = try handler.model.reconcileWorkspace(snapshot);
-        try handler.effects.apply(handler.effects.context, &reconciliation);
+        try handler.effects.deliver(handler.effects.context, &reconciliation);
     }
 };
 
@@ -36,11 +36,11 @@ const EffectsCapture = struct {
     active_changed: bool = false,
     fail: bool = false,
 
-    fn port(capture: *EffectsCapture) ReconciliationEffects {
-        return .{ .context = capture, .apply = apply };
+    fn port(capture: *EffectsCapture) Effects {
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, reconciliation: *const client_model.WorkspaceReconciliation) !void {
+    fn deliver(context: *anyopaque, reconciliation: *const client_model.WorkspaceReconciliation) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         const version = capture.model.version();
         capture.calls += 1;
@@ -49,9 +49,10 @@ const EffectsCapture = struct {
         capture.active_changed = reconciliation.active_tab_changed;
         capture.observed_commit = std.mem.eql(u8, capture.model.workspace.workspaceName(), "renamed") and
             capture.model.workspace.count == 1 and
-            version.workspace == 1 and
-            version.tabs == 1 and
-            version.active_tab == 1;
+            version.workspace == reconciliation.workspace_revision and
+            version.tabs == reconciliation.tabs_revision and
+            version.active_tab == reconciliation.active_tab_revision and
+            version.panes == reconciliation.panes_revision;
 
         if (capture.fail) {
             return error.ReconciliationSyncFailed;
@@ -116,7 +117,7 @@ const TestingModel = struct {
     }
 };
 
-test "ApplyWorkspaceSnapshotHandler commits before reconciling client resources" {
+test "ApplyWorkspaceSnapshotHandler commits before delivering client resources" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: EffectsCapture = .{ .model = testing.model };

@@ -6,15 +6,14 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
-const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
-const pane_resources = @import("pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
 const workspace_snapshot = client_application.workspace_snapshot;
+const workspace_snapshot_delivery = client_application.workspace_snapshot_delivery;
 
 /// Consumes one correlated response and applies its canonical workspace state.
 ///
@@ -62,50 +61,63 @@ fn reconciliationHandler(client: *Client) workspace_snapshot.ApplyWorkspaceSnaps
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = applyReconciliation,
+            .deliver = deliverReconciliation,
         },
     };
 }
 
-fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.WorkspaceReconciliation) !void {
+fn deliverReconciliation(context: *anyopaque, reconciliation: *const client_model.WorkspaceReconciliation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    for (reconciliation.removed_tabs.slice()) |location| {
-        request_lifecycle.ignoreTab(client, location.tab_id);
-    }
+    var use_case: workspace_snapshot_delivery.DeliverWorkspaceSnapshotHandler = .{
+        .model = &client.model,
+        .area = client.view.workbench(),
+        .geometry_effects = pane_geometry.offerEffects(client),
+        .effects = .{
+            .context = client,
+            .ignore_tab_requests = ignoreTabRequests,
+            .clear_pane_graphics = clearPaneGraphics,
+            .set_pane_graphics_visible = setPaneGraphicsVisible,
+            .synchronize_active_resources = synchronizeActiveResources,
+            .tab_snapshot_pending = tabSnapshotPending,
+            .request_tab_snapshot = requestTabSnapshot,
+        },
+    };
 
-    for (reconciliation.removed_panes.slice()) |pane_id| {
-        pane_resources.release(client, pane_id);
-    }
-
-    const active = findActive(client, reconciliation.active) orelse
-        return error.UnexpectedWorkspaceReconciliation;
-    if (reconciliation.active_tab_changed) {
-        _ = pane_focus_reports.retire(client);
-        var panes = active.model.paneIterator();
-        while (panes.next()) |pane| {
-            try client.graphics_store.setPaneVisible(pane.id, true);
-        }
-
-        try active_pane_resources.synchronize(client);
-    }
-
-    if (request_lifecycle.has(client, .tab_snapshot)) {
-        return;
-    }
-
-    if (reconciliation.active_tab_changed or !active.snapshot_loaded) {
-        try request_lifecycle.requestTabSnapshot(client, active.location);
-        return;
-    }
-
-    try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
+    try use_case.execute(reconciliation);
 }
 
-fn findActive(client: *Client, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const active = client.model.workspace.active() orelse return null;
-    if (!std.meta.eql(active.location, location)) {
-        return null;
-    }
+fn ignoreTabRequests(context: *anyopaque, tab_id: schema.TabId) void {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-    return active;
+    request_lifecycle.ignoreTab(client, tab_id);
+}
+
+fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    client.graphics_store.clearPane(pane_id);
+}
+
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try client.graphics_store.setPaneVisible(pane_id, visible);
+}
+
+fn synchronizeActiveResources(context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try active_pane_resources.synchronize(client);
+}
+
+fn tabSnapshotPending(context: *anyopaque) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return request_lifecycle.has(client, .tab_snapshot);
+}
+
+fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try request_lifecycle.requestTabSnapshot(client, location);
 }
