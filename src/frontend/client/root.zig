@@ -39,6 +39,7 @@ test {
     _ = @import("application/root.zig");
     _ = @import("actions.zig");
     _ = @import("agent_snapshots.zig");
+    _ = @import("agent_sounds.zig");
     _ = @import("attachment_targets.zig");
     _ = @import("client.zig");
     _ = @import("client_test.zig");

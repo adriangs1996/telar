@@ -20,7 +20,8 @@ snapshot, then applies its local `client.sound` policy.
 
 The runtime offers the event to every active UI client. Each client validates
 the pane identity and applies its own profile, so a remote profile can mute
-sounds without changing the runtime or another attached client.
+sounds without changing the runtime or another attached client. The complete
+worker lifecycle is documented in [Agent sound](flows/agent-sound.md).
 
 ## CLI
 
@@ -95,12 +96,8 @@ rendering, PTY traffic, or another client. Each client keeps at most one sound
 in flight and one coalesced successor; a needs-input sound wins over a ready
 sound in the same burst.
 
-On macOS Telar uses `afplay` with the system Glass and Ping sounds. On Windows
-it uses `MessageBeep`. On Linux it first asks `canberra-gtk-play` for the
-Freedesktop `complete` or `dialog-warning` event, then tries `paplay`,
-`pw-play`, `ffplay`, and `mpv` with the corresponding Freedesktop sound file.
-Missing players, missing sound files, and playback errors leave the visual
-notification intact and do not affect the client.
+The [Agent sound flow](flows/agent-sound.md) records the exact identity gate,
+configuration replacement, host adapters, process bounds and failure policy.
 
 ## Rendering
 

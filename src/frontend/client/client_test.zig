@@ -13,6 +13,7 @@ const notifications = @import("../notifications/root.zig");
 const platform = @import("../platform/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const presentation = @import("../presentation/root.zig");
+const sound_capability = @import("../sound/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
@@ -5096,6 +5097,8 @@ test "agent sounds validate exact identity against the client model" {
     var payload: [512]u8 = undefined;
     const snapshot = try encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    const version_before_sound = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
 
     const unknown = try schema.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -5105,7 +5108,7 @@ test "agent sounds validate exact identity against the client model" {
     const stale = try agent_sounds.apply(client, (try schema.decodeServer(unknown)).agent_sound);
 
     try std.testing.expectEqual(agent_sounds.Outcome.stale, stale);
-    try std.testing.expect(!client.sound_pending);
+    try std.testing.expect(!client.sound_playback.snapshot().active);
 
     const known = try schema.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -5115,7 +5118,44 @@ test "agent sounds validate exact identity against the client model" {
     const accepted = try agent_sounds.apply(client, (try schema.decodeServer(known)).agent_sound);
 
     try std.testing.expectEqual(agent_sounds.Outcome.accepted, accepted);
-    try std.testing.expect(client.sound_pending);
+    try std.testing.expect(client.sound_playback.snapshot().active);
+
+    const urgent = try schema.encodeAgentSound(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .pane_generation = 1,
+        .sound = .needs_input,
+    });
+    const queued = try agent_sounds.apply(client, (try schema.decodeServer(urgent)).agent_sound);
+
+    try std.testing.expectEqual(agent_sounds.Outcome.accepted, queued);
+    try std.testing.expectEqual(schema.AgentSound.needs_input, client.sound_playback.snapshot().queued.?);
+    try std.testing.expectEqualDeep(version_before_sound, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+}
+
+test "agent sound completion releases a failed worker before scheduling its successor" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+
+    try std.testing.expectEqualDeep(
+        sound_capability.RequestOutcome{ .start = .ready },
+        client.sound_playback.request(.ready),
+    );
+    try std.testing.expect(client.sound_playback.request(.needs_input) == .queued);
+
+    try agent_sounds.handlePlayed(client, error.SoundUnavailable);
+
+    try std.testing.expectEqual(sound_capability.Snapshot{
+        .configuration = .{},
+        .active = true,
+        .queued = null,
+    }, client.sound_playback.snapshot());
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 }
 
 test "a graphics revision break requests a graphics snapshot" {
@@ -5359,7 +5399,11 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expect(client.lua_generation == initial_generation);
     try std.testing.expectEqual(@as(u64, 1), client.model.configurationGeneration());
 
-    client.queued_sound = .ready;
+    try std.testing.expectEqualDeep(
+        sound_capability.RequestOutcome{ .start = .ready },
+        client.sound_playback.request(.ready),
+    );
+    try std.testing.expect(client.sound_playback.request(.ready) == .queued);
     const pending_updates = client.presenter.pending_updates;
     const changed = try testingConfigAdoption(2, true);
     const changed_generation = changed.generation;
@@ -5374,8 +5418,11 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expect(!client.model.sidebarVisible());
     try std.testing.expect(!client.model.paneGaps());
     try std.testing.expect(!client.view.sidebar_requested);
-    try std.testing.expectEqual(lua_config.SoundConfig{ .enabled = false }, client.sound_config);
-    try std.testing.expect(client.queued_sound == null);
+    try std.testing.expectEqual(sound_capability.Snapshot{
+        .configuration = .{ .enabled = false },
+        .active = true,
+        .queued = null,
+    }, client.sound_playback.snapshot());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
     try client.observeModel();

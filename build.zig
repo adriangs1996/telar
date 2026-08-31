@@ -465,7 +465,7 @@ pub fn build(b: *std.Build) void {
         cross_step.dependOn(&raster_check.step);
         const sound_check = b.addTest(.{
             .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/sound.zig"),
+                .root_source_file = b.path("src/frontend/sound/root.zig"),
                 .target = cross_target,
                 .optimize = .Debug,
                 .link_libc = true,

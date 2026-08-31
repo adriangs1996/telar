@@ -103,10 +103,7 @@ const AdoptionContext = struct {
         client.trust_store = context.adoption.trust_store;
         client.input_router = context.adoption.router;
         client.sidebar_rendering = context.adoption.sidebar_rendering;
-        client.sound_config = snapshot.sound;
-        if (!client.sound_config.enabled) {
-            client.queued_sound = null;
-        }
+        client.sound_playback.configure(snapshot.sound);
         _ = client.model.clearDiagnostic();
         context.consumed = true;
 

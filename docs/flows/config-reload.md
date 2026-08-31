@@ -63,9 +63,10 @@ unaccepted adoption instead of leaking its VM or plugin objects.
 ## Ownership and effects
 
 The adapter's first post-commit operation swaps the generation, registry,
-trust store, input router, sound policy and resolved sidebar renderer. It then
-destroys the previous owned objects. The client event loop cannot interleave
-another event during this synchronous operation.
+trust store, input router and resolved sidebar renderer. It replaces sound
+policy through `sound.Playback.configure`, then destroys the previous owned
+objects. The client event loop cannot interleave another event during this
+synchronous operation.
 
 Theme, icon and sidebar resources are updated after the ownership swap. CLI
 theme and sidebar-renderer locks still override reloaded values. A sidebar or

@@ -83,14 +83,11 @@ index during rendering. The stored runtime entry remains unchanged. Several
 accepted snapshots inside one frame interval fold into one render of the
 latest revision.
 
-## Sound and failure recovery
+## Failure recovery
 
-Agent sounds are separate semantic runtime events. The client validates their
-pane ID and generation through `HandleAgentSoundHandler` before applying local
-sound policy. `agent_sounds.apply` translates the wire event and connects the
-accepted effect to the client's bounded playback queue. A stale identity
-cannot notify a different process that reused the same numeric pane ID. Sound
-handling does not change `ClientModel.Version` or schedule presentation.
+Agent sounds consult this replica only for exact identity authority. Their
+separate worker lifecycle and local policy are documented in
+[Agent sound](agent-sound.md).
 
 A reconnect constructs an empty disposable model and receives the current
 runtime revision through a fresh delivery cursor. A stale snapshot is a no-op.
@@ -110,10 +107,6 @@ usable replica and its local version.
 - `src/frontend/client/application/sidebar_animation.zig` and
   `src/frontend/client/sidebar_animations.zig` separate active-state policy
   from the single pending timer.
-- `src/frontend/client/application/agent_sound.zig` proves exact-identity
-  gating, stale suppression and effect-error propagation.
-- `src/frontend/client/agent_sounds.zig` connects protocol translation to the
-  existing client-local playback policy and bounded queue.
 - `src/frontend/widgets/sidebar.zig` proves local pane-index projection does
   not mutate the runtime replica.
 - `src/frontend/client/client_test.zig` proves protocol adaptation,

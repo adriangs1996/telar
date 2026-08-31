@@ -12,6 +12,7 @@ pub const input = @import("input/root.zig");
 pub const presentation = @import("presentation/root.zig");
 pub const workspace = @import("workspace/root.zig");
 pub const agents = @import("agents/root.zig");
+pub const sound = @import("sound/root.zig");
 pub const notifications = @import("notifications/root.zig");
 pub const graphics = @import("graphics/root.zig");
 pub const attachments = @import("attachments/root.zig");
@@ -46,6 +47,7 @@ test {
     _ = @import("graphics/root.zig");
     _ = @import("attachments/root.zig");
     _ = @import("agents/root.zig");
+    _ = @import("sound/root.zig");
     _ = @import("workspace/root.zig");
     _ = @import("ui/root.zig");
     _ = @import("platform/root.zig");

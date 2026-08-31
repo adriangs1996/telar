@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const input = @import("../input/root.zig");
+const sound = @import("../sound/root.zig");
 const action = input.action;
 const keybind = input.keybind;
 const kitty = @import("../graphics/root.zig").kitty;
@@ -83,26 +84,7 @@ pub const AgentDescriptionCommand = struct {
     }
 };
 
-pub const SoundConfig = struct {
-    enabled: bool = true,
-    ready: bool = true,
-    needs_input: bool = true,
-
-    pub fn allows(config: SoundConfig, sound: core.schema.AgentSound) bool {
-        if (!config.enabled) return false;
-        return switch (sound) {
-            .ready => config.ready,
-            .needs_input => config.needs_input,
-        };
-    }
-};
-
-test "sound settings can disable each transition independently" {
-    const config: SoundConfig = .{ .ready = false };
-    try std.testing.expect(!config.allows(.ready));
-    try std.testing.expect(config.allows(.needs_input));
-    try std.testing.expect(!(SoundConfig{ .enabled = false }).allows(.needs_input));
-}
+pub const SoundConfig = sound.Config;
 
 pub const ProxyPassthroughHosts = struct {
     const Reference = struct {

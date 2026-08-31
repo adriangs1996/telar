@@ -17,7 +17,7 @@ const client_view = @import("view.zig");
 const client_model = @import("model.zig");
 const notification_capability = @import("../notifications/root.zig");
 const lua_config = @import("../config/root.zig");
-const sound_mod = @import("../sound.zig");
+const sound_capability = @import("../sound/root.zig");
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
 const mouse_protocol = input_capability.mouse_protocol;
@@ -183,7 +183,7 @@ plugin_registry: ?*plugin_broker.Registry,
 trust_store: ?*core.plugin.TrustStore,
 reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
-sound_config: lua_config.SoundConfig,
+sound_playback: sound_capability.Playback,
 clipboard_capture_resources: attachments.CaptureResources = .{},
 
 input_read_pending: bool = false,
@@ -191,8 +191,6 @@ next_request_id: u64 = 2,
 requests: client_requests.Tracker = .{},
 sidebar_animation_scheduler: sidebar_animations.Scheduler = .{},
 notification_scheduler: notification_timers.Scheduler = .{},
-sound_pending: bool = false,
-queued_sound: ?sound_mod.Kind = null,
 
 const Client = @This();
 
@@ -273,7 +271,7 @@ pub fn init(params: Params) !*Client {
         .plugin_registry = params.options.plugin_registry,
         .trust_store = params.options.trust_store,
         .sidebar_rendering = params.options.sidebar_rendering,
-        .sound_config = params.options.sound,
+        .sound_playback = .init(params.options.sound),
         .reload = .{ .mtime_ns = params.options.config_mtime_ns },
     };
     // The select's storage lives inside the heap-stable client, so the
@@ -603,27 +601,6 @@ pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
 pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
     try result;
     try client.presenter.presentMedia(client);
-}
-
-pub fn scheduleAgentSound(client: *Client, kind: sound_mod.Kind) !void {
-    if (!client.sound_config.allows(kind)) return;
-    if (client.sound_pending) {
-        client.queued_sound = sound_mod.coalesce(client.queued_sound, kind);
-        return;
-    }
-    client.sound_pending = true;
-    client.select.concurrent(.sound_played, sound_mod.play, .{ client.io, kind }) catch |err| {
-        client.sound_pending = false;
-        return err;
-    };
-}
-
-pub fn handleSoundPlayedEvent(client: *Client, result: anyerror!void) !void {
-    _ = result catch {};
-    client.sound_pending = false;
-    const queued = client.queued_sound;
-    client.queued_sound = null;
-    if (queued) |kind| try client.scheduleAgentSound(kind);
 }
 
 pub fn handleTelemetryTickEvent(

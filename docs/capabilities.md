@@ -42,6 +42,7 @@ defect in a leaf capability unless an invariant requires it.
 | --- | --- | --- |
 | Client | `src/frontend/client/root.zig` | Client event loop, disposable semantic state and cross-capability orchestration |
 | Agents | `src/frontend/agents/root.zig` | Agent identities and the bounded client replica of runtime agent state |
+| Sound | `src/frontend/sound/root.zig` | Bounded host-audio playback policy, queue and platform worker |
 | Input | `src/frontend/input/root.zig` | Host input parsing, key routing, semantic actions and editing |
 | Workspace | `src/frontend/workspace/root.zig` | Disposable tabs, pane layout and cell composition |
 | Presentation | `src/frontend/presentation/root.zig` | Host screen diff, frame application and pacing |
@@ -75,13 +76,14 @@ frontend capability roots          backend capability roots
 The important current edges are:
 
 ```text
-frontend/client       -> agents, input, workspace, presentation, graphics, ui,
-                         widgets, config, plugins, platform, transport
+frontend/client       -> agents, sound, input, workspace, presentation,
+                         graphics, ui, widgets, config, plugins, platform,
+                         transport
 frontend/input        -> presentation
 frontend/workspace    -> input, presentation, ui
 frontend/widgets      -> agents, workspace, attachments, ui
 frontend/graphics     -> workspace, presentation, ui, widgets
-frontend/config       -> input, graphics, ui
+frontend/config       -> sound, input, graphics, ui
 frontend/plugins      -> input, config
 
 backend/runtime       -> pane, pty, media, process, agent, history, proxy,
@@ -115,7 +117,7 @@ All client handlers are in `src/frontend/client/root.zig`.
 | Scheduled draw | `Client.handleDrawEvent` -> `Client.presentDue` |
 | Sidebar animation tick | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
 | Notification tick | [`notifications.handleTick`](flows/notifications.md) |
-| Agent sound completion | `Client.handleSoundPlayedEvent` |
+| Agent sound completion | [`agent_sounds.handlePlayed`](flows/agent-sound.md) |
 | Telemetry tick/write | `Client.handleTelemetryTickEvent`, `Client.handleTelemetryWrittenEvent` |
 | Config reload | `Client.handleConfigReloadEvent` |
 | Plugin worker result | [`Client.handlePluginResultEvent`](flows/plugin-action.md) |
