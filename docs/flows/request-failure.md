@@ -17,17 +17,19 @@ consume request ID -> typed Continuation
         |
 HandleRequestFailureHandler
         |
-recover, ignore, publish a notification, or report fatal
+recover, ignore, publish a notification, or report fatal/error
         |
 presentation_lifecycle.observe -> Presenter
 ```
 
 `request_failures.apply` is the protocol adapter. It calls
 `request_lifecycle.consume` to remove the continuation exactly once. An unknown
-request ID is a correlation error. After that boundary,
+request ID is a correlation error; the adapter reports the bounded runtime
+message before returning that error. After that boundary,
 `HandleRequestFailureHandler` receives only the typed continuation, failure
 code and borrowed message. It does not know `Client`, IPC request IDs or
-presentation.
+presentation. Its reporting port is infallible and borrows the message only for
+the synchronous call.
 
 The handler returns one of four semantic outcomes:
 
@@ -37,7 +39,8 @@ The handler returns one of four semantic outcomes:
 - `notified`: any required recovery completed and a failure notice was
   published.
 - `fatal`: the rejected operation cannot leave this client with a coherent
-  projection. The adapter maps this to `RuntimeRequestFailed`.
+  projection. The handler reports the runtime message, then the adapter maps
+  the outcome to `RuntimeRequestFailed`.
 
 ## Recovery policy
 
@@ -54,7 +57,9 @@ The handler returns one of four semantic outcomes:
 Recovery runs before notification publication. A recovery error stops the
 sequence, while a notification error cannot undo completed recovery. The
 continuation has already been consumed in both cases, so a duplicate terminal
-response cannot repeat either effect.
+response cannot repeat either effect. Both processing errors are reported once
+before the original error propagates. Successful ignored, recovered and
+notified outcomes do not use the reporting port.
 
 The application handler maps each request kind to a stable title and semantic
 notification target. `notifications.Center` copies the borrowed failure text
@@ -78,10 +83,10 @@ new client to rebuild its projection.
 ## Proof
 
 - `src/frontend/client/application/request_failure.zig` proves classification,
-  recovery ordering, stale suppression, notification mapping and effect
-  failure behavior.
+  recovery ordering, stale suppression, notification mapping, exact reporting
+  policy and effect failure behavior.
 - `src/frontend/client/request_failures.zig` owns correlation, concrete
-  recovery adapters and fatal error translation.
+  recovery adapters, the physical reporter and fatal error translation.
 - `src/frontend/client/request_lifecycle.zig` proves bounded identity and
   exactly-once correlation entrypoints.
 - `src/frontend/client/client_test.zig` proves wire correlation, continuation

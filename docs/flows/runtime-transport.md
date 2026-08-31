@@ -91,6 +91,11 @@ records bounded decode telemetry, dispatches the decoded message and rearms
 the read after every non-terminal result. `runtime_stopping`, a client exit
 outcome or an error leaves no new read behind.
 
+Transport does not inspect a decoded message after dispatch. Message-specific
+recovery, user notification and last-resort error reporting belong to the
+selected slice adapter; in particular, `request_failures` owns reporting the
+runtime's bounded rejection text.
+
 Decoded slices borrow the receive buffer only for this entrypoint. Slice
 adapters must copy any bytes that outlive dispatch. A new read starts only
 after dispatch and credit handling finish, so it cannot overwrite borrowed
@@ -105,7 +110,8 @@ returns.
 If the select refuses a read or write actor, transport releases the token it
 reserved. A completed socket error also releases its token, retains bounded
 queue ownership for cleanup and propagates the error. Telar does not retry an
-uncertain partial socket write inside the same client session.
+uncertain partial socket write inside the same client session. Dispatch errors
+propagate without transport classifying their original message.
 
 ## Proof
 

@@ -42,6 +42,11 @@ pub const NotificationEffects = struct {
     publish: *const fn (*anyopaque, notifications.Input) anyerror!void,
 };
 
+pub const ReportingEffects = struct {
+    context: *anyopaque,
+    report: *const fn (*anyopaque, []const u8) void,
+};
+
 pub const Outcome = enum {
     ignored,
     recovered,
@@ -52,14 +57,28 @@ pub const Outcome = enum {
 pub const HandleRequestFailureHandler = struct {
     recovery: RecoveryEffects,
     notifications: NotificationEffects,
+    reporting: ReportingEffects,
 
     /// Applies recovery policy before publishing any user-visible failure.
-    /// Fatal outcomes are values so the protocol adapter maps their error.
+    /// Fatal outcomes and processing errors report the runtime message once.
     ///
     /// ```zig
     /// const outcome = try handler.execute(command);
     /// ```
     pub fn execute(handler: *HandleRequestFailureHandler, command: Command) !Outcome {
+        const outcome = handler.apply(command) catch |err| {
+            handler.reporting.report(handler.reporting.context, command.message);
+
+            return err;
+        };
+        if (outcome == .fatal) {
+            handler.reporting.report(handler.reporting.context, command.message);
+        }
+
+        return outcome;
+    }
+
+    fn apply(handler: *HandleRequestFailureHandler, command: Command) !Outcome {
         switch (command.continuation) {
             .ignored => return .ignored,
             .workspace_snapshot, .tab_snapshot => return .fatal,
@@ -156,14 +175,16 @@ const EffectEvent = enum {
     close_tab,
     initial_open,
     publish,
+    report,
 };
 
 const EffectsCapture = struct {
-    events: [2]EffectEvent = undefined,
+    events: [3]EffectEvent = undefined,
     event_count: usize = 0,
     split_recovery: SplitRecovery = .current,
     initial_open_recovery: InitialOpenRecovery = .retried,
     notification: ?notifications.Input = null,
+    reported_message: ?[]const u8 = null,
     fail_recovery: bool = false,
     fail_notification: bool = false,
 
@@ -181,10 +202,15 @@ const EffectsCapture = struct {
         return .{ .context = capture, .publish = publish };
     }
 
+    fn reportingPort(capture: *EffectsCapture) ReportingEffects {
+        return .{ .context = capture, .report = report };
+    }
+
     fn handler(capture: *EffectsCapture) HandleRequestFailureHandler {
         return .{
             .recovery = capture.recoveryPort(),
             .notifications = capture.notificationPort(),
+            .reporting = capture.reportingPort(),
         };
     }
 
@@ -192,11 +218,14 @@ const EffectsCapture = struct {
         capture.events[capture.event_count] = event;
         capture.event_count += 1;
 
-        if (capture.fail_recovery and event != .publish) {
-            return error.RecoveryFailed;
-        }
-        if (capture.fail_notification and event == .publish) {
-            return error.NotificationFailed;
+        switch (event) {
+            .split, .attachment, .close_tab, .initial_open => if (capture.fail_recovery) {
+                return error.RecoveryFailed;
+            },
+            .publish => if (capture.fail_notification) {
+                return error.NotificationFailed;
+            },
+            .report => {},
         }
     }
 
@@ -234,9 +263,16 @@ const EffectsCapture = struct {
         try capture.record(.publish);
     }
 
+    fn report(context: *anyopaque, message: []const u8) void {
+        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
+        capture.reported_message = message;
+        capture.record(.report) catch unreachable;
+    }
+
     fn reset(capture: *EffectsCapture) void {
         capture.event_count = 0;
         capture.notification = null;
+        capture.reported_message = null;
     }
 };
 
@@ -266,7 +302,12 @@ test "request failure ignores retired work and classifies snapshot loss as fatal
         Outcome.fatal,
         try handler.execute(testingCommand(.{ .tab_snapshot = testing_location })),
     );
-    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
+    try std.testing.expectEqualSlices(
+        EffectEvent,
+        &.{ .report, .report },
+        capture.events[0..capture.event_count],
+    );
+    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
 }
 
 test "request failure retries a vanished remembered pane once" {
@@ -278,14 +319,20 @@ test "request failure retries a vanished remembered pane once" {
     try std.testing.expectEqual(Outcome.recovered, try handler.execute(command));
     try std.testing.expectEqualSlices(EffectEvent, &.{.initial_open}, capture.events[0..capture.event_count]);
     try std.testing.expect(capture.notification == null);
+    try std.testing.expect(capture.reported_message == null);
 
     capture.reset();
     capture.initial_open_recovery = .unrecoverable;
     command.code = .internal;
 
     try std.testing.expectEqual(Outcome.fatal, try handler.execute(command));
-    try std.testing.expectEqualSlices(EffectEvent, &.{.initial_open}, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualSlices(
+        EffectEvent,
+        &.{ .initial_open, .report },
+        capture.events[0..capture.event_count],
+    );
     try std.testing.expect(capture.notification == null);
+    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
 }
 
 test "request failure suppresses a stale split after recovery" {
@@ -428,8 +475,13 @@ test "request failure does not notify after recovery failure" {
         error.RecoveryFailed,
         handler.execute(testingCommand(.{ .close_tab = testing_location })),
     );
-    try std.testing.expectEqualSlices(EffectEvent, &.{.close_tab}, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualSlices(
+        EffectEvent,
+        &.{ .close_tab, .report },
+        capture.events[0..capture.event_count],
+    );
     try std.testing.expect(capture.notification == null);
+    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
 }
 
 test "request failure retains recovery when notification publication fails" {
@@ -442,7 +494,8 @@ test "request failure retains recovery when notification publication fails" {
     );
     try std.testing.expectEqualSlices(
         EffectEvent,
-        &.{ .close_tab, .publish },
+        &.{ .close_tab, .publish, .report },
         capture.events[0..capture.event_count],
     );
+    try std.testing.expectEqualStrings("runtime rejected request", capture.reported_message.?);
 }

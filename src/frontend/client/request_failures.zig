@@ -1,5 +1,7 @@
 //! Adapts rejected runtime requests to client recovery and notification use cases.
 
+const std = @import("std");
+const builtin = @import("builtin");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const notifications = @import("../notifications/root.zig");
@@ -22,8 +24,11 @@ const schema = core.schema;
 /// _ = try apply(client, failure);
 /// ```
 pub fn apply(client: *Client, failure: schema.RequestFailed) !request_failure.Outcome {
-    const continuation = request_lifecycle.consume(client, failure.request_id) orelse
+    const continuation = request_lifecycle.consume(client, failure.request_id) orelse {
+        reportFailure(client, failure.message);
+
         return error.UnexpectedRequestFailure;
+    };
     var use_case = handler(client);
     const outcome = try use_case.execute(.{
         .continuation = continuation,
@@ -50,7 +55,19 @@ fn handler(client: *Client) request_failure.HandleRequestFailureHandler {
             .context = client,
             .publish = publishNotification,
         },
+        .reporting = .{
+            .context = client,
+            .report = reportFailure,
+        },
     };
+}
+
+fn reportFailure(_: *anyopaque, message: []const u8) void {
+    if (builtin.is_test) {
+        return;
+    }
+
+    std.debug.print("telar runtime: {s}\n", .{message});
 }
 
 fn recoverSplit(context: *anyopaque, split: client_requests.Split) !request_failure.SplitRecovery {

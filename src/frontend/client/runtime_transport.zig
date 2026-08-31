@@ -134,14 +134,7 @@ pub fn handleRead(client: *Client, result: anyerror![]u8) !?u8 {
         .message = message,
         .decode_started_ns = decode_started,
     });
-    const status = server_messages.handleServerMessage(client, message) catch |err| {
-        switch (message) {
-            .request_failed => |failure| std.debug.print("telar runtime: {s}\n", .{failure.message}),
-            else => {},
-        }
-
-        return err;
-    };
+    const status = try server_messages.handleServerMessage(client, message);
     if (status) |exit_status| {
         return exit_status;
     }
