@@ -8,23 +8,30 @@ and when each committed model version reaches the terminal.
 ## Request and departure
 
 ```text
-workspace selection, sidebar agent, resync or workspace closure
-        |
-RequestWorkspaceHandoffHandler
-        |
+workspace position or identity -> SelectWorkspaceHandler --+
+                                                           |
+sidebar agent, resync or workspace closure ----------------+
+                                                           |
+                                      RequestWorkspaceHandoffHandler
+                                                           |
 detach active runtime attachments -> schema.open_pane
-        |
+                                                           |
 ClientModel.departWorkspace
-        |
+                                                           |
 release pane resources and remember navigation bookmark
-        |
+                                                           |
 presentation_lifecycle.observe -> present empty client model
 ```
 
-`workspace_handoffs` resolves a workspace bookmark to its last focused pane.
-Without a bookmark it targets the workspace identity. A sidebar agent can
-target its pane directly and retains a workspace fallback only when the pane
-belongs to an ordinary workspace.
+`SelectWorkspaceHandler` resolves positions and stable identities through the
+committed workspace-list replica. It suppresses unknown, already active and
+request-blocked selections without changing client state. This policy is
+shared by configured actions, workspace-list clicks and notification targets.
+
+`workspace_handoffs` resolves an accepted workspace bookmark to its last
+focused pane. Without a bookmark it targets the workspace identity. A sidebar
+agent can target its pane directly and retains a workspace fallback only when
+the pane belongs to an ordinary workspace.
 
 `HandleResyncRequiredHandler` also requests a handoff when the runtime reports
 that the projected workspace disappeared. It forgets the closed workspace's
@@ -113,9 +120,9 @@ bounded tab and pane stores, returns pane identities in
 outbox. Arrival reuses the empty fixed tab store; only the confirmed pane's
 normal cell buffer and damage-row bootstrap allocations occur before commit.
 
-- `src/frontend/client/application/workspace_handoff.zig` checks gating,
-  request ordering, local recovery, commit-before-effects and exact retry
-  conditions.
+- `src/frontend/client/application/workspace_handoff.zig` checks selection,
+  gating, request ordering, local recovery, commit-before-effects and exact
+  retry conditions.
 - `src/frontend/client/model.zig` checks idempotent departure, bounded capture,
   atomic arrival, rejected arrival and saved-layout staging.
 - `src/frontend/client/client_test.zig` checks protocol order, navigation and

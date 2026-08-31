@@ -6,6 +6,59 @@ const client_model = @import("../model.zig");
 
 const schema = core.schema;
 
+pub const SelectionTarget = union(enum) {
+    position: usize,
+    workspace: schema.WorkspaceId,
+};
+
+pub const SelectionGate = struct {
+    context: *anyopaque,
+    pending: *const fn (*anyopaque) bool,
+};
+
+pub const SelectionEffects = struct {
+    context: *anyopaque,
+    request: *const fn (*anyopaque, schema.WorkspaceId) anyerror!void,
+};
+
+pub const SelectWorkspaceHandler = struct {
+    model: *const client_model.Model,
+    gate: SelectionGate,
+    effects: SelectionEffects,
+
+    /// Resolves one listed workspace target and requests a handoff only when
+    /// it is known, different from the active workspace and not blocked.
+    ///
+    /// ```zig
+    /// if (!try handler.execute(.{ .position = 1 })) return;
+    /// ```
+    pub fn execute(handler: *SelectWorkspaceHandler, target: SelectionTarget) !bool {
+        if (handler.gate.pending(handler.gate.context)) {
+            return false;
+        }
+
+        const workspace = switch (target) {
+            .position => |position| handler.model.workspaceAtPosition(position) orelse return false,
+            .workspace => |workspace| workspace,
+        };
+        if (!handler.model.knowsWorkspace(workspace)) {
+            return false;
+        }
+        if (handler.model.workspaceLocation()) |current| switch (current) {
+            .workspace => |active| {
+                if (active == workspace) {
+                    return false;
+                }
+            },
+            .worktree => {},
+        };
+
+        try handler.effects.request(handler.effects.context, workspace);
+
+        return true;
+    }
+};
+
 pub const WorkspaceHandoff = struct {
     target: schema.PaneTarget,
     fallback_workspace: ?schema.WorkspaceId,
@@ -143,6 +196,117 @@ const TestingModel = struct {
         std.testing.allocator.destroy(testing.model);
     }
 };
+
+const SelectionCapture = struct {
+    blocked: bool = false,
+    fail: bool = false,
+    calls: usize = 0,
+    requested: ?schema.WorkspaceId = null,
+
+    fn gate(capture: *SelectionCapture) SelectionGate {
+        return .{ .context = capture, .pending = pending };
+    }
+
+    fn port(capture: *SelectionCapture) SelectionEffects {
+        return .{ .context = capture, .request = request };
+    }
+
+    fn pending(context: *anyopaque) bool {
+        const capture: *SelectionCapture = @ptrCast(@alignCast(context));
+
+        return capture.blocked;
+    }
+
+    fn request(context: *anyopaque, workspace: schema.WorkspaceId) !void {
+        const capture: *SelectionCapture = @ptrCast(@alignCast(context));
+        capture.calls += 1;
+        capture.requested = workspace;
+        if (capture.fail) {
+            return error.SelectionDeliveryFailed;
+        }
+    }
+};
+
+fn prepareWorkspaceSelection(model: *client_model.Model) !void {
+    _ = try model.reconcileWorkspaceList(.{
+        .revision = 1,
+        .entries = &.{
+            .{ .workspace = @enumFromInt(1), .name = "main", .path = "/work/main", .tab_count = 1 },
+            .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
+        },
+    });
+}
+
+test "SelectWorkspaceHandler resolves listed positions and identities without mutation" {
+    var testing = try TestingModel.init(true);
+    defer testing.deinit();
+    try prepareWorkspaceSelection(testing.model);
+    var capture: SelectionCapture = .{};
+    var handler: SelectWorkspaceHandler = .{
+        .model = testing.model,
+        .gate = capture.gate(),
+        .effects = capture.port(),
+    };
+    const version = testing.model.version();
+
+    try std.testing.expect(try handler.execute(.{ .position = 1 }));
+    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(2)), capture.requested.?);
+    try std.testing.expect(try handler.execute(.{ .workspace = @enumFromInt(2) }));
+
+    try std.testing.expect(!try handler.execute(.{ .workspace = @enumFromInt(1) }));
+    try std.testing.expect(!try handler.execute(.{ .workspace = @enumFromInt(9) }));
+    try std.testing.expect(!try handler.execute(.{ .position = 2 }));
+    capture.blocked = true;
+    try std.testing.expect(!try handler.execute(.{ .position = 1 }));
+
+    try std.testing.expectEqual(@as(usize, 2), capture.calls);
+    try std.testing.expectEqualDeep(version, testing.model.version());
+}
+
+test "SelectWorkspaceHandler propagates delivery failure without mutation" {
+    var testing = try TestingModel.init(true);
+    defer testing.deinit();
+    try prepareWorkspaceSelection(testing.model);
+    var capture: SelectionCapture = .{ .fail = true };
+    var handler: SelectWorkspaceHandler = .{
+        .model = testing.model,
+        .gate = capture.gate(),
+        .effects = capture.port(),
+    };
+    const version = testing.model.version();
+
+    try std.testing.expectError(
+        error.SelectionDeliveryFailed,
+        handler.execute(.{ .workspace = @enumFromInt(2) }),
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(2)), capture.requested.?);
+    try std.testing.expectEqualDeep(version, testing.model.version());
+}
+
+test "SelectWorkspaceHandler permits base workspace selection from a worktree" {
+    var testing = try TestingModel.init(false);
+    defer testing.deinit();
+    try testing.model.workspace.bootstrap(@enumFromInt(1), .{
+        .workspace = .{ .worktree = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 20, .rows = 5 });
+    try prepareWorkspaceSelection(testing.model);
+    var capture: SelectionCapture = .{};
+    var handler: SelectWorkspaceHandler = .{
+        .model = testing.model,
+        .gate = capture.gate(),
+        .effects = capture.port(),
+    };
+    const version = testing.model.version();
+
+    try std.testing.expect(try handler.execute(.{ .workspace = @enumFromInt(1) }));
+
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
+    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(1)), capture.requested.?);
+    try std.testing.expectEqualDeep(version, testing.model.version());
+}
 
 const RequestEvent = enum {
     detach,

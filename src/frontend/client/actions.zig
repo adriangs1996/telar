@@ -13,7 +13,6 @@ const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_splits = @import("pane_splits.zig");
-const request_lifecycle = @import("request_lifecycle.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -66,7 +65,7 @@ pub fn apply(client: *Client, value: Action) !keybind.Control {
         .toggle_workspace_list => toggleWorkspaceList(client),
         .new_workspace => _ = name_prompts.beginWorkspaceCreate(client),
         .rename_workspace => _ = name_prompts.beginWorkspaceRename(client),
-        .select_workspace => |position| try selectWorkspacePosition(client, position),
+        .select_workspace => |position| _ = try workspace_handoffs.selectWorkspace(client, .{ .position = position }),
         .close_pane => try closeFocused(client),
         .new_tab => try createTab(client),
         .select_tab_offset => |offset| try selectTab(client, .{ .offset = offset }),
@@ -115,36 +114,6 @@ pub fn focusPane(client: *Client, target: pane_focus.Target) !void {
     });
 }
 
-/// Selects a known workspace identity unless another request is in flight.
-///
-/// ```zig
-/// try switchWorkspace(client, workspace_id);
-/// ```
-pub fn switchWorkspace(client: *Client, workspace_id: schema.WorkspaceId) !void {
-    if (request_lifecycle.busy(client) or !client.model.knowsWorkspace(workspace_id)) {
-        return;
-    }
-    if (client.model.workspace.workspace) |current| {
-        switch (current) {
-            .workspace => |id| if (id == workspace_id) {
-                return;
-            },
-            .worktree => {},
-        }
-    }
-
-    try switchWorkspaceResolved(client, workspace_id);
-}
-
-/// Starts a runtime-resolved workspace handoff without consulting the list.
-///
-/// ```zig
-/// try switchWorkspaceResolved(client, workspace_id);
-/// ```
-pub fn switchWorkspaceResolved(client: *Client, workspace_id: schema.WorkspaceId) !void {
-    _ = try workspace_handoffs.requestWorkspace(client, workspace_id);
-}
-
 fn beginSplit(client: *Client, axis: layout.Axis) !void {
     var use_case = pane_splits.requestHandler(client);
     _ = try use_case.execute(.{
@@ -190,12 +159,6 @@ fn createTab(client: *Client) !void {
     var use_case = tab_creations.requestHandler(client);
 
     _ = try use_case.execute(.{});
-}
-
-fn selectWorkspacePosition(client: *Client, position: usize) !void {
-    const workspace_id = client.model.workspaceAtPosition(position) orelse return;
-
-    try switchWorkspace(client, workspace_id);
 }
 
 fn closeTab(client: *Client) !void {

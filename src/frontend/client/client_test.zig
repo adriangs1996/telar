@@ -60,6 +60,7 @@ const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
 const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
+const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = request_lifecycle.initial_request_id;
@@ -963,8 +964,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     });
     const version_before_departure = client.model.version();
     const pending_updates_before_departure = client.presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
-    try client_actions.switchWorkspaceResolved(handler.client, @enumFromInt(2));
+    _ = try workspace_handoffs.requestWorkspace(client, @enumFromInt(2));
 
     try std.testing.expect(client.model.workspaceLocation() == null);
     try std.testing.expectEqual(@as(usize, 0), client.model.workspace.count);
@@ -1041,11 +1041,10 @@ test "workspace handoff capacity failure preserves the source model" {
     }
     const version_before = client.model.version();
     const focus_before = client.model.reportedPaneFocus();
-    const handler: InputHandler = .{ .client = client };
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client_actions.switchWorkspaceResolved(handler.client, @enumFromInt(2)),
+        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
     );
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
@@ -1078,7 +1077,7 @@ test "workspace handoff reserves its focus-out message" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client_actions.switchWorkspaceResolved(client, @enumFromInt(2)),
+        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
     );
 
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -1109,7 +1108,7 @@ test "workspace handoff reserves its captured paste closing marker" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client_actions.switchWorkspaceResolved(client, @enumFromInt(2)),
+        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
     );
 
     try std.testing.expect(client.model.panePasteActive());
@@ -3122,8 +3121,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
 
     // Return through the same runtime handoff used by workspace selection.
     client.request_lifecycle.tracker = .{};
-    const handler: InputHandler = .{ .client = client };
-    try client_actions.switchWorkspaceResolved(handler.client, prior_location.workspace.workspace);
+    _ = try workspace_handoffs.requestWorkspace(client, prior_location.workspace.workspace);
     try harness.settle();
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);

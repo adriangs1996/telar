@@ -14,6 +14,18 @@ const multiplexer = workspace_capability.multiplexer;
 const schema = core.schema;
 const workspace_handoff = client_application.workspace_handoff;
 
+/// Resolves one workspace selection from the committed list and requests its
+/// handoff only when the target is known and actionable.
+///
+/// ```zig
+/// _ = try selectWorkspace(client, .{ .position = 1 });
+/// ```
+pub fn selectWorkspace(client: *Client, target: workspace_handoff.SelectionTarget) !bool {
+    var use_case = selectionHandler(client);
+
+    return use_case.execute(target);
+}
+
 /// Requests a workspace by its stable runtime identity, preferring its last
 /// focused pane when a navigation bookmark exists.
 ///
@@ -98,6 +110,20 @@ fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.Reque
     };
 }
 
+fn selectionHandler(client: *Client) workspace_handoff.SelectWorkspaceHandler {
+    return .{
+        .model = &client.model,
+        .gate = .{
+            .context = client,
+            .pending = requestPending,
+        },
+        .effects = .{
+            .context = client,
+            .request = requestSelectedWorkspace,
+        },
+    };
+}
+
 /// Builds the confirmed arrival command with an exact saved layout, when one
 /// still describes the pane and tab selected by the runtime.
 ///
@@ -152,6 +178,12 @@ fn requestPending(context: *anyopaque) bool {
 
 fn neverPending(_: *anyopaque) bool {
     return false;
+}
+
+fn requestSelectedWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    _ = try requestWorkspace(client, workspace);
 }
 
 fn detachCurrent(context: *anyopaque) !void {

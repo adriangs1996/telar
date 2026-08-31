@@ -98,7 +98,7 @@ fn followNotificationTarget(handler: *InputHandler, target: notifications.Target
     switch (target) {
         .none => {},
         .select_tab => |tab_id| try client_actions.selectTab(handler.client, .{ .tab_id = tab_id }),
-        .select_workspace => |workspace| try client_actions.switchWorkspace(handler.client, workspace),
+        .select_workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(handler.client, .{ .workspace = workspace }),
         .focus_pane => |pane_id| try client_actions.focusPane(handler.client, .{ .pane_id = pane_id }),
     }
 }
@@ -267,7 +267,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         _ = name_prompts.beginTabRename(handler.client, tab_id);
     }
     if (interaction.select_workspace) |workspace| {
-        try client_actions.switchWorkspace(handler.client, workspace);
+        _ = try workspace_handoffs.selectWorkspace(handler.client, .{ .workspace = workspace });
     }
     if (interaction.notification) |intent| {
         try handler.applyNotificationIntent(intent, monotonic(handler.client.io));
