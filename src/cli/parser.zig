@@ -493,3 +493,230 @@ fn defaultShell(environ: std.process.Environ) !pty.Command {
     if (configured.len == 0) return pty.Command.fromArgv(&.{fallback});
     return pty.Command.fromArgv(&.{configured.ptr});
 }
+
+test "CLI defaults to the configured shell" {
+    const args = [_][*:0]const u8{"telar"};
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expect(cli == .run);
+    try std.testing.expect(cli.run.command.argv[0] != null);
+    try std.testing.expectEqual(frontend.theme.Builtin.vesper, cli.run.theme.base);
+}
+
+test "CLI forwards a command without a shell" {
+    const args = [_][*:0]const u8{ "telar", "/bin/sh", "-c", "exit 9" };
+    const cli = try Cli.parse(&args, .empty);
+
+    try std.testing.expect(cli == .run);
+    try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
+    try std.testing.expectEqualStrings("exit 9", std.mem.span(cli.run.command.argv[2].?));
+}
+
+test "CLI delimiter permits option-shaped commands" {
+    const args = [_][*:0]const u8{ "telar", "--", "-command" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqualStrings("-command", std.mem.span(cli.run.command.file));
+}
+
+test "CLI selects a built-in theme before the command" {
+    const args = [_][*:0]const u8{ "telar", "--theme=catppuccin", "/bin/sh" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqual(frontend.theme.Builtin.catppuccin, cli.run.theme.base);
+    try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
+}
+
+test "CLI runs the default shell when only a theme is provided" {
+    const args = [_][*:0]const u8{ "telar", "--theme", "tokyonight" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqual(frontend.theme.Builtin.tokyo_night, cli.run.theme.base);
+    try std.testing.expect(cli.run.command.argv[0] != null);
+}
+
+test "CLI rejects unknown and duplicate themes" {
+    const unknown = [_][*:0]const u8{ "telar", "--theme", "neon" };
+    try std.testing.expectError(error.UnknownTheme, Cli.parse(&unknown, .empty));
+
+    const duplicate = [_][*:0]const u8{
+        "telar",
+        "--theme",
+        "vesper",
+        "--theme=catppuccin",
+    };
+    try std.testing.expectError(error.DuplicateThemeOption, Cli.parse(&duplicate, .empty));
+}
+
+test "CLI selects and validates the sidebar renderer" {
+    const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqual(frontend.kitty.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
+
+    const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
+    try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));
+}
+
+test "CLI rejects an empty command after the delimiter" {
+    const args = [_][*:0]const u8{ "telar", "--" };
+    try std.testing.expectError(error.MissingCommand, Cli.parse(&args, .empty));
+}
+
+test "CLI parses config profiles and rejects profile without config" {
+    const args = [_][*:0]const u8{ "telar", "--config", "config.lua", "--profile", "remote" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqualStrings("remote", std.mem.span(cli.run.profile.?));
+
+    const disabled = [_][*:0]const u8{ "telar", "--no-config", "--profile", "remote" };
+    try std.testing.expectError(error.ProfileWithoutConfig, Cli.parse(&disabled, .empty));
+
+    const check = [_][*:0]const u8{ "telar", "config", "check", "config.lua", "--profile", "remote" };
+    const parsed_check = try Cli.parse(&check, .empty);
+    try std.testing.expectEqualStrings("config.lua", std.mem.span(parsed_check.config_check.path.?));
+    try std.testing.expectEqualStrings("remote", std.mem.span(parsed_check.config_check.profile.?));
+}
+
+test "CLI keeps plugin inspection installation and trust separate" {
+    const install = [_][*:0]const u8{ "telar", "plugin", "install", "./plugin" };
+    const parsed_install = try Cli.parse(&install, .empty);
+    try std.testing.expectEqual(PluginCommand.install, parsed_install.plugin.command);
+
+    const trust = [_][*:0]const u8{
+        "telar",
+        "plugin",
+        "trust",
+        "./plugin",
+        "--capability",
+        "history.read",
+    };
+    const parsed_trust = try Cli.parse(&trust, .empty);
+    try std.testing.expectEqual(PluginCommand.trust, parsed_trust.plugin.command);
+    try std.testing.expectEqual(core.plugin.Capability.history_read, parsed_trust.plugin.capabilities[0]);
+}
+
+test "CLI recognizes the runtime server" {
+    const args = [_][*:0]const u8{ "telar", "server" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expect(cli == .server);
+    try std.testing.expectEqual(ServerAction.run, cli.server.action);
+    try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
+}
+
+test "CLI recognizes runtime stop" {
+    const args = [_][*:0]const u8{ "telar", "server", "stop" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expect(cli == .server);
+    try std.testing.expectEqual(ServerAction.stop, cli.server.action);
+    try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
+}
+
+test "runtime stop cannot use an internal launcher mode" {
+    const args = [_][*:0]const u8{ "telar", "server", "stop", "--background" };
+    try std.testing.expectError(error.ConflictingServerAction, Cli.parse(&args, .empty));
+}
+
+test "server socket and launcher mode are explicit" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "server",
+        "--background",
+        "--socket",
+        "/tmp/telar-test.sock",
+    };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqual(ServerMode.background_launcher, cli.server.mode);
+    try std.testing.expectEqualStrings("/tmp/telar-test.sock", std.mem.span(cli.server.socket.?));
+}
+
+test "server graphics memory quotas are configurable and bounded" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "server",
+        "--graphics-pane-mib",
+        "32",
+        "--graphics-global-mib",
+        "128",
+    };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqual(@as(usize, 32 * 1024 * 1024), cli.server.graphics.pane_bytes);
+    try std.testing.expectEqual(@as(usize, 128 * 1024 * 1024), cli.server.graphics.global_bytes);
+
+    const invalid = [_][*:0]const u8{
+        "telar",
+        "server",
+        "--graphics-pane-mib",
+        "257",
+    };
+    try std.testing.expectError(error.InvalidGraphicsLimits, Cli.parse(&invalid, .empty));
+}
+
+test "CLI parses history search filters" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "history",
+        "search",
+        "git commit",
+        "--workspace",
+        "/work/telar",
+        "--failed",
+        "--limit",
+        "40",
+    };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expect(cli == .history);
+    try std.testing.expectEqual(HistoryAction.search, cli.history.action);
+    try std.testing.expectEqualStrings("git commit", std.mem.span(cli.history.query.?));
+    try std.testing.expectEqual(core.schema.HistoryScope.workspace, cli.history.scope);
+    try std.testing.expectEqualStrings("/work/telar", std.mem.span(cli.history.scope_value.?));
+    try std.testing.expect(cli.history.failed_only);
+    try std.testing.expectEqual(@as(u16, 40), cli.history.limit);
+}
+
+test "CLI parses clickable notification commands" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "notification",
+        "show",
+        "Build complete",
+        "--body",
+        "Open the pane",
+        "--level",
+        "success",
+        "--duration",
+        "2500",
+        "--pane",
+        "42",
+        "--socket",
+        "/tmp/telar.sock",
+    };
+    const parsed = try Cli.parse(&args, .empty);
+    try std.testing.expect(parsed == .notification);
+    try std.testing.expectEqualStrings("Build complete", std.mem.span(parsed.notification.title));
+    try std.testing.expectEqualStrings("Open the pane", std.mem.span(parsed.notification.body.?));
+    try std.testing.expectEqual(core.schema.NotificationLevel.success, parsed.notification.level);
+    try std.testing.expectEqual(@as(u32, 2500), parsed.notification.duration_ms);
+    try std.testing.expectEqual(@as(core.schema.PaneId, @enumFromInt(42)), parsed.notification.target.pane);
+    try std.testing.expectEqualStrings("/tmp/telar.sock", std.mem.span(parsed.notification.socket.?));
+}
+
+test "CLI rejects conflicting notification click targets" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "notification",
+        "show",
+        "Ready",
+        "--pane",
+        "1",
+        "--tab",
+        "2",
+    };
+    try std.testing.expectError(error.ConflictingNotificationTargets, Cli.parse(&args, .empty));
+}
+
+test "CLI rejects conflicting history scopes" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "history",
+        "list",
+        "--cwd",
+        "--pane",
+        "1",
+    };
+    try std.testing.expectError(error.ConflictingHistoryScopes, Cli.parse(&args, .empty));
+}
