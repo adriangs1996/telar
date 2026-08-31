@@ -60,7 +60,7 @@ pub const ConfirmPaneSplit = struct {
 
 pub const ConfirmationEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.PaneSplitCommit) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.PaneSplitCommit) anyerror!void,
 };
 
 pub const ConfirmPaneSplitHandler = struct {
@@ -85,7 +85,7 @@ pub const ConfirmPaneSplitHandler = struct {
             .split = command.requested,
             .new_pane = command.confirmed_pane,
         });
-        try handler.effects.apply(handler.effects.context, commit);
+        try handler.effects.deliver(handler.effects.context, commit);
 
         return commit;
     }
@@ -219,14 +219,14 @@ const ConfirmationCapture = struct {
     fail: bool = false,
 
     fn port(capture: *ConfirmationCapture) ConfirmationEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, commit: client_model.PaneSplitCommit) !void {
+    fn deliver(context: *anyopaque, commit: client_model.PaneSplitCommit) !void {
         const capture: *ConfirmationCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.observed_commit = capture.model.workspace.activeConst().?.model.findConst(capture.pane_id) != null and
-            capture.model.version().panes == 1 and
+            capture.model.version().panes == commit.panes_revision and
             commit.pane_id == capture.pane_id;
         if (capture.fail) {
             return error.SyncFailed;

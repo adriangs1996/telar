@@ -33,6 +33,7 @@ pub const pane_input = @import("pane_input.zig");
 pub const pane_mouse = @import("pane_mouse.zig");
 pub const pane_paste = @import("pane_paste.zig");
 pub const pane_resource_release = @import("pane_resource_release.zig");
+pub const pane_split_confirmation_delivery = @import("pane_split_confirmation_delivery.zig");
 pub const paste_routing = @import("paste_routing.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
 pub const plugin_action = @import("plugin_action.zig");
@@ -96,6 +97,7 @@ test {
     _ = pane_mouse;
     _ = pane_paste;
     _ = pane_resource_release;
+    _ = pane_split_confirmation_delivery;
     _ = paste_routing;
     _ = pane_metadata;
     _ = plugin_action;

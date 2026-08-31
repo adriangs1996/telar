@@ -1,8 +1,6 @@
 //! Wires pane-split application ports to one disposable client.
 
-const std = @import("std");
 const core = @import("telar-core");
-const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
@@ -13,7 +11,7 @@ const Client = @import("client.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 const split_pane = client_application.split_pane;
-const tabs_mod = workspace_capability.tabs;
+const split_confirmation_delivery = client_application.pane_split_confirmation_delivery;
 
 /// Wires an interactive split request to provisional resize and delivery.
 ///
@@ -47,7 +45,7 @@ pub fn confirmationHandler(client: *Client) split_pane.ConfirmPaneSplitHandler {
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = applyConfirmation,
+            .deliver = deliverConfirmation,
         },
     };
 }
@@ -108,52 +106,50 @@ fn sendSplit(context: *anyopaque, plan: client_model.PaneSplitPlan) !void {
     });
 }
 
-fn applyConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) !void {
+fn deliverConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    switch (commit.disposition) {
-        .active => {
-            const tab = findTab(&client.model.workspace, commit.location) orelse
-                return error.UnexpectedPaneSplit;
-            const active = client.model.workspace.active() orelse
-                return error.UnexpectedPaneSplit;
-            if (active != tab) {
-                return error.UnexpectedPaneSplit;
-            }
-
-            try pane_geometry.offerAttached(client, &tab.model, client.view.workbench());
-            try active_pane_resources.synchronize(client);
+    var use_case: split_confirmation_delivery.DeliverPaneSplitConfirmationHandler = .{
+        .model = &client.model,
+        .geometry_effects = pane_geometry.offerEffects(client),
+        .effects = .{
+            .context = client,
+            .detach_pane = detachPane,
+            .set_pane_graphics_visible = setPaneGraphicsVisible,
+            .synchronize_active_resources = synchronizeActiveResources,
+            .workspace_snapshot_pending = workspaceSnapshotPending,
+            .request_workspace_snapshot = requestWorkspaceSnapshot,
         },
-        .inactive => {
-            const tab = findTab(&client.model.workspace, commit.location) orelse
-                return error.UnexpectedPaneSplit;
-            if (client.model.workspace.active()) |active| {
-                if (active == tab) {
-                    return error.UnexpectedPaneSplit;
-                }
-            }
+    };
 
-            try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = commit.pane_id } });
-            try client.graphics_store.setPaneVisible(commit.pane_id, false);
-        },
-        .stale => {
-            try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = commit.pane_id } });
-            const workspace = client.model.workspace.workspace orelse return;
-            if (!std.meta.eql(workspace, commit.location.workspace) or
-                request_lifecycle.has(client, .workspace_snapshot))
-            {
-                return;
-            }
-
-            try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
-        },
-    }
+    try use_case.execute(commit);
 }
 
-fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const tab = workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
+fn detachPane(context: *anyopaque, pane_id: schema.PaneId) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-    return tab;
+    try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane_id } });
+}
+
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try client.graphics_store.setPaneVisible(pane_id, visible);
+}
+
+fn synchronizeActiveResources(context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try active_pane_resources.synchronize(client);
+}
+
+fn workspaceSnapshotPending(context: *anyopaque) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return request_lifecycle.has(client, .workspace_snapshot);
+}
+
+fn requestWorkspaceSnapshot(context: *anyopaque, workspace: schema.WorkspaceLocation) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
 }

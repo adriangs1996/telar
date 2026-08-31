@@ -28,7 +28,11 @@ ConfirmPaneSplitHandler
         |
 ClientModel.commitPaneSplit
         |
-pane_splits applies attachment, size and focus effects
+PaneSplitCommit
+        |
+DeliverPaneSplitConfirmationHandler
+        |
+active geometry / inactive detach / stale recovery
 ```
 
 `ClientModel.planPaneSplit` reads the active, focused and attached pane plus
@@ -52,15 +56,19 @@ with a different tab, the original target identity or `created = false` before
 the model changes.
 
 An active-tab confirmation adds and focuses the created pane, marks it attached
-and advances the pane revision once. The adapter then resizes attached panes
-and synchronizes focus. It does not invalidate the view or request a draw;
-`presentation_lifecycle.observe` notices the revision after the server event and folds
-the change into the paced frame loop.
+and advances the pane revision once. The commit captures the request-time area,
+the workspace, tabs, active-tab and pane revisions, plus the exact tab-local
+layout revision. `DeliverPaneSplitConfirmationHandler` validates that state,
+then resizes attached panes and synchronizes focus. It does not invalidate the
+view or request a draw. `presentation_lifecycle.observe` notices the revision
+after the server event and folds the change into the paced frame loop.
 
 An inactive-tab confirmation records membership but leaves the created pane
-detached and advances no visible revision. The adapter sends `detach_pane` for
-the attachment created by the runtime and hides any pane graphics. Returning
-to that tab uses its canonical snapshot and normal attachment flow.
+detached and advances no visible revision. Its tab-local layout revision makes
+the commit exact even though `Version.panes` is unchanged. The delivery handler
+sends `detach_pane` for the attachment created by the runtime and then hides any
+pane graphics. Returning to that tab uses its canonical snapshot and normal
+attachment flow.
 
 ## Races and recovery
 
@@ -72,9 +80,10 @@ lose that cleanup identity.
 If the target pane disappears while launch is in flight but its tab remains,
 the confirmation adds the created pane deterministically to that exact tab.
 If the tab itself disappears, the model returns a stale commit without adding
-the pane. The adapter detaches the runtime attachment and requests one
-coalesced workspace snapshot when the client still observes the same
-workspace.
+the pane. The delivery handler validates that the identity remains
+unrepresented, detaches the runtime attachment and requests one coalesced
+workspace snapshot when the client still observes the same workspace. The
+adapter supplies only detach, graphics, geometry and request-lifecycle ports.
 
 A failed request passes through `HandleRequestFailureHandler`, which delegates
 size restoration to `RecoverPaneSplitHandler`. Recovery changes size only when
@@ -92,6 +101,9 @@ when possible.
 
 - `frontend/client/application/split_pane.zig` checks request ordering,
   restoration, exact confirmation, commit-before-effects and recovery gating.
+- `frontend/client/application/pane_split_confirmation_delivery.zig` checks
+  all three dispositions, exact revisions and layout identity, effect order,
+  recovery coalescence and partial failure semantics.
 - `frontend/client/model.zig` checks target-exit, inactive-tab and retired-tab
   transitions plus version ownership.
 - `frontend/client/requests.zig` checks that lifecycle retirement preserves

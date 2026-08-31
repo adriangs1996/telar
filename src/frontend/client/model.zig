@@ -622,8 +622,20 @@ pub const PaneSplitDisposition = enum {
 pub const PaneSplitCommit = struct {
     pane_id: schema.PaneId,
     location: schema.TabLocation,
+    area: ui.Rect,
     disposition: PaneSplitDisposition,
     change: Change,
+    layout_revision: u64,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
+};
+
+const PaneSplitCommitState = struct {
+    disposition: PaneSplitDisposition,
+    change: Change,
+    layout_revision: u64,
 };
 
 pub const RecoverPaneSplit = struct {
@@ -2808,12 +2820,11 @@ pub const Model = struct {
     /// const commit = try model.commitPaneSplit(command);
     /// ```
     pub fn commitPaneSplit(model: *Model, command: CommitPaneSplit) !PaneSplitCommit {
-        const stale: PaneSplitCommit = .{
-            .pane_id = command.new_pane,
-            .location = command.split.location,
+        const stale = model.finishPaneSplit(command, .{
             .disposition = .stale,
             .change = .unchanged,
-        };
+            .layout_revision = 0,
+        });
         const workspace = model.workspace.workspace orelse return stale;
         if (!std.meta.eql(workspace, command.split.location.workspace)) {
             return stale;
@@ -2836,12 +2847,11 @@ pub const Model = struct {
                 detachPane(pane);
             }
 
-            return .{
-                .pane_id = command.new_pane,
-                .location = command.split.location,
+            return model.finishPaneSplit(command, .{
                 .disposition = if (active) .active else .inactive,
                 .change = .unchanged,
-            };
+                .layout_revision = tab.model.layout.currentRevision(),
+            });
         }
 
         if (tab.model.find(command.split.target_pane) != null) {
@@ -2863,11 +2873,25 @@ pub const Model = struct {
             model.panes_revision +%= 1;
         }
 
+        return model.finishPaneSplit(command, .{
+            .disposition = if (active) .active else .inactive,
+            .change = if (active) .changed else .unchanged,
+            .layout_revision = tab.model.layout.currentRevision(),
+        });
+    }
+
+    fn finishPaneSplit(model: *const Model, command: CommitPaneSplit, state: PaneSplitCommitState) PaneSplitCommit {
         return .{
             .pane_id = command.new_pane,
             .location = command.split.location,
-            .disposition = if (active) .active else .inactive,
-            .change = if (active) .changed else .unchanged,
+            .area = command.split.area,
+            .disposition = state.disposition,
+            .change = state.change,
+            .layout_revision = state.layout_revision,
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
         };
     }
 
@@ -6005,6 +6029,12 @@ test "split confirmation replaces a target retired during pane creation" {
     try std.testing.expect(model.workspace.findPane(created).?.attached);
     try std.testing.expectEqual(created, model.workspace.active().?.model.layout.focused().?);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
+    try std.testing.expectEqualDeep(ui.Rect{ .w = 40, .h = 10 }, commit.area);
+    try std.testing.expectEqual(model.workspace.activeConst().?.model.layout.currentRevision(), commit.layout_revision);
+    try std.testing.expectEqual(model.version().workspace, commit.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, commit.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, commit.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, commit.panes_revision);
 }
 
 test "inactive split confirmation retains membership without visible revision" {
@@ -6039,6 +6069,8 @@ test "inactive split confirmation retains membership without visible revision" {
     try std.testing.expectEqual(Change.unchanged, commit.change);
     try std.testing.expect(!model.workspace.findPane(created).?.attached);
     try std.testing.expectEqualDeep(Version{}, model.version());
+    try std.testing.expectEqual(model.workspace.find(first.tab_id).?.model.layout.currentRevision(), commit.layout_revision);
+    try std.testing.expectEqual(model.version().panes, commit.panes_revision);
     try std.testing.expect(model.recoverPaneSplit(.{
         .split = commitSplit(target, first, .vertical),
         .area = .{ .w = 40, .h = 10 },
@@ -6077,6 +6109,11 @@ test "split confirmation leaves a retired tab unrepresented" {
     try std.testing.expectEqual(Change.unchanged, commit.change);
     try std.testing.expect(model.workspace.findPane(created) == null);
     try std.testing.expectEqualDeep(Version{}, model.version());
+    try std.testing.expectEqual(@as(u64, 0), commit.layout_revision);
+    try std.testing.expectEqual(model.version().workspace, commit.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, commit.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, commit.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, commit.panes_revision);
 }
 
 fn commitSplit(target: schema.PaneId, location: schema.TabLocation, axis: layout_mod.Axis) PaneSplit {
