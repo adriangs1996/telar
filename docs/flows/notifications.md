@@ -37,9 +37,11 @@ publication use case. Request failures, agent and proxy transitions,
 configuration or plugin diagnostics, and clipboard image failures enter
 through `notifications.publishNow` or `publishDiagnostic` and converge on the
 same use case. `publishNow` owns monotonic timestamp acquisition.
-`publishDiagnostic` requires the model's current diagnostic and applies the
-bounded failure level and seven-second duration. The handler commits the owned
-model state before it touches timer infrastructure.
+`publishDiagnostic` requires the model's current diagnostic, already committed
+through `ClientDiagnosticHandler`, and applies the bounded failure level and
+seven-second duration. Diagnostic replacement remains a separate use case.
+The notification handler commits its owned model state before it touches timer
+infrastructure.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
 keeps at most four items, refreshes an equivalent active item and replaces the

@@ -27,7 +27,9 @@ client-owned Generation.invokeCallback / invokeExpression
       |
       +-- expression --> InputDecision --> key_routing / pane_inputs
       |
-      +-- failure --> ClientModel.replaceDiagnostic
+      +-- failure --> ClientDiagnosticHandler.replace
+                               |
+                  ClientModel.replaceDiagnostic
                                |
                   ClientModel.Version.diagnostic
                                |
@@ -55,8 +57,9 @@ transition.
 
 The diagnostic banner is semantic client state. `ClientModel` owns its bounded
 text and `Version.diagnostic`; configuration reloads, Lua actions and plugin
-actions all use the same owner. Replacing equal text is a no-op. Invalid UTF-8
-or text beyond the fixed buffer is rejected before commit.
+actions all enter through
+[`ClientDiagnosticHandler`](client-diagnostic.md). Replacing equal text is a
+no-op. Invalid UTF-8 or text beyond the fixed buffer is rejected before commit.
 
 ## Callback policy
 
@@ -101,7 +104,8 @@ error, instruction exhaustion, deadline or malformed result consumes the
 matched binding and commits the bounded diagnostic produced by the VM. A
 validation failure follows the same model path. Neither branch calls
 `Presenter.requestDraw`; `client_events` publishes `Version.diagnostic`.
-Invalid diagnostic bytes are replaced with an error-name-only fallback.
+Invalid diagnostic bytes are replaced by the handler with an explicit
+error-name-only fallback.
 
 The synchronous callback path keeps its existing hard limits:
 
@@ -120,6 +124,8 @@ authority.
 
 - `src/frontend/client/model.zig` proves callback-context projection,
   diagnostic validation, equality and revision behavior.
+- `src/frontend/client/application/client_diagnostic.zig` proves shared
+  diagnostic validation, fallback and clear semantics.
 - `src/frontend/client/application/lua_action.zig` proves invocation,
   validate-before-apply order, diagnostic order, sequential exit and failure
   classification.

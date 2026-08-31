@@ -54,8 +54,10 @@ changed pane-gap preference updates every current tab and advances
 versions.
 
 The model also owns the diagnostic banner and `Version.diagnostic`. A rejected
-generation replaces that bounded text without changing the active generation.
-An accepted generation clears an older diagnostic during the resource swap.
+generation enters `ClientDiagnosticHandler`, which validates that bounded text
+and applies an explicit safe fallback for malformed worker output without
+changing the active generation. An accepted generation clears an older
+diagnostic through the same handler during the resource swap.
 
 `ApplyConfigHandler` invokes the concrete effect only after this commit. A
 stale generation invokes no effect, and `config_reloads.apply` releases the
@@ -98,6 +100,8 @@ trigger.
   settings and isolated versions.
 - `src/frontend/client/application/config_reload.zig` proves commit-before-
   effect ordering and retained commits after effect failure.
+- `src/frontend/client/application/client_diagnostic.zig` proves diagnostic
+  validation, fallback and idempotent clear policy shared with other producers.
 - `src/frontend/client/config_reloads.zig` owns the concrete resource and
   configuration-object swap plus watcher start and rearm.
 - `src/frontend/client/sidebar_projection.zig` owns the shared sidebar

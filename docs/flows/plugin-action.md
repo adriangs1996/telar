@@ -77,8 +77,8 @@ For a current successful result, the adapter re-resolves authority through the
 current `Registry.authorizeBatch`. That check verifies package position,
 stable plugin ID, exact digest, declared capabilities and digest-bound grants
 for every effect before any effect runs. Worker failures and authorization
-failures commit the shared `ClientModel` diagnostic and publish bounded client
-notifications after consuming the execution.
+failures enter `ClientDiagnosticHandler` and then publish bounded client
+notifications from the committed banner after consuming the execution.
 
 Authorized effects enter `client_actions.apply`, the shared dispatcher for
 native semantic actions regardless of whether they came from host input, Lua
@@ -111,6 +111,8 @@ presenter compare versions and schedule at most the required paced frame.
 - `src/frontend/client/application/plugin_action.zig` proves prepare/commit/
   schedule order, rollback, stale suppression, completion ordering and failure
   classification.
+- `src/frontend/client/application/client_diagnostic.zig` proves the shared
+  diagnostic replacement and clear policy used by plugin outcomes.
 - `src/frontend/client/application/action_routing.zig` proves that configured
   plugin values select only the asynchronous start port.
 - `src/frontend/client/client_test.zig` proves authorized application through

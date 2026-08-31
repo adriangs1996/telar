@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const lua_config = @import("../../config/root.zig");
 const input = @import("../../input/root.zig");
+const client_diagnostic = @import("client_diagnostic.zig");
 const client_model = @import("../model.zig");
 
 const Action = input.action.Action;
@@ -75,7 +76,8 @@ pub const LuaActionHandler = struct {
                 break :failed .{ .invocation_failed = failure.reason };
             },
             .expression => |decision| expression: {
-                _ = handler.model.clearDiagnostic();
+                var diagnostics = handler.diagnosticHandler();
+                _ = diagnostics.clear();
                 break :expression .{ .input = decision };
             },
             .callback => |batch| callback: {
@@ -87,7 +89,8 @@ pub const LuaActionHandler = struct {
                     },
                 }
 
-                _ = handler.model.clearDiagnostic();
+                var diagnostics = handler.diagnosticHandler();
+                _ = diagnostics.clear();
                 for (batch.slice()) |effect| {
                     if (try handler.effects.apply(handler.effects.context, effect) == .exit_client) {
                         break :callback .exit;
@@ -100,12 +103,19 @@ pub const LuaActionHandler = struct {
     }
 
     fn publishFailure(handler: *LuaActionHandler, failure: Failure) !void {
-        _ = handler.model.replaceDiagnostic(failure.diagnostic) catch |err| switch (err) {
-            error.InvalidClientDiagnostic => try handler.model.setDiagnostic(
+        var diagnostics = handler.diagnosticHandler();
+
+        _ = try diagnostics.replace(.{
+            .diagnostic = failure.diagnostic,
+            .invalid_fallback = client_diagnostic.formatted(
                 "Lua action failed: {s}",
                 .{@errorName(failure.reason)},
             ),
-        };
+        });
+    }
+
+    fn diagnosticHandler(handler: *LuaActionHandler) client_diagnostic.ClientDiagnosticHandler {
+        return .{ .model = handler.model };
     }
 };
 

@@ -6,6 +6,7 @@ pub const agent_navigation = @import("agent_navigation.zig");
 pub const agent_sound = @import("agent_sound.zig");
 pub const agent_snapshot = @import("agent_snapshot.zig");
 pub const clipboard_image = @import("clipboard_image.zig");
+pub const client_diagnostic = @import("client_diagnostic.zig");
 pub const close_pane = @import("close_pane.zig");
 pub const close_tab = @import("close_tab.zig");
 pub const config_reload = @import("config_reload.zig");
@@ -59,6 +60,7 @@ test {
     _ = agent_sound;
     _ = agent_snapshot;
     _ = clipboard_image;
+    _ = client_diagnostic;
     _ = close_pane;
     _ = close_tab;
     _ = config_reload;

@@ -9,6 +9,7 @@ const pane_geometry = @import("pane_geometry.zig");
 const sidebar_projection = @import("sidebar_projection.zig");
 
 const Client = @import("client.zig");
+const client_diagnostics = @import("client_diagnostics.zig");
 const reload_worker = @import("config_reload.zig");
 const config_use_case = client_application.config_reload;
 
@@ -52,7 +53,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     })) {
         .unchanged => .unchanged,
         .rejected => |diagnostic| rejected: {
-            try publishDiagnostic(client, diagnostic);
+            try commitDiagnostic(client, diagnostic);
             try notification_flow.publishDiagnostic(client, "Configuration rejected");
             break :rejected .rejected;
         },
@@ -63,13 +64,14 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     return outcome;
 }
 
-fn publishDiagnostic(client: *Client, diagnostic: lua_config.Diagnostic) !void {
-    _ = client.model.replaceDiagnostic(diagnostic) catch |err| switch (err) {
-        error.InvalidClientDiagnostic => try client.model.setDiagnostic(
+fn commitDiagnostic(client: *Client, diagnostic: lua_config.Diagnostic) !void {
+    _ = try client_diagnostics.replace(client, .{
+        .diagnostic = diagnostic,
+        .invalid_fallback = client_diagnostics.formatted(
             "configuration reload failed: invalid diagnostic text",
             .{},
         ),
-    };
+    });
 }
 
 /// Adopts one validated generation through the client application boundary.
@@ -125,7 +127,7 @@ const AdoptionContext = struct {
         client.host_input.replaceRouter(client.io, context.adoption.router);
         client.sidebar_rendering = context.adoption.sidebar_rendering;
         client.sound_playback.configure(snapshot.sound);
-        _ = client.model.clearDiagnostic();
+        _ = client_diagnostics.clear(client);
         context.consumed = true;
 
         if (previous_generation) |generation| {
