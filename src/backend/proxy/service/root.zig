@@ -3,17 +3,15 @@
 const std = @import("std");
 const core = @import("telar-core");
 const diagnostics = core.diagnostics;
-const ca = @import("../ca.zig");
 const connection_admission = @import("../connection_admission.zig");
 const credential_registry = @import("../credential_registry.zig");
 const identity = @import("../identity.zig");
+const interception_mod = @import("interception.zig");
 const listener_mod = @import("listener.zig");
 const metrics_mod = @import("../metrics.zig");
 const middleware = @import("../middleware.zig");
 const observation_queue = @import("../observation_queue.zig");
-const passthrough_policy = @import("../passthrough_policy.zig");
 const provider = @import("../provider/root.zig");
-const tls = @import("../tls.zig");
 const tunnel_mod = @import("../tunnel/root.zig");
 
 const Io = std.Io;
@@ -23,12 +21,7 @@ const schema = core.schema;
 pub const max_connections: u32 = 64;
 pub const event_capacity = observation_queue.capacity;
 
-pub const Paths = struct {
-    key: []const u8,
-    certificate: []const u8,
-    bundle: []const u8,
-    passthrough_hosts: []const []const u8 = &.{},
-};
+pub const Paths = interception_mod.Paths;
 
 pub const Pane = struct {
     id: schema.PaneId,
@@ -47,11 +40,7 @@ pub const Service = struct {
     io: Io,
     gpa: std.mem.Allocator,
     listener: listener_mod.Listener,
-    authority: ca.Authority,
-    roots: tls.Roots,
-    certificate_path: []const u8,
-    bundle_path: []const u8,
-    passthrough_hosts: passthrough_policy.Policy,
+    interception: interception_mod.Interception,
     credentials: credential_registry.Registry = .{},
     pipeline: middleware.Pipeline = .{},
     transforms: middleware.TransformPipeline = .{},
@@ -64,28 +53,19 @@ pub const Service = struct {
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
     pub fn create(io: Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
-        const ca_resources: ca.Resources = .{ .io = io, .allocator = gpa };
-        var authority = try ca.Authority.loadOrCreate(ca_resources, .{
-            .key = paths.key,
-            .certificate = paths.certificate,
-        });
-        defer std.crypto.secureZero(u8, std.mem.asBytes(&authority));
-        try authority.writeBundle(ca_resources, paths.bundle);
-        var roots = try tls.Roots.load(io, gpa);
-        errdefer roots.deinit(gpa);
+        var interception = try interception_mod.Interception.init(io, gpa, paths);
+        errdefer interception.deinit();
+
         var listener = try listener_mod.Listener.bind(io);
         errdefer listener.deinit(io);
+
         const service = try gpa.create(Service);
         errdefer gpa.destroy(service);
         service.* = .{
             .io = io,
             .gpa = gpa,
             .listener = listener,
-            .authority = authority,
-            .roots = roots,
-            .certificate_path = paths.certificate,
-            .bundle_path = paths.bundle,
-            .passthrough_hosts = try .init(paths.passthrough_hosts),
+            .interception = interception,
             .observations = undefined,
         };
         service.observations.init(.{
@@ -107,7 +87,7 @@ pub const Service = struct {
     pub fn destroy(service: *Service) void {
         const gpa = service.gpa;
         service.listener.deinit(service.io);
-        service.roots.deinit(gpa);
+        service.interception.deinit();
         std.crypto.secureZero(u8, std.mem.asBytes(service));
         gpa.destroy(service);
     }
@@ -149,10 +129,12 @@ pub const Service = struct {
     /// const client = service.clientConfiguration();
     /// ```
     pub fn clientConfiguration(service: *const Service) ClientConfiguration {
+        const trust = service.interception.clientTrust();
+
         return .{
             .port = service.listener.port(),
-            .certificate_path = service.certificate_path,
-            .bundle_path = service.bundle_path,
+            .certificate_path = trust.certificate_path,
+            .bundle_path = trust.bundle_path,
         };
     }
 
@@ -299,14 +281,7 @@ fn serveConnection(service: *Service, stream: net.Stream) Io.Cancelable!void {
 
     var tunnel = tunnel_mod.Tunnel.init(.{
         .dependencies = .{
-            .tls = .{
-                .io = service.io,
-                .gpa = service.gpa,
-                .authority = &service.authority,
-                .roots = &service.roots,
-                .passthrough = &service.passthrough_hosts,
-                .telemetry = &service.telemetry,
-            },
+            .tls = service.interception.tunnelResources(&service.telemetry),
             .credentials = &service.credentials,
             .pipeline = &service.pipeline,
             .transforms = &service.transforms,
