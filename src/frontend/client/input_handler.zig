@@ -37,7 +37,6 @@ const client_mod = @import("client.zig");
 const Client = client_mod;
 const Action = action_mod.Action;
 const monotonic = client_mod.monotonic;
-const presentableModel = client_mod.presentableModel;
 const encodeSgrMouse = mouse_protocol.encodeSgr;
 const mouseTracked = mouse_protocol.tracked;
 
@@ -48,10 +47,9 @@ redraw: bool = false,
 
 /// The model host input should act on, or null while no tab exists —
 /// before bootstrap completes, or while the workspace-handoff model is
-/// explicitly empty. Input arriving in that window is dropped, mirroring
-/// `presentableModel` on the normal draw path.
+/// explicitly empty. Input arriving in that window is dropped.
 fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
-    return presentableModel(&handler.client.model.workspace);
+    return handler.client.model.activeTabModel();
 }
 
 pub fn capturesKeys(handler: *const InputHandler) bool {

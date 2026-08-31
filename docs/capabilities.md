@@ -115,7 +115,8 @@ entrypoints below.
 | Host resize | [`Client.handleResizeEvent`](flows/host-resize.md) |
 | Runtime socket read | [`runtime_transport.handleRead`](flows/runtime-transport.md) |
 | Completed socket write | [`runtime_transport.handleSent`](flows/runtime-transport.md) |
-| Scheduled draw | `Client.handleDrawEvent` -> `Client.presentDue` |
+| Scheduled draw | [`presentation_lifecycle.handleDraw`](flows/presentation-lifecycle.md) |
+| Scheduled media pass | [`presentation_lifecycle.handleMediaTick`](flows/presentation-lifecycle.md) |
 | Sidebar animation tick | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
 | Notification tick | [`notifications.handleTick`](flows/notifications.md) |
 | Agent sound completion | [`agent_sounds.handlePlayed`](flows/agent-sound.md) |

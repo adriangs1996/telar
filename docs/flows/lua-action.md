@@ -29,7 +29,7 @@ client-owned Generation.invokeCallback / invokeExpression
                                |
                   ClientModel.Version.diagnostic
                                |
-                    Client.observeModel -> Presenter
+                    presentation_lifecycle.observe -> Presenter
 ```
 
 `InputHandler` classifies the routed action and later translates an expression

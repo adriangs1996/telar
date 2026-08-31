@@ -26,10 +26,7 @@ const icon_graphics = graphics.icons;
 const client_mod = @import("client.zig");
 const Client = client_mod;
 const ClientEvent = client_mod.ClientEvent;
-const runtime_transport = @import("runtime_transport.zig");
 const ClientMetrics = client_telemetry.Metrics;
-const monotonic = client_mod.monotonic;
-const presentableModel = client_mod.presentableModel;
 
 const Presenter = @This();
 
@@ -61,14 +58,29 @@ last_presented_ns: ?u64 = null,
 /// first read, so a fresh session starts on the boosted media budget.
 last_input_ns: u64 = 0,
 
+/// Releases the host screen buffers.
+///
+/// ```zig
+/// defer presenter.deinit();
+/// ```
 pub fn deinit(presenter: *Presenter) void {
     presenter.screen.deinit();
 }
 
+/// Resizes the host screen buffers to one validated terminal grid.
+///
+/// ```zig
+/// try presenter.resize(80, 24);
+/// ```
 pub fn resize(presenter: *Presenter, cols: u16, rows: u16) !void {
     try presenter.screen.resize(cols, rows);
 }
 
+/// Records host input activity for media-idle policy.
+///
+/// ```zig
+/// presenter.noteInput(now_ns);
+/// ```
 pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
     presenter.last_input_ns = now_ns;
 }
@@ -100,17 +112,28 @@ pub fn observe(presenter: *Presenter, observation: Observation) !void {
 
 /// Registers one pending update and arms the paced draw timer if none is
 /// armed. What does not fit the frame budget folds into the next frame.
+///
+/// ```zig
+/// try presenter.requestDraw();
+/// ```
 pub fn requestDraw(presenter: *Presenter) !void {
-    presenter.pending_updates += 1;
-    if (comptime diagnostics.enabled)
+    presenter.pending_updates +|= 1;
+    if (comptime diagnostics.enabled) {
         presenter.metrics.max_pending_updates = @max(
             presenter.metrics.max_pending_updates,
             presenter.pending_updates,
         );
-    if (presenter.draw_pending) return;
+    }
+    if (presenter.draw_pending) {
+        return;
+    }
+
     const now_ns = monotonic(presenter.io);
     const deadline_ns = presenter.pacer.waitUntil(now_ns) orelse now_ns;
-    if (deadline_ns != now_ns) presenter.pacer.noteThrottled();
+    if (deadline_ns != now_ns) {
+        presenter.pacer.noteThrottled();
+    }
+
     presenter.draw_pending = true;
     presenter.draw_due_ns = deadline_ns;
     presenter.select.concurrent(.draw, waitToDraw, .{ presenter.io, deadline_ns }) catch |err| {
@@ -121,12 +144,19 @@ pub fn requestDraw(presenter: *Presenter) !void {
 
 /// Arms one independently paced media pass. Cell work always wins before a
 /// pass starts, and each pass emits at most the baseline KGP byte budget.
+///
+/// ```zig
+/// try presenter.requestMedia();
+/// ```
 pub fn requestMedia(presenter: *Presenter) !void {
     try presenter.requestMediaAt(monotonic(presenter.io) +| pace.default_interval);
 }
 
 fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
-    if (presenter.media_tick_pending) return;
+    if (presenter.media_tick_pending) {
+        return;
+    }
+
     presenter.media_tick_pending = true;
     presenter.select.concurrent(.media_tick, waitToDraw, .{ presenter.io, deadline_ns }) catch |err| {
         presenter.media_tick_pending = false;
@@ -134,14 +164,43 @@ fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
     };
 }
 
+/// Releases the single draw-task token before propagating its result.
+///
+/// ```zig
+/// try presenter.completeDraw(result);
+/// ```
+pub fn completeDraw(presenter: *Presenter, result: anyerror!void) !void {
+    presenter.draw_pending = false;
+
+    try result;
+}
+
+/// Releases the single media-task token before propagating its result.
+///
+/// ```zig
+/// try presenter.completeMediaTick(result);
+/// ```
+pub fn completeMediaTick(presenter: *Presenter, result: anyerror!void) !void {
+    presenter.media_tick_pending = false;
+
+    try result;
+}
+
 /// The `.draw` event: presents the latest client model, including its
 /// explicit empty state during startup and workspace handoff.
-pub fn presentDue(presenter: *Presenter, client: *Client) !void {
-    presenter.draw_pending = false;
-    if (comptime diagnostics.enabled)
+///
+/// ```zig
+/// const delivery = try presenter.presentDue(client) orelse return;
+/// ```
+pub fn presentDue(presenter: *Presenter, client: *Client) !?Delivery {
+    if (comptime diagnostics.enabled) {
         presenter.metrics.draw_lateness.observe(monotonic(presenter.io) -| presenter.draw_due_ns);
-    if (presenter.pending_updates == 0) return;
-    const model = presentableModel(&client.model.workspace);
+    }
+    if (presenter.pending_updates == 0) {
+        return null;
+    }
+
+    const model = client.model.activeTabModel();
     const workspace_changed = presenter.presented_model_version.workspace !=
         presenter.observed_model_version.workspace;
     const configuration_changed = presenter.presented_model_version.configuration !=
@@ -224,16 +283,11 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
     presenter.pending_updates = 0;
-    try runtime_transport.flushGraphicsCredits(client);
-    for (presented.acks.items[0..presented.acks.len]) |ack| {
-        const ack_started = diagnostics.now(presenter.io);
-        try runtime_transport.enqueue(client, .{ .frame_ack = ack });
-        if (comptime diagnostics.enabled)
-            presenter.metrics.ack_enqueue.observe(
-                diagnostics.elapsed(ack_started, diagnostics.now(presenter.io)),
-            );
-    }
-    if (model != null and presenter.mediaWorkPending(client)) try presenter.requestMedia();
+
+    return .{
+        .frame_acks = presented.acks,
+        .media_pending = model != null and presenter.mediaWorkPending(client),
+    };
 }
 
 fn invalidateAllCompositions(model: *client_model.Model) void {
@@ -262,13 +316,17 @@ fn projectCopyMode(model: *client_model.Model, previous: ?client_model.CopyModeP
 /// The media event never composes cells. A pending or scheduled cell frame
 /// defers it, which gives interactive output priority without concurrent
 /// writes corrupting the terminal protocol stream.
+///
+/// ```zig
+/// try presenter.presentMedia(client);
+/// ```
 pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
-    presenter.media_tick_pending = false;
     if (presenter.pending_updates != 0 or presenter.draw_pending) {
         try presenter.requestMedia();
         return;
     }
-    const model = presentableModel(&client.model.workspace) orelse return;
+
+    const model = client.model.activeTabModel() orelse return;
     const media_idle = monotonic(presenter.io) -| presenter.last_input_ns >=
         toast_graphics.idle_after_ns;
     const notifications = client.model.notificationSnapshot();
@@ -276,8 +334,12 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
     const covered_before = client.view.graphicalToastsCover(notifications);
     const modal_covered_before = client.view.graphicalModalCoversPlan();
     const icon_fallback_changed = try client.view.prepareGraphics(notifications, media_idle);
-    if (icon_fallback_changed) try presenter.requestDraw();
-    if (!presenter.mediaWorkPending(client)) return;
+    if (icon_fallback_changed) {
+        try presenter.requestDraw();
+    }
+    if (!presenter.mediaWorkPending(client)) {
+        return;
+    }
     if (presenter.onlyWaitingForMediaIdle(client, media_idle)) {
         try presenter.requestMediaAt(presenter.last_input_ns +| toast_graphics.idle_after_ns);
         return;
@@ -307,7 +369,7 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         .context = &graphics_writer,
         .write = CombinedGraphicsWriter.writeOpaque,
     };
-    try flushMedia(presenter.io, &presenter.screen, client.writer, presenter.metrics);
+    try presenter.flushMedia(client.writer);
     if (comptime diagnostics.enabled) {
         const graphics_stats = graphics_writer.panes.stats;
         presenter.metrics.pane_shared_images += graphics_stats.shared_images;
@@ -324,10 +386,11 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         try presenter.requestDraw();
     }
     if (presenter.mediaWorkPending(client)) {
-        if (presenter.onlyWaitingForMediaIdle(client, media_idle))
-            try presenter.requestMediaAt(presenter.last_input_ns +| toast_graphics.idle_after_ns)
-        else
+        if (presenter.onlyWaitingForMediaIdle(client, media_idle)) {
+            try presenter.requestMediaAt(presenter.last_input_ns +| toast_graphics.idle_after_ns);
+        } else {
             try presenter.requestMedia();
+        }
     }
 }
 
@@ -341,11 +404,7 @@ fn mediaWorkPending(presenter: *const Presenter, client: *Client) bool {
                 client.view.kittyAttachments().damaged()));
 }
 
-fn onlyWaitingForMediaIdle(
-    presenter: *const Presenter,
-    client: *Client,
-    media_idle: bool,
-) bool {
+fn onlyWaitingForMediaIdle(presenter: *const Presenter, client: *Client, media_idle: bool) bool {
     _ = presenter;
     return !media_idle and !client.view.graphicsPreparationPending() and
         !client.graphics_store.damage and !client.view.kittySidebar().damaged() and
@@ -356,20 +415,36 @@ fn onlyWaitingForMediaIdle(
 
 fn observePresentation(presenter: *Presenter, presented_ns: u64) void {
     if (comptime diagnostics.enabled) {
-        if (presenter.last_presented_ns) |previous|
+        if (presenter.last_presented_ns) |previous| {
             presenter.metrics.paced_interval.observe(presented_ns -| previous);
+        }
     }
+
     presenter.last_presented_ns = presented_ns;
 }
 
-const Acks = struct {
+pub const FrameAcks = struct {
     items: [multiplexer.max_panes]schema.FrameAck = undefined,
     len: usize = 0,
+
+    /// Returns the frame acknowledgements produced by one host flush.
+    ///
+    /// ```zig
+    /// for (delivery.frame_acks.slice()) |ack| send(ack);
+    /// ```
+    pub fn slice(acks: *const FrameAcks) []const schema.FrameAck {
+        return acks.items[0..acks.len];
+    }
+};
+
+pub const Delivery = struct {
+    frame_acks: FrameAcks,
+    media_pending: bool,
 };
 
 const Presented = struct {
     presented_ns: u64,
-    acks: Acks,
+    acks: FrameAcks,
 };
 
 fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !Presented {
@@ -407,13 +482,19 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
     // Graphics never enter this flush. The media event applies the fixed plan
     // produced above only after these cells have reached the host terminal.
     presenter.screen.graphics = null;
-    try flushScreen(presenter.io, &presenter.screen, client.writer, presenter.metrics);
-    var acks: Acks = .{};
+    try presenter.flushScreen(client.writer);
+    var acks: FrameAcks = .{};
     var panes = model.paneIterator();
     while (panes.next()) |pane| {
-        if (!pane.attached) continue;
+        if (!pane.attached) {
+            continue;
+        }
+
         const frame_id = pane.takePendingFrame();
-        if (frame_id == 0) continue;
+        if (frame_id == 0) {
+            continue;
+        }
+
         acks.items[acks.len] = .{ .pane_id = pane.id, .frame_id = frame_id };
         acks.len += 1;
     }
@@ -425,7 +506,7 @@ fn presentEmpty(presenter: *Presenter, client: *Client) !Presented {
     buffer.clear(.{});
     presenter.screen.cursor = null;
     presenter.screen.graphics = null;
-    try flushScreen(presenter.io, &presenter.screen, client.writer, presenter.metrics);
+    try presenter.flushScreen(client.writer);
 
     return .{ .presented_ns = monotonic(presenter.io), .acks = .{} };
 }
@@ -473,8 +554,9 @@ const CombinedGraphicsWriter = struct {
                         toast_bytes = try self.toasts.write(writer, self.allow_toast_transmission);
                         if (toast_bytes == 0) {
                             sidebar_bytes = try self.sidebar.write(writer);
-                            if (sidebar_bytes == 0)
+                            if (sidebar_bytes == 0) {
                                 icon_bytes = try self.icons.write(writer);
+                            }
                         }
                     }
                 }
@@ -492,40 +574,36 @@ const CombinedGraphicsWriter = struct {
     }
 };
 
-fn flushScreen(
-    io: Io,
-    screen: *term.Screen,
-    writer: *Io.Writer,
-    metrics: *ClientMetrics,
-) !void {
-    const started = diagnostics.now(io);
-    const stats = try screen.flush(writer);
+fn flushScreen(presenter: *Presenter, writer: *Io.Writer) !void {
+    const started = diagnostics.now(presenter.io);
+    const stats = try presenter.screen.flush(writer);
     if (comptime diagnostics.enabled) {
-        metrics.flushes += 1;
-        metrics.scanned_cells += stats.scanned;
-        metrics.flushed_cells += stats.cells;
-        metrics.flushed_bytes += stats.bytes;
-        metrics.graphics_flushed_bytes += stats.graphics_bytes;
-        metrics.flush.observe(diagnostics.elapsed(started, diagnostics.now(io)));
+        presenter.metrics.flushes += 1;
+        presenter.metrics.scanned_cells += stats.scanned;
+        presenter.metrics.flushed_cells += stats.cells;
+        presenter.metrics.flushed_bytes += stats.bytes;
+        presenter.metrics.graphics_flushed_bytes += stats.graphics_bytes;
+        presenter.metrics.flush.observe(diagnostics.elapsed(started, diagnostics.now(presenter.io)));
     }
 }
 
-fn flushMedia(
-    io: Io,
-    screen: *term.Screen,
-    writer: *Io.Writer,
-    metrics: *ClientMetrics,
-) !void {
-    const started = diagnostics.now(io);
-    const stats = try screen.flush(writer);
+fn flushMedia(presenter: *Presenter, writer: *Io.Writer) !void {
+    const started = diagnostics.now(presenter.io);
+    const stats = try presenter.screen.flush(writer);
     if (comptime diagnostics.enabled) {
-        metrics.media_flushes += 1;
-        metrics.graphics_flushed_bytes += stats.graphics_bytes;
-        metrics.media_flush.observe(diagnostics.elapsed(started, diagnostics.now(io)));
+        presenter.metrics.media_flushes += 1;
+        presenter.metrics.graphics_flushed_bytes += stats.graphics_bytes;
+        presenter.metrics.media_flush.observe(diagnostics.elapsed(started, diagnostics.now(presenter.io)));
     }
 }
 
 fn waitToDraw(io: Io, deadline_ns: u64) anyerror!void {
     const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
     try deadline.wait(io);
+}
+
+fn monotonic(io: Io) u64 {
+    const timestamp = Io.Timestamp.now(io, .awake);
+
+    return @intCast(@max(timestamp.nanoseconds, 0));
 }

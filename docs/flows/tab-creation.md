@@ -65,7 +65,7 @@ ClientModel.createTab
         |
 detach previous tab -> synchronize root-pane focus
         |
-Presenter.observeModel -> paced presentation
+presentation_lifecycle.observe -> paced presentation
 ```
 
 `tab_creations.apply` consumes the typed continuation once and requires the

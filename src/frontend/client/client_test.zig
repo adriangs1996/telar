@@ -42,6 +42,7 @@ const pane_clipboards = @import("pane_clipboards.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_openings = @import("pane_openings.zig");
+const presentation_lifecycle = @import("presentation_lifecycle.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const resync_requirements = @import("resync_requirements.zig");
@@ -225,14 +226,14 @@ const TestHarness = struct {
         while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
             switch (try harness.client.select.await()) {
                 .sent => |result| try runtime_transport.handleSent(harness.client, result),
-                .draw => |result| try harness.client.handleDrawEvent(result),
+                .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
                 .sidebar_animation_tick => |result| {
                     _ = try sidebar_animations.handleTick(harness.client, result);
-                    try harness.client.observeModel();
+                    try presentation_lifecycle.observe(harness.client);
                 },
                 .notification_tick => |result| {
                     _ = try notification_flow.handleTick(harness.client, result);
-                    try harness.client.observeModel();
+                    try presentation_lifecycle.observe(harness.client);
                 },
                 else => return error.UnexpectedEvent,
             }
@@ -248,17 +249,17 @@ const TestHarness = struct {
             harness.client.presenter.presented_attachment_ingress != attachment_target)
         {
             switch (try harness.client.select.await()) {
-                .draw => |result| try harness.client.handleDrawEvent(result),
+                .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
                 .sent => |result| try runtime_transport.handleSent(harness.client, result),
-                .media_tick => |result| try harness.client.handleMediaTickEvent(result),
+                .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
                 .sidebar_animation_tick => |result| {
                     _ = try sidebar_animations.handleTick(harness.client, result);
-                    try harness.client.observeModel();
+                    try presentation_lifecycle.observe(harness.client);
                     target = harness.client.model.version();
                 },
                 .notification_tick => |result| {
                     _ = try notification_flow.handleTick(harness.client, result);
-                    try harness.client.observeModel();
+                    try presentation_lifecycle.observe(harness.client);
                     target = harness.client.model.version();
                 },
                 else => return error.UnexpectedEvent,
@@ -331,7 +332,7 @@ const TestHarness = struct {
         try std.testing.expect(first == .request_workspace_snapshot);
         const second = try harness.nextClientMessage(&buffer);
         try std.testing.expect(second == .request_tab_snapshot);
-        try harness.client.observeModel();
+        try presentation_lifecycle.observe(harness.client);
         try harness.settleModelPresentation();
     }
 
@@ -730,6 +731,76 @@ test "bootstrap answers the initial open with both snapshot requests" {
     );
 }
 
+test "presentation folds repeated observations into one draw task" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    _ = try client.model.setDiagnostic("first revision", .{});
+    try presentation_lifecycle.observe(client);
+
+    try std.testing.expect(client.presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 1), client.presenter.pending_updates);
+
+    try presentation_lifecycle.observe(client);
+
+    try std.testing.expect(client.presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 1), client.presenter.pending_updates);
+
+    _ = try client.model.setDiagnostic("second revision", .{});
+    try presentation_lifecycle.observe(client);
+
+    try std.testing.expect(client.presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 2), client.presenter.pending_updates);
+
+    try harness.settleModelPresentation();
+
+    try std.testing.expect(!client.presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "presentation flushes an explicit empty model before bootstrap" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+
+    try std.testing.expect(client.model.activeTabModel() == null);
+    _ = try client.model.setDiagnostic("pre-bootstrap revision", .{});
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    for (client.presenter.screen.front.cells) |cell| {
+        try std.testing.expectEqualStrings(" ", cell.text());
+        try std.testing.expectEqual(@as(u8, 1), cell.width);
+    }
+}
+
+test "presentation worker failures release their scheduling tokens" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+
+    client.presenter.draw_pending = true;
+    try std.testing.expectError(
+        error.DrawWorkerFailed,
+        presentation_lifecycle.handleDraw(client, error.DrawWorkerFailed),
+    );
+    try std.testing.expect(!client.presenter.draw_pending);
+
+    client.presenter.media_tick_pending = true;
+    try std.testing.expectError(
+        error.MediaWorkerFailed,
+        presentation_lifecycle.handleMediaTick(client, error.MediaWorkerFailed),
+    );
+    try std.testing.expect(!client.presenter.media_tick_pending);
+}
+
 test "pane opening rejects an unknown request without client effects" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -899,7 +970,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     try std.testing.expectEqual(pending_updates_before_departure, client.presenter.pending_updates);
     try std.testing.expect(client.model.reportedPaneFocus() == null);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_departure + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -910,7 +981,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
         try std.testing.expectEqualStrings(" ", cell.text());
         try std.testing.expectEqual(@as(u8, 1), cell.width);
     }
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
 
     var buffer: [256]u8 = undefined;
@@ -1117,7 +1188,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
     try std.testing.expectEqual(version_before_arrival.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_arrival, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_arrival + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -1210,7 +1281,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, discovered));
     try std.testing.expectEqual(@as(usize, 2), client.request_lifecycle.tracker.count);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settle();
@@ -1251,7 +1322,7 @@ test "an identical tab snapshot repairs resources without scheduling a frame" {
         .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(initial));
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settle();
     try harness.settleModelPresentation();
     const committed_version = client.model.version();
@@ -1264,7 +1335,7 @@ test "an identical tab snapshot repairs resources without scheduling a frame" {
     });
 
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
@@ -1330,7 +1401,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
 }
@@ -1585,7 +1656,7 @@ test "workspace snapshots commit semantic revisions before presentation" {
     try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -1606,7 +1677,7 @@ test "workspace snapshots commit semantic revisions before presentation" {
         },
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
@@ -1788,7 +1859,7 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
             .spans = &.{.{ .start = 0, .cells = &cells }},
         });
         _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
-        try harness.client.observeModel();
+        try presentation_lifecycle.observe(harness.client);
         try harness.settleModelPresentation();
         const host_bytes = "\x1b[13;2u\x1b[27;2;13~\r\n";
         var chunk: InputChunk = .{};
@@ -2001,7 +2072,7 @@ test "pane focus commits before reports resize and presentation" {
     try std.testing.expect(model.toggleFullscreen());
     model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     model.find(second).?.input_modes.focus_events = true;
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
     _ = client.model.syncReportedPaneFocus().?;
@@ -2035,7 +2106,7 @@ test "pane focus commits before reports resize and presentation" {
     try std.testing.expectEqual(TestHarness.bootstrap_pane, resize.pane_resize.pane_id);
     try std.testing.expectEqual(expected_size, resize.pane_resize.size);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
     try harness.settleModelPresentation();
@@ -2044,7 +2115,7 @@ test "pane focus commits before reports resize and presentation" {
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
     _ = try client_actions.apply(handler.client, .{ .focus_pane = .left });
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
@@ -2075,7 +2146,7 @@ test "mouse focus precedes forwarding its triggering press" {
     model.find(first).?.input_modes.focus_events = true;
     model.find(first).?.mouse = .{ .tracking = .normal, .sgr = true };
     model.find(second).?.input_modes.focus_events = true;
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
     _ = client.model.syncReportedPaneFocus().?;
@@ -2129,7 +2200,7 @@ test "pane resize publishes committed geometry before presentation" {
         },
         .new_pane = second,
     });
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const model = &client.model.workspace.active().?.model;
     const first_before = model.contentSize(first, area).?;
@@ -2165,7 +2236,7 @@ test "pane resize publishes committed geometry before presentation" {
     try std.testing.expectEqual(second, second_resize.pane_resize.pane_id);
     try std.testing.expectEqual(second_after, second_resize.pane_resize.size);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
     try harness.settleModelPresentation();
@@ -2174,7 +2245,7 @@ test "pane resize publishes committed geometry before presentation" {
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
     _ = try client_actions.apply(handler.client, .{ .resize_pane = .up });
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
@@ -2202,7 +2273,7 @@ test "pane fullscreen publishes visible geometry without direct redraw" {
         },
         .new_pane = second,
     });
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const model = &client.model.workspace.active().?.model;
     const first_tiled = model.contentSize(first, area).?;
@@ -2230,7 +2301,7 @@ test "pane fullscreen publishes visible geometry without direct redraw" {
     try std.testing.expectEqual(second, fullscreen_resize.pane_resize.pane_id);
     try std.testing.expectEqual(fullscreen_size, fullscreen_resize.pane_resize.size);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_enter + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
@@ -2257,7 +2328,7 @@ test "pane fullscreen publishes visible geometry without direct redraw" {
     try std.testing.expectEqual(second, second_resize.pane_resize.pane_id);
     try std.testing.expectEqual(second_tiled, second_resize.pane_resize.size);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
@@ -2299,7 +2370,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
         expanded.pane_resize.size,
     );
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_hide + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -2326,7 +2397,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
         contracted.pane_resize.size,
     );
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_show + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -2357,7 +2428,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expect(!handler.redraw);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_collapse + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -2375,7 +2446,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expect(!handler.redraw);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_expand + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -2414,7 +2485,7 @@ test "an active split commits once and presentation observes the model" {
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
 }
@@ -2937,7 +3008,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
             saved_geometry.find(pane_id).?.outer,
         );
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_creation + 1, client.presenter.pending_updates);
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -3157,7 +3228,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(requested_size.cols, created_pane.buffer.w);
     try std.testing.expectEqual(requested_size.rows, created_pane.buffer.h);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_creation + 1, client.presenter.pending_updates);
     try harness.settle();
@@ -3187,7 +3258,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(pending_updates_before_rename, client.presenter.pending_updates);
     try std.testing.expect(!client.notification_scheduler.pending);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_rename + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -3238,7 +3309,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(@enumFromInt(20)));
     try std.testing.expect(!client.model.copyModeActive());
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_close + 1, client.presenter.pending_updates);
     try harness.settle();
@@ -3446,7 +3517,7 @@ test "move tab waits for the canonical response and preserves active identity" {
     try std.testing.expectEqual(version_before_response.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_response, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
     try std.testing.expectEqual(pending_updates_before_response + 1, client.presenter.pending_updates);
@@ -3501,7 +3572,7 @@ test "canonical tab move at an edge does not advance or schedule the model" {
         client_model.Change.unchanged,
         try tab_moves.apply(client, (try schema.decodeServer(response)).tab_moved),
     );
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_response, client.model.version());
     try std.testing.expectEqual(pending_updates_before_response, client.presenter.pending_updates);
@@ -3606,7 +3677,7 @@ test "select tab closes captured paste before detaching and requesting the targe
     try std.testing.expect(client.graphics_store.paneVisible(second_pane));
     try std.testing.expect(!client.model.panePasteActive());
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_selection + 1, client.presenter.pending_updates);
     try harness.settle();
@@ -3655,7 +3726,7 @@ test "tab selection offset wraps while full turns remain no-ops" {
     try std.testing.expectEqual(pending_updates_before_selection, client.presenter.pending_updates);
     try std.testing.expect(!handler.redraw);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_selection + 1, client.presenter.pending_updates);
 }
 
@@ -3972,7 +4043,7 @@ test "inactive tab lifecycle closure changes only the tab collection" {
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(second_pane));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_close + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -4187,7 +4258,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(patch));
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     if (comptime core.diagnostics.enabled) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
@@ -4230,7 +4301,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
         try std.testing.expectEqual(@as(u64, 4), client.telemetry.metrics.frame_cells);
     }
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
@@ -4277,7 +4348,7 @@ test "a frame made stale by detach has no state resources or presentation effect
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 }
 
@@ -4310,7 +4381,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expect(!client.view.dirty);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(!active.model.composition_invalidated);
@@ -4330,7 +4401,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
         client.model.workspace.findPane(TestHarness.bootstrap_pane).?.cwdSlice(),
     );
     try std.testing.expectEqualDeep(presented_version, client.model.version());
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
 
     const stale = try schema.encodePaneCwd(&payload, .{
@@ -4377,7 +4448,7 @@ test "pane foreground invalidates compositions only when the presenter observes 
     try std.testing.expect(!client.view.dirty);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(!active.model.composition_invalidated);
@@ -4392,7 +4463,7 @@ test "pane foreground invalidates compositions only when the presenter observes 
         client,
         try schema.decodeServer(foreground),
     );
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(presented_version, client.model.version());
     try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
@@ -4417,7 +4488,7 @@ test "close pane request waits for the authoritative exit before committing" {
         .new_pane = closing_pane,
     });
     try std.testing.expect(split.change == .changed);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     _ = client.model.syncReportedPaneFocus().?;
     try std.testing.expectEqual(closing_pane, client.model.beginPanePaste().?.pane_id);
@@ -4470,7 +4541,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
     try std.testing.expect(!client.notification_scheduler.pending);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -4481,7 +4552,7 @@ test "close pane request waits for the authoritative exit before committing" {
     const repeated = try pane_closures.applyExit(client, (try schema.decodeServer(exited)).pane_exited);
     try std.testing.expect(repeated == .stale);
     try std.testing.expectEqual(closing_pane, repeated.stale);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
     try std.testing.expectEqual(pending_updates_after_commit, client.presenter.pending_updates);
@@ -4529,7 +4600,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(!client.notification_scheduler.pending);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -4586,7 +4657,7 @@ test "an inactive pane exit retires only inactive state" {
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
 }
@@ -4726,7 +4797,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     try std.testing.expectEqual(@as(u64, 2), client.model.version().notifications);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
@@ -4940,7 +5011,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     const enabled_version = client.model.version();
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
@@ -4968,7 +5039,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
         client.model.notificationSnapshot().itemAt(0).?.title(),
     );
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     const disabled_version = client.model.version();
     try harness.settleModelPresentation();
 
@@ -5013,7 +5084,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -5065,7 +5136,7 @@ test "workspace list snapshots commit before presenter-owned projection" {
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -5169,7 +5240,7 @@ test "an agent snapshot replaces the sidebar replica" {
     try std.testing.expectEqual(client_model.Version{ .agents = 1 }, harness.client.model.version());
     try std.testing.expectEqual(pending_updates, harness.client.presenter.pending_updates);
 
-    try harness.client.observeModel();
+    try presentation_lifecycle.observe(harness.client);
     try harness.settleModelPresentation();
 
     try std.testing.expectEqual(@as(u16, 0), harness.client.view.sidebar.scroll);
@@ -5209,7 +5280,7 @@ test "sidebar animation commits model state before the presenter observes it" {
     try std.testing.expectEqual(@as(u8, 1), client.model.sidebarAnimationFrame());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
@@ -5379,7 +5450,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -5414,7 +5485,7 @@ test "presenter observes physical graphics without a semantic fallback" {
     try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(u64, 1), client.presenter.observed_graphics_ingress);
@@ -5428,7 +5499,7 @@ test "presenter observes physical graphics without a semantic fallback" {
         .key = .{ .image_id = 1, .generation = 1 },
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
     try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
@@ -5594,7 +5665,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     }, client.sound_playback.snapshot());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
 
@@ -5651,7 +5722,7 @@ test "a configuration version alone schedules presenter observation" {
     try std.testing.expectEqual(client_model.Version{ .configuration = 1 }, client.model.version());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
 
@@ -5689,7 +5760,7 @@ test "plugin completion applies one authorized batch through model observation" 
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
     try std.testing.expect(!client.view.workspace_list_collapsed);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -5770,7 +5841,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
 }
 
@@ -5850,10 +5921,10 @@ test "Lua callback applies a validated batch through model observation" {
         \\  } },
         \\}
     );
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     _ = try client.model.setDiagnostic("old diagnostic", .{});
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
@@ -5871,7 +5942,7 @@ test "Lua callback applies a validated batch through model observation" {
     try std.testing.expect(!handler.redraw);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(client.view.workspace_list_collapsed);
@@ -5898,7 +5969,7 @@ test "Lua callback validates every plugin reference before native effects" {
         \\  } },
         \\}
     );
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
@@ -5919,7 +5990,7 @@ test "Lua callback validates every plugin reference before native effects" {
     try std.testing.expect(!handler.redraw);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(client.view.sidebar_requested);
@@ -5942,7 +6013,7 @@ test "Lua expression emits semantic keys through pane input" {
         \\  } },
         \\}
     );
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
@@ -5983,7 +6054,7 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
         \\  } },
         \\}
     );
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
@@ -6003,7 +6074,7 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     try std.testing.expect(!handler.redraw);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(expected.diagnostic, client.presenter.presented_model_version.diagnostic);
@@ -6035,7 +6106,7 @@ test "clipboard image completion publishes resource ingress before presentation"
     try harness.bootstrap();
     const client = harness.client;
     const target = try installTestingAttachmentTarget(client, 1);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const execution = (try client.model.beginClipboardCapture(target)).?;
     const completed = try testingClipboardCapture(client, execution, "png");
@@ -6055,7 +6126,7 @@ test "clipboard image completion publishes resource ingress before presentation"
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(u64, 0), client.presenter.observed_attachment_ingress);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(u64, 1), client.presenter.observed_attachment_ingress);
@@ -6070,14 +6141,14 @@ test "clipboard image from a retired agent target is consumed and freed" {
     try harness.bootstrap();
     const client = harness.client;
     const target = try installTestingAttachmentTarget(client, 1);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const execution = (try client.model.beginClipboardCapture(target)).?;
     const completed = try testingClipboardCapture(client, execution, "private png");
 
     _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
     _ = try attachment_targets.sync(client);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
@@ -6102,7 +6173,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     try harness.bootstrap();
     const client = harness.client;
     const target = try installTestingAttachmentTarget(client, 1);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const pending_before = client.presenter.pending_updates;
     const no_image = (try client.model.beginClipboardCapture(target)).?;
@@ -6196,7 +6267,7 @@ test "host resize commits before resources and presents by model version" {
     try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_resize.pane_id);
     try std.testing.expectEqualDeep(expected_pane_size, message.pane_resize.size);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
@@ -6292,7 +6363,7 @@ test "terminal pixel response keeps model host geometry authoritative" {
     try std.testing.expectEqual(@as(u16, 24), active.model.cell_height_px);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
 }
 
@@ -6358,7 +6429,7 @@ test "a Kitty capability response commits before fallback projection and present
     try std.testing.expectEqual(version.pane_graphics + 1, client.model.version().pane_graphics);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
 }
@@ -6381,14 +6452,14 @@ test "capability expiry commits fallback state and presents only by model versio
     }, client.model.version());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
 
     const version = client.model.version();
     const pending_after = client.presenter.pending_updates;
     try client.handleCapabilityTimeoutEvent({});
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
 }
@@ -6479,7 +6550,7 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expectEqual(pane.id, input.pane_input.pane_id);
     try std.testing.expectEqualStrings("x", input.pane_input.bytes);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(inactive.model.composition_invalidated);
@@ -6545,7 +6616,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expect(pane.copy_view == null);
     try std.testing.expect(!handler.redraw);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(pane.copy_view != null);
@@ -6580,7 +6651,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try handler.key(try keybind.parseKey("l"));
     try std.testing.expectEqual(@as(u16, 0), pane.copy_view.?.cursor.x);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(@as(u16, 1), pane.copy_view.?.cursor.x);
     try std.testing.expect(pane.copy_view.?.anchor != null);
@@ -6592,7 +6663,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(version_before_copy.viewport + 1, client.model.version().viewport);
     try std.testing.expect(pane.copy_view != null);
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expect(pane.copy_view == null);
     try std.testing.expect(client.presenter.presented_copy_mode == null);
@@ -6657,7 +6728,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try std.testing.expect(client.model.version().prompt > version_before_prompt.prompt);
     try std.testing.expectEqual(pending_updates_before_prompt, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_prompt + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
@@ -6700,7 +6771,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try std.testing.expectEqual(version_after_request.prompt, client.model.version().prompt);
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -6720,7 +6791,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
         },
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
@@ -6903,7 +6974,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     try std.testing.expectEqual(version_after_request.prompt, client.model.version().prompt);
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
 
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
@@ -6918,7 +6989,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
         .label = "canonical",
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unchanged));
-    try client.observeModel();
+    try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);

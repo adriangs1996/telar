@@ -20,6 +20,7 @@ const client_telemetry = @import("telemetry.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
+const presentation_lifecycle = @import("presentation_lifecycle.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const Options = Client.Options;
@@ -118,8 +119,8 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             }),
             .server => |result| if (try runtime_transport.handleRead(client, result)) |status| return status,
             .sent => |result| try runtime_transport.handleSent(client, result),
-            .draw => |result| try client.handleDrawEvent(result),
-            .media_tick => |result| try client.handleMediaTickEvent(result),
+            .draw => |result| try presentation_lifecycle.handleDraw(client, result),
+            .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
             .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
             .notification_tick => |result| _ = try notification_flow.handleTick(client, result),
             .sound_played => |result| try agent_sounds.handlePlayed(client, result),
@@ -130,7 +131,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             .clipboard_image => |result| try client.handleClipboardImageEvent(result),
         }
 
-        try client.observeModel();
+        try presentation_lifecycle.observe(client);
     }
 }
 

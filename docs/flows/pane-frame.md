@@ -29,7 +29,7 @@ PaneFrameOutcome
                               |
                     ClientModel.Version.frame
                               |
-                    Presenter.observeModel
+                    presentation_lifecycle.observe
                               |
                      host flush -> frame_ack
 ```
@@ -68,9 +68,9 @@ accepted; reconnect or canonical reconciliation repairs disposable resources.
 ## Presentation and acknowledgement
 
 After each event, the client loop publishes the latest model version through
-`Client.observeModel`. `Presenter` compares that value with the version it last
-observed and folds all pending revisions into one paced draw. Frame application
-already records pane damage and composition invalidation in the multiplexer,
+`presentation_lifecycle.observe`. `Presenter` compares that value with the
+version it last observed and folds all pending revisions into one paced draw.
+Frame application already records pane damage and composition invalidation in the multiplexer,
 so the presenter only decides when to paint.
 
 `Presenter.presentDue` composes the active model and flushes the terminal cell

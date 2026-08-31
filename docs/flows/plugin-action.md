@@ -32,7 +32,7 @@ client_actions.apply -> focused client use cases
         |
 ClientModel / bounded runtime outbox
         |
-Client.observeModel -> Presenter
+presentation_lifecycle.observe -> Presenter
 ```
 
 ## Start ownership and order
@@ -78,7 +78,7 @@ Authorized effects enter `client_actions.apply`, the shared dispatcher for
 native semantic actions regardless of whether they came from host input, Lua
 or a plugin. It delegates to the existing focused use cases. Those use cases
 commit `ClientModel` or enqueue bounded runtime messages; they do not ask the
-presenter to draw. After the event returns, `Client.observeModel` lets the
+presenter to draw. After the event returns, `presentation_lifecycle.observe` lets the
 presenter compare versions and schedule at most the required paced frame.
 
 ## Bounds and failure semantics

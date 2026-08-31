@@ -23,7 +23,7 @@ ClientModel.resizePane
         |
 pane_geometry.applyGeometry
         |                         |
-pane_resize messages             Client.observeModel
+pane_resize messages             presentation_lifecycle.observe
         |                         |
 runtime socket                   Presenter
 ```
@@ -58,7 +58,7 @@ authorized PTY resize and then synchronizes observation, media and the client
 cell projection. The protocol has no success reply.
 
 Neither the use case nor the adapter invalidates `View` or requests a draw.
-After the event, `Client.observeModel` lets `Presenter` observe the pane
+After the event, `presentation_lifecycle.observe` lets `Presenter` observe the pane
 revision and schedule one paced frame.
 
 ## Failure and recovery

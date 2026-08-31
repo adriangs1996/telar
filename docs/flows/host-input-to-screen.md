@@ -49,7 +49,7 @@ runtime.encoder.encodeFrame -> schema.pane_frame -> socket
       v
 runtime_transport.handleRead -> server_messages -> pane_frames
       |
-Client.observeModel -> Presenter.presentDue -> presentation.Screen.flush
+presentation_lifecycle.observe -> Presenter.presentDue -> presentation.Screen.flush
       |
       v
 host TTY bytes
@@ -255,12 +255,14 @@ base, applies spans to the disposable workspace, reconciles scroll, input modes
 and copy state, then publishes `ClientModel.Version.frame`. A broken base
 requests a fresh snapshot without changing state.
 
-After dispatch, the client loop calls `Client.observeModel`. `Presenter`
-detects the new frame revision and schedules the paced draw; the frame use case
-does not decide whether to paint.
+After dispatch, the client loop calls `presentation_lifecycle.observe`.
+`Presenter` detects the new frame revision and schedules the paced draw; the
+frame use case does not decide whether to paint. See
+[Client presentation lifecycle](presentation-lifecycle.md) for observation,
+coalescence, task tokens and media pacing.
 
-The `.draw` event calls `Client.handleDrawEvent`, then `Client.presentDue` and
-`Client.present`:
+The `.draw` event calls `presentation_lifecycle.handleDraw`, then
+`Presenter.presentDue` and `Presenter.present`:
 
 1. `workspace.multiplexer.Model.renderThemed` composes panes into the screen
    back buffer;

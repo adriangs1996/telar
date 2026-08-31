@@ -23,7 +23,7 @@ ClientModel.reconcileWorkspaceList
         |
 ClientModel.Version.workspace_list
         |
-Client.observeModel
+presentation_lifecycle.observe
         |
 Presenter -> View.render(workspaces)
 ```

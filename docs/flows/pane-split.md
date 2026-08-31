@@ -54,7 +54,7 @@ the model changes.
 An active-tab confirmation adds and focuses the created pane, marks it attached
 and advances the pane revision once. The adapter then resizes attached panes
 and synchronizes focus. It does not invalidate the view or request a draw;
-`Presenter.observeModel` notices the revision after the server event and folds
+`presentation_lifecycle.observe` notices the revision after the server event and folds
 the change into the paced frame loop.
 
 An inactive-tab confirmation records membership but leaves the created pane

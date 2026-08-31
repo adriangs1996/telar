@@ -30,7 +30,7 @@ ClientModel.advanceSidebarAnimation
         |
 frame + Version.sidebar_animation
         |
-Client.observeModel
+presentation_lifecycle.observe
         |
 Presenter -> View.render(frame)
 ```
@@ -54,9 +54,9 @@ sidebar scroll remain independent; an animation tick cannot look like a new
 runtime snapshot or reset scroll position.
 
 The use case and adapter never request a draw. After dispatch,
-`Client.observeModel` publishes the committed version. `Presenter` compares it
-with the last observed and painted versions, invalidates the view, and passes
-`sidebarAnimationFrame()` into `View.render`. The tick joins other committed
+`presentation_lifecycle.observe` publishes the committed version. `Presenter`
+compares it with the last observed and painted versions, invalidates the view,
+and passes `sidebarAnimationFrame()` into `View.render`. The tick joins other committed
 updates in the next paced frame.
 
 ## Failure and recovery
@@ -83,4 +83,4 @@ needed.
 - `src/frontend/client/presenter.zig` observes the dedicated revision and
   supplies the model frame to the view.
 - `src/frontend/client/client_test.zig` proves a real scheduled tick mutates
-  the model without requesting presentation before `Client.observeModel`.
+  the model without requesting presentation before `presentation_lifecycle.observe`.

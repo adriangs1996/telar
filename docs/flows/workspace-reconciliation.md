@@ -29,7 +29,7 @@ ClientModel.reconcileWorkspace -> tabs.Model.reconcileWorkspace
         |
 ReconciliationEffects -> client resource synchronization
         |
-Client.observeModel -> Presenter
+presentation_lifecycle.observe -> Presenter
 ```
 
 `RequestRenameWorkspaceHandler` accepts only the workspace currently projected

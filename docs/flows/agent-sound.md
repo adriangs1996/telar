@@ -39,8 +39,8 @@ cannot make noise after the numeric pane ID has been reused.
 
 The handler reads `ClientModel` but does not mutate it. Accepted, stale and
 configuration-filtered sounds leave every model version unchanged. The
-client loop can still call `Client.observeModel` after dispatch; the presenter
-sees no revision and schedules no frame.
+client loop still calls `presentation_lifecycle.observe` after dispatch. The
+presenter sees no revision and schedules no frame.
 
 ## Playback ownership and bounds
 

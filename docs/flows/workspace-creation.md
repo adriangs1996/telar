@@ -70,7 +70,7 @@ one version commit
         |
 bookmark/release old resources -> focus/input/snapshot effects
         |
-Presenter.observeModel -> paced presentation
+presentation_lifecycle.observe -> paced presentation
 ```
 
 The continuation retains the nonzero terminal size sent to the runtime, so a

@@ -75,7 +75,7 @@ ConfirmTabRenameHandler
         |
 ClientModel.renameTab
         |
-Presenter.observeModel
+presentation_lifecycle.observe
 ```
 
 The dispatcher only delegates the decoded response. `tab_renames.apply`

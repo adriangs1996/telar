@@ -23,7 +23,7 @@ ClientModel.reconcileSystemMetrics
              |
 SystemMetrics + Version.system_metrics
              |
-Client.observeModel
+presentation_lifecycle.observe
              |
 Presenter -> View.render(system_metrics)
              |
@@ -55,7 +55,7 @@ metrics and every model version.
 ## Presentation and recovery
 
 The protocol dispatcher never requests a draw. After event dispatch,
-`Client.observeModel` publishes the complete model version. `Presenter`
+`presentation_lifecycle.observe` publishes the complete model version. `Presenter`
 compares `Version.system_metrics` with the version it last painted, invalidates
 the view when it changed and passes `ClientModel.systemMetrics()` into the next
 paced frame. Several samples observed within one frame interval fold into one

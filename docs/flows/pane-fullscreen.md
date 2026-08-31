@@ -22,7 +22,7 @@ ClientModel.togglePaneFullscreen
         |
 pane_geometry.applyGeometry
         |                         |
-pane_resize messages             Client.observeModel
+pane_resize messages             presentation_lifecycle.observe
         |                         |
 runtime socket                   Presenter
 ```
@@ -55,8 +55,8 @@ from the workspace geometry owner and processes them through
 `pane_resize.Controller` and `PaneResizeHandler`.
 
 The protocol has no success response. Independently, the client loop calls
-`Client.observeModel`. `Presenter` observes the pane revision and schedules the
-paced frame that changes the visible composition.
+`presentation_lifecycle.observe`. `Presenter` observes the pane revision and
+schedules the paced frame that changes the visible composition.
 
 ## Failure and recovery
 

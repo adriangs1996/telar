@@ -18,7 +18,7 @@ ClientModel.departWorkspace
         |
 release pane resources and remember navigation bookmark
         |
-Presenter.observeModel -> present empty client model
+presentation_lifecycle.observe -> present empty client model
 ```
 
 `workspace_handoffs` resolves a workspace bookmark to its last focused pane.
@@ -67,7 +67,7 @@ ClientModel.arriveWorkspace
         |
 focus sync -> input read -> workspace snapshot -> tab snapshot
         |
-Presenter.observeModel -> present arrived workspace
+presentation_lifecycle.observe -> present arrived workspace
 ```
 
 The `initial_open` continuation correlates the runtime response.

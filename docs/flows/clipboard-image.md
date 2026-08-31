@@ -32,7 +32,7 @@ attachments.Store.adopt -> optional pane resize
   |
 Store.ingressVersion
   |
-Client.observeModel -> Presenter -> paced cell and media passes
+presentation_lifecycle.observe -> Presenter -> paced cell and media passes
 ```
 
 `InputHandler.key` completes `pane_inputs.send` before it calls
@@ -84,7 +84,7 @@ an explicit client error, matching other committed geometry effects.
 
 The PNG does not enter `ClientModel`. `attachments.Store` owns the physical
 preview bytes and advances `ingressVersion` after each accepted image.
-`Client.observeModel` publishes that revision beside model and pane-graphics
+`presentation_lifecycle.observe` publishes that revision beside model and pane-graphics
 revisions. The presenter compares it with the revision last painted and
 schedules the paced frame. Clipboard completion never calls
 `Presenter.requestDraw`.

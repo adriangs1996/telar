@@ -27,7 +27,7 @@ attachment sync + actionable alerts
              |
 SidebarAnimationHandler.synchronize
              |
-Client.observeModel
+presentation_lifecycle.observe
              |
 Presenter -> View.render(agents)
 ```
@@ -73,7 +73,7 @@ visible animation frame. Animation ownership and timer failure are documented
 in [Sidebar animation](sidebar-animation.md).
 
 The snapshot itself does not request a draw. At the event boundary,
-`Client.observeModel` publishes the current version. `Presenter` compares
+`presentation_lifecycle.observe` publishes the current version. `Presenter` compares
 `Version.agents` with the version it last painted, resets transient sidebar
 scroll, invalidates chrome and passes `ClientModel.agentSnapshot()` to the
 view on the paced frame.

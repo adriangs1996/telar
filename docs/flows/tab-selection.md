@@ -24,7 +24,7 @@ tab_selections.applySelection
         |
 detach previous panes -> request selected tab snapshot
         |
-Client.observeModel -> Presenter
+presentation_lifecycle.observe -> Presenter
 ```
 
 Each source adapter translates its intent into a `Target` before calling
@@ -62,8 +62,8 @@ The runtime dispatches `detach_pane` through `detach_pane.Controller` and
 repairs pane membership and attachments from runtime state.
 
 Neither the selection handler nor its adapter requests a frame. The client loop
-calls `Client.observeModel`, and `Presenter` schedules a paced frame only after
-it observes the changed active-tab revision.
+calls `presentation_lifecycle.observe`, and `Presenter` schedules a paced frame
+only after it observes the changed active-tab revision.
 
 ## Failure and recovery
 

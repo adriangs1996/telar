@@ -846,6 +846,18 @@ pub const Model = struct {
         };
     }
 
+    /// Returns the active tab model, or null during bootstrap and workspace
+    /// handoff when the client intentionally has no presentable tab.
+    ///
+    /// ```zig
+    /// const active = model.activeTabModel() orelse return;
+    /// ```
+    pub fn activeTabModel(model: *Model) ?*multiplexer.Model {
+        const active = model.workspace.active() orelse return null;
+
+        return &active.model;
+    }
+
     /// Returns the active configuration generation owned by this client.
     ///
     /// ```zig

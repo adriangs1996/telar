@@ -29,7 +29,7 @@ config, local module, plugin or trust-store fingerprint changes
                             |
                  success notification
                             |
-                  Client.observeModel
+                  presentation_lifecycle.observe
                             |
                        Presenter
 ```

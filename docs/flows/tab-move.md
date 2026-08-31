@@ -70,7 +70,7 @@ ConfirmTabMoveHandler
         |
 ClientModel.applyTabPosition
         |
-Presenter.observeModel
+presentation_lifecycle.observe
 ```
 
 The dispatcher only delegates the decoded response. `tab_moves.apply` consumes

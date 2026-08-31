@@ -29,7 +29,7 @@ pane_focus.syncResources
         |
 fullscreen resize
         |
-Client.observeModel -> Presenter
+presentation_lifecycle.observe -> Presenter
 ```
 
 The source adapter translates its intent into either a stable pane identity or

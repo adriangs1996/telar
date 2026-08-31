@@ -51,7 +51,7 @@ ClientModel.retirePane
         |
 pane_closures releases continuations, resources, focus and sizes
         |
-Presenter.observeModel
+presentation_lifecycle.observe
 ```
 
 The runtime sends `pane_exited` only after terminal ingestion has finished and

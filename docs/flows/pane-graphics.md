@@ -31,7 +31,7 @@ ReconcilePaneGraphicsHandler
                                       |
                              request_graphics_snapshot
 
-Client.observeModel
+presentation_lifecycle.observe
        |
 Presenter observes model version + graphics ingress version
        |

@@ -28,7 +28,7 @@ multiplexer.Model.setPaneCwd / setPaneForeground
 ClientModel.Version.pane_metadata
           + optional Version.pane_foreground
                     |
-Presenter.observeModel -> paced presentation
+presentation_lifecycle.observe -> paced presentation
 ```
 
 The runtime owns both facts. `Pane.cwd` tracks the latest verified directory,
@@ -66,7 +66,7 @@ projection changed and both committed revisions.
 
 ## Presentation
 
-After the server event, the client loop calls `Client.observeModel`. No
+After the server event, the client loop calls `presentation_lifecycle.observe`. No
 metadata handler calls `requestDraw`.
 
 `Presenter.presentDue` maps the metadata revision to client-view invalidation.

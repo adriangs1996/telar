@@ -23,7 +23,7 @@ ClientModel.observeHostCapability
        |
 resource synchronization
        |
-Client.observeModel
+presentation_lifecycle.observe
        |
 Presenter
 ```
@@ -41,7 +41,7 @@ ClientModel.expireHostCapabilities
        |
 fallback resource synchronization
        |
-Client.observeModel
+presentation_lifecycle.observe
        |
 Presenter
 ```

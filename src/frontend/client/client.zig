@@ -18,11 +18,8 @@ const sound_capability = @import("../sound/root.zig");
 const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
-const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
 const navigation = workspace_capability.navigation;
-const tabs_mod = workspace_capability.tabs;
-const pace = presentation.pace;
 const term = presentation.screen;
 const platform = @import("../platform/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
@@ -262,19 +259,6 @@ pub fn deinit(client: *Client) void {
     gpa.destroy(client);
 }
 
-/// Publishes the model version after one client event has committed.
-///
-/// ```zig
-/// try client.observeModel();
-/// ```
-pub fn observeModel(client: *Client) !void {
-    try client.presenter.observe(.{
-        .model = client.model.version(),
-        .graphics_ingress = client.graphics_store.ingressVersion(),
-        .attachment_ingress = client.view.kittyAttachments().ingressVersion(),
-    });
-}
-
 pub fn notify(client: *Client, input: notification_capability.Input) !void {
     _ = try notification_flow.publish(client, monotonic(client.io), input);
 }
@@ -334,18 +318,6 @@ pub fn handleResizeEvent(client: *Client, result: anyerror!void, source: host_re
     _ = try host_resizes.handle(client, result, source);
 }
 
-/// Entrypoint for the paced draw deadline.
-pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
-    try result;
-    try client.presenter.presentDue(client);
-}
-
-/// Entrypoint for the lower-priority, byte-bounded host graphics pass.
-pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
-    try result;
-    try client.presenter.presentMedia(client);
-}
-
 pub fn scheduleConfigReload(client: *Client) !void {
     const path = client.options.config_path orelse return;
     try config_reload.schedule(&client.reload, client.io, client.gpa, &client.select, .{
@@ -383,14 +355,6 @@ pub fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect)
     }
 }
 
-/// The model a due draw should present, or null while the client is not
-/// presentable yet. Unwrapping the active tab here used to panic when a
-/// resize arrived before the runtime answered the initial open request.
-pub fn presentableModel(tabs: *tabs_mod.Model) ?*multiplexer.Model {
-    const active = tabs.active() orelse return null;
-    return &active.model;
-}
-
 pub fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {
     return watcher.wait(io);
 }
@@ -404,22 +368,4 @@ pub fn waitCapabilityTimeout(io: Io) anyerror!void {
 pub fn monotonic(io: Io) u64 {
     const timestamp = Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));
-}
-
-const rectSize = multiplexer.rectSize;
-
-test "a draw scheduled before the first tab bootstraps is dropped" {
-    // A true red for the original defect is a null unwrap inside the event
-    // loop, which a test cannot expect; the guard is factored out so the
-    // pre-bootstrap case is provable here instead.
-    var tabs = tabs_mod.Model.init(std.testing.allocator);
-    defer tabs.deinit();
-    try std.testing.expectEqual(@as(?*multiplexer.Model, null), presentableModel(&tabs));
-
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try tabs.bootstrap(@enumFromInt(1), .{
-        .workspace = workspace,
-        .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
-    try std.testing.expect(presentableModel(&tabs) != null);
 }

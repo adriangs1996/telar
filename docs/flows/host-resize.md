@@ -28,7 +28,7 @@ SIGWINCH or Windows size poll
               |
  pixel queries and ResizeWatcher rearm
               |
-      Client.observeModel
+      presentation_lifecycle.observe
               |
            Presenter
 ```
@@ -77,9 +77,9 @@ After successful synchronization, the adapter writes `CSI 14 t` and
 display-scale change. It then rearms the same `ResizeWatcher`. Neither the
 handler nor its adapter requests a draw.
 
-At the client-loop boundary, `Client.observeModel` publishes `Version.host` and
-`Version.host_capabilities`. The presenter compares them with the versions last
-painted and folds a change into its paced frame. A fully repeated measurement
+At the client-loop boundary, `presentation_lifecycle.observe` publishes
+`Version.host` and `Version.host_capabilities`. The presenter compares them
+with the versions last painted and folds a change into its paced frame. A fully repeated measurement
 still sends the two pixel queries and rearms the watcher, but schedules no
 frame.
 

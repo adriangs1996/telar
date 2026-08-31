@@ -70,6 +70,7 @@ test {
     _ = @import("pane_splits.zig");
     _ = @import("pane_viewports.zig");
     _ = @import("plugin_actions.zig");
+    _ = @import("presentation_lifecycle.zig");
     _ = @import("presenter.zig");
     _ = @import("proxy_status.zig");
     _ = @import("request_lifecycle.zig");

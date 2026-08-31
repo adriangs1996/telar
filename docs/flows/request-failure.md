@@ -19,7 +19,7 @@ HandleRequestFailureHandler
         |
 recover, ignore, publish a notification, or report fatal
         |
-Client.observeModel -> Presenter
+presentation_lifecycle.observe -> Presenter
 ```
 
 `request_failures.apply` is the protocol adapter. It calls

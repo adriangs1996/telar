@@ -23,7 +23,7 @@ sidebar_toggles.applyVisibility
         |
 Client.syncSidebarVisibility
         |                         |
-View projection and pane_resize  Client.observeModel
+View projection and pane_resize  presentation_lifecycle.observe
         |                         |
 runtime socket                   Presenter
 ```
@@ -46,7 +46,7 @@ projection gives geometry effects the same workbench that the next frame will
 show.
 
 Neither the use case nor the adapter requests a frame. After the input event,
-the client loop calls `Client.observeModel`. `Presenter` detects the chrome
+the client loop calls `presentation_lifecycle.observe`. `Presenter` detects the chrome
 revision, idempotently synchronizes the view projection, invalidates it and
 folds composition into the paced frame loop.
 

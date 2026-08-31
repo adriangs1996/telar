@@ -25,7 +25,7 @@ ProxyStatusCommit + Version.proxy_status
              |
 post-commit notification
              |
-Client.observeModel
+presentation_lifecycle.observe
              |
 Presenter -> View.render(proxy_tls_active)
              |
@@ -53,14 +53,14 @@ dispatcher nor the handler calls `Presenter`.
 
 ## Presentation and recovery
 
-After event dispatch, `Client.observeModel` publishes the complete model
+After event dispatch, `presentation_lifecycle.observe` publishes the complete model
 version. `Presenter` compares `Version.proxy_status` with the version it last
 painted, invalidates chrome and passes `ClientModel.proxyTlsActive()` into the
 next paced frame. `View` uses that immutable input while composing the top bar
 and stores no proxy state.
 
 The notification center advances its own model version because notifications
-are separate disposable UI state. `Client.observeModel` folds that version
+are separate disposable UI state. `presentation_lifecycle.observe` folds that version
 with the proxy transition into the next paced frame. The badge still comes
 from `ClientModel` through `Presenter`.
 

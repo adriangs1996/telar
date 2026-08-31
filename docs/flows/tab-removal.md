@@ -113,7 +113,7 @@ retire requests -> release pane resources
         |
 stay, hand off to predecessor, or exit
         |
-Presenter.observeModel
+presentation_lifecycle.observe
 ```
 
 The dispatcher only delegates the decoded message. `tab_closures.apply`

@@ -28,7 +28,7 @@ ClientModel.reconcileTab -> tabs.Model.reconcileTab
         |
 ReconciliationEffects -> resource cleanup / focus / resize / attach
         |
-Client.observeModel -> Presenter
+presentation_lifecycle.observe -> Presenter
 ```
 
 The runtime query checks that the tab exists and has a running pane. Its
@@ -71,7 +71,8 @@ attachment request already pending does not receive a duplicate request.
 
 Resource effects still run for an identical snapshot. This lets a resync
 repair sizes or attachments without inventing a model change. The presenter
-requests a frame only after `Client.observeModel` publishes a changed version.
+requests a frame only after `presentation_lifecycle.observe` publishes a
+changed version.
 
 ## Failure and recovery
 
