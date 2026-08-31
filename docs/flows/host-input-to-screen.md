@@ -117,6 +117,10 @@ The Lua branch does not expose the VM, registry or diagnostic storage to input
 routing. See [Lua action](lua-action.md) for callback context, complete batch
 validation, expression routing and failure presentation.
 
+The detach action delegates to `client_detachments.apply`, which closes
+tab-owned paste and focus state before detaching every runtime pane. See
+[Client detach](client-detach.md) for ordering and failure semantics.
+
 Actions may mutate disposable client state or enqueue a typed runtime request.
 They never call runtime internals. The unit test `a configured sequence runs
 once and does not reach the pane` in `src/frontend/input/keybind.zig` proves

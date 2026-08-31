@@ -2890,6 +2890,39 @@ test "tab detachment preserves focus reported by another tab" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
+test "detach action releases every tab before stopping the client" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const second_pane: schema.PaneId = @enumFromInt(20);
+    _ = try harness.addTab(@enumFromInt(2), second_pane);
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+
+    try std.testing.expectEqual(
+        keybind.Control.stop,
+        try client_actions.apply(client, .detach),
+    );
+
+    try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(!client.model.workspace.findPane(second_pane).?.attached);
+    try std.testing.expect(!client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
+    try std.testing.expect(!client.graphics_store.paneVisible(second_pane));
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const first = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(first == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, first.detach_pane.pane_id);
+    const second = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(second == .detach_pane);
+    try std.testing.expectEqual(second_pane, second.detach_pane.pane_id);
+}
+
 test "a missing pane attachment keeps local membership until a canonical snapshot" {
     var harness: TestHarness = undefined;
     try harness.init();

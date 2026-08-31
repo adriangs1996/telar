@@ -40,6 +40,7 @@ test {
     _ = @import("agent_sounds.zig");
     _ = @import("attachment_targets.zig");
     _ = @import("client.zig");
+    _ = @import("client_detachments.zig");
     _ = @import("client_test.zig");
     _ = @import("clipboard_images.zig");
     _ = @import("clock.zig");

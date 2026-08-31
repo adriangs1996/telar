@@ -5,6 +5,7 @@ const input = @import("../input/root.zig");
 const workspace = @import("../workspace/root.zig");
 
 const Client = @import("client.zig");
+const client_detachments = @import("client_detachments.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const pane_closures = @import("pane_closures.zig");
@@ -13,7 +14,6 @@ const pane_geometry = @import("pane_geometry.zig");
 const pane_splits = @import("pane_splits.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
-const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
@@ -77,10 +77,7 @@ pub fn apply(client: *Client, value: Action) !keybind.Control {
             .next => .next,
         }),
         .detach => {
-            var tabs = client.model.workspace.tabIterator();
-            while (tabs.next()) |tab| {
-                try tab_attachments.detach(client, tab);
-            }
+            try client_detachments.apply(client);
 
             return .stop;
         },
