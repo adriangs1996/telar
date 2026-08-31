@@ -1,8 +1,6 @@
 //! Adapters between application state and asynchronous runtime actors.
 
 const std = @import("std");
-const core = @import("telar-core");
-const event_entrypoints = @import("../entrypoints/events/root.zig");
 const client_runtime = @import("../client/root.zig");
 const client_session = client_runtime.session;
 const runtime_config = @import("../config.zig");
@@ -12,27 +10,17 @@ const client_event_dispatcher = @import("event_dispatcher/client.zig");
 const history_event_dispatcher = @import("event_dispatcher/history.zig");
 const observability_event_dispatcher = @import("event_dispatcher/observability.zig");
 const pane_io_event_dispatcher = @import("event_dispatcher/pane/io.zig");
+const pane_pipeline_event_dispatcher = @import("event_dispatcher/pane/pipeline.zig");
 const pane_projection_event_dispatcher = @import("event_dispatcher/pane/projection.zig");
 const request_dispatch = @import("request_dispatch.zig");
-const pane_events = event_entrypoints.pane;
-const pane_launcher_mod = @import("pane_launcher.zig");
-const pane_exit_coordinator = pane_events.exit;
-const pane_ingest_coordinator = pane_events.ingest;
-const pane_output_pipeline = pane_events.output;
-const pane_mod = @import("../../pane/root.zig");
 const observability = @import("../observability/root.zig");
 const telemetry_mod = observability.telemetry;
 const transport = @import("../../transport/root.zig");
 
-const schema = core.schema;
-const diagnostics = core.diagnostics;
-
-const Pane = pane_mod.Pane;
 const TelemetryState = telemetry_mod.State;
 
 const IngestTestGate = runtime_config.IngestTestGate;
 const RuntimeEvent = runtime_event.Event;
-const PaneIngestEvent = pane_ingest_coordinator.Completion;
 const ClientSession = client_session.Session;
 
 /// Builds the zero-allocation actor bindings for one application type.
@@ -48,6 +36,11 @@ pub fn Bindings(comptime Application: type) type {
     const PaneIoEvents = pane_io_event_dispatcher.Dispatcher(Application);
     const PaneProjectionEvents = pane_projection_event_dispatcher.Dispatcher(Application, .{
         .schedule_description = AgentEvents.scheduleDescription,
+        .schedule_response = PaneIoEvents.scheduleResponse,
+    });
+    const PanePipelineEvents = pane_pipeline_event_dispatcher.Dispatcher(Application, .{
+        .schedule_observation = PaneProjectionEvents.scheduleObservation,
+        .schedule_media = PaneProjectionEvents.scheduleMedia,
         .schedule_response = PaneIoEvents.scheduleResponse,
     });
 
@@ -96,13 +89,10 @@ pub fn Bindings(comptime Application: type) type {
                     try PaneIoEvents.handleResponseWritten(application, value);
                 },
                 .pane_output => |value| {
-                    var context: PaneOutputRuntime = .{ .application = application, .ingest_gate = resources.ingest_gate };
-                    var pipeline = paneOutputPipeline(&context);
-                    try pipeline.handle(value);
+                    try PanePipelineEvents.handleOutput(application, value, resources.ingest_gate);
                 },
                 .pane_ingested => |value| {
-                    var coordinator = paneIngestCoordinator(application);
-                    try coordinator.handle(value);
+                    try PanePipelineEvents.handleIngested(application, value);
                 },
                 .pane_observed => |value| {
                     try PaneProjectionEvents.handleObserved(application, value);
@@ -111,8 +101,7 @@ pub fn Bindings(comptime Application: type) type {
                     try PaneProjectionEvents.handleMedia(application, value);
                 },
                 .pane_exit => |value| {
-                    var coordinator = paneExitCoordinator(application);
-                    try coordinator.handle(value);
+                    try PanePipelineEvents.handleExit(application, value);
                 },
                 .telemetry_tick => |result| {
                     ObservabilityEvents.handleTelemetryTick(application, resources.telemetry, result);
@@ -132,161 +121,6 @@ pub fn Bindings(comptime Application: type) type {
         /// ```
         pub fn startSessionSend(application: *Application, session: *ClientSession, payload: []const u8) !void {
             return ClientEvents.startSend(application, session, payload);
-        }
-
-        fn collectPaneLifecycle(application: *Application) void {
-            application.collect();
-        }
-
-        const PaneOutputRuntime = struct {
-            application: *Application,
-            ingest_gate: ?*IngestTestGate,
-        };
-
-        const pane_output_runtime_port: pane_output_pipeline.RuntimePort(PaneOutputRuntime) = .{
-            .schedule_observation = scheduleOutputObservation,
-            .schedule_media = scheduleOutputMedia,
-            .start_ingest = startOutputIngest,
-            .has_outstanding_frame = paneHasOutstandingFrame,
-            .collect = collectAfterOutput,
-            .pump_clients = pumpAfterOutput,
-        };
-
-        const RuntimePaneOutputPipeline = pane_output_pipeline.Pipeline(PaneOutputRuntime, pane_output_runtime_port);
-
-        fn paneOutputPipeline(context: *PaneOutputRuntime) RuntimePaneOutputPipeline {
-            return RuntimePaneOutputPipeline.init(context, .{
-                .io = context.application.io,
-                .panes = &context.application.model.panes,
-                .metrics = &context.application.metrics,
-            });
-        }
-
-        fn scheduleOutputObservation(context: *PaneOutputRuntime, pane: *Pane) !void {
-            return PaneProjectionEvents.scheduleObservation(context.application, pane);
-        }
-
-        fn scheduleOutputMedia(context: *PaneOutputRuntime, pane: *Pane) !void {
-            return PaneProjectionEvents.scheduleMedia(context.application, pane);
-        }
-
-        const PaneIngestTask = struct {
-            ingest: pane_output_pipeline.Ingest,
-            gate: ?*IngestTestGate,
-        };
-
-        fn startOutputIngest(context: *PaneOutputRuntime, ingest: pane_output_pipeline.Ingest) !void {
-            try context.application.select.concurrent(.pane_ingested, ingestPane, .{PaneIngestTask{
-                .ingest = ingest,
-                .gate = context.ingest_gate,
-            }});
-        }
-
-        fn paneHasOutstandingFrame(context: *PaneOutputRuntime, pane_id: schema.PaneId) bool {
-            for (&context.application.clients.items) |*slot| {
-                const client = slot.* orelse continue;
-                const attachment = client.attachments.find(pane_id) orelse continue;
-
-                if (attachment.outstandingFrameId() != 0) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        fn collectAfterOutput(context: *PaneOutputRuntime) void {
-            context.application.collect();
-        }
-
-        fn pumpAfterOutput(context: *PaneOutputRuntime) void {
-            context.application.pumpAll();
-        }
-
-        fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
-            const path = diagnostics.enter(.interactive);
-            defer path.restore();
-
-            if (task.gate) |gate| {
-                gate.wait(task.ingest.io) catch |err| {
-                    return .{ .pane = task.ingest.pane.key(), .result = err };
-                };
-            }
-
-            var stats: pane_ingest_coordinator.Stats = .{};
-            stats.elapsed_ns = task.ingest.pane.ingest(task.ingest.io, task.ingest.bytes) catch |err| {
-                return .{ .pane = task.ingest.pane.key(), .result = err };
-            };
-
-            return .{ .pane = task.ingest.pane.key(), .result = stats };
-        }
-
-        const pane_ingest_runtime_port: pane_ingest_coordinator.RuntimePort(Application) = .{
-            .schedule_observation = scheduleIngestObservation,
-            .schedule_media = scheduleIngestMedia,
-            .refresh_clients = refreshPaneClients,
-            .schedule_response = PaneIoEvents.scheduleResponse,
-            .start_read = startNextPaneRead,
-            .collect = collectPaneLifecycle,
-            .pump_clients = pumpRuntimeClients,
-        };
-
-        const RuntimePaneIngestCoordinator = pane_ingest_coordinator.Coordinator(Application, pane_ingest_runtime_port);
-
-        fn paneIngestCoordinator(application: *Application) RuntimePaneIngestCoordinator {
-            return RuntimePaneIngestCoordinator.init(application, .{
-                .io = application.io,
-                .panes = &application.model.panes,
-                .metrics = &application.metrics,
-            });
-        }
-
-        fn scheduleIngestObservation(application: *Application, pane: *Pane) !void {
-            return PaneProjectionEvents.scheduleObservation(application, pane);
-        }
-
-        fn scheduleIngestMedia(application: *Application, pane: *Pane) !void {
-            return PaneProjectionEvents.scheduleMedia(application, pane);
-        }
-
-        fn refreshPaneClients(application: *Application, pane: *Pane) void {
-            for (&application.clients.items) |*slot| {
-                const client = slot.* orelse continue;
-                const attachment = client.attachments.find(pane.id) orelse continue;
-
-                _ = attachment.resizeIfNeeded() catch {
-                    _ = application.detachSessionPane(client, pane.id);
-                };
-            }
-        }
-
-        fn startNextPaneRead(application: *Application, read: pane_ingest_coordinator.Read) !void {
-            try application.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
-        }
-
-        fn pumpRuntimeClients(application: *Application) void {
-            application.pumpAll();
-        }
-
-        const pane_exit_runtime_port: pane_exit_coordinator.RuntimePort(Application) = .{
-            .revoke_credential = revokeExitedPaneCredential,
-            .schedule_observation = PaneProjectionEvents.scheduleObservation,
-            .collect = collectPaneLifecycle,
-            .pump_clients = pumpRuntimeClients,
-        };
-
-        const RuntimePaneExitCoordinator = pane_exit_coordinator.Coordinator(Application, pane_exit_runtime_port);
-
-        fn paneExitCoordinator(application: *Application) RuntimePaneExitCoordinator {
-            return RuntimePaneExitCoordinator.init(application, .{
-                .panes = &application.model.panes,
-                .agents = &application.model.agents,
-                .metrics = &application.metrics,
-            });
-        }
-
-        fn revokeExitedPaneCredential(application: *Application, pane: *Pane) void {
-            application.revokePaneCredential(pane);
         }
 
         pub const request_runtime_port: request_dispatch.RuntimePort(Application) = .{
