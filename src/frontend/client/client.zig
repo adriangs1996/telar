@@ -102,6 +102,7 @@ pub const InputChunk = struct {
 };
 const InputHandler = @import("input_handler.zig");
 const config_reload = @import("config_reload.zig");
+const config_reloads = @import("config_reloads.zig");
 const notification_flow = @import("notifications.zig");
 const pane_graphics = @import("pane_graphics.zig");
 const presenter_mod = @import("presenter.zig");
@@ -245,7 +246,15 @@ pub fn init(params: Params) !*Client {
         cell_size.width,
         cell_size.height,
     );
-    var model = client_model.Model.init(gpa, params.options.pane_gaps);
+    const configuration_generation = if (params.options.lua_generation) |generation|
+        generation.number
+    else
+        0;
+    var model = client_model.Model.initWithConfiguration(
+        gpa,
+        params.options.pane_gaps,
+        configuration_generation,
+    );
     errdefer model.deinit();
     _ = model.setSidebarVisible(params.options.sidebar_visible);
     var graphics_store = if (params.options.host_shared_memory)
@@ -974,67 +983,7 @@ pub fn scheduleConfigReload(client: *Client) !void {
 /// configuration, surface the rejection, or note nothing changed — then
 /// keep watching.
 pub fn handleConfigReloadEvent(client: *Client, result: anyerror!config_reload.ConfigReload) !void {
-    const reload = try result;
-    switch (config_reload.resolve(&client.reload, client.gpa, reload, .{
-        .kitty_support = client.capabilities.kitty_graphics,
-        .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
-        .current_sidebar = client.sidebar_rendering,
-    })) {
-        .unchanged => {},
-        .rejected => |diagnostic| {
-            client.config_diagnostic = diagnostic;
-            try client.notifyDiagnostic("Configuration rejected");
-        },
-        .adopted => |adoption| try client.applyConfig(adoption),
-    }
-    try client.scheduleConfigReload();
-}
-
-/// Applies an adopted configuration: the compiled router, the view-facing
-/// settings, and the ownership swap of the generation, registry and trust
-/// store. Everything loadable was already validated by the reload module.
-pub fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
-    const snapshot = &adoption.generation.snapshot;
-    client.input_router = adoption.router;
-    if (!client.options.theme_locked) client.view.setTheme(snapshot.theme);
-    client.view.setIconTheme(snapshot.icon_theme);
-    client.sidebar_rendering = adoption.sidebar_rendering;
-    const sidebar_change = client.model.setSidebarVisible(snapshot.sidebar_visible);
-    client.view.setSidebarVisible(snapshot.sidebar_visible);
-    if (sidebar_change != null) {
-        client.graphics_store.invalidatePlacements();
-    }
-    client.model.workspace.setPaneGaps(snapshot.pane_gaps);
-    client.sound_config = snapshot.sound;
-    if (!client.sound_config.enabled) client.queued_sound = null;
-    const cell_size = client.capabilities.cellSize(
-        client.host_size.cols,
-        client.host_size.rows,
-    );
-    try client.view.configureSidebar(
-        client.sidebar_rendering,
-        client.capabilities.kitty_graphics,
-        cell_size.width,
-        cell_size.height,
-    );
-    if (client.model.workspace.active()) |active|
-        try client.resizeAttached(&active.model, client.view.workbench());
-
-    const previous = client.lua_generation;
-    client.lua_generation = adoption.generation;
-    const previous_registry = client.plugin_registry;
-    client.plugin_registry = adoption.registry;
-    const previous_trust = client.trust_store;
-    client.trust_store = adoption.trust_store;
-    if (previous) |old| old.deinit();
-    if (previous_registry) |old| client.gpa.destroy(old);
-    if (previous_trust) |old| client.gpa.destroy(old);
-    client.config_diagnostic.len = 0;
-    try client.notify(.{
-        .level = .success,
-        .title = "Configuration reloaded",
-        .message = "The new settings are active",
-    });
+    _ = try config_reloads.handle(client, result);
 }
 
 /// Entrypoint for one finished plugin action: authorize and apply its effects.

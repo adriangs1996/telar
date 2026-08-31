@@ -107,6 +107,17 @@ pub const Adoption = struct {
     trust_store: *core.plugin.TrustStore,
     router: InputRouter,
     sidebar_rendering: kitty.SidebarRendering,
+
+    /// Releases an adoption that no client accepted.
+    ///
+    /// ```zig
+    /// errdefer adoption.deinit(gpa);
+    /// ```
+    pub fn deinit(adoption: Adoption, gpa: std.mem.Allocator) void {
+        adoption.generation.deinit();
+        gpa.destroy(adoption.registry);
+        gpa.destroy(adoption.trust_store);
+    }
 };
 
 pub const Outcome = union(enum) {

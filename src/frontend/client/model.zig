@@ -19,6 +19,7 @@ const ui = core.ui;
 
 pub const Version = struct {
     workspace: u64 = 0,
+    configuration: u64 = 0,
     workspace_list: u64 = 0,
     agents: u64 = 0,
     proxy_status: u64 = 0,
@@ -146,6 +147,20 @@ pub const TogglePaneFullscreenRequest = struct {
 pub const SidebarVisibility = struct {
     visible: bool,
     chrome_revision: u64,
+};
+
+pub const ConfigurationInput = struct {
+    generation: u64,
+    sidebar_visible: bool,
+    pane_gaps: bool,
+};
+
+pub const ConfigurationCommit = struct {
+    generation: u64,
+    configuration_revision: u64,
+    sidebar: ?SidebarVisibility,
+    pane_gaps_changed: bool,
+    panes_revision: u64,
 };
 
 pub const WorkspaceListCollapse = struct {
@@ -521,6 +536,8 @@ pub const Model = struct {
     workspace: tabs_mod.Model,
     name_prompt: name_prompt.State = .{},
     workspace_revision: u64 = 0,
+    configuration_generation: u64 = 0,
+    configuration_revision: u64 = 0,
     workspace_list_snapshot: workspace_list_mod.Snapshot = .{},
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
@@ -551,10 +568,22 @@ pub const Model = struct {
     /// var model = Model.init(gpa, true);
     /// ```
     pub fn init(gpa: std.mem.Allocator, pane_gaps: bool) Model {
+        return initWithConfiguration(gpa, pane_gaps, 0);
+    }
+
+    /// Creates the client model at one already active configuration generation.
+    ///
+    /// ```zig
+    /// var model = Model.initWithConfiguration(gpa, true, 1);
+    /// ```
+    pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation: u64) Model {
         var workspace = tabs_mod.Model.init(gpa);
         workspace.setPaneGaps(pane_gaps);
 
-        return .{ .workspace = workspace };
+        return .{
+            .workspace = workspace,
+            .configuration_generation = generation,
+        };
     }
 
     /// Releases all semantic workspace state owned by the model.
@@ -574,6 +603,7 @@ pub const Model = struct {
     pub fn version(model: *const Model) Version {
         return .{
             .workspace = model.workspace_revision,
+            .configuration = model.configuration_revision,
             .workspace_list = model.workspace_list_revision,
             .agents = model.agent_revision,
             .proxy_status = model.proxy_status_revision,
@@ -590,6 +620,53 @@ pub const Model = struct {
             .prompt = model.name_prompt.version(),
             .copy = model.copy_revision,
             .viewport = model.viewport_revision,
+        };
+    }
+
+    /// Returns the active configuration generation owned by this client.
+    ///
+    /// ```zig
+    /// const generation = model.configurationGeneration();
+    /// ```
+    pub fn configurationGeneration(model: *const Model) u64 {
+        return model.configuration_generation;
+    }
+
+    /// Returns the pane-gap preference used by current and future tabs.
+    ///
+    /// ```zig
+    /// if (model.paneGaps()) drawGutters();
+    /// ```
+    pub fn paneGaps(model: *const Model) bool {
+        return model.workspace.pane_gaps;
+    }
+
+    /// Atomically adopts one newer configuration's semantic client settings.
+    ///
+    /// ```zig
+    /// const commit = try model.applyConfiguration(input);
+    /// ```
+    pub fn applyConfiguration(model: *Model, input: ConfigurationInput) !ConfigurationCommit {
+        if (input.generation <= model.configuration_generation) {
+            return error.StaleConfiguration;
+        }
+
+        const sidebar = model.setSidebarVisible(input.sidebar_visible);
+        const pane_gaps_changed = model.workspace.pane_gaps != input.pane_gaps;
+        if (pane_gaps_changed) {
+            model.workspace.setPaneGaps(input.pane_gaps);
+            model.panes_revision +%= 1;
+        }
+
+        model.configuration_generation = input.generation;
+        model.configuration_revision +%= 1;
+
+        return .{
+            .generation = model.configuration_generation,
+            .configuration_revision = model.configuration_revision,
+            .sidebar = sidebar,
+            .pane_gaps_changed = pane_gaps_changed,
+            .panes_revision = model.panes_revision,
         };
     }
 
@@ -3675,6 +3752,62 @@ test "sidebar visibility advances only the chrome revision" {
     try std.testing.expect(model.sidebarVisible());
     try std.testing.expectEqual(@as(u64, 2), shown.chrome_revision);
     try std.testing.expectEqual(Version{ .chrome = 2 }, model.version());
+}
+
+test "configuration adoption commits generation sidebar and pane gaps once" {
+    var model = Model.initWithConfiguration(std.testing.allocator, true, 1);
+    defer model.deinit();
+
+    const changed = try model.applyConfiguration(.{
+        .generation = 2,
+        .sidebar_visible = false,
+        .pane_gaps = false,
+    });
+
+    try std.testing.expectEqual(@as(u64, 2), changed.generation);
+    try std.testing.expectEqual(@as(u64, 1), changed.configuration_revision);
+    try std.testing.expect(!changed.sidebar.?.visible);
+    try std.testing.expect(changed.pane_gaps_changed);
+    try std.testing.expectEqual(@as(u64, 1), changed.panes_revision);
+    try std.testing.expectEqual(@as(u64, 2), model.configurationGeneration());
+    try std.testing.expect(!model.sidebarVisible());
+    try std.testing.expect(!model.paneGaps());
+    try std.testing.expectEqual(Version{
+        .configuration = 1,
+        .panes = 1,
+        .chrome = 1,
+    }, model.version());
+
+    const semantic_noop = try model.applyConfiguration(.{
+        .generation = 3,
+        .sidebar_visible = false,
+        .pane_gaps = false,
+    });
+
+    try std.testing.expect(semantic_noop.sidebar == null);
+    try std.testing.expect(!semantic_noop.pane_gaps_changed);
+    try std.testing.expectEqual(Version{
+        .configuration = 2,
+        .panes = 1,
+        .chrome = 1,
+    }, model.version());
+}
+
+test "configuration adoption rejects an old generation without partial state" {
+    var model = Model.initWithConfiguration(std.testing.allocator, true, 4);
+    defer model.deinit();
+    const version = model.version();
+
+    try std.testing.expectError(error.StaleConfiguration, model.applyConfiguration(.{
+        .generation = 4,
+        .sidebar_visible = false,
+        .pane_gaps = false,
+    }));
+
+    try std.testing.expectEqual(@as(u64, 4), model.configurationGeneration());
+    try std.testing.expect(model.sidebarVisible());
+    try std.testing.expect(model.paneGaps());
+    try std.testing.expectEqualDeep(version, model.version());
 }
 
 test "workspace list collapse advances only the chrome revision" {

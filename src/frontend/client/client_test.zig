@@ -8,6 +8,7 @@ const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const notifications = @import("../notifications/root.zig");
+const plugin_broker = @import("../plugins/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const keybind = input_capability.keybind;
@@ -23,6 +24,8 @@ const agent_sounds = @import("agent_sounds.zig");
 const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
+const config_reload_worker = @import("config_reload.zig");
+const config_reloads = @import("config_reloads.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
 const pane_clipboards = @import("pane_clipboards.zig");
@@ -42,6 +45,7 @@ const initial_request_id = Client.initial_request_id;
 
 fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -61,6 +65,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
 
 fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -80,6 +85,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
 
 fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -98,6 +104,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
 
 fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -334,6 +341,56 @@ fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: schema.AgentS
             .expires_at_ms = @intCast(revision + 1),
         }},
     });
+}
+
+fn testingConfigAdoption(number: u64, changed: bool) !config_reloads.Adoption {
+    const source = if (changed)
+        \\local telar = require("telar")
+        \\local config = telar.config({ api_version = 2 })
+        \\config.client = {
+        \\  prefix = "ctrl+s",
+        \\  icons = "nerd-font",
+        \\  theme = telar.theme({ base = "catppuccin" }),
+        \\  sidebar = { visible = false, renderer = "cells" },
+        \\  pane_gaps = false,
+        \\  sound = { enabled = false },
+        \\  input = { escape_timeout_ms = 40, sequence_timeout_ms = 750 },
+        \\}
+        \\return config
+    else
+        \\local telar = require("telar")
+        \\return telar.config({ api_version = 2 })
+    ;
+    var diagnostic: lua_config.Diagnostic = .{};
+    const generation = try lua_config.Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        source,
+        "@client-reload-test",
+        number,
+        &diagnostic,
+    );
+    errdefer generation.deinit();
+    const registry = try std.testing.allocator.create(plugin_broker.Registry);
+    errdefer std.testing.allocator.destroy(registry);
+    registry.* = .{};
+    const trust_store = try std.testing.allocator.create(core.plugin.TrustStore);
+    errdefer std.testing.allocator.destroy(trust_store);
+    trust_store.* = .{};
+    var router = try config_reload_worker.buildInputRouter(
+        generation.snapshot.prefix,
+        generation.snapshot.bindingSlice(),
+    );
+    router.escape_timeout_ns = generation.snapshot.input_escape_timeout_ns;
+    router.sequence_timeout_ns = generation.snapshot.input_sequence_timeout_ns;
+
+    return .{
+        .generation = generation,
+        .registry = registry,
+        .trust_store = trust_store,
+        .router = router,
+        .sidebar_rendering = generation.snapshot.sidebar_rendering,
+    };
 }
 
 test "host input arriving while no tab exists is dropped, not a crash" {
@@ -4801,6 +4858,103 @@ test "config reload outcomes that carry no new generation" {
     try std.testing.expect(client.notification_tick_pending);
     try std.testing.expect(client.config_diagnostic.len != 0);
     try harness.settle();
+}
+
+test "configuration adoption swaps ownership after commit and presents by version" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const initial = try testingConfigAdoption(1, false);
+    const initial_generation = initial.generation;
+
+    const first = try config_reloads.apply(client, initial);
+
+    try std.testing.expectEqual(@as(u64, 1), first.generation);
+    try std.testing.expect(client.lua_generation == initial_generation);
+    try std.testing.expectEqual(@as(u64, 1), client.model.configurationGeneration());
+
+    client.queued_sound = .ready;
+    const pending_updates = client.presenter.pending_updates;
+    const changed = try testingConfigAdoption(2, true);
+    const changed_generation = changed.generation;
+    const second = try config_reloads.apply(client, changed);
+
+    try std.testing.expectEqual(@as(u64, 2), second.generation);
+    try std.testing.expectEqual(@as(u64, 2), second.configuration_revision);
+    try std.testing.expect(!second.sidebar.?.visible);
+    try std.testing.expect(second.pane_gaps_changed);
+    try std.testing.expect(client.lua_generation == changed_generation);
+    try std.testing.expectEqual(@as(u64, 2), client.model.configurationGeneration());
+    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.model.paneGaps());
+    try std.testing.expect(!client.view.sidebar_requested);
+    try std.testing.expectEqual(lua_config.SoundConfig{ .enabled = false }, client.sound_config);
+    try std.testing.expect(client.queued_sound == null);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqual(client_model.Version{
+        .configuration = 2,
+        .notifications = 2,
+        .panes = 1,
+        .chrome = 1,
+    }, client.model.version());
+
+    const stale = try testingConfigAdoption(2, false);
+    try std.testing.expectError(error.StaleConfiguration, config_reloads.apply(client, stale));
+    try std.testing.expect(client.lua_generation == changed_generation);
+    try std.testing.expectEqual(@as(u64, 2), client.model.configurationGeneration());
+}
+
+test "configuration adoption keeps new ownership after geometry failure" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    while (client.outbox.hasCapacity()) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const adoption = try testingConfigAdoption(1, true);
+    const generation = adoption.generation;
+
+    try std.testing.expectError(error.ClientOutboxFull, config_reloads.apply(client, adoption));
+
+    try std.testing.expect(client.lua_generation == generation);
+    try std.testing.expectEqual(@as(u64, 1), client.model.configurationGeneration());
+    try std.testing.expectEqual(@as(u64, 1), client.model.version().configuration);
+    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.model.paneGaps());
+    try std.testing.expect(!client.view.sidebar_requested);
+    try std.testing.expectEqual(@as(usize, client_outbox.capacity), client.outbox.len);
+}
+
+test "a configuration version alone schedules presenter observation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const pending_updates = client.presenter.pending_updates;
+
+    _ = try client.model.applyConfiguration(.{
+        .generation = 1,
+        .sidebar_visible = true,
+        .pane_gaps = true,
+    });
+
+    try std.testing.expectEqual(client_model.Version{ .configuration = 1 }, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
 test "input timer expiries with nothing pending are a no-op" {

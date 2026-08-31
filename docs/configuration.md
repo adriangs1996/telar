@@ -228,6 +228,10 @@ trees, and the trust store. A change builds a complete replacement generation.
 Theme, sidebar, keymap, callbacks, plugin registry, and grants swap only after
 all validation succeeds. A failure leaves the previous generation active and
 shows the error in the client. Closure state is intentionally lost on reload.
+The client model records the accepted generation, sidebar and pane-gap state;
+the presenter observes that version and paints the new appearance on its paced
+frame. The ownership and failure order is mapped in
+[`flows/config-reload.md`](flows/config-reload.md).
 
 The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
