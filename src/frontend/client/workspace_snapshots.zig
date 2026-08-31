@@ -12,13 +12,48 @@ const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
 const workspace_snapshot = client_application.workspace_snapshot;
 
-/// Wires canonical workspace state to request, focus and attachment cleanup.
+/// Consumes one correlated response and applies its canonical workspace state.
 ///
 /// ```zig
-/// var handler = reconciliationHandler(client);
-/// try handler.execute(snapshot);
+/// try apply(client, snapshot);
 /// ```
-pub fn reconciliationHandler(client: *Client) workspace_snapshot.ApplyWorkspaceSnapshotHandler {
+pub fn apply(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
+    const continuation = client.requests.take(snapshot.request_id) orelse
+        return error.UnexpectedWorkspaceSnapshot;
+    const expected_workspace = switch (continuation) {
+        .workspace_snapshot => |workspace| workspace,
+        .rename_workspace => |workspace| workspace,
+        else => return error.UnexpectedWorkspaceSnapshot,
+    };
+    if (!std.meta.eql(expected_workspace, snapshot.workspace)) {
+        return error.UnexpectedWorkspaceSnapshot;
+    }
+
+    var tabs: [tabs_mod.max_tabs]tabs_mod.WorkspaceTabInput = undefined;
+    var tab_count: usize = 0;
+    var iterator = snapshot.tabs();
+    while (try iterator.next()) |tab| {
+        if (tab_count == tabs.len) {
+            return error.TooManyTabs;
+        }
+
+        tabs[tab_count] = .{
+            .tab_id = tab.tab_id,
+            .pane_count = tab.pane_count,
+            .label = tab.label,
+        };
+        tab_count += 1;
+    }
+
+    var use_case = reconciliationHandler(client);
+    try use_case.execute(.{
+        .workspace = snapshot.workspace,
+        .name = snapshot.name,
+        .tabs = tabs[0..tab_count],
+    });
+}
+
+fn reconciliationHandler(client: *Client) workspace_snapshot.ApplyWorkspaceSnapshotHandler {
     return .{
         .model = &client.model,
         .effects = .{

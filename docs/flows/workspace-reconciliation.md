@@ -23,7 +23,7 @@ PendingWorkspaceSnapshot -> runtime Encoder
         |
 schema.workspace_snapshot -> client socket
         |
-handleWorkspaceSnapshot -> ApplyWorkspaceSnapshotHandler
+workspace_snapshots.apply -> ApplyWorkspaceSnapshotHandler
         |
 ClientModel.reconcileWorkspace -> tabs.Model.reconcileWorkspace
         |
@@ -46,9 +46,14 @@ preserve an obsolete list.
 
 ## Client commit
 
-`handleWorkspaceSnapshot` consumes the matching `rename_workspace` or
-`workspace_snapshot` continuation and delegates. It does not mutate tabs,
-release resources or request a frame.
+`workspace_snapshots.apply` consumes the matching `rename_workspace` or
+`workspace_snapshot` continuation once and verifies the exact workspace. It
+translates the wire descriptors into a fixed array of domain tab inputs. Slice
+order carries canonical position, so request IDs, encoded bytes and protocol
+positions stop at the controller. Names and labels are borrowed only during
+the synchronous call; the workspace model copies them before it returns.
+
+The controller does not mutate tabs, release resources or request a frame.
 
 `ClientModel.reconcileWorkspace` validates the complete bounded descriptor
 list before mutation. It records tabs and panes that disappear, preserves
@@ -84,7 +89,9 @@ encoding returns `schema.request_failed` instead of stale state.
 
 A pending workspace operation or a prompt targeting another workspace emits no
 rename request and leaves the prompt open. A local delivery failure does the
-same. Runtime rejection consumes the continuation and uses the existing failure
+same. An unknown request ID, incompatible continuation or mismatched workspace
+is a protocol error. Every known continuation is consumed before rejection.
+Runtime rejection consumes the continuation and uses the existing failure
 notification. A model validation failure runs no client effects. If resource
 synchronization fails after a valid commit, the committed replica remains and
 a later resync or reconnect rebuilds the disposable resources.
@@ -98,12 +105,14 @@ a later resync or reconnect rebuilds the disposable resources.
   `frontend/client/name_prompts.zig` prove editor ownership and submit ordering.
 - `frontend/client/application/workspace_snapshot.zig` proves commit-before-
   effects ordering and post-commit failure semantics.
+- `frontend/client/workspace_snapshots.zig` owns correlation and wire-to-domain
+  translation.
 - `frontend/client/application/resync_required.zig` proves resync validation,
   coalescence and absence of direct model or presentation work.
 - `frontend/client/model.zig` proves independent workspace, tab and active-tab
   revisions, canonical no-ops and bounded retirement data.
 - `frontend/workspace/tabs.zig` proves retained layouts and replacement at the
-  64-tab capacity.
+  64-tab capacity, plus atomic rejection of malformed domain snapshots.
 - `frontend/client/client_test.zig` proves the prompt, wire correlation,
   resource cleanup, active-tab recovery and presenter boundary through the real
   client adapters.

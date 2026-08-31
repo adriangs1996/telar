@@ -21,7 +21,7 @@ pub const ApplyWorkspaceSnapshotHandler = struct {
     /// ```zig
     /// try handler.execute(snapshot);
     /// ```
-    pub fn execute(handler: *ApplyWorkspaceSnapshotHandler, snapshot: schema.WorkspaceSnapshotView) !void {
+    pub fn execute(handler: *ApplyWorkspaceSnapshotHandler, snapshot: client_model.WorkspaceSnapshot) !void {
         const reconciliation = try handler.model.reconcileWorkspace(snapshot);
         try handler.effects.apply(handler.effects.context, &reconciliation);
     }
@@ -64,6 +64,7 @@ const TestingModel = struct {
     workspace: schema.WorkspaceLocation,
     first: schema.TabLocation,
     second: schema.TabLocation,
+    tabs: [1]client_model.WorkspaceTabInput,
 
     fn init() !TestingModel {
         const model = try std.testing.allocator.create(client_model.Model);
@@ -93,6 +94,11 @@ const TestingModel = struct {
             .workspace = workspace,
             .first = first,
             .second = second,
+            .tabs = .{.{
+                .tab_id = first.tab_id,
+                .pane_count = 1,
+                .label = "main",
+            }},
         };
     }
 
@@ -101,17 +107,12 @@ const TestingModel = struct {
         std.testing.allocator.destroy(testing.model);
     }
 
-    fn snapshot(testing: *const TestingModel, buffer: []u8) !schema.WorkspaceSnapshotView {
-        const encoded = try schema.encodeWorkspaceSnapshot(buffer, .{
-            .request_id = @enumFromInt(7),
+    fn snapshot(testing: *const TestingModel) client_model.WorkspaceSnapshot {
+        return .{
             .workspace = testing.workspace,
             .name = "renamed",
-            .tabs = &.{
-                .{ .tab_id = testing.first.tab_id, .position = 0, .pane_count = 1, .label = "main" },
-            },
-        });
-
-        return (try schema.decodeServer(encoded)).workspace_snapshot;
+            .tabs = &testing.tabs,
+        };
     }
 };
 
@@ -123,9 +124,7 @@ test "ApplyWorkspaceSnapshotHandler commits before reconciling client resources"
         .model = testing.model,
         .effects = capture.port(),
     };
-    var buffer: [512]u8 = undefined;
-
-    try handler.execute(try testing.snapshot(&buffer));
+    try handler.execute(testing.snapshot());
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.observed_commit);
@@ -143,8 +142,7 @@ test "ApplyWorkspaceSnapshotHandler still runs resource effects for a canonical 
         .model = testing.model,
         .effects = capture.port(),
     };
-    var buffer: [512]u8 = undefined;
-    const snapshot = try testing.snapshot(&buffer);
+    const snapshot = testing.snapshot();
     try handler.execute(snapshot);
     const committed_version = testing.model.version();
 
@@ -165,16 +163,13 @@ test "ApplyWorkspaceSnapshotHandler rejects model failures before effects" {
         .model = testing.model,
         .effects = capture.port(),
     };
-    var buffer: [512]u8 = undefined;
-    const encoded = try schema.encodeWorkspaceSnapshot(&buffer, .{
-        .request_id = @enumFromInt(7),
+    const snapshot: client_model.WorkspaceSnapshot = .{
         .workspace = .{ .workspace = @enumFromInt(9) },
         .name = "wrong",
         .tabs = &.{
-            .{ .tab_id = testing.first.tab_id, .position = 0, .pane_count = 1, .label = "main" },
+            .{ .tab_id = testing.first.tab_id, .pane_count = 1, .label = "main" },
         },
-    });
-    const snapshot = (try schema.decodeServer(encoded)).workspace_snapshot;
+    };
 
     try std.testing.expectError(error.UnexpectedWorkspace, handler.execute(snapshot));
 
@@ -191,9 +186,7 @@ test "ApplyWorkspaceSnapshotHandler preserves a committed snapshot after effect 
         .model = testing.model,
         .effects = capture.port(),
     };
-    var buffer: [512]u8 = undefined;
-
-    try std.testing.expectError(error.ReconciliationSyncFailed, handler.execute(try testing.snapshot(&buffer)));
+    try std.testing.expectError(error.ReconciliationSyncFailed, handler.execute(testing.snapshot()));
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualStrings("renamed", testing.model.workspace.workspaceName());

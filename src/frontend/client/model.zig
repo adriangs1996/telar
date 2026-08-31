@@ -461,6 +461,8 @@ pub const TabReconciliation = struct {
     panes_changed: bool,
 };
 
+pub const WorkspaceTabInput = tabs_mod.WorkspaceTabInput;
+pub const WorkspaceSnapshot = tabs_mod.WorkspaceSnapshotInput;
 pub const TabSnapshot = tabs_mod.PaneSnapshot;
 
 pub const RemovedWorkspaceTabs = struct {
@@ -1481,18 +1483,17 @@ pub const Model = struct {
     /// ```zig
     /// const reconciliation = try model.reconcileWorkspace(snapshot);
     /// ```
-    pub fn reconcileWorkspace(model: *Model, snapshot: schema.WorkspaceSnapshotView) !WorkspaceReconciliation {
+    pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshot) !WorkspaceReconciliation {
         const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
         if (!std.meta.eql(current_workspace, snapshot.workspace)) {
             return error.UnexpectedWorkspace;
         }
 
-        if (snapshot.tab_count == 0) {
+        if (snapshot.tabs.len == 0) {
             return error.WorkspaceHasNoTabs;
         }
 
-        const snapshot_tab_count: usize = snapshot.tab_count;
-        if (snapshot_tab_count > tabs_mod.max_tabs) {
+        if (snapshot.tabs.len > tabs_mod.max_tabs) {
             return error.TabLimitReached;
         }
 
@@ -1505,30 +1506,26 @@ pub const Model = struct {
             .previous_active = previous_active,
             .active = previous_active,
             .workspace_changed = !std.mem.eql(u8, model.workspace.workspaceName(), snapshot.name),
-            .tabs_changed = snapshot_tab_count != model.workspace.count,
+            .tabs_changed = snapshot.tabs.len != model.workspace.count,
         };
         var canonical_tabs: [tabs_mod.max_tabs]schema.TabId = undefined;
-        var canonical_count: usize = 0;
-        var iterator = snapshot.tabs();
-        while (try iterator.next()) |descriptor| {
-            canonical_tabs[canonical_count] = descriptor.tab_id;
-            if (canonical_count >= model.workspace.count) {
+        for (snapshot.tabs, 0..) |descriptor, index| {
+            canonical_tabs[index] = descriptor.tab_id;
+            if (index >= model.workspace.count) {
                 reconciliation.tabs_changed = true;
             } else {
-                const current = &model.workspace.items[canonical_count].?;
+                const current = &model.workspace.items[index].?;
                 if (current.location.tab_id != descriptor.tab_id or
                     !std.mem.eql(u8, current.labelSlice(), descriptor.label))
                 {
                     reconciliation.tabs_changed = true;
                 }
             }
-
-            canonical_count += 1;
         }
 
         var tabs = model.workspace.tabIterator();
         while (tabs.next()) |tab| {
-            if (std.mem.findScalar(schema.TabId, canonical_tabs[0..canonical_count], tab.location.tab_id) != null) {
+            if (std.mem.findScalar(schema.TabId, canonical_tabs[0..snapshot.tabs.len], tab.location.tab_id) != null) {
                 continue;
             }
 
@@ -2153,10 +2150,6 @@ fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.
     }
 
     return tab;
-}
-
-fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !schema.WorkspaceSnapshotView {
-    return (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(buffer, snapshot))).workspace_snapshot;
 }
 
 const TestingPaneFrame = struct {
@@ -3010,17 +3003,14 @@ test "workspace reconciliation versions semantic dimensions independently" {
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    var buffer: [1024]u8 = undefined;
-
-    const named = try testingWorkspaceSnapshot(&buffer, .{
-        .request_id = @enumFromInt(1),
+    const named: WorkspaceSnapshot = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
-            .{ .tab_id = first.tab_id, .position = 0, .pane_count = 1, .label = "main" },
-            .{ .tab_id = second.tab_id, .position = 1, .pane_count = 1, .label = "logs" },
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "main" },
+            .{ .tab_id = second.tab_id, .pane_count = 1, .label = "logs" },
         },
-    });
+    };
     const name_change = try model.reconcileWorkspace(named);
 
     try std.testing.expect(name_change.workspace_changed);
@@ -3035,15 +3025,14 @@ test "workspace reconciliation versions semantic dimensions independently" {
     try std.testing.expect(!unchanged.active_tab_changed);
     try std.testing.expectEqualDeep(Version{ .workspace = 1 }, model.version());
 
-    const reordered = try testingWorkspaceSnapshot(&buffer, .{
-        .request_id = @enumFromInt(2),
+    const reordered: WorkspaceSnapshot = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
-            .{ .tab_id = second.tab_id, .position = 0, .pane_count = 1, .label = "server" },
-            .{ .tab_id = first.tab_id, .position = 1, .pane_count = 1, .label = "main" },
+            .{ .tab_id = second.tab_id, .pane_count = 1, .label = "server" },
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "main" },
         },
-    });
+    };
     const tabs_change = try model.reconcileWorkspace(reordered);
 
     try std.testing.expect(!tabs_change.workspace_changed);
@@ -3053,14 +3042,13 @@ test "workspace reconciliation versions semantic dimensions independently" {
     try std.testing.expectEqualStrings("server", model.workspace.items[0].?.labelSlice());
     try std.testing.expectEqualDeep(Version{ .workspace = 1, .tabs = 1 }, model.version());
 
-    const removed = try testingWorkspaceSnapshot(&buffer, .{
-        .request_id = @enumFromInt(3),
+    const removed: WorkspaceSnapshot = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
-            .{ .tab_id = first.tab_id, .position = 0, .pane_count = 1, .label = "main" },
+            .{ .tab_id = first.tab_id, .pane_count = 1, .label = "main" },
         },
-    });
+    };
     const active_change = try model.reconcileWorkspace(removed);
 
     try std.testing.expect(!active_change.workspace_changed);
@@ -3083,17 +3071,42 @@ test "rejected workspace snapshots preserve state and revisions" {
         .tab_id = @enumFromInt(1),
     };
     try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
-    var buffer: [512]u8 = undefined;
-    const empty = try testingWorkspaceSnapshot(&buffer, .{
-        .request_id = @enumFromInt(1),
+    const empty: WorkspaceSnapshot = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{},
-    });
+    };
 
     try std.testing.expectError(error.WorkspaceHasNoTabs, model.reconcileWorkspace(empty));
 
+    const duplicate: WorkspaceSnapshot = .{
+        .workspace = workspace,
+        .name = "project",
+        .tabs = &.{
+            .{ .tab_id = location.tab_id, .pane_count = 1, .label = "main" },
+            .{ .tab_id = location.tab_id, .pane_count = 1, .label = "copy" },
+        },
+    };
+    try std.testing.expectError(error.DuplicateTab, model.reconcileWorkspace(duplicate));
+
+    var excessive_tabs: [tabs_mod.max_tabs + 1]WorkspaceTabInput = undefined;
+    for (&excessive_tabs, 0..) |*tab, index| {
+        tab.* = .{
+            .tab_id = @enumFromInt(@as(u64, @intCast(index + 1))),
+            .pane_count = 1,
+            .label = "tab",
+        };
+    }
+    const excessive: WorkspaceSnapshot = .{
+        .workspace = workspace,
+        .name = "project",
+        .tabs = &excessive_tabs,
+    };
+    try std.testing.expectError(error.TabLimitReached, model.reconcileWorkspace(excessive));
+
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
+    try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
+    try std.testing.expect(model.workspace.findPane(@enumFromInt(1)) != null);
     try std.testing.expectEqualStrings("", model.workspace.workspaceName());
     try std.testing.expectEqualDeep(Version{}, model.version());
 }

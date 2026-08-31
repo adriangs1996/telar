@@ -38,7 +38,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
     switch (message) {
         .pane_opened => |opened| _ = try pane_openings.apply(client, opened),
         .tab_snapshot => |snapshot| _ = try tab_snapshots.apply(client, snapshot),
-        .workspace_snapshot => |snapshot| try handleWorkspaceSnapshot(client, snapshot),
+        .workspace_snapshot => |snapshot| try workspace_snapshots.apply(client, snapshot),
         .tab_created => |created| try handleTabCreated(client, created),
         .tab_renamed => |renamed| try handleTabRenamed(client, renamed),
         .tab_closed => |closed| return handleTabClosed(client, closed),
@@ -125,23 +125,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// Applies one correlated canonical workspace snapshot.
-fn handleWorkspaceSnapshot(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
-    const continuation = client.requests.take(snapshot.request_id) orelse
-        return error.UnexpectedWorkspaceSnapshot;
-    const expected_workspace = switch (continuation) {
-        .workspace_snapshot => |workspace| workspace,
-        .rename_workspace => |workspace| workspace,
-        else => return error.UnexpectedWorkspaceSnapshot,
-    };
-    if (!std.meta.eql(expected_workspace, snapshot.workspace)) {
-        return error.UnexpectedWorkspaceSnapshot;
-    }
-
-    var use_case = workspace_snapshots.reconciliationHandler(client);
-    try use_case.execute(snapshot);
 }
 
 /// A created tab becomes active; the previous one detaches.

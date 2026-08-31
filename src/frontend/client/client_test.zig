@@ -28,6 +28,7 @@ const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
+const workspace_snapshots = @import("workspace_snapshots.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = Client.initial_request_id;
 
@@ -1001,6 +1002,129 @@ test "tab snapshot consumes correlation before a model rejection" {
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
 
+test "an unexpected workspace snapshot is rejected without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const request_count_before = client.requests.count;
+    const pending_updates_before = client.presenter.pending_updates;
+    var payload: [512]u8 = undefined;
+    const encoded = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = @enumFromInt(99),
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .name = "main",
+        .tabs = &.{.{
+            .tab_id = TestHarness.bootstrap_location.tab_id,
+            .position = 0,
+            .pane_count = 1,
+            .label = "main",
+        }},
+    });
+
+    try std.testing.expectError(
+        error.UnexpectedWorkspaceSnapshot,
+        workspace_snapshots.apply(client, (try schema.decodeServer(encoded)).workspace_snapshot),
+    );
+
+    try std.testing.expectEqual(request_count_before, client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "workspace snapshot consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .notification);
+    var payload: [512]u8 = undefined;
+    const encoded = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = request_id,
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .name = "main",
+        .tabs = &.{.{
+            .tab_id = TestHarness.bootstrap_location.tab_id,
+            .position = 0,
+            .pane_count = 1,
+            .label = "main",
+        }},
+    });
+    const snapshot = (try schema.decodeServer(encoded)).workspace_snapshot;
+
+    try std.testing.expectError(error.UnexpectedWorkspaceSnapshot, workspace_snapshots.apply(client, snapshot));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedWorkspaceSnapshot, workspace_snapshots.apply(client, snapshot));
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "workspace snapshot consumes a mismatched workspace before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .{
+        .workspace_snapshot = TestHarness.bootstrap_location.workspace,
+    });
+    var payload: [512]u8 = undefined;
+    const encoded = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = request_id,
+        .workspace = .{ .workspace = @enumFromInt(2) },
+        .name = "other",
+        .tabs = &.{.{
+            .tab_id = @enumFromInt(2),
+            .position = 0,
+            .pane_count = 1,
+            .label = "main",
+        }},
+    });
+
+    try std.testing.expectError(
+        error.UnexpectedWorkspaceSnapshot,
+        workspace_snapshots.apply(client, (try schema.decodeServer(encoded)).workspace_snapshot),
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "workspace snapshot consumes correlation before a model rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .{
+        .workspace_snapshot = TestHarness.bootstrap_location.workspace,
+    });
+    var payload: [512]u8 = undefined;
+    const encoded = try schema.encodeWorkspaceSnapshot(&payload, .{
+        .request_id = request_id,
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .name = "main",
+        .tabs = &.{.{
+            .tab_id = TestHarness.bootstrap_location.tab_id,
+            .position = 0,
+            .pane_count = 1,
+            .label = "main",
+        }},
+    });
+
+    try std.testing.expectError(
+        error.UnexpectedWorkspace,
+        workspace_snapshots.apply(client, (try schema.decodeServer(encoded)).workspace_snapshot),
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
 test "workspace snapshots commit semantic revisions before presentation" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -1020,10 +1144,7 @@ test "workspace snapshots commit semantic revisions before presentation" {
             .{ .tab_id = @enumFromInt(2), .position = 1, .pane_count = 1, .label = "second" },
         },
     });
-    try std.testing.expectEqual(
-        @as(?u8, null),
-        try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot)),
-    );
+    try workspace_snapshots.apply(client, (try schema.decodeServer(snapshot)).workspace_snapshot);
 
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expect(client.model.workspace.find(@enumFromInt(2)) != null);
