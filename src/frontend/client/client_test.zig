@@ -33,6 +33,7 @@ const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const client_telemetry = @import("telemetry.zig");
 const clipboard_images = @import("clipboard_images.zig");
+const client_clock = @import("clock.zig");
 const config_reload_worker = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
@@ -4864,7 +4865,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const now_ns = Client.monotonic(client.io);
+    const now_ns = client_clock.monotonic(client.io);
     _ = try notification_flow.publish(client, now_ns, .{
         .title = "Building",
         .message = "Lifecycle tick",

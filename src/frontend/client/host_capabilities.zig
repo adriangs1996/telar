@@ -4,6 +4,7 @@ const std = @import("std");
 const graphics = @import("../graphics/root.zig");
 const presentation = @import("../presentation/root.zig");
 const client_application = @import("application/root.zig");
+const client_clock = @import("clock.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
@@ -57,7 +58,7 @@ pub fn expire(client: *Client) !?client_model.HostCommit {
 }
 
 fn waitExpiry(io: std.Io) anyerror!void {
-    const now_ns = Client.monotonic(io);
+    const now_ns = client_clock.monotonic(io);
     const deadline = std.Io.Timestamp.fromNanoseconds(
         @intCast(now_ns +| kitty.capability_timeout_ns),
     ).withClock(.awake);

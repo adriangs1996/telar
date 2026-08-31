@@ -2,10 +2,10 @@
 
 const std = @import("std");
 const client_application = @import("application/root.zig");
+const client_clock = @import("clock.zig");
 const client_model = @import("model.zig");
 
-const client_mod = @import("client.zig");
-const Client = client_mod;
+const Client = @import("client.zig");
 const Io = std.Io;
 const sidebar_animation = client_application.sidebar_animation;
 
@@ -57,7 +57,7 @@ fn schedule(raw_context: *anyopaque) !void {
         return;
     }
 
-    const deadline_ns = client_mod.monotonic(client.io) + interval_ns;
+    const deadline_ns = client_clock.monotonic(client.io) +| interval_ns;
     scheduler.pending = true;
     client.select.concurrent(.sidebar_animation_tick, waitUntil, .{
         client.io,

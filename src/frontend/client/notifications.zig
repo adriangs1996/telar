@@ -4,11 +4,11 @@ const std = @import("std");
 const core = @import("telar-core");
 const notification_capability = @import("../notifications/root.zig");
 const client_application = @import("application/root.zig");
+const client_clock = @import("clock.zig");
 const client_model = @import("model.zig");
 const notification_timers = @import("notification_timers.zig");
 
-const client_mod = @import("client.zig");
-const Client = client_mod;
+const Client = @import("client.zig");
 const notification_use_cases = client_application.notifications;
 const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
@@ -43,7 +43,7 @@ pub fn applyDeliveryReport(client: *Client, shown: schema.NotificationShown) !De
 /// const publication = try applyRuntime(client, notification);
 /// ```
 pub fn applyRuntime(client: *Client, notification: schema.Notification) !client_model.NotificationPublication {
-    return publish(client, client_mod.monotonic(client.io), .{
+    return publish(client, client_clock.monotonic(client.io), .{
         .level = switch (notification.level) {
             .info => .info,
             .success => .success,
@@ -82,7 +82,7 @@ pub fn publish(client: *Client, now_ns: u64, input: notification_capability.Inpu
 /// try publishNow(client, input);
 /// ```
 pub fn publishNow(client: *Client, input: notification_capability.Input) !void {
-    _ = try publish(client, client_mod.monotonic(client.io), input);
+    _ = try publish(client, client_clock.monotonic(client.io), input);
 }
 
 /// Publishes the model's current diagnostic as one bounded failure notice.
@@ -124,7 +124,7 @@ pub fn advance(client: *Client, now_ns: u64) !?client_model.NotificationChange {
 pub fn handleTick(client: *Client, result: anyerror!void) !?client_model.NotificationChange {
     try notification_timers.complete(client, result);
 
-    return advance(client, client_mod.monotonic(client.io));
+    return advance(client, client_clock.monotonic(client.io));
 }
 
 /// Activates one current notification identity at most once.

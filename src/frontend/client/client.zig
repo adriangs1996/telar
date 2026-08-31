@@ -250,8 +250,3 @@ pub fn deinit(client: *Client) void {
     client.runtime_transport.deinit(gpa);
     gpa.destroy(client);
 }
-
-pub fn monotonic(io: Io) u64 {
-    const timestamp = Io.Timestamp.now(io, .awake);
-    return @intCast(@max(timestamp.nanoseconds, 0));
-}

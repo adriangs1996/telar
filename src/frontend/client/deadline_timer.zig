@@ -1,8 +1,10 @@
 //! One replaceable absolute deadline backed by at most one select task.
 
 const std = @import("std");
+const client_clock = @import("clock.zig");
 
 const Io = std.Io;
+const monotonic = client_clock.monotonic;
 const no_deadline = std.math.maxInt(u64);
 
 const TimerEvent = union(enum) {
@@ -125,12 +127,6 @@ fn waitUntil(io: Io, deadline_ns: u64) anyerror!void {
 
 fn waitForReschedule(io: Io, event: *Io.Event) anyerror!void {
     try event.wait(io);
-}
-
-fn monotonic(io: Io) u64 {
-    const timestamp = Io.Timestamp.now(io, .awake);
-
-    return @intCast(@max(timestamp.nanoseconds, 0));
 }
 
 test "deadline completion releases the worker on every result" {

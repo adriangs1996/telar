@@ -10,6 +10,7 @@ const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const client_actions = @import("actions.zig");
+const client_clock = @import("clock.zig");
 const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const lua_actions = @import("lua_actions.zig");
@@ -34,10 +35,9 @@ const term = presentation.screen;
 const Io = std.Io;
 const diagnostics = core.diagnostics;
 
-const client_mod = @import("client.zig");
-const Client = client_mod;
+const Client = @import("client.zig");
 const Action = action_mod.Action;
-const monotonic = client_mod.monotonic;
+const monotonic = client_clock.monotonic;
 const encodeSgrMouse = mouse_protocol.encodeSgr;
 const mouseTracked = mouse_protocol.tracked;
 

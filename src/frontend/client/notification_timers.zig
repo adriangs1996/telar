@@ -1,9 +1,9 @@
 //! Owns the replaceable timer used by the client notification lifecycle.
 
+const client_clock = @import("clock.zig");
 const deadline_timer = @import("deadline_timer.zig");
 
-const client_mod = @import("client.zig");
-const Client = client_mod;
+const Client = @import("client.zig");
 
 pub const Scheduler = deadline_timer.Scheduler;
 
@@ -15,7 +15,7 @@ pub const Scheduler = deadline_timer.Scheduler;
 /// ```
 pub fn reschedule(client: *Client) !void {
     const scheduler = &client.notification_scheduler;
-    const now_ns = client_mod.monotonic(client.io);
+    const now_ns = client_clock.monotonic(client.io);
     const deadline_ns = client.model.nextNotificationDeadline(
         now_ns,
         client.presenter.pacer.interval,

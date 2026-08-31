@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const client_clock = @import("clock.zig");
 const graphics = @import("../graphics/root.zig");
 const attachments = @import("../attachments/root.zig");
 const presentation = @import("../presentation/root.zig");
@@ -19,6 +20,7 @@ const pace = presentation.pace;
 const term = presentation.screen;
 
 const Io = std.Io;
+const monotonic = client_clock.monotonic;
 const schema = core.schema;
 const diagnostics = core.diagnostics;
 const icon_graphics = graphics.icons;
@@ -600,10 +602,4 @@ fn flushMedia(presenter: *Presenter, writer: *Io.Writer) !void {
 fn waitToDraw(io: Io, deadline_ns: u64) anyerror!void {
     const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
     try deadline.wait(io);
-}
-
-fn monotonic(io: Io) u64 {
-    const timestamp = Io.Timestamp.now(io, .awake);
-
-    return @intCast(@max(timestamp.nanoseconds, 0));
 }

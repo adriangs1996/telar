@@ -4,11 +4,11 @@ const std = @import("std");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const widgets = @import("../widgets/root.zig");
+const client_clock = @import("clock.zig");
 const deadline_timer = @import("deadline_timer.zig");
 const runtime_transport = @import("runtime_transport.zig");
 
-const client_mod = @import("client.zig");
-const Client = client_mod;
+const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
 const Io = std.Io;
 const File = Io.File;
@@ -161,10 +161,10 @@ pub fn handleRead(client: *Client, result: anyerror!Chunk) !bool {
         return true;
     }
 
-    client.presenter.noteInput(client_mod.monotonic(client.io));
+    client.presenter.noteInput(client_clock.monotonic(client.io));
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
-    if (try state.router.feed(chunk.slice(), client_mod.monotonic(client.io), &handler) == .stop) {
+    if (try state.router.feed(chunk.slice(), client_clock.monotonic(client.io), &handler) == .stop) {
         return true;
     }
 
@@ -201,8 +201,8 @@ fn expire(client: *Client, expiry: Expiry) !bool {
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const control = switch (expiry) {
-        .input => try state.router.expireInput(client_mod.monotonic(client.io), &handler),
-        .binding => try state.router.expireBinding(client_mod.monotonic(client.io), &handler),
+        .input => try state.router.expireInput(client_clock.monotonic(client.io), &handler),
+        .binding => try state.router.expireBinding(client_clock.monotonic(client.io), &handler),
     };
     if (control == .stop) {
         return true;
