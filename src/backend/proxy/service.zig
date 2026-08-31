@@ -16,8 +16,8 @@ const observation_queue = @import("observation_queue.zig");
 const passthrough_policy = @import("passthrough_policy.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
-const tls_tunnel = @import("tls_tunnel.zig");
 const tunnel_exchange = @import("tunnel/exchange.zig");
+const tunnel_tls = @import("tunnel/tls.zig");
 
 const Io = std.Io;
 const net = Io.net;
@@ -251,21 +251,6 @@ const UpgradeRoute = struct {
 
 const TunnelContext = tunnel_exchange.Exchange;
 
-const TlsTunnelContext = struct {
-    service: *Service,
-    tunnel: *TunnelContext,
-};
-
-const tls_tunnel_port: tls_tunnel.Port(TlsTunnelContext, net.Stream, *tls.Session) = .{
-    .passthrough = tlsPassthrough,
-    .record_passthrough = recordTlsPassthrough,
-    .intercept = interceptTls,
-    .record_failure = recordTlsTunnelFailure,
-    .publish_failure = publishTlsTunnelFailure,
-};
-
-const EstablishTlsTunnel = tls_tunnel.Command(TlsTunnelContext, tls_tunnel_port);
-
 const Http1Context = struct {
     service: *Service,
     session: *tls.Session,
@@ -444,8 +429,18 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     defer upstream.close(service.io);
     reply(service.io, stream, "HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    var tls_context: TlsTunnelContext = .{ .service = service, .tunnel = &context };
-    const route = EstablishTlsTunnel.execute(&tls_context, .{
+    var tls_establisher: tunnel_tls.Establisher = .{
+        .resources = .{
+            .io = service.io,
+            .gpa = service.gpa,
+            .authority = &service.authority,
+            .roots = &service.roots,
+            .passthrough = &service.passthrough_hosts,
+            .telemetry = &service.telemetry,
+        },
+        .exchange = &context,
+    };
+    const route = tls_establisher.establish(.{
         .host = target.host.bytes,
         .child = stream,
         .origin = upstream,
@@ -498,48 +493,6 @@ fn recordAuthenticationRejection(service: *Service, rejection: connect_authentic
         .invalid_authorization => service.telemetry.record(.invalid_authorization_rejection),
         .unknown_credential => service.telemetry.record(.unknown_credential_rejection),
     }
-}
-
-fn recordTlsFailure(service: *Service, failure: tls.Error) void {
-    const counter: metrics_mod.Counter = switch (failure) {
-        error.ContextFailed => .tls_context_failure,
-        error.UpstreamHandshakeFailed => .tls_upstream_handshake_failure,
-        error.DownstreamHandshakeFailed => .tls_downstream_handshake_failure,
-        error.MintFailed => .tls_mint_failure,
-    };
-
-    service.telemetry.record(counter);
-}
-
-fn tlsPassthrough(context: *TlsTunnelContext, host: []const u8) bool {
-    return context.service.passthrough_hosts.contains(host);
-}
-
-fn recordTlsPassthrough(context: *TlsTunnelContext) void {
-    context.service.telemetry.record(.passthrough_connection);
-}
-
-fn interceptTls(context: *TlsTunnelContext, attempt: tls_tunnel.Attempt(net.Stream)) tls.Error!tls_tunnel.Established(*tls.Session) {
-    const service = context.service;
-    const session = try tls.intercept(.{
-        .io = service.io,
-        .gpa = service.gpa,
-        .authority = &service.authority,
-        .roots = &service.roots,
-        .host = attempt.host,
-        .child = attempt.child,
-        .origin = attempt.origin,
-    });
-
-    return .{ .session = session, .protocol = session.negotiated() };
-}
-
-fn recordTlsTunnelFailure(context: *TlsTunnelContext, failure: tls.Error) void {
-    recordTlsFailure(context.service, failure);
-}
-
-fn publishTlsTunnelFailure(context: *TlsTunnelContext) void {
-    context.tunnel.publish(.request_failed, 0);
 }
 
 fn h2Io(context: *H2Context) Io {
