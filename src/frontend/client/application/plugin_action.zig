@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const config = @import("../../config/root.zig");
+const client_diagnostic = @import("client_diagnostic.zig");
 const client_model = @import("../model.zig");
 
 const plugin = core.plugin;
@@ -82,6 +83,21 @@ pub const CompletionOutcome = union(enum) {
     authorization_failed: anyerror,
 };
 
+pub const CompletionDirective = enum {
+    continue_client,
+    exit_client,
+};
+
+pub const CompletionResult = struct {
+    outcome: CompletionOutcome,
+    directive: CompletionDirective,
+};
+
+pub const CompletionDelivery = struct {
+    context: *anyopaque,
+    deliver: *const fn (*anyopaque, CompletionOutcome) anyerror!CompletionDirective,
+};
+
 pub const CompletionEffects = struct {
     context: *anyopaque,
     authorize: *const fn (*anyopaque, PluginResult) anyerror!void,
@@ -91,32 +107,42 @@ pub const CompletionEffects = struct {
 pub const CompletePluginActionHandler = struct {
     model: *client_model.Model,
     effects: CompletionEffects,
+    delivery: CompletionDelivery,
 
     /// Consumes an exact completion before checking staleness or running effects.
     ///
     /// ```zig
-    /// const outcome = try handler.execute(command);
+    /// const result = try handler.execute(command);
     /// ```
-    pub fn execute(handler: *CompletePluginActionHandler, command: CompletionCommand) !CompletionOutcome {
+    pub fn execute(handler: *CompletePluginActionHandler, command: CompletionCommand) !CompletionResult {
         const execution = handler.model.finishPluginExecution(command.executionId()) orelse
-            return .ignored;
+            return handler.deliver(.ignored);
         if (execution.configuration_generation != handler.model.configurationGeneration()) {
-            return .stale;
+            return handler.deliver(.stale);
         }
 
-        return switch (command) {
+        return handler.deliver(switch (command) {
             .failed => |failure| .{ .worker_failed = failure.reason },
             .succeeded => |result| result: {
                 handler.effects.authorize(handler.effects.context, result) catch |err| {
                     break :result .{ .authorization_failed = err };
                 };
 
+                var diagnostic_handler: client_diagnostic.ClientDiagnosticHandler = .{ .model = handler.model };
+                _ = diagnostic_handler.clear();
                 const disposition = try handler.effects.apply(handler.effects.context, result.batch);
                 break :result switch (disposition) {
                     .continue_client => .applied,
                     .exit_client => .exit,
                 };
             },
+        });
+    }
+
+    fn deliver(handler: *CompletePluginActionHandler, outcome: CompletionOutcome) !CompletionResult {
+        return .{
+            .outcome = outcome,
+            .directive = try handler.delivery.deliver(handler.delivery.context, outcome),
         };
     }
 };
@@ -255,6 +281,39 @@ const CompletionCapture = struct {
     }
 };
 
+const CompletionDeliveryCapture = struct {
+    calls: usize = 0,
+    outcome: ?CompletionOutcome = null,
+    fail: bool = false,
+
+    fn port(capture: *CompletionDeliveryCapture) CompletionDelivery {
+        return .{ .context = capture, .deliver = deliver };
+    }
+
+    fn deliver(raw_context: *anyopaque, outcome: CompletionOutcome) !CompletionDirective {
+        const capture: *CompletionDeliveryCapture = @ptrCast(@alignCast(raw_context));
+        capture.calls += 1;
+        capture.outcome = outcome;
+
+        if (capture.fail) {
+            return error.PluginCompletionDeliveryFailed;
+        }
+
+        return switch (outcome) {
+            .exit => .exit_client,
+            else => .continue_client,
+        };
+    }
+};
+
+fn completionHandler(model: *client_model.Model, capture: *CompletionCapture, delivery: *CompletionDeliveryCapture) CompletePluginActionHandler {
+    return .{
+        .model = model,
+        .effects = capture.port(),
+        .delivery = delivery.port(),
+    };
+}
+
 fn successfulCommand(execution_id: client_model.PluginExecutionId, batch: *const config.EffectBatch) CompletionCommand {
     return .{ .succeeded = .{
         .execution_id = execution_id,
@@ -271,15 +330,15 @@ test "CompletePluginActionHandler consumes one result before authorization and e
     const execution = (try model.beginPluginExecution()).?;
     var batch: config.EffectBatch = .{};
     var capture: CompletionCapture = .{ .model = &model };
-    var handler: CompletePluginActionHandler = .{
-        .model = &model,
-        .effects = capture.port(),
-    };
+    var delivery: CompletionDeliveryCapture = .{};
+    var handler = completionHandler(&model, &capture, &delivery);
 
-    const outcome = try handler.execute(successfulCommand(execution.id, &batch));
+    const result = try handler.execute(successfulCommand(execution.id, &batch));
 
-    try std.testing.expect(outcome == .applied);
+    try std.testing.expect(result.outcome == .applied);
+    try std.testing.expect(result.directive == .continue_client);
     try std.testing.expect(capture.observed_finished);
+    try std.testing.expectEqual(@as(usize, 1), delivery.calls);
     try std.testing.expectEqualSlices(
         CompletionEvent,
         &.{ .authorize, .apply },
@@ -292,10 +351,8 @@ test "CompletePluginActionHandler classifies stale failed and unmatched completi
     var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 2);
     defer model.deinit();
     var capture: CompletionCapture = .{ .model = &model };
-    var handler: CompletePluginActionHandler = .{
-        .model = &model,
-        .effects = capture.port(),
-    };
+    var delivery: CompletionDeliveryCapture = .{};
+    var handler = completionHandler(&model, &capture, &delivery);
     const execution = (try model.beginPluginExecution()).?;
 
     const ignored = try handler.execute(.{ .failed = .{
@@ -303,7 +360,7 @@ test "CompletePluginActionHandler classifies stale failed and unmatched completi
         .reason = error.PluginWorkerFailed,
     } });
 
-    try std.testing.expect(ignored == .ignored);
+    try std.testing.expect(ignored.outcome == .ignored);
     try std.testing.expectEqualDeep(execution, model.pluginExecution().?);
 
     _ = try model.applyConfiguration(.{
@@ -316,7 +373,7 @@ test "CompletePluginActionHandler classifies stale failed and unmatched completi
         .reason = error.PluginWorkerFailed,
     } });
 
-    try std.testing.expect(stale == .stale);
+    try std.testing.expect(stale.outcome == .stale);
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
 
     const current = (try model.beginPluginExecution()).?;
@@ -325,7 +382,8 @@ test "CompletePluginActionHandler classifies stale failed and unmatched completi
         .reason = error.PluginWorkerFailed,
     } });
 
-    try std.testing.expectEqual(error.PluginWorkerFailed, failed.worker_failed);
+    try std.testing.expectEqual(error.PluginWorkerFailed, failed.outcome.worker_failed);
+    try std.testing.expectEqual(@as(usize, 3), delivery.calls);
     try std.testing.expect(model.pluginExecution() == null);
 }
 
@@ -337,15 +395,13 @@ test "CompletePluginActionHandler distinguishes authorization from effect failur
         .model = &model,
         .fail_authorize = true,
     };
-    var handler: CompletePluginActionHandler = .{
-        .model = &model,
-        .effects = capture.port(),
-    };
+    var delivery: CompletionDeliveryCapture = .{};
+    var handler = completionHandler(&model, &capture, &delivery);
     const denied_execution = (try model.beginPluginExecution()).?;
 
     const denied = try handler.execute(successfulCommand(denied_execution.id, &batch));
 
-    try std.testing.expectEqual(error.PluginAuthorizationFailed, denied.authorization_failed);
+    try std.testing.expectEqual(error.PluginAuthorizationFailed, denied.outcome.authorization_failed);
     try std.testing.expectEqual(@as(usize, 1), capture.event_count);
 
     capture.fail_authorize = false;
@@ -358,4 +414,32 @@ test "CompletePluginActionHandler distinguishes authorization from effect failur
     );
     try std.testing.expect(model.pluginExecution() == null);
     try std.testing.expectEqual(@as(usize, 2), capture.event_count);
+}
+
+test "CompletePluginActionHandler delegates exit and preserves completion after delivery failure" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var batch: config.EffectBatch = .{};
+    var capture: CompletionCapture = .{
+        .model = &model,
+        .disposition = .exit_client,
+    };
+    var delivery: CompletionDeliveryCapture = .{};
+    var handler = completionHandler(&model, &capture, &delivery);
+    const exiting = (try model.beginPluginExecution()).?;
+
+    const result = try handler.execute(successfulCommand(exiting.id, &batch));
+
+    try std.testing.expect(result.outcome == .exit);
+    try std.testing.expect(result.directive == .exit_client);
+
+    delivery.fail = true;
+    const failed = (try model.beginPluginExecution()).?;
+    try std.testing.expectError(error.PluginCompletionDeliveryFailed, handler.execute(.{ .failed = .{
+        .execution_id = failed.id,
+        .reason = error.PluginWorkerFailed,
+    } }));
+
+    try std.testing.expect(model.pluginExecution() == null);
+    try std.testing.expectEqual(error.PluginWorkerFailed, delivery.outcome.?.worker_failed);
 }

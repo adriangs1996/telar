@@ -34,6 +34,10 @@ client_actions.apply -> focused client use cases
         |
 ClientModel / bounded runtime outbox
         |
+DeliverPluginActionCompletionHandler
+        |
+loop directive or diagnostic + notification
+        |
 presentation_lifecycle.observe -> Presenter
 ```
 
@@ -76,9 +80,16 @@ cannot be authorized or applied against the replacement configuration.
 For a current successful result, the adapter re-resolves authority through the
 current `Registry.authorizeBatch`. That check verifies package position,
 stable plugin ID, exact digest, declared capabilities and digest-bound grants
-for every effect before any effect runs. Worker failures and authorization
-failures enter `ClientDiagnosticHandler` and then publish bounded client
-notifications from the committed banner after consuming the execution.
+for every effect before any effect runs. After authorization, the completion
+handler clears an obsolete diagnostic before applying the batch. The adapter
+does not own that semantic transition.
+
+Every classified outcome crosses an explicit completion-delivery boundary.
+`DeliverPluginActionCompletionHandler` maps `exit` to the client-loop exit
+directive, keeps applied and obsolete outcomes quiet, and sends worker or
+authorization failures through `ClientDiagnosticHandler`. It then builds a
+bounded notification from the committed banner. The adapter supplies only the
+physical notification publication port after consuming the execution.
 
 Authorized effects enter `client_actions.apply`, the shared dispatcher for
 native semantic actions regardless of whether they came from host input, Lua
@@ -109,8 +120,11 @@ presenter compare versions and schedule at most the required paced frame.
 - `src/frontend/client/model.zig` proves single-flight reservation, exact
   identity matching, generation retention and identifier exhaustion.
 - `src/frontend/client/application/plugin_action.zig` proves prepare/commit/
-  schedule order, rollback, stale suppression, completion ordering and failure
-  classification.
+  schedule order, rollback, stale suppression, completion ordering, diagnostic
+  clearing and failure classification before delivery.
+- `src/frontend/client/application/plugin_action_delivery.zig` proves loop
+  directives, diagnostic policy, notification mapping and retained diagnostics
+  after publication failure.
 - `src/frontend/client/application/client_diagnostic.zig` proves the shared
   diagnostic replacement and clear policy used by plugin outcomes.
 - `src/frontend/client/application/action_routing.zig` proves that configured

@@ -6,12 +6,14 @@ const input = @import("../input/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
 const client_actions = @import("actions.zig");
 const client_diagnostics = @import("client_diagnostics.zig");
 const notification_flow = @import("notifications.zig");
 const plugin_action = client_application.plugin_action;
+const plugin_action_delivery = client_application.plugin_action_delivery;
 
 pub const Completion = struct {
     execution_id: client_model.PluginExecutionId,
@@ -91,6 +93,10 @@ pub fn complete(client: *Client, completion: Completion) !bool {
             .authorize = authorize,
             .apply = applyBatch,
         },
+        .delivery = .{
+            .context = client,
+            .deliver = deliverOutcome,
+        },
     };
     const command: plugin_action.CompletionCommand = if (completion.result) |result|
         .{ .succeeded = .{
@@ -105,9 +111,9 @@ pub fn complete(client: *Client, completion: Completion) !bool {
             .execution_id = completion.execution_id,
             .reason = err,
         } };
-    const outcome = try use_case.execute(command);
+    const result = try use_case.execute(command);
 
-    return handleOutcome(client, outcome);
+    return result.directive == .exit_client;
 }
 
 fn prepare(raw_context: *anyopaque) !void {
@@ -150,7 +156,6 @@ fn authorize(raw_context: *anyopaque, result: plugin_action.PluginResult) !void 
 
 fn applyBatch(raw_context: *anyopaque, batch: *const config.EffectBatch) !plugin_action.BatchDisposition {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    _ = client_diagnostics.clear(client);
     for (batch.slice()) |effect| {
         if (try client_actions.apply(client, effect) == .stop) {
             return .exit_client;
@@ -160,30 +165,21 @@ fn applyBatch(raw_context: *anyopaque, batch: *const config.EffectBatch) !plugin
     return .continue_client;
 }
 
-fn handleOutcome(client: *Client, outcome: plugin_action.CompletionOutcome) !bool {
-    switch (outcome) {
-        .applied => return false,
-        .exit => return true,
-        .stale, .ignored => return false,
-        .worker_failed => |err| {
-            _ = try client_diagnostics.set(client, "plugin worker failed: {s}", .{@errorName(err)});
-            try notification_flow.publishDiagnostic(client, "Plugin failed");
-            return false;
+fn deliverOutcome(raw_context: *anyopaque, outcome: plugin_action.CompletionOutcome) !plugin_action.CompletionDirective {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+    var use_case: plugin_action_delivery.DeliverPluginActionCompletionHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .publish_notification = publishNotification,
         },
-        .authorization_failed => |err| {
-            const title = if (err == error.PluginRegistryUnavailable) failed: {
-                _ = try client_diagnostics.set(
-                    client,
-                    "plugin registry changed while action was running",
-                    .{},
-                );
-                break :failed "Plugin failed";
-            } else denied: {
-                _ = try client_diagnostics.set(client, "plugin effect denied: {s}", .{@errorName(err)});
-                break :denied "Plugin denied";
-            };
-            try notification_flow.publishDiagnostic(client, title);
-            return false;
-        },
-    }
+    };
+
+    return use_case.execute(outcome);
+}
+
+fn publishNotification(raw_context: *anyopaque, notification: notifications.Input) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    try notification_flow.publishNow(client, notification);
 }

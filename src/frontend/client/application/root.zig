@@ -40,6 +40,7 @@ pub const pane_split_confirmation_delivery = @import("pane_split_confirmation_de
 pub const paste_routing = @import("paste_routing.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
 pub const plugin_action = @import("plugin_action.zig");
+pub const plugin_action_delivery = @import("plugin_action_delivery.zig");
 pub const pointer_routing = @import("pointer_routing.zig");
 pub const presentation_delivery = @import("presentation_delivery.zig");
 pub const proxy_status = @import("proxy_status.zig");
@@ -113,6 +114,7 @@ test {
     _ = paste_routing;
     _ = pane_metadata;
     _ = plugin_action;
+    _ = plugin_action_delivery;
     _ = pointer_routing;
     _ = presentation_delivery;
     _ = proxy_status;
