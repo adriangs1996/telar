@@ -1,6 +1,5 @@
 //! Adapts runtime TLS interception state to the client application boundary.
 
-const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
@@ -9,6 +8,7 @@ const notifications = @import("../notifications/root.zig");
 const Client = @import("client.zig");
 const notification_flow = @import("notifications.zig");
 const proxy_status = client_application.proxy_status;
+const proxy_status_delivery = client_application.proxy_status_delivery;
 const schema = core.schema;
 
 /// Commits one decoded proxy state and announces only semantic transitions.
@@ -25,26 +25,28 @@ pub fn apply(client: *Client, message: schema.ProxyStatus) !?client_model.ProxyS
 fn handler(client: *Client) proxy_status.ApplyProxyStatusHandler {
     return .{
         .model = &client.model,
-        .effects = .{
+        .delivery = .{
             .context = client,
-            .announce = announce,
+            .deliver = deliverCommit,
         },
     };
 }
 
-fn announce(context: *anyopaque, commit: client_model.ProxyStatusCommit) !void {
+fn deliverCommit(context: *anyopaque, commit: client_model.ProxyStatusCommit) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    var use_case: proxy_status_delivery.DeliverProxyStatusHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .publish_notification = publishNotification,
+        },
+    };
+
+    try use_case.execute(commit);
+}
+
+fn publishNotification(context: *anyopaque, input: notifications.Input) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try notification_flow.publishNow(client, .{
-        .level = if (commit.active) .warning else .info,
-        .title = if (commit.active) "TLS interception active" else "TLS interception stopped",
-        .message = if (commit.active)
-            "Agent network traffic is being observed"
-        else
-            "Agent network traffic is no longer observed",
-        .duration_ns = if (commit.active)
-            7 * std.time.ns_per_s
-        else
-            notifications.default_duration_ns,
-    });
+    try notification_flow.publishNow(client, input);
 }

@@ -418,6 +418,7 @@ pub const WorkspaceListCommit = struct {
 pub const ProxyStatusCommit = struct {
     previous: bool,
     active: bool,
+    proxy_status_revision_before: u64,
     proxy_status_revision: u64,
 };
 
@@ -1509,12 +1510,14 @@ pub const Model = struct {
         }
 
         const previous = model.proxy_tls_active;
+        const proxy_status_revision_before = model.proxy_status_revision;
         model.proxy_tls_active = active;
         model.proxy_status_revision +%= 1;
 
         return .{
             .previous = previous,
             .active = active,
+            .proxy_status_revision_before = proxy_status_revision_before,
             .proxy_status_revision = model.proxy_status_revision,
         };
     }
@@ -5778,6 +5781,7 @@ test "proxy status reconciliation commits only changed runtime state" {
 
     try std.testing.expect(!enabled.previous);
     try std.testing.expect(enabled.active);
+    try std.testing.expectEqual(@as(u64, 0), enabled.proxy_status_revision_before);
     try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
     try std.testing.expect(model.proxyTlsActive());
     try std.testing.expectEqual(Version{ .proxy_status = 1 }, model.version());
@@ -5788,6 +5792,7 @@ test "proxy status reconciliation commits only changed runtime state" {
 
     try std.testing.expect(disabled.previous);
     try std.testing.expect(!disabled.active);
+    try std.testing.expectEqual(@as(u64, 1), disabled.proxy_status_revision_before);
     try std.testing.expectEqual(@as(u64, 2), disabled.proxy_status_revision);
     try std.testing.expect(!model.proxyTlsActive());
     try std.testing.expectEqual(Version{ .proxy_status = 2 }, model.version());

@@ -23,6 +23,8 @@ ClientModel.reconcileProxyStatus
              |
 ProxyStatusCommit + Version.proxy_status
              |
+DeliverProxyStatusHandler
+             |
 post-commit notification
              |
 presentation_lifecycle.observe
@@ -44,12 +46,15 @@ state.
 `ApplyProxyStatusHandler`. The handler asks `ClientModel` to reconcile the
 boolean. An equal value is a no-op. A changed value advances
 `Version.proxy_status` exactly once and returns the previous and current state
-in a typed commit.
+plus the local revision before and after the change in a typed commit.
 
-The handler announces the transition only after the model commit. Enabling the
-proxy produces a warning; disabling it produces an informational notice. A
-notification failure does not roll back the committed replica. Neither the
-dispatcher nor the handler calls `Presenter`.
+The apply handler delegates only a changed commit.
+`DeliverProxyStatusHandler` validates the exact current state, one-step local
+revision and boolean transition before mapping it to a notification. Enabling
+the proxy produces a warning; disabling it produces an informational notice.
+The adapter supplies only physical publication. A notification failure does
+not roll back the committed replica. Neither the dispatcher nor either handler
+calls `Presenter`.
 
 ## Presentation and recovery
 
@@ -76,7 +81,11 @@ nothing.
 - `src/core/schema/root.zig` defines the bounded boolean wire value.
 - `src/frontend/client/model.zig` proves idempotence and isolated versioning.
 - `src/frontend/client/application/proxy_status.zig` proves commit-before-
-  announcement ordering and retained commits after effect failure.
+  delivery ordering, duplicate suppression and retained commits after delivery
+  failure.
+- `src/frontend/client/application/proxy_status_delivery.zig` proves exact
+  transition validation, notification policy and retained commits after
+  publication failure.
 - `src/frontend/client/client_test.zig` proves protocol adaptation, duplicate
   suppression, notifications and presenter-owned badge projection.
 - `src/frontend/widgets/top_bar.zig` proves the interception badge retains

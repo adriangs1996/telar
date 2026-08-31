@@ -42,6 +42,7 @@ pub const plugin_action = @import("plugin_action.zig");
 pub const pointer_routing = @import("pointer_routing.zig");
 pub const presentation_delivery = @import("presentation_delivery.zig");
 pub const proxy_status = @import("proxy_status.zig");
+pub const proxy_status_delivery = @import("proxy_status_delivery.zig");
 pub const request_failure = @import("request_failure.zig");
 pub const resync_required = @import("resync_required.zig");
 pub const rename_tab = @import("rename_tab.zig");
@@ -113,6 +114,7 @@ test {
     _ = pointer_routing;
     _ = presentation_delivery;
     _ = proxy_status;
+    _ = proxy_status_delivery;
     _ = request_failure;
     _ = resync_required;
     _ = rename_tab;
