@@ -122,3 +122,25 @@ fn encodeHistoryResult(buffer: []u8, result: *const history.model.QueryResult, s
         .entries = storage[0..result.entries.len],
     });
 }
+
+test "a workspace snapshot for a vanished workspace becomes a failure reply" {
+    var workspaces: workspace.State = .{};
+    var panes: PaneStore = .{};
+    var response: PendingResponse = .{ .workspace_snapshot = .{
+        .request_id = @enumFromInt(9),
+        .workspace = .{ .workspace = try schema.id.workspace(77) },
+    } };
+    var buffer: [1024]u8 = undefined;
+    var history_result: ?*history.model.QueryResult = null;
+
+    const payload = try encodeResponse(.{
+        .buffer = &buffer,
+        .panes = &panes,
+        .workspaces = workspace.Reader.init(&workspaces),
+        .history_result = &history_result,
+    }, &response);
+    const decoded = try schema.decodeServer(payload);
+
+    try std.testing.expect(decoded == .request_failed);
+    try std.testing.expectEqual(schema.FailureCode.workspace_not_found, decoded.request_failed.code);
+}

@@ -11,7 +11,7 @@ InputHandler.closeTab
         |
 schema.close_tab -> runtime socket
         |
-Server.handleClientMessageEvent -> Server.dispatchClientMessage
+Runtime.run -> Bindings.handle(.client_message) -> RequestDispatcher.dispatch
         |
 close_tab.Controller -> CloseTabHandler
         |
@@ -43,7 +43,7 @@ client.
 ```text
 pane child exit
       |
-Server.collectFinished
+Application.collectFinished
       |
 destroy final pane -> workspace.removeTab
       |
@@ -52,7 +52,7 @@ TabRemoved -> schema.tab_closed(request_id = none)
 handleTabClosed
 ```
 
-`Server.collectFinished` destroys a pane only after no actor or client
+`Application.collectFinished` destroys a pane only after no actor or client
 attachment still borrows it. If no pane remains at that location, it invokes
 the same workspace operation used by the explicit handler. Active clients that
 still observe the workspace receive `schema.TabClosed` with `RequestId.none`.

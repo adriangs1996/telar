@@ -5,8 +5,8 @@ const telemetry = @import("telemetry.zig");
 
 const State = telemetry.State;
 
-/// Defines sink availability, sampling, and actor scheduling supplied by the
-/// runtime composition root. `format_sample` must return a slice backed by its
+/// Defines sink availability, sampling, and actor scheduling bound by the
+/// runtime instance. `format_sample` must return a slice backed by its
 /// buffer argument; the write actor owns that storage until completion.
 ///
 /// ```zig

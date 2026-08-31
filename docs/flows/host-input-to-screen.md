@@ -28,15 +28,15 @@ Client.enqueueInput                              consumed by Telar
 Outbox.encodeNext -> schema.pane_input -> socket
       |
       v
-Server.handleClientMessageEvent -> dispatchClientMessage
+Runtime.run -> Bindings.handle(.client_message) -> Application.dispatchClientMessage
       |
 Pane input queue -> writePaneInput -> child PTY
       |
       | child emits output
       v
-Server.handlePaneOutputEvent -> ingestPane -> Pane.ingest
+Bindings.handle(.pane_output) -> pane_events.output.Pipeline -> Pane.ingest
       |
-Server.handlePaneIngestedEvent -> Server.pump
+Bindings.handle(.pane_ingested) -> pane_events.ingest.Coordinator -> Application.pump
       |
 Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
@@ -144,13 +144,16 @@ the same pane. Only one socket send is in flight.
 
 ## 3. Runtime input entry
 
-`receiveSession` completes as `.client_message`. The runtime loop delegates it
-to `Server.handleClientMessageEvent` in `src/backend/runtime/instance.zig`. That
-entrypoint resolves the client generation, decodes the message, establishes
-the connection role, calls `Server.dispatchClientMessage`, pumps pending
-responses and schedules the next socket read.
+`receiveSession` completes as `.client_message`. `Runtime.run` delegates it
+through `application.handle` to `Bindings.handleClientMessageEvent` in
+`src/backend/runtime/application/actor_bindings.zig`. That entrypoint resolves
+the client generation, decodes the message, establishes the connection role,
+calls `Application.dispatchClientMessage`, pumps pending responses and
+schedules the next socket read.
 
-The `.pane_input` case in `Server.dispatchClientMessage`:
+`RequestDispatcher.dispatch` in
+`src/backend/runtime/application/request_dispatch.zig` routes `.pane_input`
+through its request-scoped controller:
 
 1. resolves the client's attachment and rejects stale or exited panes;
 2. copies the bytes into the best-effort history observer;
@@ -169,7 +172,7 @@ The child may echo the input, repaint, emit unrelated output, or emit nothing.
 There is no assumption that one key produces one frame.
 
 `readPane` completes as `.pane_output`, which delegates to
-`Server.handlePaneOutputEvent`. The entrypoint:
+`pane_events.output.Pipeline.handle` through the actor bindings. The pipeline:
 
 1. marks EOF or failure as completed output;
 2. feeds copies to the observation and media queues;
@@ -181,12 +184,12 @@ projection dirty. VT is the only component that interprets child escape
 sequences.
 
 The `.pane_ingested` completion delegates to
-`Server.handlePaneIngestedEvent`. It applies deferred resize state, schedules
-terminal responses and the next PTY read, then calls `Server.pumpAll`.
+`pane_events.ingest.Coordinator`. It applies deferred resize state, schedules
+terminal responses and the next PTY read, then calls `Application.pumpAll`.
 
 ## 5. Runtime frame publication
 
-`Server.pump` publishes a pane only after ingestion is complete and only when
+`Application.pump` publishes a pane only after ingestion is complete and only when
 that client's prior frame has been acknowledged. `Delivery.prepare` selects
 the attachment cell lane and calls `Attachment.prepareNextCells`. The internal
 `cell.Sync.prepare` in `src/backend/runtime/attachment/cell.zig` renders the

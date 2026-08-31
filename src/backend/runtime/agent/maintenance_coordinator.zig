@@ -10,8 +10,8 @@ pub const Resources = struct {
     agents: *agent_mod.Tracker,
 };
 
-/// Defines timer rearming, clock access, and client delivery supplied by the
-/// runtime composition root.
+/// Defines timer rearming, clock access, and client delivery bound by the
+/// runtime instance.
 ///
 /// ```zig
 /// const port: RuntimePort(Context) = .{ ... };

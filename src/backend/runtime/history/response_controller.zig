@@ -4,7 +4,7 @@ const std = @import("std");
 const history = @import("../../history/root.zig");
 
 /// Defines history receiving, client lookup, response queuing, and delivery
-/// supplied by the runtime composition root.
+/// bound by the runtime instance.
 ///
 /// `enqueue_query_result` takes ownership only when it returns true. Failure
 /// responses contain no owned allocation and may be dropped on backpressure.

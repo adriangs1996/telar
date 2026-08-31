@@ -60,8 +60,8 @@ pub const LocalListener = struct {
     pub fn deinit(listener: *LocalListener, io: Io) void {
         if (!listener.active) return;
         // POSIX does not guarantee that close from another thread interrupts
-        // accept. Shutdown does, and Server.accept documents it as the
-        // concurrent cancellation mechanism.
+        // accept. Shutdown does, and the runtime admission actor uses it as
+        // the concurrent cancellation mechanism.
         listener.shutdown();
         listener.listener.deinit(io);
         removeIfOwned(io, listener.path[0..listener.path_len], listener.inode);

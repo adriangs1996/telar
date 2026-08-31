@@ -7,7 +7,7 @@ status: accepted
 Runtime-to-client delivery and client-to-pane synchronization obey different
 invariants. Delivery chooses which bounded message one client receives next,
 while an attachment tracks what that client has acknowledged for one pane.
-Keeping both policies in `Server.pump` leaks attachment representation into
+Keeping both policies in the former monolithic runtime pump leaked attachment representation into
 cross-message scheduling and mixes the interactive and media budgets.
 
 ## Decision
@@ -24,7 +24,7 @@ runtime successfully schedules the write actor, and completes when that actor
 returns. A scheduling failure closes delivery because the existing runtime
 drops that client; retry would require a separate rollback decision. Delivery
 owns the fairness cursor between attachments and receives only explicit,
-read-only capability references. It never receives `Server`, the socket or the
+read-only capability references. It never receives `Application`, the socket or the
 scheduler.
 
 Each client-pane relationship owns an `Attachment` module. It owns cell and

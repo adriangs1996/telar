@@ -24,7 +24,7 @@ pub const Resources = struct {
 };
 
 /// Defines credential retirement, history scheduling, and runtime lifecycle
-/// effects supplied by the composition root.
+/// effects bound by the runtime instance.
 ///
 /// ```zig
 /// const port: RuntimePort(Context) = .{ ... };

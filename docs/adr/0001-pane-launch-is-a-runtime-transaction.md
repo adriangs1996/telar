@@ -13,7 +13,7 @@ failure before that point aborts only the launch and never stops the runtime.
 
 The runtime owns the launch transaction through a concrete `PaneLauncher`
 module and returns either a `running` pane or an error. `PaneLauncher` owns only
-the cohesive launch dependencies and never receives `Server` or client state.
+the cohesive launch dependencies and never receives `Application` or client state.
 `PaneStore` owns every spawned pane allocation while the launch moves from
 `starting` to `running` or `aborting`. Discovery and attachment expose only
 `running` panes.

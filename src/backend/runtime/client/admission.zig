@@ -65,8 +65,7 @@ pub fn State(comptime Connection: type) type {
     };
 }
 
-/// Defines shutdown policy and socket effects supplied by the runtime
-/// composition root.
+/// Defines shutdown policy and socket effects bound by the runtime instance.
 ///
 /// ```zig
 /// const port: AcceptPort(Context, Connection) = .{ ... };
@@ -148,8 +147,8 @@ pub fn AcceptCoordinator(comptime Context: type, comptime Connection: type, comp
     };
 }
 
-/// Defines negotiated-connection admission and first-read effects supplied by
-/// the runtime composition root. `Types` declares `Connection` and `Session`.
+/// Defines negotiated-connection admission and first-read effects bound by the
+/// runtime instance. `Types` declares `Connection` and `Session`.
 /// `admit` takes connection ownership only when it returns successfully.
 ///
 /// ```zig

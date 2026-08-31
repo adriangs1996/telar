@@ -4,6 +4,10 @@ status: accepted
 
 # Keep the live runtime model in memory
 
+[ADR 0007](0007-instantiate-runtime-through-explicit-dependencies.md)
+supersedes only this ADR's assignment of the composition-root role to
+`Server`. The model and infrastructure ownership decision remains unchanged.
+
 Telar needs an authoritative model that components can query without coupling
 domain behavior to sockets, workers, databases or other runtime machinery. The
 live model remains in memory for the lifetime of the runtime. A persistence
@@ -12,11 +16,14 @@ changes outside the interactive path.
 
 ## Decision
 
-`Server` is the composition root for two different kinds of ownership. The
-runtime model owns semantic state such as workspaces, tabs, pane identity and
+`Runtime` composes two different kinds of ownership. Its `Application` owns the
+runtime model and application state such as workspaces, tabs, pane identity and
 lifecycle, agent state, validated configuration and typed session references.
-Infrastructure owns the event loop, allocators, workers, queues, sockets, PTYs,
-storage connections, telemetry and other resources needed to run the model.
+Its `Resources` and `EventLoop` own runtime-wide allocators, queues, listener,
+proxy, storage connection, telemetry and scheduling machinery. `PaneStore`
+still co-locates each pane's semantic state with its child, PTY and terminal
+resources because their lifecycle is indivisible today; this is the explicit
+transitional exception described below.
 
 `RuntimeModel` is passive data ownership, not a service or aggregate. It exposes
 no domain commands and performs no infrastructure work. Capability APIs resolve
@@ -93,8 +100,9 @@ supervisor which owns their master descriptors.
   capability produce persistence records.
 - Routing all component interaction through a bus would add queueing, copying
   and scheduling where a direct call already preserves ownership.
-- Serializing `Server` or live aggregate memory would retain process-local
-  resources, expose private data and bind recovery to unstable memory layout.
+- Serializing `Runtime`, `Application` or live aggregate memory would retain
+  process-local resources, expose private data and bind recovery to unstable
+  memory layout.
 - Keeping all state volatile would preserve current latency but prevent tested
   runtime recovery and make later durability depend on representation leaks.
 

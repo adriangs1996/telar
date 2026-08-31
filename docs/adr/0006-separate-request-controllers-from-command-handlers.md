@@ -36,7 +36,7 @@ contain client connections, response IDs, callbacks or borrowed request
 buffers.
 
 Domain events use narrow typed publisher ports and direct synchronous calls
-within the runtime. The composition root binds request metadata, such as the
+within the runtime. Runtime assembly binds request metadata, such as the
 originating client, outside the domain event and connects concrete subscribers.
 For `renameTab`, those subscribers advance the agent projection and mark other
 observing clients for workspace resynchronization. This is not a universal
@@ -111,8 +111,8 @@ handler tests use an in-memory repository and captured publisher, and aggregate
 tests inspect invariants and event ownership.
 
 Handlers that span capabilities use narrow synchronous ports rather than
-receiving `Server`, client sessions or concrete infrastructure stores. This
-keeps transaction ordering unit-testable while the composition root remains the
+receiving `Runtime`, `Application`, client sessions or concrete infrastructure stores. This
+keeps transaction ordering unit-testable while runtime assembly remains the
 only code that converts those ports into pane launch, cwd authority, attachment
 and workspace notification operations.
 
@@ -121,7 +121,8 @@ confirmation for a mutation that exists, which is already required for a
 long-lived runtime whose clients are disposable. Snapshot reconciliation is the
 recovery mechanism.
 
-The runtime composition root still wires concrete repositories, subscribers
-and client queues. It is the only layer that needs to know those concrete
-participants. Command handlers and controllers remain allocation-free and use
-bounded fixed-size values for this flow.
+`application/request_dispatch.zig` wires concrete repositories, subscribers
+and client queues at the request boundary. `application/actor_bindings.zig`
+wires asynchronous completions. They are the only layers that need to know
+those concrete participants. Command handlers and controllers remain
+allocation-free and use bounded fixed-size values for this flow.

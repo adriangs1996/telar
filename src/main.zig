@@ -439,10 +439,13 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
             .passthrough_hosts = proxy_passthrough_hosts,
         };
     } else null;
-    try backend.runtime.serve(
-        init.io,
-        init.gpa,
-        .{
+    var runtime: backend.runtime.Runtime = undefined;
+    try runtime.init(.{
+        .dependencies = .{
+            .io = init.io,
+            .allocator = init.gpa,
+        },
+        .options = .{
             .endpoint = endpoint.path(),
             .graphics = resolved_options.graphics,
             .environment = init.minimal.environ,
@@ -450,7 +453,10 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
             .proxy = proxy_options,
             .agent_descriptions = agent_description_options,
         },
-    );
+    });
+    defer runtime.deinit();
+
+    try runtime.run();
 }
 
 fn stopRuntime(init: std.process.Init, endpoint: *const core.endpoint.Local) !void {

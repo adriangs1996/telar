@@ -32,8 +32,8 @@ pub const Resources = struct {
     metrics: *RuntimeMetrics,
 };
 
-/// Defines the schedulers, client-state query, and lifecycle effects supplied
-/// by the runtime composition root.
+/// Defines the schedulers, client-state query, and lifecycle effects bound by
+/// the runtime instance.
 ///
 /// ```zig
 /// const port: RuntimePort(Context) = .{ ... };

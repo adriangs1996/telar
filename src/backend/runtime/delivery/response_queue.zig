@@ -113,7 +113,10 @@ pub const ResponseQueue = struct {
     };
 
     pub fn push(queue: *ResponseQueue, response: PendingResponse) !void {
-        if (queue.len == queue.items.len) return error.ResponseQueueFull;
+        if (queue.len == queue.items.len) {
+            return error.ResponseQueueFull;
+        }
+
         const index = (@as(usize, queue.head) + queue.len) % queue.items.len;
         queue.items[index] = response;
         queue.len += 1;
@@ -179,14 +182,21 @@ pub const ResponseQueue = struct {
     }
 
     pub fn peek(queue: *ResponseQueue) ?*PendingResponse {
-        if (queue.len == 0) return null;
+        if (queue.len == 0) {
+            return null;
+        }
+
         return &queue.items[queue.head];
     }
 
     pub fn peekManagement(queue: *ResponseQueue) ?Entry {
         for (0..queue.len) |offset| {
             const index = (@as(usize, queue.head) + offset) % queue.items.len;
-            if (queue.items[index] == .history_result) continue;
+
+            if (queue.items[index] == .history_result) {
+                continue;
+            }
+
             return .{ .offset = @intCast(offset), .response = &queue.items[index] };
         }
         return null;
@@ -195,7 +205,11 @@ pub const ResponseQueue = struct {
     pub fn peekObservation(queue: *ResponseQueue) ?Entry {
         for (0..queue.len) |offset| {
             const index = (@as(usize, queue.head) + offset) % queue.items.len;
-            if (queue.items[index] != .history_result) continue;
+
+            if (queue.items[index] != .history_result) {
+                continue;
+            }
+
             return .{ .offset = @intCast(offset), .response = &queue.items[index] };
         }
         return null;
@@ -290,6 +304,34 @@ test "a dropped workspace close preserves its handoff target" {
         @as(schema.WorkspaceId, @enumFromInt(6)),
         queue.resync_previous_workspace.?,
     );
+    queue.len = 0;
+}
+
+test "a dropped tab move preserves the workspace that must be resynchronized" {
+    var queue: ResponseQueue = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .tab_id = @enumFromInt(3),
+    };
+
+    while (queue.len < queue.items.len) {
+        try queue.push(.{ .tab_moved = .{
+            .request_id = .none,
+            .location = location,
+            .position = 0,
+        } });
+    }
+
+    queue.pushOrDrop(.{ .tab_moved = .{
+        .request_id = .none,
+        .location = location,
+        .position = 1,
+    } });
+
+    try std.testing.expectEqual(@as(u64, 1), queue.dropped);
+    try std.testing.expectEqual(@as(u8, queue.items.len), queue.len);
+    try std.testing.expectEqualDeep(location.workspace, queue.resync_workspace.?);
+    try std.testing.expect(queue.resync_previous_workspace == null);
     queue.len = 0;
 }
 

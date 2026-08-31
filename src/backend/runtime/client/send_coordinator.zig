@@ -17,7 +17,7 @@ pub fn SentEvent(comptime Types: type) type {
 }
 
 /// Defines client lookup, delivery mutation, lifecycle effects, and shutdown
-/// queries supplied by the runtime composition root. `Types` declares
+/// queries bound by the runtime instance. `Types` declares
 /// `Client`, `Session`, `Completion`, and `Detach`; a completion exposes
 /// `close_client` and `detach_pane` fields.
 ///

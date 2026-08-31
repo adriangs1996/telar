@@ -898,3 +898,64 @@ test "output coalescing preserves resize order" {
     try std.testing.expectEqual(@as(u16, 40), batch.events[1].resize.cols);
     try std.testing.expectEqual(@as(u32, 4), batch.events[2].output.len);
 }
+
+test "graphics terminal answers KGP queries and rejects unsupported payloads" {
+    const previous_log_level = std.testing.log_level;
+    std.testing.log_level = .err;
+    defer std.testing.log_level = previous_log_level;
+
+    const Capture = struct {
+        var bytes: [512]u8 = undefined;
+        var len: usize = 0;
+
+        fn reset() void {
+            len = 0;
+        }
+
+        fn writePty(_: *vt.TerminalStream.Handler, response: [:0]const u8) void {
+            if (len + response.len > bytes.len) {
+                @panic("KGP test response overflow");
+            }
+
+            @memcpy(bytes[len..][0..response.len], response);
+            len += response.len;
+        }
+    };
+
+    var terminal = try vt.Terminal.init(std.testing.io, std.testing.allocator, .{
+        .cols = 10,
+        .rows = 5,
+        .kitty_image_storage_limit = core.graphics.max_image_bytes_per_screen,
+        .kitty_image_loading_limits = .direct,
+    });
+    defer terminal.deinit(std.testing.allocator);
+
+    var handler = terminal.vtHandler();
+    handler.apc_handler.max_bytes.put(.kitty, core.graphics.max_encoded_chunk_bytes);
+    handler.effects.write_pty = Capture.writePty;
+    var stream = vt.TerminalStream.init(.{
+        .allocator = std.testing.allocator,
+        .handler = handler,
+    });
+    defer stream.deinit();
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\");
+    try std.testing.expectEqualStrings("\x1b_Gi=31;OK\x1b\\", Capture.bytes[0..Capture.len]);
+    try std.testing.expectEqual(@as(usize, 0), terminal.screens.active.kitty_images.images.count());
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=t,f=32,o=z,s=1,v=1,t=d,i=7,m=1;eAFjZGL+\x1b\\");
+    stream.nextSlice("\x1b_Gm=0;DwABEwEG\x1b\\");
+    const image = terminal.screens.active.kitty_images.imageById(7).?;
+    try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3, 255 }, image.data.bytes().?);
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=q,f=32,o=z,s=1,v=1,t=d,i=8;eAFjZGIGAAANAAc=\x1b\\");
+    try std.testing.expect(std.mem.indexOf(u8, Capture.bytes[0..Capture.len], "EINVAL: invalid data") != null);
+    try std.testing.expect(terminal.screens.active.kitty_images.imageById(8) == null);
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=q,f=24,s=1,v=1,t=f,i=9;L3RtcC9pbWFnZQ==\x1b\\");
+    try std.testing.expect(std.mem.indexOf(u8, Capture.bytes[0..Capture.len], "EINVAL: unsupported medium") != null);
+}

@@ -47,7 +47,7 @@ pub const Resources = struct {
 };
 
 /// Defines generator startup, durable title projection, and client delivery
-/// supplied by the runtime composition root.
+/// bound by the runtime instance.
 ///
 /// ```zig
 /// const port: RuntimePort(Context) = .{ ... };

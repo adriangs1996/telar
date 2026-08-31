@@ -19,8 +19,8 @@ pub const Resources = struct {
     metrics: *RuntimeMetrics,
 };
 
-/// Defines proxy receive scheduling and downstream runtime effects supplied by
-/// the composition root.
+/// Defines proxy receive scheduling and downstream effects bound by the
+/// runtime instance.
 ///
 /// ```zig
 /// const port: RuntimePort(Context) = .{ ... };

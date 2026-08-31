@@ -7,8 +7,8 @@ pub const Resources = struct {
     sampler: *system_metrics.Sampler,
 };
 
-/// Defines timer rearming, host sampling, and client delivery supplied by the
-/// runtime composition root.
+/// Defines timer rearming, host sampling, and client delivery bound by the
+/// runtime instance.
 ///
 /// ```zig
 /// const port: RuntimePort(Context) = .{ ... };
