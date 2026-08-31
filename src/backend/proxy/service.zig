@@ -7,7 +7,6 @@ const ca = @import("ca.zig");
 const connection_admission = @import("connection_admission.zig");
 const connect_authentication = @import("connect_authentication.zig");
 const credential_registry = @import("credential_registry.zig");
-const h2 = @import("h2/root.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
 const metrics_mod = @import("metrics.zig");
@@ -17,6 +16,7 @@ const passthrough_policy = @import("passthrough_policy.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
 const tunnel_exchange = @import("tunnel/exchange.zig");
+const tunnel_h2 = @import("tunnel/h2.zig");
 const tunnel_http1 = @import("tunnel/http1.zig");
 const tunnel_tls = @import("tunnel/tls.zig");
 
@@ -247,116 +247,6 @@ test "proxy listeners own distinct loopback ports" {
 
 const TunnelContext = tunnel_exchange.Exchange;
 
-const H2Context = struct {
-    service: *Service,
-    session: *tls.Session,
-    tunnel: *TunnelContext,
-    responses: ?*provider.ResponseStreams,
-    requests: ?*provider.RequestStreams = null,
-};
-
-const h2_connection_port: h2.ConnectionPort(H2Context) = .{
-    .io = h2Io,
-    .relay_request = relayH2Request,
-    .relay_response = relayH2Response,
-    .record_decode_failure = recordH2DecodeFailure,
-    .settle = settleH2Connection,
-};
-
-const RelayH2Connection = h2.Connection(H2Context, h2_connection_port);
-
-const H2EventObserver = struct {
-    context: *TunnelContext,
-    responses: ?*provider.ResponseStreams = null,
-    requests: ?*provider.RequestStreams = null,
-
-    /// Routes borrowed HTTP/2 observations through provider request and
-    /// response semantics before publishing lifecycle evidence.
-    ///
-    /// ```zig
-    /// observer.emit(.{ .request_body = .{ .stream_id = 3, .bytes = fragment } });
-    /// ```
-    pub fn emit(observer: *H2EventObserver, event: h2.Event) void {
-        switch (event) {
-            .lifecycle => |lifecycle| observer.observeLifecycle(lifecycle),
-            .request_body => |body| {
-                const requests = observer.requests orelse return;
-
-                requests.feed(.{
-                    .stream_id = body.stream_id,
-                    .bytes = body.bytes,
-                });
-            },
-            .request_finished => |finished| observer.finishRequest(finished.stream_id),
-            .response_body => |body| {
-                const responses = observer.responses orelse return;
-
-                if (shouldInspectH2Body(body)) {
-                    observer.context.record(.claude_sse_payload_fragment);
-
-                    if (responses.feed(body.stream_id, body.bytes)) {
-                        observer.context.publishStatus(.{ .phase = .provider_turn_completed, .stream_id = body.stream_id, .status_code = 0 });
-                    }
-                }
-            },
-        }
-    }
-
-    fn observeLifecycle(observer: *H2EventObserver, lifecycle: h2.Lifecycle) void {
-        if (observer.shouldClassifyRequest(lifecycle)) {
-            const requests = observer.requests.?;
-            if (!requests.start(lifecycle.stream_id)) {
-                publishH2RequestClass(observer.context, lifecycle.stream_id, .auxiliary);
-            }
-
-            return;
-        }
-
-        if (lifecycle.phase == .request_failed) {
-            if (observer.requests) |requests| {
-                requests.discard(lifecycle.stream_id);
-            }
-        }
-
-        observer.context.publishStatus(.{
-            .phase = lifecycle.phase,
-            .stream_id = lifecycle.stream_id,
-            .status_code = lifecycle.status_code,
-        });
-
-        if (observer.responses) |responses| {
-            if (lifecycle.stream_id != 0 and
-                (lifecycle.phase == .response_finished or lifecycle.phase == .request_failed))
-            {
-                responses.finish(lifecycle.stream_id);
-            }
-        }
-    }
-
-    fn shouldClassifyRequest(observer: *const H2EventObserver, lifecycle: h2.Lifecycle) bool {
-        return observer.context.provider == .claude and observer.requests != null and
-            lifecycle.phase == .request_started;
-    }
-
-    fn finishRequest(observer: *H2EventObserver, stream_id: u32) void {
-        const requests = observer.requests orelse return;
-        const classification = requests.finish(stream_id) orelse return;
-        publishH2RequestClass(observer.context, stream_id, classification);
-    }
-};
-
-fn publishH2RequestClass(context: *TunnelContext, stream_id: u32, classification: provider.RequestClass) void {
-    context.publishStatus(.{
-        .phase = tunnel_exchange.requestPhase(classification),
-        .stream_id = stream_id,
-        .status_code = 0,
-    });
-}
-
-fn shouldInspectH2Body(body: h2.ResponseBody) bool {
-    return body.sse_body and body.status_code >= 200 and body.status_code < 300;
-}
-
 fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     const path = diagnostics.enter(.observation);
     defer path.restore();
@@ -432,19 +322,16 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
 
     context.protocol = if (negotiated_h2) .h2 else .http11;
     if (negotiated_h2) {
-        var response_streams = provider.ResponseStreams.init(service.gpa, context.provider);
-        defer response_streams.deinit();
-        var request_streams = provider.RequestStreams.init(context.provider);
-        defer request_streams.deinit();
-        var h2_context: H2Context = .{
-            .service = service,
+        var h2_connection = tunnel_h2.Connection.init(.{
+            .io = service.io,
+            .gpa = service.gpa,
+            .transforms = &service.transforms,
+            .has_custom_transformers = service.has_custom_transformers,
             .session = session,
-            .tunnel = &context,
-            .responses = if (context.provider == .claude) &response_streams else null,
-            .requests = if (context.provider == .claude) &request_streams else null,
-        };
+            .exchange = &context,
+        });
 
-        RelayH2Connection.run(&h2_context);
+        h2_connection.run();
         return;
     }
 
@@ -463,66 +350,6 @@ fn recordAuthenticationRejection(service: *Service, rejection: connect_authentic
         .invalid_authorization => service.telemetry.record(.invalid_authorization_rejection),
         .unknown_credential => service.telemetry.record(.unknown_credential_rejection),
     }
-}
-
-fn h2Io(context: *H2Context) Io {
-    return context.service.io;
-}
-
-fn relayH2Request(context: *H2Context, settings: *h2.Settings) h2.Stats {
-    var observer: H2EventObserver = .{
-        .context = context.tunnel,
-        .requests = context.requests,
-    };
-
-    return h2.relay(context.session, h2RelayOptions(context, settings, .request), &observer);
-}
-
-fn relayH2Response(context: *H2Context, settings: *h2.Settings) h2.Stats {
-    var observer: H2EventObserver = .{
-        .context = context.tunnel,
-        .responses = context.responses,
-    };
-
-    return h2.relay(context.session, h2RelayOptions(context, settings, .response), &observer);
-}
-
-fn h2RelayOptions(context: *H2Context, settings: *h2.Settings, direction: h2.Direction) h2.RelayOptions {
-    const kind: middleware.HeaderKind = switch (direction) {
-        .request => .request,
-        .response => .response,
-    };
-    const transform_direction: middleware.Direction = switch (direction) {
-        .request => .request,
-        .response => .response,
-    };
-
-    return h2.relayOptions(direction, settings, .{
-        .provider = context.tunnel.provider,
-        .transformation = if (!shouldTransformH2(context, direction)) null else .{
-            .pipeline = &context.service.transforms,
-            .io = context.service.io,
-            .context = context.tunnel.transformContext(.{ .direction = transform_direction, .kind = kind, .stream_id = 0 }),
-        },
-    });
-}
-
-fn shouldTransformH2(context: *const H2Context, direction: h2.Direction) bool {
-    if (context.service.has_custom_transformers) {
-        return true;
-    }
-
-    return context.tunnel.provider == .claude and direction == .request;
-}
-
-fn recordH2DecodeFailure(context: *H2Context, _: h2.Direction) void {
-    context.service.telemetry.record(.h2_decode_failure);
-}
-
-fn settleH2Connection(context: *H2Context) void {
-    // A stream-zero failure settles any exchange left open when the transport
-    // disappeared. The agent model ignores it after every stream settled.
-    context.tunnel.publish(.request_failed, 0);
 }
 
 const TestServiceFixture = struct {
@@ -552,120 +379,6 @@ const TestServiceFixture = struct {
     }
 };
 
-const ExpectedTestObservation = struct {
-    phase: middleware.Phase,
-    protocol: middleware.Protocol,
-    connection_id: u64,
-    stream_id: u32,
-};
-
-fn expectTestObservations(service: *Service, expected: []const ExpectedTestObservation) !void {
-    try std.testing.expectEqual(expected.len, service.observations.metrics().queued);
-
-    for (expected) |wanted| {
-        var event = try service.receive(std.testing.io);
-        defer std.crypto.secureZero(u8, &event.credential.token);
-
-        try std.testing.expectEqual(wanted.phase, event.phase);
-        try std.testing.expectEqual(schema.AgentProvider.claude, event.provider);
-        try std.testing.expectEqual(wanted.protocol, event.protocol);
-        try std.testing.expectEqual(wanted.connection_id, event.connection_id);
-        try std.testing.expectEqual(wanted.stream_id, event.stream_id);
-    }
-}
-
-const test_claude_end_turn_event =
-    "event: message_delta\n" ++
-    "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n" ++
-    "\n";
-
-const test_claude_primary_request =
-    "{\"messages\":[{\"role\":\"user\",\"content\":\"private\"}]," ++
-    "\"tools\":[{\"name\":\"Read\"}],\"stream\":true}";
-
-const test_claude_startup_request =
-    "{\"model\":\"claude-haiku\",\"max_tokens\":1," ++
-    "\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}";
-
-fn testingTunnel(service: *Service, protocol: middleware.Protocol, connection_id: u64) !TunnelContext {
-    const credential: identity.Credential = .{
-        .pane_id = try schema.id.pane(47),
-        .pane_generation = 53,
-        .token = .{0x35} ** identity.token_bytes,
-    };
-    try service.registerCredential(&credential);
-
-    return .{
-        .io = service.io,
-        .pipeline = &service.pipeline,
-        .telemetry = &service.telemetry,
-        .credential = credential,
-        .provider = .claude,
-        .connection_id = connection_id,
-        .protocol = protocol,
-    };
-}
-
-test "HTTP2 Claude request bodies refine interleaved route candidates per stream" {
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(std.testing.io, std.testing.allocator);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-    var tunnel_context = try testingTunnel(service, .h2, 61);
-    var requests = provider.RequestStreams.init(.claude);
-    defer requests.deinit();
-    var observer: H2EventObserver = .{
-        .context = &tunnel_context,
-        .requests = &requests,
-    };
-
-    observer.emit(.{ .lifecycle = .{ .phase = .request_started, .stream_id = 63, .status_code = 0 } });
-    observer.emit(.{ .lifecycle = .{ .phase = .request_started, .stream_id = 65, .status_code = 0 } });
-    try std.testing.expectEqual(@as(u64, 0), service.observations.metrics().queued);
-
-    const primary_split = test_claude_primary_request.len / 2;
-    const startup_split = test_claude_startup_request.len / 2;
-    observer.emit(.{ .request_body = .{ .stream_id = 63, .bytes = test_claude_primary_request[0..primary_split] } });
-    observer.emit(.{ .request_body = .{ .stream_id = 65, .bytes = test_claude_startup_request[0..startup_split] } });
-    observer.emit(.{ .request_body = .{ .stream_id = 63, .bytes = test_claude_primary_request[primary_split..] } });
-    observer.emit(.{ .request_body = .{ .stream_id = 65, .bytes = test_claude_startup_request[startup_split..] } });
-    observer.emit(.{ .request_finished = .{ .stream_id = 65 } });
-    observer.emit(.{ .request_finished = .{ .stream_id = 63 } });
-
-    try expectTestObservations(service, &.{
-        .{ .phase = .auxiliary_request_started, .protocol = .h2, .connection_id = 61, .stream_id = 65 },
-        .{ .phase = .request_started, .protocol = .h2, .connection_id = 61, .stream_id = 63 },
-    });
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
-}
-
-test "HTTP2 payload inspection uses successful SSE response bodies as evidence" {
-    inline for (.{ @as(u16, 199), 300, 429, 500 }) |status_code| {
-        try std.testing.expect(!shouldInspectH2Body(.{
-            .stream_id = 1,
-            .status_code = status_code,
-            .sse_body = true,
-            .bytes = "",
-        }));
-    }
-
-    inline for (.{ @as(u16, 200), 204, 299 }) |status_code| {
-        try std.testing.expect(shouldInspectH2Body(.{
-            .stream_id = 1,
-            .status_code = status_code,
-            .sse_body = true,
-            .bytes = "",
-        }));
-    }
-
-    try std.testing.expect(!shouldInspectH2Body(.{
-        .stream_id = 1,
-        .status_code = 200,
-        .sse_body = false,
-        .bytes = "",
-    }));
-}
-
 test "service negotiates identity encoding for Claude message requests" {
     var fixture: TestServiceFixture = .{};
     try fixture.init(std.testing.io, std.testing.allocator);
@@ -693,103 +406,6 @@ test "service negotiates identity encoding for Claude message requests" {
 
     try std.testing.expect(changed);
     try std.testing.expectEqualStrings("identity", headers.find("accept-encoding").?);
-}
-
-test "built-in Claude negotiation transforms only HTTP2 request heads" {
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(std.testing.io, std.testing.allocator);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-    var tunnel_context = try testingTunnel(service, .h2, 1);
-    var context: H2Context = .{
-        .service = service,
-        .session = undefined,
-        .tunnel = &tunnel_context,
-        .responses = null,
-    };
-
-    try std.testing.expect(shouldTransformH2(&context, .request));
-    try std.testing.expect(!shouldTransformH2(&context, .response));
-
-    tunnel_context.provider = .codex;
-    try std.testing.expect(!shouldTransformH2(&context, .request));
-    try std.testing.expect(!shouldTransformH2(&context, .response));
-
-    const Preserve = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
-            return .preserve;
-        }
-    };
-    var ignored: u8 = 0;
-    try service.addTransformer(.{ .context = &ignored, .transform = Preserve.transform });
-
-    try std.testing.expect(shouldTransformH2(&context, .request));
-    try std.testing.expect(shouldTransformH2(&context, .response));
-}
-
-test "HTTP2 final DATA publishes Claude completion before transport completion" {
-    const io = std.testing.io;
-    const gpa = std.testing.allocator;
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(io, gpa);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-
-    const credential: identity.Credential = .{
-        .pane_id = try schema.id.pane(13),
-        .pane_generation = 17,
-        .token = .{0x24} ** identity.token_bytes,
-    };
-    try service.registerCredential(&credential);
-    var tunnel_context: TunnelContext = .{
-        .io = service.io,
-        .pipeline = &service.pipeline,
-        .telemetry = &service.telemetry,
-        .credential = credential,
-        .provider = .claude,
-        .connection_id = 29,
-        .protocol = .h2,
-    };
-    var responses = provider.ResponseStreams.init(gpa, .claude);
-    defer responses.deinit();
-    var observer: H2EventObserver = .{
-        .context = &tunnel_context,
-        .responses = &responses,
-    };
-
-    observer.emit(.{ .lifecycle = .{
-        .phase = .request_started,
-        .stream_id = 31,
-        .status_code = 0,
-    } });
-    observer.emit(.{ .lifecycle = .{
-        .phase = .response_activity,
-        .stream_id = 31,
-        .status_code = 200,
-    } });
-    observer.emit(.{ .response_body = .{
-        .stream_id = 31,
-        .status_code = 200,
-        .sse_body = true,
-        .bytes = test_claude_end_turn_event,
-    } });
-    observer.emit(.{ .lifecycle = .{
-        .phase = .response_finished,
-        .stream_id = 31,
-        .status_code = 200,
-    } });
-
-    try expectTestObservations(service, &.{
-        .{ .phase = .request_started, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
-        .{ .phase = .response_activity, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
-        .{ .phase = .provider_turn_completed, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
-        .{ .phase = .response_finished, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
-    });
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_sse_payload_fragments);
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_turn_completions);
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_successful_responses);
-    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_failure_observations);
 }
 
 fn relayPassthrough(io: Io, child: net.Stream, origin: net.Stream) void {
