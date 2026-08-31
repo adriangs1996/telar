@@ -865,6 +865,60 @@ fn shouldInspectHttpResponse(request: http.RequestHead, head: http.Head) bool {
         head.message.status_code >= 200 and head.message.status_code < 300;
 }
 
+const TestServiceFixture = struct {
+    temp: std.testing.TmpDir = undefined,
+    key: [std.fs.max_path_bytes]u8 = undefined,
+    certificate: [std.fs.max_path_bytes]u8 = undefined,
+    bundle: [std.fs.max_path_bytes]u8 = undefined,
+    service: ?*Service = null,
+
+    fn init(fixture: *TestServiceFixture, io: Io, gpa: std.mem.Allocator) !void {
+        fixture.temp = std.testing.tmpDir(.{});
+        errdefer fixture.temp.cleanup();
+
+        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const directory_len = try fixture.temp.dir.realPath(io, &directory_buffer);
+        const directory = directory_buffer[0..directory_len];
+        fixture.service = try Service.create(io, gpa, .{
+            .key = try std.fmt.bufPrint(&fixture.key, "{s}/ca-key.pem", .{directory}),
+            .certificate = try std.fmt.bufPrint(&fixture.certificate, "{s}/ca-cert.pem", .{directory}),
+            .bundle = try std.fmt.bufPrint(&fixture.bundle, "{s}/ca-bundle.pem", .{directory}),
+        });
+    }
+
+    fn deinit(fixture: *TestServiceFixture) void {
+        fixture.service.?.destroy();
+        fixture.temp.cleanup();
+    }
+};
+
+const ExpectedTestObservation = struct {
+    phase: middleware.Phase,
+    protocol: middleware.Protocol,
+    connection_id: u64,
+    stream_id: u32,
+};
+
+fn expectTestObservations(service: *Service, expected: []const ExpectedTestObservation) !void {
+    try std.testing.expectEqual(expected.len, service.observations.metrics().queued);
+
+    for (expected) |wanted| {
+        var event = try service.receive(std.testing.io);
+        defer std.crypto.secureZero(u8, &event.credential.token);
+
+        try std.testing.expectEqual(wanted.phase, event.phase);
+        try std.testing.expectEqual(schema.AgentProvider.claude, event.provider);
+        try std.testing.expectEqual(wanted.protocol, event.protocol);
+        try std.testing.expectEqual(wanted.connection_id, event.connection_id);
+        try std.testing.expectEqual(wanted.stream_id, event.stream_id);
+    }
+}
+
+const test_claude_end_turn_event =
+    "event: message_delta\n" ++
+    "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n" ++
+    "\n";
+
 test "provider payload inspection requires a successful inference stream" {
     const request: http.RequestHead = .{
         .classification = .inference,
@@ -922,36 +976,22 @@ test "HTTP1 Claude SSE publishes provider turn completion after forwarding" {
     const FakeSession = @import("http/test_support.zig").FakeSession;
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const response_body =
-        "event: message_delta\n" ++
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n" ++
-        "\n";
     const response =
         "HTTP/1.1 200 OK\r\n" ++
         "Content-Type: text/event-stream; charset=utf-8\r\n" ++
-        "Content-Length: " ++ std.fmt.comptimePrint("{d}", .{response_body.len}) ++ "\r\n" ++
+        "Content-Length: " ++ std.fmt.comptimePrint("{d}", .{test_claude_end_turn_event.len}) ++ "\r\n" ++
         "Connection: close\r\n" ++
         "\r\n" ++
-        response_body;
+        test_claude_end_turn_event;
     var session: FakeSession = .{
         .child_input = "POST /v1/messages HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
         .origin_input = response,
     };
 
-    var temp = std.testing.tmpDir(.{});
-    defer temp.cleanup();
-    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try temp.dir.realPath(io, &directory_buffer);
-    const directory = directory_buffer[0..directory_len];
-    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var certificate_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const service = try Service.create(io, gpa, .{
-        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
-        .certificate = try std.fmt.bufPrint(&certificate_buffer, "{s}/ca-cert.pem", .{directory}),
-        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-    });
-    defer service.destroy();
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, gpa);
+    defer fixture.deinit();
+    const service = fixture.service.?;
 
     const credential: identity.Credential = .{
         .pane_id = try schema.id.pane(7),
@@ -1001,27 +1041,73 @@ test "HTTP1 Claude SSE publishes provider turn completion after forwarding" {
     tunnel_context.status_code = parsed_response.message.status_code;
     tunnel_context.publish(httpResponsePhase(tunnel_context.status_code), 0);
 
-    const expected_phases = [_]middleware.Phase{
-        .request_started,
-        .response_activity,
-        .provider_turn_completed,
-        .response_finished,
-    };
-    try std.testing.expectEqual(expected_phases.len, service.observations.metrics().queued);
-
-    for (expected_phases) |expected_phase| {
-        var event = try service.receive(io);
-        defer std.crypto.secureZero(u8, &event.credential.token);
-
-        try std.testing.expectEqual(expected_phase, event.phase);
-        try std.testing.expectEqual(schema.AgentProvider.claude, event.provider);
-        try std.testing.expectEqual(middleware.Protocol.http11, event.protocol);
-        try std.testing.expectEqual(@as(u64, 19), event.connection_id);
-        try std.testing.expectEqual(@as(u32, 0), event.stream_id);
-    }
+    try expectTestObservations(service, &.{
+        .{ .phase = .request_started, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
+        .{ .phase = .response_activity, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
+        .{ .phase = .provider_turn_completed, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
+        .{ .phase = .response_finished, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
+    });
 
     try std.testing.expectEqualStrings(session.child_input, session.originOutput());
     try std.testing.expectEqualStrings(response, session.childOutput());
+}
+
+test "HTTP2 final DATA publishes Claude completion before transport completion" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, gpa);
+    defer fixture.deinit();
+    const service = fixture.service.?;
+
+    const credential: identity.Credential = .{
+        .pane_id = try schema.id.pane(13),
+        .pane_generation = 17,
+        .token = .{0x24} ** identity.token_bytes,
+    };
+    try service.registerCredential(&credential);
+    var tunnel_context: TunnelContext = .{
+        .service = service,
+        .credential = credential,
+        .provider = .claude,
+        .connection_id = 29,
+        .protocol = .h2,
+    };
+    var responses = provider.ResponseStreams.init(gpa, .claude);
+    defer responses.deinit();
+    var observer: H2EventObserver = .{
+        .context = &tunnel_context,
+        .responses = &responses,
+    };
+
+    observer.emit(.{ .lifecycle = .{
+        .phase = .request_started,
+        .stream_id = 31,
+        .status_code = 0,
+    } });
+    observer.emit(.{ .lifecycle = .{
+        .phase = .response_activity,
+        .stream_id = 31,
+        .status_code = 200,
+    } });
+    observer.emit(.{ .response_body = .{
+        .stream_id = 31,
+        .status_code = 200,
+        .sse_body = true,
+        .bytes = test_claude_end_turn_event,
+    } });
+    observer.emit(.{ .lifecycle = .{
+        .phase = .response_finished,
+        .stream_id = 31,
+        .status_code = 200,
+    } });
+
+    try expectTestObservations(service, &.{
+        .{ .phase = .request_started, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
+        .{ .phase = .response_activity, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
+        .{ .phase = .provider_turn_completed, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
+        .{ .phase = .response_finished, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
+    });
 }
 
 test "HTTP response metadata preserves final routing semantics" {

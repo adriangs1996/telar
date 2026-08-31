@@ -322,42 +322,45 @@ test "an inference start updates the agent before scheduling downstream work" {
     try std.testing.expectEqual(expectedProxyObservations(), fixture.support.metrics.proxy_observations);
 }
 
-test "Claude provider completion projects ready before downstream work" {
-    var fixture: Fixture = .{};
-    try fixture.init();
-    defer fixture.deinit();
-    var adapter = fixture.adapter();
+test "Claude provider completion projects ready for each HTTP protocol" {
+    inline for (.{ proxy_mod.ObservationProtocol.http11, .h2 }) |protocol| {
+        var fixture: Fixture = .{};
+        try fixture.init();
+        defer fixture.deinit();
+        var adapter = fixture.adapter();
+        const stream_id: u32 = if (protocol == .http11) 0 else 23;
 
-    var started = fixture.event(.request_started, .http11);
-    started.provider = .claude;
-    started.stream_id = 0;
-    started.status_code = 0;
-    started.observed_at_ms = 100;
-    try adapter.handle(started);
+        var started = fixture.event(.request_started, protocol);
+        started.provider = .claude;
+        started.stream_id = stream_id;
+        started.status_code = 0;
+        started.observed_at_ms = 100;
+        try adapter.handle(started);
 
-    try std.testing.expectEqual(core.schema.AgentStatus.working, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
-    fixture.capture.len = 0;
+        try std.testing.expectEqual(core.schema.AgentStatus.working, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        fixture.capture.len = 0;
 
-    var completed = fixture.event(.provider_turn_completed, .http11);
-    completed.provider = .claude;
-    completed.stream_id = 0;
-    completed.status_code = 0;
-    completed.observed_at_ms = 200;
-    try adapter.handle(completed);
+        var completed = fixture.event(.provider_turn_completed, protocol);
+        completed.provider = .claude;
+        completed.stream_id = stream_id;
+        completed.status_code = 0;
+        completed.observed_at_ms = 200;
+        try adapter.handle(completed);
 
-    try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description, .pump_clients });
-    try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.capture.status_at_description_schedule.?);
-    try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
-    fixture.capture.len = 0;
+        try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description, .pump_clients });
+        try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.capture.status_at_description_schedule.?);
+        try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        fixture.capture.len = 0;
 
-    var finished = fixture.event(.response_finished, .http11);
-    finished.provider = .claude;
-    finished.stream_id = 0;
-    finished.status_code = 200;
-    finished.observed_at_ms = 300;
-    try adapter.handle(finished);
+        var finished = fixture.event(.response_finished, protocol);
+        finished.provider = .claude;
+        finished.stream_id = stream_id;
+        finished.status_code = 200;
+        finished.observed_at_ms = 300;
+        try adapter.handle(finished);
 
-    try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+    }
 }
 
 test "an unmatched lifecycle event still runs the established downstream policy" {

@@ -1381,12 +1381,16 @@ const BodyCollector = struct {
     sse_body: bool = false,
     activity: usize = 0,
     finished: usize = 0,
+    finished_before_body: bool = false,
 
     fn emit(collector: *BodyCollector, event: Event) void {
         switch (event) {
             .lifecycle => |observed| switch (observed.phase) {
                 .response_activity => collector.activity += 1,
-                .response_finished => collector.finished += 1,
+                .response_finished => {
+                    collector.finished_before_body = collector.len == 0;
+                    collector.finished += 1;
+                },
                 else => {},
             },
             .response_body => |body| {
@@ -1426,6 +1430,7 @@ test "HTTP2 observer exposes DATA payload across every two-chunk split" {
         try std.testing.expect(!collector.sse_body);
         try std.testing.expect(collector.activity != 0);
         try std.testing.expectEqual(@as(usize, 1), collector.finished);
+        try std.testing.expect(!collector.finished_before_body);
     }
 }
 
@@ -1473,6 +1478,7 @@ test "HTTP2 observer attaches the decoded final status to response DATA" {
     try std.testing.expectEqual(@as(u16, 200), collector.status_code);
     try std.testing.expect(collector.sse_body);
     try std.testing.expectEqual(@as(usize, 1), collector.finished);
+    try std.testing.expect(!collector.finished_before_body);
 }
 
 test "HTTP2 observer excludes the pad length and padding from DATA payload" {
@@ -2196,6 +2202,7 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
     try std.testing.expectEqualStrings(payload, collector.payloadSlice());
     try std.testing.expectEqual(@as(u16, 200), collector.status_code);
     try std.testing.expect(collector.sse_body);
+    try std.testing.expect(!collector.finished_before_body);
     try std.testing.expectEqualSlices(u8, &data, session.output[session.len - data.len .. session.len]);
 }
 
