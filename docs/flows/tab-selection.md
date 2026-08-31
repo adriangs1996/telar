@@ -20,7 +20,9 @@ SelectTabHandler
         |
 ClientModel.selectTab
         |
-tab_selections.applySelection
+TabSelection
+        |
+DeliverTabSelectionHandler
         |
 detach previous panes -> request selected tab snapshot
         |
@@ -45,15 +47,23 @@ overflow for the full `isize` input range.
 
 ## Resource effects and presentation
 
-A committed selection advances only `ClientModel.Version.active_tab`.
+A committed selection advances `ClientModel.Version.active_tab` and releases
+copy mode when its pane belongs to the previous tab. Its commit captures both
+exact tab identities, both tab-local layout revisions and the workspace, tab,
+active-tab, pane and copy revisions. The two layout revisions make the commit
+exact even when an inactive tab changed without advancing the visible pane
+revision.
+
+`DeliverTabSelectionHandler` validates that commit before any resource effect.
 `RetireTabAttachmentsHandler` closes any bracketed paste captured by the
 previous tab. If that tab owns `ClientModel.reported_pane_focus`, it sends
 focus-out and clears the state before every `detach_pane`. Detaching another
 tab cannot clear the active owner's report state. The handler hides old
-graphics and commits their operational detachment. The selection adapter then
+graphics and commits their operational detachment. The delivery handler then
 makes the selected tab's graphics visible, synchronizes attachment geometry
 and focus reporting, and enqueues one `request_tab_snapshot` for the exact
-selected location.
+selected location. The `tab_selections` adapter supplies only paste, focus,
+attachment, graphics and request-lifecycle ports.
 
 The runtime dispatches `detach_pane` through `detach_pane.Controller` and
 `DetachPaneHandler`. It dispatches `request_tab_snapshot` through
@@ -82,7 +92,10 @@ session.
 - `src/frontend/client/model.zig` proves identity, position and offset
   resolution plus exact version changes.
 - `src/frontend/client/application/select_tab.zig` proves snapshot gating,
-  commit ordering, no-op behavior and post-commit effect failure.
+  commit ordering, no-op behavior and post-commit delivery failure.
+- `src/frontend/client/application/tab_selection_delivery.zig` proves exact
+  revisions and identities, local-layout ABA rejection, complete effect order
+  and partial failure boundaries.
 - `src/frontend/client/application/tab_attachment_retirement.zig` proves
   exact previous-tab authority and attachment retirement.
 - `src/frontend/client/client_test.zig` proves native position and offset

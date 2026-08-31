@@ -19,7 +19,7 @@ pub const SnapshotGate = struct {
 
 pub const SelectionEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.TabSelection) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.TabSelection) anyerror!void,
 };
 
 pub const SelectTabHandler = struct {
@@ -42,7 +42,7 @@ pub const SelectTabHandler = struct {
             error.NoActiveTab, error.TabNotFound => return null,
         } orelse return null;
 
-        try handler.effects.apply(handler.effects.context, selection);
+        try handler.effects.deliver(handler.effects.context, selection);
         return selection;
     }
 };
@@ -61,22 +61,32 @@ const SnapshotGateCapture = struct {
 };
 
 const EffectsCapture = struct {
-    model: *const client_model.Model,
+    model: *client_model.Model,
     expected: schema.TabLocation,
     calls: usize = 0,
     observed_commit: bool = false,
     fail: bool = false,
 
     fn port(capture: *EffectsCapture) SelectionEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, selection: client_model.TabSelection) !void {
+    fn deliver(context: *anyopaque, selection: client_model.TabSelection) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
+        const previous = capture.model.workspace.find(selection.previous.tab_id);
+        const selected = capture.model.workspace.find(selection.selected.tab_id);
+        const version = capture.model.version();
         capture.calls += 1;
         capture.observed_commit = std.meta.eql(capture.model.activeTabLocation(), capture.expected) and
-            capture.model.version().active_tab == 1 and
-            std.meta.eql(selection.selected, capture.expected);
+            std.meta.eql(selection.selected, capture.expected) and
+            previous != null and selected != null and
+            previous.?.model.layout.currentRevision() == selection.previous_layout_revision and
+            selected.?.model.layout.currentRevision() == selection.selected_layout_revision and
+            version.workspace == selection.workspace_revision and
+            version.tabs == selection.tabs_revision and
+            version.active_tab == selection.active_tab_revision and
+            version.panes == selection.panes_revision and
+            version.copy == selection.copy_revision;
         if (capture.fail) {
             return error.SelectionSyncFailed;
         }
@@ -136,6 +146,19 @@ test "SelectTabHandler commits a resolved target before synchronizing resources"
 
     try std.testing.expectEqualDeep(testing.first, selection.previous);
     try std.testing.expectEqualDeep(testing.second, selection.selected);
+    try std.testing.expectEqual(
+        testing.model.workspace.find(testing.first.tab_id).?.model.layout.currentRevision(),
+        selection.previous_layout_revision,
+    );
+    try std.testing.expectEqual(
+        testing.model.workspace.find(testing.second.tab_id).?.model.layout.currentRevision(),
+        selection.selected_layout_revision,
+    );
+    try std.testing.expectEqual(testing.model.version().workspace, selection.workspace_revision);
+    try std.testing.expectEqual(testing.model.version().tabs, selection.tabs_revision);
+    try std.testing.expectEqual(testing.model.version().active_tab, selection.active_tab_revision);
+    try std.testing.expectEqual(testing.model.version().panes, selection.panes_revision);
+    try std.testing.expectEqual(testing.model.version().copy, selection.copy_revision);
     try std.testing.expectEqual(@as(usize, 1), effects.calls);
     try std.testing.expect(effects.observed_commit);
 }

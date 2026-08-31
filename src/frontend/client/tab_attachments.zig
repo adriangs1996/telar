@@ -22,13 +22,19 @@ pub fn detach(client: *Client, location: schema.TabLocation) !void {
         .model = &client.model,
         .paste_effects = pane_pastes.effects(client),
         .focus_effects = pane_focus_reports.effects(client),
-        .effects = attachmentEffects(client),
+        .effects = effects(client),
     };
 
     try use_case.execute(location);
 }
 
-fn attachmentEffects(client: *Client) tab_attachment_retirement.Effects {
+/// Returns the attachment-retirement ports reused by compound application
+/// flows.
+///
+/// ```zig
+/// const attachment_effects = effects(client);
+/// ```
+pub fn effects(client: *Client) tab_attachment_retirement.Effects {
     return .{
         .context = client,
         .attachment_pending = attachmentPending,

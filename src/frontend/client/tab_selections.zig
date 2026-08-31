@@ -1,18 +1,18 @@
 //! Wires semantic tab selection to one client's disposable resources.
 
-const std = @import("std");
 const core = @import("telar-core");
-const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
+const pane_pastes = @import("pane_pastes.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
 const select_tab = client_application.select_tab;
-const tabs_mod = workspace_capability.tabs;
+const tab_selection_delivery = client_application.tab_selection_delivery;
 
 pub const Target = select_tab.Target;
 
@@ -31,7 +31,7 @@ pub fn selectionHandler(client: *Client) select_tab.SelectTabHandler {
         },
         .effects = .{
             .context = client,
-            .apply = applySelection,
+            .deliver = deliverSelection,
         },
     };
 }
@@ -41,32 +41,38 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_snapshot);
 }
 
-fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !void {
+fn deliverSelection(context: *anyopaque, selection: client_model.TabSelection) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const workspace = &client.model.workspace;
-    const previous = findTab(workspace, selection.previous) orelse return error.UnexpectedTabSelection;
-    const selected = findTab(workspace, selection.selected) orelse return error.UnexpectedTabSelection;
-    const active = workspace.active() orelse return error.UnexpectedTabSelection;
-    if (active != selected) {
-        return error.UnexpectedTabSelection;
-    }
+    var use_case: tab_selection_delivery.DeliverTabSelectionHandler = .{
+        .model = &client.model,
+        .paste_effects = pane_pastes.effects(client),
+        .focus_effects = pane_focus_reports.effects(client),
+        .attachment_effects = tab_attachments.effects(client),
+        .effects = .{
+            .context = client,
+            .set_pane_graphics_visible = setPaneGraphicsVisible,
+            .synchronize_active_resources = synchronizeActiveResources,
+            .request_tab_snapshot = requestTabSnapshot,
+        },
+    };
 
-    try tab_attachments.detach(client, previous.location);
-
-    var visible = selected.model.paneIterator();
-    while (visible.next()) |pane| {
-        try client.graphics_store.setPaneVisible(pane.id, true);
-    }
-
-    try active_pane_resources.synchronize(client);
-    try request_lifecycle.requestTabSnapshot(client, selected.location);
+    try use_case.execute(selection);
 }
 
-fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const tab = workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-    return tab;
+    try client.graphics_store.setPaneVisible(pane_id, visible);
+}
+
+fn synchronizeActiveResources(context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try active_pane_resources.synchronize(client);
+}
+
+fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try request_lifecycle.requestTabSnapshot(client, location);
 }

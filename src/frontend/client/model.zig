@@ -54,6 +54,13 @@ pub const Change = enum {
 pub const TabSelection = struct {
     previous: schema.TabLocation,
     selected: schema.TabLocation,
+    previous_layout_revision: u64,
+    selected_layout_revision: u64,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
+    copy_revision: u64,
 };
 
 pub const TabSelectionTarget = union(enum) {
@@ -3125,14 +3132,21 @@ pub const Model = struct {
             return null;
         }
 
-        const selection: TabSelection = .{
-            .previous = previous.location,
-            .selected = model.workspace.activeConst().?.location,
-        };
+        const selected = model.workspace.activeConst().?;
         model.active_tab_revision +%= 1;
         releaseInvalidCopyMode(model);
 
-        return selection;
+        return .{
+            .previous = previous.location,
+            .selected = selected.location,
+            .previous_layout_revision = previous.model.layout.currentRevision(),
+            .selected_layout_revision = selected.model.layout.currentRevision(),
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
+            .copy_revision = model.copy_revision,
+        };
     }
 };
 
@@ -3956,6 +3970,7 @@ test "an active tab transition releases copy authority" {
 
     try std.testing.expectEqualDeep(first, selection.previous);
     try std.testing.expectEqualDeep(second, selection.selected);
+    try std.testing.expectEqual(model.version().copy, selection.copy_revision);
     try std.testing.expect(!model.copyModeActive());
     try std.testing.expectEqual(version.active_tab + 1, model.version().active_tab);
     try std.testing.expectEqual(version.copy + 1, model.version().copy);
@@ -4983,9 +4998,22 @@ test "tab selection resolves identity position and wrapping offset" {
 
     try std.testing.expectEqualDeep(first, selection.previous);
     try std.testing.expectEqualDeep(second, selection.selected);
+    try std.testing.expectEqual(
+        model.workspace.find(first.tab_id).?.model.layout.currentRevision(),
+        selection.previous_layout_revision,
+    );
+    try std.testing.expectEqual(
+        model.workspace.find(second.tab_id).?.model.layout.currentRevision(),
+        selection.selected_layout_revision,
+    );
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(u64, 0), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+    try std.testing.expectEqual(model.version().workspace, selection.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, selection.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, selection.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, selection.panes_revision);
+    try std.testing.expectEqual(model.version().copy, selection.copy_revision);
 
     try std.testing.expectEqualDeep(first, (try model.selectTab(.{ .offset = 1 })).?.selected);
     try std.testing.expectEqualDeep(second, (try model.selectTab(.{ .offset = -1 })).?.selected);
