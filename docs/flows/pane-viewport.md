@@ -18,7 +18,9 @@ mouse wheel or pane input
         |
 InputHandler
         |
-pane_viewports adapter or PaneInputHandler
+pane_mouse_inputs or PaneInputHandler
+        |
+PaneMouseHandler or pane-input viewport policy
         |
 SetPaneViewportHandler
         |
@@ -30,11 +32,13 @@ graphics visibility, then set_pane_viewport
 ```
 
 `PaneViewportCommand` supports an absolute row, a relative movement and the
-bottom of retained history. `InputHandler` uses the standalone adapter for
-relative mouse-wheel movement. `PaneInputHandler` composes the same use case
-with a `.bottom` intent before keyboard and paste delivery. Neither caller
-clamps offsets, changes scroll state, hides graphics, sends viewport protocol
-messages or requests a draw.
+bottom of retained history. `PaneMouseHandler` selects relative mouse-wheel
+movement, and `pane_mouse_inputs` applies it through the viewport adapter.
+`PaneInputHandler` composes the same use case with a `.bottom` intent before
+keyboard and paste delivery. None of these callers clamps offsets, changes
+scroll state, hides graphics, sends viewport protocol messages or requests a
+draw. See [Pane mouse input](pane-mouse-input.md) for wheel ownership and
+alternate-screen policy.
 
 `ClientModel.setPaneViewport` resolves the intent against the attached pane in
 the active tab. It clamps the offset to `scroll.maxOffset`, commits it and

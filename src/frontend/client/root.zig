@@ -68,6 +68,7 @@ test {
     _ = @import("pane_geometry.zig");
     _ = @import("pane_inputs.zig");
     _ = @import("pane_metadata.zig");
+    _ = @import("pane_mouse_inputs.zig");
     _ = @import("pane_openings.zig");
     _ = @import("paste_routing.zig");
     _ = @import("pane_resources.zig");

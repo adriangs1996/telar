@@ -22,6 +22,7 @@ pub const pane_frame = @import("pane_frame.zig");
 pub const pane_focus_reporting = @import("pane_focus_reporting.zig");
 pub const pane_graphics = @import("pane_graphics.zig");
 pub const pane_input = @import("pane_input.zig");
+pub const pane_mouse = @import("pane_mouse.zig");
 pub const pane_paste = @import("pane_paste.zig");
 pub const paste_routing = @import("paste_routing.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
@@ -69,6 +70,7 @@ test {
     _ = pane_focus_reporting;
     _ = pane_graphics;
     _ = pane_input;
+    _ = pane_mouse;
     _ = pane_paste;
     _ = paste_routing;
     _ = pane_metadata;

@@ -12,8 +12,8 @@ const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const lua_actions = @import("lua_actions.zig");
 const pane_inputs = @import("pane_inputs.zig");
+const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 const paste_routing = @import("paste_routing.zig");
-const pane_viewports = @import("pane_viewports.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
@@ -21,7 +21,6 @@ const view_interactions = @import("view_interactions.zig");
 const action_mod = input_capability.action;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
-const mouse_protocol = input_capability.mouse_protocol;
 const multiplexer = workspace_capability.multiplexer;
 const term = presentation.screen;
 
@@ -30,8 +29,6 @@ const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
 const Action = action_mod.Action;
-const encodeSgrMouse = mouse_protocol.encodeSgr;
-const mouseTracked = mouse_protocol.tracked;
 
 const InputHandler = @This();
 
@@ -148,70 +145,16 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     const interaction_outcome = try view_interactions.apply(handler.client, model, interaction);
     handler.redraw = handler.redraw or interaction_outcome.redraw;
     if (interaction_outcome.consume_pane_input or
-        !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
-    const wheel_delta: ?i32 = switch (cell_event.kind) {
-        .scroll_up => -3,
-        .scroll_down => 3,
-        else => null,
-    };
-    var pane = model.focusedPane() orelse return;
-    if (wheel_delta != null) {
-        for (model.layoutSnapshot(handler.client.view.workbench()).views()) |candidate| {
-            if (!candidate.content.contains(cell_event.x, cell_event.y)) continue;
-            pane = model.find(candidate.pane_id) orelse return;
-            break;
-        }
+        !handler.client.view.workbench().contains(cell_event.x, cell_event.y))
+    {
+        return;
     }
-    const pane_view = model.viewForPane(pane.id, handler.client.view.workbench()) orelse return;
-    if (!pane_view.content.contains(cell_event.x, cell_event.y)) return;
-    if (wheel_delta) |delta| {
-        if (!pane.mouse.sgr or !mouseTracked(pane.mouse.tracking, cell_event.kind)) {
-            if (pane.input_modes.alternate_screen and pane.input_modes.alternate_scroll and
-                pane.scroll.atBottom(pane.buffer.h))
-            {
-                const bytes = if (delta < 0) "\x1b[A" else "\x1b[B";
-                for (0..@abs(delta)) |_| {
-                    _ = try pane_inputs.send(handler.client, .{
-                        .target = .{ .pane = pane.id },
-                        .source = .mouse,
-                        .payload = .{ .bytes = bytes },
-                    });
-                }
-            } else {
-                var viewport = pane_viewports.handler(handler.client);
-                _ = try viewport.execute(.{
-                    .pane_id = pane.id,
-                    .target = .{ .relative = delta },
-                });
-            }
-            return;
-        }
-    }
-    if (!pane.mouse.sgr or !mouseTracked(pane.mouse.tracking, cell_event.kind)) return;
-    var encoded: [64]u8 = undefined;
-    const exact_x: ?u32 = if (pane.mouse.pixels and exterior_pixels)
-        event.raw_x - @as(u32, pane_view.content.x) * host_size.cell_width_px
-    else
-        null;
-    const exact_y: ?u32 = if (pane.mouse.pixels and exterior_pixels)
-        event.raw_y - @as(u32, pane_view.content.y) * host_size.cell_height_px
-    else
-        null;
-    const bytes = try encodeSgrMouse(
-        &encoded,
-        cell_event,
-        cell_event.x - pane_view.content.x,
-        cell_event.y - pane_view.content.y,
-        pane.mouse.pixels,
-        host_size.cell_width_px,
-        host_size.cell_height_px,
-        exact_x,
-        exact_y,
-    );
-    _ = try pane_inputs.send(handler.client, .{
-        .target = .{ .pane = pane.id },
-        .source = .mouse,
-        .payload = .{ .bytes = bytes },
+
+    _ = try pane_mouse_inputs.apply(handler.client, model, .{
+        .event = cell_event,
+        .exterior_pixels = exterior_pixels,
+        .cell_width_px = host_size.cell_width_px,
+        .cell_height_px = host_size.cell_height_px,
     });
 }
 

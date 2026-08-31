@@ -14,19 +14,19 @@ queue.
 ## Client boundary
 
 ```text
-semantic key, routed bytes, paste or mouse report
+semantic key, routed bytes, paste or pointer event
                          |
                   InputHandler
                          |
-         +---------------+---------------+
-         |                               |
-  pane_pastes adapter             pane_inputs adapter
-         |                               |
-  PanePasteHandler                        |
-         |                               |
- ClientModel.pane_paste                   |
-         |                               |
-         +---------------+---------------+
+         +---------------+----------------------+
+         |               |                      |
+  paste_routing   pane_mouse_inputs       pane_inputs
+         |               |                      |
+  PanePasteHandler  PaneMouseHandler             |
+         |               |                      |
+ ClientModel.pane_paste  SGR / alternate bytes   |
+         |               |                      |
+         +---------------+----------------------+
                          |
                  PaneInputHandler
                          |
@@ -45,10 +45,15 @@ semantic key, routed bytes, paste or mouse report
  runtime_transport.enqueueInput -> Outbox -> pane_input
 ```
 
-`InputHandler` classifies keys, pointer events, Telar actions and paste phases.
-It delegates paste start, content and finish directly to `paste_routing`
-without deciding their owner. It does not resolve pane storage, encode a child
-key, restore scrollback, write pane-input telemetry or enqueue pane bytes.
+`InputHandler` classifies keys and Telar actions. It delegates paste phases to
+`paste_routing` without deciding their owner. After prompt, copy-mode and view
+ownership, it delegates pane-local pointer events to `pane_mouse_inputs`. It
+does not resolve pane storage, inspect child mouse modes, encode child input,
+restore scrollback, write pane-input telemetry or enqueue pane bytes.
+
+`PaneMouseHandler` selects viewport, alternate-scroll or child-report policy.
+Only the latter two enter `PaneInputHandler`. See
+[Pane mouse input](pane-mouse-input.md) for target and coordinate rules.
 
 `ClientModel.planPaneInput` is a read-only query. Normal input resolves the
 focused or explicit pane in the active tab. A captured paste may resolve its
@@ -166,6 +171,8 @@ different pane or the runtime event loop.
 - `src/frontend/client/application/pane_input.zig` proves child-mode encoding,
   explicit marker delivery, bounds, source-specific viewport policy, effect
   order and failure behavior.
+- `src/frontend/client/application/pane_mouse.zig` proves exclusive pointer
+  policy before any report reaches pane input.
 - `src/frontend/client/client_test.zig` proves captured target and framing,
   prompt and copy-mode routing, viewport and protocol order, owner exclusion,
   close-before-detach, pane-retirement cleanup, mouse scrollback preservation,

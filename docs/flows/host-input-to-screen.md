@@ -168,7 +168,11 @@ Explicitly consumed view chrome does the same. Pane focus remains routable so
 the newly focused child receives the press after focus resources commit. If an
 effect fails, dispatch stops before later effects and `InputHandler` does not
 forward the event. Otherwise `InputHandler` forwards only events that remain
-inside the workbench and follows the focused pane's current SGR mouse modes.
+inside the workbench. It delegates them to `pane_mouse_inputs` without reading
+pane geometry or child mouse modes. `multiplexer.Model.planPaneMouse` resolves
+the pane snapshot, `PaneMouseHandler` chooses one viewport, alternate-scroll
+or report effect, and the adapter applies it through the existing viewport and
+pane-input use cases. See [Pane mouse input](pane-mouse-input.md).
 
 The command and handler use fixed value types and allocate no memory. Unit
 tests in `application/view_interaction.zig` prove intent-before-layout order,

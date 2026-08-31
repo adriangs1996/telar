@@ -135,6 +135,14 @@ pub const Pane = struct {
     }
 };
 
+pub const PaneMousePlan = struct {
+    pane_id: schema.PaneId,
+    content: ui.Rect,
+    protocol: schema.frame.Mouse,
+    alternate_scroll: bool,
+    at_bottom: bool,
+};
+
 fn displayCwdName(path: []const u8) []const u8 {
     if (path.len == 0) return "";
     const basename = cwdBaseName(path);
@@ -506,6 +514,42 @@ pub const Model = struct {
         area: ui.Rect,
     ) ?layout_mod.View {
         return model.layoutSnapshot(area).find(pane_id);
+    }
+
+    /// Resolves one pointer event to a visible pane and returns only the state
+    /// required by mouse-input policy. Wheel events target the pane under the
+    /// pointer; every other event targets the focused pane.
+    ///
+    /// ```zig
+    /// const plan = model.planPaneMouse(event, area) orelse return;
+    /// ```
+    pub fn planPaneMouse(model: *Model, event: term.Event.Mouse, area: ui.Rect) ?PaneMousePlan {
+        const snapshot = model.layoutSnapshot(area);
+        const wheel = event.kind == .scroll_up or event.kind == .scroll_down;
+        var pane = model.focusedPane() orelse return null;
+        if (wheel) {
+            for (snapshot.views()) |candidate| {
+                if (!candidate.content.contains(event.x, event.y)) {
+                    continue;
+                }
+
+                pane = model.find(candidate.pane_id) orelse return null;
+                break;
+            }
+        }
+
+        const view = snapshot.find(pane.id) orelse return null;
+        if (!view.content.contains(event.x, event.y)) {
+            return null;
+        }
+
+        return .{
+            .pane_id = pane.id,
+            .content = view.content,
+            .protocol = pane.mouse,
+            .alternate_scroll = pane.input_modes.alternate_screen and pane.input_modes.alternate_scroll,
+            .at_bottom = pane.scroll.atBottom(pane.buffer.h),
+        };
     }
 
     pub fn layoutSnapshot(model: *Model, area: ui.Rect) *const layout_mod.Snapshot {
@@ -1325,4 +1369,50 @@ test "layout snapshot cache invalidates on geometry and revision" {
     const split = model.layoutSnapshot(.{ .w = 40, .h = 12 });
     try std.testing.expect(split.revision != first_revision);
     try std.testing.expectEqual(@as(usize, 2), split.views().len);
+}
+
+test "pane mouse planning keeps buttons focused and wheels pointer-local" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    try model.addRoot(first, location, .{ .cols = 39, .rows = 24 });
+    try model.split(first, second, location, .horizontal, area);
+    try std.testing.expect(model.focusPane(first));
+    const second_pane = model.find(second).?;
+    second_pane.mouse = .{ .tracking = .any, .sgr = true, .pixels = true };
+    second_pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
+    second_pane.scroll = .{ .total_rows = second_pane.buffer.h, .offset = 0 };
+    const second_view = model.layoutSnapshot(area).find(second).?;
+    const second_point: term.Event.Mouse = .{
+        .x = second_view.content.x,
+        .y = second_view.content.y,
+        .kind = .press,
+    };
+
+    try std.testing.expect(model.planPaneMouse(second_point, area) == null);
+
+    var wheel = second_point;
+    wheel.kind = .scroll_up;
+    const plan = model.planPaneMouse(wheel, area).?;
+
+    try std.testing.expectEqual(second, plan.pane_id);
+    try std.testing.expectEqualDeep(second_view.content, plan.content);
+    try std.testing.expectEqualDeep(second_pane.mouse, plan.protocol);
+    try std.testing.expect(plan.alternate_scroll);
+    try std.testing.expect(plan.at_bottom);
+
+    const first_view = model.layoutSnapshot(area).find(first).?;
+    const focused = model.planPaneMouse(.{
+        .x = first_view.content.x,
+        .y = first_view.content.y,
+        .kind = .release,
+    }, area).?;
+    try std.testing.expectEqual(first, focused.pane_id);
 }

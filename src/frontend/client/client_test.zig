@@ -2106,6 +2106,91 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
     try std.testing.expectEqualStrings("\x1b[<0;1;1M", input.pane_input.bytes);
 }
 
+test "mouse reports preserve exact host pixels relative to pane content" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = try client.model.observeHostCapability(.{ .cell_pixels = .{
+        .width = 10,
+        .height = 20,
+    } });
+    _ = try client.model.observeHostCapability(.{ .mouse_pixels = .supported });
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
+    const pane_view = client.model.workspace.active().?.model.viewForPane(
+        pane.id,
+        client.view.workbench(),
+    ).?;
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.mouse(.{
+        .x = 0,
+        .y = 0,
+        .raw_x = @as(u32, pane_view.content.x) * 10 + 7,
+        .raw_y = @as(u32, pane_view.content.y) * 20 + 9,
+        .kind = .press,
+    });
+
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const input = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(input == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, input.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[<0;8;10M", input.pane_input.bytes);
+}
+
+test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const model = &client.model.workspace.active().?.model;
+    const focused = TestHarness.bootstrap_pane;
+    const hovered: schema.PaneId = @enumFromInt(20);
+    try model.split(
+        focused,
+        hovered,
+        TestHarness.bootstrap_location,
+        .horizontal,
+        client.view.workbench(),
+    );
+    try std.testing.expect(model.focusPane(focused));
+    const pane = model.find(hovered).?;
+    pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
+    pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
+    const hovered_view = model.viewForPane(hovered, client.view.workbench()).?;
+    const version = client.model.version();
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.mouse(.{
+        .x = hovered_view.content.x,
+        .y = hovered_view.content.y,
+        .kind = .scroll_up,
+    });
+
+    try std.testing.expectEqual(focused, model.layout.focused().?);
+    try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    var received: [9]u8 = undefined;
+    var received_len: usize = 0;
+    while (received_len < received.len) {
+        const input = try harness.nextClientMessage(&buffer);
+        try std.testing.expect(input == .pane_input);
+        try std.testing.expectEqual(hovered, input.pane_input.pane_id);
+        try std.testing.expect(input.pane_input.bytes.len <= received.len - received_len);
+        @memcpy(received[received_len..][0..input.pane_input.bytes.len], input.pane_input.bytes);
+        received_len += input.pane_input.bytes.len;
+    }
+
+    try std.testing.expectEqualStrings("\x1b[A\x1b[A\x1b[A", &received);
+}
+
 test "focus reporting emits focus-in only after the pane opts in" {
     var harness: TestHarness = undefined;
     try harness.init();
