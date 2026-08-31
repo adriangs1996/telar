@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const Client = @import("client.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const kitty = @import("../graphics/root.zig").kitty;
@@ -10,6 +11,8 @@ const pace = @import("../presentation/root.zig").pace;
 const Io = std.Io;
 const diagnostics = core.diagnostics;
 const schema = core.schema;
+
+const buffer_size = 8192;
 
 pub const Metrics = struct {
     started_ns: u64,
@@ -67,6 +70,72 @@ pub const Metrics = struct {
     paced_interval: diagnostics.Timing = .{},
 };
 
+pub const State = struct {
+    metrics: Metrics,
+    sink: diagnostics.Sink,
+    buffer: [buffer_size]u8 = undefined,
+    write_pending: bool = false,
+    enabled: bool,
+
+    /// Creates the client's fail-closed diagnostics sink and metrics epoch.
+    ///
+    /// ```zig
+    /// var telemetry = State.init(io, runtime_endpoint);
+    /// ```
+    pub fn init(io: Io, endpoint: []const u8) State {
+        if (!diagnostics.enabled or endpoint.len == 0) {
+            return .{
+                .metrics = .{ .started_ns = diagnostics.now(io) },
+                .sink = .{},
+                .enabled = false,
+            };
+        }
+
+        var suffix_buffer: [64]u8 = undefined;
+        const suffix = std.fmt.bufPrint(&suffix_buffer, "client-{d}", .{std.c.getpid()}) catch "client";
+        var sink = diagnostics.Sink.init(io, endpoint, suffix);
+
+        return .{
+            .metrics = .{ .started_ns = diagnostics.now(io) },
+            .sink = sink,
+            .enabled = sink.available(),
+        };
+    }
+
+    /// Closes the diagnostics sink after the client has cancelled its tasks.
+    ///
+    /// ```zig
+    /// telemetry.deinit(io);
+    /// ```
+    pub fn deinit(state: *State, io: Io) void {
+        state.write_pending = false;
+        state.enabled = false;
+        state.sink.deinit(io);
+    }
+
+    fn available(state: *const State) bool {
+        return state.enabled and state.sink.available();
+    }
+
+    fn reserveWrite(state: *State) bool {
+        if (!state.available() or state.write_pending) {
+            return false;
+        }
+
+        state.write_pending = true;
+
+        return true;
+    }
+
+    fn disable(state: *State, io: Io) void {
+        state.enabled = false;
+
+        if (!state.write_pending) {
+            state.sink.deinit(io);
+        }
+    }
+};
+
 pub const Snapshot = struct {
     theme_name: []const u8,
     icon_theme_name: []const u8,
@@ -92,14 +161,23 @@ pub const Snapshot = struct {
     heap: diagnostics.Heap.Snapshot,
 };
 
-pub fn format(
-    buffer: []u8,
+pub const FormatRequest = struct {
     io: Io,
     metrics: *const Metrics,
     pacer: *const pace.Pacer,
-    state: Snapshot,
-) ![]const u8 {
-    const now_ns = diagnostics.now(io);
+    snapshot: Snapshot,
+};
+
+/// Projects one immutable client observation into a bounded JSON line.
+///
+/// ```zig
+/// const line = try format(&buffer, request);
+/// ```
+pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
+    const metrics = request.metrics;
+    const pacer = request.pacer;
+    const state = request.snapshot;
+    const now_ns = diagnostics.now(request.io);
     var writer = Io.Writer.fixed(buffer);
     try writer.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"client\"," ++
         "\"theme\":\"{s}\",\"icons\":\"{s}\"," ++
@@ -251,6 +329,125 @@ pub fn format(
     return buffer[0..writer.end];
 }
 
+/// Schedules the first diagnostics tick when the fail-closed sink exists.
+///
+/// ```zig
+/// try telemetry.start(client);
+/// ```
+pub fn start(client: *Client) !void {
+    if (!client.telemetry.available()) {
+        return;
+    }
+
+    try scheduleTick(client);
+}
+
+/// Rearms diagnostics and offers one latest-state write to the observation path.
+///
+/// ```zig
+/// telemetry.handleTick(client, result, heap.snapshot());
+/// ```
+pub fn handleTick(client: *Client, result: anyerror!void, heap: diagnostics.Heap.Snapshot) void {
+    result catch {
+        client.telemetry.disable(client.io);
+        return;
+    };
+
+    if (!client.telemetry.available()) {
+        return;
+    }
+
+    scheduleTick(client) catch {
+        client.telemetry.disable(client.io);
+        return;
+    };
+
+    if (client.telemetry.write_pending) {
+        return;
+    }
+
+    const state = capture(client, heap) orelse return;
+    const line = format(&client.telemetry.buffer, .{
+        .io = client.io,
+        .metrics = &client.telemetry.metrics,
+        .pacer = &client.presenter.pacer,
+        .snapshot = state,
+    }) catch return;
+
+    if (!client.telemetry.reserveWrite()) {
+        return;
+    }
+
+    client.select.concurrent(.telemetry_written, writeDiagnostics, .{
+        client.io,
+        &client.telemetry.sink,
+        line,
+    }) catch {
+        client.telemetry.write_pending = false;
+        client.telemetry.disable(client.io);
+    };
+}
+
+/// Releases one diagnostics write and finalizes a deferred sink shutdown.
+///
+/// ```zig
+/// telemetry.handleWritten(client, result);
+/// ```
+pub fn handleWritten(client: *Client, result: anyerror!void) void {
+    finishWrite(&client.telemetry, client.io, result);
+}
+
+fn capture(client: *Client, heap: diagnostics.Heap.Snapshot) ?Snapshot {
+    const active = client.model.workspace.active() orelse return null;
+    const focused = active.model.layout.focused() orelse .invalid;
+
+    return .{
+        .theme_name = client.view.theme.base.canonicalName(),
+        .icon_theme_name = client.view.icon_theme.canonicalName(),
+        .active_tab = active.location.tab_id,
+        .tab_count = client.model.workspace.count,
+        .focused_pane = focused,
+        .pane_count = active.model.pane_count,
+        .pending_updates = client.presenter.pending_updates,
+        .draw_pending = client.presenter.draw_pending,
+        .media_pending = client.presenter.media_tick_pending,
+        .outbox = &client.outbox,
+        .capabilities = client.model.hostCapabilities(),
+        .sidebar_rendering = client.view.sidebar_rendering,
+        .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
+        .lua_limit = if (client.lua_generation) |generation| generation.vm.meter.limit else 0,
+        .kitty_store_bytes = client.graphics_store.total_bytes,
+        .toast_cache_bytes = client.view.kittyToasts().retainedBytes(),
+        .sidebar_cache_bytes = client.view.kittySidebar().retainedBytes(),
+        .icon_cache_bytes = client.view.kittyIcons().retainedBytes(),
+        .modal_cache_bytes = client.view.kittyModal().retainedBytes(),
+        .attachment_cache_bytes = client.view.kittyAttachments().retainedBytes(),
+        .screen_bytes = (client.presenter.screen.front.cells.len +
+            client.presenter.screen.back.cells.len) *
+            @sizeOf(core.ui.Cell),
+        .heap = heap,
+    };
+}
+
+fn scheduleTick(client: *Client) !void {
+    try client.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{client.io});
+}
+
+fn finishWrite(state: *State, io: Io, result: anyerror!void) void {
+    state.write_pending = false;
+    result catch {
+        state.enabled = false;
+    };
+
+    if (!state.enabled) {
+        state.sink.deinit(io);
+    }
+}
+
+fn writeDiagnostics(io: Io, sink: *diagnostics.Sink, bytes: []const u8) anyerror!void {
+    try sink.write(io, bytes);
+}
+
 test "client telemetry reports lua kitty and heap retained bytes" {
     const io = std.testing.io;
     var outbox: client_outbox.Outbox = .{};
@@ -258,33 +455,38 @@ test "client telemetry reports lua kitty and heap retained bytes" {
     const pacer: pace.Pacer = .{};
     const metrics: Metrics = .{ .started_ns = 0 };
     var buffer: [8192]u8 = undefined;
-    const line = try format(&buffer, io, &metrics, &pacer, .{
-        .theme_name = "vesper",
-        .icon_theme_name = "nerd-font",
-        .active_tab = @enumFromInt(1),
-        .tab_count = 1,
-        .focused_pane = @enumFromInt(2),
-        .pane_count = 1,
-        .pending_updates = 0,
-        .draw_pending = false,
-        .media_pending = true,
-        .outbox = &outbox,
-        .capabilities = capabilities,
-        .sidebar_rendering = .cells,
-        .lua_used = 123,
-        .lua_limit = 1024,
-        .kitty_store_bytes = 4,
-        .toast_cache_bytes = 8,
-        .sidebar_cache_bytes = 12,
-        .icon_cache_bytes = 16,
-        .modal_cache_bytes = 18,
-        .attachment_cache_bytes = 20,
-        .screen_bytes = 80 * 24 * 32,
-        .heap = .{
-            .live_bytes = 48,
-            .allocs = 3,
-            .interactive_allocs = 0,
-            .observation_allocs = 3,
+    const line = try format(&buffer, .{
+        .io = io,
+        .metrics = &metrics,
+        .pacer = &pacer,
+        .snapshot = .{
+            .theme_name = "vesper",
+            .icon_theme_name = "nerd-font",
+            .active_tab = @enumFromInt(1),
+            .tab_count = 1,
+            .focused_pane = @enumFromInt(2),
+            .pane_count = 1,
+            .pending_updates = 0,
+            .draw_pending = false,
+            .media_pending = true,
+            .outbox = &outbox,
+            .capabilities = capabilities,
+            .sidebar_rendering = .cells,
+            .lua_used = 123,
+            .lua_limit = 1024,
+            .kitty_store_bytes = 4,
+            .toast_cache_bytes = 8,
+            .sidebar_cache_bytes = 12,
+            .icon_cache_bytes = 16,
+            .modal_cache_bytes = 18,
+            .attachment_cache_bytes = 20,
+            .screen_bytes = 80 * 24 * 32,
+            .heap = .{
+                .live_bytes = 48,
+                .allocs = 3,
+                .interactive_allocs = 0,
+                .observation_allocs = 3,
+            },
         },
     });
     try std.testing.expect(std.mem.indexOf(u8, line, "\"lua_used\":123") != null);
@@ -300,4 +502,63 @@ test "client telemetry reports lua kitty and heap retained bytes" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":3") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
+}
+
+test "client telemetry stays disabled when no runtime endpoint exists" {
+    const io = std.testing.io;
+    var state = State.init(io, "");
+    defer state.deinit(io);
+
+    try std.testing.expect(!state.enabled);
+    try std.testing.expect(!state.sink.available());
+}
+
+test "client telemetry coalesces writes and defers sink shutdown until completion" {
+    if (!diagnostics.enabled) {
+        return;
+    }
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    const file = try temp.dir.createFile(io, "telemetry.log", .{});
+    var state: State = .{
+        .metrics = .{ .started_ns = 0 },
+        .sink = .{ .file = file },
+        .enabled = true,
+    };
+    defer state.deinit(io);
+
+    try std.testing.expect(state.reserveWrite());
+    try std.testing.expect(!state.reserveWrite());
+    state.disable(io);
+    try std.testing.expect(!state.available());
+    try std.testing.expect(state.sink.available());
+
+    finishWrite(&state, io, {});
+    try std.testing.expect(!state.write_pending);
+    try std.testing.expect(!state.sink.available());
+}
+
+test "client telemetry write failure releases its token and disables the sink" {
+    if (!diagnostics.enabled) {
+        return;
+    }
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    const file = try temp.dir.createFile(io, "telemetry.log", .{});
+    var state: State = .{
+        .metrics = .{ .started_ns = 0 },
+        .sink = .{ .file = file },
+        .write_pending = true,
+        .enabled = true,
+    };
+    defer state.deinit(io);
+
+    finishWrite(&state, io, error.WriteFailed);
+    try std.testing.expect(!state.write_pending);
+    try std.testing.expect(!state.available());
+    try std.testing.expect(!state.sink.available());
 }

@@ -74,9 +74,9 @@ fn record(client: *Client, started: u64, delivery: ?pane_input.Delivery) ?pane_i
     const completed = delivery orelse return null;
     if (comptime diagnostics.enabled) {
         if (completed.source != .mouse) {
-            client.metrics.input_events += 1;
-            client.metrics.input_bytes += completed.byte_count;
-            client.metrics.input_enqueue.observe(diagnostics.elapsed(started, diagnostics.now(client.io)));
+            client.telemetry.metrics.input_events += 1;
+            client.telemetry.metrics.input_bytes += completed.byte_count;
+            client.telemetry.metrics.input_enqueue.observe(diagnostics.elapsed(started, diagnostics.now(client.io)));
         }
     }
 

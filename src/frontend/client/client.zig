@@ -88,7 +88,6 @@ pub const Options = struct {
     profile: ?[]const u8 = null,
 };
 
-const ClientMetrics = client_telemetry.Metrics;
 const encodeSgrMouse = mouse_protocol.encodeSgr;
 const mouseTracked = mouse_protocol.tracked;
 
@@ -166,7 +165,7 @@ writer: *Io.Writer,
 select: Io.Select(ClientEvent),
 select_storage: [client_event_count]ClientEvent = undefined,
 options: Options,
-metrics: ClientMetrics,
+telemetry: client_telemetry.State,
 presenter: presenter_mod,
 view: client_view.State,
 model: client_model.Model,
@@ -176,8 +175,6 @@ input_file: File,
 input_router: InputRouter,
 input_timeout_pending: bool = false,
 binding_timeout_pending: bool = false,
-telemetry_buffer: [8192]u8 = undefined,
-telemetry_write_pending: bool = false,
 lua_generation: ?*lua_config.Generation,
 plugin_registry: ?*plugin_broker.Registry,
 trust_store: ?*core.plugin.TrustStore,
@@ -260,7 +257,7 @@ pub fn init(params: Params) !*Client {
         .writer = params.writer,
         .select = undefined,
         .options = params.options,
-        .metrics = .{ .started_ns = diagnostics.now(params.io) },
+        .telemetry = .init(params.io, params.options.endpoint),
         .presenter = undefined,
         .view = view,
         .model = model,
@@ -282,7 +279,7 @@ pub fn init(params: Params) !*Client {
     client.presenter = .{
         .io = params.io,
         .select = &client.select,
-        .metrics = &client.metrics,
+        .metrics = &client.telemetry.metrics,
         .screen = screen,
     };
     return client;
@@ -294,6 +291,7 @@ pub fn init(params: Params) !*Client {
 pub fn deinit(client: *Client) void {
     const gpa = client.gpa;
     client.select.cancelDiscard();
+    client.telemetry.deinit(client.io);
     client.reload.deinit(gpa);
     client.clipboard_capture_resources.deinit(gpa);
     if (client.lua_generation) |generation| generation.deinit();
@@ -500,8 +498,8 @@ pub fn handleServerEvent(client: *Client, result: anyerror![]u8) !?u8 {
     const decode_started = diagnostics.now(client.io);
     const message = try schema.decodeServer(payload);
     if (comptime diagnostics.enabled) {
-        client.metrics.server_messages += 1;
-        client.metrics.server_bytes += payload.len;
+        client.telemetry.metrics.server_messages += 1;
+        client.telemetry.metrics.server_bytes += payload.len;
         switch (message) {
             .graphics_snapshot,
             .graphics_image,
@@ -511,12 +509,12 @@ pub fn handleServerEvent(client: *Client, result: anyerror![]u8) !?u8 {
             .graphics_delete_image,
             .graphics_delete_placement,
             => {
-                client.metrics.graphics_messages += 1;
-                client.metrics.graphics_bytes += payload.len;
+                client.telemetry.metrics.graphics_messages += 1;
+                client.telemetry.metrics.graphics_bytes += payload.len;
             },
             else => {},
         }
-        client.metrics.decode.observe(
+        client.telemetry.metrics.decode.observe(
             diagnostics.elapsed(decode_started, diagnostics.now(client.io)),
         );
     }
@@ -601,77 +599,6 @@ pub fn handleDrawEvent(client: *Client, result: anyerror!void) !void {
 pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
     try result;
     try client.presenter.presentMedia(client);
-}
-
-pub fn handleTelemetryTickEvent(
-    client: *Client,
-    result: anyerror!void,
-    telemetry: *diagnostics.Sink,
-    heap: diagnostics.Heap.Snapshot,
-) void {
-    result catch {
-        telemetry.deinit(client.io);
-        return;
-    };
-    if (!telemetry.available()) return;
-    client.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{client.io}) catch {
-        telemetry.deinit(client.io);
-        return;
-    };
-    if (client.telemetry_write_pending) return;
-    // Ticks can fire before the first tab exists; report nothing.
-    const active = client.model.workspace.active() orelse return;
-    const focused = active.model.layout.focused() orelse .invalid;
-    const line = client_telemetry.format(
-        &client.telemetry_buffer,
-        client.io,
-        &client.metrics,
-        &client.presenter.pacer,
-        .{
-            .theme_name = client.view.theme.base.canonicalName(),
-            .icon_theme_name = client.view.icon_theme.canonicalName(),
-            .active_tab = active.location.tab_id,
-            .tab_count = client.model.workspace.count,
-            .focused_pane = focused,
-            .pane_count = active.model.pane_count,
-            .pending_updates = client.presenter.pending_updates,
-            .draw_pending = client.presenter.draw_pending,
-            .media_pending = client.presenter.media_tick_pending,
-            .outbox = &client.outbox,
-            .capabilities = client.model.hostCapabilities(),
-            .sidebar_rendering = client.view.sidebar_rendering,
-            .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
-            .lua_limit = if (client.lua_generation) |generation| generation.vm.meter.limit else 0,
-            .kitty_store_bytes = client.graphics_store.total_bytes,
-            .toast_cache_bytes = client.view.kittyToasts().retainedBytes(),
-            .sidebar_cache_bytes = client.view.kittySidebar().retainedBytes(),
-            .icon_cache_bytes = client.view.kittyIcons().retainedBytes(),
-            .modal_cache_bytes = client.view.kittyModal().retainedBytes(),
-            .attachment_cache_bytes = client.view.kittyAttachments().retainedBytes(),
-            .screen_bytes = (client.presenter.screen.front.cells.len +
-                client.presenter.screen.back.cells.len) *
-                @sizeOf(core.ui.Cell),
-            .heap = heap,
-        },
-    ) catch return;
-    client.telemetry_write_pending = true;
-    client.select.concurrent(.telemetry_written, writeDiagnostics, .{
-        client.io,
-        telemetry,
-        line,
-    }) catch {
-        client.telemetry_write_pending = false;
-        telemetry.deinit(client.io);
-    };
-}
-
-pub fn handleTelemetryWrittenEvent(
-    client: *Client,
-    result: anyerror!void,
-    telemetry: *diagnostics.Sink,
-) void {
-    client.telemetry_write_pending = false;
-    result catch telemetry.deinit(client.io);
 }
 
 /// Asks the runtime for a fresh snapshot of one tab, tracking the reply.
@@ -829,10 +756,6 @@ fn sendClient(
     payload: []const u8,
 ) anyerror!void {
     return connection.send(io, payload);
-}
-
-fn writeDiagnostics(io: Io, sink: *diagnostics.Sink, bytes: []const u8) anyerror!void {
-    try sink.write(io, bytes);
 }
 
 pub fn waitCapabilityTimeout(io: Io) anyerror!void {

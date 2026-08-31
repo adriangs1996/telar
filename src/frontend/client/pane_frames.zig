@@ -24,11 +24,11 @@ pub fn apply(client: *Client, frame: schema.frame.FrameView) !client_model.PaneF
     if (outcome == .applied) {
         const commit = outcome.applied;
         if (comptime diagnostics.enabled) {
-            client.metrics.frames += 1;
-            client.metrics.frame_cells += commit.cells;
-            client.metrics.frame_spans += commit.spans;
-            client.metrics.snapshots += @intFromBool(commit.snapshot);
-            client.metrics.apply.observe(diagnostics.elapsed(started, diagnostics.now(client.io)));
+            client.telemetry.metrics.frames += 1;
+            client.telemetry.metrics.frame_cells += commit.cells;
+            client.telemetry.metrics.frame_spans += commit.spans;
+            client.telemetry.metrics.snapshots += @intFromBool(commit.snapshot);
+            client.telemetry.metrics.apply.observe(diagnostics.elapsed(started, diagnostics.now(client.io)));
         }
     }
 

@@ -15,10 +15,12 @@ const schema = core.schema;
 /// _ = try apply(client, command);
 /// ```
 pub fn apply(client: *Client, command: pane_graphics.Command) !pane_graphics.Outcome {
-    if (comptime diagnostics.enabled) switch (command) {
-        .image, .shared_image => client.metrics.graphics_images += 1,
-        else => {},
-    };
+    if (comptime diagnostics.enabled) {
+        switch (command) {
+            .image, .shared_image => client.telemetry.metrics.graphics_images += 1,
+            else => {},
+        }
+    }
 
     var use_case = handler(client);
     return use_case.execute(command);

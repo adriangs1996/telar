@@ -222,7 +222,10 @@ fn promptOwnsPaste(handler: *const InputHandler) bool {
 }
 
 pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
-    if (comptime diagnostics.enabled) handler.client.metrics.mouse_events += 1;
+    if (comptime diagnostics.enabled) {
+        handler.client.telemetry.metrics.mouse_events += 1;
+    }
+
     if (handler.client.model.name_prompt.active()) {
         return;
     }

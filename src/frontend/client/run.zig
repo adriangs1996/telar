@@ -17,6 +17,7 @@ const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
 const agent_sounds = @import("agent_sounds.zig");
+const client_telemetry = @import("telemetry.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
 const Options = Client.Options;
@@ -40,15 +41,6 @@ pub fn run(
         if (options.plugin_registry) |registry| gpa.destroy(registry);
         if (options.trust_store) |store| gpa.destroy(store);
     };
-
-    var telemetry_suffix_buffer: [64]u8 = undefined;
-    const telemetry_suffix = std.fmt.bufPrint(
-        &telemetry_suffix_buffer,
-        "client-{d}",
-        .{std.c.getpid()},
-    ) catch "client";
-    var telemetry = diagnostics.Sink.init(io, options.endpoint, telemetry_suffix);
-    defer telemetry.deinit(io);
 
     var tty = platform.Tty.open() catch |err| {
         std.debug.print("telar needs a terminal: {s}\n", .{@errorName(err)});
@@ -119,10 +111,7 @@ pub fn run(
     try client.select.concurrent(.resized, Client.waitResize, .{ io, &watcher });
     try client.select.concurrent(.server, Client.receive, .{ io, connection, client.receive_buffer });
     try client.select.concurrent(.capability_timeout, Client.waitCapabilityTimeout, .{io});
-    if (comptime diagnostics.enabled) {
-        if (telemetry.available())
-            try client.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{io});
-    }
+    try client_telemetry.start(client);
     try client.scheduleConfigReload();
 
     while (true) {
@@ -145,8 +134,8 @@ pub fn run(
             .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
             .notification_tick => |result| _ = try notification_flow.handleTick(client, result),
             .sound_played => |result| try agent_sounds.handlePlayed(client, result),
-            .telemetry_tick => |result| client.handleTelemetryTickEvent(result, &telemetry, heap.snapshot()),
-            .telemetry_written => |result| client.handleTelemetryWrittenEvent(result, &telemetry),
+            .telemetry_tick => |result| client_telemetry.handleTick(client, result, heap.snapshot()),
+            .telemetry_written => |result| client_telemetry.handleWritten(client, result),
             .config_reload => |result| try client.handleConfigReloadEvent(result),
             .plugin_result => |result| if (try client.handlePluginResultEvent(result)) return 0,
             .clipboard_image => |result| try client.handleClipboardImageEvent(result),

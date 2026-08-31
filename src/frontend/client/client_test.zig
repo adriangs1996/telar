@@ -31,6 +31,7 @@ const attachment_targets = @import("attachment_targets.zig");
 const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
+const client_telemetry = @import("telemetry.zig");
 const config_reload_worker = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_resizes = @import("host_resizes.zig");
@@ -1680,9 +1681,9 @@ test "streamed paste captures target and framing while restoring its live viewpo
     };
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
-    const input_events = client.metrics.input_events;
-    const input_bytes = client.metrics.input_bytes;
-    const timing_count = client.metrics.input_enqueue.count;
+    const input_events = client.telemetry.metrics.input_events;
+    const input_bytes = client.telemetry.metrics.input_bytes;
+    const timing_count = client.telemetry.metrics.input_enqueue.count;
     var handler: InputHandler = .{ .client = client };
 
     try handler.pasteStart();
@@ -1699,9 +1700,9 @@ test "streamed paste captures target and framing while restoring its live viewpo
     try expectNonViewportVersionEqual(version, client.model.version());
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     if (comptime core.diagnostics.enabled) {
-        try std.testing.expectEqual(input_events + 3, client.metrics.input_events);
-        try std.testing.expectEqual(input_bytes + 18, client.metrics.input_bytes);
-        try std.testing.expectEqual(timing_count + 3, client.metrics.input_enqueue.count);
+        try std.testing.expectEqual(input_events + 3, client.telemetry.metrics.input_events);
+        try std.testing.expectEqual(input_bytes + 18, client.telemetry.metrics.input_bytes);
+        try std.testing.expectEqual(timing_count + 3, client.telemetry.metrics.input_enqueue.count);
     }
 
     try harness.settle();
@@ -1757,10 +1758,10 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
         client.view.workbench(),
     ).?;
     const version = client.model.version();
-    const input_events = client.metrics.input_events;
-    const input_bytes = client.metrics.input_bytes;
-    const timing_count = client.metrics.input_enqueue.count;
-    const mouse_events = client.metrics.mouse_events;
+    const input_events = client.telemetry.metrics.input_events;
+    const input_bytes = client.telemetry.metrics.input_bytes;
+    const timing_count = client.telemetry.metrics.input_enqueue.count;
+    const mouse_events = client.telemetry.metrics.mouse_events;
     var handler: InputHandler = .{ .client = client };
     const point: term.Event.Mouse = .{
         .x = pane_view.content.x,
@@ -1776,10 +1777,10 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try std.testing.expectEqualDeep(version, client.model.version());
     if (comptime core.diagnostics.enabled) {
-        try std.testing.expectEqual(input_events, client.metrics.input_events);
-        try std.testing.expectEqual(input_bytes, client.metrics.input_bytes);
-        try std.testing.expectEqual(timing_count, client.metrics.input_enqueue.count);
-        try std.testing.expectEqual(mouse_events + 2, client.metrics.mouse_events);
+        try std.testing.expectEqual(input_events, client.telemetry.metrics.input_events);
+        try std.testing.expectEqual(input_bytes, client.telemetry.metrics.input_bytes);
+        try std.testing.expectEqual(timing_count, client.telemetry.metrics.input_enqueue.count);
+        try std.testing.expectEqual(mouse_events + 2, client.telemetry.metrics.mouse_events);
     }
 
     try harness.settle();
@@ -1804,13 +1805,13 @@ test "focus reporting emits focus-in only after the pane opts in" {
 
     const model = &client.model.workspace.active().?.model;
     model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    const input_events = client.metrics.input_events;
+    const input_events = client.telemetry.metrics.input_events;
     try pane_focus.syncResources(client);
     try harness.settle();
 
     try std.testing.expect(client.model.reportedPaneFocus().?.focus_events);
     if (comptime core.diagnostics.enabled) {
-        try std.testing.expectEqual(input_events, client.metrics.input_events);
+        try std.testing.expectEqual(input_events, client.telemetry.metrics.input_events);
     }
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -4012,7 +4013,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     const client = harness.client;
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
-    const frames = client.metrics.frames;
+    const frames = client.telemetry.metrics.frames;
 
     var payload: [512]u8 = undefined;
     const patch = try schema.encodePaneFrame(&payload, .{
@@ -4030,7 +4031,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try client.observeModel();
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     if (comptime core.diagnostics.enabled) {
-        try std.testing.expectEqual(frames, client.metrics.frames);
+        try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
 
     try harness.settle();
@@ -4064,10 +4065,10 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     try std.testing.expect(client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
     if (comptime core.diagnostics.enabled) {
-        try std.testing.expectEqual(frames + 1, client.metrics.frames);
-        try std.testing.expectEqual(@as(u64, 1), client.metrics.snapshots);
-        try std.testing.expectEqual(@as(u64, 1), client.metrics.frame_spans);
-        try std.testing.expectEqual(@as(u64, 4), client.metrics.frame_cells);
+        try std.testing.expectEqual(frames + 1, client.telemetry.metrics.frames);
+        try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.snapshots);
+        try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.frame_spans);
+        try std.testing.expectEqual(@as(u64, 4), client.telemetry.metrics.frame_cells);
     }
 
     try client.observeModel();
@@ -4093,7 +4094,7 @@ test "a frame made stale by detach has no state resources or presentation effect
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
     const graphics_visible = client.graphics_store.paneVisible(TestHarness.bootstrap_pane);
-    const frames = client.metrics.frames;
+    const frames = client.telemetry.metrics.frames;
     const cells = [_]core.ui.Cell{.{}};
     var payload: [256]u8 = undefined;
     const snapshot = try schema.encodePaneFrame(&payload, .{
@@ -4114,7 +4115,7 @@ test "a frame made stale by detach has no state resources or presentation effect
     try std.testing.expectEqual(graphics_visible, client.graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
     if (comptime core.diagnostics.enabled) {
-        try std.testing.expectEqual(frames, client.metrics.frames);
+        try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
 
     try client.observeModel();
@@ -6874,4 +6875,49 @@ test "escaping the prompt editor closes model state without changing mode" {
     try handler.forward("\x1b");
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
+}
+
+test "client telemetry writes one snapshot without mutating semantic state" {
+    if (!core.diagnostics.enabled) {
+        return;
+    }
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const model_version = client.model.version();
+    const presented_version = client.presenter.presented_model_version;
+    const file = try temp.dir.createFile(io, "client.log", .{});
+    client.telemetry.sink.deinit(io);
+    client.telemetry.sink = .{ .file = file };
+    client.telemetry.enabled = true;
+
+    client_telemetry.handleTick(client, {}, .{ .observation_allocs = 7 });
+
+    try std.testing.expect(client.telemetry.write_pending);
+    const line_end = (std.mem.indexOfScalar(u8, &client.telemetry.buffer, '\n') orelse
+        return error.TelemetryLineMissing) + 1;
+    const line = client.telemetry.buffer[0..line_end];
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"role\":\"client\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"active_tab\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":7") != null);
+
+    switch (try client.select.await()) {
+        .telemetry_written => |result| client_telemetry.handleWritten(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expect(!client.telemetry.write_pending);
+    try std.testing.expect(client.telemetry.enabled);
+    try std.testing.expect(client.telemetry.sink.available());
+    try std.testing.expectEqualDeep(model_version, client.model.version());
+    try std.testing.expectEqualDeep(presented_version, client.presenter.presented_model_version);
+
+    client_telemetry.handleTick(client, error.TickFailed, .{});
+    try std.testing.expect(!client.telemetry.enabled);
+    try std.testing.expect(!client.telemetry.sink.available());
 }

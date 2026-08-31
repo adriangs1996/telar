@@ -40,7 +40,7 @@ defect in a leaf capability unless an invariant requires it.
 
 | Capability | Root | Owns |
 | --- | --- | --- |
-| Client | `src/frontend/client/root.zig` | Client event loop, disposable semantic state and cross-capability orchestration |
+| Client | `src/frontend/client/root.zig` | Client event loop, disposable semantic state, observability lifecycle and cross-capability orchestration |
 | Agents | `src/frontend/agents/root.zig` | Agent identities and the bounded client replica of runtime agent state |
 | Sound | `src/frontend/sound/root.zig` | Bounded host-audio playback policy, queue and platform worker |
 | Input | `src/frontend/input/root.zig` | Host input parsing, key routing, semantic actions and editing |
@@ -103,7 +103,8 @@ named handlers own ordering, state transitions and rescheduling.
 
 ### Client
 
-All client handlers are in `src/frontend/client/root.zig`.
+The client root exports the loop; its internal adapters own the named event
+entrypoints below.
 
 | Event | Entrypoint |
 | --- | --- |
@@ -118,7 +119,7 @@ All client handlers are in `src/frontend/client/root.zig`.
 | Sidebar animation tick | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
 | Notification tick | [`notifications.handleTick`](flows/notifications.md) |
 | Agent sound completion | [`agent_sounds.handlePlayed`](flows/agent-sound.md) |
-| Telemetry tick/write | `Client.handleTelemetryTickEvent`, `Client.handleTelemetryWrittenEvent` |
+| Telemetry tick/write | [`telemetry.handleTick`, `telemetry.handleWritten`](flows/client-telemetry.md) |
 | Config reload | `Client.handleConfigReloadEvent` |
 | Plugin worker result | [`Client.handlePluginResultEvent`](flows/plugin-action.md) |
 | Clipboard image result | [`Client.handleClipboardImageEvent`](flows/clipboard-image.md) |
