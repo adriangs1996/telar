@@ -5,6 +5,7 @@ const client_application = @import("application/root.zig");
 
 const Client = @import("client.zig");
 const attach_pane = client_application.attach_pane;
+const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
 
 /// Wires a runtime attachment confirmation to the passive client model.
@@ -35,9 +36,9 @@ pub fn recoveryHandler(client: *Client) attach_pane.RecoverPaneAttachmentHandler
 
 fn refreshTab(context: *anyopaque, location: schema.TabLocation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    if (client.requests.has(.tab_snapshot)) {
+    if (request_lifecycle.has(client, .tab_snapshot)) {
         return;
     }
 
-    try client.requestTabSnapshot(location);
+    try request_lifecycle.requestTabSnapshot(client, location);
 }

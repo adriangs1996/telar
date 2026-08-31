@@ -5,9 +5,9 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const client_requests = @import("requests.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 
@@ -74,7 +74,7 @@ pub fn apply(client: *Client, closed: schema.TabClosed) !Outcome {
     const trigger: close_tab.RemovalTrigger = if (closed.request_id == .none)
         .lifecycle
     else requested: {
-        const continuation = client.requests.take(closed.request_id) orelse
+        const continuation = request_lifecycle.consume(client, closed.request_id) orelse
             return error.UnexpectedTabClosed;
         const expected_location = switch (continuation) {
             .close_tab => |location| location,
@@ -117,19 +117,14 @@ fn removalHandler(client: *Client) close_tab.ApplyTabRemovalHandler {
 
 fn tabOperationPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.tab_operation);
+    return request_lifecycle.has(client, .tab_operation);
 }
 
 fn prepareClose(context: *anyopaque, location: schema.TabLocation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const tab = findTab(&client.model.workspace, location) orelse return error.UnexpectedTabClosure;
 
-    if (client.next_request_id == 0 or client.next_request_id >= std.math.maxInt(u64) - 1) {
-        return error.RequestIdExhausted;
-    }
-    if (client.requests.count >= client_requests.Tracker.capacity) {
-        return error.TooManyPendingRequests;
-    }
+    try request_lifecycle.ensureCanStart(client, 2);
 
     var required_capacity: usize = 1;
     if (client.model.panePasteSession()) |session| {
@@ -145,7 +140,7 @@ fn prepareClose(context: *anyopaque, location: schema.TabLocation) !void {
 
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {
-        const attachment_pending = client.requests.hasPane(.attachment, pane.id);
+        const attachment_pending = request_lifecycle.hasPane(client, .attachment, pane.id);
         required_capacity += @intFromBool(pane.attached or attachment_pending);
     }
 
@@ -164,11 +159,13 @@ fn detachForClose(context: *anyopaque, location: schema.TabLocation) !void {
 
 fn sendClose(context: *anyopaque, intent: close_tab.TabCloseIntent) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
+    const request_id = try request_lifecycle.nextId(client);
 
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .close_tab = intent.location },
+    try request_lifecycle.deliver(client, .{
+        .registration = .{
+            .request_id = request_id,
+            .continuation = .{ .close_tab = intent.location },
+        },
         .message = .{ .close_tab = .{
             .request_id = request_id,
             .location = intent.location,
@@ -178,16 +175,16 @@ fn sendClose(context: *anyopaque, intent: close_tab.TabCloseIntent) !void {
 
 fn restoreClose(context: *anyopaque, location: schema.TabLocation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    if (client.requests.has(.tab_snapshot)) {
+    if (request_lifecycle.has(client, .tab_snapshot)) {
         return;
     }
 
-    try client.requestTabSnapshot(location);
+    try request_lifecycle.requestTabSnapshot(client, location);
 }
 
 fn retireRequests(context: *anyopaque, location: schema.TabLocation) void {
     const client: *Client = @ptrCast(@alignCast(context));
-    client.requests.ignoreTab(location.tab_id);
+    request_lifecycle.ignoreTab(client, location.tab_id);
 }
 
 fn releaseResources(context: *anyopaque, removal_result: client_model.TabRemoval) !void {
@@ -211,8 +208,8 @@ fn releaseResources(context: *anyopaque, removal_result: client_model.TabRemoval
     }
 
     try pane_focus.syncResources(client);
-    if (!client.requests.has(.tab_snapshot)) {
-        try client.requestTabSnapshot(active.location);
+    if (!request_lifecycle.has(client, .tab_snapshot)) {
+        try request_lifecycle.requestTabSnapshot(client, active.location);
     }
 }
 

@@ -10,7 +10,7 @@ retained client state.
 ```text
 bootstrap / tab selection / resync
         |
-Client.requestTabSnapshot
+request_lifecycle.requestTabSnapshot
         |
 schema.request_tab_snapshot -> runtime socket
         |
@@ -99,6 +99,8 @@ uses the same fixed bound and allocates no unbounded retirement list.
   focused pane.
 - `frontend/client/requests.zig` checks attachment lookup and retirement of
   pane-scoped continuations.
+- `frontend/client/request_lifecycle.zig` checks request identity and bounded
+  registration before transport delivery.
 - `frontend/client/client_test.zig` checks real protocol correlation,
   attachment requests, resource cleanup and the presenter boundary.
 - `backend/runtime/queries/tab_snapshot.zig`,

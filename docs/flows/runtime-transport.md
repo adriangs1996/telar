@@ -15,9 +15,10 @@ terminal state.
 - one allocation-free `Outbox` with fixed message and copied-byte storage;
 - one receive token, while `Outbox` owns the single send token.
 
-The state does not own `requests.Tracker`. Request continuations decide which
-application transaction may consume a reply. Transport only preserves framed
-delivery, bounded storage and I/O ordering.
+The state does not own request correlation. `request_lifecycle.State` decides
+which typed continuation may consume a reply. Transport only preserves framed
+delivery, bounded storage and I/O ordering. See
+[Client request lifecycle](request-lifecycle.md).
 
 ## Bootstrap
 
@@ -29,15 +30,16 @@ frames synchronously through the same send buffer:
 2. `request_runtime_state`, so reconnectable replicas can be rebuilt;
 3. `open_pane`, which starts or attaches the initial pane transaction.
 
-The client records the initial request continuation, then
-`runtime_transport.scheduleRead` reserves the only receive token.
+The request lifecycle records the initial continuation before bootstrap sends
+these frames. After all three writes finish, `runtime_transport.scheduleRead`
+reserves the only receive token.
 
 ## Outbound path
 
 ```text
 client slice effect
        |
-runtime_transport.enqueue / enqueueInput / owned request enqueue
+request_lifecycle.deliver / runtime_transport.enqueueInput
        |
 Outbox copies and folds bounded data
        |

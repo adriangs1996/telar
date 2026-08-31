@@ -72,6 +72,7 @@ test {
     _ = @import("plugin_actions.zig");
     _ = @import("presenter.zig");
     _ = @import("proxy_status.zig");
+    _ = @import("request_lifecycle.zig");
     _ = @import("runtime_transport.zig");
     _ = @import("server_messages.zig");
     _ = @import("sidebar_animations.zig");

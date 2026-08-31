@@ -6,6 +6,7 @@ const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
 const client_application = @import("application/root.zig");
 const prompt_state = @import("name_prompt.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const tab_renames = @import("tab_renames.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_renames = @import("workspace_renames.zig");
@@ -22,7 +23,7 @@ const term = presentation.screen;
 /// if (beginWorkspaceCreate(client)) return;
 /// ```
 pub fn beginWorkspaceCreate(client: *Client) bool {
-    if (client.model.copyModeActive() or client.model.panePasteActive() or client.requests.count != 0 or
+    if (client.model.copyModeActive() or client.model.panePasteActive() or request_lifecycle.busy(client) or
         client.model.planWorkspaceCreation() == null)
     {
         return false;

@@ -6,6 +6,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const runtime_transport = @import("runtime_transport.zig");
@@ -69,7 +70,7 @@ pub fn recoveryHandler(client: *Client) split_pane.RecoverPaneSplitHandler {
 
 fn paneOperationPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.pane_operation);
+    return request_lifecycle.has(client, .pane_operation);
 }
 
 fn resizePane(context: *anyopaque, resize: client_model.PaneResize) !void {
@@ -82,15 +83,17 @@ fn resizePane(context: *anyopaque, resize: client_model.PaneResize) !void {
 
 fn sendSplit(context: *anyopaque, plan: client_model.PaneSplitPlan) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .split = .{
-            .target_pane = plan.split.target_pane,
-            .location = plan.split.location,
-            .axis = plan.split.axis,
-            .area = plan.split.area,
-        } },
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliver(client, .{
+        .registration = .{
+            .request_id = request_id,
+            .continuation = .{ .split = .{
+                .target_pane = plan.split.target_pane,
+                .location = plan.split.location,
+                .axis = plan.split.axis,
+                .area = plan.split.area,
+            } },
+        },
         .message = .{ .create_pane = .{
             .request_id = request_id,
             .location = plan.split.location,
@@ -135,12 +138,12 @@ fn applyConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) 
             try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = commit.pane_id } });
             const workspace = client.model.workspace.workspace orelse return;
             if (!std.meta.eql(workspace, commit.location.workspace) or
-                client.requests.has(.workspace_snapshot))
+                request_lifecycle.has(client, .workspace_snapshot))
             {
                 return;
             }
 
-            try client.requestWorkspaceSnapshot(workspace);
+            try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
         },
     }
 }

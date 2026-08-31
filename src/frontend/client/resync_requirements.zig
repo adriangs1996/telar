@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 
 const Client = @import("client.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const resync_required = client_application.resync_required;
 const schema = core.schema;
@@ -26,7 +27,7 @@ pub fn apply(client: *Client, required: schema.ResyncRequired) !resync_required.
         .{ .reconcile = .{
             .required_workspace = required.workspace,
             .projected_workspace = client.model.workspaceLocation(),
-            .snapshot_pending = client.requests.has(.workspace_snapshot),
+            .snapshot_pending = request_lifecycle.has(client, .workspace_snapshot),
         } });
 }
 
@@ -48,7 +49,7 @@ fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) voi
 fn requestSnapshot(context: *anyopaque, workspace: schema.WorkspaceLocation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.requestWorkspaceSnapshot(workspace);
+    try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
 }
 
 fn requestHandoff(context: *anyopaque, workspace: schema.WorkspaceId) !void {

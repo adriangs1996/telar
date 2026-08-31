@@ -8,6 +8,7 @@ const client_requests = @import("requests.zig");
 const Client = @import("client.zig");
 const pane_attachments = @import("pane_attachments.zig");
 const pane_splits = @import("pane_splits.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const tab_closures = @import("tab_closures.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const request_failure = client_application.request_failure;
@@ -20,7 +21,7 @@ const schema = core.schema;
 /// _ = try apply(client, failure);
 /// ```
 pub fn apply(client: *Client, failure: schema.RequestFailed) !request_failure.Outcome {
-    const continuation = client.requests.take(failure.request_id) orelse
+    const continuation = request_lifecycle.consume(client, failure.request_id) orelse
         return error.UnexpectedRequestFailure;
     var use_case = handler(client);
     const outcome = try use_case.execute(.{

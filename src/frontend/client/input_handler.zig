@@ -17,6 +17,7 @@ const pane_inputs = @import("pane_inputs.zig");
 const pane_pastes = @import("pane_pastes.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const plugin_actions = @import("plugin_actions.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
@@ -69,7 +70,7 @@ fn focusSidebarAgent(handler: *InputHandler, agent_key: agents.AgentKey) !bool {
             return false;
         },
         .handoff => |handoff| {
-            if (handler.client.requests.count != 0) {
+            if (request_lifecycle.busy(handler.client)) {
                 return false;
             }
 

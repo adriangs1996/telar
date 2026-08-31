@@ -6,6 +6,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("client.zig");
@@ -40,7 +41,7 @@ pub fn requestHandler(client: *Client) create_tab.RequestTabCreationHandler {
 /// const creation = try apply(client, created);
 /// ```
 pub fn apply(client: *Client, created: schema.TabCreated) !client_model.TabCreation {
-    const continuation = client.requests.take(created.request_id) orelse
+    const continuation = request_lifecycle.consume(client, created.request_id) orelse
         return error.UnexpectedTabCreated;
     const requested = switch (continuation) {
         .create_tab => |creation| creation,
@@ -75,13 +76,13 @@ fn confirmationHandler(client: *Client) create_tab.ConfirmTabCreationHandler {
 
 fn tabOperationPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.tab_operation);
+    return request_lifecycle.has(client, .tab_operation);
 }
 
 fn sendCreation(context: *anyopaque, intent: create_tab.TabCreationIntent) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueCreateTabRequest(.{
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliverCreateTab(client, .{
         .request_id = request_id,
         .workspace = intent.workspace,
         .label = intent.label,

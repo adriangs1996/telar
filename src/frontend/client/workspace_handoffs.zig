@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
@@ -146,7 +147,7 @@ pub fn recoveryHandler(client: *Client) workspace_handoff.RecoverWorkspaceHandof
 
 fn requestPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.count != 0;
+    return request_lifecycle.busy(client);
 }
 
 fn neverPending(_: *anyopaque) bool {
@@ -185,10 +186,12 @@ fn detachCurrent(context: *anyopaque) !void {
 
 fn sendHandoff(context: *anyopaque, command: workspace_handoff.WorkspaceHandoff) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .initial_open = .{ .fallback_workspace = command.fallback_workspace } },
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliver(client, .{
+        .registration = .{
+            .request_id = request_id,
+            .continuation = .{ .initial_open = .{ .fallback_workspace = command.fallback_workspace } },
+        },
         .message = .{ .open_pane = .{
             .request_id = request_id,
             .target = command.target,
@@ -206,8 +209,8 @@ fn restoreCurrent(context: *anyopaque) !void {
         try client.graphics_store.setPaneVisible(pane.id, true);
     }
 
-    if (!client.requests.has(.tab_snapshot)) {
-        try client.requestTabSnapshot(active.location);
+    if (!request_lifecycle.has(client, .tab_snapshot)) {
+        try request_lifecycle.requestTabSnapshot(client, active.location);
     }
 }
 
@@ -231,10 +234,12 @@ fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) void {
 
 fn retryWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .initial_open = .{} },
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliver(client, .{
+        .registration = .{
+            .request_id = request_id,
+            .continuation = .{ .initial_open = .{} },
+        },
         .message = .{ .open_pane = .{
             .request_id = request_id,
             .target = .{ .workspace = workspace },

@@ -7,6 +7,7 @@ const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const move_tab = client_application.move_tab;
+const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
 
 /// Wires an interactive move to the tab-operation gate and runtime request.
@@ -37,7 +38,7 @@ pub fn requestHandler(client: *Client) move_tab.RequestTabMoveHandler {
 /// const change = try apply(client, moved);
 /// ```
 pub fn apply(client: *Client, moved: schema.TabMoved) !client_model.Change {
-    const continuation = client.requests.take(moved.request_id) orelse
+    const continuation = request_lifecycle.consume(client, moved.request_id) orelse
         return error.UnexpectedTabMoved;
     const expected_location = switch (continuation) {
         .move_tab => |location| location,
@@ -61,15 +62,17 @@ fn confirmationHandler(client: *Client) move_tab.ConfirmTabMoveHandler {
 
 fn tabOperationPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.tab_operation);
+    return request_lifecycle.has(client, .tab_operation);
 }
 
 fn sendMove(context: *anyopaque, intent: move_tab.TabMoveIntent) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .move_tab = intent.location },
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliver(client, .{
+        .registration = .{
+            .request_id = request_id,
+            .continuation = .{ .move_tab = intent.location },
+        },
         .message = .{ .move_tab = .{
             .request_id = request_id,
             .location = intent.location,

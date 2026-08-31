@@ -7,6 +7,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
@@ -24,7 +25,7 @@ pub const Outcome = enum {
 /// _ = try apply(client, snapshot);
 /// ```
 pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
-    const continuation = client.requests.take(snapshot.request_id) orelse
+    const continuation = request_lifecycle.consume(client, snapshot.request_id) orelse
         return error.UnexpectedTabSnapshot;
     const expected_location = switch (continuation) {
         .tab_snapshot => |location| location,
@@ -70,7 +71,7 @@ fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {
 fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.TabReconciliation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     for (reconciliation.removed_panes.slice()) |pane_id| {
-        client.requests.ignorePane(pane_id);
+        request_lifecycle.ignorePane(client, pane_id);
         pane_resources.release(client, pane_id);
     }
 
@@ -90,19 +91,21 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
     try client.resizeAttached(&tab.model, client.view.workbench());
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {
-        if (pane.attached or client.requests.hasPane(.attachment, pane.id)) {
+        if (pane.attached or request_lifecycle.hasPane(client, .attachment, pane.id)) {
             continue;
         }
 
         const size = tab.model.contentSize(pane.id, client.view.workbench()) orelse
             return error.PaneTooSmall;
-        const request_id = try client.nextId();
-        try client.enqueueRequest(.{
-            .request_id = request_id,
-            .continuation = .{ .attach_pane = .{
-                .pane_id = pane.id,
-                .location = tab.location,
-            } },
+        const request_id = try request_lifecycle.nextId(client);
+        try request_lifecycle.deliver(client, .{
+            .registration = .{
+                .request_id = request_id,
+                .continuation = .{ .attach_pane = .{
+                    .pane_id = pane.id,
+                    .location = tab.location,
+                } },
+            },
             .message = .{ .open_pane = .{
                 .request_id = request_id,
                 .target = .{ .pane = pane.id },

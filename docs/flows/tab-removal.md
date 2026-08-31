@@ -26,15 +26,15 @@ runtime socket
 ```
 
 `RequestCloseTabHandler` resolves the active tab identity without changing the
-semantic model. Its adapter checks request identity, continuation and outbox
-capacity before the first provisional effect. The check accounts for a
-required paste-closing marker, focus output, every pane detach and the close
-request itself.
+semantic model. Its adapter calls `request_lifecycle.ensureCanStart` and checks
+outbox capacity before the first provisional effect. The check accounts for
+the close request, its recovery identity, a required paste-closing marker,
+focus output and every pane detach.
 
 After that check, the handler closes any captured paste, detaches the active tab
-and asks the adapter to send one `close_tab` message. The adapter allocates the
-request ID, records the exact `TabLocation` in the continuation tracker and
-queues the message. The request does not advance a model version.
+and asks the adapter to send one `close_tab` message. The request lifecycle
+allocates the ID, records the exact `TabLocation` and queues the message as one
+fallible transaction. The request does not advance a model version.
 
 A detach or send failure asks for a canonical tab snapshot. A capacity failure
 happens before focus or attachment state changes. A runtime `request_failed`

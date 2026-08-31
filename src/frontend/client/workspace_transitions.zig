@@ -6,6 +6,7 @@ const client_model = @import("model.zig");
 const host_inputs = @import("host_inputs.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
@@ -73,6 +74,6 @@ pub fn activate(client: *Client, activation: Activation) !void {
 
     try pane_focus.syncResources(client);
     try host_inputs.scheduleRead(client);
-    try client.requestWorkspaceSnapshot(activation.location.workspace);
-    try client.requestTabSnapshot(activation.location);
+    try request_lifecycle.requestWorkspaceSnapshot(client, activation.location.workspace);
+    try request_lifecycle.requestTabSnapshot(client, activation.location);
 }

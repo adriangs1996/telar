@@ -7,6 +7,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
@@ -19,7 +20,7 @@ const workspace_snapshot = client_application.workspace_snapshot;
 /// try apply(client, snapshot);
 /// ```
 pub fn apply(client: *Client, snapshot: schema.WorkspaceSnapshotView) !void {
-    const continuation = client.requests.take(snapshot.request_id) orelse
+    const continuation = request_lifecycle.consume(client, snapshot.request_id) orelse
         return error.UnexpectedWorkspaceSnapshot;
     const expected_workspace = switch (continuation) {
         .workspace_snapshot => |workspace| workspace,
@@ -67,7 +68,7 @@ fn reconciliationHandler(client: *Client) workspace_snapshot.ApplyWorkspaceSnaps
 fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.WorkspaceReconciliation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     for (reconciliation.removed_tabs.slice()) |location| {
-        client.requests.ignoreTab(location.tab_id);
+        request_lifecycle.ignoreTab(client, location.tab_id);
     }
 
     for (reconciliation.removed_panes.slice()) |pane_id| {
@@ -86,12 +87,12 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
         try pane_focus.syncResources(client);
     }
 
-    if (client.requests.has(.tab_snapshot)) {
+    if (request_lifecycle.has(client, .tab_snapshot)) {
         return;
     }
 
     if (reconciliation.active_tab_changed or !active.snapshot_loaded) {
-        try client.requestTabSnapshot(active.location);
+        try request_lifecycle.requestTabSnapshot(client, active.location);
         return;
     }
 

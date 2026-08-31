@@ -9,7 +9,6 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const graphics = @import("../graphics/root.zig");
 const attachments = @import("../attachments/root.zig");
-const client_requests = @import("requests.zig");
 const client_telemetry = @import("telemetry.zig");
 const client_view = @import("view.zig");
 const client_model = @import("model.zig");
@@ -80,6 +79,7 @@ const notification_timers = @import("notification_timers.zig");
 const notification_flow = @import("notifications.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
+const request_lifecycle_mod = @import("request_lifecycle.zig");
 const runtime_transport_mod = @import("runtime_transport.zig");
 const sidebar_animations = @import("sidebar_animations.zig");
 
@@ -101,16 +101,6 @@ pub const ClientEvent = union(enum) {
     config_reload: anyerror!config_reload.ConfigReload,
     plugin_result: plugin_actions.Completion,
     clipboard_image: clipboard_images.Completion,
-};
-
-/// The request that opens the first pane; everything else is numbered by
-/// `Client.nextId`.
-pub const initial_request_id: schema.RequestId = @enumFromInt(1);
-
-pub const RequestDelivery = struct {
-    request_id: schema.RequestId,
-    continuation: client_requests.Continuation,
-    message: runtime_transport_mod.Message,
 };
 
 const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
@@ -154,8 +144,7 @@ sidebar_rendering: kitty.SidebarRendering,
 sound_playback: sound_capability.Playback,
 clipboard_capture_resources: attachments.CaptureResources = .{},
 
-next_request_id: u64 = 2,
-requests: client_requests.Tracker = .{},
+request_lifecycle: request_lifecycle_mod.State = .{},
 sidebar_animation_scheduler: sidebar_animations.Scheduler = .{},
 notification_scheduler: notification_timers.Scheduler = .{},
 
@@ -273,10 +262,6 @@ pub fn deinit(client: *Client) void {
     gpa.destroy(client);
 }
 
-pub fn nextId(client: *Client) !schema.RequestId {
-    return nextRequestId(&client.next_request_id);
-}
-
 /// Publishes the model version after one client event has committed.
 ///
 /// ```zig
@@ -288,76 +273,6 @@ pub fn observeModel(client: *Client) !void {
         .graphics_ingress = client.graphics_store.ingressVersion(),
         .attachment_ingress = client.view.kittyAttachments().ingressVersion(),
     });
-}
-
-/// Records one typed continuation and queues its message as one fallible
-/// transaction.
-///
-/// ```zig
-/// try client.enqueueRequest(delivery);
-/// ```
-pub fn enqueueRequest(client: *Client, delivery: RequestDelivery) !void {
-    try client.requests.add(delivery.request_id, delivery.continuation);
-    errdefer _ = client.requests.take(delivery.request_id);
-    try runtime_transport_mod.enqueue(client, delivery.message);
-}
-
-/// Records and queues one rename whose label needs bounded ownership.
-///
-/// ```zig
-/// try client.enqueueRenameRequest(rename, continuation);
-/// ```
-pub fn enqueueRenameRequest(client: *Client, rename: schema.RenameTab, continuation: client_requests.Continuation) !void {
-    try client.requests.add(rename.request_id, continuation);
-    errdefer _ = client.requests.take(rename.request_id);
-    try runtime_transport_mod.enqueueRename(client, rename);
-}
-
-/// Records and queues one workspace rename with its canonical continuation.
-///
-/// ```zig
-/// try client.enqueueWorkspaceRenameRequest(rename);
-/// ```
-pub fn enqueueWorkspaceRenameRequest(client: *Client, rename: schema.RenameWorkspace) !void {
-    try client.requests.add(rename.request_id, .{ .rename_workspace = rename.workspace });
-    errdefer _ = client.requests.take(rename.request_id);
-    try runtime_transport_mod.enqueueWorkspaceRename(client, rename);
-}
-
-/// Records and queues one workspace creation with owned launch data.
-///
-/// ```zig
-/// try client.enqueueCreateWorkspaceRequest(request);
-/// ```
-pub fn enqueueCreateWorkspaceRequest(client: *Client, request: schema.CreateWorkspace) !void {
-    try client.requests.add(request.request_id, .{ .create_workspace = request.size });
-    errdefer _ = client.requests.take(request.request_id);
-    try runtime_transport_mod.enqueueCreateWorkspace(client, request);
-}
-
-/// Records and queues one tab creation with owned launch data.
-///
-/// ```zig
-/// try client.enqueueCreateTabRequest(request);
-/// ```
-pub fn enqueueCreateTabRequest(client: *Client, request: schema.CreateTab) !void {
-    try client.requests.add(request.request_id, .{ .create_tab = .{
-        .workspace = request.workspace,
-        .size = request.size,
-    } });
-    errdefer _ = client.requests.take(request.request_id);
-    try runtime_transport_mod.enqueueCreateTab(client, request);
-}
-
-/// Records and queues one bounded runtime notification request.
-///
-/// ```zig
-/// try client.enqueueNotificationRequest(request);
-/// ```
-pub fn enqueueNotificationRequest(client: *Client, request: schema.ShowNotification) !void {
-    try client.requests.add(request.request_id, .notification);
-    errdefer _ = client.requests.take(request.request_id);
-    try runtime_transport_mod.enqueueNotification(client, request);
 }
 
 pub fn notify(client: *Client, input: notification_capability.Input) !void {
@@ -431,33 +346,6 @@ pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
     try client.presenter.presentMedia(client);
 }
 
-/// Asks the runtime for a fresh snapshot of one tab, tracking the reply.
-pub fn requestTabSnapshot(client: *Client, location: schema.TabLocation) !void {
-    const request_id = try client.nextId();
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .tab_snapshot = location },
-        .message = .{ .request_tab_snapshot = .{
-            .request_id = request_id,
-            .location = location,
-        } },
-    });
-}
-
-/// Asks the runtime for a fresh snapshot of one workspace, tracking the
-/// reply.
-pub fn requestWorkspaceSnapshot(client: *Client, workspace: schema.WorkspaceLocation) !void {
-    const request_id = try client.nextId();
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .workspace_snapshot = workspace },
-        .message = .{ .request_workspace_snapshot = .{
-            .request_id = request_id,
-            .workspace = workspace,
-        } },
-    });
-}
-
 pub fn scheduleConfigReload(client: *Client) !void {
     const path = client.options.config_path orelse return;
     try config_reload.schedule(&client.reload, client.io, client.gpa, &client.select, .{
@@ -519,14 +407,6 @@ pub fn monotonic(io: Io) u64 {
 }
 
 const rectSize = multiplexer.rectSize;
-
-fn nextRequestId(next: *u64) !schema.RequestId {
-    if (next.* == 0 or next.* == std.math.maxInt(u64))
-        return error.RequestIdExhausted;
-    const value = next.*;
-    next.* += 1;
-    return @enumFromInt(value);
-}
 
 test "a draw scheduled before the first tab bootstraps is dropped" {
     // A true red for the original defect is a null unwrap inside the event

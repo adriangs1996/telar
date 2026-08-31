@@ -6,6 +6,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("client.zig");
@@ -37,7 +38,7 @@ pub fn selectionHandler(client: *Client) select_tab.SelectTabHandler {
 
 fn tabSnapshotPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.tab_snapshot);
+    return request_lifecycle.has(client, .tab_snapshot);
 }
 
 fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !void {
@@ -58,7 +59,7 @@ fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !vo
     }
 
     try pane_focus.syncResources(client);
-    try client.requestTabSnapshot(selected.location);
+    try request_lifecycle.requestTabSnapshot(client, selected.location);
 }
 
 fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {

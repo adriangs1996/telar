@@ -10,6 +10,7 @@ const notification_timers = @import("notification_timers.zig");
 const client_mod = @import("client.zig");
 const Client = client_mod;
 const notification_use_cases = client_application.notifications;
+const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
 
 pub const DeliveryOutcome = notification_use_cases.DeliveryOutcome;
@@ -20,7 +21,7 @@ pub const DeliveryOutcome = notification_use_cases.DeliveryOutcome;
 /// const outcome = try applyDeliveryReport(client, shown);
 /// ```
 pub fn applyDeliveryReport(client: *Client, shown: schema.NotificationShown) !DeliveryOutcome {
-    const continuation = client.requests.take(shown.request_id) orelse
+    const continuation = request_lifecycle.consume(client, shown.request_id) orelse
         return error.UnexpectedNotificationReply;
     if (continuation != .notification) {
         return error.UnexpectedNotificationReply;

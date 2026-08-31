@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 
 const Client = @import("client.zig");
@@ -64,13 +65,13 @@ pub fn confirmationHandler(client: *Client) create_workspace.ConfirmWorkspaceCre
 
 fn requestPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.count != 0;
+    return request_lifecycle.busy(client);
 }
 
 fn sendCreation(context: *anyopaque, creation: create_workspace.WorkspaceCreation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueCreateWorkspaceRequest(.{
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliverCreateWorkspace(client, .{
         .request_id = request_id,
         .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
         .name = creation.name,

@@ -11,6 +11,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_splits = @import("pane_splits.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
@@ -85,8 +86,8 @@ pub fn apply(client: *Client, value: Action) !keybind.Control {
         },
         .enter_copy_mode => _ = copy_modes.enter(client),
         .notification => |*notification| {
-            const request_id = try client.nextId();
-            try client.enqueueNotificationRequest(.{
+            const request_id = try request_lifecycle.nextId(client);
+            try request_lifecycle.deliverNotification(client, .{
                 .request_id = request_id,
                 .notification = .{
                     .level = notification.level,
@@ -134,7 +135,7 @@ pub fn focusPane(client: *Client, target: pane_focus.Target) !void {
 /// try switchWorkspace(client, workspace_id);
 /// ```
 pub fn switchWorkspace(client: *Client, workspace_id: schema.WorkspaceId) !void {
-    if (client.requests.count != 0 or !client.model.knowsWorkspace(workspace_id)) {
+    if (request_lifecycle.busy(client) or !client.model.knowsWorkspace(workspace_id)) {
         return;
     }
     if (client.model.workspace.workspace) |current| {

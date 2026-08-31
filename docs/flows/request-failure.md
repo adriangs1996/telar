@@ -22,11 +22,12 @@ recover, ignore, publish a notification, or report fatal
 Client.observeModel -> Presenter
 ```
 
-`request_failures.apply` is the protocol adapter. It removes the continuation
-from the fixed request tracker exactly once. An unknown request ID is a
-correlation error. After that boundary, `HandleRequestFailureHandler` receives
-only the typed continuation, failure code and borrowed message. It does not
-know `Client`, IPC request IDs or presentation.
+`request_failures.apply` is the protocol adapter. It calls
+`request_lifecycle.consume` to remove the continuation exactly once. An unknown
+request ID is a correlation error. After that boundary,
+`HandleRequestFailureHandler` receives only the typed continuation, failure
+code and borrowed message. It does not know `Client`, IPC request IDs or
+presentation.
 
 The handler returns one of four semantic outcomes:
 
@@ -81,6 +82,8 @@ new client to rebuild its projection.
   failure behavior.
 - `src/frontend/client/request_failures.zig` owns correlation, concrete
   recovery adapters and fatal error translation.
+- `src/frontend/client/request_lifecycle.zig` proves bounded identity and
+  exactly-once correlation entrypoints.
 - `src/frontend/client/client_test.zig` proves wire correlation, continuation
   consumption, recovery paths, targeted notices and fatal snapshot rejection.
 - `src/core/schema/root.zig` and `src/core/schema/codec.zig` prove the bounded

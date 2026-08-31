@@ -107,36 +107,77 @@ pub const Tracker = struct {
     entries: [capacity]?Entry = @splat(null),
     count: usize = 0,
 
-    pub fn add(
-        tracker: *Tracker,
-        request_id: schema.RequestId,
-        continuation: Continuation,
-    ) !void {
+    /// Retains one unique typed continuation in fixed storage.
+    ///
+    /// ```zig
+    /// try tracker.add(request_id, continuation);
+    /// ```
+    pub fn add(tracker: *Tracker, request_id: schema.RequestId, continuation: Continuation) !void {
         std.debug.assert(request_id != .none);
         for (&tracker.entries) |*slot| {
             if (slot.*) |entry| {
-                if (entry.request_id == request_id) return error.DuplicateRequest;
+                if (entry.request_id == request_id) {
+                    return error.DuplicateRequest;
+                }
+
                 continue;
             }
+
             slot.* = .{ .request_id = request_id, .continuation = continuation };
             tracker.count += 1;
+
             return;
         }
+
         return error.TooManyPendingRequests;
     }
 
+    /// Reports whether another complete correlation can be retained.
+    ///
+    /// ```zig
+    /// if (!tracker.hasCapacity()) {
+    ///     return error.TooManyPendingRequests;
+    /// }
+    /// ```
+    pub fn hasCapacity(tracker: *const Tracker) bool {
+        return tracker.count < capacity;
+    }
+
+    /// Reports whether no request can still receive a response.
+    ///
+    /// ```zig
+    /// if (tracker.isEmpty()) {
+    ///     return;
+    /// }
+    /// ```
+    pub fn isEmpty(tracker: *const Tracker) bool {
+        return tracker.count == 0;
+    }
+
+    /// Reports whether any retained continuation belongs to `group`.
+    ///
+    /// ```zig
+    /// if (tracker.has(.tab_operation)) {
+    ///     return;
+    /// }
+    /// ```
     pub fn has(tracker: *const Tracker, group: Group) bool {
         for (tracker.entries) |slot| {
             const entry = slot orelse continue;
-            if (entry.continuation.group() == group) return true;
+            if (entry.continuation.group() == group) {
+                return true;
+            }
         }
+
         return false;
     }
 
     /// Reports whether one pane already owns a pending request in a group.
     ///
     /// ```zig
-    /// if (tracker.hasPane(.attachment, pane_id)) return;
+    /// if (tracker.hasPane(.attachment, pane_id)) {
+    ///     return;
+    /// }
     /// ```
     pub fn hasPane(tracker: *const Tracker, group: Group, pane_id: schema.PaneId) bool {
         for (tracker.entries) |slot| {
@@ -149,14 +190,24 @@ pub const Tracker = struct {
         return false;
     }
 
+    /// Removes and returns one exact correlation at most once.
+    ///
+    /// ```zig
+    /// const continuation = tracker.take(request_id) orelse return error.UnexpectedRequest;
+    /// ```
     pub fn take(tracker: *Tracker, request_id: schema.RequestId) ?Continuation {
         for (&tracker.entries) |*slot| {
             const entry = slot.* orelse continue;
-            if (entry.request_id != request_id) continue;
+            if (entry.request_id != request_id) {
+                continue;
+            }
+
             slot.* = null;
             tracker.count -= 1;
+
             return entry.continuation;
         }
+
         return null;
     }
 
@@ -164,6 +215,10 @@ pub const Tracker = struct {
     /// for that tab remain identifiable, but their eventual replies are stale
     /// because the tab and its client state are already gone. A split keeps its
     /// correlation so a late created pane can still be detached.
+    ///
+    /// ```zig
+    /// tracker.ignoreTab(tab_id);
+    /// ```
     pub fn ignoreTab(tracker: *Tracker, tab_id: schema.TabId) void {
         for (&tracker.entries) |*slot| {
             const entry = if (slot.*) |*value| value else continue;
@@ -221,6 +276,10 @@ pub const Tracker = struct {
     }
 
     /// Pane exit is the successful completion signal for `close_pane`.
+    ///
+    /// ```zig
+    /// _ = tracker.completePaneClose(pane_id);
+    /// ```
     pub fn completePaneClose(tracker: *Tracker, pane_id: schema.PaneId) bool {
         for (&tracker.entries) |*slot| {
             const entry = slot.* orelse continue;
@@ -233,6 +292,7 @@ pub const Tracker = struct {
                 else => {},
             }
         }
+
         return false;
     }
 };

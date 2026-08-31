@@ -3,6 +3,7 @@
 const workspace_capability = @import("../workspace/root.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_pastes = @import("pane_pastes.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const runtime_transport = @import("runtime_transport.zig");
@@ -31,13 +32,13 @@ pub fn detach(client: *Client, tab: *tabs_mod.Tab) !void {
 
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {
-        const attachment_pending = client.requests.hasPane(.attachment, pane.id);
+        const attachment_pending = request_lifecycle.hasPane(client, .attachment, pane.id);
         if (!pane.attached and !attachment_pending) {
             continue;
         }
 
         try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane.id } });
-        _ = client.requests.ignoreAttachment(pane.id);
+        _ = request_lifecycle.ignoreAttachment(client, pane.id);
         try client.graphics_store.setPaneVisible(pane.id, false);
     }
 

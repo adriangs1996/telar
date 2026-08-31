@@ -7,6 +7,7 @@ const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const rename_tab = client_application.rename_tab;
+const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
 
 /// Wires a rename request to the client's continuation tracker and outbox.
@@ -37,7 +38,7 @@ pub fn requestHandler(client: *Client) rename_tab.RequestRenameTabHandler {
 /// const change = try apply(client, renamed);
 /// ```
 pub fn apply(client: *Client, renamed: schema.TabRenamed) !client_model.Change {
-    const continuation = client.requests.take(renamed.request_id) orelse
+    const continuation = request_lifecycle.consume(client, renamed.request_id) orelse
         return error.UnexpectedTabRenamed;
     const expected_location = switch (continuation) {
         .rename_tab => |location| location,
@@ -61,13 +62,13 @@ fn confirmationHandler(client: *Client) rename_tab.ConfirmTabRenameHandler {
 
 fn tabOperationPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.tab_operation);
+    return request_lifecycle.has(client, .tab_operation);
 }
 
 fn sendRename(context: *anyopaque, requested: rename_tab.TabRenameIntent) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueRenameRequest(.{
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliverRename(client, .{
         .request_id = request_id,
         .location = requested.location,
         .label = requested.label,

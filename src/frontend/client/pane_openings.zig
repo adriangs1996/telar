@@ -6,6 +6,7 @@ const core = @import("telar-core");
 const Client = @import("client.zig");
 const pane_attachments = @import("pane_attachments.zig");
 const pane_splits = @import("pane_splits.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const schema = core.schema;
@@ -24,7 +25,7 @@ pub const Outcome = enum {
 /// _ = try apply(client, opened);
 /// ```
 pub fn apply(client: *Client, opened: schema.PaneOpened) !Outcome {
-    const continuation = client.requests.take(opened.request_id) orelse
+    const continuation = request_lifecycle.consume(client, opened.request_id) orelse
         return error.UnexpectedRequest;
 
     switch (continuation) {

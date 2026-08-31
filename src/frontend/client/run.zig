@@ -20,15 +20,12 @@ const client_telemetry = @import("telemetry.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const Options = Client.Options;
 const rectSize = multiplexer.rectSize;
 
-pub fn run(
-    init: std.process.Init,
-    connection: *core.transport.SocketChannel,
-    options: Options,
-) !u8 {
+pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, options: Options) !u8 {
     const io = init.io;
     var heap = diagnostics.Heap.init(init.gpa);
     const gpa = heap.allocator();
@@ -87,10 +84,11 @@ pub fn run(
     // itself is torn down.
     defer client.deinit();
 
+    const initial_request_id = try request_lifecycle.registerInitial(client);
     try client.runtime_transport.bootstrap(io, .{
         .graphics_shared = kitty.clientSupportsSharedMemory(),
         .open = .{
-            .request_id = Client.initial_request_id,
+            .request_id = initial_request_id,
             .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
             .launch = .{
                 .cwd = options.cwd,
@@ -98,7 +96,6 @@ pub fn run(
             },
         },
     });
-    try client.requests.add(Client.initial_request_id, .{ .initial_open = .{} });
 
     try client.select.concurrent(.resized, Client.waitResize, .{ io, &watcher });
     try runtime_transport.scheduleRead(client);

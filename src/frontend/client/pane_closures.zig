@@ -6,6 +6,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
+const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const close_pane = client_application.close_pane;
@@ -54,18 +55,20 @@ fn exitHandler(client: *Client) close_pane.HandlePaneExitHandler {
 
 fn paneOperationPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
-    return client.requests.has(.pane_operation);
+    return request_lifecycle.has(client, .pane_operation);
 }
 
 fn sendClosure(context: *anyopaque, closure: client_model.PaneClosure) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const request_id = try client.nextId();
-    try client.enqueueRequest(.{
-        .request_id = request_id,
-        .continuation = .{ .close_pane = .{
-            .pane_id = closure.pane_id,
-            .location = closure.location,
-        } },
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliver(client, .{
+        .registration = .{
+            .request_id = request_id,
+            .continuation = .{ .close_pane = .{
+                .pane_id = closure.pane_id,
+                .location = closure.location,
+            } },
+        },
         .message = .{ .close_pane = .{
             .request_id = request_id,
             .pane_id = closure.pane_id,
@@ -79,8 +82,8 @@ fn applyExitEffects(context: *anyopaque, transition: client_model.PaneExit) !voi
         .retired => |retired| retired.pane_id,
         .stale => |stale| stale,
     };
-    _ = client.requests.ignoreAttachment(pane_id);
-    _ = client.requests.completePaneClose(pane_id);
+    _ = request_lifecycle.ignoreAttachment(client, pane_id);
+    _ = request_lifecycle.completePaneClose(client, pane_id);
     pane_resources.release(client, pane_id);
 
     const retirement = switch (transition) {
