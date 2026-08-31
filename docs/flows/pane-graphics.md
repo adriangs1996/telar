@@ -31,6 +31,14 @@ ReconcilePaneGraphicsHandler
                                       |
                              request_graphics_snapshot
 
+committed Kitty capability
+       |
+SyncPaneGraphicsFallbacksHandler
+       |
+       +-- physical presence query --> pane_graphics adapter --> kitty.Store
+       |
+       +-- derived fallback --> ClientModel.setPaneGraphicsFallback
+
 presentation_lifecycle.observe
        |
 Presenter observes model version + graphics ingress version
@@ -42,8 +50,8 @@ bounded media pass
 
 `server_messages` only translates the decoded union variant into a typed
 application command. `ReconcilePaneGraphicsHandler` applies the physical
-resource first and then commits the fallback derived from the resulting store.
-It does not request a draw.
+resource first, reads the committed host capability and then commits the
+derived fallback. It does not request a draw.
 
 `kitty.Store` remains outside `ClientModel`. It owns allocations, shared
 memory mappings, quotas, host image identifiers and transmission damage. Every
@@ -56,8 +64,11 @@ The fallback flag is semantic client state because cell composition reads it.
 Only `ClientModel.setPaneGraphicsFallback` may change it. A real change
 advances `Version.pane_graphics`; unknown panes and repeated values are no-ops.
 The presenter-owned compositor detects the changed immutable pane projection.
-Capability negotiation reconciles all bounded panes through the same model
-operation.
+Capability negotiation enters `SyncPaneGraphicsFallbacksHandler`. The handler
+owns the bounded model traversal and fallback decision. Its adapter effect only
+answers whether `kitty.Store` contains graphics for one pane. Supported hosts
+clear every fallback without querying the physical store; unknown or
+unsupported hosts query once per pane. The adapter never mutates `AppState`.
 
 ## Ordering and recovery
 
@@ -81,6 +92,11 @@ configured KGP byte budget and yields while interactive cell work is pending.
 Repeated frames replace obsolete generations in the store rather than forming
 an unbounded replay queue.
 
+Fallback synchronization allocates nothing and visits at most 64 tabs with 64
+panes each. A supported host performs no store queries. Every other capability
+state performs at most 4096 bounded presence lookups and transition attempts;
+repeated semantic values preserve `Version.pane_graphics`.
+
 The socket dispatcher is still the decoded message entrypoint. This slice
 separates ownership and scheduling policy; moving bulk ingestion behind a
 dedicated media queue is a separate scheduling change.
@@ -92,7 +108,8 @@ dedicated media queue is a separate scheduling change.
 - `src/frontend/client/model.zig` proves fallback ownership, no-op behavior and
   isolated semantic versions.
 - `src/frontend/client/application/pane_graphics.zig` proves resource-before-
-  model ordering, recovery selection, downgrade ordering and failure policy.
+  model ordering, committed-capability policy, bounded fallback traversal,
+  repeated-value suppression, recovery selection and downgrade ordering.
 - `src/frontend/client/client_test.zig` proves protocol recovery, physical-only
   presenter observation and shared-memory downgrade ordering.
 - `src/frontend/client/presenter.zig` proves that use cases do not choose when

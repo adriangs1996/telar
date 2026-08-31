@@ -58,9 +58,13 @@ pub const Outcome = union(enum) {
     shared_disabled: schema.PaneId,
 };
 
+pub const FallbackEffects = struct {
+    context: *anyopaque,
+    has_graphics: *const fn (*anyopaque, schema.PaneId) bool,
+};
+
 pub const ReconcilePaneGraphicsHandler = struct {
     model: *client_model.Model,
-    fallback_required: bool,
     effects: Effects,
 
     /// Reconciles one physical resource result, then commits its derived cell
@@ -84,7 +88,8 @@ pub const ReconcilePaneGraphicsHandler = struct {
                     .pane_id = pane_id,
                     .fallback = handler.model.setPaneGraphicsFallback(
                         pane_id,
-                        handler.fallback_required and state.has_graphics,
+                        handler.model.hostCapabilities().kitty_graphics != .supported and
+                            state.has_graphics,
                     ),
                 } };
             },
@@ -106,6 +111,34 @@ pub const ReconcilePaneGraphicsHandler = struct {
                 break :block .{ .shared_disabled = pane_id };
             },
         };
+    }
+};
+
+pub const SyncPaneGraphicsFallbacksHandler = struct {
+    model: *client_model.Model,
+    effects: FallbackEffects,
+
+    /// Reconciles every bounded pane fallback from committed host capability
+    /// state and the physical graphics owned by the client adapter.
+    ///
+    /// ```zig
+    /// handler.execute();
+    /// ```
+    pub fn execute(handler: *SyncPaneGraphicsFallbacksHandler) void {
+        const fallback_required = handler.model.hostCapabilities().kitty_graphics != .supported;
+        var inspected: usize = 0;
+        var tabs = handler.model.workspace.tabIterator();
+        while (tabs.next()) |tab| {
+            var panes = tab.model.paneIterator();
+            while (panes.next()) |pane| {
+                inspected += 1;
+                const has_graphics = fallback_required and
+                    handler.effects.has_graphics(handler.effects.context, pane.id);
+                _ = handler.model.setPaneGraphicsFallback(pane.id, has_graphics);
+            }
+        }
+
+        std.debug.assert(inspected <= schema.max_tabs_per_workspace * schema.max_panes_per_tab);
     }
 };
 
@@ -194,6 +227,144 @@ const TestingModel = struct {
     }
 };
 
+const FallbackTestingModel = struct {
+    model: *client_model.Model,
+    first: schema.PaneId,
+    second: schema.PaneId,
+    third: schema.PaneId,
+
+    fn init() !FallbackTestingModel {
+        const model = try std.testing.allocator.create(client_model.Model);
+        errdefer std.testing.allocator.destroy(model);
+        model.* = client_model.Model.init(std.testing.allocator, true);
+        errdefer model.deinit();
+
+        const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+        const first_location: schema.TabLocation = .{
+            .workspace = workspace,
+            .tab_id = @enumFromInt(1),
+        };
+        const second_location: schema.TabLocation = .{
+            .workspace = workspace,
+            .tab_id = @enumFromInt(2),
+        };
+        const first: schema.PaneId = @enumFromInt(1);
+        const second: schema.PaneId = @enumFromInt(2);
+        const third: schema.PaneId = @enumFromInt(3);
+        try model.workspace.bootstrap(first, first_location, .{ .cols = 20, .rows = 5 });
+        try model.workspace.active().?.model.split(
+            first,
+            second,
+            first_location,
+            .horizontal,
+            .{ .w = 20, .h = 5 },
+        );
+        _ = try model.workspace.addCreated(.{
+            .location = second_location,
+            .position = 1,
+            .label = "logs",
+            .root_pane_id = third,
+        }, .{ .cols = 20, .rows = 5 });
+
+        return .{
+            .model = model,
+            .first = first,
+            .second = second,
+            .third = third,
+        };
+    }
+
+    fn deinit(testing: *FallbackTestingModel) void {
+        testing.model.deinit();
+        std.testing.allocator.destroy(testing.model);
+    }
+};
+
+const FallbackCapture = struct {
+    with_graphics: []const schema.PaneId,
+    queries: [3]schema.PaneId = undefined,
+    query_count: usize = 0,
+
+    fn port(capture: *FallbackCapture) FallbackEffects {
+        return .{ .context = capture, .has_graphics = hasGraphics };
+    }
+
+    fn hasGraphics(context: *anyopaque, pane_id: schema.PaneId) bool {
+        const capture: *FallbackCapture = @ptrCast(@alignCast(context));
+        capture.queries[capture.query_count] = pane_id;
+        capture.query_count += 1;
+
+        return std.mem.findScalar(schema.PaneId, capture.with_graphics, pane_id) != null;
+    }
+};
+
+test "pane graphics fallback sync derives every bounded pane from physical resources" {
+    var testing = try FallbackTestingModel.init();
+    defer testing.deinit();
+    const with_graphics = [_]schema.PaneId{ testing.first, testing.third };
+    var capture: FallbackCapture = .{ .with_graphics = &with_graphics };
+    var handler: SyncPaneGraphicsFallbacksHandler = .{
+        .model = testing.model,
+        .effects = capture.port(),
+    };
+
+    handler.execute();
+
+    try std.testing.expectEqualSlices(
+        schema.PaneId,
+        &.{ testing.first, testing.second, testing.third },
+        capture.queries[0..capture.query_count],
+    );
+    try std.testing.expect(testing.model.workspace.findPane(testing.first).?.graphics_placeholder);
+    try std.testing.expect(!testing.model.workspace.findPane(testing.second).?.graphics_placeholder);
+    try std.testing.expect(testing.model.workspace.findPane(testing.third).?.graphics_placeholder);
+    try std.testing.expectEqual(client_model.Version{ .pane_graphics = 2 }, testing.model.version());
+}
+
+test "pane graphics fallback sync suppresses repeats" {
+    var testing = try FallbackTestingModel.init();
+    defer testing.deinit();
+    const with_graphics = [_]schema.PaneId{testing.second};
+    var capture: FallbackCapture = .{ .with_graphics = &with_graphics };
+    var handler: SyncPaneGraphicsFallbacksHandler = .{
+        .model = testing.model,
+        .effects = capture.port(),
+    };
+
+    handler.execute();
+    const version = testing.model.version();
+    capture.query_count = 0;
+
+    handler.execute();
+
+    try std.testing.expectEqual(@as(usize, 3), capture.query_count);
+    try std.testing.expectEqualDeep(version, testing.model.version());
+}
+
+test "supported pane graphics clears fallbacks without querying physical resources" {
+    var testing = try FallbackTestingModel.init();
+    defer testing.deinit();
+    _ = testing.model.setPaneGraphicsFallback(testing.first, true).?;
+    _ = testing.model.setPaneGraphicsFallback(testing.second, true).?;
+    _ = testing.model.setPaneGraphicsFallback(testing.third, true).?;
+    _ = (try testing.model.observeHostCapability(.{ .kitty_graphics = .supported })).?;
+    const version = testing.model.version();
+    const with_graphics = [_]schema.PaneId{ testing.first, testing.second, testing.third };
+    var capture: FallbackCapture = .{ .with_graphics = &with_graphics };
+    var handler: SyncPaneGraphicsFallbacksHandler = .{
+        .model = testing.model,
+        .effects = capture.port(),
+    };
+
+    handler.execute();
+
+    try std.testing.expectEqual(@as(usize, 0), capture.query_count);
+    try std.testing.expect(!testing.model.workspace.findPane(testing.first).?.graphics_placeholder);
+    try std.testing.expect(!testing.model.workspace.findPane(testing.second).?.graphics_placeholder);
+    try std.testing.expect(!testing.model.workspace.findPane(testing.third).?.graphics_placeholder);
+    try std.testing.expectEqual(version.pane_graphics + 3, testing.model.version().pane_graphics);
+}
+
 test "pane graphics commits fallback after physical resource application" {
     var testing = try TestingModel.init();
     defer testing.deinit();
@@ -203,7 +374,6 @@ test "pane graphics commits fallback after physical resource application" {
     };
     var handler: ReconcilePaneGraphicsHandler = .{
         .model = testing.model,
-        .fallback_required = true,
         .effects = capture.port(),
     };
 
@@ -216,13 +386,33 @@ test "pane graphics commits fallback after physical resource application" {
     try std.testing.expectEqualDeep(client_model.Version{ .pane_graphics = 1 }, testing.model.version());
 }
 
+test "pane graphics derives fallback from committed host support" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    _ = (try testing.model.observeHostCapability(.{ .kitty_graphics = .supported })).?;
+    var capture: EffectsCapture = .{
+        .model = testing.model,
+        .result = .{ .changed = .{ .pane_id = testing.pane_id, .has_graphics = true } },
+    };
+    var handler: ReconcilePaneGraphicsHandler = .{
+        .model = testing.model,
+        .effects = capture.port(),
+    };
+
+    const outcome = try handler.execute(testing.command());
+
+    try std.testing.expect(outcome == .applied);
+    try std.testing.expect(outcome.applied.fallback == null);
+    try std.testing.expect(!testing.model.workspace.findPane(testing.pane_id).?.graphics_placeholder);
+    try std.testing.expectEqualDeep(client_model.Version{ .host_capabilities = 1 }, testing.model.version());
+}
+
 test "pane graphics stale resource result has no semantic or recovery effects" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: EffectsCapture = .{ .model = testing.model, .result = .unchanged };
     var handler: ReconcilePaneGraphicsHandler = .{
         .model = testing.model,
-        .fallback_required = true,
         .effects = capture.port(),
     };
 
@@ -242,7 +432,6 @@ test "pane graphics revision break requests a snapshot after resource applicatio
     };
     var handler: ReconcilePaneGraphicsHandler = .{
         .model = testing.model,
-        .fallback_required = true,
         .effects = capture.port(),
     };
 
@@ -266,7 +455,6 @@ test "shared graphics failure disables mapping before requesting a snapshot" {
     };
     var handler: ReconcilePaneGraphicsHandler = .{
         .model = testing.model,
-        .fallback_required = false,
         .effects = capture.port(),
     };
 
@@ -290,7 +478,6 @@ test "shared graphics recovery preserves downgrade when snapshot enqueue fails" 
     };
     var handler: ReconcilePaneGraphicsHandler = .{
         .model = testing.model,
-        .fallback_required = false,
         .effects = capture.port(),
     };
 

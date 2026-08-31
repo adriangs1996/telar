@@ -23,7 +23,7 @@ pub fn apply(client: *Client, command: pane_graphics.Command) !pane_graphics.Out
         }
     }
 
-    var use_case = handler(client);
+    var use_case = reconciliationHandler(client);
     return use_case.execute(command);
 }
 
@@ -35,23 +35,20 @@ pub fn apply(client: *Client, command: pane_graphics.Command) !pane_graphics.Out
 /// syncFallbacks(client);
 /// ```
 pub fn syncFallbacks(client: *Client) void {
-    const fallback_required = client.model.hostCapabilities().kitty_graphics != .supported;
-    var tabs = client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |pane| {
-            _ = client.model.setPaneGraphicsFallback(
-                pane.id,
-                fallback_required and client.graphics_store.hasPaneGraphics(pane.id),
-            );
-        }
-    }
+    var use_case: pane_graphics.SyncPaneGraphicsFallbacksHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .has_graphics = hasGraphics,
+        },
+    };
+
+    use_case.execute();
 }
 
-fn handler(client: *Client) pane_graphics.ReconcilePaneGraphicsHandler {
+fn reconciliationHandler(client: *Client) pane_graphics.ReconcilePaneGraphicsHandler {
     return .{
         .model = &client.model,
-        .fallback_required = client.model.hostCapabilities().kitty_graphics != .supported,
         .effects = .{
             .context = client,
             .apply = applyResources,
@@ -59,6 +56,12 @@ fn handler(client: *Client) pane_graphics.ReconcilePaneGraphicsHandler {
             .disable_shared = disableShared,
         },
     };
+}
+
+fn hasGraphics(context: *anyopaque, pane_id: schema.PaneId) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return client.graphics_store.hasPaneGraphics(pane_id);
 }
 
 fn applyResources(context: *anyopaque, command: pane_graphics.Command) !pane_graphics.ResourceResult {
