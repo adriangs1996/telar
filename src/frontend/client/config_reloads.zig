@@ -101,7 +101,7 @@ const AdoptionContext = struct {
         client.lua_generation = context.adoption.generation;
         client.plugin_registry = context.adoption.registry;
         client.trust_store = context.adoption.trust_store;
-        client.input_router = context.adoption.router;
+        client.host_input.replaceRouter(client.io, context.adoption.router);
         client.sidebar_rendering = context.adoption.sidebar_rendering;
         client.sound_playback.configure(snapshot.sound);
         _ = client.model.clearDiagnostic();

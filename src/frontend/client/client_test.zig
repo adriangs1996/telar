@@ -34,6 +34,7 @@ const client_model = @import("model.zig");
 const client_telemetry = @import("telemetry.zig");
 const config_reload_worker = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
+const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
@@ -432,12 +433,12 @@ fn testingConfigAdoptionSource(number: u64, source: []const u8) !config_reloads.
     const trust_store = try std.testing.allocator.create(core.plugin.TrustStore);
     errdefer std.testing.allocator.destroy(trust_store);
     trust_store.* = .{};
-    var router = try config_reload_worker.buildInputRouter(
-        generation.snapshot.prefix,
-        generation.snapshot.bindingSlice(),
-    );
-    router.escape_timeout_ns = generation.snapshot.input_escape_timeout_ns;
-    router.sequence_timeout_ns = generation.snapshot.input_sequence_timeout_ns;
+    const router = try host_inputs.buildRouter(.{
+        .prefix = generation.snapshot.prefix,
+        .bindings = generation.snapshot.bindingSlice(),
+        .escape_timeout_ns = generation.snapshot.input_escape_timeout_ns,
+        .sequence_timeout_ns = generation.snapshot.input_sequence_timeout_ns,
+    });
 
     return .{
         .generation = generation,
@@ -547,8 +548,35 @@ test "host input arriving while no tab exists is dropped, not a crash" {
     var chunk: InputChunk = .{};
     chunk.bytes[0] = 'x';
     chunk.len = 1;
-    try std.testing.expect(!try harness.client.handleHostInput(chunk));
+    try std.testing.expect(!try host_inputs.handleRead(harness.client, chunk));
     try std.testing.expectEqual(@as(usize, 0), harness.client.outbox.len);
+}
+
+test "host input reads pause at outbox capacity and resume with one token" {
+    const io = std.testing.io;
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    while (client.outbox.hasCapacity()) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+
+    try host_inputs.scheduleRead(client);
+    try std.testing.expect(!client.host_input.read_pending);
+
+    client.outbox = .{};
+    try host_inputs.scheduleRead(client);
+    try host_inputs.scheduleRead(client);
+    try std.testing.expect(client.host_input.read_pending);
+    try harness.input_write.writeStreamingAll(io, "x");
+
+    switch (try client.select.await()) {
+        .input => |result| try std.testing.expect(!try host_inputs.handleRead(client, result)),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expect(client.host_input.read_pending);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
 
 test "bootstrap answers the initial open with both snapshot requests" {
@@ -1635,7 +1663,7 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
         var chunk: InputChunk = .{};
         @memcpy(chunk.bytes[0..host_bytes.len], host_bytes);
         chunk.len = host_bytes.len;
-        try std.testing.expect(!try harness.client.handleHostInput(chunk));
+        try std.testing.expect(!try host_inputs.handleRead(harness.client, chunk));
         try harness.settle();
 
         var received: [32]u8 = undefined;
@@ -5419,6 +5447,15 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expect(!client.model.sidebarVisible());
     try std.testing.expect(!client.model.paneGaps());
     try std.testing.expect(!client.view.sidebar_requested);
+    try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+s"), client.host_input.router.prefix.?);
+    try std.testing.expectEqual(
+        @as(u64, 40 * std.time.ns_per_ms),
+        client.host_input.router.escape_timeout_ns,
+    );
+    try std.testing.expectEqual(
+        @as(u64, 750 * std.time.ns_per_ms),
+        client.host_input.router.sequence_timeout_ns,
+    );
     try std.testing.expectEqual(sound_capability.Snapshot{
         .configuration = .{ .enabled = false },
         .active = true,
@@ -6133,10 +6170,24 @@ test "input timer expiries with nothing pending are a no-op" {
     try harness.init();
     defer harness.deinit();
 
-    try std.testing.expect(!try harness.client.handleInputTimeoutEvent({}));
-    try std.testing.expect(!try harness.client.handleBindingTimeoutEvent({}));
-    try std.testing.expect(!harness.client.input_timeout_pending);
-    try std.testing.expect(!harness.client.binding_timeout_pending);
+    try std.testing.expect(!try host_inputs.handleInputTimeout(harness.client, {}));
+    try std.testing.expect(!try host_inputs.handleBindingTimeout(harness.client, {}));
+    try std.testing.expect(!harness.client.host_input.input_timeout.pending);
+    try std.testing.expect(!harness.client.host_input.binding_timeout.pending);
+
+    harness.client.host_input.input_timeout.pending = true;
+    try std.testing.expectError(
+        error.InputTimerFailed,
+        host_inputs.handleInputTimeout(harness.client, error.InputTimerFailed),
+    );
+    try std.testing.expect(!harness.client.host_input.input_timeout.pending);
+
+    harness.client.host_input.binding_timeout.pending = true;
+    try std.testing.expectError(
+        error.BindingTimerFailed,
+        host_inputs.handleBindingTimeout(harness.client, error.BindingTimerFailed),
+    );
+    try std.testing.expect(!harness.client.host_input.binding_timeout.pending);
 }
 
 test "a Kitty capability response commits before fallback projection and presentation" {

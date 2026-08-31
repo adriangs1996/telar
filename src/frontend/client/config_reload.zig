@@ -7,18 +7,16 @@
 const std = @import("std");
 const core = @import("telar-core");
 const graphics = @import("../graphics/root.zig");
-const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
-const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
+const host_inputs = @import("host_inputs.zig");
 
 const Io = std.Io;
 
 const client_mod = @import("client.zig");
 const ClientEvent = client_mod.ClientEvent;
-const InputRouter = client_mod.InputRouter;
-const ConfiguredBinding = lua_config.ConfiguredBinding;
+const InputRouter = host_inputs.Router;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
@@ -158,18 +156,18 @@ pub fn resolve(
                 "reloaded sidebar renderer is unavailable: {s}",
                 .{@errorName(err)},
             );
-            var router = buildInputRouter(
-                snapshot.prefix,
-                snapshot.bindingSlice(),
-            ) catch |err| return reject(
+            const router = host_inputs.buildRouter(.{
+                .prefix = snapshot.prefix,
+                .bindings = snapshot.bindingSlice(),
+                .escape_timeout_ns = snapshot.input_escape_timeout_ns,
+                .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
+            }) catch |err| return reject(
                 state,
                 gpa,
                 loaded,
                 "reloaded keymap is invalid: {s}",
                 .{@errorName(err)},
             );
-            router.escape_timeout_ns = snapshot.input_escape_timeout_ns;
-            router.sequence_timeout_ns = snapshot.input_sequence_timeout_ns;
             state.clearOrphans();
             state.mtime_ns = loaded.mtime_ns;
             state.next_generation += 1;
@@ -199,11 +197,6 @@ fn reject(
     gpa.destroy(loaded.registry);
     gpa.destroy(loaded.trust_store);
     return .{ .rejected = diagnostic };
-}
-
-pub fn buildInputRouter(prefix: keybind.Key, configured: []const ConfiguredBinding) !InputRouter {
-    const resolved = try lua_config.resolveBindings(prefix, configured);
-    return InputRouter.initWithPrefix(resolved.slice(), prefix);
 }
 
 /// The pieces the async task has built so far, so every failure unwinds

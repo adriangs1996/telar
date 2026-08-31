@@ -18,6 +18,7 @@ const sidebar_animations = @import("sidebar_animations.zig");
 const Client = @import("client.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const client_telemetry = @import("telemetry.zig");
+const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
 const Options = Client.Options;
@@ -119,9 +120,9 @@ pub fn run(
         const path = diagnostics.enter(clientEventPath(event));
         defer path.restore();
         switch (event) {
-            .input => |result| if (try client.handleHostInput(result)) return 0,
-            .input_timeout => |result| if (try client.handleInputTimeoutEvent(result)) return 0,
-            .binding_timeout => |result| if (try client.handleBindingTimeoutEvent(result)) return 0,
+            .input => |result| if (try host_inputs.handleRead(client, result)) return 0,
+            .input_timeout => |result| if (try host_inputs.handleInputTimeout(client, result)) return 0,
+            .binding_timeout => |result| if (try host_inputs.handleBindingTimeout(client, result)) return 0,
             .capability_timeout => |result| try client.handleCapabilityTimeoutEvent(result),
             .resized => |result| try client.handleResizeEvent(result, .{
                 .tty = &tty,

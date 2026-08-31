@@ -47,7 +47,9 @@ test {
     _ = @import("config_reload.zig");
     _ = @import("config_reloads.zig");
     _ = @import("copy_modes.zig");
+    _ = @import("deadline_timer.zig");
     _ = @import("host_capabilities.zig");
+    _ = @import("host_inputs.zig");
     _ = @import("host_resizes.zig");
     _ = @import("lua_actions.zig");
     _ = @import("model.zig");

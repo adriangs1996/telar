@@ -108,9 +108,9 @@ entrypoints below.
 
 | Event | Entrypoint |
 | --- | --- |
-| Host terminal bytes | [`Client.handleHostInput`](flows/host-input-to-screen.md) |
-| Input parser deadline | `Client.handleInputTimeoutEvent` |
-| Partial binding deadline | `Client.handleBindingTimeoutEvent` |
+| Host terminal bytes | [`host_inputs.handleRead`](flows/host-input-to-screen.md) |
+| Input parser deadline | [`host_inputs.handleInputTimeout`](flows/host-input-to-screen.md) |
+| Partial binding deadline | [`host_inputs.handleBindingTimeout`](flows/host-input-to-screen.md) |
 | Host capability deadline | [`Client.handleCapabilityTimeoutEvent`](flows/host-capabilities.md) |
 | Host resize | [`Client.handleResizeEvent`](flows/host-resize.md) |
 | Runtime socket read | `Client.handleServerEvent` |

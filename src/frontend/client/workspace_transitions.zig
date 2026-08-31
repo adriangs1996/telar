@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("model.zig");
+const host_inputs = @import("host_inputs.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
 
@@ -71,7 +72,7 @@ pub fn activate(client: *Client, activation: Activation) !void {
     }
 
     try pane_focus.syncResources(client);
-    try client.scheduleInputRead();
+    try host_inputs.scheduleRead(client);
     try client.requestWorkspaceSnapshot(activation.location.workspace);
     try client.requestTabSnapshot(activation.location);
 }

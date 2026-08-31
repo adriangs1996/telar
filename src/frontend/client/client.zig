@@ -9,7 +9,6 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const graphics = @import("../graphics/root.zig");
 const attachments = @import("../attachments/root.zig");
-const action_mod = input_capability.action;
 const client_outbox = @import("outbox.zig");
 const client_requests = @import("requests.zig");
 const client_telemetry = @import("telemetry.zig");
@@ -18,9 +17,7 @@ const client_model = @import("model.zig");
 const notification_capability = @import("../notifications/root.zig");
 const lua_config = @import("../config/root.zig");
 const sound_capability = @import("../sound/root.zig");
-const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
-const mouse_protocol = input_capability.mouse_protocol;
 const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
 const layout_mod = workspace_capability.layout;
@@ -34,7 +31,6 @@ const plugin_broker = @import("../plugins/root.zig");
 const ui_capability = @import("../ui/root.zig");
 const icons = ui_capability.icons;
 const theme = ui_capability.theme;
-const widgets = @import("../widgets/root.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -42,23 +38,11 @@ const schema = core.schema;
 const diagnostics = core.diagnostics;
 const ui = core.ui;
 
-const input_chunk_size = 4096;
-const max_bindings = lua_config.max_bindings;
-const max_binding_keys = lua_config.default_binding_max_keys;
-const held_binding_bytes = 128;
-
-const Action = action_mod.Action;
 const ConfiguredBinding = lua_config.ConfiguredBinding;
-pub const InputRouter = keybind.Router(
-    Action,
-    max_bindings,
-    max_binding_keys,
-    input_chunk_size,
-    held_binding_bytes,
-);
+pub const InputRouter = host_inputs.Router;
+pub const InputChunk = host_inputs.Chunk;
 
 comptime {
-    std.debug.assert(input_chunk_size <= client_outbox.max_input_bytes);
     std.debug.assert(lua_config.max_expression_paste_bytes + 16 <= client_outbox.max_input_bytes);
 }
 
@@ -88,22 +72,11 @@ pub const Options = struct {
     profile: ?[]const u8 = null,
 };
 
-const encodeSgrMouse = mouse_protocol.encodeSgr;
-const mouseTracked = mouse_protocol.tracked;
-
-pub const InputChunk = struct {
-    bytes: [input_chunk_size]u8 = undefined,
-    len: u16 = 0,
-
-    fn slice(chunk: *const InputChunk) []const u8 {
-        return chunk.bytes[0..chunk.len];
-    }
-};
-const InputHandler = @import("input_handler.zig");
 const clipboard_images = @import("clipboard_images.zig");
 const config_reload = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
+const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_timers = @import("notification_timers.zig");
 const notification_flow = @import("notifications.zig");
@@ -171,10 +144,7 @@ view: client_view.State,
 model: client_model.Model,
 navigation_history: navigation.History = .{},
 graphics_store: kitty.Store,
-input_file: File,
-input_router: InputRouter,
-input_timeout_pending: bool = false,
-binding_timeout_pending: bool = false,
+host_input: host_inputs.State,
 lua_generation: ?*lua_config.Generation,
 plugin_registry: ?*plugin_broker.Registry,
 trust_store: ?*core.plugin.TrustStore,
@@ -183,7 +153,6 @@ sidebar_rendering: kitty.SidebarRendering,
 sound_playback: sound_capability.Playback,
 clipboard_capture_resources: attachments.CaptureResources = .{},
 
-input_read_pending: bool = false,
 next_request_id: u64 = 2,
 requests: client_requests.Tracker = .{},
 sidebar_animation_scheduler: sidebar_animations.Scheduler = .{},
@@ -245,9 +214,12 @@ pub fn init(params: Params) !*Client {
     errdefer gpa.free(receive_buffer);
     const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
     errdefer gpa.free(send_buffer);
-    var input_router = try config_reload.buildInputRouter(params.options.prefix, params.options.bindings);
-    input_router.escape_timeout_ns = params.options.input_escape_timeout_ns;
-    input_router.sequence_timeout_ns = params.options.input_sequence_timeout_ns;
+    const host_input = try host_inputs.State.init(params.input_file, .{
+        .prefix = params.options.prefix,
+        .bindings = params.options.bindings,
+        .escape_timeout_ns = params.options.input_escape_timeout_ns,
+        .sequence_timeout_ns = params.options.input_sequence_timeout_ns,
+    });
     client.* = .{
         .io = params.io,
         .gpa = gpa,
@@ -262,8 +234,7 @@ pub fn init(params: Params) !*Client {
         .view = view,
         .model = model,
         .graphics_store = graphics_store,
-        .input_file = params.input_file,
-        .input_router = input_router,
+        .host_input = host_input,
         .lua_generation = params.options.lua_generation,
         .plugin_registry = params.options.plugin_registry,
         .trust_store = params.options.trust_store,
@@ -423,12 +394,6 @@ pub fn returnGraphicsCredits(client: *Client) !void {
     try client.pumpOutbox();
 }
 
-pub fn scheduleInputRead(client: *Client) !void {
-    if (client.input_read_pending or !client.outbox.hasCapacity()) return;
-    try client.select.concurrent(.input, readInput, .{ client.io, client.input_file });
-    client.input_read_pending = true;
-}
-
 pub fn notify(client: *Client, input: notification_capability.Input) !void {
     _ = try notification_flow.publish(client, monotonic(client.io), input);
 }
@@ -471,24 +436,6 @@ pub fn syncSidebarVisibility(client: *Client, change: client_model.SidebarVisibi
 /// ```
 pub fn handleClipboardImageEvent(client: *Client, completion: clipboard_images.Completion) !void {
     try clipboard_images.complete(client, completion);
-}
-
-/// Entrypoint for bytes read from the host terminal. It owns the complete
-/// routing decision: consume a Telar action or enqueue pane input.
-pub fn handleHostInput(client: *Client, result: anyerror!InputChunk) !bool {
-    client.input_read_pending = false;
-    const chunk = try result;
-    if (chunk.len == 0) return true;
-    client.presenter.noteInput(monotonic(client.io));
-    var handler: InputHandler = .{ .client = client };
-    const prefix_was_pending = client.input_router.prefixPending();
-    if (try client.input_router.feed(chunk.slice(), monotonic(client.io), &handler) == .stop)
-        return true;
-    client.syncPrefixStatus(prefix_was_pending, &handler);
-    if (handler.redraw) try client.presenter.requestDraw();
-    try client.scheduleInputTimers();
-    try client.scheduleInputRead();
-    return false;
 }
 
 /// Entrypoint for one completed runtime socket read. It owns decode,
@@ -540,32 +487,6 @@ pub fn handleServerEvent(client: *Client, result: anyerror![]u8) !?u8 {
     return null;
 }
 
-/// Entrypoint for the escape-sequence input timeout: flush what the router held.
-pub fn handleInputTimeoutEvent(client: *Client, result: anyerror!void) !bool {
-    try result;
-    client.input_timeout_pending = false;
-    var handler: InputHandler = .{ .client = client };
-    const prefix_was_pending = client.input_router.prefixPending();
-    if (try client.input_router.expireInput(monotonic(client.io), &handler) == .stop) return true;
-    client.syncPrefixStatus(prefix_was_pending, &handler);
-    if (handler.redraw) try client.presenter.requestDraw();
-    try client.scheduleInputTimers();
-    return false;
-}
-
-/// Entrypoint for the binding-sequence timeout: replay an unfinished chord.
-pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
-    try result;
-    client.binding_timeout_pending = false;
-    var handler: InputHandler = .{ .client = client };
-    const prefix_was_pending = client.input_router.prefixPending();
-    if (try client.input_router.expireBinding(monotonic(client.io), &handler) == .stop) return true;
-    client.syncPrefixStatus(prefix_was_pending, &handler);
-    if (handler.redraw) try client.presenter.requestDraw();
-    try client.scheduleInputTimers();
-    return false;
-}
-
 /// Entrypoint for the capability-probe deadline: settle what the host never answered.
 pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !void {
     try result;
@@ -586,7 +507,7 @@ pub fn handleSentEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.outbox.popSent();
     try client.returnGraphicsCredits();
-    try client.scheduleInputRead();
+    try host_inputs.scheduleRead(client);
 }
 
 /// Entrypoint for the paced draw deadline.
@@ -665,81 +586,12 @@ pub fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect)
     }
 }
 
-fn readInput(io: Io, input: File) anyerror!InputChunk {
-    var chunk: InputChunk = .{};
-    chunk.len = @intCast(try input.readStreaming(io, &.{&chunk.bytes}));
-    return chunk;
-}
-
 /// The model a due draw should present, or null while the client is not
 /// presentable yet. Unwrapping the active tab here used to panic when a
 /// resize arrived before the runtime answered the initial open request.
 pub fn presentableModel(tabs: *tabs_mod.Model) ?*multiplexer.Model {
     const active = tabs.active() orelse return null;
     return &active.model;
-}
-
-pub fn statusMode(client: *const Client) widgets.status_bar.Mode {
-    if (client.input_router.prefixPending()) {
-        const DescribedAction = struct {
-            action: Action,
-            label: []const u8,
-        };
-        const useful = [_]DescribedAction{
-            .{ .action = .{ .split_pane = .horizontal }, .label = "split right" },
-            .{ .action = .{ .split_pane = .vertical }, .label = "split down" },
-            .{ .action = .new_tab, .label = "new tab" },
-            .{ .action = .new_workspace, .label = "new workspace" },
-            .{ .action = .rename_tab, .label = "rename tab" },
-            .{ .action = .rename_workspace, .label = "rename workspace" },
-            .{ .action = .close_pane, .label = "close pane" },
-            .{ .action = .enter_copy_mode, .label = "copy mode" },
-        };
-        var hints: widgets.status_bar.Hints = .{};
-        for (useful) |described| {
-            const key = client.input_router.prefixedKeyForAction(described.action) orelse
-                continue;
-            hints.append(.{ .key = key, .label = described.label });
-        }
-        return .{ .prefix = hints };
-    }
-    return if (client.model.copyModeActive()) .copy else .normal;
-}
-
-fn syncPrefixStatus(
-    client: *Client,
-    prefix_was_pending: bool,
-    handler: *InputHandler,
-) void {
-    if (prefix_was_pending == client.input_router.prefixPending()) return;
-    client.view.invalidate();
-    handler.redraw = true;
-}
-
-fn scheduleInputTimers(client: *Client) !void {
-    if (!client.input_timeout_pending) {
-        if (client.input_router.inputDeadline()) |deadline| {
-            client.input_timeout_pending = true;
-            client.select.concurrent(.input_timeout, waitUntil, .{ client.io, deadline }) catch |err| {
-                client.input_timeout_pending = false;
-                return err;
-            };
-        }
-    }
-    if (!client.binding_timeout_pending) {
-        if (client.input_router.bindingDeadline()) |deadline| {
-            client.binding_timeout_pending = true;
-            client.select.concurrent(.binding_timeout, waitUntil, .{ client.io, deadline }) catch |err| {
-                client.binding_timeout_pending = false;
-                return err;
-            };
-        }
-    }
-}
-
-fn waitUntil(io: Io, deadline_ns: u64) anyerror!void {
-    const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
-    try deadline.wait(io);
 }
 
 pub fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {

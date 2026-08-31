@@ -73,13 +73,14 @@ another request later.
 
 ## Time and presentation
 
-`notification_timers.Scheduler` asks
+`notification_timers` asks
 `ClientModel.nextNotificationDeadline` for the next useful wakeup. Moving
 items wake at the presenter's frame interval, while stable items sleep until
-expiry. The scheduler owns one atomic deadline, one wake event and one pending
-client select task. Replacing a pending deadline sets the wake event rather
-than adding another task. Its fixed two-way select discards whichever wait
-loses the race.
+expiry. It uses the same `deadline_timer.Scheduler` as host input. The
+scheduler owns one atomic deadline, one wake event and one pending client
+select task. Replacing or removing a deadline sets the wake event rather than
+adding another task. Its fixed two-way select discards whichever wait loses
+the race.
 
 `notifications.handleTick` releases the completed task before checking its
 result. It then executes `AdvanceNotificationsHandler`, which advances the
@@ -150,8 +151,11 @@ new notifications after reconciliation.
 - `src/frontend/client/notifications.zig` proves runtime wire translation,
   delivery correlation, timer event ordering and connection of application use
   cases to client infrastructure.
-- `src/frontend/client/notification_timers.zig` proves deadline replacement
-  and pending-token release after successful and failed completions.
+- `src/frontend/client/notification_timers.zig` maps model deadlines to the
+  shared scheduler and notification events.
+- `src/frontend/client/deadline_timer.zig` proves deadline replacement,
+  removal, parking and pending-token release after successful and failed
+  completions.
 - `src/frontend/client/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
 - `src/frontend/client/client_test.zig` proves wire and local producers, a real

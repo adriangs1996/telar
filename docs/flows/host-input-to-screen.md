@@ -11,7 +11,7 @@ then emits output, that output returns through VT state and the client renderer.
 host TTY bytes
       |
       v
-Client.handleHostInput
+host_inputs.handleRead
       |
       v
 keybind.Router.feed -> term.parse -> Router.routeKey
@@ -57,18 +57,22 @@ host TTY bytes
 
 ## 1. Host terminal entry
 
-`client.run` in `src/frontend/client/root.zig` opens `platform.Tty`, schedules
-`readInput`, and classifies its completion as `.input`. The event loop delegates
-that completion to `Client.handleHostInput`.
+`client.run` opens `platform.Tty` and gives its read handle to
+`host_inputs.State`. That state owns the handle, native router, one read token
+and the two replaceable deadline schedulers. Workspace activation and socket
+send completion call `host_inputs.scheduleRead`. The scheduler pauses when the
+bounded outbox has no capacity and never publishes a second read while one is
+pending.
 
-`Client.handleHostInput` owns this entrypoint's ordering:
+The read completes as `.input`. The event loop delegates it to
+`host_inputs.handleRead`, which owns this ordering:
 
 1. release the outstanding-read flag;
 2. stop on EOF;
 3. record input activity for media pacing;
 4. call `keybind.Router.feed` with an `InputHandler`;
 5. request a draw for immediate `View` changes that have no model revision;
-6. schedule input and binding deadlines;
+6. synchronize input and binding deadlines;
 7. schedule the next TTY read.
 
 After the entrypoint returns, the event loop publishes `ClientModel.Version`.
@@ -80,6 +84,19 @@ classifies a key against the compiled keymap. The configured prefix enters a
 persistent router state and therefore schedules no binding deadline. Escape
 cancels that state; an unmatched suffix clears it without forwarding either
 key. Partial global sequences retain the configured binding timeout.
+
+`host_inputs.handleInputTimeout` and `handleBindingTimeout` release their
+worker token before asking the router to expire partial state. Both paths reuse
+the same prefix invalidation, draw request and timer synchronization as a TTY
+read.
+
+Each deadline uses `deadline_timer.Scheduler`. It stores one atomic absolute
+deadline, one wake event and one pending worker. Replacing or removing a
+deadline wakes that worker instead of queueing another. A configuration reload
+compiles a complete replacement router, swaps it through
+`State.replaceRouter`, and clears both old deadlines. A new partial sequence
+can then wake the retained workers with the replacement timeout; it never
+waits for the old configuration's deadline.
 
 ## 2A. Telar action branch
 
@@ -252,6 +269,13 @@ The `.draw` event calls `Client.handleDrawEvent`, then `Client.presentDue` and
 
 ## Proof
 
+- `src/frontend/client/deadline_timer.zig` proves replacement, removal,
+  parking, wakeup and token release for successful and failed workers.
+- `src/frontend/client/host_inputs.zig` proves owned timeout configuration,
+  router replacement without duplicate workers and prefix-status projection.
+- `host input reads pause at outbox capacity and resume with one token` in
+  `src/frontend/client/client_test.zig` proves real pipe backpressure, one read
+  token and rearming after routing.
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
 - The persistent-prefix, invalid-suffix, Escape-cancellation, and global-timeout

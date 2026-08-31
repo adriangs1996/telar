@@ -388,7 +388,7 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
         .prompt = client.model.name_prompt.current(),
         .proxy_tls_active = client.model.proxyTlsActive(),
         .system_metrics = client.model.systemMetrics(),
-        .status_mode = client.statusMode(),
+        .status_mode = client.host_input.statusMode(client.model.copyModeActive()),
         .force = composed.full,
         .diagnostic = client.model.diagnostic(),
     });
