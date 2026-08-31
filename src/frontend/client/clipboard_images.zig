@@ -4,6 +4,7 @@ const std = @import("std");
 const attachments = @import("../attachments/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const notification_flow = @import("notifications.zig");
 const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
@@ -127,17 +128,17 @@ fn resize(raw_context: *anyopaque) !void {
 fn handleOutcome(client: *Client, outcome: clipboard_image.CompletionOutcome) !void {
     switch (outcome) {
         .applied, .stale, .ignored, .no_image => {},
-        .too_large => try client.notify(.{
+        .too_large => try notification_flow.publishNow(client, .{
             .level = .failure,
             .title = "Image preview skipped",
             .message = "The clipboard image exceeds Telar's local preview limit",
         }),
-        .worker_failed => |err| try client.notify(.{
+        .worker_failed => |err| try notification_flow.publishNow(client, .{
             .level = .failure,
             .title = "Image preview failed",
             .message = @errorName(err),
         }),
-        .adoption_failed => |err| try client.notify(.{
+        .adoption_failed => |err| try notification_flow.publishNow(client, .{
             .level = .failure,
             .title = "Image preview failed",
             .message = @errorName(err),

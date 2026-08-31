@@ -9,6 +9,7 @@ const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const client_actions = @import("actions.zig");
+const notification_flow = @import("notifications.zig");
 const plugin_action = client_application.plugin_action;
 
 pub const Completion = struct {
@@ -61,7 +62,7 @@ pub fn start(client: *Client, requested: input.action.PluginAction, callback_con
                 "plugin action cannot be resolved: {s}",
                 .{@errorName(err)},
             );
-            try client.notifyDiagnostic("Plugin action rejected");
+            try notification_flow.publishDiagnostic(client, "Plugin action rejected");
             return .rejected;
         },
         else => return err,
@@ -164,7 +165,7 @@ fn handleOutcome(client: *Client, outcome: plugin_action.CompletionOutcome) !boo
         .stale, .ignored => return false,
         .worker_failed => |err| {
             _ = try client.model.setDiagnostic("plugin worker failed: {s}", .{@errorName(err)});
-            try client.notifyDiagnostic("Plugin failed");
+            try notification_flow.publishDiagnostic(client, "Plugin failed");
             return false;
         },
         .authorization_failed => |err| {
@@ -178,7 +179,7 @@ fn handleOutcome(client: *Client, outcome: plugin_action.CompletionOutcome) !boo
                 _ = try client.model.setDiagnostic("plugin effect denied: {s}", .{@errorName(err)});
                 break :denied "Plugin denied";
             };
-            try client.notifyDiagnostic(title);
+            try notification_flow.publishDiagnostic(client, title);
             return false;
         },
     }

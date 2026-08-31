@@ -4,6 +4,7 @@ const std = @import("std");
 const lua_config = @import("../config/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const notification_flow = @import("notifications.zig");
 const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
@@ -33,7 +34,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
         .unchanged => .unchanged,
         .rejected => |diagnostic| rejected: {
             try publishDiagnostic(client, diagnostic);
-            try client.notifyDiagnostic("Configuration rejected");
+            try notification_flow.publishDiagnostic(client, "Configuration rejected");
             break :rejected .rejected;
         },
         .adopted => |adoption| .{ .adopted = try apply(client, adoption) },
@@ -147,7 +148,7 @@ fn applyAdoption(raw_context: *anyopaque, commit: client_model.ConfigurationComm
         }
     }
 
-    try client.notify(.{
+    try notification_flow.publishNow(client, .{
         .level = .success,
         .title = "Configuration reloaded",
         .message = "The new settings are active",

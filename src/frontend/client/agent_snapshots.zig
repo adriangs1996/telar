@@ -7,6 +7,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const attachment_targets = @import("attachment_targets.zig");
 const notifications = @import("../notifications/root.zig");
+const notification_flow = @import("notifications.zig");
 const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
@@ -81,7 +82,7 @@ fn alert(context: *anyopaque, change: client_model.AgentStatusChange) !void {
         .{ providerName(change.provider), change.pane_index, statusName(change.current) },
     ) catch "Agent status changed";
 
-    try client.notify(.{
+    try notification_flow.publishNow(client, .{
         .level = switch (change.current) {
             .blocked => .warning,
             .ready => .success,

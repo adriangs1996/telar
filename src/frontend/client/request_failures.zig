@@ -6,6 +6,7 @@ const notifications = @import("../notifications/root.zig");
 const client_requests = @import("requests.zig");
 
 const Client = @import("client.zig");
+const notification_flow = @import("notifications.zig");
 const pane_attachments = @import("pane_attachments.zig");
 const pane_splits = @import("pane_splits.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
@@ -102,5 +103,5 @@ fn recoverInitialOpen(context: *anyopaque, failure: request_failure.InitialOpenF
 fn publishNotification(context: *anyopaque, input: notifications.Input) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.notify(input);
+    try notification_flow.publishNow(client, input);
 }

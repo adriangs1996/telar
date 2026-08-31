@@ -12,7 +12,6 @@ const attachments = @import("../attachments/root.zig");
 const client_telemetry = @import("telemetry.zig");
 const client_view = @import("view.zig");
 const client_model = @import("model.zig");
-const notification_capability = @import("../notifications/root.zig");
 const lua_config = @import("../config/root.zig");
 const sound_capability = @import("../sound/root.zig");
 const keybind = input_capability.keybind;
@@ -71,7 +70,6 @@ const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_timers = @import("notification_timers.zig");
-const notification_flow = @import("notifications.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
@@ -256,21 +254,6 @@ pub fn deinit(client: *Client) void {
     client.presenter.deinit();
     client.runtime_transport.deinit(gpa);
     gpa.destroy(client);
-}
-
-pub fn notify(client: *Client, input: notification_capability.Input) !void {
-    _ = try notification_flow.publish(client, monotonic(client.io), input);
-}
-
-pub fn notifyDiagnostic(client: *Client, title: []const u8) !void {
-    const message = client.model.diagnostic() orelse return error.ClientDiagnosticMissing;
-
-    try client.notify(.{
-        .level = .failure,
-        .title = title,
-        .message = message,
-        .duration_ns = 7 * std.time.ns_per_s,
-    });
 }
 
 /// Synchronizes a committed sidebar preference with disposable view,

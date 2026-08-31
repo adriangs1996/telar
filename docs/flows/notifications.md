@@ -10,7 +10,7 @@ starts exiting.
 ```text
 runtime notification             request failure or local diagnostic
         |                                      |
-notifications.applyRuntime                  Client.notify
+notifications.applyRuntime       publishNow or publishDiagnostic
         |                                      |
 wire-to-client translation                    |
         +------------------+-------------------+
@@ -35,8 +35,11 @@ adapter translates protocol level, target and millisecond duration into client
 notification values, adds the monotonic timestamp and invokes the existing
 publication use case. Request failures, agent and proxy transitions,
 configuration or plugin diagnostics, and clipboard image failures enter
-through `Client.notify` and converge on the same use case. The handler commits
-the owned model state before it touches timer infrastructure.
+through `notifications.publishNow` or `publishDiagnostic` and converge on the
+same use case. `publishNow` owns monotonic timestamp acquisition.
+`publishDiagnostic` requires the model's current diagnostic and applies the
+bounded failure level and seven-second duration. The handler commits the owned
+model state before it touches timer infrastructure.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
 keeps at most four items, refreshes an equivalent active item and replaces the
@@ -87,11 +90,11 @@ result. It then executes `AdvanceNotificationsHandler`, which advances the
 center from elapsed monotonic time, commits `Version.notifications` only when
 state changed and rearms the next deadline.
 
-The client run loop calls `presentation_lifecycle.observe` after the event. `Presenter`
-compares the notification version with the last version it painted, invalidates
-the view and passes `ClientModel.notificationSnapshot()` into the next paced
-frame. Several lifecycle ticks inside one frame budget therefore fold into one
-projection of the latest state.
+The client run loop calls `presentation_lifecycle.observe` after the event.
+`Presenter` compares the notification version with the last version it painted,
+invalidates the view and passes `ClientModel.notificationSnapshot()` into the
+next paced frame. Several lifecycle ticks inside one frame budget therefore
+fold into one projection of the latest state.
 
 Cell toasts and the Kitty Graphics renderer consume the same immutable center.
 The view stores only physical presentation state such as hit regions, overlay
@@ -148,9 +151,9 @@ new notifications after reconciliation.
 - `src/frontend/client/application/notifications.zig` proves commit-before-
   timer ordering, delivery policy, stale interaction behavior and retained
   commits when timer scheduling fails.
-- `src/frontend/client/notifications.zig` proves runtime wire translation,
-  delivery correlation, timer event ordering and connection of application use
-  cases to client infrastructure.
+- `src/frontend/client/notifications.zig` owns local timestamp acquisition,
+  diagnostic publication, runtime wire translation, delivery correlation and
+  timer event ordering.
 - `src/frontend/client/notification_timers.zig` maps model deadlines to the
   shared scheduler and notification events.
 - `src/frontend/client/deadline_timer.zig` proves deadline replacement,
@@ -158,5 +161,6 @@ new notifications after reconciliation.
   completions.
 - `src/frontend/client/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
-- `src/frontend/client/client_test.zig` proves wire and local producers, a real
-  lifecycle tick, presenter-owned projection and bounded agent alerts.
+- `src/frontend/client/client_test.zig` proves wire and local producers,
+  diagnostic ownership and duration, a real lifecycle tick, presenter-owned
+  projection and bounded agent alerts.

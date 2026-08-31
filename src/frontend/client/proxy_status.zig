@@ -7,6 +7,7 @@ const client_model = @import("model.zig");
 const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
+const notification_flow = @import("notifications.zig");
 const proxy_status = client_application.proxy_status;
 const schema = core.schema;
 
@@ -34,7 +35,7 @@ fn handler(client: *Client) proxy_status.ApplyProxyStatusHandler {
 fn announce(context: *anyopaque, commit: client_model.ProxyStatusCommit) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.notify(.{
+    try notification_flow.publishNow(client, .{
         .level = if (commit.active) .warning else .info,
         .title = if (commit.active) "TLS interception active" else "TLS interception stopped",
         .message = if (commit.active)
