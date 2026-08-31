@@ -17,6 +17,7 @@ const passthrough_policy = @import("passthrough_policy.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
 const tunnel_exchange = @import("tunnel/exchange.zig");
+const tunnel_http1 = @import("tunnel/http1.zig");
 const tunnel_tls = @import("tunnel/tls.zig");
 
 const Io = std.Io;
@@ -244,38 +245,7 @@ test "proxy listeners own distinct loopback ports" {
     try std.testing.expect(first.port != second.port);
 }
 
-const UpgradeRoute = struct {
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-};
-
 const TunnelContext = tunnel_exchange.Exchange;
-
-const Http1Context = struct {
-    service: *Service,
-    session: *tls.Session,
-    tunnel: *TunnelContext,
-    request: provider.RequestObserver = .{},
-};
-
-const http1_exchange_port: http.ExchangePort(Http1Context) = .{
-    .io = http1Io,
-    .relay_body = relayHttpRequestBody,
-    .relay_response = relayHttpResponse,
-};
-
-const RelayHttp1Exchange = http.Exchange(Http1Context, http1_exchange_port);
-
-const http1_connection_port: http.ConnectionPort(Http1Context) = .{
-    .read_request = relayHttpRequestHead,
-    .exchange = relayHttpExchange,
-    .publish_request = publishHttpRequest,
-    .publish_response = publishHttpResponse,
-    .publish_failure = publishHttpFailure,
-    .upgrade = upgradeHttpConnection,
-};
-
-const RelayHttp1Connection = http.Connection(Http1Context, http1_connection_port);
 
 const H2Context = struct {
     service: *Service,
@@ -377,7 +347,7 @@ const H2EventObserver = struct {
 
 fn publishH2RequestClass(context: *TunnelContext, stream_id: u32, classification: provider.RequestClass) void {
     context.publishStatus(.{
-        .phase = httpRequestPhase(classification),
+        .phase = tunnel_exchange.requestPhase(classification),
         .stream_id = stream_id,
         .status_code = 0,
     });
@@ -478,13 +448,13 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
         return;
     }
 
-    var http1_context: Http1Context = .{
-        .service = service,
+    var http1_connection = tunnel_http1.Connection.init(.{
+        .io = service.io,
+        .transforms = &service.transforms,
         .session = session,
-        .tunnel = &context,
-    };
-    defer http1_context.request.deinit();
-    RelayHttp1Connection.run(&http1_context);
+        .exchange = &context,
+    });
+    http1_connection.run();
 }
 
 fn recordAuthenticationRejection(service: *Service, rejection: connect_authentication.RejectionMetric) void {
@@ -553,208 +523,6 @@ fn settleH2Connection(context: *H2Context) void {
     // A stream-zero failure settles any exchange left open when the transport
     // disappeared. The agent model ignores it after every stream settled.
     context.tunnel.publish(.request_failed, 0);
-}
-
-const HttpRequestObserver = struct {
-    request: *provider.RequestObserver,
-
-    /// Feeds decoded payload bytes to the active provider request classifier.
-    ///
-    /// ```zig
-    /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
-    /// ```
-    pub fn observe(observer: HttpRequestObserver, fragment: http.BodyFragment) void {
-        observer.request.feed(fragment.payload);
-    }
-};
-
-fn http1Io(context: *Http1Context) Io {
-    return context.service.io;
-}
-
-fn relayHttpRequestHead(context: *Http1Context) ?http.RequestHead {
-    context.request.deinit();
-
-    const parsed = http.relayHeadTransformed(context.session, .{
-        .route = .{
-            .from = .child,
-            .to = .origin,
-            .is_response = false,
-            .response_to_head = false,
-            .provider = context.tunnel.provider,
-        },
-        .pipeline = &context.service.transforms,
-        .io = context.service.io,
-        .context = context.tunnel.transformContext(.{ .direction = .request, .kind = .request, .stream_id = 0 }),
-    }) orelse return null;
-
-    return .{
-        .classification = parsed.classification,
-        .body = parsed.framing,
-        .response_context = if (parsed.message.head_request) .head_request else .normal,
-    };
-}
-
-fn relayHttpExchange(context: *Http1Context, request: http.RequestHead) http.ExchangeOutcome {
-    return RelayHttp1Exchange.execute(context, request);
-}
-
-fn relayHttpRequestBody(context: *Http1Context, framing: http.BodyPlan) bool {
-    const inspect = context.request.isActive();
-    defer {
-        if (inspect) {
-            context.request.deinit();
-        }
-    }
-    const forwarded = http.relayBody(
-        context.session,
-        .{ .from = .child, .to = .origin, .framing = framing },
-        HttpRequestObserver{ .request = &context.request },
-    );
-
-    if (forwarded and inspect) {
-        finishHttpRequest(context);
-    }
-
-    return forwarded;
-}
-
-fn finishHttpRequest(context: *Http1Context) void {
-    context.tunnel.publish(httpRequestPhase(context.request.finish()), 0);
-}
-
-fn relayHttpResponse(context: *Http1Context, request: http.RequestHead) ?http.ResponseHead {
-    while (true) {
-        const head = http.relayHeadTransformed(context.session, .{
-            .route = .{
-                .from = .origin,
-                .to = .child,
-                .is_response = true,
-                .response_to_head = request.response_context == .head_request,
-            },
-            .pipeline = &context.service.transforms,
-            .io = context.service.io,
-            .context = context.tunnel.transformContext(.{ .direction = .response, .kind = .response, .stream_id = 0 }),
-        }) orelse return null;
-
-        var observer: HttpResponseObserver = .init(
-            context.tunnel,
-            shouldInspectHttpResponse(request, head),
-        );
-        const forwarded = http.relayBody(
-            context.session,
-            .{ .from = .origin, .to = .child, .framing = head.framing },
-            &observer,
-        );
-        observer.deinit();
-
-        if (!forwarded) {
-            return null;
-        }
-
-        if (!head.message.informational) {
-            return semanticResponseHead(head);
-        }
-    }
-}
-
-fn semanticResponseHead(head: http.Head) http.ResponseHead {
-    return .{
-        .status_code = head.message.status_code,
-        .body = head.framing,
-        .kind = if (head.message.informational)
-            .informational
-        else if (head.message.upgrade)
-            .upgrade
-        else
-            .final,
-        .connection = if (head.message.closes) .close else .keep_alive,
-    };
-}
-
-fn publishHttpRequest(context: *Http1Context, request: http.RequestHead) void {
-    if (shouldClassifyHttpRequest(context, request)) {
-        context.request.init(context.tunnel.provider);
-        return;
-    }
-
-    const classification: http.RequestClass = if (context.tunnel.provider == .claude and
-        request.classification == .inference)
-        .auxiliary
-    else
-        request.classification;
-    context.tunnel.publish(httpRequestPhase(classification), 0);
-}
-
-fn shouldClassifyHttpRequest(context: *const Http1Context, request: http.RequestHead) bool {
-    return context.tunnel.provider == .claude and request.classification == .inference and
-        request.body.hasBody();
-}
-
-fn httpRequestPhase(classification: http.RequestClass) middleware.Phase {
-    return switch (classification) {
-        .inference => .request_started,
-        .auxiliary => .auxiliary_request_started,
-    };
-}
-
-fn publishHttpResponse(context: *Http1Context, response: http.ResponseHead) void {
-    context.tunnel.status_code = response.status_code;
-    context.tunnel.publish(httpResponsePhase(response.status_code), 0);
-}
-
-fn httpResponsePhase(status_code: u16) middleware.Phase {
-    return if (status_code >= 400) .request_failed else .response_finished;
-}
-
-fn publishHttpFailure(context: *Http1Context) void {
-    context.tunnel.publish(.request_failed, 0);
-}
-
-fn upgradeHttpConnection(context: *Http1Context) void {
-    context.tunnel.protocol = .upgraded;
-    relayUpgrade(context.service.io, context.session, context.tunnel);
-}
-
-const HttpResponseObserver = struct {
-    context: *TunnelContext,
-    response: provider.ResponseObserver,
-    inspect_payload: bool,
-
-    fn init(context: *TunnelContext, inspect_payload: bool) HttpResponseObserver {
-        return .{
-            .context = context,
-            .response = .init(context.provider),
-            .inspect_payload = inspect_payload,
-        };
-    }
-
-    pub fn observe(observer: *HttpResponseObserver, fragment: http.BodyFragment) void {
-        if (fragment.forwarded_bytes != 0) {
-            observer.context.publish(.response_activity, 0);
-        }
-
-        if (observer.inspect_payload and fragment.payload.len != 0) {
-            if (observer.response.provider == .claude) {
-                observer.context.record(.claude_sse_payload_fragment);
-            }
-
-            if (observer.response.feed(fragment.payload)) {
-                observer.context.publish(.provider_turn_completed, 0);
-            }
-        }
-    }
-
-    fn deinit(observer: *HttpResponseObserver) void {
-        observer.response.deinit();
-        observer.inspect_payload = false;
-    }
-};
-
-fn shouldInspectHttpResponse(request: http.RequestHead, head: http.Head) bool {
-    return request.classification == .inference and
-        head.sse_body and
-        head.message.status_code >= 200 and head.message.status_code < 300;
 }
 
 const TestServiceFixture = struct {
@@ -838,62 +606,6 @@ fn testingTunnel(service: *Service, protocol: middleware.Protocol, connection_id
     };
 }
 
-test "HTTP1 Claude request bodies refine route candidates before publication" {
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(std.testing.io, std.testing.allocator);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-    var tunnel_context = try testingTunnel(service, .http11, 59);
-    var context: Http1Context = .{
-        .service = service,
-        .session = undefined,
-        .tunnel = &tunnel_context,
-    };
-    defer context.request.deinit();
-    const candidate: http.RequestHead = .{
-        .classification = .inference,
-        .body = .{ .content_length = test_claude_startup_request.len },
-        .response_context = .normal,
-    };
-    const request_observer: HttpRequestObserver = .{ .request = &context.request };
-
-    publishHttpRequest(&context, candidate);
-    try std.testing.expectEqual(@as(u64, 0), service.observations.metrics().queued);
-    request_observer.observe(.{
-        .payload = test_claude_startup_request,
-        .forwarded_bytes = test_claude_startup_request.len,
-    });
-    finishHttpRequest(&context);
-    context.request.deinit();
-
-    publishHttpRequest(&context, .{
-        .classification = .inference,
-        .body = .none,
-        .response_context = .normal,
-    });
-
-    var primary = candidate;
-    primary.body = .{ .content_length = test_claude_primary_request.len };
-    publishHttpRequest(&context, primary);
-    const split = test_claude_primary_request.len / 2;
-    request_observer.observe(.{
-        .payload = test_claude_primary_request[0..split],
-        .forwarded_bytes = split,
-    });
-    request_observer.observe(.{
-        .payload = test_claude_primary_request[split..],
-        .forwarded_bytes = test_claude_primary_request.len - split,
-    });
-    finishHttpRequest(&context);
-
-    try expectTestObservations(service, &.{
-        .{ .phase = .auxiliary_request_started, .protocol = .http11, .connection_id = 59, .stream_id = 0 },
-        .{ .phase = .auxiliary_request_started, .protocol = .http11, .connection_id = 59, .stream_id = 0 },
-        .{ .phase = .request_started, .protocol = .http11, .connection_id = 59, .stream_id = 0 },
-    });
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
-}
-
 test "HTTP2 Claude request bodies refine interleaved route candidates per stream" {
     var fixture: TestServiceFixture = .{};
     try fixture.init(std.testing.io, std.testing.allocator);
@@ -927,34 +639,8 @@ test "HTTP2 Claude request bodies refine interleaved route candidates per stream
     try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
 }
 
-test "provider payload inspection uses successful response bodies as evidence" {
-    const request: http.RequestHead = .{
-        .classification = .inference,
-        .body = .none,
-        .response_context = .normal,
-    };
-    const successful: http.Head = .{
-        .message = .{ .status_code = 200 },
-        .framing = .none,
-        .classification = .auxiliary,
-        .sse_body = true,
-    };
-
-    try std.testing.expect(shouldInspectHttpResponse(request, successful));
-    try std.testing.expect(!shouldInspectHttpResponse(.{
-        .classification = .auxiliary,
-        .body = .none,
-        .response_context = .normal,
-    }, successful));
-
-    var non_sse = successful;
-    non_sse.sse_body = false;
-    try std.testing.expect(!shouldInspectHttpResponse(request, non_sse));
-
+test "HTTP2 payload inspection uses successful SSE response bodies as evidence" {
     inline for (.{ @as(u16, 199), 300, 429, 500 }) |status_code| {
-        var failed = successful;
-        failed.message.status_code = status_code;
-        try std.testing.expect(!shouldInspectHttpResponse(request, failed));
         try std.testing.expect(!shouldInspectH2Body(.{
             .stream_id = 1,
             .status_code = status_code,
@@ -1041,93 +727,6 @@ test "built-in Claude negotiation transforms only HTTP2 request heads" {
     try std.testing.expect(shouldTransformH2(&context, .response));
 }
 
-test "HTTP1 Claude SSE publishes provider turn completion after forwarding" {
-    const FakeSession = @import("http/test_support.zig").FakeSession;
-    const io = std.testing.io;
-    const gpa = std.testing.allocator;
-    const response =
-        "HTTP/1.1 200 OK\r\n" ++
-        "Content-Type: text/event-stream; charset=utf-8\r\n" ++
-        "Content-Length: " ++ std.fmt.comptimePrint("{d}", .{test_claude_end_turn_event.len}) ++ "\r\n" ++
-        "Connection: close\r\n" ++
-        "\r\n" ++
-        test_claude_end_turn_event;
-    var session: FakeSession = .{
-        .child_input = "POST /v1/messages HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .origin_input = response,
-    };
-
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(io, gpa);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-
-    const credential: identity.Credential = .{
-        .pane_id = try schema.id.pane(7),
-        .pane_generation = 11,
-        .token = .{0x42} ** identity.token_bytes,
-    };
-    try service.registerCredential(&credential);
-    var tunnel_context: TunnelContext = .{
-        .io = service.io,
-        .pipeline = &service.pipeline,
-        .telemetry = &service.telemetry,
-        .credential = credential,
-        .provider = .claude,
-        .connection_id = 19,
-        .protocol = .http11,
-    };
-
-    const parsed_request = http.relayHead(&session, .{
-        .from = .child,
-        .to = .origin,
-        .is_response = false,
-        .response_to_head = false,
-        .provider = tunnel_context.provider,
-    }).?;
-    const request: http.RequestHead = .{
-        .classification = parsed_request.classification,
-        .body = parsed_request.framing,
-        .response_context = .normal,
-    };
-    tunnel_context.publish(httpRequestPhase(request.classification), 0);
-
-    const parsed_response = http.relayHead(&session, .{
-        .from = .origin,
-        .to = .child,
-        .is_response = true,
-        .response_to_head = false,
-    }).?;
-    var observer: HttpResponseObserver = .init(
-        &tunnel_context,
-        shouldInspectHttpResponse(request, parsed_response),
-    );
-    defer observer.deinit();
-
-    try std.testing.expect(http.relayBody(
-        &session,
-        .{ .from = .origin, .to = .child, .framing = parsed_response.framing },
-        &observer,
-    ));
-    tunnel_context.status_code = parsed_response.message.status_code;
-    tunnel_context.publish(httpResponsePhase(tunnel_context.status_code), 0);
-
-    try expectTestObservations(service, &.{
-        .{ .phase = .request_started, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
-        .{ .phase = .response_activity, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
-        .{ .phase = .provider_turn_completed, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
-        .{ .phase = .response_finished, .protocol = .http11, .connection_id = 19, .stream_id = 0 },
-    });
-
-    try std.testing.expectEqualStrings(session.child_input, session.originOutput());
-    try std.testing.expectEqualStrings(response, session.childOutput());
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_sse_payload_fragments);
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_turn_completions);
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_successful_responses);
-    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_failure_observations);
-}
-
 test "HTTP2 final DATA publishes Claude completion before transport completion" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
@@ -1193,55 +792,6 @@ test "HTTP2 final DATA publishes Claude completion before transport completion" 
     try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_failure_observations);
 }
 
-test "HTTP response metadata preserves final routing semantics" {
-    const informational = semanticResponseHead(.{
-        .message = .{ .status_code = 100, .informational = true },
-        .framing = .none,
-        .classification = .auxiliary,
-        .sse_body = false,
-    });
-    try std.testing.expectEqual(http.ResponseKind.informational, informational.kind);
-    try std.testing.expectEqual(http.ConnectionPolicy.keep_alive, informational.connection);
-
-    const upgrade = semanticResponseHead(.{
-        .message = .{ .status_code = 101, .upgrade = true },
-        .framing = .none,
-        .classification = .auxiliary,
-        .sse_body = false,
-    });
-    try std.testing.expectEqual(http.ResponseKind.upgrade, upgrade.kind);
-
-    const closing = semanticResponseHead(.{
-        .message = .{ .status_code = 200, .closes = true },
-        .framing = .until_close,
-        .classification = .auxiliary,
-        .sse_body = false,
-    });
-    try std.testing.expectEqual(http.ResponseKind.final, closing.kind);
-    try std.testing.expectEqual(http.ConnectionPolicy.close, closing.connection);
-    try std.testing.expectEqual(http.BodyPlan.until_close, closing.body);
-}
-
-test "HTTP observations map request class and final status" {
-    try std.testing.expectEqual(middleware.Phase.request_started, httpRequestPhase(.inference));
-    try std.testing.expectEqual(middleware.Phase.auxiliary_request_started, httpRequestPhase(.auxiliary));
-
-    inline for (.{ @as(u16, 200), 204, 399 }) |status_code| {
-        try std.testing.expectEqual(middleware.Phase.response_finished, httpResponsePhase(status_code));
-    }
-
-    inline for (.{ @as(u16, 400), 429, 599 }) |status_code| {
-        try std.testing.expectEqual(middleware.Phase.request_failed, httpResponsePhase(status_code));
-    }
-}
-
-fn relayUpgrade(io: Io, session: *tls.Session, context: *TunnelContext) void {
-    var outbound = io.concurrent(pumpUpgrade, .{ session, UpgradeRoute{ .from = .child, .to = .origin }, context }) catch return;
-    pumpUpgrade(session, .{ .from = .origin, .to = .child }, context);
-    outbound.await(io);
-    context.publish(.response_finished, 0);
-}
-
 fn relayPassthrough(io: Io, child: net.Stream, origin: net.Stream) void {
     var outbound = io.concurrent(pumpPassthrough, .{ io, child, origin }) catch return;
     pumpPassthrough(io, origin, child);
@@ -1259,21 +809,6 @@ fn pumpPassthrough(io: Io, source: net.Stream, destination: net.Stream) void {
         if (copied == 0) break;
     }
     destination.shutdown(io, .send) catch {};
-}
-
-fn pumpUpgrade(session: *tls.Session, route: UpgradeRoute, context: *TunnelContext) void {
-    var buffer: [16 * 1024]u8 = undefined;
-    while (session.read(route.from, &buffer)) |len| {
-        if (!session.writeAll(route.to, buffer[0..len])) {
-            break;
-        }
-
-        if (route.from == .origin) {
-            context.publish(.response_activity, 0);
-        }
-    }
-
-    session.halfClose(route.to);
 }
 
 fn readConnectHead(io: Io, stream: net.Stream, buffer: []u8) ?usize {

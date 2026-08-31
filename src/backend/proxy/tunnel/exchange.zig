@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const identity = @import("../identity.zig");
 const metrics = @import("../metrics.zig");
 const middleware = @import("../middleware.zig");
+const provider = @import("../provider/root.zig");
 
 const Io = std.Io;
 const schema = core.schema;
@@ -114,6 +115,19 @@ pub const Exchange = struct {
     }
 };
 
+/// Maps provider request classification to the lifecycle phase shared by
+/// HTTP/1.1 and HTTP/2 adapters.
+///
+/// ```zig
+/// const phase = requestPhase(.inference);
+/// ```
+pub fn requestPhase(classification: provider.RequestClass) middleware.Phase {
+    return switch (classification) {
+        .inference => .request_started,
+        .auxiliary => .auxiliary_request_started,
+    };
+}
+
 const Capture = struct {
     events: [8]middleware.Event = undefined,
     len: usize = 0,
@@ -203,4 +217,9 @@ test "only lifecycle evidence for Claude increments Claude counters" {
         .connections = .{ .active = 0, .limit_drops = 0 },
         .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
     }).claude_inference_requests);
+}
+
+test "request classification maps to one lifecycle phase" {
+    try std.testing.expectEqual(middleware.Phase.request_started, requestPhase(.inference));
+    try std.testing.expectEqual(middleware.Phase.auxiliary_request_started, requestPhase(.auxiliary));
 }
