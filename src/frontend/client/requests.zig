@@ -161,9 +161,9 @@ pub const Tracker = struct {
     }
 
     /// A tab lifecycle notification is authoritative. Requests already sent
-    /// for that tab remain identifiable, but their eventual failures need no
-    /// rollback because the tab and its client state are already gone. A split
-    /// keeps its correlation so a late created pane can still be detached.
+    /// for that tab remain identifiable, but their eventual replies are stale
+    /// because the tab and its client state are already gone. A split keeps its
+    /// correlation so a late created pane can still be detached.
     pub fn ignoreTab(tracker: *Tracker, tab_id: schema.TabId) void {
         for (&tracker.entries) |*slot| {
             const entry = if (slot.*) |*value| value else continue;

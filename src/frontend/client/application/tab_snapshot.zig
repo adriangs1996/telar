@@ -23,7 +23,7 @@ pub const ApplyTabSnapshotHandler = struct {
     /// ```zig
     /// try handler.execute(snapshot);
     /// ```
-    pub fn execute(handler: *ApplyTabSnapshotHandler, snapshot: schema.TabSnapshotView) !void {
+    pub fn execute(handler: *ApplyTabSnapshotHandler, snapshot: client_model.TabSnapshot) !void {
         const reconciliation = try handler.model.reconcileTab(snapshot, handler.area);
         try handler.effects.apply(handler.effects.context, &reconciliation);
     }
@@ -61,6 +61,7 @@ const TestingModel = struct {
     location: schema.TabLocation,
     root_pane: schema.PaneId,
     discovered_pane: schema.PaneId,
+    pane_ids: [2]schema.PaneId,
 
     fn init() !TestingModel {
         const model = try std.testing.allocator.create(client_model.Model);
@@ -75,11 +76,14 @@ const TestingModel = struct {
         const root_pane: schema.PaneId = @enumFromInt(1);
         try model.workspace.bootstrap(root_pane, location, .{ .cols = 20, .rows = 5 });
 
+        const discovered_pane: schema.PaneId = @enumFromInt(2);
+
         return .{
             .model = model,
             .location = location,
             .root_pane = root_pane,
-            .discovered_pane = @enumFromInt(2),
+            .discovered_pane = discovered_pane,
+            .pane_ids = .{ root_pane, discovered_pane },
         };
     }
 
@@ -88,17 +92,11 @@ const TestingModel = struct {
         std.testing.allocator.destroy(testing.model);
     }
 
-    fn snapshot(testing: *const TestingModel, buffer: []u8) !schema.TabSnapshotView {
-        const encoded = try schema.encodeTabSnapshot(buffer, .{
-            .request_id = @enumFromInt(7),
+    fn snapshot(testing: *const TestingModel) client_model.TabSnapshot {
+        return .{
             .location = testing.location,
-            .panes = &.{
-                .{ .pane_id = testing.root_pane, .lifecycle = .running },
-                .{ .pane_id = testing.discovered_pane, .lifecycle = .running },
-            },
-        });
-
-        return (try schema.decodeServer(encoded)).tab_snapshot;
+            .panes = &testing.pane_ids,
+        };
     }
 };
 
@@ -114,9 +112,7 @@ test "ApplyTabSnapshotHandler commits before reconciling client resources" {
         .area = .{ .w = 40, .h = 10 },
         .effects = capture.port(),
     };
-    var buffer: [256]u8 = undefined;
-
-    try handler.execute(try testing.snapshot(&buffer));
+    try handler.execute(testing.snapshot());
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.observed_commit);
@@ -136,8 +132,7 @@ test "ApplyTabSnapshotHandler still runs resource effects for a canonical no-op"
         .area = .{ .w = 40, .h = 10 },
         .effects = capture.port(),
     };
-    var buffer: [256]u8 = undefined;
-    const snapshot = try testing.snapshot(&buffer);
+    const snapshot = testing.snapshot();
     try handler.execute(snapshot);
     const committed_version = testing.model.version();
 
@@ -160,16 +155,13 @@ test "ApplyTabSnapshotHandler rejects model failures before effects" {
         .area = .{ .w = 40, .h = 10 },
         .effects = capture.port(),
     };
-    var buffer: [256]u8 = undefined;
-    const encoded = try schema.encodeTabSnapshot(&buffer, .{
-        .request_id = @enumFromInt(7),
+    const snapshot: client_model.TabSnapshot = .{
         .location = .{
             .workspace = testing.location.workspace,
             .tab_id = @enumFromInt(9),
         },
-        .panes = &.{.{ .pane_id = testing.root_pane, .lifecycle = .running }},
-    });
-    const snapshot = (try schema.decodeServer(encoded)).tab_snapshot;
+        .panes = &.{testing.root_pane},
+    };
 
     try std.testing.expectError(error.UnexpectedTab, handler.execute(snapshot));
 
@@ -190,9 +182,7 @@ test "ApplyTabSnapshotHandler preserves a committed snapshot after effect failur
         .area = .{ .w = 40, .h = 10 },
         .effects = capture.port(),
     };
-    var buffer: [256]u8 = undefined;
-
-    try std.testing.expectError(error.ReconciliationSyncFailed, handler.execute(try testing.snapshot(&buffer)));
+    try std.testing.expectError(error.ReconciliationSyncFailed, handler.execute(testing.snapshot()));
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(testing.model.workspace.findPane(testing.discovered_pane) != null);

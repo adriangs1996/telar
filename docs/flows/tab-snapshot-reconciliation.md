@@ -22,7 +22,7 @@ PaneStore.descriptorsAt
         |
 schema.tab_snapshot -> client socket
         |
-handleTabSnapshot -> ApplyTabSnapshotHandler
+tab_snapshots.apply -> ApplyTabSnapshotHandler
         |
 ClientModel.reconcileTab -> tabs.Model.reconcileTab
         |
@@ -36,8 +36,11 @@ response queue stores only the stable tab location. The encoder reads the
 current pane store when it writes `schema.tab_snapshot`, so queued responses
 do not retain borrowed pane data.
 
-`handleTabSnapshot` consumes the matching continuation and delegates. It does
-not mutate pane state, touch attachments or request a frame.
+`tab_snapshots.apply` consumes the continuation once and verifies the exact tab
+location before it delegates. It translates the wire view into a bounded list
+of pane identities, so request IDs, encoded descriptors and pane lifecycle
+fields do not enter the application or model layers. The controller does not
+mutate pane state, touch attachments or request a frame.
 
 ## Client commit
 
@@ -72,10 +75,14 @@ requests a frame only after `Client.observeModel` publishes a changed version.
 
 ## Failure and recovery
 
-An unknown request ID or a response for another tab is a protocol error. Model
-validation runs before client resource effects. If a resource effect fails
-after commit, the canonical pane membership remains in `ClientModel`; a later
-tab snapshot can retry disposable attachments and geometry.
+An unknown request ID, an incompatible continuation or a response for another
+tab is a protocol error. Every known continuation is consumed before rejection.
+If tab lifecycle or workspace reconciliation already retired the request, the
+controller consumes its `ignored` continuation and discards the late snapshot.
+
+Model validation runs before client resource effects. If a resource effect
+fails after commit, the canonical pane membership remains in `ClientModel`; a
+later tab snapshot can retry disposable attachments and geometry.
 
 The runtime bounds each snapshot to `schema.max_panes_per_tab`. Client cleanup
 uses the same fixed bound and allocates no unbounded retirement list.
@@ -85,9 +92,11 @@ uses the same fixed bound and allocates no unbounded retirement list.
 - `frontend/client/application/tab_snapshot.zig` checks commit ordering,
   canonical no-ops, model rejection and post-commit effect failure.
 - `frontend/client/model.zig` checks active and inactive revision semantics,
-  removed pane capture and cross-tab pane identity rejection.
+  removed pane capture, membership bounds and cross-tab pane identity
+  rejection.
 - `frontend/workspace/tabs.zig` checks display-order restoration, saved layout
-  restoration and replacement of a vanished focused pane.
+  restoration, malformed membership rejection and replacement of a vanished
+  focused pane.
 - `frontend/client/requests.zig` checks attachment lookup and retirement of
   pane-scoped continuations.
 - `frontend/client/client_test.zig` checks real protocol correlation,

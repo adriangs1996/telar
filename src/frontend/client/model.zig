@@ -461,6 +461,8 @@ pub const TabReconciliation = struct {
     panes_changed: bool,
 };
 
+pub const TabSnapshot = tabs_mod.PaneSnapshot;
+
 pub const RemovedWorkspaceTabs = struct {
     items: [schema.max_tabs_per_workspace]schema.TabLocation = undefined,
     count: u8 = 0,
@@ -1563,31 +1565,25 @@ pub const Model = struct {
     /// ```zig
     /// const reconciliation = try model.reconcileTab(snapshot, workbench);
     /// ```
-    pub fn reconcileTab(model: *Model, snapshot: schema.TabSnapshotView, area: ui.Rect) !TabReconciliation {
+    pub fn reconcileTab(model: *Model, snapshot: TabSnapshot, area: ui.Rect) !TabReconciliation {
         const tab = model.workspace.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
         if (!std.meta.eql(tab.location, snapshot.location)) {
             return error.UnexpectedTab;
         }
 
-        if (snapshot.pane_count > schema.max_panes_per_tab) {
+        if (snapshot.panes.len > schema.max_panes_per_tab) {
             return error.TooManyPanes;
         }
 
-        var canonical_panes: [schema.max_panes_per_tab]schema.PaneId = undefined;
-        var canonical_count: usize = 0;
-        var descriptors = snapshot.panes();
-        while (try descriptors.next()) |descriptor| {
-            if (std.mem.findScalar(schema.PaneId, canonical_panes[0..canonical_count], descriptor.pane_id) != null) {
+        for (snapshot.panes, 0..) |pane_id, index| {
+            if (std.mem.findScalar(schema.PaneId, snapshot.panes[0..index], pane_id) != null) {
                 return error.DuplicatePane;
             }
 
-            const existing = model.workspace.findPane(descriptor.pane_id);
+            const existing = model.workspace.findPane(pane_id);
             if (existing != null and !std.meta.eql(existing.?.location, snapshot.location)) {
                 return error.PaneAlreadyExists;
             }
-
-            canonical_panes[canonical_count] = descriptor.pane_id;
-            canonical_count += 1;
         }
 
         const active_location = model.activeTabLocation() orelse return error.NoActiveTab;
@@ -1600,7 +1596,7 @@ pub const Model = struct {
         };
         var panes = tab.model.paneIterator();
         while (panes.next()) |pane| {
-            if (std.mem.findScalar(schema.PaneId, canonical_panes[0..canonical_count], pane.id) == null) {
+            if (std.mem.findScalar(schema.PaneId, snapshot.panes, pane.id) == null) {
                 reconciliation.removed_panes.append(pane.id);
             }
         }
@@ -2161,10 +2157,6 @@ fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.
 
 fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !schema.WorkspaceSnapshotView {
     return (try schema.decodeServer(try schema.encodeWorkspaceSnapshot(buffer, snapshot))).workspace_snapshot;
-}
-
-fn testingTabSnapshot(buffer: []u8, snapshot: schema.TabSnapshot) !schema.TabSnapshotView {
-    return (try schema.decodeServer(try schema.encodeTabSnapshot(buffer, snapshot))).tab_snapshot;
 }
 
 const TestingPaneFrame = struct {
@@ -2843,15 +2835,10 @@ test "workspace arrival commits atomically and stages the saved layout" {
         .panes = 1,
     }, model.version());
 
-    var buffer: [256]u8 = undefined;
-    const snapshot = try testingTabSnapshot(&buffer, .{
-        .request_id = @enumFromInt(1),
+    const snapshot: TabSnapshot = .{
         .location = location,
-        .panes = &.{
-            .{ .pane_id = left, .lifecycle = .running },
-            .{ .pane_id = focused, .lifecycle = .running },
-        },
-    });
+        .panes = &.{ left, focused },
+    };
     _ = try model.reconcileTab(snapshot, area);
     var actual: layout_mod.Snapshot = .{};
     model.workspace.activeConst().?.model.layout.snapshot(area, &actual);
@@ -3122,15 +3109,10 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     try model.workspace.bootstrap(first, location, .{ .cols = 20, .rows = 5 });
-    var buffer: [256]u8 = undefined;
-    const discovered = try testingTabSnapshot(&buffer, .{
-        .request_id = @enumFromInt(1),
+    const discovered: TabSnapshot = .{
         .location = location,
-        .panes = &.{
-            .{ .pane_id = first, .lifecycle = .running },
-            .{ .pane_id = second, .lifecycle = .running },
-        },
-    });
+        .panes = &.{ first, second },
+    };
 
     const addition = try model.reconcileTab(discovered, .{ .w = 40, .h = 10 });
 
@@ -3145,17 +3127,42 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     try std.testing.expect(!unchanged.panes_changed);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
 
-    const removed = try testingTabSnapshot(&buffer, .{
-        .request_id = @enumFromInt(2),
+    const removed: TabSnapshot = .{
         .location = location,
-        .panes = &.{.{ .pane_id = second, .lifecycle = .running }},
-    });
+        .panes = &.{second},
+    };
     const removal = try model.reconcileTab(removed, .{ .w = 40, .h = 10 });
 
     try std.testing.expect(removal.panes_changed);
     try std.testing.expectEqualSlices(schema.PaneId, &.{first}, removal.removed_panes.slice());
     try std.testing.expect(model.workspace.findPane(first) == null);
     try std.testing.expectEqualDeep(Version{ .panes = 2 }, model.version());
+}
+
+test "tab reconciliation rejects excessive pane membership atomically" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const root_pane: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(root_pane, location, .{ .cols = 20, .rows = 5 });
+    var pane_ids: [schema.max_panes_per_tab + 1]schema.PaneId = undefined;
+    for (&pane_ids, 0..) |*pane_id, index| {
+        pane_id.* = @enumFromInt(@as(u64, @intCast(index + 1)));
+    }
+    const snapshot: TabSnapshot = .{
+        .location = location,
+        .panes = &pane_ids,
+    };
+
+    try std.testing.expectError(error.TooManyPanes, model.reconcileTab(snapshot, .{ .w = 40, .h = 10 }));
+
+    try std.testing.expectEqual(@as(usize, 1), model.workspace.find(location.tab_id).?.model.pane_count);
+    try std.testing.expect(model.workspace.findPane(root_pane) != null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "inactive tab reconciliation does not advance the visible pane revision" {
@@ -3179,15 +3186,10 @@ test "inactive tab reconciliation does not advance the visible pane revision" {
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(active.tab_id));
-    var buffer: [256]u8 = undefined;
-    const snapshot = try testingTabSnapshot(&buffer, .{
-        .request_id = @enumFromInt(1),
+    const snapshot: TabSnapshot = .{
         .location = inactive,
-        .panes = &.{
-            .{ .pane_id = @enumFromInt(2), .lifecycle = .running },
-            .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
-        },
-    });
+        .panes = &.{ @enumFromInt(2), @enumFromInt(3) },
+    };
 
     const reconciliation = try model.reconcileTab(snapshot, .{ .w = 40, .h = 10 });
 
@@ -3217,15 +3219,10 @@ test "tab reconciliation rejects pane identities owned by another tab" {
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    var buffer: [256]u8 = undefined;
-    const snapshot = try testingTabSnapshot(&buffer, .{
-        .request_id = @enumFromInt(1),
+    const snapshot: TabSnapshot = .{
         .location = first,
-        .panes = &.{
-            .{ .pane_id = @enumFromInt(1), .lifecycle = .running },
-            .{ .pane_id = @enumFromInt(2), .lifecycle = .running },
-        },
-    });
+        .panes = &.{ @enumFromInt(1), @enumFromInt(2) },
+    };
 
     try std.testing.expectError(error.PaneAlreadyExists, model.reconcileTab(snapshot, .{ .w = 40, .h = 10 }));
 

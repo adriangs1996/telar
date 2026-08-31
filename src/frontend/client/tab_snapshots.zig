@@ -12,13 +12,50 @@ const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
 const tab_snapshot = client_application.tab_snapshot;
 
-/// Wires canonical pane membership to focus, attachment and resource repair.
+pub const Outcome = enum {
+    applied,
+    ignored,
+};
+
+/// Consumes one correlated response and applies its canonical pane membership.
 ///
 /// ```zig
-/// var handler = reconciliationHandler(client);
-/// try handler.execute(snapshot);
+/// _ = try apply(client, snapshot);
 /// ```
-pub fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {
+pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
+    const continuation = client.requests.take(snapshot.request_id) orelse
+        return error.UnexpectedTabSnapshot;
+    const expected_location = switch (continuation) {
+        .tab_snapshot => |location| location,
+        .ignored => return .ignored,
+        else => return error.UnexpectedTabSnapshot,
+    };
+    if (!std.meta.eql(expected_location, snapshot.location)) {
+        return error.UnexpectedTabSnapshot;
+    }
+
+    var pane_ids: [schema.max_panes_per_tab]schema.PaneId = undefined;
+    var pane_count: usize = 0;
+    var panes = snapshot.panes();
+    while (try panes.next()) |pane| {
+        if (pane_count == pane_ids.len) {
+            return error.TooManyPanes;
+        }
+
+        pane_ids[pane_count] = pane.pane_id;
+        pane_count += 1;
+    }
+
+    var use_case = reconciliationHandler(client);
+    try use_case.execute(.{
+        .location = snapshot.location,
+        .panes = pane_ids[0..pane_count],
+    });
+
+    return .applied;
+}
+
+fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {
     return .{
         .model = &client.model,
         .area = client.view.workbench(),

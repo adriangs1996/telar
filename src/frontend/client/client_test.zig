@@ -27,6 +27,7 @@ const pane_openings = @import("pane_openings.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_snapshots = @import("tab_snapshots.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = Client.initial_request_id;
 
@@ -750,8 +751,8 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
         },
     });
     try std.testing.expectEqual(
-        @as(?u8, null),
-        try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot)),
+        tab_snapshots.Outcome.applied,
+        try tab_snapshots.apply(client, (try schema.decodeServer(snapshot)).tab_snapshot),
     );
 
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
@@ -908,6 +909,10 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
     defer harness.deinit();
     try harness.bootstrap();
 
+    const client = harness.client;
+    const version_before = client.model.version();
+    const request_count_before = client.requests.count;
+    const pending_updates_before = client.presenter.pending_updates;
     var payload: [256]u8 = undefined;
     const snapshot = try schema.encodeTabSnapshot(&payload, .{
         .request_id = @enumFromInt(99),
@@ -916,8 +921,84 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
     });
     try std.testing.expectError(
         error.UnexpectedTabSnapshot,
-        server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot)),
+        server_messages.handleServerMessage(client, try schema.decodeServer(snapshot)),
     );
+
+    try std.testing.expectEqual(request_count_before, client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab snapshot consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .notification);
+    var payload: [256]u8 = undefined;
+    const encoded = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = request_id,
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{},
+    });
+    const snapshot = (try schema.decodeServer(encoded)).tab_snapshot;
+
+    try std.testing.expectError(error.UnexpectedTabSnapshot, tab_snapshots.apply(client, snapshot));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabSnapshot, tab_snapshots.apply(client, snapshot));
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab snapshot consumes a mismatched location before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .{ .tab_snapshot = TestHarness.bootstrap_location });
+    var payload: [256]u8 = undefined;
+    const encoded = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = request_id,
+        .location = .{
+            .workspace = TestHarness.bootstrap_location.workspace,
+            .tab_id = @enumFromInt(2),
+        },
+        .panes = &.{},
+    });
+
+    try std.testing.expectError(
+        error.UnexpectedTabSnapshot,
+        tab_snapshots.apply(client, (try schema.decodeServer(encoded)).tab_snapshot),
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab snapshot consumes correlation before a model rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .{ .tab_snapshot = TestHarness.bootstrap_location });
+    var payload: [256]u8 = undefined;
+    const encoded = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = request_id,
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{},
+    });
+
+    try std.testing.expectError(
+        error.UnexpectedTab,
+        tab_snapshots.apply(client, (try schema.decodeServer(encoded)).tab_snapshot),
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 }
 
 test "workspace snapshots commit semantic revisions before presentation" {
@@ -1016,7 +1097,24 @@ test "workspace reconciliation retires removed state and restores the new active
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(client.graphics_store.paneVisible(@enumFromInt(20)));
     try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(20)), client.reported_focus);
-    try std.testing.expect(client.requests.take(@enumFromInt(3)).? == .ignored);
+    const version_before_late_snapshot = client.model.version();
+    const pending_updates_before_late_snapshot = client.presenter.pending_updates;
+    const outbox_len_before_late_snapshot = client.outbox.len;
+    const request_count_before_late_snapshot = client.requests.count;
+    const late_snapshot = try schema.encodeTabSnapshot(&payload, .{
+        .request_id = @enumFromInt(3),
+        .location = TestHarness.bootstrap_location,
+        .panes = &.{},
+    });
+    try std.testing.expectEqual(
+        tab_snapshots.Outcome.ignored,
+        try tab_snapshots.apply(client, (try schema.decodeServer(late_snapshot)).tab_snapshot),
+    );
+
+    try std.testing.expectEqual(request_count_before_late_snapshot - 1, client.requests.count);
+    try std.testing.expectEqualDeep(version_before_late_snapshot, client.model.version());
+    try std.testing.expectEqual(pending_updates_before_late_snapshot, client.presenter.pending_updates);
+    try std.testing.expectEqual(outbox_len_before_late_snapshot, client.outbox.len);
     try std.testing.expect(client.requests.take(@enumFromInt(90)).? == .ignored);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try harness.settle();

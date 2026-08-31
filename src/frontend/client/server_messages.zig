@@ -37,7 +37,7 @@ const monotonic = client_mod.monotonic;
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
     switch (message) {
         .pane_opened => |opened| _ = try pane_openings.apply(client, opened),
-        .tab_snapshot => |snapshot| try handleTabSnapshot(client, snapshot),
+        .tab_snapshot => |snapshot| _ = try tab_snapshots.apply(client, snapshot),
         .workspace_snapshot => |snapshot| try handleWorkspaceSnapshot(client, snapshot),
         .tab_created => |created| try handleTabCreated(client, created),
         .tab_renamed => |renamed| try handleTabRenamed(client, renamed),
@@ -125,20 +125,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// Applies one correlated canonical tab snapshot.
-fn handleTabSnapshot(client: *Client, snapshot: schema.TabSnapshotView) !void {
-    const continuation = client.requests.take(snapshot.request_id) orelse
-        return error.UnexpectedTabSnapshot;
-    if (continuation != .tab_snapshot or
-        !std.meta.eql(continuation.tab_snapshot, snapshot.location))
-    {
-        return error.UnexpectedTabSnapshot;
-    }
-
-    var use_case = tab_snapshots.reconciliationHandler(client);
-    try use_case.execute(snapshot);
 }
 
 /// Applies one correlated canonical workspace snapshot.
