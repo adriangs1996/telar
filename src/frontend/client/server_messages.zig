@@ -23,6 +23,7 @@ const pane_metadata = @import("pane_metadata.zig");
 const pane_splits = @import("pane_splits.zig");
 const proxy_status = @import("proxy_status.zig");
 const request_failures = @import("request_failures.zig");
+const resync_requirements = @import("resync_requirements.zig");
 const system_metrics = @import("system_metrics.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -34,20 +35,6 @@ const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_lists = @import("workspace_lists.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const monotonic = client_mod.monotonic;
-
-const WorkspaceClosureAction = union(enum) {
-    stay,
-    exit,
-    switch_to: schema.WorkspaceId,
-};
-
-fn workspaceClosureAction(
-    workspace_closed: bool,
-    previous_workspace: ?schema.WorkspaceId,
-) WorkspaceClosureAction {
-    if (!workspace_closed) return .stay;
-    return if (previous_workspace) |workspace| .{ .switch_to = workspace } else .exit;
-}
 
 /// Routes one decoded message from the runtime.
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
@@ -68,7 +55,11 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .notification => |notification| try handleRuntimeNotification(client, notification),
         .notification_shown => |shown| try handleNotificationShown(client, shown),
         .agent_sound => |sound| try handleAgentSound(client, sound),
-        .resync_required => |required| return handleResyncMessage(client, required),
+        .resync_required => |required| {
+            if (try resync_requirements.apply(client, required) == .exit) {
+                return 0;
+            }
+        },
         .runtime_stopping => return 0,
         .history_results => return error.UnexpectedHistoryResults,
         .proxy_status => |status| _ = try proxy_status.apply(client, status),
@@ -137,24 +128,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// Entrypoint for a resync demand: reconcile in place, follow the runtime
-/// to a surviving workspace, or exit when nothing survives.
-fn handleResyncMessage(client: *Client, required: schema.ResyncRequired) !?u8 {
-    if (required.workspace_closed)
-        client.navigation_history.forget(required.workspace);
-    switch (workspaceClosureAction(
-        required.workspace_closed,
-        required.previous_workspace,
-    )) {
-        .stay => try handleResyncRequired(client, required),
-        .exit => return 0,
-        .switch_to => |previous| {
-            _ = try workspace_handoffs.requestWorkspace(client, previous);
-        },
-    }
-    return null;
 }
 
 /// An open-pane reply: routed by the continuation that asked for it.
@@ -306,26 +279,4 @@ fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
 fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
     var use_case = pane_closures.exitHandler(client);
     _ = try use_case.execute(exited.pane_id);
-}
-
-pub fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !void {
-    const workspace = client.model.workspace.workspace orelse return error.UnexpectedResync;
-    if (!std.meta.eql(workspace, required.workspace)) return error.UnexpectedResync;
-    if (client.requests.has(.workspace_snapshot)) return;
-    try client.requestWorkspaceSnapshot(workspace);
-}
-
-test "workspace closure exits only when no predecessor survives" {
-    try std.testing.expectEqualDeep(
-        WorkspaceClosureAction.stay,
-        workspaceClosureAction(false, null),
-    );
-    try std.testing.expectEqualDeep(
-        WorkspaceClosureAction.exit,
-        workspaceClosureAction(true, null),
-    );
-    try std.testing.expectEqualDeep(
-        WorkspaceClosureAction{ .switch_to = @enumFromInt(7) },
-        workspaceClosureAction(true, @enumFromInt(7)),
-    );
 }

@@ -26,6 +26,11 @@ Without a bookmark it targets the workspace identity. A sidebar agent can
 target its pane directly and retains a workspace fallback only when the pane
 belongs to an ordinary workspace.
 
+`HandleResyncRequiredHandler` also requests a handoff when the runtime reports
+that the projected workspace disappeared. It forgets the closed workspace's
+bookmark first and uses the runtime's canonical predecessor as the target. A
+failed handoff cannot restore identity that no longer exists.
+
 The adapter checks that the fixed outbox has room for focus-out, every detach
 and the final open before it changes attachment state. The request handler then
 delivers detaches before `open_pane`; socket order prevents the new attachment

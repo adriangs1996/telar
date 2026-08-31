@@ -19,9 +19,11 @@ const term = presentation.screen;
 
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
+const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const name_prompts = @import("name_prompts.zig");
+const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const InputChunk = Client.InputChunk;
@@ -962,15 +964,21 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     defer harness.deinit();
     const client = harness.client;
     client.model.workspace.workspace = TestHarness.bootstrap_location.workspace;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    const required: schema.ResyncRequired = .{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .workspace_closed = false,
+    };
 
-    try server_messages.handleResyncRequired(client, .{
-        .workspace = TestHarness.bootstrap_location.workspace,
-        .workspace_closed = false,
-    });
-    try server_messages.handleResyncRequired(client, .{
-        .workspace = TestHarness.bootstrap_location.workspace,
-        .workspace_closed = false,
-    });
+    try std.testing.expectEqual(
+        client_application.resync_required.Outcome.snapshot_requested,
+        try resync_requirements.apply(client, required),
+    );
+    try std.testing.expectEqual(
+        client_application.resync_required.Outcome.coalesced,
+        try resync_requirements.apply(client, required),
+    );
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -978,6 +986,56 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     try std.testing.expect(first == .request_workspace_snapshot);
     try std.testing.expect(client.requests.has(.workspace_snapshot));
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+}
+
+test "resync rejects a workspace other than the current projection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.model.workspace.workspace = TestHarness.bootstrap_location.workspace;
+    const next_request_id = client.next_request_id;
+
+    try std.testing.expectError(
+        error.UnexpectedResync,
+        resync_requirements.apply(client, .{
+            .workspace = .{ .workspace = @enumFromInt(9) },
+            .workspace_closed = false,
+        }),
+    );
+    try std.testing.expectEqual(next_request_id, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "resync keeps a closed bookmark forgotten when predecessor handoff is blocked" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.navigation_history.remember(.{
+        .location = TestHarness.bootstrap_location,
+        .pane_id = TestHarness.bootstrap_pane,
+    });
+    try client.requests.add(@enumFromInt(7), .notification);
+    const version_before = client.model.version();
+
+    try std.testing.expectError(
+        error.WorkspaceSwitchWhileRequestPending,
+        resync_requirements.apply(client, .{
+            .workspace = TestHarness.bootstrap_location.workspace,
+            .workspace_closed = true,
+            .previous_workspace = @enumFromInt(2),
+        }),
+    );
+    try std.testing.expect(
+        client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
+    );
+    try std.testing.expectEqual(@as(usize, 1), client.requests.count);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
 }
 
 test "host Enter variants use the keyboard modes received in a pane frame" {
@@ -2909,6 +2967,10 @@ test "resync follows the runtime predecessor after a workspace disappears" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
+    harness.client.navigation_history.remember(.{
+        .location = TestHarness.bootstrap_location,
+        .pane_id = TestHarness.bootstrap_pane,
+    });
 
     var payload: [128]u8 = undefined;
     const resync = try schema.encodeResyncRequired(&payload, .{
@@ -2928,6 +2990,40 @@ test "resync follows the runtime predecessor after a workspace disappears" {
         schema.PaneTarget{ .workspace = @enumFromInt(2) },
         message.open_pane.target,
     );
+    try std.testing.expect(
+        harness.client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
+    );
+}
+
+test "resync forgets the final workspace before exiting" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.navigation_history.remember(.{
+        .location = TestHarness.bootstrap_location,
+        .pane_id = TestHarness.bootstrap_pane,
+    });
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+
+    var payload: [128]u8 = undefined;
+    const resync = try schema.encodeResyncRequired(&payload, .{
+        .workspace = TestHarness.bootstrap_location.workspace,
+        .workspace_closed = true,
+    });
+
+    try std.testing.expectEqual(
+        @as(?u8, 0),
+        try server_messages.handleServerMessage(client, try schema.decodeServer(resync)),
+    );
+    try std.testing.expect(
+        client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
 
 test "a patch against an unknown base requests a fresh snapshot" {

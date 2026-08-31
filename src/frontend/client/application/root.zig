@@ -17,6 +17,7 @@ pub const pane_input = @import("pane_input.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
 pub const proxy_status = @import("proxy_status.zig");
 pub const request_failure = @import("request_failure.zig");
+pub const resync_required = @import("resync_required.zig");
 pub const rename_tab = @import("rename_tab.zig");
 pub const rename_workspace = @import("rename_workspace.zig");
 pub const resize_pane = @import("resize_pane.zig");
@@ -50,6 +51,7 @@ test {
     _ = pane_metadata;
     _ = proxy_status;
     _ = request_failure;
+    _ = resync_required;
     _ = rename_tab;
     _ = rename_workspace;
     _ = resize_pane;

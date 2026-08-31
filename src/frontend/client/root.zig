@@ -76,6 +76,7 @@ test {
     _ = @import("view.zig");
     _ = @import("requests.zig");
     _ = @import("request_failures.zig");
+    _ = @import("resync_requirements.zig");
 }
 
 test "configured action names cover multiplexer operations" {

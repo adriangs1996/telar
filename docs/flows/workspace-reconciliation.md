@@ -76,10 +76,11 @@ versions, so that operational recovery does not force a frame.
 
 ## Resync and failure
 
-`schema.resync_required` follows the same commit path after
-`handleResyncRequired` requests one coalesced workspace snapshot. A workspace
-that closes before encoding returns `schema.request_failed` instead of stale
-state.
+`schema.resync_required` enters `resync_requirements.apply`.
+`HandleResyncRequiredHandler` validates the projected workspace and requests
+one coalesced workspace snapshot. The later correlated snapshot follows the
+same commit path described above. A workspace that closes before snapshot
+encoding returns `schema.request_failed` instead of stale state.
 
 A pending workspace operation or a prompt targeting another workspace emits no
 rename request and leaves the prompt open. A local delivery failure does the
@@ -97,6 +98,8 @@ a later resync or reconnect rebuilds the disposable resources.
   `frontend/client/name_prompts.zig` prove editor ownership and submit ordering.
 - `frontend/client/application/workspace_snapshot.zig` proves commit-before-
   effects ordering and post-commit failure semantics.
+- `frontend/client/application/resync_required.zig` proves resync validation,
+  coalescence and absence of direct model or presentation work.
 - `frontend/client/model.zig` proves independent workspace, tab and active-tab
   revisions, canonical no-ops and bounded retirement data.
 - `frontend/workspace/tabs.zig` proves retained layouts and replacement at the
