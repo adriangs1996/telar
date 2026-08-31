@@ -66,8 +66,8 @@ projection changed and both committed revisions.
 
 ## Presentation
 
-After the server event, the client loop calls `presentation_lifecycle.observe`. No
-metadata handler calls `requestDraw`.
+After the server event, `client_events` calls
+`presentation_lifecycle.observe`. No metadata handler calls `requestDraw`.
 
 `Presenter.presentDue` maps the metadata revision to client-view invalidation.
 A foreground revision forces the single presenter-owned compositor to rebuild

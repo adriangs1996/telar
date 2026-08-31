@@ -59,8 +59,8 @@ not navigation authority and owns no second copy of the list.
 
 ## Presentation
 
-The server-message path never requests a draw. After the event completes, the
-client loop publishes the current model version. `Presenter` compares the
+The server-message path never requests a draw. After the event completes,
+`client_events` publishes the current model version. `Presenter` compares the
 workspace-list revision with the last version it painted, invalidates client
 chrome and passes the current immutable snapshot to `View.render` when the
 paced frame is due.

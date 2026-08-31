@@ -92,7 +92,7 @@ state, while runtime panes continue and a reconnect negotiates a fresh model.
 ## Presentation
 
 Neither the response adapter nor the timeout requests a draw or advances
-disposable presentation ingress. The client loop publishes the resulting model
+disposable presentation ingress. `client_events` publishes the resulting model
 version. The presenter folds a changed version into its paced frame and records
 the version it painted. A repeated reply or deadline on an already settled
 model schedules no frame.

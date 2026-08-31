@@ -79,7 +79,7 @@ graphics placements and resizes the newly visible pane.
 
 A workbench click completes these resource effects before it sends the
 triggering mouse event to the new pane. No focus-reporting transition requests
-a draw. The client loop publishes the semantic pane revision, and `Presenter`
+a draw. `client_events` publishes the semantic pane revision, and `Presenter`
 folds it into the paced frame loop.
 
 ## Failure and recovery

@@ -40,7 +40,7 @@ This slice has no application effects port because the state change needs no
 IPC, resource cleanup or immediate geometry synchronization. The use case has
 no reference to `View` or `Presenter`.
 
-After the input event, the client loop calls `presentation_lifecycle.observe`.
+After the input event, `client_events` calls `presentation_lifecycle.observe`.
 `Presenter` compares the observed and presented chrome revisions and schedules
 the paced frame. When that frame is due, it projects the committed value into
 `View` before composing. Repeated observations of the same version schedule

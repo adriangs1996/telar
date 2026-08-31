@@ -87,7 +87,7 @@ reconciliation use cases.
 ## Presentation
 
 Neither input routing nor the prompt use case requests a draw. After each
-client event, the loop publishes `ClientModel.Version` to `Presenter`.
+client event, `client_events` publishes `ClientModel.Version` to `Presenter`.
 `Presenter` compares the observed `prompt` revision with its last presented
 version and folds the latest state into the paced frame.
 

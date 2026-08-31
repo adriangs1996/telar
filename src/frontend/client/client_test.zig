@@ -30,6 +30,7 @@ const agent_navigation = @import("agent_navigation.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const attachment_targets = @import("attachment_targets.zig");
 const client_application = @import("application/root.zig");
+const client_events = @import("client_events.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const client_telemetry = @import("telemetry.zig");
@@ -65,6 +66,14 @@ const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = request_lifecycle.initial_request_id;
+
+fn clientEventResourcesForTest(heap: *const core.diagnostics.Heap) client_events.Resources {
+    return .{
+        .tty = undefined,
+        .resize_watcher = undefined,
+        .heap = heap,
+    };
+}
 
 fn reportedPaneId(client: *const Client) ?schema.PaneId {
     const reported = client.model.reportedPaneFocus() orelse return null;
@@ -6964,15 +6973,21 @@ test "a Kitty capability response commits before fallback projection and present
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
 }
 
-test "capability expiry commits fallback state and presents only by model version" {
+test "client event dispatch observes a completed capability expiry" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
     const pending_updates = client.presenter.pending_updates;
+    var heap = core.diagnostics.Heap.init(std.testing.allocator);
 
-    _ = try host_capabilities.handleExpiry(client, {});
+    const first = try client_events.handle(
+        client,
+        .{ .capability_timeout = {} },
+        clientEventResourcesForTest(&heap),
+    );
 
+    try std.testing.expect(first == .keep_running);
     const capabilities = client.model.hostCapabilities();
     try std.testing.expectEqual(kitty.Support.unsupported, capabilities.kitty_graphics);
     try std.testing.expectEqual(kitty.Support.unsupported, capabilities.kitty_zlib);
@@ -6980,18 +6995,43 @@ test "capability expiry commits fallback state and presents only by model versio
     try std.testing.expectEqual(client_model.Version{
         .host_capabilities = 1,
     }, client.model.version());
-    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
-
-    try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
 
     const version = client.model.version();
     const pending_after = client.presenter.pending_updates;
-    _ = try host_capabilities.handleExpiry(client, {});
-    try presentation_lifecycle.observe(client);
+    const repeated = try client_events.handle(
+        client,
+        .{ .capability_timeout = {} },
+        clientEventResourcesForTest(&heap),
+    );
+
+    try std.testing.expect(repeated == .keep_running);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+}
+
+test "client event dispatch skips observation after terminal input" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    var heap = core.diagnostics.Heap.init(std.testing.allocator);
+    const observed = client.presenter.observed_model_version;
+    const pending_updates = client.presenter.pending_updates;
+    _ = try client.model.setDiagnostic("client is stopping", .{});
+
+    const outcome = try client_events.handle(
+        client,
+        .{ .input = .{} },
+        clientEventResourcesForTest(&heap),
+    );
+
+    try std.testing.expect(outcome == .exit);
+    try std.testing.expectEqual(@as(u8, 0), outcome.exit);
+    try std.testing.expectEqualDeep(observed, client.presenter.observed_model_version);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expect(!std.meta.eql(client.model.version(), observed));
 }
 
 test "failed capability deadline changes no host state" {

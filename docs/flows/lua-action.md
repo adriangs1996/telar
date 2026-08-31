@@ -100,7 +100,7 @@ A missing live generation leaves state unchanged. A stale reference, Lua
 error, instruction exhaustion, deadline or malformed result consumes the
 matched binding and commits the bounded diagnostic produced by the VM. A
 validation failure follows the same model path. Neither branch calls
-`Presenter.requestDraw`; the client loop publishes `Version.diagnostic`.
+`Presenter.requestDraw`; `client_events` publishes `Version.diagnostic`.
 Invalid diagnostic bytes are replaced with an error-name-only fallback.
 
 The synchronous callback path keeps its existing hard limits:

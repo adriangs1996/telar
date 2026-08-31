@@ -54,7 +54,7 @@ one resize for each attached pane. The runtime accepts those messages only
 from the workspace geometry owner and processes them through
 `pane_resize.Controller` and `PaneResizeHandler`.
 
-The protocol has no success response. Independently, the client loop calls
+The protocol has no success response. Independently, `client_events` calls
 `presentation_lifecycle.observe`. `Presenter` observes the pane revision and
 schedules the paced frame that changes the visible composition.
 

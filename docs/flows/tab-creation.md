@@ -88,7 +88,7 @@ before its panes detach. They then synchronize attachment geometry and focus
 reporting with the new root pane. An effect failure preserves the confirmed tab
 because the runtime already owns it.
 
-The use cases do not invalidate the view or request a draw. The client loop
+The use cases do not invalidate the view or request a draw. `client_events`
 publishes `ClientModel.Version` to `Presenter`, which schedules one paced frame
 for the changed model dimensions.
 

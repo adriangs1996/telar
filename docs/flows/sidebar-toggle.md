@@ -47,8 +47,8 @@ This immediate projection gives geometry effects the same workbench that the
 next frame will show.
 
 Neither the use case nor the adapter requests a frame. After the input event,
-the client loop calls `presentation_lifecycle.observe`. `Presenter` detects the chrome
-revision, idempotently synchronizes the view projection, invalidates it and
+`client_events` calls `presentation_lifecycle.observe`. `Presenter` detects the
+chrome revision, idempotently synchronizes the view projection, invalidates it and
 folds composition into the paced frame loop.
 
 Hiding the sidebar expands the workbench and showing it contracts the

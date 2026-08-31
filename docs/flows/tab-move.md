@@ -81,7 +81,7 @@ preserves the active tab identity and advances only the tab collection version.
 
 A repeated position is a semantic no-op. It leaves every model version
 unchanged, so `Presenter` schedules no frame. A changed position reaches the
-presenter when the client loop observes the new model version. Neither move
+presenter when `client_events` observes the new model version. Neither move
 use case invalidates the view or requests a draw.
 
 A correlated `request_failed` leaves tab order and model versions unchanged.

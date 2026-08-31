@@ -59,7 +59,7 @@ response cannot repeat either effect.
 The application handler maps each request kind to a stable title and semantic
 notification target. `notifications.Center` copies the borrowed failure text
 into its fixed `schema.max_notification_message_bytes` buffer. Publication
-advances only `ClientModel.Version.notifications`; the client loop passes that
+advances only `ClientModel.Version.notifications`; `client_events` passes that
 version to `Presenter`, which decides whether a paced frame is needed. No
 failure use case requests a draw.
 

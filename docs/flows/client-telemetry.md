@@ -30,8 +30,8 @@ release token or finish deferred sink shutdown
 
 `Client` owns one `telemetry.State`. That object owns the metrics epoch, the
 diagnostics sink, the fixed 8192-byte line buffer and the single in-flight
-write token. `run` only starts the flow and dispatches its two events; it does
-not construct file names, format JSON or manage write lifetime.
+write token. `run` starts the flow; `client_events` dispatches its two events.
+Neither constructs file names, formats JSON or manages write lifetime.
 
 ## Snapshot boundary
 
@@ -73,7 +73,8 @@ Neither condition changes semantic state or visible presentation.
 - `src/frontend/client/client_test.zig` proves a real substituted client
   schedules and completes a snapshot write without changing model or
   presenter versions, and that tick failure disables the sink.
-- `src/frontend/client/run.zig` keeps telemetry events on the observation path
-  and delegates both lifecycle boundaries to the telemetry adapter.
+- `src/frontend/client/client_events.zig` keeps telemetry events on the
+  observation path and delegates both lifecycle boundaries to the telemetry
+  adapter.
 - `src/core/diagnostics.zig` owns the development-only sink, interval and heap
   attribution primitives shared with the runtime.

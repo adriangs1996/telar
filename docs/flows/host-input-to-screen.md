@@ -79,7 +79,7 @@ The read completes as `.input`. The event loop delegates it to
 6. synchronize input and binding deadlines;
 7. schedule the next TTY read.
 
-After the entrypoint returns, the event loop publishes `ClientModel.Version`
+After the entrypoint returns, `client_events` publishes `ClientModel.Version`
 and `PresentationIngress`. The latter contains the disposable view-interaction
 and visible input-routing revisions. The presenter schedules a paced draw when
 any observed value changed.
@@ -327,7 +327,7 @@ base, applies spans to the disposable workspace, reconciles scroll, input modes
 and copy state, then publishes `ClientModel.Version.frame`. A broken base
 requests a fresh snapshot without changing state.
 
-After dispatch, the client loop calls `presentation_lifecycle.observe`.
+After dispatch, `client_events` calls `presentation_lifecycle.observe`.
 `Presenter` detects the new frame revision and schedules the paced draw; the
 frame use case does not decide whether to paint. See
 [Client presentation lifecycle](presentation-lifecycle.md) for observation,

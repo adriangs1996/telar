@@ -123,7 +123,7 @@ runtime response.
 ## Presentation
 
 Neither the input adapter nor the application handler requests a draw or
-writes presentation state. After the client event, the loop publishes the
+writes presentation state. After the client event, `client_events` publishes the
 model version. `Presenter` compares the `copy` revision with its last presented
 version and folds the latest immutable `CopyModeProjection` into the paced
 frame.

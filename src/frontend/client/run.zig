@@ -1,6 +1,5 @@
-//! Client bootstrap: the platform adapter that opens the real terminal,
-//! performs the runtime handshake, and drives the event loop that delegates
-//! every event to a `Client` entrypoint.
+//! Client bootstrap: opens the real terminal, performs the runtime handshake
+//! and lends each completed event to the client event dispatcher.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -12,19 +11,13 @@ const multiplexer = workspace_capability.multiplexer;
 
 const Io = std.Io;
 const diagnostics = core.diagnostics;
-const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
-const agent_sounds = @import("agent_sounds.zig");
+const client_events = @import("client_events.zig");
 const client_telemetry = @import("telemetry.zig");
-const clipboard_images = @import("clipboard_images.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
-const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
-const notification_flow = @import("notifications.zig");
-const presentation_lifecycle = @import("presentation_lifecycle.zig");
-const plugin_actions = @import("plugin_actions.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const Options = Client.Options;
@@ -110,54 +103,13 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
 
     while (true) {
         const event = try client.select.await();
-        const path = diagnostics.enter(clientEventPath(event));
-        defer path.restore();
-        switch (event) {
-            .input => |result| if (try host_inputs.handleRead(client, result)) return 0,
-            .input_timeout => |result| if (try host_inputs.handleInputTimeout(client, result)) return 0,
-            .binding_timeout => |result| if (try host_inputs.handleBindingTimeout(client, result)) return 0,
-            .capability_timeout => |result| _ = try host_capabilities.handleExpiry(client, result),
-            .resized => |result| _ = try host_resizes.handle(client, result, .{
-                .tty = &tty,
-                .watcher = &watcher,
-            }),
-            .server => |result| if (try runtime_transport.handleRead(client, result)) |status| return status,
-            .sent => |result| try runtime_transport.handleSent(client, result),
-            .draw => |result| try presentation_lifecycle.handleDraw(client, result),
-            .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
-            .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
-            .notification_tick => |result| _ = try notification_flow.handleTick(client, result),
-            .sound_played => |result| try agent_sounds.handlePlayed(client, result),
-            .telemetry_tick => |result| client_telemetry.handleTick(client, result, heap.snapshot()),
-            .telemetry_written => |result| client_telemetry.handleWritten(client, result),
-            .config_reload => |result| _ = try config_reloads.handle(client, result),
-            .plugin_result => |result| if (try plugin_actions.complete(client, result)) return 0,
-            .clipboard_image => |result| try clipboard_images.complete(client, result),
+        switch (try client_events.handle(client, event, .{
+            .tty = &tty,
+            .resize_watcher = &watcher,
+            .heap = &heap,
+        })) {
+            .keep_running => {},
+            .exit => |status| return status,
         }
-
-        try presentation_lifecycle.observe(client);
     }
-}
-
-fn clientEventPath(event: Client.ClientEvent) diagnostics.Path {
-    return switch (event) {
-        .input,
-        .input_timeout,
-        .binding_timeout,
-        .capability_timeout,
-        .resized,
-        .server,
-        .sent,
-        .draw,
-        .sidebar_animation_tick,
-        => .interactive,
-        .media_tick, .clipboard_image => .media,
-        .notification_tick,
-        .sound_played,
-        .telemetry_tick,
-        .telemetry_written,
-        .config_reload,
-        .plugin_result,
-        => .observation,
-    };
 }

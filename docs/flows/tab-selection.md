@@ -61,7 +61,7 @@ The runtime dispatches `detach_pane` through `detach_pane.Controller` and
 [tab snapshot reconciliation](tab-snapshot-reconciliation.md) flow, which
 repairs pane membership and attachments from runtime state.
 
-Neither the selection handler nor its adapter requests a frame. The client loop
+Neither the selection handler nor its adapter requests a frame. `client_events`
 calls `presentation_lifecycle.observe`, and `Presenter` schedules a paced frame
 only after it observes the changed active-tab revision.
 

@@ -144,7 +144,7 @@ application directive into `applied` or `exit`; the dispatcher only maps
 
 The handler never requests a draw. `ClientModel.removeTab` advances the tab
 version and advances the active-tab version only when the active identity
-changed. The client loop passes that version to `Presenter`, which coalesces
+changed. `client_events` passes that version to `Presenter`, which coalesces
 presentation onto its paced frame deadline. A repeated lifecycle fact leaves
 the version unchanged and schedules no frame.
 

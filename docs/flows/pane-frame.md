@@ -67,7 +67,7 @@ accepted; reconnect or canonical reconciliation repairs disposable resources.
 
 ## Presentation and acknowledgement
 
-After each event, the client loop publishes the latest model version through
+After each event, `client_events` publishes the latest model version through
 `presentation_lifecycle.observe`. `Presenter` compares that value with the
 version it last observed and folds all pending revisions into one paced draw.
 Frame application records only semantic pane damage in the multiplexer. The

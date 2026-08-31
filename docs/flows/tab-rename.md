@@ -88,8 +88,8 @@ the borrowed response storage is released.
 
 A changed label advances only `tabs_revision`. An identical canonical label is
 a semantic no-op and changes no version. Neither case changes active-tab
-identity. The use cases do not invalidate the view or request a draw. The
-client loop publishes a changed model version to `Presenter`, which schedules
+identity. The use cases do not invalidate the view or request a draw.
+`client_events` publishes a changed model version to `Presenter`, which schedules
 the frame.
 
 ## Failure and recovery

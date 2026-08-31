@@ -114,7 +114,7 @@ result. It then executes `AdvanceNotificationsHandler`, which advances the
 center from elapsed monotonic time, commits `Version.notifications` only when
 state changed and rearms the next deadline.
 
-The client run loop calls `presentation_lifecycle.observe` after the event.
+`client_events` calls `presentation_lifecycle.observe` after the event.
 `Presenter` compares the notification version with the last version it painted,
 invalidates the view and passes `ClientModel.notificationSnapshot()` into the
 next paced frame. Several lifecycle ticks inside one frame budget therefore

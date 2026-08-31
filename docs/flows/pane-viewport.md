@@ -68,7 +68,7 @@ inside copy mode while leaving graphics and IPC knowledge in one adapter.
 
 ## Presentation
 
-The event loop publishes `ClientModel.Version` after the input event.
+`client_events` publishes `ClientModel.Version` after the input event.
 `Presenter` compares the viewport revision with the version it last painted.
 When it changes, the presenter renders only the active tab. The single
 presenter-owned compositor detects the active pane's projected scroll offset

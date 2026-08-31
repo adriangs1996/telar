@@ -75,6 +75,8 @@ SocketChannel.receive
        |
 ClientEvent.server
        |
+client_events.handle
+       |
 runtime_transport.handleRead
        |
 schema.decodeServer -> server_messages.handleServerMessage

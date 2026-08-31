@@ -13,10 +13,11 @@ last presented timestamp. It decides whether a revision needs a frame. Client
 use cases never schedule a frame; visible changes reach the presenter through
 the observation boundary.
 
-`presentation_lifecycle` is the asynchronous adapter. The client loop delegates
-observation, `.draw` and `.media_tick` events to it. The adapter releases task
-tokens and orders presentation effects that cross into runtime transport. It
-does not decide which parts of the screen changed.
+`presentation_lifecycle` is the asynchronous adapter. `client_events`
+delegates `.draw` and `.media_tick` events to it and publishes one observation
+after every non-terminal event. The adapter releases task tokens and orders
+presentation effects that cross into runtime transport. It does not decide
+which parts of the screen changed.
 
 ```text
 committed client event
@@ -40,11 +41,11 @@ bounded graphics flush
 
 ## Observation and frame choice
 
-The loop publishes one complete `Presenter.Observation` after every event. It
-contains the semantic `ClientModel.Version` and the ingress versions of pane
-graphics, client attachments, view interactions and visible input routing.
-`Presenter` compares it with both the last observation and the last successful
-presentation.
+The dispatcher publishes one complete `Presenter.Observation` after every
+non-terminal event. It contains the semantic `ClientModel.Version` and the
+ingress versions of pane graphics, client attachments, view interactions and
+visible input routing. `Presenter` compares it with both the last observation
+and the last successful presentation.
 
 An identical observation does nothing while a draw is pending. A newer
 observation increments the saturating `pending_updates` count but retains the
