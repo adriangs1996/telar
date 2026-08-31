@@ -15,7 +15,6 @@ const version = "0.0.0";
 pub const std_options: std.Options = .{ .log_level = .err };
 
 const Cli = cli_mod.Cli;
-const RunOptions = cli_mod.RunOptions;
 const RuntimeConfigSelection = cli_mod.RuntimeConfigSelection;
 const RuntimeConnector = cli_mod.RuntimeConnector;
 const ServerAction = cli_mod.ServerAction;
@@ -329,135 +328,6 @@ fn collectArgs(init: std.process.Init, storage: *[pty.max_args][*:0]const u8) ![
     return storage[0..len];
 }
 
-fn runClient(
-    init: std.process.Init,
-    connection: *core.transport.SocketChannel,
-    options: *const RunOptions,
-    endpoint: []const u8,
-) !u8 {
-    var argument_storage: [pty.max_args][]const u8 = undefined;
-    var argument_count: usize = 0;
-    while (options.command.argv[argument_count]) |argument| : (argument_count += 1) {
-        argument_storage[argument_count] = std.mem.span(argument);
-    }
-
-    var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const cwd_len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
-    var config_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const generation = try cli_mod.config.loadGeneration(init, .{
-        .path = options.config,
-        .disabled = options.no_config,
-        .profile = options.profile,
-    }, &config_path_buffer);
-    const config_path: ?[]const u8 = if (generation != null)
-        if (options.config) |value|
-            std.mem.span(value)
-        else
-            try frontend.config.defaultPath(init.minimal.environ, &config_path_buffer)
-    else
-        null;
-    var config_mtime_ns = if (config_path) |path|
-        generation.?.watchFingerprint(init.io, path)
-    else
-        0;
-    const snapshot = if (generation) |value| &value.snapshot else null;
-    var plugin_registry: ?*frontend.plugins.Registry = null;
-    var trust_store: ?*core.plugin.TrustStore = null;
-    var trust_path: ?[]const u8 = null;
-    if (generation) |value| {
-        var trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const resolved_trust_path = cli_mod.plugin.trustPath(
-            init.minimal.environ,
-            &trust_path_buffer,
-        ) catch |err| {
-            value.deinit();
-            return err;
-        };
-        const loaded_trust = cli_mod.plugin.loadTrustStore(
-            init,
-            resolved_trust_path,
-        ) catch |err| {
-            value.deinit();
-            return err;
-        };
-        trust_store = init.gpa.create(core.plugin.TrustStore) catch |err| {
-            value.deinit();
-            return err;
-        };
-        trust_store.?.* = loaded_trust;
-        const registry_value = frontend.plugins.Registry.loadWithTrust(
-            init.gpa,
-            init.io,
-            value.configDir(),
-            value.pluginSlice(),
-            trust_store.?,
-        ) catch |err| {
-            init.gpa.destroy(trust_store.?);
-            value.deinit();
-            return err;
-        };
-        registry_value.validateConfiguredActions(value.snapshot.bindingSlice()) catch |err| {
-            init.gpa.destroy(trust_store.?);
-            value.deinit();
-            return err;
-        };
-        plugin_registry = init.gpa.create(frontend.plugins.Registry) catch |err| {
-            init.gpa.destroy(trust_store.?);
-            value.deinit();
-            return err;
-        };
-        plugin_registry.?.* = registry_value;
-        config_mtime_ns ^= @as(i128, plugin_registry.?.watchFingerprint(init.gpa, init.io));
-        config_mtime_ns ^= @as(i128, frontend.client.trustWatchFingerprint(init.io, resolved_trust_path));
-        trust_path = resolved_trust_path;
-    }
-    return frontend.client.run(init, connection, .{
-        .arguments = argument_storage[0..argument_count],
-        .cwd = cwd_buffer[0..cwd_len],
-        .endpoint = endpoint,
-        .prefix = if (snapshot) |value| value.prefix else frontend.keybind.default_prefix,
-        .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
-        .theme = if (options.theme_set)
-            options.theme
-        else if (snapshot) |value|
-            value.theme
-        else
-            options.theme,
-        .icon_theme = if (snapshot) |value| value.icon_theme else .unicode,
-        .sidebar_rendering = if (options.sidebar_renderer_set)
-            options.sidebar_rendering
-        else if (snapshot) |value|
-            value.sidebar_rendering
-        else
-            options.sidebar_rendering,
-        .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
-        .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
-        .sound = if (snapshot) |value| value.sound else .{},
-        .host_shared_memory = init.minimal.environ.getPosix("SSH_CONNECTION") == null and
-            if (init.minimal.environ.getPosix("TERM_PROGRAM")) |program|
-                std.ascii.eqlIgnoreCase(program, "ghostty")
-            else
-                false,
-        .input_escape_timeout_ns = if (snapshot) |value|
-            value.input_escape_timeout_ns
-        else
-            frontend.keybind.default_escape_timeout_ns,
-        .input_sequence_timeout_ns = if (snapshot) |value|
-            value.input_sequence_timeout_ns
-        else
-            frontend.keybind.default_sequence_timeout_ns,
-        .lua_generation = generation,
-        .config_path = config_path,
-        .config_mtime_ns = config_mtime_ns,
-        .theme_locked = options.theme_set,
-        .sidebar_renderer_locked = options.sidebar_renderer_set,
-        .plugin_registry = plugin_registry,
-        .trust_store = trust_store,
-        .trust_path = trust_path,
-        .profile = if (options.profile) |value| std.mem.span(value) else null,
-    });
-}
-
 const usage =
     \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
     \\       telar server
@@ -555,16 +425,7 @@ pub fn main(init: std.process.Init) !void {
         ),
         .plugin => |options| try cli_mod.plugin.run(init, options),
         .run => |options| {
-            const connector = try RuntimeConnector.init(init, null);
-            var connection = try connector.connectOrStart(.{
-                .path = options.config,
-                .disabled = options.no_config,
-                .profile = options.profile,
-            });
-            defer connection.deinit(init.io);
-
-            const code = try runClient(init, &connection, &options, connector.endpointPath());
-            std.process.exit(code);
+            std.process.exit(try cli_mod.client.run(init, options));
         },
     }
 }
