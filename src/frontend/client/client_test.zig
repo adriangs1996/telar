@@ -4023,6 +4023,47 @@ test "a failed snapshot request is fatal after consuming its continuation" {
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
 }
 
+test "a runtime notification translates and owns its wire payload" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    var payload: [512]u8 = undefined;
+    const encoded = try schema.encodeNotification(&payload, .{
+        .level = .warning,
+        .duration_ms = 2500,
+        .target = .{ .tab = @enumFromInt(3) },
+        .title = "Agent waiting",
+        .message = "Review its question",
+    });
+
+    const publication = try notification_flow.applyRuntime(
+        client,
+        (try schema.decodeServer(encoded)).notification,
+    );
+    @memset(&payload, 'x');
+
+    const item = client.model.notificationSnapshot().itemAt(0).?;
+    try std.testing.expectEqual(item.id, publication.id);
+    try std.testing.expectEqual(version_before.notifications + 1, publication.notifications_revision);
+    try std.testing.expectEqual(notifications.Level.warning, item.level);
+    try std.testing.expectEqual(
+        notifications.Target{ .select_tab = @enumFromInt(3) },
+        item.target,
+    );
+    try std.testing.expectEqualStrings("Agent waiting", item.title());
+    try std.testing.expectEqualStrings("Review its question", item.message());
+    try std.testing.expectEqual(
+        notifications.transition_duration_ns + 2500 * std.time.ns_per_ms,
+        item.expires_at_ns - item.transition_updated_ns,
+    );
+    try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(client.notification_tick_pending);
+}
+
 test "an unexpected notification delivery report is rejected without effects" {
     var harness: TestHarness = undefined;
     try harness.init();

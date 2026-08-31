@@ -1,11 +1,13 @@
 //! Connects notification use cases to the client timer infrastructure.
 
+const std = @import("std");
 const core = @import("telar-core");
 const notification_capability = @import("../notifications/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 
-const Client = @import("client.zig");
+const client_mod = @import("client.zig");
+const Client = client_mod;
 const notification_use_cases = client_application.notifications;
 const schema = core.schema;
 
@@ -31,6 +33,31 @@ pub fn applyDeliveryReport(client: *Client, shown: schema.NotificationShown) !De
     };
 
     return use_case.execute(.{ .delivered_clients = shown.delivered_clients });
+}
+
+/// Translates and publishes one notification pushed by the runtime.
+///
+/// ```zig
+/// const publication = try applyRuntime(client, notification);
+/// ```
+pub fn applyRuntime(client: *Client, notification: schema.Notification) !client_model.NotificationPublication {
+    return publish(client, client_mod.monotonic(client.io), .{
+        .level = switch (notification.level) {
+            .info => .info,
+            .success => .success,
+            .warning => .warning,
+            .failure => .failure,
+        },
+        .title = notification.title,
+        .message = notification.message,
+        .target = switch (notification.target) {
+            .none => .none,
+            .pane => |pane_id| .{ .focus_pane = pane_id },
+            .tab => |tab_id| .{ .select_tab = tab_id },
+            .workspace => |workspace_id| .{ .select_workspace = workspace_id },
+        },
+        .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
+    });
 }
 
 /// Publishes one owned notice through the application boundary.

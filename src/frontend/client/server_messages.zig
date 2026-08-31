@@ -3,17 +3,13 @@
 //! input handler does. Nothing here owns state — the client does; this
 //! file owns the protocol conversation.
 
-const std = @import("std");
 const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
 const term = presentation.screen;
 
-const Io = std.Io;
 const schema = core.schema;
-const diagnostics = core.diagnostics;
 
-const client_mod = @import("client.zig");
-const Client = client_mod;
+const Client = @import("client.zig");
 const agent_snapshots = @import("agent_snapshots.zig");
 const notifications = @import("notifications.zig");
 const pane_closures = @import("pane_closures.zig");
@@ -32,7 +28,6 @@ const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_lists = @import("workspace_lists.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
-const monotonic = client_mod.monotonic;
 
 /// Routes one decoded message from the runtime.
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
@@ -53,7 +48,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_clipboard => |clipboard| try handlePaneClipboard(client, clipboard),
         .pane_exited => |exited| try handlePaneExited(client, exited),
         .request_failed => |failure| _ = try request_failures.apply(client, failure),
-        .notification => |notification| try handleRuntimeNotification(client, notification),
+        .notification => |notification| _ = try notifications.applyRuntime(client, notification),
         .notification_shown => |shown| _ = try notifications.applyDeliveryReport(client, shown),
         .agent_sound => |sound| try handleAgentSound(client, sound),
         .resync_required => |required| {
@@ -95,27 +90,6 @@ fn handlePaneClipboard(client: *Client, clipboard: schema.PaneClipboard) !void {
     if (clipboard.pane_id == .invalid) return error.UnexpectedPane;
     try term.writeClipboard(client.writer, clipboard.bytes);
     try client.writer.flush();
-}
-
-/// Entrypoint for a notification the runtime pushes on its own behalf.
-fn handleRuntimeNotification(client: *Client, notification: schema.Notification) !void {
-    try client.notify(.{
-        .level = switch (notification.level) {
-            .info => .info,
-            .success => .success,
-            .warning => .warning,
-            .failure => .failure,
-        },
-        .title = notification.title,
-        .message = notification.message,
-        .target = switch (notification.target) {
-            .none => .none,
-            .pane => |pane_id| .{ .focus_pane = pane_id },
-            .tab => |tab_id| .{ .select_tab = tab_id },
-            .workspace => |workspace_id| .{ .select_workspace = workspace_id },
-        },
-        .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
-    });
 }
 
 /// A pane's child ended: drop the pane and every piece of client state on it.

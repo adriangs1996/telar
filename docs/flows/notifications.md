@@ -8,11 +8,14 @@ starts exiting.
 ## Publication path
 
 ```text
-runtime event, request failure or local client diagnostic
-                         |
-                    Client.notify
-                         |
-              notifications client adapter
+runtime notification             request failure or local diagnostic
+        |                                      |
+notifications.applyRuntime                  Client.notify
+        |                                      |
+wire-to-client translation                    |
+        +------------------+-------------------+
+                           |
+                notifications.publish
                          |
              PublishNotificationHandler
                          |
@@ -27,16 +30,19 @@ runtime event, request failure or local client diagnostic
           Presenter -> View.render(snapshot)
 ```
 
-The runtime can publish a notification directly. Request failures, agent and
-proxy transitions, configuration or plugin diagnostics, and clipboard image
-failures use the same local entrypoint. `Client.notify` adds the monotonic
-timestamp and delegates to the application handler. The handler commits the
-owned model state before it touches timer infrastructure.
+The dispatcher delegates a runtime event to `notifications.applyRuntime`. The
+adapter translates protocol level, target and millisecond duration into client
+notification values, adds the monotonic timestamp and invokes the existing
+publication use case. Request failures, agent and proxy transitions,
+configuration or plugin diagnostics, and clipboard image failures enter
+through `Client.notify` and converge on the same use case. The handler commits
+the owned model state before it touches timer infrastructure.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
 keeps at most four items, refreshes an equivalent active item and replaces the
 oldest item at capacity. Invalid UTF-8 is replaced before storage. Publication
-does not request a frame directly.
+does not request a frame directly. In particular, no title or message borrowed
+from a decoded runtime buffer survives the synchronous adapter call.
 
 ## Runtime delivery report
 
@@ -132,8 +138,9 @@ new notifications after reconciliation.
 - `src/frontend/client/application/notifications.zig` proves commit-before-
   timer ordering, delivery policy, stale interaction behavior and retained
   commits when timer scheduling fails.
-- `src/frontend/client/notifications.zig` proves delivery correlation and
-  connects every application notification use case to client infrastructure.
+- `src/frontend/client/notifications.zig` proves runtime wire translation,
+  delivery correlation and connection of application use cases to client
+  infrastructure.
 - `src/frontend/client/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
 - `src/frontend/client/client_test.zig` proves wire and local producers,
