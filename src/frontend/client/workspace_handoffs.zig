@@ -13,6 +13,7 @@ const workspace_transitions = @import("workspace_transitions.zig");
 
 const Client = @import("client.zig");
 const multiplexer = workspace_capability.multiplexer;
+const pane_open_delivery = client_application.pane_open_delivery;
 const schema = core.schema;
 const workspace_handoff = client_application.workspace_handoff;
 const workspace_handoff_preparation = client_application.workspace_handoff_preparation;
@@ -133,7 +134,7 @@ fn selectionHandler(client: *Client) workspace_handoff.SelectWorkspaceHandler {
 /// ```zig
 /// try confirmationHandler(client).execute(try arrival(client, opened));
 /// ```
-pub fn arrival(client: *Client, opened: schema.PaneOpened) !client_model.WorkspaceArrival {
+pub fn arrival(client: *Client, opened: pane_open_delivery.OpenedPane) !client_model.WorkspaceArrival {
     return workspace_transitions.arrival(
         client,
         opened,

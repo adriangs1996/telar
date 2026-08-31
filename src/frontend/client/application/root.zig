@@ -35,6 +35,7 @@ pub const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
 pub const pane_graphics = @import("pane_graphics.zig");
 pub const pane_input = @import("pane_input.zig");
 pub const pane_mouse = @import("pane_mouse.zig");
+pub const pane_open_delivery = @import("pane_open_delivery.zig");
 pub const pane_paste = @import("pane_paste.zig");
 pub const pane_resource_release = @import("pane_resource_release.zig");
 pub const pane_split_confirmation_delivery = @import("pane_split_confirmation_delivery.zig");
@@ -110,6 +111,7 @@ test {
     _ = pane_graphics;
     _ = pane_input;
     _ = pane_mouse;
+    _ = pane_open_delivery;
     _ = pane_paste;
     _ = pane_resource_release;
     _ = pane_split_confirmation_delivery;

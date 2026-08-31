@@ -19,16 +19,20 @@ prepare view -> attach client -> PendingPaneOpened
         |
 schema.pane_opened -> client socket
         |
-pane_openings.apply -> ConfirmPaneAttachmentHandler
+pane_openings.apply -> DeliverPaneOpenHandler
+        |
+ConfirmPaneAttachmentHandler
         |
 ClientModel.confirmPaneAttachment
 ```
 
 `tab_snapshots.applyReconciliation` sends at most one attachment request per
-pane. The request tracker stores the pane ID and exact tab location. A matching
-`pane_opened` response must identify the same existing pane, the same location
-and `created = false`. `pane_openings.apply` consumes that correlation once,
-translates the protocol response and delivers only the attachment command.
+pane. The request tracker stores the pane ID and exact tab location.
+`pane_openings.apply` consumes that correlation once, rejects unrelated
+continuations and removes the request identity from the translated value.
+`DeliverPaneOpenHandler` selects the attachment confirmation port. A matching
+response must identify the same existing pane, the same location and
+`created = false`.
 
 ## Client commit
 
@@ -112,6 +116,8 @@ nothing.
 
 - `frontend/client/application/attach_pane.zig` checks exact confirmation,
   stale success, recovery gating and effect failure.
+- `frontend/client/application/pane_open_delivery.zig` checks successful-open
+  routing, retired work and delivery failure propagation.
 - `frontend/client/application/tab_attachment_retirement.zig` proves paste,
   focus, pane and commit ordering, pending attachment retirement, idempotence
   and partial failures.

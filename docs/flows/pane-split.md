@@ -24,6 +24,8 @@ schema.pane_opened -> client socket
         |
 pane_openings.apply
         |
+DeliverPaneOpenHandler
+        |
 ConfirmPaneSplitHandler
         |
 ClientModel.commitPaneSplit
@@ -45,8 +47,10 @@ a host resize while launch is in flight cannot invalidate accepted geometry.
 `RequestPaneSplitHandler` owns the provisional protocol conversation. It sends
 the target resize before `create_pane`; any local delivery failure restores the
 pre-request size. The request tracker stores the exact target, tab, axis and
-request-time workbench. `pane_openings.apply` consumes that continuation once
-and translates the successful protocol response into the confirmation command.
+request-time workbench. `pane_openings.apply` consumes that continuation once,
+translates it to a request-ID-free value and rejects unrelated continuations.
+`DeliverPaneOpenHandler` selects the split confirmation port and combines the
+translated response with the retained request.
 
 ## Runtime confirmation
 
@@ -101,6 +105,8 @@ when possible.
 
 - `frontend/client/application/split_pane.zig` checks request ordering,
   restoration, exact confirmation, commit-before-effects and recovery gating.
+- `frontend/client/application/pane_open_delivery.zig` checks successful-open
+  routing, retired work and delivery failure propagation.
 - `frontend/client/application/pane_split_confirmation_delivery.zig` checks
   all three dispositions, exact revisions and layout identity, effect order,
   recovery coalescence and partial failure semantics.

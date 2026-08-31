@@ -10,6 +10,7 @@ const workspace_transitions = @import("workspace_transitions.zig");
 const Client = @import("client.zig");
 const create_workspace = client_application.create_workspace;
 const multiplexer = workspace_capability.multiplexer;
+const pane_open_delivery = client_application.pane_open_delivery;
 const schema = core.schema;
 const workspace_creation_delivery = client_application.workspace_creation_delivery;
 
@@ -40,7 +41,7 @@ pub fn requestHandler(client: *Client) create_workspace.RequestWorkspaceCreation
 /// ```zig
 /// const command = confirmation(client, opened, requested_size);
 /// ```
-pub fn confirmation(client: *Client, opened: schema.PaneOpened, requested_size: schema.TerminalSize) create_workspace.ConfirmWorkspaceCreation {
+pub fn confirmation(client: *Client, opened: pane_open_delivery.OpenedPane, requested_size: schema.TerminalSize) create_workspace.ConfirmWorkspaceCreation {
     return .{
         .created = opened.created,
         .arrival = workspace_transitions.arrival(client, opened, requested_size),

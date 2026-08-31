@@ -80,6 +80,8 @@ schema.pane_opened -> client socket
         |
 pane_openings.apply
         |
+DeliverPaneOpenHandler
+        |
 ConfirmWorkspaceHandoffHandler
         |
 ClientModel.arriveWorkspace
@@ -94,9 +96,10 @@ presentation_lifecycle.observe -> present arrived workspace
 ```
 
 The `initial_open` continuation correlates the runtime response.
-`pane_openings.apply` consumes it once and delivers the translated arrival to
-the handoff use case. Before the commit, the adapter copies a saved layout only
-when its exact tab identity matches the confirmed location.
+`pane_openings.apply` consumes it once, removes its request identity and
+translates it to the narrow application continuation. `DeliverPaneOpenHandler`
+selects the handoff-arrival port. Before the commit, that concrete port copies a
+saved layout only when its exact tab identity matches the confirmed location.
 
 `ClientModel.arriveWorkspace` accepts only an empty model. The tab store builds
 the root tab and confirmed pane transactionally before publishing them, then
@@ -142,6 +145,8 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
 - `src/frontend/client/application/workspace_handoff.zig` checks selection,
   gating, request ordering, local recovery, commit-before-effects and exact
   retry conditions.
+- `src/frontend/client/application/pane_open_delivery.zig` checks
+  successful-open routing, retired work and delivery failure propagation.
 - `src/frontend/client/application/workspace_handoff_preparation.zig` checks
   complete capacity accounting, pending attachments, preflight-before-effects,
   multi-tab retirement order and partial detach failures.

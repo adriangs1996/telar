@@ -60,6 +60,8 @@ pane_opened(create_workspace continuation)
         |
 pane_openings.apply
         |
+DeliverPaneOpenHandler
+        |
 ConfirmWorkspaceCreationHandler
         |
 ClientModel.replaceWorkspace
@@ -83,11 +85,12 @@ presentation_lifecycle.observe -> paced presentation
 
 The continuation retains the nonzero terminal size sent to the runtime, so a
 host resize cannot replace valid construction geometry with a zero-sized
-workbench while the response is in flight. The `created` flag is checked before
-mutation. `pane_openings.apply` consumes the correlation once and combines the
-response with that retained size before delivery. The adapter also stages a
-remembered layout only when its exact workspace and tab identity matches the
-runtime confirmation.
+workbench while the response is in flight. `pane_openings.apply` consumes the
+correlation once, removes the request identity and translates the retained size
+with the response. `DeliverPaneOpenHandler` selects the workspace-creation
+confirmation port. The `created` flag is checked before mutation, and the
+concrete port stages a remembered layout only when its exact workspace and tab
+identity matches the runtime confirmation.
 
 `ClientModel.replaceWorkspace` captures the previous workspace, focused-pane
 bookmark, layout and bounded pane identities. The tab store constructs the new
@@ -141,6 +144,8 @@ still install the confirmed root, which keeps recovery deterministic.
 - `src/frontend/client/application/create_workspace.zig` proves request
   gating, validation, no provisional mutation, response validation,
   commit-before-delivery and post-commit failure behavior.
+- `src/frontend/client/application/pane_open_delivery.zig` proves
+  successful-open routing, retired work and delivery failure propagation.
 - `src/frontend/client/application/workspace_creation_delivery.zig` proves
   exact replacement validation, release-before-activation order, empty-source
   recovery and partial failure semantics.
