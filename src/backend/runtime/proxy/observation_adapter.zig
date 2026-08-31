@@ -322,6 +322,44 @@ test "an inference start updates the agent before scheduling downstream work" {
     try std.testing.expectEqual(expectedProxyObservations(), fixture.support.metrics.proxy_observations);
 }
 
+test "Claude provider completion projects ready before downstream work" {
+    var fixture: Fixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var adapter = fixture.adapter();
+
+    var started = fixture.event(.request_started, .http11);
+    started.provider = .claude;
+    started.stream_id = 0;
+    started.status_code = 0;
+    started.observed_at_ms = 100;
+    try adapter.handle(started);
+
+    try std.testing.expectEqual(core.schema.AgentStatus.working, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+    fixture.capture.len = 0;
+
+    var completed = fixture.event(.provider_turn_completed, .http11);
+    completed.provider = .claude;
+    completed.stream_id = 0;
+    completed.status_code = 0;
+    completed.observed_at_ms = 200;
+    try adapter.handle(completed);
+
+    try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description, .pump_clients });
+    try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.capture.status_at_description_schedule.?);
+    try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+    fixture.capture.len = 0;
+
+    var finished = fixture.event(.response_finished, .http11);
+    finished.provider = .claude;
+    finished.stream_id = 0;
+    finished.status_code = 200;
+    finished.observed_at_ms = 300;
+    try adapter.handle(finished);
+
+    try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+}
+
 test "an unmatched lifecycle event still runs the established downstream policy" {
     var fixture: Fixture = .{};
     try fixture.init();

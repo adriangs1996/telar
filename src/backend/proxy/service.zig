@@ -918,6 +918,112 @@ test "provider payload inspection requires a successful inference stream" {
     }));
 }
 
+test "HTTP1 Claude SSE publishes provider turn completion after forwarding" {
+    const FakeSession = @import("http/test_support.zig").FakeSession;
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const response_body =
+        "event: message_delta\n" ++
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n" ++
+        "\n";
+    const response =
+        "HTTP/1.1 200 OK\r\n" ++
+        "Content-Type: text/event-stream; charset=utf-8\r\n" ++
+        "Content-Length: " ++ std.fmt.comptimePrint("{d}", .{response_body.len}) ++ "\r\n" ++
+        "Connection: close\r\n" ++
+        "\r\n" ++
+        response_body;
+    var session: FakeSession = .{
+        .child_input = "POST /v1/messages HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
+        .origin_input = response,
+    };
+
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var key_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var certificate_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var bundle_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const service = try Service.create(io, gpa, .{
+        .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
+        .certificate = try std.fmt.bufPrint(&certificate_buffer, "{s}/ca-cert.pem", .{directory}),
+        .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+    });
+    defer service.destroy();
+
+    const credential: identity.Credential = .{
+        .pane_id = try schema.id.pane(7),
+        .pane_generation = 11,
+        .token = .{0x42} ** identity.token_bytes,
+    };
+    try service.registerCredential(&credential);
+    var tunnel_context: TunnelContext = .{
+        .service = service,
+        .credential = credential,
+        .provider = .claude,
+        .connection_id = 19,
+        .protocol = .http11,
+    };
+
+    const parsed_request = http.relayHead(&session, .{
+        .from = .child,
+        .to = .origin,
+        .is_response = false,
+        .response_to_head = false,
+        .provider = tunnel_context.provider,
+    }).?;
+    const request: http.RequestHead = .{
+        .classification = parsed_request.classification,
+        .body = parsed_request.framing,
+        .response_context = .normal,
+    };
+    tunnel_context.publish(httpRequestPhase(request.classification), 0);
+
+    const parsed_response = http.relayHead(&session, .{
+        .from = .origin,
+        .to = .child,
+        .is_response = true,
+        .response_to_head = false,
+    }).?;
+    var observer: HttpResponseObserver = .init(
+        &tunnel_context,
+        shouldInspectHttpResponse(request, parsed_response),
+    );
+    defer observer.deinit();
+
+    try std.testing.expect(http.relayBody(
+        &session,
+        .{ .from = .origin, .to = .child, .framing = parsed_response.framing },
+        &observer,
+    ));
+    tunnel_context.status_code = parsed_response.message.status_code;
+    tunnel_context.publish(httpResponsePhase(tunnel_context.status_code), 0);
+
+    const expected_phases = [_]middleware.Phase{
+        .request_started,
+        .response_activity,
+        .provider_turn_completed,
+        .response_finished,
+    };
+    try std.testing.expectEqual(expected_phases.len, service.observations.metrics().queued);
+
+    for (expected_phases) |expected_phase| {
+        var event = try service.receive(io);
+        defer std.crypto.secureZero(u8, &event.credential.token);
+
+        try std.testing.expectEqual(expected_phase, event.phase);
+        try std.testing.expectEqual(schema.AgentProvider.claude, event.provider);
+        try std.testing.expectEqual(middleware.Protocol.http11, event.protocol);
+        try std.testing.expectEqual(@as(u64, 19), event.connection_id);
+        try std.testing.expectEqual(@as(u32, 0), event.stream_id);
+    }
+
+    try std.testing.expectEqualStrings(session.child_input, session.originOutput());
+    try std.testing.expectEqualStrings(response, session.childOutput());
+}
+
 test "HTTP response metadata preserves final routing semantics" {
     const informational = semanticResponseHead(.{
         .message = .{ .status_code = 100, .informational = true },
