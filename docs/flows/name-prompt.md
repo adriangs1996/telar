@@ -22,21 +22,27 @@ name_prompt.State.begin
         |
 ClientModel.Version.prompt
 
-host input
-        |
-InputHandler checks ClientModel.name_prompt.active
-        |
-name_prompts.handleInput -> term.parse
+host key input                     streamed paste phase
+        |                                  |
+InputHandler key branch             paste_routing adapter
+        |                                  |
+name_prompts.handleInput       PasteRoutingHandler -> prompt owner
+        |                                  |
+        +----------------+-----------------+
+                         |
+                     term.parse
         |
 semantic Command
         |
 NamePromptHandler.execute -> name_prompt.State.apply
 ```
 
-`ClientModel` owns prompt, copy-mode and pane-paste routing authority, and their
-entry adapters reject overlap. A paste that starts in the prompt records
-`Prompt.pasting`; its later chunks and closing boundary stay with that editor.
-Mouse input and configured actions are suppressed while the prompt is active.
+`ClientModel` owns prompt, copy-mode and pane-paste authority. For streamed
+paste, `paste_routing` snapshots those modes plus the attachment modal and
+`PasteRoutingHandler` selects one owner. A paste that starts in the prompt
+records `Prompt.pasting`; its later chunks and closing boundary stay with that
+editor. Mouse input and configured actions are suppressed while the prompt is
+active.
 
 The terminal adapter translates bytes into semantic editor commands. The state
 component handles grapheme-aware editing and records a revision only for a
@@ -92,6 +98,8 @@ latest model state.
   prompt retention after blocked or failed submissions.
 - `src/frontend/client/name_prompts.zig` proves terminal parsing, bracketed
   paste handling and the zero-length incomplete-sequence regression.
+- `src/frontend/client/application/paste_routing.zig` proves exclusive prompt
+  or pane ownership and ignored unowned phases.
 - `src/frontend/client/client_test.zig` proves request ownership, outbox
   failure recovery and presenter-only frame scheduling through the real client
   adapters.

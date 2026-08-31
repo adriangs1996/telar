@@ -23,6 +23,7 @@ pub const pane_focus_reporting = @import("pane_focus_reporting.zig");
 pub const pane_graphics = @import("pane_graphics.zig");
 pub const pane_input = @import("pane_input.zig");
 pub const pane_paste = @import("pane_paste.zig");
+pub const paste_routing = @import("paste_routing.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
 pub const plugin_action = @import("plugin_action.zig");
 pub const proxy_status = @import("proxy_status.zig");
@@ -69,6 +70,7 @@ test {
     _ = pane_graphics;
     _ = pane_input;
     _ = pane_paste;
+    _ = paste_routing;
     _ = pane_metadata;
     _ = plugin_action;
     _ = proxy_status;

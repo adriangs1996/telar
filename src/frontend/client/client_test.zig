@@ -2023,6 +2023,39 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     try std.testing.expect(name_prompts.beginWorkspaceRename(client));
 }
 
+test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    var handler: InputHandler = .{ .client = client };
+    try std.testing.expect(name_prompts.beginActiveTabRename(client));
+
+    try handler.pasteStart();
+    try std.testing.expect(client.model.name_prompt.currentConst().?.pasting);
+    try handler.pasteContent(" one\r");
+    try handler.pasteEnd();
+
+    const prompt = client.model.name_prompt.currentConst().?;
+    try std.testing.expect(!prompt.pasting);
+    try std.testing.expectEqualStrings("main one ", prompt.field.text());
+    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+
+    try handler.key(try keybind.parseKey("escape"));
+    try std.testing.expect(!client.model.name_prompt.active());
+    try std.testing.expect(client.model.enterCopyMode());
+
+    try handler.pasteStart();
+    try handler.pasteContent("ignored");
+    try handler.pasteEnd();
+
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+}
+
 test "mouse reports preserve scrollback and remain outside user-input telemetry" {
     var harness: TestHarness = undefined;
     try harness.init();

@@ -69,6 +69,7 @@ test {
     _ = @import("pane_inputs.zig");
     _ = @import("pane_metadata.zig");
     _ = @import("pane_openings.zig");
+    _ = @import("paste_routing.zig");
     _ = @import("pane_resources.zig");
     _ = @import("pane_splits.zig");
     _ = @import("pane_viewports.zig");

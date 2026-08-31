@@ -12,7 +12,7 @@ const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const lua_actions = @import("lua_actions.zig");
 const pane_inputs = @import("pane_inputs.zig");
-const pane_pastes = @import("pane_pastes.zig");
+const paste_routing = @import("paste_routing.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const copy_modes = @import("copy_modes.zig");
@@ -108,63 +108,15 @@ fn sendPaste(handler: *InputHandler, text: []const u8) !void {
 }
 
 pub fn pasteStart(handler: *InputHandler) !void {
-    if (handler.client.view.hasAttachmentModal()) {
-        return;
-    }
-
-    if (handler.client.model.name_prompt.active()) {
-        _ = try name_prompts.handleInput(handler.client, "\x1b[200~");
-        return;
-    }
-    if (handler.client.model.copyModeActive()) {
-        return;
-    }
-
-    _ = try pane_pastes.start(handler.client);
+    _ = try paste_routing.start(handler.client);
 }
 
 pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
-    if (handler.client.model.panePasteActive()) {
-        _ = try pane_pastes.content(handler.client, text);
-        return;
-    }
-
-    if (handler.promptOwnsPaste()) {
-        _ = try name_prompts.handleInput(handler.client, text);
-        return;
-    }
-
-    if (handler.client.view.hasAttachmentModal() or
-        handler.client.model.name_prompt.active() or
-        handler.client.model.copyModeActive())
-    {
-        return;
-    }
+    _ = try paste_routing.content(handler.client, text);
 }
 
 pub fn pasteEnd(handler: *InputHandler) !void {
-    if (handler.client.model.panePasteActive()) {
-        _ = try pane_pastes.finish(handler.client);
-        return;
-    }
-
-    if (handler.promptOwnsPaste()) {
-        _ = try name_prompts.handleInput(handler.client, "\x1b[201~");
-        return;
-    }
-
-    if (handler.client.view.hasAttachmentModal() or
-        handler.client.model.name_prompt.active() or
-        handler.client.model.copyModeActive())
-    {
-        return;
-    }
-}
-
-fn promptOwnsPaste(handler: *const InputHandler) bool {
-    const prompt = handler.client.model.name_prompt.currentConst() orelse return false;
-
-    return prompt.pasting;
+    _ = try paste_routing.finish(handler.client);
 }
 
 pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {

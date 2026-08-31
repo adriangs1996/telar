@@ -45,11 +45,10 @@ semantic key, routed bytes, paste or mouse report
  runtime_transport.enqueueInput -> Outbox -> pane_input
 ```
 
-`InputHandler` classifies attachment-modal, name-prompt, copy-mode, Telar-action
-and pane-input events. For a streamed pane paste it delegates start, content
-and finish without reading the captured pane identity or framing mode. It does
-not resolve pane storage, encode a child key, restore scrollback, write
-pane-input telemetry or enqueue pane bytes.
+`InputHandler` classifies keys, pointer events, Telar actions and paste phases.
+It delegates paste start, content and finish directly to `paste_routing`
+without deciding their owner. It does not resolve pane storage, encode a child
+key, restore scrollback, write pane-input telemetry or enqueue pane bytes.
 
 `ClientModel.planPaneInput` is a read-only query. Normal input resolves the
 focused or explicit pane in the active tab. A captured paste may resolve its
@@ -69,9 +68,21 @@ slice borrowed for the synchronous call.
 ## Paste ownership
 
 The input router identifies bracketed-paste boundaries and owns only its parser
-flag. `PanePasteHandler.start` asks `ClientModel` to capture the focused pane
-and its current `bracketed_paste` mode as one `PanePasteSession`. The state has
-no presentation revision because the UI does not render it.
+flag. For every phase, the `paste_routing` adapter snapshots attachment-modal,
+prompt, copy-mode and pane-session authority. `PasteRoutingHandler` assigns the
+phase to at most one owner. An attachment modal blocks start. An active prompt
+owns start, copy mode blocks it, and every other accepted start reaches the
+pane use case. Content and finish stay with an active pane session first, then
+with a prompt whose `pasting` flag is set. Without an established owner they
+are dropped.
+
+The routing snapshot and borrowed command are fixed values. The handler adds no
+allocation, queue or retained pointer. A selected owner failure propagates and
+never falls through to the other owner.
+
+`PanePasteHandler.start` asks `ClientModel` to capture the focused pane and its
+current `bracketed_paste` mode as one `PanePasteSession`. The state has no
+presentation revision because the UI does not render it.
 
 The handler commits the session before sending an opening marker. A failed or
 unavailable opening delivery rolls that exact session back. Content uses the
@@ -150,13 +161,15 @@ different pane or the runtime event loop.
 - `src/frontend/client/application/pane_paste.zig` proves start rollback,
   ordered delivery, unframed behavior, content retention and unconditional
   finish cleanup.
+- `src/frontend/client/application/paste_routing.zig` proves start authority,
+  established-owner priority, ignored phases and failure isolation.
 - `src/frontend/client/application/pane_input.zig` proves child-mode encoding,
   explicit marker delivery, bounds, source-specific viewport policy, effect
   order and failure behavior.
 - `src/frontend/client/client_test.zig` proves captured target and framing,
-  viewport and protocol order, owner exclusion, close-before-detach,
-  pane-retirement cleanup, mouse scrollback preservation, telemetry separation
-  and outbox backpressure.
+  prompt and copy-mode routing, viewport and protocol order, owner exclusion,
+  close-before-detach, pane-retirement cleanup, mouse scrollback preservation,
+  telemetry separation and outbox backpressure.
 - `src/frontend/input/host.zig` proves terminal-mode-specific key and paste
   encoding.
 - `src/backend/runtime/pane_input_test.zig` and

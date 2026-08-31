@@ -141,10 +141,11 @@ modes; host bytes are not copied blindly into the child.
 
 The pane-input boundary also owns raw routed chunks, Lua paste,
 alternate-scroll cursor sequences and SGR mouse reports. Streamed paste first
-passes through `PanePasteHandler`, which captures one pane and then reuses pane
-input for every chunk and marker. Prompts, copy mode and an active paste keep
-their exact input ownership. See [Pane input](pane-input.md) for target,
-session, viewport, failure and telemetry policy.
+passes through `PasteRoutingHandler`, which assigns every phase to one prompt
+or pane owner. A pane-owned start then enters `PanePasteHandler`, which captures
+one pane and reuses pane input for every chunk and marker. See
+[Pane input](pane-input.md) for ownership, target, session, viewport, failure
+and telemetry policy.
 
 ## 2C. Pointer interaction branch
 
