@@ -21,7 +21,7 @@ keybind.Router.feed -> term.parse -> Router.routeKey
       v                                                      v
 InputHandler.key / forward / mouse                 InputHandler.action
       |                                                      |
-key_routing / pane_mouse_inputs                 action_routing adapter
+key_routing / pointer_routing                   action_routing adapter
       |                                                      |
 application owner handler                     ActionRoutingHandler
       |                                                      |
@@ -167,12 +167,16 @@ and telemetry policy.
 
 ## 2C. Pointer interaction branch
 
-`InputHandler.mouse` converts host pixel coordinates to cells and delegates
-copy-mode ownership to `copy_mode_pointer`. The adapter resolves a fixed copy
-and geometry snapshot; `CopyModePointerHandler` consumes every pointer event
-while copy mode is active and selects only bounded vertical movement or exit.
-`InputHandler` neither reads copy projections nor resolves panes. Only an
-`unowned` result reaches `View.handleMouse`. See [Copy mode](copy-mode.md).
+`InputHandler.mouse` delegates to `pointer_routing`. The adapter records host
+telemetry, rejects prompt-owned input or an absent active model, and converts
+supported host pixels to cells. `PointerRoutingHandler` gives copy mode, the
+view and pane input exclusive refusal in that order. It knows their outcomes,
+but it does not read any model or view representation.
+
+`copy_mode_pointer` resolves a fixed copy and geometry snapshot;
+`CopyModePointerHandler` consumes every pointer event while copy mode is active
+and selects only bounded vertical movement or exit. Only an `unowned` result
+reaches `View.handleMouse`. See [Copy mode](copy-mode.md).
 
 `View.handleMouse` returns one `view_interaction.Command`. The command contains
 one exclusive semantic intent plus redraw, layout and pointer-capture facts.
@@ -352,6 +356,8 @@ The `.draw` event calls `presentation_lifecycle.handleDraw`, then
 - `src/frontend/client/application/action_routing.zig` proves prompt
   suppression, source selection, Lua router control, input reinjection and
   selected-effect failure ordering.
+- `src/frontend/client/application/pointer_routing.zig` proves copy, view and
+  pane owner ordering before any pointer effect reaches a child.
 - The configured-action, Lua key and Lua paste tests in
   `src/frontend/client/client_test.zig` prove the adapter against prompt,
   copy-mode and acknowledged pane-mode authority.

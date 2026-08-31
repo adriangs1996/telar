@@ -17,15 +17,21 @@ host mouse event
         |
 InputHandler.mouse
         |
-raw pixels -> host cells
+pointer_routing adapter
         |
-prompt / copy_mode_pointer
+prompt/model authority + raw pixels -> host cells
+        |
+PointerRoutingHandler
+        |
+copy_mode_pointer
         |
 unowned only
         |
 View.handleMouse
         |
 DispatchViewInteractionHandler
+        |
+inside workbench and unconsumed
         |
 pane_mouse_inputs adapter
         |
@@ -46,18 +52,25 @@ SetPaneViewportHandler      +---------+----------+
                               runtime attachment
 ```
 
-`InputHandler` owns host parsing concerns. It counts the event, suppresses it
-while a name prompt is active and converts supported raw pixel coordinates to
-host cells. It then delegates first refusal to `copy_mode_pointer` without
-reading copy state, pane storage or pane geometry. `CopyModePointerHandler`
-owns copy-mode pointer policy; only its `unowned` result continues to the view.
-The view then resolves client chrome. A consumed view command ends the event.
-Pane focus is different: the focus command commits first, then the same press
-may continue to the newly focused child. See [Copy mode](copy-mode.md).
+`InputHandler.mouse` only delegates the host event and redraw accumulator.
+`pointer_routing` counts the event, rejects input while a name prompt owns the
+client or no active model exists, and converts supported raw pixel coordinates
+to host cells. It captures one active model pointer for the synchronous call.
 
-After those owners finish, `InputHandler` delegates the remaining event. It
-does not inspect pane mouse modes, choose scroll policy, encode SGR bytes or
-send IPC.
+`PointerRoutingHandler` owns the order between the three existing policies.
+It gives `copy_mode_pointer` first refusal, then asks the view to resolve client
+chrome, and reaches `pane_mouse_inputs` only while the normalized pointer is
+inside the post-interaction workbench and the view did not consume it.
+`CopyModePointerHandler` still owns copy-mode policy. See
+[Copy mode](copy-mode.md).
+
+A consumed view command ends the event. Pane focus is different: the focus
+command commits first, then the same press may continue to the newly focused
+child. The adapter publishes a completed view redraw even if later pane input
+fails.
+
+Neither `InputHandler` nor `PointerRoutingHandler` inspects pane mouse modes,
+chooses scroll policy, encodes SGR bytes or sends IPC.
 
 ## Pane plan
 
@@ -112,13 +125,16 @@ recomposes the affected projection. No use case requests a draw directly.
 
 - `src/frontend/workspace/multiplexer.zig` proves focused button ownership,
   pointer-local wheel targeting and value-copy planning.
+- `src/frontend/client/application/pointer_routing.zig` proves exclusive owner
+  order, workbench gating and selected-effect failure boundaries.
 - `src/frontend/client/application/pane_mouse.zig` proves tracked-event,
   viewport and alternate-scroll selection, the live-bottom gate, ignored
   events and effect failure propagation.
 - `src/frontend/client/pane_mouse_inputs.zig` proves exact raw-pixel and
   cell-center SGR encoding.
-- `src/frontend/client/client_test.zig` proves focus-before-press delivery,
-  scrollback preservation, exact host-pixel delivery and pointer-local
-  alternate-screen scrolling through the complete input entrypoint.
+- `src/frontend/client/client_test.zig` proves prompt rejection after host
+  telemetry, focus-before-press delivery, scrollback preservation, exact
+  host-pixel delivery and pointer-local alternate-screen scrolling through the
+  complete input entrypoint.
 - `src/frontend/input/mouse_protocol.zig`, `pane-input.md` and
   `pane-viewport.md` cover protocol encoding and the two downstream effects.

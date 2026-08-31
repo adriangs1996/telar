@@ -2056,6 +2056,39 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
+test "name prompt rejects pointer routing after host telemetry" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.mouse = .{ .tracking = .normal, .sgr = true };
+    const pane_view = client.model.workspace.active().?.model.viewForPane(
+        pane.id,
+        client.view.workbench(),
+    ).?;
+    try std.testing.expect(name_prompts.beginActiveTabRename(client));
+    const version = client.model.version();
+    const outbox_len = client.runtime_transport.outbox.len;
+    const mouse_events = client.telemetry.metrics.mouse_events;
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.mouse(.{
+        .x = pane_view.content.x,
+        .y = pane_view.content.y,
+        .kind = .press,
+    });
+
+    try std.testing.expect(client.model.name_prompt.active());
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    try std.testing.expect(!handler.redraw);
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(mouse_events + 1, client.telemetry.metrics.mouse_events);
+    }
+}
+
 test "mouse reports preserve scrollback and remain outside user-input telemetry" {
     var harness: TestHarness = undefined;
     try harness.init();

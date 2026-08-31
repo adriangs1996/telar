@@ -46,8 +46,9 @@ records `Prompt.pasting`; its later chunks and closing boundary stay with that
 editor. For normal host keys, `KeyRoutingHandler` selects prompt authority
 before copy mode or pane input. `capturesKeys` bypasses configured bindings
 while the prompt is active. Mouse input and configured actions are suppressed
-in that interval; `ActionRoutingHandler` returns before selecting a native,
-Lua or plugin effect. See [Key routing](key-routing.md).
+in that interval. `PointerRoutingHandler` receives no pointer authority, while
+`ActionRoutingHandler` returns before selecting a native, Lua or plugin effect.
+See [Key routing](key-routing.md).
 
 The terminal adapter translates bytes into semantic editor commands. The state
 component handles grapheme-aware editing and records a revision only for a

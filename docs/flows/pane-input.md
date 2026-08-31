@@ -47,10 +47,11 @@ semantic key, routed bytes, paste or pointer event
 
 `InputHandler` delegates semantic keys and replayed bytes to `key_routing`
 without deciding their owner. It delegates paste phases to `paste_routing` and
-pane-local pointer events to `pane_mouse_inputs`. It does not inspect prompt,
-copy-mode or pane authority, resolve pane storage, inspect child mouse modes,
-encode child input, restore scrollback, write pane-input telemetry or enqueue
-pane bytes. See [Key routing](key-routing.md) for keyboard ownership.
+host pointer events to `pointer_routing`; only its pane-owned branch enters
+`pane_mouse_inputs`. It does not inspect prompt, copy-mode or pane authority,
+resolve pane storage, inspect child mouse modes, encode child input, restore
+scrollback, write pane-input telemetry or enqueue pane bytes. See
+[Key routing](key-routing.md) for keyboard ownership.
 
 `PaneMouseHandler` selects viewport, alternate-scroll or child-report policy.
 Only the latter two enter `PaneInputHandler`. See
