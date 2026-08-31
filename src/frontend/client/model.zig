@@ -20,6 +20,7 @@ const ui = core.ui;
 pub const Version = struct {
     workspace: u64 = 0,
     configuration: u64 = 0,
+    host: u64 = 0,
     workspace_list: u64 = 0,
     agents: u64 = 0,
     proxy_status: u64 = 0,
@@ -161,6 +162,20 @@ pub const ConfigurationCommit = struct {
     sidebar: ?SidebarVisibility,
     pane_gaps_changed: bool,
     panes_revision: u64,
+};
+
+pub const InitialClientState = struct {
+    pane_gaps: bool,
+    configuration_generation: u64 = 0,
+    host_size: schema.TerminalSize = .{ .cols = 80, .rows = 24 },
+};
+
+pub const HostResizeCommit = struct {
+    previous: schema.TerminalSize,
+    current: schema.TerminalSize,
+    grid_changed: bool,
+    cell_size_changed: bool,
+    host_revision: u64,
 };
 
 pub const WorkspaceListCollapse = struct {
@@ -538,6 +553,8 @@ pub const Model = struct {
     workspace_revision: u64 = 0,
     configuration_generation: u64 = 0,
     configuration_revision: u64 = 0,
+    host_size: schema.TerminalSize,
+    host_revision: u64 = 0,
     workspace_list_snapshot: workspace_list_mod.Snapshot = .{},
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
@@ -568,7 +585,7 @@ pub const Model = struct {
     /// var model = Model.init(gpa, true);
     /// ```
     pub fn init(gpa: std.mem.Allocator, pane_gaps: bool) Model {
-        return initWithConfiguration(gpa, pane_gaps, 0);
+        return initWithState(gpa, .{ .pane_gaps = pane_gaps });
     }
 
     /// Creates the client model at one already active configuration generation.
@@ -577,12 +594,27 @@ pub const Model = struct {
     /// var model = Model.initWithConfiguration(gpa, true, 1);
     /// ```
     pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation: u64) Model {
+        return initWithState(gpa, .{
+            .pane_gaps = pane_gaps,
+            .configuration_generation = generation,
+        });
+    }
+
+    /// Creates the client model from its complete initial semantic state.
+    ///
+    /// ```zig
+    /// var model = Model.initWithState(gpa, initial);
+    /// ```
+    pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientState) Model {
+        initial.host_size.validate() catch unreachable;
         var workspace = tabs_mod.Model.init(gpa);
-        workspace.setPaneGaps(pane_gaps);
+        workspace.setPaneGaps(initial.pane_gaps);
+        workspace.setCellSize(initial.host_size.cell_width_px, initial.host_size.cell_height_px);
 
         return .{
             .workspace = workspace,
-            .configuration_generation = generation,
+            .configuration_generation = initial.configuration_generation,
+            .host_size = initial.host_size,
         };
     }
 
@@ -604,6 +636,7 @@ pub const Model = struct {
         return .{
             .workspace = model.workspace_revision,
             .configuration = model.configuration_revision,
+            .host = model.host_revision,
             .workspace_list = model.workspace_list_revision,
             .agents = model.agent_revision,
             .proxy_status = model.proxy_status_revision,
@@ -639,6 +672,42 @@ pub const Model = struct {
     /// ```
     pub fn paneGaps(model: *const Model) bool {
         return model.workspace.pane_gaps;
+    }
+
+    /// Returns the resolved host grid and cell geometry.
+    ///
+    /// ```zig
+    /// const host_size = model.hostSize();
+    /// ```
+    pub fn hostSize(model: *const Model) schema.TerminalSize {
+        return model.host_size;
+    }
+
+    /// Commits one resolved host geometry and updates every tab's cell size.
+    ///
+    /// ```zig
+    /// const commit = try model.resizeHost(size) orelse return;
+    /// ```
+    pub fn resizeHost(model: *Model, size: schema.TerminalSize) !?HostResizeCommit {
+        try size.validate();
+
+        if (std.meta.eql(model.host_size, size)) {
+            return null;
+        }
+
+        const previous = model.host_size;
+        model.workspace.setCellSize(size.cell_width_px, size.cell_height_px);
+        model.host_size = size;
+        model.host_revision +%= 1;
+
+        return .{
+            .previous = previous,
+            .current = size,
+            .grid_changed = previous.cols != size.cols or previous.rows != size.rows,
+            .cell_size_changed = previous.cell_width_px != size.cell_width_px or
+                previous.cell_height_px != size.cell_height_px,
+            .host_revision = model.host_revision,
+        };
     }
 
     /// Atomically adopts one newer configuration's semantic client settings.
@@ -3807,6 +3876,57 @@ test "configuration adoption rejects an old generation without partial state" {
     try std.testing.expectEqual(@as(u64, 4), model.configurationGeneration());
     try std.testing.expect(model.sidebarVisible());
     try std.testing.expect(model.paneGaps());
+    try std.testing.expectEqualDeep(version, model.version());
+}
+
+test "host resize commits resolved geometry once" {
+    const initial: schema.TerminalSize = .{
+        .cols = 80,
+        .rows = 24,
+        .cell_width_px = 8,
+        .cell_height_px = 16,
+    };
+    var model = Model.initWithState(std.testing.allocator, .{
+        .pane_gaps = true,
+        .host_size = initial,
+    });
+    defer model.deinit();
+    const resized: schema.TerminalSize = .{
+        .cols = 100,
+        .rows = 30,
+        .cell_width_px = 10,
+        .cell_height_px = 20,
+    };
+
+    const commit = (try model.resizeHost(resized)).?;
+
+    try std.testing.expectEqualDeep(initial, commit.previous);
+    try std.testing.expectEqualDeep(resized, commit.current);
+    try std.testing.expect(commit.grid_changed);
+    try std.testing.expect(commit.cell_size_changed);
+    try std.testing.expectEqual(@as(u64, 1), commit.host_revision);
+    try std.testing.expectEqualDeep(resized, model.hostSize());
+    try std.testing.expectEqual(Version{ .host = 1 }, model.version());
+    try std.testing.expect((try model.resizeHost(resized)) == null);
+    try std.testing.expectEqual(Version{ .host = 1 }, model.version());
+}
+
+test "host resize rejects invalid and oversized grids without partial state" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const size = model.hostSize();
+    const version = model.version();
+
+    try std.testing.expectError(error.InvalidTerminalSize, model.resizeHost(.{
+        .cols = 0,
+        .rows = 24,
+    }));
+    try std.testing.expectError(error.ScreenTooLarge, model.resizeHost(.{
+        .cols = std.math.maxInt(u16),
+        .rows = std.math.maxInt(u16),
+    }));
+
+    try std.testing.expectEqualDeep(size, model.hostSize());
     try std.testing.expectEqualDeep(version, model.version());
 }
 

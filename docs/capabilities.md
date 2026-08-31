@@ -109,7 +109,7 @@ All client handlers are in `src/frontend/client/root.zig`.
 | Input parser deadline | `Client.handleInputTimeoutEvent` |
 | Partial binding deadline | `Client.handleBindingTimeoutEvent` |
 | Host capability deadline | `Client.handleCapabilityTimeoutEvent` |
-| Host resize | `Client.handleResizeEvent` |
+| Host resize | [`Client.handleResizeEvent`](flows/host-resize.md) |
 | Runtime socket read | `Client.handleServerEvent` |
 | Completed socket write | `Client.handleSentEvent` |
 | Scheduled draw | `Client.handleDrawEvent` -> `Client.presentDue` |

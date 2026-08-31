@@ -8,6 +8,7 @@ const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const notifications = @import("../notifications/root.zig");
+const platform = @import("../platform/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
@@ -26,6 +27,7 @@ const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const config_reload_worker = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
+const host_resizes = @import("host_resizes.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
 const pane_clipboards = @import("pane_clipboards.zig");
@@ -46,6 +48,7 @@ const initial_request_id = Client.initial_request_id;
 fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -66,6 +69,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
 fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -86,6 +90,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
 fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -105,6 +110,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
 fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
+    try std.testing.expectEqual(expected.host, actual.host);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
@@ -4955,6 +4961,154 @@ test "a configuration version alone schedules presenter observation" {
     try harness.settleModelPresentation();
 
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "host resize commits before resources and presents by model version" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pending_updates = client.presenter.pending_updates;
+    const measurement: platform.Size = .{
+        .cols = 100,
+        .rows = 30,
+        .width_px = 1000,
+        .height_px = 600,
+    };
+
+    const commit = (try host_resizes.apply(client, measurement)).?;
+
+    const expected: schema.TerminalSize = .{
+        .cols = 100,
+        .rows = 30,
+        .cell_width_px = 10,
+        .cell_height_px = 20,
+    };
+    try std.testing.expectEqualDeep(expected, commit.current);
+    try std.testing.expectEqualDeep(expected, client.model.hostSize());
+    try std.testing.expectEqual(client_model.Version{
+        .host = 1,
+        .workspace = 1,
+        .tabs = 1,
+        .active_tab = 1,
+        .panes = 1,
+    }, client.model.version());
+    try std.testing.expect(client.presenter.screen.sizeMatches(100, 30));
+    try std.testing.expectEqual(@as(u16, 100), client.view.scratch.w);
+    try std.testing.expectEqual(@as(u16, 30), client.view.scratch.h);
+    const active = client.model.workspace.active().?;
+    try std.testing.expectEqual(@as(u16, 10), active.model.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 20), active.model.cell_height_px);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    const expected_pane_size = active.model.contentSize(
+        TestHarness.bootstrap_pane,
+        client.view.workbench(),
+    ).?;
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_resize.pane_id);
+    try std.testing.expectEqualDeep(expected_pane_size, message.pane_resize.size);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const version = client.model.version();
+    const pending_after = client.presenter.pending_updates;
+    try std.testing.expect((try host_resizes.apply(client, measurement)) == null);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+}
+
+test "host resize retains committed geometry after outbox backpressure" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    while (client.outbox.hasCapacity()) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const pending_updates = client.presenter.pending_updates;
+    const measurement: platform.Size = .{
+        .cols = 90,
+        .rows = 28,
+        .width_px = 900,
+        .height_px = 560,
+    };
+
+    try std.testing.expectError(error.ClientOutboxFull, host_resizes.apply(client, measurement));
+
+    try std.testing.expectEqual(schema.TerminalSize{
+        .cols = 90,
+        .rows = 28,
+        .cell_width_px = 10,
+        .cell_height_px = 20,
+    }, client.model.hostSize());
+    try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
+    try std.testing.expect(client.presenter.screen.sizeMatches(90, 28));
+    try std.testing.expectEqual(@as(u16, 90), client.view.scratch.w);
+    try std.testing.expectEqual(@as(u16, 28), client.view.scratch.h);
+    try std.testing.expectEqual(@as(usize, client_outbox.capacity), client.outbox.len);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+}
+
+test "oversized host measurement changes neither model nor capabilities" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const host_size = client.model.hostSize();
+    const capabilities = client.capabilities;
+
+    try std.testing.expectError(error.ScreenTooLarge, host_resizes.apply(client, .{
+        .cols = std.math.maxInt(u16),
+        .rows = std.math.maxInt(u16),
+        .width_px = 1200,
+        .height_px = 800,
+    }));
+
+    try std.testing.expectEqualDeep(host_size, client.model.hostSize());
+    try std.testing.expectEqualDeep(capabilities, client.capabilities);
+    try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "terminal pixel response keeps model host geometry authoritative" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pending_updates = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.terminalResponse(.{ .cell_pixels = .{
+        .width = 12,
+        .height = 24,
+    } });
+
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(schema.TerminalSize{
+        .cols = 80,
+        .rows = 24,
+        .cell_width_px = 12,
+        .cell_height_px = 24,
+    }, client.model.hostSize());
+    try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
+    const active = client.model.workspace.active().?;
+    try std.testing.expectEqual(@as(u16, 12), active.model.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 24), active.model.cell_height_px);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
 }
 
 test "input timer expiries with nothing pending are a no-op" {

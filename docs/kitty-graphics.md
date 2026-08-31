@@ -30,6 +30,8 @@ device attributes. APC and CSI replies are consumed by the client input parser
 and never reach the focused pane. The KGP state is `unknown`, `supported`, or
 `unsupported`; `unknown` expires after 250 ms without blocking input. Pixel
 queries are repeated after resize.
+The [host resize flow](flows/host-resize.md) records the geometry commit,
+placement invalidation and query-rearm order.
 
 `automatic` renders cells while support is unknown, selects `kitty-hybrid` on
 success, and stays on cells on rejection or timeout. Explicit `kitty-hybrid`

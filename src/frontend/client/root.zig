@@ -37,6 +37,7 @@ test {
     _ = @import("config_reload.zig");
     _ = @import("config_reloads.zig");
     _ = @import("copy_modes.zig");
+    _ = @import("host_resizes.zig");
     _ = @import("model.zig");
     _ = @import("name_prompt.zig");
     _ = @import("name_prompts.zig");

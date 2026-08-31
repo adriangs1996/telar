@@ -122,6 +122,8 @@ pub const Model = struct {
     count: usize = 0,
     active_index: usize = 0,
     pane_gaps: bool = true,
+    cell_width_px: u16 = 0,
+    cell_height_px: u16 = 0,
     pending_layout_restore: ?PendingLayoutRestore = null,
 
     pub fn init(gpa: std.mem.Allocator) Model {
@@ -144,6 +146,25 @@ pub const Model = struct {
         model.pane_gaps = enabled;
         for (model.items[0..model.count]) |*slot|
             if (slot.*) |*tab| tab.model.setPaneGaps(enabled);
+    }
+
+    /// Sets the host cell geometry for current and future tabs.
+    ///
+    /// ```zig
+    /// model.setCellSize(8, 16);
+    /// ```
+    pub fn setCellSize(model: *Model, width: u16, height: u16) void {
+        if (model.cell_width_px == width and model.cell_height_px == height) {
+            return;
+        }
+
+        model.cell_width_px = width;
+        model.cell_height_px = height;
+        for (model.items[0..model.count]) |*slot| {
+            if (slot.*) |*tab| {
+                tab.model.setCellSize(width, height);
+            }
+        }
     }
 
     pub fn bootstrap(
@@ -170,6 +191,7 @@ pub const Model = struct {
     pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
         var tab = Tab.init(model.gpa, root.location, "main", model.pane_gaps);
         errdefer tab.deinit();
+        tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
         try tab.model.addRoot(root.pane_id, root.location, root.size);
         tab.restore_display_order = true;
 
@@ -453,6 +475,7 @@ pub const Model = struct {
             .workspace = model.workspace.?,
             .tab_id = descriptor.tab_id,
         }, descriptor.label, model.pane_gaps);
+        model.items[index].?.model.setCellSize(model.cell_width_px, model.cell_height_px);
         model.count += 1;
     }
 
@@ -481,6 +504,7 @@ pub const Model = struct {
 
         var tab = Tab.init(model.gpa, created.location, created.label, model.pane_gaps);
         errdefer tab.deinit();
+        tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
         try tab.model.addRoot(created.root_pane_id, created.location, size);
         tab.snapshot_loaded = true;
 
@@ -766,6 +790,47 @@ test "pane gap configuration reaches current and future tabs" {
     model.setPaneGaps(true);
     for (model.items[0..model.count]) |slot|
         try std.testing.expect(slot.?.model.layout.pane_gaps);
+}
+
+test "host cell geometry reaches current and future tabs" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.setCellSize(8, 16);
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    try model.bootstrap(@enumFromInt(1), .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expectEqual(@as(u16, 8), model.active().?.model.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 16), model.active().?.model.cell_height_px);
+
+    const created = try model.addCreated(.{
+        .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expectEqual(@as(u16, 8), created.model.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 16), created.model.cell_height_px);
+
+    try model.reconcileWorkspace(.{
+        .workspace = workspace,
+        .name = "work",
+        .tabs = &.{
+            .{ .tab_id = @enumFromInt(1), .pane_count = 1, .label = "main" },
+            .{ .tab_id = @enumFromInt(2), .pane_count = 1, .label = "logs" },
+            .{ .tab_id = @enumFromInt(3), .pane_count = 0, .label = "empty" },
+        },
+    });
+    const discovered = model.find(@enumFromInt(3)).?;
+    try std.testing.expectEqual(@as(u16, 8), discovered.model.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 16), discovered.model.cell_height_px);
+
+    model.setCellSize(10, 20);
+    for (model.items[0..model.count]) |slot| {
+        try std.testing.expectEqual(@as(u16, 10), slot.?.model.cell_width_px);
+        try std.testing.expectEqual(@as(u16, 20), slot.?.model.cell_height_px);
+    }
 }
 
 test "workspace snapshots restore labels and order without losing pane layouts" {

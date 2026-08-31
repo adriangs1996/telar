@@ -11,6 +11,7 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
+const host_resizes = @import("host_resizes.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
@@ -397,28 +398,37 @@ fn copyModeMouse(handler: *InputHandler, event: term.Event.Mouse, model: *multip
     return true;
 }
 
+/// Reconciles one host-terminal capability response without forwarding it.
+///
+/// ```zig
+/// try handler.terminalResponse(response);
+/// ```
 pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalResponse) !void {
     if (!handler.client.capabilities.observe(response)) return;
+    const host_size = handler.client.model.hostSize();
     const cell_size = handler.client.capabilities.cellSize(
-        handler.client.view.scratch.w,
-        handler.client.view.scratch.h,
+        host_size.cols,
+        host_size.rows,
     );
-    var tabs = handler.client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        tab.model.setCellSize(cell_size.width, cell_size.height);
-    }
+    var resolved = host_size;
+    resolved.cell_width_px = cell_size.width;
+    resolved.cell_height_px = cell_size.height;
+    const geometry_changed = try host_resizes.applyResolved(handler.client, resolved) != null;
     pane_graphics.syncFallbacks(handler.client);
-    handler.client.graphics_store.invalidatePlacements();
-    try handler.client.view.configureSidebar(
-        handler.client.sidebar_rendering,
-        handler.client.capabilities.kitty_graphics,
-        cell_size.width,
-        cell_size.height,
-    );
-    if (handler.client.model.workspace.active()) |active|
-        try handler.client.resizeAttached(&active.model, handler.client.view.workbench());
-    handler.client.view.invalidate();
-    handler.redraw = true;
+    if (!geometry_changed) {
+        handler.client.graphics_store.invalidatePlacements();
+        try handler.client.view.configureSidebar(
+            handler.client.sidebar_rendering,
+            handler.client.capabilities.kitty_graphics,
+            cell_size.width,
+            cell_size.height,
+        );
+        if (handler.client.model.workspace.active()) |active| {
+            try handler.client.resizeAttached(&active.model, handler.client.view.workbench());
+        }
+        handler.client.view.invalidate();
+        handler.redraw = true;
+    }
 }
 
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {

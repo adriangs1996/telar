@@ -103,6 +103,7 @@ pub const InputChunk = struct {
 const InputHandler = @import("input_handler.zig");
 const config_reload = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
+const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
 const pane_graphics = @import("pane_graphics.zig");
 const presenter_mod = @import("presenter.zig");
@@ -183,7 +184,6 @@ model: client_model.Model,
 navigation_history: navigation.History = .{},
 graphics_store: kitty.Store,
 capabilities: kitty.TerminalCapabilities,
-host_size: schema.TerminalSize,
 input_file: File,
 input_router: InputRouter,
 input_timeout_pending: bool = false,
@@ -229,6 +229,7 @@ pub fn init(params: Params) !*Client {
     const cell_size = capabilities.cellSize(host_size.cols, host_size.rows);
     host_size.cell_width_px = cell_size.width;
     host_size.cell_height_px = cell_size.height;
+    try host_size.validate();
     var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
     errdefer screen.deinit();
     var view = try client_view.State.initWithAppearance(
@@ -250,11 +251,11 @@ pub fn init(params: Params) !*Client {
         generation.number
     else
         0;
-    var model = client_model.Model.initWithConfiguration(
-        gpa,
-        params.options.pane_gaps,
-        configuration_generation,
-    );
+    var model = client_model.Model.initWithState(gpa, .{
+        .pane_gaps = params.options.pane_gaps,
+        .configuration_generation = configuration_generation,
+        .host_size = host_size,
+    });
     errdefer model.deinit();
     _ = model.setSidebarVisible(params.options.sidebar_visible);
     var graphics_store = if (params.options.host_shared_memory)
@@ -284,7 +285,6 @@ pub fn init(params: Params) !*Client {
         .model = model,
         .graphics_store = graphics_store,
         .capabilities = capabilities,
-        .host_size = host_size,
         .input_file = params.input_file,
         .input_router = input_router,
         .lua_generation = params.options.lua_generation,
@@ -750,12 +750,12 @@ pub fn handleBindingTimeoutEvent(client: *Client, result: anyerror!void) !bool {
 pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !void {
     try result;
     if (!client.capabilities.expire()) return;
-    const cell_size = client.capabilities.cellSize(client.host_size.cols, client.host_size.rows);
+    const host_size = client.model.hostSize();
     try client.view.configureSidebar(
         client.sidebar_rendering,
         client.capabilities.kitty_graphics,
-        cell_size.width,
-        cell_size.height,
+        host_size.cell_width_px,
+        host_size.cell_height_px,
     );
     pane_graphics.syncFallbacks(client);
     client.view.invalidate();
@@ -763,41 +763,12 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
 }
 
 /// Entrypoint for a host terminal resize: remeasure, reflow, and re-offer sizes.
-pub fn handleResizeEvent(
-    client: *Client,
-    result: anyerror!void,
-    tty: *const platform.Tty,
-    watcher: *platform.ResizeWatcher,
-) !void {
-    try result;
-    client.host_size = terminalSize(tty);
-    const platform_size = tty.size();
-    if (platform_size.width_px != 0)
-        client.capabilities.window_width_px = platform_size.width_px;
-    if (platform_size.height_px != 0)
-        client.capabilities.window_height_px = platform_size.height_px;
-    const cell_size = client.capabilities.cellSize(client.host_size.cols, client.host_size.rows);
-    client.host_size.cell_width_px = cell_size.width;
-    client.host_size.cell_height_px = cell_size.height;
-    try client.view.configureSidebar(
-        client.sidebar_rendering,
-        client.capabilities.kitty_graphics,
-        cell_size.width,
-        cell_size.height,
-    );
-    try client.presenter.resize(client.host_size.cols, client.host_size.rows);
-    try client.view.resize(client.host_size.cols, client.host_size.rows);
-    if (client.model.workspace.active()) |active| {
-        active.model.setCellSize(cell_size.width, cell_size.height);
-        client.graphics_store.invalidatePlacements();
-        try client.resizeAttached(&active.model, client.view.workbench());
-    }
-    // Pixel dimensions can change independently when the font or display
-    // scale changes. Refresh both values without blocking the resize path.
-    try client.writer.writeAll("\x1b[14t\x1b[16t");
-    try client.writer.flush();
-    try client.presenter.requestDraw();
-    try client.select.concurrent(.resized, waitResize, .{ client.io, watcher });
+///
+/// ```zig
+/// try client.handleResizeEvent(result, source);
+/// ```
+pub fn handleResizeEvent(client: *Client, result: anyerror!void, source: host_resizes.Source) !void {
+    _ = try host_resizes.handle(client, result, source);
 }
 
 /// Entrypoint for one completed socket send: pop it and pump the next.
@@ -1177,18 +1148,6 @@ pub fn waitCapabilityTimeout(io: Io) anyerror!void {
 pub fn monotonic(io: Io) u64 {
     const timestamp = Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));
-}
-
-pub fn terminalSize(tty: *const platform.Tty) schema.TerminalSize {
-    const size = tty.size();
-    const cols = if (size.cols == 0) 80 else size.cols;
-    const rows = if (size.rows == 0) 24 else size.rows;
-    return .{
-        .cols = cols,
-        .rows = rows,
-        .cell_width_px = if (size.width_px == 0) 0 else size.width_px / cols,
-        .cell_height_px = if (size.height_px == 0) 0 else size.height_px / rows,
-    };
 }
 
 const rectSize = multiplexer.rectSize;

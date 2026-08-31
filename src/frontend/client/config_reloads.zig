@@ -122,12 +122,12 @@ fn applyAdoption(raw_context: *anyopaque, commit: client_model.ConfigurationComm
         client.view.setTheme(snapshot.theme);
     }
     client.view.setIconTheme(snapshot.icon_theme);
-    const cell_size = client.capabilities.cellSize(client.host_size.cols, client.host_size.rows);
+    const host_size = client.model.hostSize();
     try client.view.configureSidebar(
         client.sidebar_rendering,
         client.capabilities.kitty_graphics,
-        cell_size.width,
-        cell_size.height,
+        host_size.cell_width_px,
+        host_size.cell_height_px,
     );
 
     if (commit.sidebar) |change| {

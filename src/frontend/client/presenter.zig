@@ -139,6 +139,8 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.workspace;
     const configuration_changed = presenter.presented_model_version.configuration !=
         presenter.observed_model_version.configuration;
+    const host_changed = presenter.presented_model_version.host !=
+        presenter.observed_model_version.host;
     const workspace_list_changed = presenter.presented_model_version.workspace_list !=
         presenter.observed_model_version.workspace_list;
     const agents_changed = presenter.presented_model_version.agents !=
@@ -186,14 +188,14 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     if (prompt_changed) {
         client.view.clearHover();
     }
-    if (workspace_changed or configuration_changed or workspace_list_changed or agents_changed or
+    if (workspace_changed or configuration_changed or host_changed or workspace_list_changed or agents_changed or
         proxy_status_changed or system_metrics_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or prompt_changed or
         copy_status_changed)
     {
         client.view.invalidate();
     }
-    if (active_tab_changed or panes_changed) {
+    if (active_tab_changed or panes_changed or host_changed) {
         if (model) |active| {
             active.composition_invalidated = true;
         }

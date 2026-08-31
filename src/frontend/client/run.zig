@@ -15,6 +15,7 @@ const schema = core.schema;
 const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
+const host_resizes = @import("host_resizes.zig");
 const Options = Client.Options;
 const rectSize = multiplexer.rectSize;
 
@@ -79,7 +80,7 @@ pub fn run(
         .connection = connection,
         .input_file = input_file,
         .writer = writer,
-        .host_size = Client.terminalSize(&tty),
+        .host_size = host_resizes.initialSize(host_platform_size),
         .window_width_px = host_platform_size.width_px,
         .window_height_px = host_platform_size.height_px,
         .options = options,
@@ -130,7 +131,10 @@ pub fn run(
             .input_timeout => |result| if (try client.handleInputTimeoutEvent(result)) return 0,
             .binding_timeout => |result| if (try client.handleBindingTimeoutEvent(result)) return 0,
             .capability_timeout => |result| try client.handleCapabilityTimeoutEvent(result),
-            .resized => |result| try client.handleResizeEvent(result, &tty, &watcher),
+            .resized => |result| try client.handleResizeEvent(result, .{
+                .tty = &tty,
+                .watcher = &watcher,
+            }),
             .server => |result| if (try client.handleServerEvent(result)) |status| return status,
             .sent => |result| try client.handleSentEvent(result),
             .draw => |result| try client.handleDrawEvent(result),
