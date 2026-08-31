@@ -37,9 +37,11 @@ request does not advance a model version.
 
 A detach or send failure asks for a canonical tab snapshot. A capacity failure
 happens before focus or attachment state changes. A runtime `request_failed`
-also requests a snapshot when the same tab remains active. If navigation has
-already selected another tab, selecting the rejected tab later requests its
-snapshot through the normal attachment flow.
+passes through `HandleRequestFailureHandler`, which delegates to
+`RecoverTabClosureHandler` before publishing the failure notice. Recovery asks
+for a snapshot when the same tab remains active. If navigation has already
+selected another tab, selecting the rejected tab later requests its snapshot
+through the normal attachment flow.
 
 ## Runtime transaction
 

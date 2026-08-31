@@ -75,6 +75,7 @@ test {
     _ = @import("telemetry.zig");
     _ = @import("view.zig");
     _ = @import("requests.zig");
+    _ = @import("request_failures.zig");
 }
 
 test "configured action names cover multiplexer operations" {

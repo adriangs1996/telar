@@ -3374,7 +3374,15 @@ test "a failed request surfaces as a notification" {
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
     try harness.settle();
+    const notification = client.model.notificationSnapshot().itemAt(0).?;
+
     try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expectEqualStrings("Could not close pane", notification.title());
+    try std.testing.expectEqualStrings("no such pane", notification.message());
+    try std.testing.expectEqualDeep(
+        notifications.Target{ .select_tab = TestHarness.bootstrap_location.tab_id },
+        notification.target,
+    );
 
     const unknown = try schema.encodeRequestFailed(&payload, .{
         .request_id = @enumFromInt(99),
@@ -3385,6 +3393,31 @@ test "a failed request surfaces as a notification" {
         error.UnexpectedRequestFailure,
         server_messages.handleServerMessage(client, try schema.decodeServer(unknown)),
     );
+}
+
+test "a failed snapshot request is fatal after consuming its continuation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(4);
+    try client.requests.add(request_id, .{
+        .workspace_snapshot = TestHarness.bootstrap_location.workspace,
+    });
+
+    var payload: [256]u8 = undefined;
+    const failed = try schema.encodeRequestFailed(&payload, .{
+        .request_id = request_id,
+        .code = .workspace_not_found,
+        .message = "workspace disappeared",
+    });
+
+    try std.testing.expectError(
+        error.RuntimeRequestFailed,
+        server_messages.handleServerMessage(client, try schema.decodeServer(failed)),
+    );
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
 }
 
 test "runtime notifications and delivery failures reach the toasts" {
@@ -3524,12 +3557,13 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try std.testing.expectEqualStrings("\u{26e8}", client.presenter.screen.front.cells[badge_index].text());
 
     const pending_updates_after_enabled = client.presenter.pending_updates;
+    const version_before_disabled = client.model.version();
     const disabled = try schema.encodeProxyStatus(&payload, .{ .active = false });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(disabled));
 
     try std.testing.expect(!client.model.proxyTlsActive());
-    try std.testing.expectEqual(version_before.proxy_status + 2, client.model.version().proxy_status);
-    try std.testing.expectEqual(version_before.notifications + 2, client.model.version().notifications);
+    try std.testing.expectEqual(version_before_disabled.proxy_status + 1, client.model.version().proxy_status);
+    try std.testing.expectEqual(version_before_disabled.notifications + 1, client.model.version().notifications);
     try std.testing.expectEqual(pending_updates_after_enabled, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 2), client.model.notificationSnapshot().count);
     try std.testing.expectEqualStrings(

@@ -5,9 +5,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
-const client_requests = @import("requests.zig");
 const term = presentation.screen;
 
 const Io = std.Io;
@@ -24,6 +22,7 @@ const pane_graphics = @import("pane_graphics.zig");
 const pane_metadata = @import("pane_metadata.zig");
 const pane_splits = @import("pane_splits.zig");
 const proxy_status = @import("proxy_status.zig");
+const request_failures = @import("request_failures.zig");
 const system_metrics = @import("system_metrics.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -50,45 +49,6 @@ fn workspaceClosureAction(
     return if (previous_workspace) |workspace| .{ .switch_to = workspace } else .exit;
 }
 
-fn failureTitle(continuation: client_requests.Continuation) []const u8 {
-    return switch (continuation) {
-        .split => "Could not split pane",
-        .close_pane => "Could not close pane",
-        .attach_pane => "Could not attach pane",
-        .create_workspace => "Could not create workspace",
-        .rename_workspace => "Could not rename workspace",
-        .create_tab => "Could not create tab",
-        .rename_tab => "Could not rename tab",
-        .close_tab => "Could not close tab",
-        .move_tab => "Could not move tab",
-        .notification => "Could not show notification",
-        .initial_open, .workspace_snapshot, .tab_snapshot => "Runtime request failed",
-        .ignored => "Request ignored",
-    };
-}
-
-fn notificationTarget(
-    continuation: client_requests.Continuation,
-) notifications.Target {
-    return switch (continuation) {
-        .split => |split| .{ .focus_pane = split.target_pane },
-        .close_pane, .attach_pane => |operation| .{ .select_tab = operation.location.tab_id },
-        .tab_snapshot, .rename_tab, .close_tab, .move_tab => |location| .{
-            .select_tab = location.tab_id,
-        },
-        .rename_workspace, .workspace_snapshot => |location| workspaceNotificationTarget(location),
-        .create_tab => |creation| workspaceNotificationTarget(creation.workspace),
-        .initial_open, .create_workspace, .notification, .ignored => .none,
-    };
-}
-
-fn workspaceNotificationTarget(location: schema.WorkspaceLocation) notifications.Target {
-    return switch (location) {
-        .workspace => |workspace| .{ .select_workspace = workspace },
-        .worktree => .none,
-    };
-}
-
 /// Routes one decoded message from the runtime.
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
     switch (message) {
@@ -104,7 +64,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
         .pane_clipboard => |clipboard| try handlePaneClipboard(client, clipboard),
         .pane_exited => |exited| try handlePaneExited(client, exited),
-        .request_failed => |failure| try handleRequestFailed(client, failure),
+        .request_failed => |failure| _ = try request_failures.apply(client, failure),
         .notification => |notification| try handleRuntimeNotification(client, notification),
         .notification_shown => |shown| try handleNotificationShown(client, shown),
         .agent_sound => |sound| try handleAgentSound(client, sound),
@@ -346,62 +306,6 @@ fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
 fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
     var use_case = pane_closures.exitHandler(client);
     _ = try use_case.execute(exited.pane_id);
-}
-
-/// A failed request: recover disposable state when needed and tell the user.
-fn handleRequestFailed(client: *Client, failure: schema.RequestFailed) !void {
-    const continuation = client.requests.take(failure.request_id) orelse return error.UnexpectedRequestFailure;
-    var notify_failure = true;
-    switch (continuation) {
-        .ignored, .close_pane, .rename_tab, .rename_workspace, .move_tab => {},
-        .split => |split| {
-            var recovery = pane_splits.recoveryHandler(client);
-            const status = try recovery.execute(.{
-                .target_pane = split.target_pane,
-                .location = split.location,
-                .axis = split.axis,
-                .area = split.area,
-            });
-            notify_failure = status != .stale;
-        },
-        .attach_pane => |attachment| {
-            if (failure.code == .pane_not_found) {
-                var recovery = pane_attachments.recoveryHandler(client);
-                _ = try recovery.execute(.{
-                    .pane_id = attachment.pane_id,
-                    .location = attachment.location,
-                });
-            }
-        },
-        .close_tab => |location| {
-            var recovery = tab_closures.recoveryHandler(client);
-            _ = try recovery.execute(location);
-        },
-        .create_workspace, .notification => {},
-        .initial_open => |open| {
-            var recovery = workspace_handoffs.recoveryHandler(client);
-            if (try recovery.execute(.{
-                .fallback_workspace = open.fallback_workspace,
-                .code = failure.code,
-            }) == .unrecoverable) {
-                return error.RuntimeRequestFailed;
-            }
-            return;
-        },
-        .create_tab => {},
-        .workspace_snapshot, .tab_snapshot => return error.RuntimeRequestFailed,
-    }
-    if (continuation == .ignored or !notify_failure) {
-        return;
-    }
-
-    try client.notify(.{
-        .level = .failure,
-        .title = failureTitle(continuation),
-        .message = failure.message,
-        .target = notificationTarget(continuation),
-        .duration_ns = 7 * std.time.ns_per_s,
-    });
 }
 
 pub fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !void {

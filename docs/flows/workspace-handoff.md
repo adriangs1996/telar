@@ -86,9 +86,10 @@ folds the result into the paced frame loop.
 
 A handoff that targets a remembered pane retains its containing workspace in
 the continuation. If the runtime reports `pane_not_found`,
-`RecoverWorkspaceHandoffHandler` forgets that bookmark and retries once with a
-workspace target. The client remains in its already presented empty version;
-the retry is not another model transition.
+`HandleRequestFailureHandler` delegates to `RecoverWorkspaceHandoffHandler`,
+which forgets that bookmark and retries once with a workspace target. The
+client remains in its already presented empty version; the retry is not
+another model transition.
 
 A missing fallback or any other failure code is unrecoverable and propagates
 as `RuntimeRequestFailed`. The workspace retry carries no fallback, so another

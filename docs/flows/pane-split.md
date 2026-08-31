@@ -73,10 +73,12 @@ the pane. The adapter detaches the runtime attachment and requests one
 coalesced workspace snapshot when the client still observes the same
 workspace.
 
-A failed request restores size only when the exact requested target is still
-attached in the active tab. An inactive target needs no restoration because
-tab selection detached it. A retired target or tab is stale: it receives
-neither rollback nor an obsolete failure notification.
+A failed request passes through `HandleRequestFailureHandler`, which delegates
+size restoration to `RecoverPaneSplitHandler`. Recovery changes size only when
+the exact requested target is still attached in the active tab. An inactive
+target needs no restoration because tab selection detached it. A retired
+target or tab is stale: it receives neither rollback nor an obsolete failure
+notification.
 
 ## Bounds and proof
 

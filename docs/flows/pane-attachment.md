@@ -50,10 +50,11 @@ a draw and the presenter observes no model change.
 ## Failure and recovery
 
 An explicit pane attachment can report `pane_not_found` when runtime membership
-changed after the snapshot. `handleRequestFailed` delegates that case to
-`RecoverPaneAttachmentHandler`, which requests one coalesced tab snapshot only
-if the same pane is still detached in the active tab. The snapshot, rather than
-the failed client request, decides whether to remove the pane.
+changed after the snapshot. `request_failures.apply` correlates the response,
+then `HandleRequestFailureHandler` delegates that case to
+`RecoverPaneAttachmentHandler`. Recovery requests one coalesced tab snapshot
+only if the same pane is still detached in the active tab. The snapshot, rather
+than the failed client request, decides whether to remove the pane.
 
 An internal attachment failure does not request an immediate snapshot. An
 identical snapshot would issue the same attachment again and could create an
