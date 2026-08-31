@@ -58,7 +58,7 @@ pub fn confirmationHandler(client: *Client) create_workspace.ConfirmWorkspaceCre
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = applyReplacement,
+            .deliver = deliverReplacement,
         },
     };
 }
@@ -83,11 +83,8 @@ fn sendCreation(context: *anyopaque, creation: create_workspace.WorkspaceCreatio
     });
 }
 
-fn applyReplacement(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
+fn deliverReplacement(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     workspace_transitions.release(client, &replacement.departure);
-    try workspace_transitions.activate(client, .{
-        .pane_id = replacement.pane_id,
-        .location = replacement.location,
-    });
+    try workspace_transitions.activate(client, replacement.activation);
 }

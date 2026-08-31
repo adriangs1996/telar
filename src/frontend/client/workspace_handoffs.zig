@@ -105,7 +105,7 @@ fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.Reque
             .detach = detachCurrent,
             .send = sendHandoff,
             .restore = restoreCurrent,
-            .apply = releaseDeparture,
+            .release = releaseDeparture,
         },
     };
 }
@@ -150,7 +150,7 @@ pub fn confirmationHandler(client: *Client) workspace_handoff.ConfirmWorkspaceHa
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = activateArrival,
+            .deliver = activateArrival,
         },
     };
 }
@@ -251,12 +251,10 @@ fn releaseDeparture(context: *anyopaque, departure: *const client_model.Workspac
     workspace_transitions.release(client, departure);
 }
 
-fn activateArrival(context: *anyopaque, command: client_model.WorkspaceArrival) !void {
+fn activateArrival(context: *anyopaque, activation: client_model.WorkspaceActivation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    try workspace_transitions.activate(client, .{
-        .pane_id = command.pane_id,
-        .location = command.location,
-    });
+
+    try workspace_transitions.activate(client, activation);
 }
 
 fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) void {

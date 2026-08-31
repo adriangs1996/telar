@@ -18,7 +18,7 @@ detach active runtime attachments -> schema.open_pane
                                                            |
 ClientModel.departWorkspace
                                                            |
-release pane resources and remember navigation bookmark
+ReleaseWorkspaceResourcesHandler
                                                            |
 presentation_lifecycle.observe -> present empty client model
 ```
@@ -53,8 +53,8 @@ Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused
 pane, client-owned layout and every pane identity in fixed-capacity values,
 then advances the affected workspace, tab, active-tab and pane revisions once.
-Post-commit effects copy the bookmark into navigation history and give every
-retired pane identity to `ReleasePaneResourcesHandler`.
+`ReleaseWorkspaceResourcesHandler` copies the bookmark into navigation history
+and gives every retired pane identity to `ReleasePaneResourcesHandler`.
 `RetireReportedPaneFocusHandler` then removes any remaining stale reporting
 context without emitting child input.
 
@@ -76,6 +76,10 @@ ConfirmWorkspaceHandoffHandler
         |
 ClientModel.arriveWorkspace
         |
+WorkspaceActivation
+        |
+ActivateWorkspaceHandler
+        |
 focus sync -> input read -> workspace snapshot -> tab snapshot
         |
 presentation_lifecycle.observe -> present arrived workspace
@@ -89,15 +93,17 @@ when its exact tab identity matches the confirmed location.
 `ClientModel.arriveWorkspace` accepts only an empty model. The tab store builds
 the root tab and confirmed pane transactionally before publishing them, then
 the model stages the saved layout and advances all four semantic dimensions
-once. Construction failure therefore preserves the prior empty model and every
+once. It returns a `WorkspaceActivation` carrying those exact revisions.
+Construction failure therefore preserves the prior empty model and every
 revision.
 
-Operational effects run after the commit. They validate the active pane,
-synchronize attachment geometry and `ClientModel.reported_pane_focus`, schedule
-host input, and request canonical workspace and tab snapshots. The tab snapshot
-restores the saved split tree only if the runtime still reports exactly the
-bookmarked pane set; otherwise normal deterministic display order wins. Effect
-failure does not roll the confirmed model back.
+`ActivateWorkspaceHandler` runs after the commit. It validates the active pane
+and all four activation revisions, synchronizes attachment geometry and
+`ClientModel.reported_pane_focus`, schedules host input, and requests canonical
+workspace and tab snapshots in order. The tab snapshot restores the saved
+split tree only if the runtime still reports exactly the bookmarked pane set;
+otherwise normal deterministic display order wins. Effect failure does not
+roll the confirmed model back.
 
 The dispatcher does not draw the arrival. The presenter observes its new
 version independently. Its compositor detects the new immutable source and
@@ -127,6 +133,9 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
 - `src/frontend/client/application/workspace_handoff.zig` checks selection,
   gating, request ordering, local recovery, commit-before-effects and exact
   retry conditions.
+- `src/frontend/client/application/workspace_transition_delivery.zig` checks
+  resource retirement, exact activation validation, ordered snapshot requests
+  and partial failures.
 - `src/frontend/client/model.zig` checks idempotent departure, bounded capture,
   atomic arrival, rejected arrival and saved-layout staging.
 - `src/frontend/client/client_test.zig` checks protocol order, navigation and

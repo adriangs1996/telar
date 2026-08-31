@@ -68,7 +68,11 @@ capture departure + construct new root before retiring old projection
         |
 one version commit
         |
-bookmark/release old resources -> focus/input/snapshot effects
+ReleaseWorkspaceResourcesHandler
+        |
+ActivateWorkspaceHandler
+        |
+focus/input/snapshot effects
         |
 presentation_lifecycle.observe -> paced presentation
 ```
@@ -88,14 +92,18 @@ publishes the new workspace, so allocation or validation failure preserves the
 old projection and every revision.
 
 The successful replacement advances workspace, tabs, active-tab and panes
-exactly once. There is no intermediate empty model and therefore no empty
-frame between the old and new workspace. This differs deliberately from a
-normal workspace handoff, whose departure is visible while it waits for an
-existing runtime target.
+exactly once and returns a `WorkspaceActivation` carrying all four committed
+revisions. There is no intermediate empty model and therefore no empty frame
+between the old and new workspace. This differs deliberately from a normal
+workspace handoff, whose departure is visible while it waits for an existing
+runtime target.
 
-Post-commit effects retain the navigation bookmark, release copy, paste,
-reported-focus and graphics resources for every retired pane, activate the
-confirmed root and request canonical workspace and tab snapshots.
+`ReleaseWorkspaceResourcesHandler` retains the navigation bookmark, releases
+copy, paste, reported-focus and graphics resources for every retired pane, and
+silently retires any remaining reported focus. `ActivateWorkspaceHandler`
+then validates the exact root and all four activation revisions before it
+synchronizes active resources, schedules input and requests canonical
+workspace and tab snapshots.
 `ClientModel.releaseReportedPaneFocus` forgets the exact retired owner without
 sending focus-out or detach for runtime attachments that were already replaced.
 `RetireReportedPaneFocusHandler` then removes any remaining stale reporting
@@ -117,6 +125,9 @@ still install the confirmed root, which keeps recovery deterministic.
 - `src/frontend/client/application/create_workspace.zig` proves request
   gating, validation, no provisional mutation, response validation,
   commit-before-effects and post-commit failure behavior.
+- `src/frontend/client/application/workspace_transition_delivery.zig` proves
+  release order, exact activation validation, snapshot order and partial
+  failures.
 - `src/frontend/client/model.zig` and `src/frontend/workspace/tabs.zig` prove
   bounded departure capture, atomic construction, exact versioning, rejection
   without mutation and recovery from an empty source.

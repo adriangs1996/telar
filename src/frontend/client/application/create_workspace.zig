@@ -61,15 +61,15 @@ pub const ConfirmWorkspaceCreation = struct {
 
 pub const WorkspaceCreationEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, *const client_model.WorkspaceReplacement) anyerror!void,
+    deliver: *const fn (*anyopaque, *const client_model.WorkspaceReplacement) anyerror!void,
 };
 
 pub const ConfirmWorkspaceCreationHandler = struct {
     model: *client_model.Model,
     effects: WorkspaceCreationEffects,
 
-    /// Replaces the current projection in one commit before synchronizing
-    /// client resources. Effect failure never restores the retired workspace.
+    /// Replaces the current projection in one commit before delivering client
+    /// resources. Effect failure never restores the retired workspace.
     ///
     /// ```zig
     /// const replacement = try handler.execute(command);
@@ -80,7 +80,7 @@ pub const ConfirmWorkspaceCreationHandler = struct {
         }
 
         const replacement = try handler.model.replaceWorkspace(command.arrival);
-        try handler.effects.apply(handler.effects.context, &replacement);
+        try handler.effects.deliver(handler.effects.context, &replacement);
 
         return replacement;
     }
@@ -184,14 +184,14 @@ const ConfirmationCapture = struct {
     fail: bool = false,
 
     fn effects(capture: *ConfirmationCapture) WorkspaceCreationEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
+    fn deliver(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
         const capture: *ConfirmationCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.observed_commit = std.meta.eql(capture.model.activeTabLocation(), capture.expected) and
-            std.meta.eql(replacement.location, capture.expected) and
+            std.meta.eql(replacement.activation.location, capture.expected) and
             replacement.departure.source != null and
             capture.model.version().workspace == 1;
 
@@ -274,7 +274,7 @@ test "workspace creation request propagates delivery failure without mutation" {
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "workspace creation confirmation replaces the projection before effects" {
+test "workspace creation confirmation replaces the projection before delivery" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     const arrival = testing.arrival();
@@ -289,7 +289,7 @@ test "workspace creation confirmation replaces the projection before effects" {
 
     const replacement = try handler.execute(.{ .created = true, .arrival = arrival });
 
-    try std.testing.expectEqualDeep(arrival.location, replacement.location);
+    try std.testing.expectEqualDeep(arrival.location, replacement.activation.location);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.observed_commit);
 }

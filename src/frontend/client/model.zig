@@ -102,10 +102,18 @@ pub const WorkspaceArrival = struct {
     saved_layout: ?layout_mod.Layout = null,
 };
 
-pub const WorkspaceReplacement = struct {
-    departure: WorkspaceDeparture,
+pub const WorkspaceActivation = struct {
     pane_id: schema.PaneId,
     location: schema.TabLocation,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
+};
+
+pub const WorkspaceReplacement = struct {
+    departure: WorkspaceDeparture,
+    activation: WorkspaceActivation,
 };
 
 pub const PaneAttachment = struct {
@@ -2341,9 +2349,9 @@ pub const Model = struct {
     /// version.
     ///
     /// ```zig
-    /// try model.arriveWorkspace(arrival);
+    /// const activation = try model.arriveWorkspace(arrival);
     /// ```
-    pub fn arriveWorkspace(model: *Model, arrival: WorkspaceArrival) !void {
+    pub fn arriveWorkspace(model: *Model, arrival: WorkspaceArrival) !WorkspaceActivation {
         if (model.workspace.count != 0 or model.workspace.workspace != null) {
             return error.ModelNotEmpty;
         }
@@ -2358,6 +2366,8 @@ pub const Model = struct {
         model.active_tab_revision +%= 1;
         model.panes_revision +%= 1;
         releaseInvalidCopyMode(model);
+
+        return model.workspaceActivation(arrival.pane_id, arrival.location);
     }
 
     /// Replaces the current projection with one runtime-created workspace in
@@ -2392,8 +2402,18 @@ pub const Model = struct {
 
         return .{
             .departure = departure,
-            .pane_id = arrival.pane_id,
-            .location = arrival.location,
+            .activation = model.workspaceActivation(arrival.pane_id, arrival.location),
+        };
+    }
+
+    fn workspaceActivation(model: *const Model, pane_id: schema.PaneId, location: schema.TabLocation) WorkspaceActivation {
+        return .{
+            .pane_id = pane_id,
+            .location = location,
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
         };
     }
 
@@ -3952,7 +3972,7 @@ test "workspace arrival commits atomically and stages the saved layout" {
     var expected: layout_mod.Snapshot = .{};
     saved.snapshot(area, &expected);
 
-    try model.arriveWorkspace(.{
+    const activation = try model.arriveWorkspace(.{
         .pane_id = focused,
         .location = location,
         .size = .{ .cols = 30, .rows = 8 },
@@ -3961,6 +3981,14 @@ test "workspace arrival commits atomically and stages the saved layout" {
 
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
     try std.testing.expectEqual(focused, model.workspace.activeConst().?.model.layout.focused().?);
+    try std.testing.expectEqualDeep(WorkspaceActivation{
+        .pane_id = focused,
+        .location = location,
+        .workspace_revision = 1,
+        .tabs_revision = 1,
+        .active_tab_revision = 1,
+        .panes_revision = 1,
+    }, activation);
     try std.testing.expectEqualDeep(Version{
         .workspace = 1,
         .tabs = 1,
@@ -4056,8 +4084,14 @@ test "workspace replacement commits the confirmed root and captures retired stat
     try std.testing.expectEqualDeep(previous, committed.departure.bookmark.?.location);
     try std.testing.expectEqual(focused, committed.departure.bookmark.?.pane_id);
     try std.testing.expectEqualSlices(schema.PaneId, &.{ first, focused, inactive_pane }, committed.departure.panes.slice());
-    try std.testing.expectEqual(replacement_pane, committed.pane_id);
-    try std.testing.expectEqualDeep(replacement, committed.location);
+    try std.testing.expectEqualDeep(WorkspaceActivation{
+        .pane_id = replacement_pane,
+        .location = replacement,
+        .workspace_revision = 1,
+        .tabs_revision = 1,
+        .active_tab_revision = 1,
+        .panes_revision = 1,
+    }, committed.activation);
     try std.testing.expectEqualDeep(replacement, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
     try std.testing.expect(model.workspace.findPane(first) == null);

@@ -75,7 +75,7 @@ pub const HandoffRequestEffects = struct {
     detach: *const fn (*anyopaque) anyerror!void,
     send: *const fn (*anyopaque, WorkspaceHandoff) anyerror!void,
     restore: *const fn (*anyopaque) anyerror!void,
-    apply: *const fn (*anyopaque, *const client_model.WorkspaceDeparture) void,
+    release: *const fn (*anyopaque, *const client_model.WorkspaceDeparture) void,
 };
 
 pub const RequestWorkspaceHandoffHandler = struct {
@@ -105,7 +105,7 @@ pub const RequestWorkspaceHandoffHandler = struct {
         };
 
         const departure = handler.model.departWorkspace();
-        handler.effects.apply(handler.effects.context, &departure);
+        handler.effects.release(handler.effects.context, &departure);
 
         return departure;
     }
@@ -113,22 +113,23 @@ pub const RequestWorkspaceHandoffHandler = struct {
 
 pub const WorkspaceArrivalEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.WorkspaceArrival) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.WorkspaceActivation) anyerror!void,
 };
 
 pub const ConfirmWorkspaceHandoffHandler = struct {
     model: *client_model.Model,
     effects: WorkspaceArrivalEffects,
 
-    /// Commits a fully constructed workspace before starting its operational
-    /// focus and snapshot effects. Effect failure never rolls the model back.
+    /// Commits a fully constructed workspace before delivering its exact
+    /// operational activation. Effect failure never rolls the model back.
     ///
     /// ```zig
     /// try handler.execute(arrival);
     /// ```
     pub fn execute(handler: *ConfirmWorkspaceHandoffHandler, arrival: client_model.WorkspaceArrival) !void {
-        try handler.model.arriveWorkspace(arrival);
-        try handler.effects.apply(handler.effects.context, arrival);
+        const activation = try handler.model.arriveWorkspace(arrival);
+
+        try handler.effects.deliver(handler.effects.context, activation);
     }
 };
 
@@ -312,7 +313,7 @@ const RequestEvent = enum {
     detach,
     send,
     restore,
-    apply,
+    release,
 };
 
 const RequestCapture = struct {
@@ -336,7 +337,7 @@ const RequestCapture = struct {
             .detach = detach,
             .send = send,
             .restore = restore,
-            .apply = apply,
+            .release = release,
         };
     }
 
@@ -372,9 +373,9 @@ const RequestCapture = struct {
         capture.record(.restore);
     }
 
-    fn apply(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {
+    fn release(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {
         const capture: *RequestCapture = @ptrCast(@alignCast(context));
-        capture.record(.apply);
+        capture.record(.release);
         capture.departure = departure.*;
         capture.observed_commit = capture.model.workspaceLocation() == null and
             capture.model.version().workspace == 1;
@@ -402,7 +403,7 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
 
     const departure = try handler.execute(command);
 
-    try std.testing.expectEqualSlices(RequestEvent, &.{ .detach, .send, .apply }, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualSlices(RequestEvent, &.{ .detach, .send, .release }, capture.events[0..capture.event_count]);
     try std.testing.expectEqualDeep(command, capture.command.?);
     try std.testing.expectEqualDeep(departure.source, capture.departure.?.source);
     try std.testing.expect(capture.observed_commit);
@@ -459,21 +460,21 @@ const ArrivalCapture = struct {
     fail: bool = false,
 
     fn port(capture: *ArrivalCapture) WorkspaceArrivalEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, arrival: client_model.WorkspaceArrival) !void {
+    fn deliver(context: *anyopaque, activation: client_model.WorkspaceActivation) !void {
         const capture: *ArrivalCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
-        capture.observed_commit = std.meta.eql(capture.model.activeTabLocation().?, arrival.location) and
-            capture.model.version().workspace == 1;
+        capture.observed_commit = std.meta.eql(capture.model.activeTabLocation().?, activation.location) and
+            capture.model.version().workspace == activation.workspace_revision;
         if (capture.fail) {
             return error.ArrivalEffectFailed;
         }
     }
 };
 
-test "ConfirmWorkspaceHandoffHandler commits before effects and retains effect failures" {
+test "ConfirmWorkspaceHandoffHandler commits before delivery and retains failures" {
     inline for (.{ false, true }) |fail| {
         var testing = try TestingModel.init(false);
         defer testing.deinit();
