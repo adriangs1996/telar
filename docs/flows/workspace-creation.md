@@ -96,27 +96,27 @@ publishes the new workspace, so allocation or validation failure preserves the
 old projection and every revision.
 
 The successful replacement advances workspace, tabs, active-tab and panes
-exactly once. `WorkspaceReplacement` carries the captured departure, the
-`WorkspaceActivation`, every pre-commit semantic revision and the exact copy
-revision transition. There is no intermediate empty model and therefore no
-empty frame between the old and new workspace. This differs deliberately from
-a normal workspace handoff, whose departure is visible while it waits for an
-existing runtime target.
+exactly once. `WorkspaceReplacement` carries only the captured departure and
+the shared `WorkspaceActivation`. The activation proves every pre/post
+semantic revision and the exact copy revision transition. There is no
+intermediate empty model and therefore no empty frame between the old and new
+workspace. This differs deliberately from a normal workspace handoff, whose
+departure is visible while it waits for an existing runtime target.
 
 `DeliverWorkspaceCreationHandler` validates the complete replacement before
-the first cleanup effect. The created root and activation revisions must still
-match the model; every semantic revision must be exactly one step after its
-captured predecessor; and copy release must match its captured delta. The
-departure must name a different workspace, contain unique pane identities now
-absent from the model and carry a coherent bookmark. An empty source remains a
-valid recovery case only when it has no fabricated departure resources.
+the first cleanup effect. `ActivateWorkspaceHandler` validates the created root,
+the current revisions, every one-step semantic delta and the exact copy release
+through the shared activation contract. Creation then validates only its
+departure: it must name a different workspace, contain unique pane identities
+now absent from the model and carry a coherent bookmark. An empty source
+remains a valid recovery case only when it has no fabricated departure
+resources.
 
 `ReleaseWorkspaceResourcesHandler` retains the navigation bookmark, releases
 copy, paste, reported-focus and graphics resources for every retired pane, and
 silently retires any remaining reported focus. `ActivateWorkspaceHandler`
-then validates the exact root and all four activation revisions before it
-synchronizes active resources, schedules input and requests canonical
-workspace and tab snapshots.
+revalidates the shared activation before it synchronizes active resources,
+schedules input and requests canonical workspace and tab snapshots.
 `ClientModel.releaseReportedPaneFocus` forgets the exact retired owner without
 sending focus-out or detach for runtime attachments that were already replaced.
 `RetireReportedPaneFocusHandler` then removes any remaining stale reporting

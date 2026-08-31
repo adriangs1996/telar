@@ -77,8 +77,9 @@ pub const ActivateWorkspaceHandler = struct {
         try handler.effects.request_tab_snapshot(handler.effects.context, activation.location);
     }
 
-    /// Rejects an activation that no longer names the exact committed root
-    /// and semantic revisions. Compound flows may validate before cleanup.
+    /// Rejects an activation that no longer proves the exact committed root,
+    /// one-step semantic transition and copy release. Compound flows may
+    /// validate before cleanup.
     ///
     /// ```zig
     /// try handler.validate(activation);
@@ -95,7 +96,13 @@ pub const ActivateWorkspaceHandler = struct {
             version.workspace != activation.workspace_revision or
             version.tabs != activation.tabs_revision or
             version.active_tab != activation.active_tab_revision or
-            version.panes != activation.panes_revision)
+            version.panes != activation.panes_revision or
+            version.copy != activation.copy_revision or
+            activation.workspace_revision_before +% 1 != activation.workspace_revision or
+            activation.tabs_revision_before +% 1 != activation.tabs_revision or
+            activation.active_tab_revision_before +% 1 != activation.active_tab_revision or
+            activation.panes_revision_before +% 1 != activation.panes_revision or
+            activation.copy_revision_before +% @intFromBool(activation.copy_released) != activation.copy_revision)
         {
             return error.StaleWorkspaceActivation;
         }
@@ -223,7 +230,8 @@ const ActivationCapture = struct {
             version.workspace == capture.activation.workspace_revision and
             version.tabs == capture.activation.tabs_revision and
             version.active_tab == capture.activation.active_tab_revision and
-            version.panes == capture.activation.panes_revision;
+            version.panes == capture.activation.panes_revision and
+            version.copy == capture.activation.copy_revision;
         capture.events[capture.event_count] = event;
         capture.event_count += 1;
     }
@@ -302,8 +310,7 @@ test "ActivateWorkspaceHandler orders resources and exact snapshot requests" {
 test "ActivateWorkspaceHandler rejects stale activation before effects" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    var activation = try prepareActivation(&model);
-    activation.panes_revision -%= 1;
+    const activation = try prepareActivation(&model);
     var capture: ActivationCapture = .{
         .model = &model,
         .activation = activation,
@@ -313,7 +320,40 @@ test "ActivateWorkspaceHandler rejects stale activation before effects" {
         .effects = capture.effects(),
     };
 
-    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(activation));
+    var altered = activation;
+    altered.workspace_revision -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.tabs_revision -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.active_tab_revision -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.panes_revision -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.copy_revision -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.workspace_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.tabs_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.active_tab_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.panes_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.copy_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+    altered = activation;
+    altered.copy_released = !altered.copy_released;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(altered));
+
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
 }
 

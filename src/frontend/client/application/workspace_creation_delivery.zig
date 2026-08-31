@@ -25,7 +25,7 @@ pub const DeliverWorkspaceCreationHandler = struct {
             .effects = handler.activation_effects,
         };
         try activate.validate(replacement.activation);
-        try handler.validate(replacement);
+        try handler.validateDeparture(replacement);
 
         var release: workspace_transition_delivery.ReleaseWorkspaceResourcesHandler = .{
             .model = handler.model,
@@ -36,18 +36,7 @@ pub const DeliverWorkspaceCreationHandler = struct {
         try activate.execute(replacement.activation);
     }
 
-    fn validate(handler: *const DeliverWorkspaceCreationHandler, replacement: *const client_model.WorkspaceReplacement) !void {
-        const version = handler.model.version();
-        if (version.copy != replacement.copy_revision or
-            replacement.workspace_revision_before +% 1 != replacement.activation.workspace_revision or
-            replacement.tabs_revision_before +% 1 != replacement.activation.tabs_revision or
-            replacement.active_tab_revision_before +% 1 != replacement.activation.active_tab_revision or
-            replacement.panes_revision_before +% 1 != replacement.activation.panes_revision or
-            replacement.copy_revision_before +% @intFromBool(replacement.copy_released) != replacement.copy_revision)
-        {
-            return error.StaleWorkspaceCreation;
-        }
-
+    fn validateDeparture(handler: *const DeliverWorkspaceCreationHandler, replacement: *const client_model.WorkspaceReplacement) !void {
         const panes = replacement.departure.panes.slice();
         const source = replacement.departure.source orelse {
             if (replacement.departure.bookmark != null or panes.len != 0) {
@@ -266,7 +255,7 @@ const EffectsCapture = struct {
             version.tabs == activation.tabs_revision and
             version.active_tab == activation.active_tab_revision and
             version.panes == activation.panes_revision and
-            version.copy == capture.replacement.copy_revision;
+            version.copy == activation.copy_revision;
     }
 
     fn eventSlice(capture: *const EffectsCapture) []const Event {
@@ -326,8 +315,8 @@ test "DeliverWorkspaceCreationHandler accepts an exact invalid-copy release" {
 
     try handler.execute(&replacement);
 
-    try std.testing.expect(replacement.copy_released);
-    try std.testing.expectEqual(replacement.copy_revision_before +% 1, replacement.copy_revision);
+    try std.testing.expect(replacement.activation.copy_released);
+    try std.testing.expectEqual(replacement.activation.copy_revision_before +% 1, replacement.activation.copy_revision);
     try std.testing.expect(!testing.model.copyModeActive());
     try std.testing.expect(capture.release_complete_before_activation);
     try std.testing.expect(capture.exact_commit_observed);
@@ -347,26 +336,26 @@ test "DeliverWorkspaceCreationHandler validates replacement before release" {
     altered.activation.workspace_revision -%= 1;
     try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
-    altered.workspace_revision_before -%= 1;
-    try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
+    altered.activation.workspace_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
-    altered.tabs_revision_before -%= 1;
-    try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
+    altered.activation.tabs_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
-    altered.active_tab_revision_before -%= 1;
-    try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
+    altered.activation.active_tab_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
-    altered.panes_revision_before -%= 1;
-    try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
+    altered.activation.panes_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
-    altered.copy_revision_before -%= 1;
-    try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
+    altered.activation.copy_revision_before -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
-    altered.copy_revision -%= 1;
-    try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
+    altered.activation.copy_revision -%= 1;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
-    altered.copy_released = !altered.copy_released;
-    try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
+    altered.activation.copy_released = !altered.activation.copy_released;
+    try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&altered));
     altered = replacement;
     altered.departure.source = replacement.activation.location.workspace;
     try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));

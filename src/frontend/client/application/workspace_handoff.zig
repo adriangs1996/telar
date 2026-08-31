@@ -111,17 +111,17 @@ pub const RequestWorkspaceHandoffHandler = struct {
     }
 };
 
-pub const WorkspaceArrivalEffects = struct {
+pub const WorkspaceArrivalDelivery = struct {
     context: *anyopaque,
     deliver: *const fn (*anyopaque, client_model.WorkspaceActivation) anyerror!void,
 };
 
 pub const ConfirmWorkspaceHandoffHandler = struct {
     model: *client_model.Model,
-    effects: WorkspaceArrivalEffects,
+    delivery: WorkspaceArrivalDelivery,
 
     /// Commits a fully constructed workspace before delivering its exact
-    /// operational activation. Effect failure never rolls the model back.
+    /// operational activation. Delivery failure never rolls the model back.
     ///
     /// ```zig
     /// try handler.execute(arrival);
@@ -129,7 +129,7 @@ pub const ConfirmWorkspaceHandoffHandler = struct {
     pub fn execute(handler: *ConfirmWorkspaceHandoffHandler, arrival: client_model.WorkspaceArrival) !void {
         const activation = try handler.model.arriveWorkspace(arrival);
 
-        try handler.effects.deliver(handler.effects.context, activation);
+        try handler.delivery.deliver(handler.delivery.context, activation);
     }
 };
 
@@ -455,33 +455,55 @@ test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
 
 const ArrivalCapture = struct {
     model: *const client_model.Model,
+    expected_before: client_model.Version = .{},
     calls: usize = 0,
     observed_commit: bool = false,
     fail: bool = false,
 
-    fn port(capture: *ArrivalCapture) WorkspaceArrivalEffects {
+    fn port(capture: *ArrivalCapture) WorkspaceArrivalDelivery {
         return .{ .context = capture, .deliver = deliver };
     }
 
     fn deliver(context: *anyopaque, activation: client_model.WorkspaceActivation) !void {
         const capture: *ArrivalCapture = @ptrCast(@alignCast(context));
+        const version = capture.model.version();
         capture.calls += 1;
         capture.observed_commit = std.meta.eql(capture.model.activeTabLocation().?, activation.location) and
-            capture.model.version().workspace == activation.workspace_revision;
+            version.workspace == activation.workspace_revision and
+            version.tabs == activation.tabs_revision and
+            version.active_tab == activation.active_tab_revision and
+            version.panes == activation.panes_revision and
+            version.copy == activation.copy_revision and
+            activation.workspace_revision_before == capture.expected_before.workspace and
+            activation.tabs_revision_before == capture.expected_before.tabs and
+            activation.active_tab_revision_before == capture.expected_before.active_tab and
+            activation.panes_revision_before == capture.expected_before.panes and
+            activation.copy_revision_before == capture.expected_before.copy and
+            activation.workspace_revision_before +% 1 == activation.workspace_revision and
+            activation.tabs_revision_before +% 1 == activation.tabs_revision and
+            activation.active_tab_revision_before +% 1 == activation.active_tab_revision and
+            activation.panes_revision_before +% 1 == activation.panes_revision and
+            activation.copy_revision_before +% @intFromBool(activation.copy_released) == activation.copy_revision;
         if (capture.fail) {
-            return error.ArrivalEffectFailed;
+            return error.ArrivalDeliveryFailed;
         }
     }
 };
 
 test "ConfirmWorkspaceHandoffHandler commits before delivery and retains failures" {
     inline for (.{ false, true }) |fail| {
-        var testing = try TestingModel.init(false);
+        var testing = try TestingModel.init(true);
         defer testing.deinit();
-        var capture: ArrivalCapture = .{ .model = testing.model, .fail = fail };
+        _ = testing.model.departWorkspace();
+        const version_before = testing.model.version();
+        var capture: ArrivalCapture = .{
+            .model = testing.model,
+            .expected_before = version_before,
+            .fail = fail,
+        };
         var handler: ConfirmWorkspaceHandoffHandler = .{
             .model = testing.model,
-            .effects = capture.port(),
+            .delivery = capture.port(),
         };
         const arrival: client_model.WorkspaceArrival = .{
             .pane_id = @enumFromInt(9),
@@ -490,7 +512,7 @@ test "ConfirmWorkspaceHandoffHandler commits before delivery and retains failure
         };
 
         if (fail) {
-            try std.testing.expectError(error.ArrivalEffectFailed, handler.execute(arrival));
+            try std.testing.expectError(error.ArrivalDeliveryFailed, handler.execute(arrival));
         } else {
             try handler.execute(arrival);
         }
@@ -498,22 +520,22 @@ test "ConfirmWorkspaceHandoffHandler commits before delivery and retains failure
         try std.testing.expectEqual(@as(usize, 1), capture.calls);
         try std.testing.expect(capture.observed_commit);
         try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
-        try std.testing.expectEqualDeep(client_model.Version{
-            .workspace = 1,
-            .tabs = 1,
-            .active_tab = 1,
-            .panes = 1,
-        }, testing.model.version());
+        const version = testing.model.version();
+        try std.testing.expectEqual(version_before.workspace +% 1, version.workspace);
+        try std.testing.expectEqual(version_before.tabs +% 1, version.tabs);
+        try std.testing.expectEqual(version_before.active_tab +% 1, version.active_tab);
+        try std.testing.expectEqual(version_before.panes +% 1, version.panes);
+        try std.testing.expectEqual(version_before.copy, version.copy);
     }
 }
 
-test "ConfirmWorkspaceHandoffHandler rejects construction before effects" {
+test "ConfirmWorkspaceHandoffHandler rejects construction before delivery" {
     var testing = try TestingModel.init(false);
     defer testing.deinit();
     var capture: ArrivalCapture = .{ .model = testing.model };
     var handler: ConfirmWorkspaceHandoffHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .delivery = capture.port(),
     };
 
     try std.testing.expectError(error.InvalidPaneId, handler.execute(.{

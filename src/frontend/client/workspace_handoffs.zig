@@ -151,7 +151,7 @@ pub fn arrival(client: *Client, opened: schema.PaneOpened) !client_model.Workspa
 pub fn confirmationHandler(client: *Client) workspace_handoff.ConfirmWorkspaceHandoffHandler {
     return .{
         .model = &client.model,
-        .effects = .{
+        .delivery = .{
             .context = client,
             .deliver = activateArrival,
         },

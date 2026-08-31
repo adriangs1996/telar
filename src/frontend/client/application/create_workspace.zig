@@ -198,12 +198,12 @@ const DeliveryCapture = struct {
             version.tabs == replacement.activation.tabs_revision and
             version.active_tab == replacement.activation.active_tab_revision and
             version.panes == replacement.activation.panes_revision and
-            version.copy == replacement.copy_revision and
-            replacement.workspace_revision_before +% 1 == replacement.activation.workspace_revision and
-            replacement.tabs_revision_before +% 1 == replacement.activation.tabs_revision and
-            replacement.active_tab_revision_before +% 1 == replacement.activation.active_tab_revision and
-            replacement.panes_revision_before +% 1 == replacement.activation.panes_revision and
-            replacement.copy_revision_before +% @intFromBool(replacement.copy_released) == replacement.copy_revision;
+            version.copy == replacement.activation.copy_revision and
+            replacement.activation.workspace_revision_before +% 1 == replacement.activation.workspace_revision and
+            replacement.activation.tabs_revision_before +% 1 == replacement.activation.tabs_revision and
+            replacement.activation.active_tab_revision_before +% 1 == replacement.activation.active_tab_revision and
+            replacement.activation.panes_revision_before +% 1 == replacement.activation.panes_revision and
+            replacement.activation.copy_revision_before +% @intFromBool(replacement.activation.copy_released) == replacement.activation.copy_revision;
 
         if (capture.fail) {
             return error.CreationSyncFailed;

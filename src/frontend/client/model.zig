@@ -125,22 +125,28 @@ pub const WorkspaceArrival = struct {
 pub const WorkspaceActivation = struct {
     pane_id: schema.PaneId,
     location: schema.TabLocation,
-    workspace_revision: u64,
-    tabs_revision: u64,
-    active_tab_revision: u64,
-    panes_revision: u64,
-};
-
-pub const WorkspaceReplacement = struct {
-    departure: WorkspaceDeparture,
-    activation: WorkspaceActivation,
     workspace_revision_before: u64,
     tabs_revision_before: u64,
     active_tab_revision_before: u64,
     panes_revision_before: u64,
     copy_revision_before: u64,
     copy_released: bool,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
     copy_revision: u64,
+};
+
+pub const WorkspaceReplacement = struct {
+    departure: WorkspaceDeparture,
+    activation: WorkspaceActivation,
+};
+
+const WorkspaceActivationSeed = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    version_before: Version,
 };
 
 pub const PaneAttachment = struct {
@@ -2455,6 +2461,7 @@ pub const Model = struct {
             return error.ModelNotEmpty;
         }
 
+        const version_before = model.version();
         try model.workspace.bootstrap(arrival.pane_id, arrival.location, arrival.size);
         if (arrival.saved_layout) |saved| {
             std.debug.assert(model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved));
@@ -2466,7 +2473,11 @@ pub const Model = struct {
         model.panes_revision +%= 1;
         releaseInvalidCopyMode(model);
 
-        return model.workspaceActivation(arrival.pane_id, arrival.location);
+        return model.workspaceActivation(.{
+            .pane_id = arrival.pane_id,
+            .location = arrival.location,
+            .version_before = version_before,
+        });
     }
 
     /// Replaces the current projection with one runtime-created workspace in
@@ -2478,11 +2489,7 @@ pub const Model = struct {
     /// ```
     pub fn replaceWorkspace(model: *Model, arrival: WorkspaceArrival) !WorkspaceReplacement {
         const departure = captureWorkspace(model);
-        const workspace_revision_before = model.workspace_revision;
-        const tabs_revision_before = model.tabs_revision;
-        const active_tab_revision_before = model.active_tab_revision;
-        const panes_revision_before = model.panes_revision;
-        const copy_revision_before = model.copy_revision;
+        const version_before = model.version();
         if (departure.source) |source| {
             if (std.meta.eql(source, arrival.location.workspace)) {
                 return error.WorkspaceAlreadyActive;
@@ -2506,25 +2513,29 @@ pub const Model = struct {
 
         return .{
             .departure = departure,
-            .activation = model.workspaceActivation(arrival.pane_id, arrival.location),
-            .workspace_revision_before = workspace_revision_before,
-            .tabs_revision_before = tabs_revision_before,
-            .active_tab_revision_before = active_tab_revision_before,
-            .panes_revision_before = panes_revision_before,
-            .copy_revision_before = copy_revision_before,
-            .copy_released = model.copy_revision != copy_revision_before,
-            .copy_revision = model.copy_revision,
+            .activation = model.workspaceActivation(.{
+                .pane_id = arrival.pane_id,
+                .location = arrival.location,
+                .version_before = version_before,
+            }),
         };
     }
 
-    fn workspaceActivation(model: *const Model, pane_id: schema.PaneId, location: schema.TabLocation) WorkspaceActivation {
+    fn workspaceActivation(model: *const Model, seed: WorkspaceActivationSeed) WorkspaceActivation {
         return .{
-            .pane_id = pane_id,
-            .location = location,
+            .pane_id = seed.pane_id,
+            .location = seed.location,
+            .workspace_revision_before = seed.version_before.workspace,
+            .tabs_revision_before = seed.version_before.tabs,
+            .active_tab_revision_before = seed.version_before.active_tab,
+            .panes_revision_before = seed.version_before.panes,
+            .copy_revision_before = seed.version_before.copy,
+            .copy_released = model.copy_revision != seed.version_before.copy,
             .workspace_revision = model.workspace_revision,
             .tabs_revision = model.tabs_revision,
             .active_tab_revision = model.active_tab_revision,
             .panes_revision = model.panes_revision,
+            .copy_revision = model.copy_revision,
         };
     }
 
@@ -4192,10 +4203,17 @@ test "workspace arrival commits atomically and stages the saved layout" {
     try std.testing.expectEqualDeep(WorkspaceActivation{
         .pane_id = focused,
         .location = location,
+        .workspace_revision_before = 0,
+        .tabs_revision_before = 0,
+        .active_tab_revision_before = 0,
+        .panes_revision_before = 0,
+        .copy_revision_before = 0,
+        .copy_released = false,
         .workspace_revision = 1,
         .tabs_revision = 1,
         .active_tab_revision = 1,
         .panes_revision = 1,
+        .copy_revision = 0,
     }, activation);
     try std.testing.expectEqualDeep(Version{
         .workspace = 1,
@@ -4295,18 +4313,18 @@ test "workspace replacement commits the confirmed root and captures retired stat
     try std.testing.expectEqualDeep(WorkspaceActivation{
         .pane_id = replacement_pane,
         .location = replacement,
+        .workspace_revision_before = 0,
+        .tabs_revision_before = 0,
+        .active_tab_revision_before = 0,
+        .panes_revision_before = 0,
+        .copy_revision_before = 0,
+        .copy_released = false,
         .workspace_revision = 1,
         .tabs_revision = 1,
         .active_tab_revision = 1,
         .panes_revision = 1,
+        .copy_revision = 0,
     }, committed.activation);
-    try std.testing.expectEqual(@as(u64, 0), committed.workspace_revision_before);
-    try std.testing.expectEqual(@as(u64, 0), committed.tabs_revision_before);
-    try std.testing.expectEqual(@as(u64, 0), committed.active_tab_revision_before);
-    try std.testing.expectEqual(@as(u64, 0), committed.panes_revision_before);
-    try std.testing.expectEqual(@as(u64, 0), committed.copy_revision_before);
-    try std.testing.expect(!committed.copy_released);
-    try std.testing.expectEqual(@as(u64, 0), committed.copy_revision);
     try std.testing.expectEqualDeep(replacement, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
     try std.testing.expect(model.workspace.findPane(first) == null);
@@ -4340,9 +4358,9 @@ test "workspace replacement captures invalid copy-mode release" {
         .size = .{ .cols = 30, .rows = 8 },
     });
 
-    try std.testing.expect(committed.copy_released);
-    try std.testing.expectEqual(version_before.copy, committed.copy_revision_before);
-    try std.testing.expectEqual(version_before.copy +% 1, committed.copy_revision);
+    try std.testing.expect(committed.activation.copy_released);
+    try std.testing.expectEqual(version_before.copy, committed.activation.copy_revision_before);
+    try std.testing.expectEqual(version_before.copy +% 1, committed.activation.copy_revision);
     try std.testing.expect(!model.copyModeActive());
 }
 

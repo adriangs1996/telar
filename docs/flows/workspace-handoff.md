@@ -101,16 +101,17 @@ when its exact tab identity matches the confirmed location.
 `ClientModel.arriveWorkspace` accepts only an empty model. The tab store builds
 the root tab and confirmed pane transactionally before publishing them, then
 the model stages the saved layout and advances all four semantic dimensions
-once. It returns a `WorkspaceActivation` carrying those exact revisions.
-Construction failure therefore preserves the prior empty model and every
-revision.
+once. It returns a `WorkspaceActivation` carrying every pre/post semantic
+revision and the exact copy revision transition. Construction failure therefore
+preserves the prior empty model and every revision.
 
 `ActivateWorkspaceHandler` runs after the commit. It validates the active pane
-and all four activation revisions, synchronizes attachment geometry and
+and root, the current revisions, every one-step semantic delta and the exact
+copy release. It then synchronizes attachment geometry and
 `ClientModel.reported_pane_focus`, schedules host input, and requests canonical
 workspace and tab snapshots in order. The tab snapshot restores the saved
 split tree only if the runtime still reports exactly the bookmarked pane set;
-otherwise normal deterministic display order wins. Effect failure does not
+otherwise normal deterministic display order wins. Delivery failure does not
 roll the confirmed model back.
 
 The dispatcher does not draw the arrival. The presenter observes its new
