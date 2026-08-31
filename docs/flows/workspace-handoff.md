@@ -14,6 +14,8 @@ sidebar agent, resync or workspace closure ----------------+
                                                            |
                                       RequestWorkspaceHandoffHandler
                                                            |
+                                      PrepareWorkspaceHandoffHandler
+                                                           |
 detach active runtime attachments -> schema.open_pane
                                                            |
 ClientModel.departWorkspace
@@ -39,15 +41,21 @@ that the projected workspace disappeared. It forgets the closed workspace's
 bookmark first and uses the runtime's canonical predecessor as the target. A
 failed handoff cannot restore identity that no longer exists.
 
-The adapter checks that the fixed outbox has room for a required paste-closing
-marker, focus-out, every detach and the final open before it changes attachment
-state. It reserves focus-out only when the reported pane still exists,
-remains attached and has focus events enabled. The request handler delegates
-each tab to `RetireTabAttachmentsHandler`, which closes the paste and delivers
-detaches before `open_pane`; socket order prevents the new attachment from
-preceding retirement of the old ones. A local detach or open failure does not
-commit departure and requests a canonical tab snapshot to repair any
-provisional attachment effects.
+`PrepareWorkspaceHandoffHandler` checks that the fixed outbox has room for a
+required paste-closing marker, focus-out, every detach and the final open before
+it changes attachment state. It reserves focus-out only when the reported pane
+still exists, remains attached and has focus events enabled. Every attached
+pane and every unattached pane with an attachment request in flight reserves a
+detach slot. This prevents a pending attachment from consuming capacity that
+the old adapter preflight did not account for.
+
+After the capacity gate, the preparation handler delegates each tab to
+`RetireTabAttachmentsHandler`, which closes the paste and delivers detaches in
+tab and pane order before `open_pane`; socket order prevents the new attachment
+from preceding retirement of the old ones. `workspace_handoffs` now supplies
+only outbox capacity and the physical paste, focus, attachment and graphics
+ports. A local detach or open failure does not commit departure and requests a
+canonical tab snapshot to repair any provisional attachment effects.
 
 Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused
@@ -133,6 +141,9 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
 - `src/frontend/client/application/workspace_handoff.zig` checks selection,
   gating, request ordering, local recovery, commit-before-effects and exact
   retry conditions.
+- `src/frontend/client/application/workspace_handoff_preparation.zig` checks
+  complete capacity accounting, pending attachments, preflight-before-effects,
+  multi-tab retirement order and partial detach failures.
 - `src/frontend/client/application/workspace_transition_delivery.zig` checks
   resource retirement, exact activation validation, ordered snapshot requests
   and partial failures.

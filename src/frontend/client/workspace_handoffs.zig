@@ -4,6 +4,8 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
+const pane_pastes = @import("pane_pastes.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const tab_attachments = @import("tab_attachments.zig");
@@ -13,6 +15,7 @@ const Client = @import("client.zig");
 const multiplexer = workspace_capability.multiplexer;
 const schema = core.schema;
 const workspace_handoff = client_application.workspace_handoff;
+const workspace_handoff_preparation = client_application.workspace_handoff_preparation;
 
 /// Resolves one workspace selection from the committed list and requests its
 /// handoff only when the target is known and actionable.
@@ -188,32 +191,24 @@ fn requestSelectedWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) 
 
 fn detachCurrent(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var required_capacity: usize = 1;
-    if (client.model.reportedPaneFocus()) |reported| {
-        if (client.model.workspace.findPane(reported.pane_id)) |pane| {
-            required_capacity += @intFromBool(reported.focus_events and pane.attached);
-        }
-    }
-    if (client.model.panePasteSession()) |session| {
-        required_capacity += @intFromBool(session.bracketed_paste);
-    }
+    var use_case: workspace_handoff_preparation.PrepareWorkspaceHandoffHandler = .{
+        .model = &client.model,
+        .capacity = .{
+            .context = client,
+            .available = availableCapacity,
+        },
+        .paste_effects = pane_pastes.effects(client),
+        .focus_effects = pane_focus_reports.effects(client),
+        .attachment_effects = tab_attachments.effects(client),
+    };
 
-    var planned_tabs = client.model.workspace.tabIterator();
-    while (planned_tabs.next()) |tab| {
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |pane| {
-            required_capacity += @intFromBool(pane.attached);
-        }
-    }
-    const available_capacity = runtime_transport.availableCapacity(client);
-    if (required_capacity > available_capacity) {
-        return error.ClientOutboxFull;
-    }
+    try use_case.execute();
+}
 
-    var tabs = client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        try tab_attachments.detach(client, tab.location);
-    }
+fn availableCapacity(context: *anyopaque) usize {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return runtime_transport.availableCapacity(client);
 }
 
 fn sendHandoff(context: *anyopaque, command: workspace_handoff.WorkspaceHandoff) !void {
