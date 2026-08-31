@@ -41,7 +41,10 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .workspace_snapshot => |snapshot| try workspace_snapshots.apply(client, snapshot),
         .tab_created => |created| _ = try tab_creations.apply(client, created),
         .tab_renamed => |renamed| _ = try tab_renames.apply(client, renamed),
-        .tab_closed => |closed| return handleTabClosed(client, closed),
+        .tab_closed => |closed| switch (try tab_closures.apply(client, closed)) {
+            .applied, .ignored => {},
+            .exit => return 0,
+        },
         .tab_moved => |moved| try handleTabMoved(client, moved),
         .pane_frame => |frame| _ = try pane_frames.apply(client, frame),
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
@@ -125,32 +128,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// A canonical tab-removal response or lifecycle fact.
-fn handleTabClosed(client: *Client, closed: schema.TabClosed) !?u8 {
-    const trigger: tab_closures.RemovalTrigger = if (closed.request_id == .none)
-        .lifecycle
-    else requested: {
-        const continuation = client.requests.take(closed.request_id) orelse
-            return error.UnexpectedTabClosed;
-        if (continuation == .ignored) {
-            return null;
-        }
-        if (continuation != .close_tab or
-            !std.meta.eql(continuation.close_tab, closed.location))
-        {
-            return error.UnexpectedTabClosed;
-        }
-
-        break :requested .requested;
-    };
-
-    var use_case = tab_closures.removalHandler(client);
-    return switch (try use_case.execute(tab_closures.removal(closed, trigger))) {
-        .continue_running => null,
-        .exit => 0,
-    };
 }
 
 /// A confirmed tab reorder.

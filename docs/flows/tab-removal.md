@@ -100,6 +100,8 @@ requirement instead of blocking PTY work.
 ```text
 tab_closed
         |
+tab_closures.apply
+        |
 correlate explicit response or classify lifecycle event
         |
 ApplyTabRemovalHandler
@@ -113,11 +115,12 @@ stay, hand off to predecessor, or exit
 Presenter.observeModel
 ```
 
-The dispatcher consumes an explicit close continuation and requires its exact
-tab identity. A lifecycle message has no continuation. A terminal response for
-a request already retired by canonical reconciliation is consumed and ignored.
-The dispatcher then removes protocol-only fields and calls
-`ApplyTabRemovalHandler`.
+The dispatcher only delegates the decoded message. `tab_closures.apply`
+classifies a zero request ID as a lifecycle fact. Otherwise it consumes the
+continuation, requires its `close_tab` type and verifies the exact tab identity.
+A terminal response for a request already retired by canonical reconciliation
+is consumed and returns `ignored`. The slice removes protocol-only fields and
+calls `ApplyTabRemovalHandler`.
 
 The application handler owns the client policy. It validates the workspace
 transition and commits the canonical fact through `ClientModel.removeTab`.
@@ -133,8 +136,9 @@ If the last tab removed the workspace, the handler forgets its navigation
 bookmark. It starts a workspace handoff when the runtime supplied a canonical
 predecessor. The projection is already empty, so continuations retired by the
 removal cannot block this runtime-directed handoff. With no surviving
-predecessor the handler returns an exit directive to the client loop. The
-dispatcher only maps that directive to process status `0`.
+predecessor the handler returns an exit directive. The slice translates the
+application directive into `applied` or `exit`; the dispatcher only maps
+`exit` to process status `0`.
 
 The handler never requests a draw. `ClientModel.removeTab` advances the tab
 version and advances the active-tab version only when the active identity
@@ -147,6 +151,8 @@ new client rebuilds its disposable model through workspace and tab snapshots.
 
 ## Proof
 
+- `src/frontend/client/tab_closures.zig` proves explicit correlation,
+  lifecycle classification, retired-response handling and wire translation.
 - `src/frontend/client/application/close_tab.zig` proves request ordering,
   failure recovery, commit-before-effects, lifecycle idempotence, workspace
   transition policy and post-commit failures.

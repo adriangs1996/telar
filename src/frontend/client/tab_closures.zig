@@ -16,7 +16,11 @@ const close_tab = client_application.close_tab;
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
 
-pub const RemovalTrigger = close_tab.RemovalTrigger;
+pub const Outcome = enum {
+    applied,
+    ignored,
+    exit,
+};
 
 /// Wires an interactive close to bounded delivery and provisional attachment
 /// recovery.
@@ -60,27 +64,44 @@ pub fn recoveryHandler(client: *Client) close_tab.RecoverCloseTabHandler {
     };
 }
 
-/// Removes request-only protocol data from one canonical removal message.
+/// Consumes one explicit response or applies one autonomous lifecycle removal.
 ///
 /// ```zig
-/// const command = removal(closed, .lifecycle);
+/// const outcome = try apply(client, closed);
 /// ```
-pub fn removal(closed: schema.TabClosed, trigger: RemovalTrigger) close_tab.ApplyTabRemoval {
-    return .{
+pub fn apply(client: *Client, closed: schema.TabClosed) !Outcome {
+    const trigger: close_tab.RemovalTrigger = if (closed.request_id == .none)
+        .lifecycle
+    else requested: {
+        const continuation = client.requests.take(closed.request_id) orelse
+            return error.UnexpectedTabClosed;
+        const expected_location = switch (continuation) {
+            .close_tab => |location| location,
+            .ignored => return .ignored,
+            else => return error.UnexpectedTabClosed,
+        };
+        if (!std.meta.eql(expected_location, closed.location)) {
+            return error.UnexpectedTabClosed;
+        }
+
+        break :requested .requested;
+    };
+
+    var use_case = removalHandler(client);
+    const directive = try use_case.execute(.{
         .location = closed.location,
         .workspace_removed = closed.workspace_closed,
         .previous_workspace = closed.previous_workspace,
         .trigger = trigger,
+    });
+
+    return switch (directive) {
+        .continue_running => .applied,
+        .exit => .exit,
     };
 }
 
-/// Wires a canonical tab removal to request, resource and workspace effects.
-///
-/// ```zig
-/// var handler = removalHandler(client);
-/// const directive = try handler.execute(command);
-/// ```
-pub fn removalHandler(client: *Client) close_tab.ApplyTabRemovalHandler {
+fn removalHandler(client: *Client) close_tab.ApplyTabRemovalHandler {
     return .{
         .model = &client.model,
         .effects = .{

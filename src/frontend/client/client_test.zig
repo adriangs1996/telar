@@ -27,6 +27,7 @@ const pane_openings = @import("pane_openings.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
+const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
@@ -3115,6 +3116,53 @@ test "close tab capacity failure preserves attachment and request state" {
     try std.testing.expectEqualDeep(version_before, client.model.version());
 }
 
+test "an unexpected tab closure is rejected without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    const closed: schema.TabClosed = .{
+        .request_id = @enumFromInt(99),
+        .location = TestHarness.bootstrap_location,
+        .workspace_closed = true,
+    };
+
+    try std.testing.expectError(error.UnexpectedTabClosed, tab_closures.apply(client, closed));
+
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab closure consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const request_id: schema.RequestId = @enumFromInt(90);
+    const version_before = client.model.version();
+    try client.requests.add(request_id, .notification);
+    const closed: schema.TabClosed = .{
+        .request_id = request_id,
+        .location = TestHarness.bootstrap_location,
+        .workspace_closed = true,
+    };
+
+    try std.testing.expectError(error.UnexpectedTabClosed, tab_closures.apply(client, closed));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabClosed, tab_closures.apply(client, closed));
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+}
+
 test "tab close response must match the requested identity" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -3136,7 +3184,7 @@ test "tab close response must match the requested identity" {
 
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
+        tab_closures.apply(client, (try schema.decodeServer(closed)).tab_closed),
     );
     try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
@@ -3170,8 +3218,8 @@ test "late correlated close after lifecycle removal is ignored" {
         .workspace_closed = false,
     });
     try std.testing.expectEqual(
-        @as(?u8, null),
-        try server_messages.handleServerMessage(client, try schema.decodeServer(response)),
+        tab_closures.Outcome.ignored,
+        try tab_closures.apply(client, (try schema.decodeServer(response)).tab_closed),
     );
 
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
@@ -3205,8 +3253,8 @@ test "inactive tab lifecycle closure changes only the tab collection" {
         .workspace_closed = false,
     });
     try std.testing.expectEqual(
-        @as(?u8, null),
-        try server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
+        tab_closures.Outcome.applied,
+        try tab_closures.apply(client, (try schema.decodeServer(closed)).tab_closed),
     );
 
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
@@ -3252,9 +3300,14 @@ test "invalid last tab closure has no semantic or cleanup effects" {
     });
     try std.testing.expectError(
         error.UnexpectedWorkspaceRemoval,
-        server_messages.handleServerMessage(client, try schema.decodeServer(closed)),
+        tab_closures.apply(client, (try schema.decodeServer(closed)).tab_closed),
     );
 
+    try std.testing.expectEqual(@as(usize, 1), client.requests.count);
+    try std.testing.expectError(
+        error.UnexpectedTabClosed,
+        tab_closures.apply(client, (try schema.decodeServer(closed)).tab_closed),
+    );
     try std.testing.expectEqual(@as(usize, 1), client.model.workspace.count);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
