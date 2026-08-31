@@ -58,7 +58,8 @@ The model also exposes bounded semantic queries. Input asks for an
 `AgentNavigationPlan`, attachment capture asks for the focused eligible agent,
 the sidebar animation use case asks whether animation is active, and sound
 validation asks whether an exact identity exists. None of those callers reads
-snapshot storage.
+snapshot storage. [Agent navigation](agent-navigation.md) owns the ordered local
+focus or remote handoff selected from that plan.
 
 ## Effects and presentation
 

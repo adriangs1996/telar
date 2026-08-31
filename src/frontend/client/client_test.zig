@@ -26,6 +26,7 @@ const term = presentation.screen;
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
 const client_actions = @import("actions.zig");
+const agent_navigation = @import("agent_navigation.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const attachment_targets = @import("attachment_targets.zig");
 const client_application = @import("application/root.zig");
@@ -1238,6 +1239,53 @@ test "clicking a sidebar agent hands off directly to its pane" {
             expected_geometry.find(pane_id).?.outer,
             actual_geometry.find(pane_id).?.outer,
         );
+}
+
+test "local agent navigation selects its tab before focusing its pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    try harness.allowTabSelection();
+    const client = harness.client;
+    const agent_pane: schema.PaneId = @enumFromInt(20);
+    const location = try harness.addInactiveTab(@enumFromInt(2), agent_pane);
+    const key: agents.AgentKey = .{
+        .pane_id = agent_pane,
+        .pane_generation = 1,
+    };
+    _ = try client.model.reconcileAgentSnapshot(.{
+        .revision = 1,
+        .agents = &.{.{
+            .key = key,
+            .location = location,
+            .pane_index = 1,
+            .provider = .codex,
+            .status = .working,
+        }},
+    });
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+
+    try std.testing.expectEqual(
+        agent_navigation.Outcome.focused,
+        try agent_navigation.apply(client, key),
+    );
+
+    try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
+    try std.testing.expectEqual(agent_pane, client.model.workspace.activeConst().?.model.layout.focused().?);
+    try std.testing.expectEqual(version.active_tab + 1, client.model.version().active_tab);
+    try std.testing.expectEqual(version.panes, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
+    const snapshot = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(snapshot == .request_tab_snapshot);
+    try std.testing.expectEqualDeep(location, snapshot.request_tab_snapshot.location);
 }
 
 test "tab snapshots commit pane revisions before attaching and presenting" {

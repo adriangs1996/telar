@@ -1594,9 +1594,9 @@ pub const Model = struct {
     /// ```zig
     /// const plan = model.planAgentNavigation(key) orelse return;
     /// ```
-    pub fn planAgentNavigation(model: *Model, key: agents.AgentKey) ?AgentNavigationPlan {
+    pub fn planAgentNavigation(model: *const Model, key: agents.AgentKey) ?AgentNavigationPlan {
         const agent = model.agent_snapshot.find(key) orelse return null;
-        if (model.workspace.tabForPane(key.pane_id)) |tab| {
+        if (model.workspace.tabForPaneConst(key.pane_id)) |tab| {
             const active = model.workspace.activeConst() orelse return null;
 
             return .{ .local = .{

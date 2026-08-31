@@ -31,7 +31,8 @@ shared by configured actions, workspace-list clicks and notification targets.
 `workspace_handoffs` resolves an accepted workspace bookmark to its last
 focused pane. Without a bookmark it targets the workspace identity. A sidebar
 agent can target its pane directly and retains a workspace fallback only when
-the pane belongs to an ordinary workspace.
+the pane belongs to an ordinary workspace. [Agent navigation](agent-navigation.md)
+owns that local-or-remote decision.
 
 `HandleResyncRequiredHandler` also requests a handoff when the runtime reports
 that the projected workspace disappeared. It forgets the closed workspace's

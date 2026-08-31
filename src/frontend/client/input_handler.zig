@@ -4,11 +4,11 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
 const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
+const agent_navigation = @import("agent_navigation.zig");
 const client_actions = @import("actions.zig");
 const client_clock = @import("clock.zig");
 const clipboard_images = @import("clipboard_images.zig");
@@ -19,7 +19,6 @@ const pane_inputs = @import("pane_inputs.zig");
 const pane_pastes = @import("pane_pastes.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const plugin_actions = @import("plugin_actions.zig");
-const request_lifecycle = @import("request_lifecycle.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
@@ -55,32 +54,6 @@ fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
 
 pub fn capturesKeys(handler: *const InputHandler) bool {
     return handler.client.model.name_prompt.active() or handler.client.view.hasAttachmentModal();
-}
-
-fn focusSidebarAgent(handler: *InputHandler, agent_key: agents.AgentKey) !bool {
-    const plan = handler.client.model.planAgentNavigation(agent_key) orelse return false;
-    switch (plan) {
-        .local => |local| {
-            if (local.select_tab) |tab_id| {
-                try client_actions.selectTab(handler.client, .{ .tab_id = tab_id });
-            }
-
-            try client_actions.focusPane(handler.client, .{ .pane_id = local.pane_id });
-            return false;
-        },
-        .handoff => |handoff| {
-            if (request_lifecycle.busy(handler.client)) {
-                return false;
-            }
-
-            _ = try workspace_handoffs.requestPane(
-                handler.client,
-                handoff.pane_id,
-                handoff.fallback_workspace,
-            );
-            return true;
-        },
-    }
 }
 
 fn applyNotificationIntent(handler: *InputHandler, intent: view_mod.NotificationIntent, now_ns: u64) !void {
@@ -253,10 +226,9 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     if (interaction.toggle_workspace_list) {
         _ = try client_actions.apply(handler.client, .toggle_workspace_list);
     }
-    const agent_handoff = if (interaction.focus_agent) |agent_key|
-        try handler.focusSidebarAgent(agent_key)
-    else
-        false;
+    if (interaction.focus_agent) |agent_key| {
+        _ = try agent_navigation.apply(handler.client, agent_key);
+    }
     if (interaction.select_tab) |tab_id| {
         try client_actions.selectTab(handler.client, .{ .tab_id = tab_id });
     }
@@ -277,7 +249,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         try pane_geometry.offerAttached(handler.client, model, handler.client.view.workbench());
     }
     handler.redraw = handler.redraw or interaction.redraw;
-    if (interaction.consumed or agent_handoff or interaction.select_tab != null or
+    if (interaction.consumed or interaction.select_tab != null or
         interaction.focus_agent != null or
         !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
     const wheel_delta: ?i32 = switch (cell_event.kind) {

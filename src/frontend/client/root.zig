@@ -36,6 +36,7 @@ test {
     // The client capability's own files, collected for the suite.
     _ = @import("application/root.zig");
     _ = @import("actions.zig");
+    _ = @import("agent_navigation.zig");
     _ = @import("agent_snapshots.zig");
     _ = @import("agent_sounds.zig");
     _ = @import("attachment_targets.zig");

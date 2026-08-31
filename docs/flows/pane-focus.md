@@ -13,7 +13,7 @@ It allocates no queue and never waits for a runtime response.
 ```text
 native direction / workbench click / notification / sidebar agent
         |
-client_actions.focusPane
+pane_focus handler adapter
         |
 FocusPaneHandler -> ClientModel.focusPane
         |
@@ -33,10 +33,10 @@ presentation_lifecycle.observe -> Presenter
 ```
 
 The source adapter translates its intent into either a stable pane identity or
-a direction before calling `client_actions.focusPane`. `View.handleMouse`
+a direction before constructing `FocusPaneHandler`. `View.handleMouse`
 returns a pane identity and does not mutate the workspace model. Sidebar
-navigation may select the pane's tab first, then sends the same identity
-through this transition.
+navigation uses [Agent navigation](agent-navigation.md) to select the pane's tab
+first, then sends the same identity through this transition.
 
 `ClientModel.focusPane` resolves the target only inside the active tab. A
 missing identity, the already focused identity, a direction without a
