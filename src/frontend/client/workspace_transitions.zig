@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const client_model = @import("model.zig");
 const host_inputs = @import("host_inputs.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_resources = @import("pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
@@ -55,7 +56,7 @@ pub fn release(client: *Client, departure: *const client_model.WorkspaceDepartur
         pane_resources.release(client, pane_id);
     }
 
-    _ = client.model.forgetReportedPaneFocus();
+    _ = pane_focus_reports.retire(client);
 }
 
 /// Activates the root selected by the runtime, then requests both canonical

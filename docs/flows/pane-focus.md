@@ -30,6 +30,12 @@ pane_focus.syncResources
 fullscreen resize
         |
 presentation_lifecycle.observe -> Presenter
+
+canonical tab / workspace transition
+        |
+RetireReportedPaneFocusHandler
+        |
+ClientModel.forgetReportedPaneFocus -> no protocol effect
 ```
 
 The source adapter translates its intent into either a stable pane identity or
@@ -60,14 +66,18 @@ without sending focus-out because the child disabled that protocol.
 An intentional tab detach clears reported focus only when that tab contains
 the reported pane. It emits focus-out before `detach_pane`. Detaching another
 tab leaves the active owner's state untouched. Authoritative pane retirement
-uses `releaseReportedPaneFocus` and sends no byte because the child is already
-gone. Workspace reconciliation may also forget stale reporting state before it
-synchronizes the newly active pane.
+uses `ReleasePaneResourcesHandler` and sends no byte because the child is
+already gone. A canonical tab or workspace transition that invalidates the
+whole reporting context enters `RetireReportedPaneFocusHandler`. That handler
+has no effect port: it can only call `forgetReportedPaneFocus`, so it cannot
+mistake canonical retirement for an intentional focus-out. Repeated retirement
+is a no-op.
 
 `pane_focus_reports` is the only adapter that translates semantic focus-in and
-focus-out into `pane_input`. These bytes do not count as user-input telemetry.
-Close-tab and workspace-handoff preflights reserve the focus-out slot before
-they mutate attachment state.
+focus-out into `pane_input`. Its retirement entrypoint constructs the
+effect-free handler and never touches runtime transport. Report bytes do not
+count as user-input telemetry. Close-tab and workspace-handoff preflights
+reserve the focus-out slot before they mutate attachment state.
 
 ## Geometry and presentation
 
@@ -97,9 +107,10 @@ runtime panes and PTYs continue running.
 - `src/frontend/client/application/focus_pane.zig` proves semantic
   commit-before-effects ordering.
 - `src/frontend/client/application/pane_focus_reporting.zig` proves reporting
-  commit order, focus-out before focus-in, no-op behavior and effect failure.
+  commit order, focus-out before focus-in, effect failure and silent,
+  idempotent canonical retirement.
 - `src/frontend/client/attachment_targets.zig` keeps shelf geometry outside
   focus-reporting policy.
 - `src/frontend/client/client_test.zig` proves protocol order, mode opt-in,
-  exact tab ownership, capacity reservation, mouse ordering and presentation
-  through a substituted runtime socket.
+  exact tab ownership, silent retirement, capacity reservation, mouse ordering
+  and presentation through a substituted runtime socket.

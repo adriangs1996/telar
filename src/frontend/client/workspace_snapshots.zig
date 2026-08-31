@@ -6,6 +6,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_resources = @import("pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
@@ -79,7 +80,7 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
     const active = findActive(client, reconciliation.active) orelse
         return error.UnexpectedWorkspaceReconciliation;
     if (reconciliation.active_tab_changed) {
-        _ = client.model.forgetReportedPaneFocus();
+        _ = pane_focus_reports.retire(client);
         var panes = active.model.paneIterator();
         while (panes.next()) |pane| {
             try client.graphics_store.setPaneVisible(pane.id, true);

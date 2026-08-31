@@ -6,6 +6,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_resources = @import("pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
@@ -198,7 +199,7 @@ fn releaseResources(context: *anyopaque, removal_result: client_model.TabRemoval
         return;
     }
 
-    _ = client.model.forgetReportedPaneFocus();
+    _ = pane_focus_reports.retire(client);
     const active_location = removal_result.active orelse return;
     const active = findTab(&client.model.workspace, active_location) orelse return error.UnexpectedTabRemoval;
 

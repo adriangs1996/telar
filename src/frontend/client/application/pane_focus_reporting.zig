@@ -1,4 +1,4 @@
-//! Application policy for synchronizing child terminal focus reports.
+//! Application policy for child terminal focus reporting and retirement.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -62,6 +62,20 @@ pub const PaneFocusReportingHandler = struct {
         }
 
         return .applied;
+    }
+};
+
+pub const RetireReportedPaneFocusHandler = struct {
+    model: *client_model.Model,
+
+    /// Forgets focus reporting after a canonical transition invalidates its
+    /// owner. This use case has no delivery port and cannot emit focus-out.
+    ///
+    /// ```zig
+    /// _ = handler.execute();
+    /// ```
+    pub fn execute(handler: *RetireReportedPaneFocusHandler) Outcome {
+        return if (handler.model.forgetReportedPaneFocus()) .applied else .unchanged;
     }
 };
 
@@ -225,4 +239,20 @@ test "PaneFocusReportingHandler clears one reporting owner exactly once" {
     try std.testing.expectEqual(@as(usize, 1), capture.delivery_count);
     try std.testing.expect(capture.deliveries[0].direction == .focus_out);
     try std.testing.expect(capture.all_observed_commit);
+}
+
+test "RetireReportedPaneFocusHandler silently forgets one stale owner" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    testing.model.workspace.findPane(testing.first).?.input_modes.focus_events = true;
+    _ = testing.model.syncReportedPaneFocus().?;
+    const version = testing.model.version();
+    var handler: RetireReportedPaneFocusHandler = .{ .model = testing.model };
+
+    try std.testing.expect(handler.execute() == .applied);
+    try std.testing.expect(handler.execute() == .unchanged);
+
+    try std.testing.expect(testing.model.reportedPaneFocus() == null);
+    try std.testing.expectEqual(testing.first, testing.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqualDeep(version, testing.model.version());
 }

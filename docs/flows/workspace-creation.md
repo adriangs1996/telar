@@ -98,7 +98,8 @@ reported-focus and graphics resources for every retired pane, activate the
 confirmed root and request canonical workspace and tab snapshots.
 `ClientModel.releaseReportedPaneFocus` forgets the exact retired owner without
 sending focus-out or detach for runtime attachments that were already replaced.
-Effect failure preserves the committed model.
+`RetireReportedPaneFocusHandler` then removes any remaining stale reporting
+context before root activation. Effect failure preserves the committed model.
 
 Neither creation use case invalidates the view nor requests a draw. The client
 runtime publishes `ClientModel.Version` to `Presenter`; the presenter compares

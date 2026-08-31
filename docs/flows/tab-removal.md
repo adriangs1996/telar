@@ -128,11 +128,13 @@ transition and commits the canonical fact through `ClientModel.removeTab`.
 Requested removals must still exist. Repeated or stale lifecycle facts are
 idempotent and only retire obsolete continuations.
 
-After a commit, the handler retires requests for the removed tab and gives each
-pane identity to `ReleasePaneResourcesHandler`. Removing
-an inactive tab leaves the active report owner untouched. Removing the active
-tab exposes its successor, synchronizes attachment geometry and focus
-reporting, and requests that tab's canonical snapshot.
+After a commit, the handler retires requests for the removed tab and gives
+each pane identity to `ReleasePaneResourcesHandler`. Removing an inactive tab
+leaves the active report owner untouched. Removing the active tab retires any
+remaining stale reporting context through
+`RetireReportedPaneFocusHandler`, exposes its successor, synchronizes
+attachment geometry and focus reporting, and requests that tab's canonical
+snapshot. Canonical retirement emits no focus-out.
 
 If the last tab removed the workspace, the handler forgets its navigation
 bookmark. It starts a workspace handoff when the runtime supplied a canonical

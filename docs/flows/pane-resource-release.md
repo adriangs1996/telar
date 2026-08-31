@@ -49,7 +49,9 @@ repeated cleanup schedules no frame. This handler never schedules one.
 
 Authoritative retirement forgets reported focus without sending focus-out. The
 child has already exited or the client attachment is being discarded, so no
-valid receiver remains.
+valid receiver remains. This handler matches one exact pane identity. A
+canonical tab or workspace transition that invalidates the entire reporting
+context uses the separate, effect-free `RetireReportedPaneFocusHandler`.
 
 ## Bounds and proof
 

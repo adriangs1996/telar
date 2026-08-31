@@ -1,4 +1,4 @@
-//! Adapts model-owned pane focus reporting to runtime pane input.
+//! Adapts model-owned pane focus reporting and canonical retirement.
 
 const client_application = @import("application/root.zig");
 
@@ -28,6 +28,20 @@ pub fn clear(client: *Client) !Outcome {
     var use_case = handler(client);
 
     return use_case.execute(.clear);
+}
+
+/// Retires stale reported focus after a canonical transition. No child input
+/// can be emitted by this use case.
+///
+/// ```zig
+/// _ = retire(client);
+/// ```
+pub fn retire(client: *Client) Outcome {
+    var use_case: pane_focus_reporting.RetireReportedPaneFocusHandler = .{
+        .model = &client.model,
+    };
+
+    return use_case.execute();
 }
 
 fn handler(client: *Client) pane_focus_reporting.PaneFocusReportingHandler {

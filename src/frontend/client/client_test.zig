@@ -47,6 +47,7 @@ const notification_flow = @import("notifications.zig");
 const pane_clipboards = @import("pane_clipboards.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_openings = @import("pane_openings.zig");
 const presentation_lifecycle = @import("presentation_lifecycle.zig");
@@ -2353,6 +2354,25 @@ test "focus reporting emits focus-in only after the pane opts in" {
     const message = try harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", message.pane_input.bytes);
+}
+
+test "canonical reported focus retirement is silent and idempotent" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    _ = client.model.syncReportedPaneFocus().?;
+    const version = client.model.version();
+    const outbox_len = client.runtime_transport.outbox.len;
+
+    try std.testing.expect(pane_focus_reports.retire(client) == .applied);
+    try std.testing.expect(pane_focus_reports.retire(client) == .unchanged);
+
+    try std.testing.expect(client.model.reportedPaneFocus() == null);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
 }
 
 test "pane focus commits before reports resize and presentation" {

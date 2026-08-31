@@ -54,6 +54,8 @@ pane, client-owned layout and every pane identity in fixed-capacity values,
 then advances the affected workspace, tab, active-tab and pane revisions once.
 Post-commit effects copy the bookmark into navigation history and give every
 retired pane identity to `ReleasePaneResourcesHandler`.
+`RetireReportedPaneFocusHandler` then removes any remaining stale reporting
+context without emitting child input.
 
 The use case neither invalidates the view nor requests a draw. `client_events`
 publishes `ClientModel.Version` to `Presenter`, which presents the empty model

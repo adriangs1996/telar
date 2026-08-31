@@ -71,10 +71,11 @@ a presentation revision.
 The result holds at most 64 removed tabs and 4096 removed pane IDs. The
 reconciliation allocates no unbounded storage. After the commit, the client
 adapter ignores requests for removed tabs and gives each pane identity to
-`ReleasePaneResourcesHandler`. It forgets stale report
-ownership before synchronizing the new active tab and requests a tab snapshot
-when needed. An otherwise current active tab re-offers its size to recover a
-lost geometry lease.
+`ReleasePaneResourcesHandler`. When the active tab changes,
+`RetireReportedPaneFocusHandler` silently forgets the previous reporting
+context before the adapter synchronizes the new active tab. The adapter then
+requests a tab snapshot when needed. An otherwise current active tab re-offers
+its size to recover a lost geometry lease.
 
 The resource effects still run for an identical workspace snapshot because a
 resync may be about attachments or geometry. The presenter receives only model
