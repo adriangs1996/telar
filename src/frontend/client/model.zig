@@ -20,6 +20,7 @@ pub const Version = struct {
     workspace: u64 = 0,
     workspace_list: u64 = 0,
     agents: u64 = 0,
+    proxy_status: u64 = 0,
     system_metrics: u64 = 0,
     tabs: u64 = 0,
     active_tab: u64 = 0,
@@ -153,6 +154,12 @@ pub const WorkspaceListCommit = struct {
     runtime_revision: u64,
     count: usize,
     workspace_list_revision: u64,
+};
+
+pub const ProxyStatusCommit = struct {
+    previous: bool,
+    active: bool,
+    proxy_status_revision: u64,
 };
 
 pub const SystemMetrics = struct {
@@ -491,6 +498,8 @@ pub const Model = struct {
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
     agent_revision: u64 = 0,
+    proxy_tls_active: bool = false,
+    proxy_status_revision: u64 = 0,
     system_metrics: ?SystemMetrics = null,
     system_metrics_revision: u64 = 0,
     tabs_revision: u64 = 0,
@@ -537,6 +546,7 @@ pub const Model = struct {
             .workspace = model.workspace_revision,
             .workspace_list = model.workspace_list_revision,
             .agents = model.agent_revision,
+            .proxy_status = model.proxy_status_revision,
             .system_metrics = model.system_metrics_revision,
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
@@ -672,6 +682,37 @@ pub const Model = struct {
     /// ```
     pub fn workspaceAtPosition(model: *const Model, position: usize) ?schema.WorkspaceId {
         return model.workspace_list_snapshot.workspaceAtPosition(position);
+    }
+
+    /// Commits one changed runtime proxy state. Repeated values produce no
+    /// effect or presentation work.
+    ///
+    /// ```zig
+    /// const commit = model.reconcileProxyStatus(true) orelse return;
+    /// ```
+    pub fn reconcileProxyStatus(model: *Model, active: bool) ?ProxyStatusCommit {
+        if (model.proxy_tls_active == active) {
+            return null;
+        }
+
+        const previous = model.proxy_tls_active;
+        model.proxy_tls_active = active;
+        model.proxy_status_revision +%= 1;
+
+        return .{
+            .previous = previous,
+            .active = active,
+            .proxy_status_revision = model.proxy_status_revision,
+        };
+    }
+
+    /// Returns whether the runtime's TLS interception service is active.
+    ///
+    /// ```zig
+    /// if (model.proxyTlsActive()) renderProxyBadge();
+    /// ```
+    pub fn proxyTlsActive(model: *const Model) bool {
+        return model.proxy_tls_active;
     }
 
     /// Commits one newer host-health replica. Invalid newer values preserve
@@ -3532,6 +3573,33 @@ test "workspace list reconciliation owns navigation state and one isolated revis
     }));
     try std.testing.expectEqual(Version{ .workspace_list = 1 }, model.version());
     try std.testing.expectEqualStrings("telar", model.workspaceListSnapshot().nameAt(0));
+}
+
+test "proxy status reconciliation commits only changed runtime state" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    try std.testing.expect(model.reconcileProxyStatus(false) == null);
+    try std.testing.expect(!model.proxyTlsActive());
+    try std.testing.expectEqualDeep(Version{}, model.version());
+
+    const enabled = model.reconcileProxyStatus(true).?;
+
+    try std.testing.expect(!enabled.previous);
+    try std.testing.expect(enabled.active);
+    try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
+    try std.testing.expect(model.proxyTlsActive());
+    try std.testing.expectEqual(Version{ .proxy_status = 1 }, model.version());
+    try std.testing.expect(model.reconcileProxyStatus(true) == null);
+    try std.testing.expectEqual(Version{ .proxy_status = 1 }, model.version());
+
+    const disabled = model.reconcileProxyStatus(false).?;
+
+    try std.testing.expect(disabled.previous);
+    try std.testing.expect(!disabled.active);
+    try std.testing.expectEqual(@as(u64, 2), disabled.proxy_status_revision);
+    try std.testing.expect(!model.proxyTlsActive());
+    try std.testing.expectEqual(Version{ .proxy_status = 2 }, model.version());
 }
 
 test "system metrics reconciliation owns the latest replica and one isolated revision" {

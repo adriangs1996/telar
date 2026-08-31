@@ -31,6 +31,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -47,6 +48,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -63,6 +65,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -78,6 +81,7 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -3393,17 +3397,55 @@ test "runtime notifications and delivery failures reach the toasts" {
     try harness.settle();
 }
 
-test "proxy status flips the interception indicator once" {
+test "proxy status commits before announcement and presenter-owned projection" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
+    try harness.bootstrap();
     const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
-    const status = try schema.encodeProxyStatus(&payload, .{ .active = true });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(status));
-    try std.testing.expect(client.view.proxy_tls_active);
-    try harness.settle();
+    const enabled = try schema.encodeProxyStatus(&payload, .{ .active = true });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(enabled));
+
+    try std.testing.expect(client.model.proxyTlsActive());
+    try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
+    try std.testing.expectEqual(version_before.proxy_status, client.presenter.observed_model_version.proxy_status);
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
+    try std.testing.expectEqualStrings("TLS interception active", client.view.notifications.itemAt(0).?.title());
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(enabled));
+
+    try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before + 2, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    const badge_index = @as(usize, client.presenter.screen.front.w) - 2;
+    try std.testing.expectEqualStrings("\u{26e8}", client.presenter.screen.front.cells[badge_index].text());
+
+    const pending_updates_after_enabled = client.presenter.pending_updates;
+    const disabled = try schema.encodeProxyStatus(&payload, .{ .active = false });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(disabled));
+
+    try std.testing.expect(!client.model.proxyTlsActive());
+    try std.testing.expectEqual(version_before.proxy_status + 2, client.model.version().proxy_status);
+    try std.testing.expectEqual(pending_updates_after_enabled + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u8, 2), client.view.notifications.count);
+    try std.testing.expectEqualStrings("TLS interception stopped", client.view.notifications.itemAt(0).?.title());
+
+    try client.observeModel();
+    try harness.settleModelPresentation();
+
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", client.presenter.screen.front.cells[badge_index].text()));
 }
 
 test "system metrics commit before presenter-owned projection" {

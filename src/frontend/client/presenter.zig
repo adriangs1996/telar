@@ -131,6 +131,8 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.workspace_list;
     const agents_changed = presenter.presented_model_version.agents !=
         presenter.observed_model_version.agents;
+    const proxy_status_changed = presenter.presented_model_version.proxy_status !=
+        presenter.observed_model_version.proxy_status;
     const system_metrics_changed = presenter.presented_model_version.system_metrics !=
         presenter.observed_model_version.system_metrics;
     const tabs_changed = presenter.presented_model_version.tabs !=
@@ -170,8 +172,9 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     if (prompt_changed) {
         client.view.clearHover();
     }
-    if (workspace_changed or workspace_list_changed or agents_changed or system_metrics_changed or tabs_changed or active_tab_changed or
-        panes_changed or pane_metadata_changed or chrome_changed or prompt_changed or
+    if (workspace_changed or workspace_list_changed or agents_changed or
+        proxy_status_changed or system_metrics_changed or tabs_changed or
+        active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or prompt_changed or
         copy_status_changed)
     {
         client.view.invalidate();
@@ -350,6 +353,7 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
         .agents = client.model.agentSnapshot(),
         .workspaces = client.model.workspaceListSnapshot(),
         .prompt = client.model.name_prompt.current(),
+        .proxy_tls_active = client.model.proxyTlsActive(),
         .system_metrics = client.model.systemMetrics(),
         .status_mode = client.statusMode(),
         .force = composed.full,

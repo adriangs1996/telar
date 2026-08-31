@@ -60,6 +60,7 @@ pub const RenderInput = struct {
     agents: *const agents.Snapshot = &empty_agent_snapshot,
     workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
+    proxy_tls_active: bool = false,
     system_metrics: ?client_model.SystemMetrics = null,
     status_mode: widgets.status_bar.Mode = .normal,
     force: bool = false,
@@ -90,7 +91,6 @@ pub const State = struct {
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
-    proxy_tls_active: bool = false,
     notifications: widgets.notification.Center = .{},
     toast_overlay_drawn: bool = false,
     kitty_sidebar: kitty.KittySidebarRenderer,
@@ -206,12 +206,6 @@ pub const State = struct {
         }
 
         state.hovered = null;
-        state.dirty = true;
-    }
-
-    pub fn setProxyTlsActive(state: *State, active: bool) void {
-        if (state.proxy_tls_active == active) return;
-        state.proxy_tls_active = active;
         state.dirty = true;
     }
 
@@ -553,7 +547,7 @@ pub const State = struct {
             .sidebar_transparent = hybrid,
             .sidebar_rounded_focus = focused_card_color != null,
             .sidebar_animation_frame = state.sidebar_animation_frame,
-            .proxy_tls_active = state.proxy_tls_active,
+            .proxy_tls_active = input.proxy_tls_active,
             .system_metrics = if (input.system_metrics) |metrics| .{
                 .cpu_percent = metrics.cpu_percent,
                 .memory_used_decigib = metrics.memory_used_decigib,

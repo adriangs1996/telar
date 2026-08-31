@@ -421,6 +421,36 @@ test "sidebar toggle publishes the matching Nerd Font action icon" {
     try std.testing.expectEqual(ui.icons.Icon.sidebar_expand, plan.slice()[0].icon);
 }
 
+test "proxy badge reserves the right edge before workspace navigation" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+    };
+    const workspaces: workspace_list.Snapshot = .{};
+
+    render(&context, .{
+        .area = buffer.area(),
+        .sidebar_visible = true,
+        .location = null,
+        .workspace_name = "telar",
+        .workspaces = &workspaces,
+        .collapsed = false,
+        .proxy_tls_active = true,
+    });
+
+    const badge_x = @as(usize, buffer.w) - 2;
+    try std.testing.expectEqualStrings(
+        ui.icons.Icon.proxy_active.unicodeGlyph(),
+        buffer.cells[badge_x].text(),
+    );
+    try std.testing.expect(hits.at(@intCast(badge_x), 0) == null);
+}
+
 test "workspace navigation is centered independently of the sidebar toggle" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();

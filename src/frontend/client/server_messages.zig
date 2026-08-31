@@ -23,6 +23,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
 const pane_metadata = @import("pane_metadata.zig");
 const pane_splits = @import("pane_splits.zig");
+const proxy_status = @import("proxy_status.zig");
 const system_metrics = @import("system_metrics.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -110,7 +111,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .resync_required => |required| return handleResyncMessage(client, required),
         .runtime_stopping => return 0,
         .history_results => return error.UnexpectedHistoryResults,
-        .proxy_status => |status| try handleProxyStatus(client, status),
+        .proxy_status => |status| _ = try proxy_status.apply(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),
         .workspace_list => |list| _ = try workspace_lists.apply(client, list),
@@ -195,24 +196,6 @@ fn handleResyncMessage(client: *Client, required: schema.ResyncRequired) !?u8 {
         },
     }
     return null;
-}
-
-/// The proxy interception indicator, announced once per flip.
-fn handleProxyStatus(client: *Client, status: schema.ProxyStatus) !void {
-    if (client.view.proxy_tls_active == status.active) return;
-    client.view.setProxyTlsActive(status.active);
-    try client.notify(.{
-        .level = if (status.active) .warning else .info,
-        .title = if (status.active) "TLS interception active" else "TLS interception stopped",
-        .message = if (status.active)
-            "Agent network traffic is being observed"
-        else
-            "Agent network traffic is no longer observed",
-        .duration_ns = if (status.active)
-            7 * std.time.ns_per_s
-        else
-            widgets.notification.default_duration_ns,
-    });
 }
 
 /// An open-pane reply: routed by the continuation that asked for it.

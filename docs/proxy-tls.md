@@ -21,8 +21,8 @@ return {
 }
 ```
 
-The bottom status bar displays `TLS PROXY` for the entire time interception is
-active, including while a pane is fullscreen.
+The top workspace bar displays an interception badge for the entire time the
+proxy is active, including while a pane is fullscreen.
 
 ## Traffic path and trust
 

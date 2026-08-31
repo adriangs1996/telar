@@ -50,6 +50,7 @@ test {
     _ = @import("pane_splits.zig");
     _ = @import("pane_viewports.zig");
     _ = @import("presenter.zig");
+    _ = @import("proxy_status.zig");
     _ = @import("server_messages.zig");
     _ = @import("sidebar_toggles.zig");
     _ = @import("system_metrics.zig");
