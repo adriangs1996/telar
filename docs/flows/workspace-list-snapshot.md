@@ -36,7 +36,9 @@ the client adapter runs.
 
 `workspace_lists.apply` translates borrowed wire entries into domain inputs on
 the stack. `ReconcileWorkspaceListHandler` delegates the transaction to
-`ClientModel`; neither layer references `View`, `Presenter` or input routing.
+`ClientModel` and returns the complete `stale`, `rejected` or `applied`
+application outcome; neither layer references `View`, `Presenter` or input
+routing.
 
 ## Client ownership
 
@@ -73,8 +75,10 @@ snapshot.
 ## Failure and recovery
 
 A wire-valid list can still exceed the client's 16 KiB aggregate path budget.
-The adapter classifies that model error as a rejected snapshot and leaves the
-previous replica and model version intact. Runtime delivery continues with
+The application handler classifies that error, along with every other bounded
+snapshot validation failure, as a rejected outcome and leaves the previous
+replica and model version intact. It propagates any unclassified error instead
+of letting the adapter silently discard it. Runtime delivery continues with
 later repository revisions, each of which gets a fresh reconciliation attempt.
 A reconnect constructs a new disposable client model and receives the current
 runtime revision through a fresh delivery cursor.
@@ -86,7 +90,7 @@ runtime revision through a fresh delivery cursor.
 - `src/frontend/client/model.zig` proves sole ownership, bounded navigation
   queries and isolated version publication.
 - `src/frontend/client/application/workspace_list_snapshot.zig` proves the use
-  case changes only committed client state.
+  case owns outcome classification and changes only committed client state.
 - `src/frontend/client/client_test.zig` proves protocol reconciliation happens
   before presentation, emits no direct draw and reaches the top bar only after
   presenter observation.
