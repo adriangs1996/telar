@@ -15,7 +15,9 @@ No borrowed label crosses the asynchronous boundary.
 ```text
 name prompt
         |
-InputHandler.submitTabRename
+InputHandler -> name_prompts.handleInput
+        |
+NamePromptHandler -> name_prompts submit effect
         |
 RequestRenameTabHandler
         |
@@ -33,8 +35,8 @@ adapter callback.
 
 The adapter allocates the request identity, records the expected location and
 copies the label into the bounded outbox. Local enqueue does not mutate the
-model or advance a version. `InputHandler` closes the prompt only after the
-adapter accepts the request into the outbox.
+canonical tab replica. `NamePromptHandler` closes the model-owned prompt only
+after the request adapter accepts it into the outbox.
 
 ## Runtime command
 
@@ -102,6 +104,10 @@ replays a rename.
 
 - `src/frontend/client/application/rename_tab.zig` proves local validation,
   gating, exact target resolution, delivery failure and canonical confirmation.
+- `src/frontend/client/name_prompt.zig`,
+  `src/frontend/client/application/name_prompt.zig` and
+  `src/frontend/client/name_prompts.zig` prove editor ownership, submit ordering
+  and prompt retention.
 - `src/frontend/client/outbox.zig` proves bounded storage and ownership of
   queued label bytes.
 - `src/frontend/workspace/tabs.zig` proves canonical label validation and

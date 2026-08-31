@@ -14,17 +14,15 @@ const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_splits = @import("pane_splits.zig");
+const name_prompts = @import("name_prompts.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
-const tab_renames = @import("tab_renames.zig");
 const tab_selections = @import("tab_selections.zig");
-const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_list_toggles = @import("workspace_list_toggles.zig");
-const workspace_renames = @import("workspace_renames.zig");
 const action_mod = input_capability.action;
 const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
@@ -60,7 +58,7 @@ fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
 }
 
 pub fn capturesKeys(handler: *const InputHandler) bool {
-    return handler.client.mode == .prompt or handler.client.view.hasAttachmentModal();
+    return handler.client.model.name_prompt.active() or handler.client.view.hasAttachmentModal();
 }
 
 fn selectTab(handler: *InputHandler, target: tab_selections.Target) !void {
@@ -121,8 +119,12 @@ fn focusSidebarAgent(
 
 pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
     if (bytes.len == 0) return;
+    if (handler.client.model.name_prompt.active()) {
+        _ = try name_prompts.handleInput(handler.client, bytes);
+        return;
+    }
+
     switch (handler.client.mode) {
-        .prompt => try handler.promptInput(bytes),
         .copy => {},
         .normal => {
             const model = handler.activeModel() orelse return;
@@ -133,34 +135,22 @@ pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
     }
 }
 
-/// The prompt mode's byte sink. The view edits the text; a cancel inside
-/// the editor is reconciled back into the mode here, the one place both
-/// are observed together.
-fn promptInput(handler: *InputHandler, bytes: []const u8) !void {
-    switch (handler.client.view.handleNameInput(bytes)) {
-        .editing => {},
-        .cancelled => handler.client.mode = .normal,
-        .submitted => |name| if (handler.client.view.creatingWorkspace())
-            try handler.submitWorkspaceCreate(name)
-        else if (handler.client.view.renamedWorkspace() != null)
-            try handler.submitWorkspaceRename(name)
-        else
-            try handler.submitTabRename(name),
-    }
-    handler.redraw = true;
-}
-
 pub fn key(handler: *InputHandler, value: keybind.Key) !void {
     if (handler.client.view.hasAttachmentModal()) {
         if (value.code == .escape) _ = handler.client.view.closeAttachmentModal();
         handler.redraw = true;
         return;
     }
+    if (handler.client.model.name_prompt.active()) {
+        var editing_bytes: [32]u8 = undefined;
+        _ = try name_prompts.handleInput(
+            handler.client,
+            try input_mod.encodeKey(&editing_bytes, value, .{}),
+        );
+        return;
+    }
+
     switch (handler.client.mode) {
-        .prompt => {
-            var editing_bytes: [32]u8 = undefined;
-            try handler.promptInput(try input_mod.encodeKey(&editing_bytes, value, .{}));
-        },
         .copy => try handler.copyModeKey(value),
         .normal => {
             const model = handler.activeModel() orelse return;
@@ -196,8 +186,12 @@ fn sendPaste(handler: *InputHandler, text: []const u8) !void {
 
 pub fn pasteStart(handler: *InputHandler) !void {
     if (handler.client.view.hasAttachmentModal()) return;
+    if (handler.client.model.name_prompt.active()) {
+        _ = try name_prompts.handleInput(handler.client, "\x1b[200~");
+        return;
+    }
+
     switch (handler.client.mode) {
-        .prompt => try handler.promptInput("\x1b[200~"),
         .copy => {},
         .normal => {
             const model = handler.activeModel() orelse return;
@@ -212,8 +206,12 @@ pub fn pasteStart(handler: *InputHandler) !void {
 
 pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
     if (handler.client.view.hasAttachmentModal()) return;
+    if (handler.client.model.name_prompt.active()) {
+        _ = try name_prompts.handleInput(handler.client, text);
+        return;
+    }
+
     switch (handler.client.mode) {
-        .prompt => try handler.promptInput(text),
         .copy => {},
         .normal => {
             const pane_id = handler.client.paste_pane orelse return;
@@ -225,8 +223,12 @@ pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
 
 pub fn pasteEnd(handler: *InputHandler) !void {
     if (handler.client.view.hasAttachmentModal()) return;
+    if (handler.client.model.name_prompt.active()) {
+        _ = try name_prompts.handleInput(handler.client, "\x1b[201~");
+        return;
+    }
+
     switch (handler.client.mode) {
-        .prompt => try handler.promptInput("\x1b[201~"),
         .copy => {},
         .normal => {
             const pane_id = handler.client.paste_pane orelse return;
@@ -344,6 +346,10 @@ fn copyModeKey(handler: *InputHandler, pressed: keybind.Key) !void {
 
 pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     if (comptime diagnostics.enabled) handler.client.metrics.mouse_events += 1;
+    if (handler.client.model.name_prompt.active()) {
+        return;
+    }
+
     const cell_size = handler.client.capabilities.cellSize(
         handler.client.view.scratch.w,
         handler.client.view.scratch.h,
@@ -377,10 +383,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     }
     if (interaction.rename_tab) |tab_id| {
         if (handler.client.mode == .normal) {
-            if (handler.client.model.workspace.find(tab_id)) |tab| {
-                handler.client.beginTabRenamePrompt(tab_id, tab.labelSlice());
-                handler.redraw = true;
-            }
+            _ = name_prompts.beginTabRename(handler.client, tab_id);
         }
     }
     if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
@@ -494,7 +497,7 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
 }
 
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
-    if (handler.client.mode == .prompt) return .continue_routing;
+    if (handler.client.model.name_prompt.active()) return .continue_routing;
     switch (value) {
         .lua_callback => |reference| {
             const generation = handler.client.lua_generation orelse
@@ -604,23 +607,14 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
         .toggle_pane_fullscreen => try handler.togglePaneFullscreen(),
         .toggle_sidebar => try handler.toggleSidebar(),
         .toggle_workspace_list => handler.toggleWorkspaceList(),
-        .new_workspace => try handler.beginWorkspaceCreate(),
-        .rename_workspace => if (handler.client.model.workspace.workspace) |workspace| {
-            handler.client.beginWorkspaceRenamePrompt(
-                workspace,
-                handler.client.model.workspace.workspaceName(),
-            );
-            handler.redraw = true;
-        },
+        .new_workspace => _ = name_prompts.beginWorkspaceCreate(handler.client),
+        .rename_workspace => _ = name_prompts.beginWorkspaceRename(handler.client),
         .select_workspace => |position| try handler.selectWorkspacePosition(position),
         .close_pane => try handler.closeFocused(),
         .new_tab => try handler.createTab(),
         .select_tab_offset => |offset| try handler.selectTab(.{ .offset = offset }),
         .select_tab => |position| try handler.selectTab(.{ .position = position }),
-        .rename_tab => if (handler.client.model.workspace.active()) |tab| {
-            handler.client.beginTabRenamePrompt(tab.location.tab_id, tab.labelSlice());
-            handler.redraw = true;
-        },
+        .rename_tab => _ = name_prompts.beginActiveTabRename(handler.client),
         .close_tab => try handler.closeTab(),
         .move_tab => |direction| try handler.moveTab(switch (direction) {
             .previous => .previous,
@@ -713,37 +707,6 @@ fn createTab(handler: *InputHandler) !void {
     _ = try use_case.execute(.{});
 }
 
-fn beginWorkspaceCreate(handler: *InputHandler) !void {
-    const client = handler.client;
-    if (client.requests.count != 0) return;
-    if (client.model.planWorkspaceCreation() == null) return;
-    client.beginWorkspaceCreatePrompt();
-    handler.redraw = true;
-}
-
-fn submitWorkspaceCreate(handler: *InputHandler, name: []const u8) !void {
-    const client = handler.client;
-    if (!client.view.creatingWorkspace()) return;
-    var use_case = workspace_creations.requestHandler(client);
-    if (!try use_case.execute(.{ .name = name })) return;
-
-    client.finishNamePrompt();
-}
-
-fn submitWorkspaceRename(handler: *InputHandler, name: []const u8) !void {
-    const client = handler.client;
-    const workspace = client.view.renamedWorkspace() orelse return;
-    var use_case = workspace_renames.requestHandler(client);
-    if (!try use_case.execute(.{
-        .workspace = workspace,
-        .name = name,
-    })) {
-        return;
-    }
-
-    client.finishNamePrompt();
-}
-
 fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
     const workspaces = &handler.client.view.workspace_list;
     const workspace = workspaces.workspaceAtPosition(position) orelse return;
@@ -759,16 +722,6 @@ fn closeTab(handler: *InputHandler) !void {
 fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
     var use_case = tab_moves.requestHandler(handler.client);
     _ = try use_case.execute(.{ .direction = direction });
-}
-
-fn submitTabRename(handler: *InputHandler, label: []const u8) !void {
-    const tab_id = handler.client.view.renamedTab() orelse return;
-    var use_case = tab_renames.requestHandler(handler.client);
-    if (!try use_case.execute(.{ .tab_id = tab_id, .label = label })) {
-        return;
-    }
-
-    handler.client.finishNamePrompt();
 }
 
 test "only an unmodified control-v triggers local image inspection" {

@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const attachments = @import("../attachments/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
+const name_prompt = @import("name_prompt.zig");
 const diff = presentation.diff;
 const icon_graphics = @import("../graphics/root.zig").icons;
 const kitty = @import("../graphics/root.zig").kitty;
@@ -37,8 +38,8 @@ pub const Interaction = struct {
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
     focus_agent: ?widgets.sidebar.AgentKey = null,
-    /// Intent only: starting the rename prompt is a mode change, which the
-    /// client owns; the view never enters the prompt on its own.
+    /// Intent only: the client model owns prompt creation; the view never
+    /// enters the editor on its own.
     rename_tab: ?schema.TabId = null,
     notification_target: ?widgets.notification.Target = null,
 };
@@ -46,6 +47,15 @@ pub const Interaction = struct {
 pub const RenderStats = struct {
     scanned: usize = 0,
     damaged: usize = 0,
+};
+
+pub const RenderInput = struct {
+    tabs: ?*const tabs_mod.Model = null,
+    model: *multiplexer.Model,
+    prompt: ?*name_prompt.Prompt = null,
+    status_mode: widgets.status_bar.Mode = .normal,
+    force: bool = false,
+    diagnostic: ?[]const u8 = null,
 };
 
 const GraphicsPlan = struct {
@@ -59,22 +69,6 @@ const GraphicsPlan = struct {
     modal_area: ui.Rect = .{},
 };
 
-pub const NameInput = union(enum) {
-    editing,
-    cancelled,
-    submitted: []const u8,
-};
-
-const NamePrompt = struct {
-    target: union(enum) {
-        tab: schema.TabId,
-        create_workspace,
-        rename_workspace: schema.WorkspaceLocation,
-    },
-    field: widgets.tab_rename.Field,
-    pasting: bool = false,
-};
-
 pub const State = struct {
     scratch: ui.Buffer,
     regions: Regions,
@@ -83,7 +77,6 @@ pub const State = struct {
     hits: Hits = .{},
     sidebar_requested: bool = true,
     hovered: ?Action = null,
-    name_prompt: ?NamePrompt = null,
     sidebar_snapshot: widgets.sidebar.Snapshot = .{},
     sidebar: widgets.sidebar.State = .{},
     sidebar_animation_frame: u8 = 0,
@@ -197,6 +190,20 @@ pub const State = struct {
     }
 
     pub fn invalidate(state: *State) void {
+        state.dirty = true;
+    }
+
+    /// Clears stale pointer hover when a modal input surface changes routing.
+    ///
+    /// ```zig
+    /// view.clearHover();
+    /// ```
+    pub fn clearHover(state: *State) void {
+        if (state.hovered == null) {
+            return;
+        }
+
+        state.hovered = null;
         state.dirty = true;
     }
 
@@ -427,123 +434,8 @@ pub const State = struct {
         return state.graphicalModalCovers(state.graphics_plan.modal_area);
     }
 
-    pub fn beginTabRename(state: *State, tab_id: schema.TabId, label: []const u8) void {
-        state.name_prompt = .{ .target = .{ .tab = tab_id }, .field = .init(label) };
-        state.hovered = null;
-        state.dirty = true;
-    }
-
-    pub fn beginWorkspaceCreate(state: *State) void {
-        state.name_prompt = .{ .target = .create_workspace, .field = .init("") };
-        state.hovered = null;
-        state.dirty = true;
-    }
-
-    pub fn beginWorkspaceRename(
-        state: *State,
-        workspace: schema.WorkspaceLocation,
-        name: []const u8,
-    ) void {
-        const editable_name = if (name.len <= schema.max_tab_label_bytes) name else "";
-        state.name_prompt = .{
-            .target = .{ .rename_workspace = workspace },
-            .field = .init(editable_name),
-        };
-        state.hovered = null;
-        state.dirty = true;
-    }
-
-    pub fn renamedTab(state: *const State) ?schema.TabId {
-        const prompt = state.name_prompt orelse return null;
-        return switch (prompt.target) {
-            .tab => |tab_id| tab_id,
-            .create_workspace, .rename_workspace => null,
-        };
-    }
-
-    pub fn creatingWorkspace(state: *const State) bool {
-        const prompt = state.name_prompt orelse return false;
-        return std.meta.activeTag(prompt.target) == .create_workspace;
-    }
-
-    pub fn renamedWorkspace(state: *const State) ?schema.WorkspaceLocation {
-        const prompt = state.name_prompt orelse return null;
-        return switch (prompt.target) {
-            .rename_workspace => |workspace| workspace,
-            .tab, .create_workspace => null,
-        };
-    }
-
-    pub fn hasNamePrompt(state: *const State) bool {
-        return state.name_prompt != null;
-    }
-
-    fn namePromptKind(state: *const State) widgets.tab_rename.Kind {
-        const prompt = state.name_prompt orelse return .rename_tab;
-        return switch (prompt.target) {
-            .tab => .rename_tab,
-            .create_workspace => .create_workspace,
-            .rename_workspace => .rename_workspace,
-        };
-    }
-
-    pub fn handleNameInput(state: *State, bytes: []const u8) NameInput {
-        const rename = if (state.name_prompt) |*value| value else return .editing;
-        var offset: usize = 0;
-        while (offset < bytes.len) {
-            const parsed = term.parse(bytes[offset..]) orelse {
-                if (rename.pasting) rename.field.insert(bytes[offset..]);
-                break;
-            };
-            // A zero-length incomplete can never complete inside this chunk:
-            // the router only hands over raw pending bytes after its own
-            // timeout, so the tail is stale terminal noise. Dropping it is the
-            // only move that guarantees the offset advances.
-            if (parsed.len == 0) break;
-            offset += parsed.len;
-            switch (parsed.event) {
-                .paste_start => rename.pasting = true,
-                .paste_end => rename.pasting = false,
-                .key => |key| switch (key.code) {
-                    .enter => {
-                        if (rename.pasting) {
-                            rename.field.insert(" ");
-                            continue;
-                        }
-                        if (rename.field.text().len == 0) return .editing;
-                        state.dirty = true;
-                        return .{ .submitted = rename.field.text() };
-                    },
-                    .escape => {
-                        state.name_prompt = null;
-                        state.dirty = true;
-                        return .cancelled;
-                    },
-                    .backspace => rename.field.backspace(),
-                    .delete => rename.field.delete(),
-                    .left => rename.field.moveLeft(key.mods.shift),
-                    .right => rename.field.moveRight(key.mods.shift),
-                    .home => rename.field.home(key.mods.shift),
-                    .end => rename.field.end(key.mods.shift),
-                    .char => |char| if (!key.mods.ctrl and !key.mods.alt)
-                        rename.field.insert(char.slice()),
-                    else => {},
-                },
-                .mouse, .terminal_response, .incomplete => {},
-            }
-        }
-        state.dirty = true;
-        return .editing;
-    }
-
-    pub fn finishNamePrompt(state: *State) void {
-        state.name_prompt = null;
-        state.dirty = true;
-    }
-
     pub fn handleMouse(state: *State, mouse: term.Event.Mouse, now_ns: u64) Interaction {
         var result: Interaction = .{};
-        if (state.name_prompt != null) return result;
         if (state.attachment_store.hasModal()) result.consumed = true;
         const hovered = state.hits.at(mouse.x, mouse.y);
         if (!optionalActionEql(state.hovered, hovered)) {
@@ -650,48 +542,22 @@ pub const State = struct {
         _ = screen.back.writeText(banner, prefix_width, banner.y, message, style);
     }
 
-    pub fn render(
-        state: *State,
-        screen: *term.Screen,
-        tabs: ?*const tabs_mod.Model,
-        model: *multiplexer.Model,
-        force: bool,
-        diagnostic: ?[]const u8,
-    ) !RenderStats {
-        return state.renderWithStatus(
-            screen,
-            tabs,
-            model,
-            .normal,
-            force,
-            diagnostic,
-        );
-    }
-
-    pub fn renderWithStatus(
-        state: *State,
-        screen: *term.Screen,
-        tabs: ?*const tabs_mod.Model,
-        model: *multiplexer.Model,
-        status_mode: widgets.status_bar.Mode,
-        force: bool,
-        diagnostic: ?[]const u8,
-    ) !RenderStats {
-        if (!std.meta.eql(state.sidebar_index_location, model.location) or
-            state.sidebar_index_layout_revision != model.layout.currentRevision() or
+    pub fn render(state: *State, screen: *term.Screen, input: RenderInput) !RenderStats {
+        if (!std.meta.eql(state.sidebar_index_location, input.model.location) or
+            state.sidebar_index_layout_revision != input.model.layout.currentRevision() or
             state.sidebar_index_agent_revision != state.sidebar_snapshot.revision)
         {
-            var panes = model.paneIterator();
-            while (panes.next()) |pane| if (model.displayIndex(pane.id)) |pane_index|
+            var panes = input.model.paneIterator();
+            while (panes.next()) |pane| if (input.model.displayIndex(pane.id)) |pane_index|
                 state.sidebar_snapshot.setPaneIndex(pane.id, pane_index);
-            state.sidebar_index_location = model.location;
-            state.sidebar_index_layout_revision = model.layout.currentRevision();
+            state.sidebar_index_location = input.model.location;
+            state.sidebar_index_layout_revision = input.model.layout.currentRevision();
             state.sidebar_index_agent_revision = state.sidebar_snapshot.revision;
         }
         // The banner must survive every present — pane composition may have
         // repainted the bottom row — so it lands on both exit paths.
-        defer state.renderDiagnosticBanner(screen, diagnostic);
-        if (!force and !state.dirty and !state.attachment_store.hasModal() and
+        defer state.renderDiagnosticBanner(screen, input.diagnostic);
+        if (!input.force and !state.dirty and !state.attachment_store.hasModal() and
             !state.notifications.hasItems() and !state.toast_overlay_drawn)
             return .{};
         state.hits.clear();
@@ -709,17 +575,17 @@ pub const State = struct {
             .palette = state.palette(),
             .hovered = state.hovered,
             .icon_theme = state.icon_theme,
-            .icon_plan = if (diagnostic == null and state.kitty_icons.available())
+            .icon_plan = if (input.diagnostic == null and state.kitty_icons.available())
                 &state.graphics_plan.icons
             else
                 null,
         };
         const composed = widgets.composition.render(&context, .{
             .regions = state.regions,
-            .tabs = tabs,
-            .model = model,
-            .rename_field = if (state.name_prompt) |*prompt| &prompt.field else null,
-            .rename_kind = state.namePromptKind(),
+            .tabs = input.tabs,
+            .model = input.model,
+            .rename_field = if (input.prompt) |prompt| &prompt.field else null,
+            .rename_kind = promptKind(input.prompt),
             .sidebar_snapshot = &state.sidebar_snapshot,
             .sidebar_state = &state.sidebar,
             .sidebar_transparent = hybrid,
@@ -727,7 +593,7 @@ pub const State = struct {
             .sidebar_animation_frame = state.sidebar_animation_frame,
             .proxy_tls_active = state.proxy_tls_active,
             .system_metrics = state.system_metrics,
-            .status_mode = status_mode,
+            .status_mode = input.status_mode,
             .workspaces = &state.workspace_list,
             .workspace_list_collapsed = state.workspace_list_collapsed,
         });
@@ -743,15 +609,15 @@ pub const State = struct {
             ui.Rect{};
         const graphical_modal = state.graphicalModalCovers(current_modal_area);
         if (!state.modal_overlay_area.isEmpty())
-            model.copyComposedArea(&state.scratch, state.modal_overlay_area);
+            input.model.copyComposedArea(&state.scratch, state.modal_overlay_area);
         if (!current_modal_area.isEmpty() and
             !std.meta.eql(current_modal_area, state.modal_overlay_area))
-            model.copyComposedArea(&state.scratch, current_modal_area);
+            input.model.copyComposedArea(&state.scratch, current_modal_area);
         const toast_area = widgets.toast.overlayArea(state.regions.workbench);
         const has_toasts = state.notifications.hasItems() and !toast_area.isEmpty();
         const graphical_toasts = state.kitty_toasts.covers(&state.notifications);
         if (has_toasts or state.toast_overlay_drawn) {
-            model.copyComposedArea(&state.scratch, toast_area);
+            input.model.copyComposedArea(&state.scratch, toast_area);
             if (has_toasts) {
                 if (graphical_toasts)
                     widgets.toast.registerHits(&context, toast_area, &state.notifications)
@@ -823,6 +689,16 @@ pub const State = struct {
     }
 };
 
+fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
+    const current = prompt orelse return .rename_tab;
+
+    return switch (current.target) {
+        .rename_tab => .rename_tab,
+        .create_workspace => .create_workspace,
+        .rename_workspace => .rename_workspace,
+    };
+}
+
 fn optionalActionEql(a: ?Action, b: ?Action) bool {
     if (a == null or b == null) return a == null and b == null;
     return std.meta.eql(a.?, b.?);
@@ -891,7 +767,7 @@ test "empty production sidebar has no task controls" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 27 });
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
 
     try std.testing.expect(state.hits.at(3, 2) == null);
     try std.testing.expect(state.hits.at(58, 2) == null);
@@ -915,7 +791,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
     const second_view = model.layoutSnapshot(state.workbench()).find(second).?;
     const point = term.Event.Mouse{
         .x = second_view.content.x,
@@ -968,7 +844,7 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
     try std.testing.expect(state.handleMouse(first_row, 0).redraw);
@@ -1014,7 +890,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
     var open_point: ?struct { x: u16, y: u16 } = null;
     for (state.hits.registered()) |entry| switch (entry.action) {
         .attachment_open => {
@@ -1032,7 +908,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
     try std.testing.expect(opened.consumed);
     try std.testing.expect(state.hasAttachmentModal());
 
-    _ = try state.render(&screen, null, &model, false, null);
+    _ = try state.render(&screen, .{ .model = &model });
     const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,
         .y = state.regions.workbench.y,
@@ -1109,24 +985,24 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     defer screen.deinit();
     const palette = state.palette();
 
-    _ = try state.render(&screen, null, &first_model, true, null);
+    _ = try state.render(&screen, .{ .model = &first_model, .force = true });
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
 
     try std.testing.expect(first_model.focusPane(second_pane));
     state.invalidate();
-    _ = try state.render(&screen, null, &first_model, false, null);
+    _ = try state.render(&screen, .{ .model = &first_model });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 7).?.style.bg);
 
     try std.testing.expect(first_model.focusPane(shell_pane));
     state.invalidate();
-    _ = try state.render(&screen, null, &first_model, false, null);
+    _ = try state.render(&screen, .{ .model = &first_model });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
 
     state.invalidate();
-    _ = try state.render(&screen, null, &second_model, false, null);
+    _ = try state.render(&screen, .{ .model = &second_model });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 10).?.style.bg);
@@ -1153,7 +1029,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     _ = try state.replaceSidebarSnapshot(.{ .revision = 1, .agents = &agents });
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
     _ = try state.prepareGraphics(true);
     try std.testing.expect(state.kittySidebar().focused_card != null);
     try std.testing.expectEqualDeep(
@@ -1187,7 +1063,7 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
     const workspace_mark = for (state.graphics_plan.icons.slice()) |mark| {
         if (mark.icon == .workspace_menu) break mark;
     } else null;
@@ -1222,7 +1098,7 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
     const marker = for (state.hits.registered()) |entry| {
         if (std.meta.activeTag(entry.action) == .toggle_workspace_list) break entry.rect;
     } else null;
@@ -1250,7 +1126,7 @@ test "cell rendering leaves toast rasterization to the media pass" {
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
 
     try std.testing.expectEqual(@as(usize, 0), state.kittyToasts().retainedBytes());
     _ = try state.prepareGraphics(false);
@@ -1280,7 +1156,7 @@ test "client chrome uses Vesper by default" {
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
 
     try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[0].style.bg);
     try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[0].style.fg);
@@ -1302,7 +1178,7 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     _ = try model.renderThemed(&screen, state.workbench(), state.palette());
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
 
     try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[0].style.bg);
     // The bottom-left corner is the status region, which stays on the host
@@ -1346,7 +1222,7 @@ test "clickable toast restores pane cells after its exit animation" {
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, null, &model, false, null);
+    _ = try state.render(&screen, .{ .model = &model });
 
     const interaction = state.handleMouse(.{
         .x = click_x,
@@ -1358,7 +1234,7 @@ test "clickable toast restores pane cells after its exit animation" {
         state.advanceNotifications(200 + widgets.notification.transition_duration_ns),
     );
     try std.testing.expect(!state.notifications.hasItems());
-    _ = try state.render(&screen, null, &model, false, null);
+    _ = try state.render(&screen, .{ .model = &model });
 
     const restored = screen.back.cells[@as(usize, click_y) * screen.back.w + click_x];
     try std.testing.expectEqualStrings("u", restored.text());
@@ -1398,7 +1274,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     defer screen.deinit();
     const model = &tabs.active().?.model;
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, &tabs, model, true, null);
+    _ = try state.render(&screen, .{ .tabs = &tabs, .model = model, .force = true });
 
     // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
     // last sixteen columns of the bottom row.
@@ -1416,7 +1292,6 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     }, 0);
     try std.testing.expect(rename.select_tab == null);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), rename.rename_tab.?);
-    try std.testing.expect(state.renamedTab() == null);
 }
 
 test "the top bar lists open workspaces and clicking one requests a switch" {
@@ -1440,7 +1315,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     }));
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, null, &model, true, null);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
 
     const sidebar_requested = state.sidebar_requested;
     const sidebar_toggle = state.handleMouse(.{ .x = 0, .y = 0, .kind = .press }, 0);
@@ -1477,58 +1352,4 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     }, 0);
     try std.testing.expect(workspace_list_toggle.toggle_workspace_list);
     try std.testing.expect(!state.workspace_list_collapsed);
-}
-
-test "rename input consumes an unparseable tail instead of spinning" {
-    // Regression: the keybind router forwards raw pending bytes after its
-    // escape timeout ("\x1b[123" is its own tested behavior), and `term.parse`
-    // reports those as incomplete with zero length. The rename loop never
-    // advanced past a zero-length parse, so the client span forever.
-    var state = try State.init(std.testing.allocator, 80, 24);
-    defer state.deinit();
-    state.beginTabRename(@enumFromInt(3), "logs");
-    try std.testing.expect(state.handleNameInput("\x1b[123") == .editing);
-    // The field is untouched and editing continues normally afterwards.
-    const submitted = state.handleNameInput("!\r");
-    try std.testing.expect(submitted == .submitted);
-    try std.testing.expectEqualStrings("logs!", submitted.submitted);
-}
-
-test "tab rename edits clusters and submits a non-empty label" {
-    var state = try State.init(std.testing.allocator, 80, 24);
-    defer state.deinit();
-    state.beginTabRename(@enumFromInt(3), "logs");
-    try std.testing.expect(state.handleNameInput("\x7f") == .editing);
-    const submitted = state.handleNameInput("í\r");
-    try std.testing.expect(submitted == .submitted);
-    try std.testing.expectEqualStrings("logí", submitted.submitted);
-}
-
-test "workspace creation prompt requires an explicit non-empty name" {
-    var state = try State.init(std.testing.allocator, 80, 24);
-    defer state.deinit();
-    state.beginWorkspaceCreate();
-    try std.testing.expect(state.hasNamePrompt());
-    try std.testing.expect(state.creatingWorkspace());
-    try std.testing.expect(state.renamedTab() == null);
-    try std.testing.expect(state.handleNameInput("\r") == .editing);
-
-    const submitted = state.handleNameInput("agents\r");
-    try std.testing.expect(submitted == .submitted);
-    try std.testing.expectEqualStrings("agents", submitted.submitted);
-    state.finishNamePrompt();
-    try std.testing.expect(!state.hasNamePrompt());
-}
-
-test "workspace rename starts with the canonical name" {
-    var state = try State.init(std.testing.allocator, 80, 24);
-    defer state.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
-    state.beginWorkspaceRename(workspace, "telar");
-
-    try std.testing.expectEqualDeep(workspace, state.renamedWorkspace().?);
-    try std.testing.expect(!state.creatingWorkspace());
-    const submitted = state.handleNameInput("\x7f\x7f\x7f\x7f\x7fagents\r");
-    try std.testing.expect(submitted == .submitted);
-    try std.testing.expectEqualStrings("agents", submitted.submitted);
 }

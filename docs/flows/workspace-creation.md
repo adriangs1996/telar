@@ -2,8 +2,8 @@
 
 Workspace creation is one runtime transaction followed by one client-model
 replacement. The runtime owns workspace, tab, pane and attachment existence.
-The client owns the creation prompt, its disposable projection, navigation
-history and the version the presenter eventually paints.
+The client model owns the creation prompt, the client owns navigation history
+and the view owns only their disposable projection.
 
 ## Request
 
@@ -26,8 +26,9 @@ does not advance a semantic version.
 
 The adapter supplies workbench geometry and launch configuration. The outbox
 copies the prompt name and launch cwd into bounded storage before the input
-event returns, so the view can close the prompt immediately after local
-delivery succeeds. A delivery failure leaves both the prompt and model intact.
+event returns. `NamePromptHandler` then closes the prompt after local delivery
+succeeds. A delivery failure leaves the prompt and canonical workspace replica
+intact.
 
 ## Runtime transaction
 
@@ -115,6 +116,9 @@ still install the confirmed root, which keeps recovery deterministic.
   bounded departure capture, atomic construction, exact versioning, rejection
   without mutation and recovery from an empty source.
 - `src/frontend/client/outbox.zig` proves queued creation owns its name and cwd.
+- `src/frontend/client/name_prompt.zig` and
+  `src/frontend/client/application/name_prompt.zig` prove prompt ownership and
+  accepted-submit ordering.
 - `src/frontend/client/client_test.zig` proves the protocol request, single
   replacement commit, presenter boundary, exact snapshot messages, navigation
   restoration, absence of stale detach/focus output and failure preservation.

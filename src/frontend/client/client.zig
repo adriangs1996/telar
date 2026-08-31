@@ -146,15 +146,11 @@ pub const initial_request_id: schema.RequestId = @enumFromInt(1);
 
 const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
 
-/// Which consumer host input belongs to, decided once per event at the top
-/// of input dispatch instead of re-checked inside every handler method.
-/// Copy mode owns its state here; the name prompt's text lives in the view
-/// and the mode owns only the routing decision — transitions go through the
-/// prompt helpers so both always move together.
+/// Which non-modal consumer owns host input. The model-owned name prompt is
+/// checked before this mode because its active state is its routing authority.
 const Mode = union(enum) {
     normal,
     copy: copy_mode.State,
-    prompt,
 };
 
 /// The platform resources a client cannot fabricate: everything else it
@@ -514,35 +510,6 @@ pub fn clearPaneFocus(client: *Client) !void {
 pub fn forgetPaneFocus(client: *Client) void {
     client.reported_focus = null;
     client.reported_focus_events = false;
-}
-
-// Prompt transitions. The view owns the edited text, the mode owns the
-// routing decision; these helpers are the only writers of both, so the two
-// can never disagree. Cancellation inside the prompt editor is reconciled
-// by the prompt mode's input handler.
-
-pub fn beginTabRenamePrompt(client: *Client, tab_id: schema.TabId, label: []const u8) void {
-    client.view.beginTabRename(tab_id, label);
-    client.mode = .prompt;
-}
-
-pub fn beginWorkspaceRenamePrompt(
-    client: *Client,
-    workspace: schema.WorkspaceLocation,
-    name: []const u8,
-) void {
-    client.view.beginWorkspaceRename(workspace, name);
-    client.mode = .prompt;
-}
-
-pub fn beginWorkspaceCreatePrompt(client: *Client) void {
-    client.view.beginWorkspaceCreate();
-    client.mode = .prompt;
-}
-
-pub fn finishNamePrompt(client: *Client) void {
-    client.view.finishNamePrompt();
-    client.mode = .normal;
 }
 
 /// Synchronizes a committed sidebar preference with disposable view,
@@ -1136,7 +1103,7 @@ pub fn statusMode(client: *const Client) widgets.status_bar.Mode {
     }
     return switch (client.mode) {
         .copy => .copy,
-        .normal, .prompt => .normal,
+        .normal => .normal,
     };
 }
 

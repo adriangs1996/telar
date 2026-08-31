@@ -134,11 +134,18 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.panes;
     const chrome_changed = presenter.presented_model_version.chrome !=
         presenter.observed_model_version.chrome;
+    const prompt_changed = presenter.presented_model_version.prompt !=
+        presenter.observed_model_version.prompt;
     if (chrome_changed) {
         client.view.setSidebarVisible(client.model.sidebarVisible());
         client.view.setWorkspaceListCollapsed(client.model.workspaceListCollapsed());
     }
-    if (workspace_changed or tabs_changed or active_tab_changed or panes_changed or chrome_changed) {
+    if (prompt_changed) {
+        client.view.clearHover();
+    }
+    if (workspace_changed or tabs_changed or active_tab_changed or panes_changed or chrome_changed or
+        prompt_changed)
+    {
         client.view.invalidate();
     }
     if (active_tab_changed or panes_changed) {
@@ -285,14 +292,17 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
         client.view.workbench(),
         client.view.palette(),
     );
-    const chrome = try client.view.renderWithStatus(
-        &presenter.screen,
-        &client.model.workspace,
-        model,
-        client.statusMode(),
-        composed.full,
-        if (client.config_diagnostic.len != 0) client.config_diagnostic.message() else null,
-    );
+    const chrome = try client.view.render(&presenter.screen, .{
+        .tabs = &client.model.workspace,
+        .model = model,
+        .prompt = client.model.name_prompt.current(),
+        .status_mode = client.statusMode(),
+        .force = composed.full,
+        .diagnostic = if (client.config_diagnostic.len != 0)
+            client.config_diagnostic.message()
+        else
+            null,
+    });
     if (comptime diagnostics.enabled) {
         presenter.metrics.composed_panes += composed.panes;
         presenter.metrics.composed_cells += composed.cells;

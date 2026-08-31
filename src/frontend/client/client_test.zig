@@ -19,10 +19,20 @@ const term = presentation.screen;
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
 const client_outbox = @import("outbox.zig");
+const client_model = @import("model.zig");
+const name_prompts = @import("name_prompts.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = Client.initial_request_id;
+
+fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+    try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.tabs, actual.tabs);
+    try std.testing.expectEqual(expected.active_tab, actual.active_tab);
+    try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.chrome, actual.chrome);
+}
 
 // ---------------------------------------------------------------------------
 // Test harness: a real Client over substituted platform dependencies — a
@@ -454,13 +464,11 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .agents = &.{agent},
     });
     const model = &client.model.workspace.active().?.model;
-    _ = try client.view.render(
-        &client.presenter.screen,
-        &client.model.workspace,
-        model,
-        true,
-        null,
-    );
+    _ = try client.view.render(&client.presenter.screen, .{
+        .tabs = &client.model.workspace,
+        .model = model,
+        .force = true,
+    });
     var handler: InputHandler = .{ .client = client };
     try handler.mouse(.{ .x = 4, .y = 4, .kind = .press });
     try harness.settle();
@@ -3292,18 +3300,33 @@ test "workspace rename separates prompt submission canonical commit and presenta
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const version_before_prompt = client.model.version();
+    const pending_updates_before_prompt = client.presenter.pending_updates;
+
+    try std.testing.expect(name_prompts.beginWorkspaceRename(client));
+    try std.testing.expect(client.model.name_prompt.active());
+    try std.testing.expectEqualStrings("", client.model.name_prompt.currentConst().?.field.text());
+    try expectNonPromptVersionEqual(version_before_prompt, client.model.version());
+    try std.testing.expect(client.model.version().prompt > version_before_prompt.prompt);
+    try std.testing.expectEqual(pending_updates_before_prompt, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates_before_prompt + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
     const version_before_request = client.model.version();
     const pending_updates_before_request = client.presenter.pending_updates;
-
-    client.beginWorkspaceRenamePrompt(TestHarness.bootstrap_location.workspace, "main");
     var handler: InputHandler = .{ .client = client };
-    try handler.forward("x\r");
+    try handler.forward("mainx\r");
 
     try std.testing.expect(client.mode == .normal);
-    try std.testing.expect(!client.view.hasNamePrompt());
+    try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("", client.model.workspace.workspaceName());
-    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try expectNonPromptVersionEqual(version_before_request, client.model.version());
+    try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    const version_after_request = client.model.version();
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -3327,6 +3350,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try std.testing.expectEqual(version_before_request.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before_request.tabs, client.model.version().tabs);
     try std.testing.expectEqual(version_before_request.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(version_after_request.prompt, client.model.version().prompt);
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
 
     try client.observeModel();
@@ -3367,18 +3391,20 @@ test "pending workspace operation keeps the rename prompt without sending" {
     const next_request_id = client.next_request_id;
     const version_before_request = client.model.version();
 
-    client.beginWorkspaceRenamePrompt(TestHarness.bootstrap_location.workspace, "main");
+    try std.testing.expect(name_prompts.beginWorkspaceRename(client));
     var handler: InputHandler = .{ .client = client };
     try handler.forward("x\r");
 
-    try std.testing.expect(client.mode == .prompt);
-    try std.testing.expect(client.view.hasNamePrompt());
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
-    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try expectNonPromptVersionEqual(version_before_request, client.model.version());
+    try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try handler.forward("\x1b");
     try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.name_prompt.active());
 }
 
 test "tab rename separates prompt submission canonical commit and presentation" {
@@ -3391,17 +3417,19 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     const version_before_request = client.model.version();
     const pending_updates_before_request = client.presenter.pending_updates;
 
-    client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
+    try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
     var handler: InputHandler = .{ .client = client };
     try std.testing.expect(handler.capturesKeys());
 
     try handler.forward("x");
     try handler.forward("\r");
     try std.testing.expect(client.mode == .normal);
-    try std.testing.expect(!client.view.hasNamePrompt());
+    try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
-    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try expectNonPromptVersionEqual(version_before_request, client.model.version());
+    try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
+    const version_after_request = client.model.version();
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -3425,6 +3453,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     try std.testing.expectEqualStrings("canonical", client.model.workspace.activeConst().?.labelSlice());
     try std.testing.expectEqual(version_before_request.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_request.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(version_after_request.prompt, client.model.version().prompt);
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
 
     try client.observeModel();
@@ -3455,11 +3484,11 @@ test "tab rename response must match the requested identity" {
     try harness.bootstrap();
     const client = harness.client;
     client.requests = .{};
-    const version_before_response = client.model.version();
 
-    client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
+    try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
     var handler: InputHandler = .{ .client = client };
     try handler.forward("x\r");
+    const version_before_response = client.model.version();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -3490,11 +3519,11 @@ test "a failed tab rename preserves the label and notifies" {
     try harness.bootstrap();
     const client = harness.client;
     client.requests = .{};
-    const version_before_failure = client.model.version();
 
-    client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
+    try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
     var handler: InputHandler = .{ .client = client };
     try handler.forward("x\r");
+    const version_before_failure = client.model.version();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -3524,18 +3553,20 @@ test "pending tab operation keeps the rename prompt without sending" {
     const next_request_id = client.next_request_id;
     const version_before_request = client.model.version();
 
-    client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
+    try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
     var handler: InputHandler = .{ .client = client };
     try handler.forward("x\r");
 
-    try std.testing.expect(client.mode == .prompt);
-    try std.testing.expect(client.view.hasNamePrompt());
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
-    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try expectNonPromptVersionEqual(version_before_request, client.model.version());
+    try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try handler.forward("\x1b");
     try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.name_prompt.active());
 }
 
 test "a full outbox keeps the tab rename prompt and rolls back correlation" {
@@ -3550,29 +3581,33 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
         try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
-    client.beginTabRenamePrompt(TestHarness.bootstrap_location.tab_id, "main");
+    try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
     var handler: InputHandler = .{ .client = client };
 
     try std.testing.expectError(error.ClientOutboxFull, handler.forward("x\r"));
 
-    try std.testing.expect(client.mode == .prompt);
-    try std.testing.expect(client.view.hasNamePrompt());
+    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.requests.has(.tab_operation));
     try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.outbox.len));
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
-    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try expectNonPromptVersionEqual(version_before_request, client.model.version());
+    try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 }
 
-test "escaping the prompt editor returns the mode to normal" {
+test "escaping the prompt editor closes model state without changing mode" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
+    try harness.bootstrap();
     const client = harness.client;
+    client.requests = .{};
 
-    client.beginWorkspaceCreatePrompt();
-    try std.testing.expect(client.mode == .prompt);
+    try std.testing.expect(name_prompts.beginWorkspaceCreate(client));
+    try std.testing.expect(client.model.name_prompt.active());
+    try std.testing.expect(client.mode == .normal);
     var handler: InputHandler = .{ .client = client };
     try handler.forward("\x1b");
     try std.testing.expect(client.mode == .normal);
-    try std.testing.expect(!client.view.hasNamePrompt());
+    try std.testing.expect(!client.model.name_prompt.active());
 }

@@ -8,6 +8,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | Flow | Trigger | Visible result | Proof |
 | --- | --- | --- | --- |
 | [Host input to screen](host-input-to-screen.md) | Bytes arrive from the host TTY | A Telar action is consumed, or child output is presented | Input router unit tests and transport integration tests |
+| [Name prompt](name-prompt.md) | User opens, edits, cancels or submits a naming prompt | One model-owned editor is presented, or its accepted intent reaches the matching request use case | State, effect-order, input-adapter and presenter tests |
 | [Pane launch](../adr/0001-pane-launch-is-a-runtime-transaction.md) | Client sends an open/create request | A running runtime pane is confirmed to the client | Launch fault-injection integration test |
 | [Pane attachment](pane-attachment.md) | Tab reconciliation finds a detached pane | The active client accepts frames from the runtime attachment | Model, recovery, presenter and protocol tests |
 | [Pane focus](pane-focus.md) | User, notification or sidebar selects a pane | The client commits focus, orders terminal reports and resizes fullscreen geometry before presentation | Model, intent, effect-order and presenter tests |

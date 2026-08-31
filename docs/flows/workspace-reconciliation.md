@@ -7,7 +7,9 @@ and host graphics associated with that replica.
 ## Workspace rename
 
 ```text
-name prompt -> InputHandler.submitWorkspaceRename
+name prompt -> InputHandler -> name_prompts.handleInput
+        |
+NamePromptHandler -> name_prompts submit effect
         |
 RequestRenameWorkspaceHandler -> RenameRequestEffects.send
         |
@@ -32,8 +34,9 @@ Client.observeModel -> Presenter
 
 `RequestRenameWorkspaceHandler` accepts only the workspace currently projected
 by `ClientModel` and refuses overlapping workspace operations. Its adapter
-copies the borrowed name into the outbox before the prompt closes. Sending the
-request does not change the client replica.
+copies the borrowed name into the outbox before `NamePromptHandler` closes the
+model-owned prompt. Sending the request does not change the canonical workspace
+replica.
 
 The runtime aggregate commits the name and publishes an owned
 `WorkspaceRenamed` event. The controller queues a workspace reference rather
@@ -89,6 +92,9 @@ a later resync or reconnect rebuilds the disposable resources.
 
 - `frontend/client/application/rename_workspace.zig` proves request gating,
   stale-target rejection, delivery failure and absence of provisional state.
+- `frontend/client/name_prompt.zig`,
+  `frontend/client/application/name_prompt.zig` and
+  `frontend/client/name_prompts.zig` prove editor ownership and submit ordering.
 - `frontend/client/application/workspace_snapshot.zig` proves commit-before-
   effects ordering and post-commit failure semantics.
 - `frontend/client/model.zig` proves independent workspace, tab and active-tab

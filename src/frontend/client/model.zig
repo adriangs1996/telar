@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const name_prompt = @import("name_prompt.zig");
 const workspace_capability = @import("../workspace/root.zig");
 
 const schema = core.schema;
@@ -16,6 +17,7 @@ pub const Version = struct {
     active_tab: u64 = 0,
     panes: u64 = 0,
     chrome: u64 = 0,
+    prompt: u64 = 0,
 };
 
 pub const Change = enum {
@@ -295,6 +297,7 @@ pub const WorkspaceReconciliation = struct {
 
 pub const Model = struct {
     workspace: tabs_mod.Model,
+    name_prompt: name_prompt.State = .{},
     workspace_revision: u64 = 0,
     tabs_revision: u64 = 0,
     active_tab_revision: u64 = 0,
@@ -336,6 +339,7 @@ pub const Model = struct {
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
             .chrome = model.chrome_revision,
+            .prompt = model.name_prompt.version(),
         };
     }
 
