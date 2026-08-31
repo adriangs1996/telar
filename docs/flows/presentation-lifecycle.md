@@ -15,9 +15,10 @@ the observation boundary.
 
 `presentation_lifecycle` is the asynchronous adapter. `client_events`
 delegates `.draw` and `.media_tick` events to it and publishes one observation
-after every non-terminal event. The adapter releases task tokens and orders
-presentation effects that cross into runtime transport. It does not decide
-which parts of the screen changed.
+after every non-terminal event. The adapter releases task tokens, asks the
+presenter for a delivery and supplies concrete effects to
+`DeliverPresentationHandler`. The handler owns the irreversible post-flush
+policy. Neither component decides which parts of the screen changed.
 
 ```text
 committed client event
@@ -31,6 +32,8 @@ Presenter.observe -> one paced draw task
 ClientEvent.draw -> presentation_lifecycle.handleDraw
         |
 presentation_projection -> Presenter.presentDue -> cell flush
+        |
+DeliverPresentationHandler
         |
 PresentationCommit -> graphics credits -> frame_ack messages -> optional media task
         |
@@ -81,14 +84,17 @@ changes patch only their affected visible ranges.
 Only a successful flush advances the presented revisions and clears
 `pending_updates`. The returned `PresentationCommit` describes the exact pane
 damage and pending frame identifiers safe to retire after that flush, including
-panes intentionally hidden by fullscreen layout. The lifecycle adapter applies
-it to `ClientModel` before enqueueing acknowledgements. Exact frame matching
-prevents an obsolete commit from consuming newer pane work.
+panes intentionally hidden by fullscreen layout. `DeliverPresentationHandler`
+applies it to `ClientModel` before invoking any external effect. Exact frame
+matching prevents an obsolete commit from consuming newer pane work.
 
 The presenter returns a fixed array of at most `multiplexer.max_panes` frame
-acknowledgements. The adapter first flushes graphics flow-control credits, then
-enqueues each `.frame_ack`. The runtime therefore learns about a frame only
-after the host terminal accepted it.
+acknowledgements. `DeliverPresentationHandler` rejects an unbounded command
+before mutation, then flushes graphics flow-control credits and acknowledges
+each frame in presenter order. It requests media only after every
+acknowledgement succeeds. The lifecycle adapter contains only the concrete
+transport, telemetry and presenter callbacks. The runtime therefore learns
+about a frame only after the host terminal accepted it.
 
 Media uses its own task token and `ClientEvent.media_tick`. A pending cell frame
 always defers media. Each pass uses the fixed 256 KiB baseline KGP budget and
@@ -100,10 +106,12 @@ activity can delay graphical toasts, but it does not delay pane cells.
 Draw and media completion release their tokens before propagating a worker
 error. A failed cell composition or flush leaves semantic damage and pending
 frame identifiers uncommitted, and leaves the observed version newer than the
-presented version. The current event loop treats that error as fatal and
-destroys the disposable client. Transport failure after a successful host
-flush has the same policy. The runtime remains canonical and a new client
-rebuilds its projection.
+presented version. After a successful host flush, the handler commits the
+presentation before attempting transport. A later credit, acknowledgement or
+media scheduling failure preserves every earlier effect and skips the remaining
+ones. The current event loop treats either class of error as fatal and destroys
+the disposable client. The runtime remains canonical and a new client rebuilds
+its projection.
 
 Client destruction cancels the select tasks before deinitializing the
 presenter and its screen buffers. `Presenter` owns no work queue. It retains
@@ -117,7 +125,10 @@ one draw task, one media task and the latest revisions.
   fixed frame acknowledgements and independent media scheduling without a
   `Client` dependency.
 - `src/frontend/client/presentation_lifecycle.zig` proves the event entrypoints
-  and post-flush model-commit and transport ordering.
+  and adapts concrete transport, telemetry and presenter effects.
+- `src/frontend/client/application/presentation_delivery.zig` owns and proves
+  bounded post-flush model-commit, credit, acknowledgement and media ordering,
+  including partial failure semantics.
 - `composition damage retires only after its presentation commits`, `stale
   presentation commits preserve newer pane work` and `fullscreen presentation
   commits include hidden panes` prove bounded commit semantics.
