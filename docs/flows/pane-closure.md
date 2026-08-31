@@ -43,6 +43,8 @@ child exit -> drain output and outstanding frame acknowledgement
         |
 schema.pane_exited -> client socket
         |
+pane_closures.applyExit
+        |
 HandlePaneExitHandler
         |
 ClientModel.retirePane
@@ -55,6 +57,12 @@ Presenter.observeModel
 The runtime sends `pane_exited` only after terminal ingestion has finished and
 the attachment has no outstanding frame. Committing that delivery detaches
 the runtime attachment, allowing the exited pane to be reaped later.
+
+The dispatcher only delegates the decoded event. `pane_closures.applyExit`
+removes the wire-only process outcome and passes the stable pane identity to
+`HandlePaneExitHandler`. Exit kind and value do not affect disposable client
+cleanup; process lifecycle remains runtime-owned. The slice returns the
+resulting `retired` or `stale` transition for direct observation.
 
 `ClientModel.retirePane` locates the pane globally by stable identity and
 removes it from its exact tab. Retirement in the active tab advances the pane
@@ -95,6 +103,8 @@ coalescing outbox.
 
 - `frontend/client/application/close_pane.zig` checks request gating, pure
   planning, commit-before-effects, stale cleanup and committed-effect failure.
+- `frontend/client/pane_closures.zig` checks wire translation and owns request,
+  resource, focus and geometry effects after the application transition.
 - `frontend/client/model.zig` checks active, inactive and repeated retirement
   plus presentation revision ownership.
 - `frontend/client/requests.zig` checks exact close completion and attachment

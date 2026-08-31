@@ -46,7 +46,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
         .pane_clipboard => |clipboard| try handlePaneClipboard(client, clipboard),
-        .pane_exited => |exited| try handlePaneExited(client, exited),
+        .pane_exited => |exited| _ = try pane_closures.applyExit(client, exited),
         .request_failed => |failure| _ = try request_failures.apply(client, failure),
         .notification => |notification| _ = try notifications.applyRuntime(client, notification),
         .notification_shown => |shown| _ = try notifications.applyDeliveryReport(client, shown),
@@ -90,10 +90,4 @@ fn handlePaneClipboard(client: *Client, clipboard: schema.PaneClipboard) !void {
     if (clipboard.pane_id == .invalid) return error.UnexpectedPane;
     try term.writeClipboard(client.writer, clipboard.bytes);
     try client.writer.flush();
-}
-
-/// A pane's child ended: drop the pane and every piece of client state on it.
-fn handlePaneExited(client: *Client, exited: schema.PaneExited) !void {
-    var use_case = pane_closures.exitHandler(client);
-    _ = try use_case.execute(exited.pane_id);
 }

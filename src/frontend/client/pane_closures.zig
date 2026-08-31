@@ -30,18 +30,23 @@ pub fn requestHandler(client: *Client) close_pane.RequestClosePaneHandler {
     };
 }
 
-/// Wires an authoritative pane exit to model commit and resource cleanup.
+/// Translates one authoritative pane exit into model commit and cleanup.
 ///
 /// ```zig
-/// var handler = exitHandler(client);
-/// _ = try handler.execute(pane_id);
+/// const transition = try applyExit(client, exited);
 /// ```
-pub fn exitHandler(client: *Client) close_pane.HandlePaneExitHandler {
+pub fn applyExit(client: *Client, exited: schema.PaneExited) !client_model.PaneExit {
+    var use_case = exitHandler(client);
+
+    return use_case.execute(exited.pane_id);
+}
+
+fn exitHandler(client: *Client) close_pane.HandlePaneExitHandler {
     return .{
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = applyExit,
+            .apply = applyExitEffects,
         },
     };
 }
@@ -67,7 +72,7 @@ fn sendClosure(context: *anyopaque, closure: client_model.PaneClosure) !void {
     );
 }
 
-fn applyExit(context: *anyopaque, transition: client_model.PaneExit) !void {
+fn applyExitEffects(context: *anyopaque, transition: client_model.PaneExit) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const pane_id = switch (transition) {
         .retired => |retired| retired.pane_id,

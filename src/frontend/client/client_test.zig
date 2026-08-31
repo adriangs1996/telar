@@ -24,6 +24,7 @@ const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
+const pane_closures = @import("pane_closures.zig");
 const pane_openings = @import("pane_openings.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
@@ -3847,7 +3848,9 @@ test "close pane request waits for the authoritative exit before committing" {
     const committed_version = client.model.version();
     const pending_updates_after_commit = client.presenter.pending_updates;
 
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
+    const repeated = try pane_closures.applyExit(client, (try schema.decodeServer(exited)).pane_exited);
+    try std.testing.expect(repeated == .stale);
+    try std.testing.expectEqual(closing_pane, repeated.stale);
     try client.observeModel();
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
@@ -3882,7 +3885,11 @@ test "an unrequested pane exit removes the pane silently" {
         .kind = .exited,
         .value = 0,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(exited));
+    const transition = try pane_closures.applyExit(client, (try schema.decodeServer(exited)).pane_exited);
+    try std.testing.expect(transition == .retired);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, transition.retired.pane_id);
+    try std.testing.expect(transition.retired.active);
+    try std.testing.expect(transition.retired.tab_empty);
     try harness.settle();
 
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
