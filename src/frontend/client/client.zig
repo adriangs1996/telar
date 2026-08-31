@@ -101,6 +101,7 @@ pub const InputChunk = struct {
     }
 };
 const InputHandler = @import("input_handler.zig");
+const clipboard_images = @import("clipboard_images.zig");
 const config_reload = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
@@ -127,7 +128,7 @@ pub const ClientEvent = union(enum) {
     telemetry_written: anyerror!void,
     config_reload: anyerror!config_reload.ConfigReload,
     plugin_result: plugin_actions.Completion,
-    clipboard_image: anyerror!*attachments.Capture,
+    clipboard_image: clipboard_images.Completion,
 };
 
 const NotificationTimer = struct {
@@ -197,7 +198,7 @@ trust_store: ?*core.plugin.TrustStore,
 reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
 sound_config: lua_config.SoundConfig,
-attachment_capture: attachments.CaptureState = .{},
+clipboard_capture_resources: attachments.CaptureResources = .{},
 paste_pane: ?schema.PaneId = null,
 
 input_read_pending: bool = false,
@@ -314,7 +315,7 @@ pub fn deinit(client: *Client) void {
     const gpa = client.gpa;
     client.select.cancelDiscard();
     client.reload.deinit(gpa);
-    client.attachment_capture.deinit(gpa);
+    client.clipboard_capture_resources.deinit(gpa);
     if (client.lua_generation) |generation| generation.deinit();
     if (client.plugin_registry) |registry| gpa.destroy(registry);
     if (client.trust_store) |store| gpa.destroy(store);
@@ -340,6 +341,7 @@ pub fn observeModel(client: *Client) !void {
     try client.presenter.observe(.{
         .model = client.model.version(),
         .graphics_ingress = client.graphics_store.ingressVersion(),
+        .attachment_ingress = client.view.kittyAttachments().ingressVersion(),
     });
 }
 
@@ -538,7 +540,7 @@ pub fn syncSidebarVisibility(client: *Client, change: client_model.SidebarVisibi
 }
 
 pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
-    if (client.view.syncAttachmentTarget(client.focusedAttachmentTarget())) {
+    if (client.view.syncAttachmentTarget(client.model.focusedAttachmentTarget())) {
         try client.resizeAttached(model, client.view.workbench());
     }
     const next_id = model.layout.focused();
@@ -561,21 +563,6 @@ pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
     if (next_reports) try client.enqueueInput(next_id.?, "\x1b[I");
 }
 
-/// Resolves the model's focused attachment-capable agent into the local
-/// preview identity used by platform and view adapters.
-///
-/// ```zig
-/// const target = client.focusedAttachmentTarget() orelse return;
-/// ```
-pub fn focusedAttachmentTarget(client: *const Client) ?attachments.Target {
-    const key = client.model.focusedAttachmentAgent() orelse return null;
-
-    return .{
-        .pane_id = key.pane_id,
-        .pane_generation = key.pane_generation,
-    };
-}
-
 /// Reconciles attachment resources after an agent snapshot commit. Any shelf
 /// geometry change is applied to the currently active pane model.
 ///
@@ -583,7 +570,7 @@ pub fn focusedAttachmentTarget(client: *const Client) ?attachments.Target {
 /// try client.syncAgentSnapshotResources();
 /// ```
 pub fn syncAgentSnapshotResources(client: *Client) !void {
-    const layout_changed = client.view.syncAttachmentTarget(client.focusedAttachmentTarget());
+    const layout_changed = client.view.syncAttachmentTarget(client.model.focusedAttachmentTarget());
     if (!layout_changed) {
         return;
     }
@@ -592,64 +579,13 @@ pub fn syncAgentSnapshotResources(client: *Client) !void {
     try client.resizeAttached(&active.model, client.view.workbench());
 }
 
-pub fn scheduleAttachmentCapture(client: *Client, target: attachments.Target) !void {
-    if (!attachments.platformSupported()) return;
-    const request = (try client.attachment_capture.begin(target)) orelse return;
-    client.select.concurrent(.clipboard_image, attachments.captureClipboard, .{
-        client.gpa,
-        request,
-        &client.attachment_capture.orphan,
-    }) catch |err| {
-        client.attachment_capture.scheduleFailed();
-        return err;
-    };
-}
-
-pub fn handleClipboardImageEvent(
-    client: *Client,
-    result: anyerror!*attachments.Capture,
-) !void {
-    const completed = result catch |err| {
-        client.attachment_capture.failed();
-        switch (err) {
-            error.NoImageOnClipboard => {},
-            error.ClipboardImageTooLarge => try client.notify(.{
-                .level = .failure,
-                .title = "Image preview skipped",
-                .message = "The clipboard image exceeds Telar's local preview limit",
-            }),
-            else => try client.notify(.{
-                .level = .failure,
-                .title = "Image preview failed",
-                .message = @errorName(err),
-            }),
-        }
-        return;
-    };
-    const capture = client.attachment_capture.take(completed);
-    const active = client.model.workspace.active() orelse {
-        capture.deinit(client.gpa);
-        return;
-    };
-    const target = client.focusedAttachmentTarget() orelse {
-        capture.deinit(client.gpa);
-        return;
-    };
-    if (!std.meta.eql(target, capture.request.target)) {
-        capture.deinit(client.gpa);
-        return;
-    }
-    const layout_changed = client.view.adoptAttachment(capture) catch |err| {
-        capture.deinit(client.gpa);
-        try client.notify(.{
-            .level = .failure,
-            .title = "Image preview failed",
-            .message = @errorName(err),
-        });
-        return;
-    };
-    if (layout_changed) try client.resizeAttached(&active.model, client.view.workbench());
-    try client.presenter.requestDraw();
+/// Entrypoint for one completed local clipboard image capture.
+///
+/// ```zig
+/// try client.handleClipboardImageEvent(completion);
+/// ```
+pub fn handleClipboardImageEvent(client: *Client, completion: clipboard_images.Completion) !void {
+    try clipboard_images.complete(client, completion);
 }
 
 /// Entrypoint for bytes read from the host terminal. It owns the complete

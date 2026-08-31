@@ -11,6 +11,7 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
 const client_actions = @import("actions.zig");
+const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_viewports = @import("pane_viewports.zig");
@@ -144,9 +145,7 @@ pub fn key(handler: *InputHandler, value: keybind.Key) !void {
         .payload = .{ .key = value },
     }) orelse return;
     if (isClipboardImagePasteKey(value)) {
-        if (handler.client.focusedAttachmentTarget()) |target| {
-            handler.client.scheduleAttachmentCapture(target) catch {};
-        }
+        _ = clipboard_images.start(handler.client) catch {};
     }
 }
 

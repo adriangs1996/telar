@@ -5,6 +5,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
+const attachments = @import("../attachments/root.zig");
 const graphics = @import("../graphics/root.zig");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
@@ -213,8 +214,10 @@ const TestHarness = struct {
     fn settleModelPresentation(harness: *TestHarness) !void {
         const target = harness.client.model.version();
         const graphics_target = harness.client.graphics_store.ingressVersion();
+        const attachment_target = harness.client.view.kittyAttachments().ingressVersion();
         while (!std.meta.eql(harness.client.presenter.presented_model_version, target) or
-            harness.client.presenter.presented_graphics_ingress != graphics_target)
+            harness.client.presenter.presented_graphics_ingress != graphics_target or
+            harness.client.presenter.presented_attachment_ingress != attachment_target)
         {
             switch (try harness.client.select.await()) {
                 .draw => |result| try harness.client.handleDrawEvent(result),
@@ -445,6 +448,46 @@ fn installTestingPlugin(client: *Client) !TestingPlugin {
         },
         .digest = digest,
     };
+}
+
+fn installTestingAttachmentTarget(client: *Client, generation: u64) !attachments.Target {
+    const target: attachments.Target = .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .pane_generation = generation,
+    };
+    _ = try client.model.reconcileAgentSnapshot(.{
+        .revision = generation,
+        .agents = &.{agents.AgentInput{
+            .key = .{
+                .pane_id = target.pane_id,
+                .pane_generation = target.pane_generation,
+            },
+            .location = TestHarness.bootstrap_location,
+            .pane_index = 1,
+            .provider = .codex,
+            .status = .working,
+        }},
+    });
+    try client.syncAgentSnapshotResources();
+
+    return target;
+}
+
+fn testingClipboardCapture(client: *Client, execution: client_model.ClipboardCapture, bytes: []const u8) !*attachments.Capture {
+    const capture = try client.gpa.create(attachments.Capture);
+    errdefer client.gpa.destroy(capture);
+    capture.* = .{
+        .request = .{
+            .target = execution.target,
+            .sequence = @intFromEnum(execution.id),
+        },
+        .png = try client.gpa.dupe(u8, bytes),
+        .width = 2,
+        .height = 2,
+    };
+    client.clipboard_capture_resources.orphan = capture;
+
+    return capture;
 }
 
 test "host input arriving while no tab exists is dropped, not a crash" {
@@ -5187,6 +5230,142 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
         client.config_diagnostic.message(),
         "UnknownPluginAction",
     ) != null);
+}
+
+test "control-v reaches the pane when no clipboard preview target exists" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.key(try keybind.parseKey("ctrl+v"));
+
+    try std.testing.expect(client.model.clipboardCapture() == null);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x16", message.pane_input.bytes);
+}
+
+test "clipboard image completion publishes resource ingress before presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try installTestingAttachmentTarget(client, 1);
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const execution = (try client.model.beginClipboardCapture(target)).?;
+    const completed = try testingClipboardCapture(client, execution, "png");
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+
+    try client.handleClipboardImageEvent(.{
+        .execution_id = execution.id,
+        .result = completed,
+    });
+
+    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(@as(u64, 1), client.view.kittyAttachments().ingressVersion());
+    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 0), client.presenter.observed_attachment_ingress);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.observed_attachment_ingress);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.presented_attachment_ingress);
+}
+
+test "clipboard image from a retired agent target is consumed and freed" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try installTestingAttachmentTarget(client, 1);
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const execution = (try client.model.beginClipboardCapture(target)).?;
+    const completed = try testingClipboardCapture(client, execution, "private png");
+
+    _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
+    try client.syncAgentSnapshotResources();
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+
+    try client.handleClipboardImageEvent(.{
+        .execution_id = execution.id,
+        .result = completed,
+    });
+
+    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expectEqual(@as(u64, 0), client.view.kittyAttachments().ingressVersion());
+    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+}
+
+test "clipboard image failures settle lifecycle without direct presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try installTestingAttachmentTarget(client, 1);
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    const pending_before = client.presenter.pending_updates;
+    const no_image = (try client.model.beginClipboardCapture(target)).?;
+    const version_before_empty = client.model.version();
+
+    try client.handleClipboardImageEvent(.{
+        .execution_id = no_image.id,
+        .result = error.NoImageOnClipboard,
+    });
+
+    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expectEqualDeep(version_before_empty, client.model.version());
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    const too_large = (try client.model.beginClipboardCapture(target)).?;
+    const version_before_large = client.model.version();
+    try client.handleClipboardImageEvent(.{
+        .execution_id = too_large.id,
+        .result = error.ClipboardImageTooLarge,
+    });
+
+    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.model.version().notifications > version_before_large.notifications);
+    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    const invalid = (try client.model.beginClipboardCapture(target)).?;
+    const completed = try testingClipboardCapture(client, invalid, "invalid");
+    completed.width = 0;
+    const version_before_invalid = client.model.version();
+    try client.handleClipboardImageEvent(.{
+        .execution_id = invalid.id,
+        .result = completed,
+    });
+
+    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.version().notifications > version_before_invalid.notifications);
+    try std.testing.expectEqual(@as(u64, 0), client.view.kittyAttachments().ingressVersion());
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
 }
 
 test "host resize commits before resources and presents by model version" {

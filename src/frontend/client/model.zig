@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
+const attachments = @import("../attachments/root.zig");
 const graphics = @import("../graphics/root.zig");
 const input_capability = @import("../input/root.zig");
 const notifications = @import("../notifications/root.zig");
@@ -175,6 +176,16 @@ pub const PluginExecutionId = enum(u64) {
 pub const PluginExecution = struct {
     id: PluginExecutionId,
     configuration_generation: u64,
+};
+
+pub const ClipboardCaptureId = enum(u64) {
+    none = 0,
+    _,
+};
+
+pub const ClipboardCapture = struct {
+    id: ClipboardCaptureId,
+    target: attachments.Target,
 };
 
 pub const InitialClientState = struct {
@@ -686,6 +697,8 @@ pub const Model = struct {
     configuration_revision: u64 = 0,
     plugin_execution: ?PluginExecution = null,
     next_plugin_execution_id: u64 = 1,
+    clipboard_capture: ?ClipboardCapture = null,
+    next_clipboard_capture_id: u64 = 1,
     host_size: schema.TerminalSize,
     host_revision: u64 = 0,
     host_capabilities: HostCapabilities,
@@ -855,6 +868,54 @@ pub const Model = struct {
 
         model.plugin_execution = null;
         return execution;
+    }
+
+    /// Returns the single clipboard capture currently owned by the client.
+    ///
+    /// ```zig
+    /// const capture = model.clipboardCapture() orelse return;
+    /// ```
+    pub fn clipboardCapture(model: *const Model) ?ClipboardCapture {
+        return model.clipboard_capture;
+    }
+
+    /// Reserves one capture identity for the focused attachment target.
+    ///
+    /// ```zig
+    /// const capture = try model.beginClipboardCapture(target) orelse return;
+    /// ```
+    pub fn beginClipboardCapture(model: *Model, target: attachments.Target) !?ClipboardCapture {
+        if (model.clipboard_capture != null) {
+            return null;
+        }
+        if (model.next_clipboard_capture_id == 0) {
+            return error.ClipboardCaptureIdExhausted;
+        }
+
+        try target.validate();
+        const capture: ClipboardCapture = .{
+            .id = @enumFromInt(model.next_clipboard_capture_id),
+            .target = target,
+        };
+        model.next_clipboard_capture_id +%= 1;
+        model.clipboard_capture = capture;
+
+        return capture;
+    }
+
+    /// Finishes only the matching capture and preserves a newer reservation.
+    ///
+    /// ```zig
+    /// const capture = model.finishClipboardCapture(id) orelse return;
+    /// ```
+    pub fn finishClipboardCapture(model: *Model, id: ClipboardCaptureId) ?ClipboardCapture {
+        const capture = model.clipboard_capture orelse return null;
+        if (capture.id != id) {
+            return null;
+        }
+
+        model.clipboard_capture = null;
+        return capture;
     }
 
     /// Returns the pane-gap preference used by current and future tabs.
@@ -1401,6 +1462,20 @@ pub const Model = struct {
             .claude, .codex => return key,
             .unknown => return null,
         }
+    }
+
+    /// Resolves the focused attachment-capable agent to its capture target.
+    ///
+    /// ```zig
+    /// const target = model.focusedAttachmentTarget() orelse return;
+    /// ```
+    pub fn focusedAttachmentTarget(model: *const Model) ?attachments.Target {
+        const key = model.focusedAttachmentAgent() orelse return null;
+
+        return .{
+            .pane_id = key.pane_id,
+            .pane_generation = key.pane_generation,
+        };
     }
 
     /// Resolves one user-input target without exposing pane storage. Prompts
@@ -4202,6 +4277,56 @@ test "plugin execution identity exhaustion cannot publish a partial reservation"
     try std.testing.expect(model.pluginExecution() == null);
 }
 
+test "clipboard capture is single flight and completion matches its exact identity" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const target: attachments.Target = .{
+        .pane_id = @enumFromInt(7),
+        .pane_generation = 3,
+    };
+
+    const first = (try model.beginClipboardCapture(target)).?;
+
+    try std.testing.expectEqual(@as(u64, 1), @intFromEnum(first.id));
+    try std.testing.expectEqualDeep(target, first.target);
+    try std.testing.expectEqualDeep(first, model.clipboardCapture().?);
+    try std.testing.expect((try model.beginClipboardCapture(target)) == null);
+    try std.testing.expect(model.finishClipboardCapture(@enumFromInt(99)) == null);
+    try std.testing.expectEqualDeep(first, model.clipboardCapture().?);
+    try std.testing.expectEqualDeep(first, model.finishClipboardCapture(first.id).?);
+    try std.testing.expect(model.clipboardCapture() == null);
+
+    const second = (try model.beginClipboardCapture(target)).?;
+
+    try std.testing.expectEqual(@as(u64, 2), @intFromEnum(second.id));
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "clipboard capture validation and identity exhaustion leave no reservation" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    try std.testing.expectError(error.InvalidAttachmentTarget, model.beginClipboardCapture(.{
+        .pane_id = .invalid,
+        .pane_generation = 1,
+    }));
+    try std.testing.expect(model.clipboardCapture() == null);
+
+    model.next_clipboard_capture_id = std.math.maxInt(u64);
+    const last = (try model.beginClipboardCapture(.{
+        .pane_id = @enumFromInt(4),
+        .pane_generation = 2,
+    })).?;
+
+    try std.testing.expectEqual(std.math.maxInt(u64), @intFromEnum(last.id));
+    _ = model.finishClipboardCapture(last.id);
+    try std.testing.expectError(
+        error.ClipboardCaptureIdExhausted,
+        model.beginClipboardCapture(last.target),
+    );
+    try std.testing.expect(model.clipboardCapture() == null);
+}
+
 test "host resize commits resolved geometry once" {
     const initial: schema.TerminalSize = .{
         .cols = 80,
@@ -4701,6 +4826,10 @@ test "agent navigation and focused attachments derive from committed client stat
     _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &agent_entries });
 
     try std.testing.expectEqualDeep(local_key, model.focusedAttachmentAgent().?);
+    try std.testing.expectEqualDeep(attachments.Target{
+        .pane_id = local_key.pane_id,
+        .pane_generation = local_key.pane_generation,
+    }, model.focusedAttachmentTarget().?);
     try std.testing.expectEqualDeep(LocalAgentNavigation{
         .pane_id = local_key.pane_id,
         .select_tab = null,
@@ -4718,6 +4847,7 @@ test "agent navigation and focused attachments derive from committed client stat
     }, .{ .cols = 20, .rows = 5 });
 
     try std.testing.expect(model.focusedAttachmentAgent() == null);
+    try std.testing.expect(model.focusedAttachmentTarget() == null);
     try std.testing.expectEqualDeep(LocalAgentNavigation{
         .pane_id = local_key.pane_id,
         .select_tab = first.tab_id,

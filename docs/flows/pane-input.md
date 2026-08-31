@@ -68,6 +68,11 @@ If the captured pane stops being attached or leaves the active tab, later
 chunks are dropped. A prompt or copy mode that starts during the stream keeps
 exclusive ownership and no paste bytes escape to the child.
 
+An unmodified `Ctrl+V` follows the normal pane-input transaction first. Only
+after delivery does the client schedule its best-effort local image preview.
+See [Clipboard image preview](clipboard-image.md) for its media worker,
+identity, bounds and presentation path.
+
 ## Effects and failure policy
 
 `pane_inputs` wires the application ports to the shared `pane_viewports` effect

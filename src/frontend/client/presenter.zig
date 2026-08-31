@@ -35,6 +35,7 @@ const Presenter = @This();
 pub const Observation = struct {
     model: client_model.Version,
     graphics_ingress: u64,
+    attachment_ingress: u64,
 };
 
 io: Io,
@@ -47,6 +48,8 @@ observed_model_version: client_model.Version = .{},
 presented_model_version: client_model.Version = .{},
 observed_graphics_ingress: u64 = 0,
 presented_graphics_ingress: u64 = 0,
+observed_attachment_ingress: u64 = 0,
+presented_attachment_ingress: u64 = 0,
 presented_copy_mode: ?client_model.CopyModeProjection = null,
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
@@ -72,20 +75,23 @@ pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
 /// Observes semantic and physical client revisions and schedules one frame.
 ///
 /// ```zig
-/// try presenter.observe(.{ .model = model.version(), .graphics_ingress = store.ingressVersion() });
+/// try presenter.observe(observation);
 /// ```
 pub fn observe(presenter: *Presenter, observation: Observation) !void {
     const newly_observed = !std.meta.eql(presenter.observed_model_version, observation.model) or
-        presenter.observed_graphics_ingress != observation.graphics_ingress;
+        presenter.observed_graphics_ingress != observation.graphics_ingress or
+        presenter.observed_attachment_ingress != observation.attachment_ingress;
     if (newly_observed) {
         presenter.observed_model_version = observation.model;
         presenter.observed_graphics_ingress = observation.graphics_ingress;
+        presenter.observed_attachment_ingress = observation.attachment_ingress;
         try presenter.requestDraw();
         return;
     }
 
     const presentation_stale = !std.meta.eql(presenter.presented_model_version, observation.model) or
-        presenter.presented_graphics_ingress != observation.graphics_ingress;
+        presenter.presented_graphics_ingress != observation.graphics_ingress or
+        presenter.presented_attachment_ingress != observation.attachment_ingress;
     if (presentation_stale and !presenter.draw_pending) {
         try presenter.requestDraw();
     }
@@ -207,6 +213,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         try presenter.presentEmpty(client);
     presenter.presented_model_version = presenter.observed_model_version;
     presenter.presented_graphics_ingress = presenter.observed_graphics_ingress;
+    presenter.presented_attachment_ingress = presenter.observed_attachment_ingress;
     presenter.presented_copy_mode = copy_projection;
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);

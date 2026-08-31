@@ -8,6 +8,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | Flow | Trigger | Visible result | Proof |
 | --- | --- | --- | --- |
 | [Agent snapshot](agent-snapshot.md) | Runtime agent evidence changes | The client commits one bounded replica, emits actionable transitions and the presenter projects the latest revision | Storage, model, effect-order, protocol and presenter tests |
+| [Clipboard image preview](clipboard-image.md) | An attachment-capable pane receives `Ctrl+V` | The child gets its paste first, then one current bounded preview enters paced client media | Identity, ownership, bounds, stale-result and presenter tests |
 | [Configuration reload](config-reload.md) | A watched config, module, plugin or trust file changes | One validated generation replaces client state, resources and owned Lua/plugin objects before paced presentation | Validation, ownership, model, effect-order and presenter tests |
 | [Copy mode](copy-mode.md) | User enters scrollback, moves or selects text | Model-owned copy state is projected on a paced frame, and an accepted selection reaches the runtime | Pure-state, model, effect-order, backpressure and presenter tests |
 | [Host capabilities](host-capabilities.md) | The exterior terminal answers a probe or its deadline expires | The client commits per-host features, projects fallbacks and lets the presenter observe one version | Translation, model, effect-order, failure and presenter tests |

@@ -54,50 +54,33 @@ pub const Capture = struct {
     }
 };
 
-/// One bounded in-flight capture. A second paste still reaches the pane, but
-/// its preview is dropped until this worker finishes. `orphan` closes the
-/// cancellation race: once a worker allocates a result, client shutdown can
-/// always find and free it after cancelling the select tasks.
-pub const CaptureState = struct {
-    pending: bool = false,
-    next_sequence: u64 = 1,
+/// Owns only the result pointer that can outlive a cancelled capture worker.
+/// The client model owns the active capture identity and target.
+pub const CaptureResources = struct {
     orphan: ?*Capture = null,
 
-    pub fn begin(state: *CaptureState, target: Target) !?CaptureRequest {
-        try target.validate();
-        if (state.pending) return null;
-        if (state.next_sequence == 0 or state.next_sequence == std.math.maxInt(u64))
-            return error.AttachmentSequenceExhausted;
-        const request: CaptureRequest = .{
-            .target = target,
-            .sequence = state.next_sequence,
-        };
-        state.next_sequence += 1;
-        state.pending = true;
-        return request;
-    }
-
-    pub fn scheduleFailed(state: *CaptureState) void {
-        std.debug.assert(state.orphan == null);
-        state.pending = false;
-    }
-
-    pub fn failed(state: *CaptureState) void {
-        std.debug.assert(state.orphan == null);
-        state.pending = false;
-    }
-
-    pub fn take(state: *CaptureState, capture: *Capture) *Capture {
-        std.debug.assert(state.pending);
-        std.debug.assert(state.orphan == capture);
-        state.orphan = null;
-        state.pending = false;
+    /// Transfers one completed worker result to the client event handler.
+    ///
+    /// ```zig
+    /// const owned = resources.take(completed);
+    /// ```
+    pub fn take(resources: *CaptureResources, capture: *Capture) *Capture {
+        std.debug.assert(resources.orphan == capture);
+        resources.orphan = null;
         return capture;
     }
 
-    pub fn deinit(state: *CaptureState, gpa: std.mem.Allocator) void {
-        if (state.orphan) |capture| capture.deinit(gpa);
-        state.* = .{};
+    /// Frees a result published before its worker was cancelled.
+    ///
+    /// ```zig
+    /// defer resources.deinit(gpa);
+    /// ```
+    pub fn deinit(resources: *CaptureResources, gpa: std.mem.Allocator) void {
+        if (resources.orphan) |capture| {
+            capture.deinit(gpa);
+        }
+
+        resources.* = .{};
     }
 };
 
@@ -180,6 +163,7 @@ pub const Store = struct {
     cell_height: u16 = 0,
     total_bytes: usize = 0,
     next_host_id: u32 = 1,
+    ingress_version: u64 = 0,
     partial: ?u8 = null,
     abort_pending: bool = false,
     delete_ids: [max_items * 2]u32 = undefined,
@@ -196,6 +180,15 @@ pub const Store = struct {
 
     pub fn retainedBytes(store: *const Store) usize {
         return store.total_bytes;
+    }
+
+    /// Returns the revision advanced by each accepted clipboard image.
+    ///
+    /// ```zig
+    /// const revision = store.ingressVersion();
+    /// ```
+    pub fn ingressVersion(store: *const Store) u64 {
+        return store.ingress_version;
     }
 
     pub fn cleanupPending(store: *const Store) bool {
@@ -320,6 +313,7 @@ pub const Store = struct {
             .modal_placement_id = first_modal_placement_id + host_id,
         };
         store.total_bytes += png.len;
+        store.ingress_version +%= 1;
     }
 
     pub fn remove(store: *Store, id: Id) bool {
@@ -709,36 +703,38 @@ extern fn telar_macos_clipboard_copy_png(
     max_pixels_value: u64,
 ) c_int;
 
-test "capture state admits one worker and releases an adopted result" {
-    var state: CaptureState = .{};
-    const target: Target = .{
-        .pane_id = @enumFromInt(7),
-        .pane_generation = 3,
+test "capture resources release one completed worker result" {
+    var resources: CaptureResources = .{};
+    const request: CaptureRequest = .{
+        .target = .{
+            .pane_id = @enumFromInt(7),
+            .pane_generation = 3,
+        },
+        .sequence = 1,
     };
-    const first = (try state.begin(target)).?;
-    try std.testing.expect((try state.begin(target)) == null);
-    try std.testing.expectEqual(@as(u64, 1), first.sequence);
-
     const capture = try std.testing.allocator.create(Capture);
     capture.* = .{
-        .request = first,
+        .request = request,
         .png = try std.testing.allocator.dupe(u8, "png"),
         .width = 1,
         .height = 1,
     };
-    state.orphan = capture;
-    try std.testing.expect(state.take(capture) == capture);
+    resources.orphan = capture;
+
+    try std.testing.expect(resources.take(capture) == capture);
     capture.deinit(std.testing.allocator);
-    try std.testing.expect(!state.pending);
-    try std.testing.expectEqual(@as(u64, 2), state.next_sequence);
+    try std.testing.expect(resources.orphan == null);
 }
 
-test "capture state frees a cancelled worker result" {
-    var state: CaptureState = .{};
-    const request = (try state.begin(.{
-        .pane_id = @enumFromInt(9),
-        .pane_generation = 4,
-    })).?;
+test "capture resources free a cancelled worker result" {
+    var resources: CaptureResources = .{};
+    const request: CaptureRequest = .{
+        .target = .{
+            .pane_id = @enumFromInt(9),
+            .pane_generation = 4,
+        },
+        .sequence = 1,
+    };
     const capture = try std.testing.allocator.create(Capture);
     capture.* = .{
         .request = request,
@@ -746,21 +742,17 @@ test "capture state frees a cancelled worker result" {
         .width = 2,
         .height = 2,
     };
-    state.orphan = capture;
-    state.deinit(std.testing.allocator);
-    try std.testing.expect(!state.pending);
+    resources.orphan = capture;
+    resources.deinit(std.testing.allocator);
+
+    try std.testing.expect(resources.orphan == null);
 }
 
-fn testCapture(
-    gpa: std.mem.Allocator,
-    sequence: u64,
-    target: Target,
-    bytes: []const u8,
-) !*Capture {
+fn testCapture(gpa: std.mem.Allocator, request: CaptureRequest, bytes: []const u8) !*Capture {
     const capture = try gpa.create(Capture);
     errdefer gpa.destroy(capture);
     capture.* = .{
-        .request = .{ .target = target, .sequence = sequence },
+        .request = request,
         .png = try gpa.dupe(u8, bytes),
         .width = 20,
         .height = 10,
@@ -768,19 +760,32 @@ fn testCapture(
     return capture;
 }
 
+fn testRequest(sequence: u64, target: Target) CaptureRequest {
+    return .{
+        .target = target,
+        .sequence = sequence,
+    };
+}
+
 test "preview store is bounded and keeps captures scoped to their agent generation" {
     var store = Store.init(std.testing.allocator);
     defer store.deinit();
     const target: Target = .{ .pane_id = @enumFromInt(7), .pane_generation = 3 };
     try std.testing.expect(store.setTarget(target).changed);
-    for (1..6) |sequence|
-        try store.adopt(try testCapture(std.testing.allocator, sequence, target, "png"));
+    for (1..6) |sequence| {
+        try store.adopt(try testCapture(
+            std.testing.allocator,
+            testRequest(sequence, target),
+            "png",
+        ));
+    }
 
     const snapshot = store.snapshot();
     try std.testing.expectEqual(@as(u8, max_items), snapshot.len);
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(snapshot.items[0].id));
     try std.testing.expectEqual(@as(u64, 5), @intFromEnum(snapshot.items[3].id));
     try std.testing.expectEqual(@as(usize, max_items * 3), store.retainedBytes());
+    try std.testing.expectEqual(@as(u64, 5), store.ingressVersion());
 
     const other: Target = .{ .pane_id = target.pane_id, .pane_generation = 4 };
     const changed = store.setTarget(other);
@@ -794,7 +799,11 @@ test "preview store emits PNG and client-owned z-index placements" {
     defer store.deinit();
     const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 2 };
     _ = store.setTarget(target);
-    try store.adopt(try testCapture(std.testing.allocator, 1, target, "encoded png"));
+    try store.adopt(try testCapture(
+        std.testing.allocator,
+        testRequest(1, target),
+        "encoded png",
+    ));
     _ = store.configure(.supported, 10, 20);
     var plan: Plan = .{ .thumbnail_count = 1 };
     plan.thumbnails[0] = .{
@@ -817,7 +826,11 @@ test "dismissal defers private buffer wiping to the media path" {
     defer store.deinit();
     const target: Target = .{ .pane_id = @enumFromInt(9), .pane_generation = 2 };
     _ = store.setTarget(target);
-    try store.adopt(try testCapture(std.testing.allocator, 1, target, "private png"));
+    try store.adopt(try testCapture(
+        std.testing.allocator,
+        testRequest(1, target),
+        "private png",
+    ));
     try std.testing.expect(store.remove(@enumFromInt(1)));
     try std.testing.expect(store.cleanupPending());
     try std.testing.expectEqual(@as(usize, 11), store.retainedBytes());
@@ -835,7 +848,11 @@ test "cancelling a dismissed PNG transfer owns the graphics stream until abort" 
     const large = try std.testing.allocator.alloc(u8, kitty.transmission_budget_per_frame);
     defer std.testing.allocator.free(large);
     @memset(large, 0xaa);
-    try store.adopt(try testCapture(std.testing.allocator, 1, target, large));
+    try store.adopt(try testCapture(
+        std.testing.allocator,
+        testRequest(1, target),
+        large,
+    ));
     _ = store.configure(.supported, 10, 20);
     var plan: Plan = .{ .thumbnail_count = 1 };
     plan.thumbnails[0] = .{

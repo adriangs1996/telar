@@ -41,6 +41,7 @@ test {
     _ = @import("agent_snapshots.zig");
     _ = @import("client.zig");
     _ = @import("client_test.zig");
+    _ = @import("clipboard_images.zig");
     _ = @import("config_reload.zig");
     _ = @import("config_reloads.zig");
     _ = @import("copy_modes.zig");

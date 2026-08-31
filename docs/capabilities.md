@@ -119,6 +119,7 @@ All client handlers are in `src/frontend/client/root.zig`.
 | Telemetry tick/write | `Client.handleTelemetryTickEvent`, `Client.handleTelemetryWrittenEvent` |
 | Config reload | `Client.handleConfigReloadEvent` |
 | Plugin worker result | [`Client.handlePluginResultEvent`](flows/plugin-action.md) |
+| Clipboard image result | [`Client.handleClipboardImageEvent`](flows/clipboard-image.md) |
 
 ### Runtime
 
