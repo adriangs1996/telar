@@ -9,9 +9,7 @@ const agent_event_dispatcher = @import("event_dispatcher/agent.zig");
 const client_event_dispatcher = @import("event_dispatcher/client.zig");
 const history_event_dispatcher = @import("event_dispatcher/history.zig");
 const observability_event_dispatcher = @import("event_dispatcher/observability.zig");
-const pane_io_event_dispatcher = @import("event_dispatcher/pane/io.zig");
-const pane_pipeline_event_dispatcher = @import("event_dispatcher/pane/pipeline.zig");
-const pane_projection_event_dispatcher = @import("event_dispatcher/pane/projection.zig");
+const pane_event_dispatcher = @import("event_dispatcher/pane/root.zig");
 const request_dispatch = @import("request_dispatch.zig");
 const observability = @import("../observability/root.zig");
 const telemetry_mod = observability.telemetry;
@@ -33,15 +31,8 @@ pub fn Bindings(comptime Application: type) type {
     const ClientEvents = client_event_dispatcher.Dispatcher(Application);
     const HistoryEvents = history_event_dispatcher.Dispatcher(Application);
     const ObservabilityEvents = observability_event_dispatcher.Dispatcher(Application);
-    const PaneIoEvents = pane_io_event_dispatcher.Dispatcher(Application);
-    const PaneProjectionEvents = pane_projection_event_dispatcher.Dispatcher(Application, .{
-        .schedule_description = AgentEvents.scheduleDescription,
-        .schedule_response = PaneIoEvents.scheduleResponse,
-    });
-    const PanePipelineEvents = pane_pipeline_event_dispatcher.Dispatcher(Application, .{
-        .schedule_observation = PaneProjectionEvents.scheduleObservation,
-        .schedule_media = PaneProjectionEvents.scheduleMedia,
-        .schedule_response = PaneIoEvents.scheduleResponse,
+    const PaneEvents = pane_event_dispatcher.Dispatcher(Application, .{
+        .schedule_agent_description = AgentEvents.scheduleDescription,
     });
 
     return struct {
@@ -83,25 +74,25 @@ pub fn Bindings(comptime Application: type) type {
                     try ObservabilityEvents.handleMetricsTick(application, result);
                 },
                 .pane_input_written => |value| {
-                    try PaneIoEvents.handleInputWritten(application, value);
+                    try PaneEvents.Io.handleInputWritten(application, value);
                 },
                 .pane_response_written => |value| {
-                    try PaneIoEvents.handleResponseWritten(application, value);
+                    try PaneEvents.Io.handleResponseWritten(application, value);
                 },
                 .pane_output => |value| {
-                    try PanePipelineEvents.handleOutput(application, value, resources.ingest_gate);
+                    try PaneEvents.Pipeline.handleOutput(application, value, resources.ingest_gate);
                 },
                 .pane_ingested => |value| {
-                    try PanePipelineEvents.handleIngested(application, value);
+                    try PaneEvents.Pipeline.handleIngested(application, value);
                 },
                 .pane_observed => |value| {
-                    try PaneProjectionEvents.handleObserved(application, value);
+                    try PaneEvents.Projection.handleObserved(application, value);
                 },
                 .pane_media => |value| {
-                    try PaneProjectionEvents.handleMedia(application, value);
+                    try PaneEvents.Projection.handleMedia(application, value);
                 },
                 .pane_exit => |value| {
-                    try PanePipelineEvents.handleExit(application, value);
+                    try PaneEvents.Pipeline.handleExit(application, value);
                 },
                 .telemetry_tick => |result| {
                     ObservabilityEvents.handleTelemetryTick(application, resources.telemetry, result);
@@ -124,10 +115,10 @@ pub fn Bindings(comptime Application: type) type {
         }
 
         pub const request_runtime_port: request_dispatch.RuntimePort(Application) = .{
-            .schedule_observation = PaneProjectionEvents.scheduleObservation,
-            .schedule_media = PaneProjectionEvents.scheduleMedia,
-            .schedule_response = PaneIoEvents.scheduleResponse,
-            .schedule_input = PaneIoEvents.scheduleInput,
+            .schedule_observation = PaneEvents.Projection.scheduleObservation,
+            .schedule_media = PaneEvents.Projection.scheduleMedia,
+            .schedule_response = PaneEvents.Io.scheduleResponse,
+            .schedule_input = PaneEvents.Io.scheduleInput,
         };
     };
 }
