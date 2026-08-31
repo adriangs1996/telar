@@ -15,7 +15,6 @@ const version = "0.0.0";
 pub const std_options: std.Options = .{ .log_level = .err };
 
 const Cli = cli_mod.Cli;
-const ConfigCheckOptions = cli_mod.ConfigCheckOptions;
 const PluginCommand = cli_mod.PluginCommand;
 const PluginOptions = cli_mod.PluginOptions;
 const RunOptions = cli_mod.RunOptions;
@@ -198,13 +197,11 @@ fn runServer(init: std.process.Init, options: ServerOptions) !void {
     if (options.action == .stop) return stopRuntime(init, &connector);
 
     var config_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const config_generation = try loadConfigGeneration(
-        init,
-        options.config,
-        options.no_config,
-        options.profile,
-        &config_path_buffer,
-    );
+    const config_generation = try cli_mod.config.loadGeneration(init, .{
+        .path = options.config,
+        .disabled = options.no_config,
+        .profile = options.profile,
+    }, &config_path_buffer);
     defer if (config_generation) |generation| generation.deinit();
     if (config_generation) |generation| {
         if (!resolved_options.graphics_pane_set)
@@ -349,13 +346,11 @@ fn runClient(
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const cwd_len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
     var config_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const generation = try loadConfigGeneration(
-        init,
-        options.config,
-        options.no_config,
-        options.profile,
-        &config_path_buffer,
-    );
+    const generation = try cli_mod.config.loadGeneration(init, .{
+        .path = options.config,
+        .disabled = options.no_config,
+        .profile = options.profile,
+    }, &config_path_buffer);
     const config_path: ?[]const u8 = if (generation != null)
         if (options.config) |value|
             std.mem.span(value)
@@ -463,73 +458,6 @@ fn runClient(
         .trust_path = trust_path,
         .profile = if (options.profile) |value| std.mem.span(value) else null,
     });
-}
-
-fn loadConfigGeneration(
-    init: std.process.Init,
-    override: ?[*:0]const u8,
-    disabled: bool,
-    profile: ?[*:0]const u8,
-    path_buffer: []u8,
-) !?*frontend.config.Generation {
-    if (disabled) return null;
-    const explicit = override != null or profile != null;
-    const path = if (override) |value|
-        std.mem.span(value)
-    else
-        try frontend.config.defaultPath(init.minimal.environ, path_buffer);
-    Io.Dir.cwd().access(init.io, path, .{}) catch |err| switch (err) {
-        error.FileNotFound => if (explicit) return err else return null,
-        else => |other| return other,
-    };
-    var diagnostic: frontend.config.Diagnostic = .{};
-    return frontend.config.Generation.loadFileProfile(
-        init.gpa,
-        init.io,
-        path,
-        1,
-        if (profile) |value| std.mem.span(value) else null,
-        &diagnostic,
-    ) catch |err| {
-        std.debug.print("telar config: {s}\n", .{diagnostic.message()});
-        return err;
-    };
-}
-
-fn runConfigCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = if (options.path) |value|
-        std.mem.span(value)
-    else
-        try frontend.config.defaultPath(init.minimal.environ, &path_buffer);
-    var diagnostic: frontend.config.Diagnostic = .{};
-    const generation = frontend.config.Generation.loadFileProfile(
-        init.gpa,
-        init.io,
-        path,
-        1,
-        if (options.profile) |value| std.mem.span(value) else null,
-        &diagnostic,
-    ) catch |err| {
-        std.debug.print("telar config: {s}\n", .{diagnostic.message()});
-        return err;
-    };
-    defer generation.deinit();
-    const registry = try frontend.plugins.Registry.load(
-        init.gpa,
-        init.io,
-        generation.configDir(),
-        generation.pluginSlice(),
-    );
-    try registry.validateConfiguredActions(generation.snapshot.bindingSlice());
-    frontend.config.validateKeymap(
-        generation.snapshot.prefix,
-        generation.snapshot.bindingSlice(),
-    ) catch |err| {
-        std.debug.print("telar config: keybindings do not compile: {s}\n", .{@errorName(err)});
-        return err;
-    };
-    try File.stdout().writeStreamingAll(init.io, "telar config: OK\n");
 }
 
 fn runPluginCommand(init: std.process.Init, options: PluginOptions) !void {
@@ -767,7 +695,7 @@ pub fn main(init: std.process.Init) !void {
         .server => |options| try runServer(init, options),
         .history => |options| try cli_mod.history.run(init, options),
         .notification => |options| try cli_mod.notification.run(init, options),
-        .config_check => |options| try runConfigCheck(init, options),
+        .config_check => |options| try cli_mod.config.runCheck(init, options),
         .plugin_worker => |options| try frontend.plugins.runWorker(
             init,
             std.mem.span(options.entry),
