@@ -19,6 +19,7 @@ const proxy_resource = @import("../resources/proxy.zig");
 const observability = @import("../observability/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 const actor_bindings = @import("actor_bindings.zig");
+const operation_scheduler = @import("operation_scheduler.zig");
 const request_dispatch = @import("request_dispatch.zig");
 
 const Io = std.Io;
@@ -602,7 +603,7 @@ pub const Application = struct {
             },
             .metrics = &application.metrics,
         })) orelse return;
-        Actors.startSessionSend(application, session, prepared.payload) catch |err| {
+        Operations.startSessionSend(application, session, prepared.payload) catch |err| {
             session.delivery.abort(prepared);
             return err;
         };
@@ -624,7 +625,8 @@ pub const Application = struct {
 };
 
 const Actors = actor_bindings.Bindings(Application);
-const RequestDispatcher = request_dispatch.Dispatcher(Application, Actors.request_runtime_port);
+const Operations = operation_scheduler.Scheduler(Application);
+const RequestDispatcher = request_dispatch.Dispatcher(Application, Operations.request_runtime_port);
 pub const EventResources = Actors.EventResources;
 
 /// Delegates one runtime event to the capability that owns it and reports
