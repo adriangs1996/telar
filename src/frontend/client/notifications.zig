@@ -112,22 +112,6 @@ pub fn publishNow(client: *Client, input: notification_capability.Input) !void {
     _ = try publish(client, client_clock.monotonic(client.io), input);
 }
 
-/// Publishes the model's current diagnostic as one bounded failure notice.
-///
-/// ```zig
-/// try publishDiagnostic(client, "Configuration rejected");
-/// ```
-pub fn publishDiagnostic(client: *Client, title: []const u8) !void {
-    const message = client.model.diagnostic() orelse return error.ClientDiagnosticMissing;
-
-    try publishNow(client, .{
-        .level = .failure,
-        .title = title,
-        .message = message,
-        .duration_ns = 7 * std.time.ns_per_s,
-    });
-}
-
 /// Advances every notification lifecycle to one monotonic timestamp.
 ///
 /// ```zig

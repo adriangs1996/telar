@@ -5231,32 +5231,6 @@ test "notification request rolls correlation back when transport is full" {
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
 
-test "diagnostic notification publication owns one bounded failure notice" {
-    var harness: TestHarness = undefined;
-    try harness.init();
-    defer harness.deinit();
-    const client = harness.client;
-
-    try std.testing.expectError(
-        error.ClientDiagnosticMissing,
-        notification_flow.publishDiagnostic(client, "Operation failed"),
-    );
-
-    _ = try client.model.setDiagnostic("original diagnostic", .{});
-    try notification_flow.publishDiagnostic(client, "Operation failed");
-    _ = try client.model.setDiagnostic("replacement diagnostic", .{});
-
-    const item = client.model.notificationSnapshot().itemAt(0).?;
-    try std.testing.expectEqual(notifications.Level.failure, item.level);
-    try std.testing.expectEqualStrings("Operation failed", item.title());
-    try std.testing.expectEqualStrings("original diagnostic", item.message());
-    try std.testing.expectEqual(
-        notifications.transition_duration_ns + 7 * std.time.ns_per_s,
-        item.expires_at_ns - item.transition_updated_ns,
-    );
-    try std.testing.expect(client.notification_scheduler.pending);
-}
-
 test "notification timer commits lifecycle state before presenter observation" {
     var harness: TestHarness = undefined;
     try harness.init();

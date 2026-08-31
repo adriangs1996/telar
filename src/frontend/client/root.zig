@@ -42,7 +42,6 @@ test {
     _ = @import("agent_snapshots.zig");
     _ = @import("agent_sounds.zig");
     _ = @import("client.zig");
-    _ = @import("client_diagnostics.zig");
     _ = @import("client_events.zig");
     _ = @import("client_startup.zig");
     _ = @import("client_detachments.zig");

@@ -8,37 +8,34 @@ state transition.
 ## Boundary
 
 ```text
-Lua invocation or validation failure
-        |
-LuaActionHandler ------------------------+
-                                         |
-configuration worker rejection           |
-        |                                |
-config_reloads -> client_diagnostics ----+--> ClientDiagnosticHandler
-                                         |             |
-plugin resolution or completion failure  |    validate primary value
-        |                                |             |
-plugin_actions -> client_diagnostics ----+      optional safe fallback
-                                                       |
-                                     ClientModel.replaceDiagnostic / clearDiagnostic
-                                                       |
-                                           Version.diagnostic
-                                                       |
-                                      client_events -> Presenter
+Lua invocation/validation -> LuaActionHandler ----------------------+
+configuration rejection -> DeliverConfigReloadHandler -------------+--> ClientDiagnosticHandler
+plugin start/completion -> DeliverPluginActionStart/Completion -----+             |
+                                                                         validate primary value
+                                                                                  |
+                                                                        optional safe fallback
+                                                                                  |
+                                                        ClientModel.replaceDiagnostic / clearDiagnostic
+                                                                                  |
+                                                                      Version.diagnostic
+                                                                                  |
+                                                                 client_events -> Presenter
 
-committed config or plugin diagnostic -> optional notification publication
+config/plugin delivery -> bounded notification input -> adapter publishNow
 ```
 
-`LuaActionHandler` composes `ClientDiagnosticHandler` directly because both
-belong to the application layer. Concrete configuration and plugin adapters
-enter through `client_diagnostics`, which only constructs the same handler and
-formats fixed-capacity values. No producer mutates diagnostic model state
-directly.
+Every producer composes `ClientDiagnosticHandler` directly inside the
+application layer. Lua owns invocation and validation failures,
+`DeliverConfigReloadHandler` owns configuration rejection, and the two plugin
+delivery handlers own resolution, worker and authorization failures. No client
+adapter formats or mutates diagnostic model state.
 
 Notification publication is a separate use case. Configuration and plugin
-failures first commit the banner and then let `notifications.publishDiagnostic`
-read that committed value. Lua failures intentionally publish only the banner.
-A notification failure cannot roll back diagnostic state.
+delivery handlers first commit the banner, construct a bounded notification
+input from that committed value and pass it to a physical publication port.
+The adapter only supplies `notifications.publishNow`. Lua failures
+intentionally publish only the banner. A notification failure cannot roll back
+diagnostic state.
 
 ## Validation and revisions
 
@@ -72,5 +69,8 @@ independently of notification timers or runtime transport.
   clear.
 - `src/frontend/client/application/lua_action.zig` proves failure fallback and
   clear-before-effects ordering through the shared handler.
+- `src/frontend/client/application/config_reload_delivery.zig` and
+  `plugin_action_delivery.zig` prove diagnostic-before-notification ordering
+  and preservation after publication failure.
 - `src/frontend/client/client_test.zig` proves configuration, Lua and plugin
   outcomes plus presenter observation on a real client.

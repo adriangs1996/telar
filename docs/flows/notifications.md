@@ -8,26 +8,25 @@ starts exiting.
 ## Publication path
 
 ```text
-runtime notification             request failure or local diagnostic
-        |                                      |
-notifications.applyRuntime       publishNow or publishDiagnostic
-        |                                      |
-wire-to-client translation                    |
-        +------------------+-------------------+
-                           |
-                notifications.publish
-                         |
-             PublishNotificationHandler
-                         |
-              ClientModel.publishNotification
-                         |
-       notifications.Center + Version.notifications
-                         |
-             notification_timers.reschedule
-                         |
-                 presentation_lifecycle.observe
-                         |
-          Presenter -> View.render(snapshot)
+runtime notification                         local semantic event
+        |                                              |
+notifications.applyRuntime                    application handler
+        |                                              |
+wire-to-client translation              construct notifications.Input
+        |                                              |
+notifications.publish <--------- adapter publishNow
+                               |
+                   PublishNotificationHandler
+                               |
+                    ClientModel.publishNotification
+                               |
+             notifications.Center + Version.notifications
+                               |
+                   notification_timers.reschedule
+                               |
+                       presentation_lifecycle.observe
+                               |
+                Presenter -> View.render(snapshot)
 ```
 
 The dispatcher delegates a runtime event to `notifications.applyRuntime`. The
@@ -35,13 +34,12 @@ adapter translates protocol level, target and millisecond duration into client
 notification values, adds the monotonic timestamp and invokes the existing
 publication use case. Request failures, agent and proxy transitions,
 configuration or plugin diagnostics, and clipboard image failures enter
-through `notifications.publishNow` or `publishDiagnostic` and converge on the
-same use case. `publishNow` owns monotonic timestamp acquisition.
-`publishDiagnostic` requires the model's current diagnostic, already committed
-through `ClientDiagnosticHandler`, and applies the bounded failure level and
-seven-second duration. Diagnostic replacement remains a separate use case.
-The notification handler commits its owned model state before it touches timer
-infrastructure.
+as complete `notifications.Input` values constructed by their application
+handlers. Their adapters pass those values to `notifications.publishNow`,
+which owns monotonic timestamp acquisition but no notification policy.
+Diagnostic-producing delivery handlers commit their banner before constructing
+the input. The notification handler commits its owned model state before it
+touches timer infrastructure.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
 keeps at most four items, refreshes an equivalent active item and replaces the
