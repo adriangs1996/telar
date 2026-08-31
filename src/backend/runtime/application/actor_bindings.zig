@@ -11,10 +11,10 @@ const client_session = client_runtime.session;
 const client_store = client_runtime.store;
 const runtime_config = @import("../config.zig");
 const runtime_event = @import("../event.zig");
-const event_sources = @import("../event_sources.zig");
 const agent_event_dispatcher = @import("event_dispatcher/agent.zig");
 const client_event_dispatcher = @import("event_dispatcher/client.zig");
 const history_event_dispatcher = @import("event_dispatcher/history.zig");
+const observability_event_dispatcher = @import("event_dispatcher/observability.zig");
 const request_dispatch = @import("request_dispatch.zig");
 const pane_events = event_entrypoints.pane;
 const media_projection = pane_events.media_projection;
@@ -29,10 +29,7 @@ const pane_response_pump = pane_events.response;
 const pane_mod = @import("../../pane/root.zig");
 const media_mod = @import("../../media/root.zig");
 const observability = @import("../observability/root.zig");
-const system_metrics_mod = observability.system_metrics;
-const system_metrics_coordinator = observability.system_metrics_coordinator;
 const telemetry_mod = observability.telemetry;
-const telemetry_tick_coordinator = observability.telemetry_tick_coordinator;
 const transport = @import("../../transport/root.zig");
 
 const Io = std.Io;
@@ -43,7 +40,6 @@ const Pane = pane_mod.Pane;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const TelemetryState = telemetry_mod.State;
-const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = client_store.max_clients;
 
 const IngestTestGate = runtime_config.IngestTestGate;
@@ -64,6 +60,7 @@ pub fn Bindings(comptime Application: type) type {
     const AgentEvents = agent_event_dispatcher.Dispatcher(Application);
     const ClientEvents = client_event_dispatcher.Dispatcher(Application);
     const HistoryEvents = history_event_dispatcher.Dispatcher(Application);
+    const ObservabilityEvents = observability_event_dispatcher.Dispatcher(Application);
 
     return struct {
         pub const EventResources = struct {
@@ -101,8 +98,7 @@ pub fn Bindings(comptime Application: type) type {
                     AgentEvents.handleDescription(application, result);
                 },
                 .metrics_tick => |result| {
-                    var coordinator = systemMetricsCoordinator(application);
-                    try coordinator.handle(result);
+                    try ObservabilityEvents.handleMetricsTick(application, result);
                 },
                 .pane_input_written => |value| {
                     var input_pump = paneInputPump(application);
@@ -134,12 +130,10 @@ pub fn Bindings(comptime Application: type) type {
                     try coordinator.handle(value);
                 },
                 .telemetry_tick => |result| {
-                    var coordinator = telemetryTickCoordinator(application, resources.telemetry);
-                    coordinator.handle(result);
+                    ObservabilityEvents.handleTelemetryTick(application, resources.telemetry, result);
                 },
-                .telemetry_written => |result| switch (resources.telemetry.finishWrite(result)) {
-                    .ready => {},
-                    .disable_sink => resources.telemetry.deinit(application.io),
+                .telemetry_written => |result| {
+                    ObservabilityEvents.handleTelemetryWritten(application, resources.telemetry, result);
                 },
             }
 
@@ -153,10 +147,6 @@ pub fn Bindings(comptime Application: type) type {
         /// ```
         pub fn startSessionSend(application: *Application, session: *ClientSession, payload: []const u8) !void {
             return ClientEvents.startSend(application, session, payload);
-        }
-
-        fn writeDiagnostics(io: Io, state: *TelemetryState, bytes: []const u8) anyerror!void {
-            try state.write(io, bytes);
         }
 
         const pane_input_runtime_port: pane_input_pump.RuntimePort(Application) = .{
@@ -382,116 +372,6 @@ pub fn Bindings(comptime Application: type) type {
 
         fn revokeExitedPaneCredential(application: *Application, pane: *Pane) void {
             application.revokePaneCredential(pane);
-        }
-
-        const system_metrics_runtime_port: system_metrics_coordinator.RuntimePort(Application) = .{
-            .rearm_tick = rearmSystemMetrics,
-            .sample = sampleSystemMetrics,
-            .pump_clients = pumpRuntimeClients,
-        };
-
-        const RuntimeSystemMetricsCoordinator = system_metrics_coordinator.Coordinator(Application, system_metrics_runtime_port);
-
-        fn systemMetricsCoordinator(application: *Application) RuntimeSystemMetricsCoordinator {
-            return RuntimeSystemMetricsCoordinator.init(application, .{ .sampler = &application.system_metrics });
-        }
-
-        fn rearmSystemMetrics(application: *Application) !void {
-            var sources = eventSources(application);
-            try sources.waitForSystemMetrics();
-        }
-
-        fn sampleSystemMetrics(_: *Application, sampler: *system_metrics_mod.Sampler) void {
-            sampler.sample();
-        }
-
-        const telemetry_tick_runtime_port: telemetry_tick_coordinator.RuntimePort(Application) = .{
-            .available = telemetryAvailable,
-            .disable = disableTelemetry,
-            .schedule_tick = scheduleTelemetryTick,
-            .format_sample = formatTelemetrySample,
-            .schedule_write = scheduleTelemetryWrite,
-        };
-
-        const RuntimeTelemetryTickCoordinator = telemetry_tick_coordinator.Coordinator(Application, telemetry_tick_runtime_port);
-
-        fn telemetryTickCoordinator(application: *Application, state: *TelemetryState) RuntimeTelemetryTickCoordinator {
-            return RuntimeTelemetryTickCoordinator.init(application, state);
-        }
-
-        fn telemetryAvailable(_: *Application, state: *const TelemetryState) bool {
-            return state.available();
-        }
-
-        fn disableTelemetry(application: *Application, state: *TelemetryState) void {
-            state.deinit(application.io);
-        }
-
-        fn scheduleTelemetryTick(application: *Application) !void {
-            var sources = eventSources(application);
-            try sources.waitForTelemetry();
-        }
-
-        fn eventSources(application: *Application) event_sources.Sources {
-            return event_sources.Sources.init(application.io, application.select);
-        }
-
-        fn formatTelemetrySample(application: *Application, buffer: []u8) ![]const u8 {
-            var attachment_stores: [max_clients]*const AttachmentStore = undefined;
-            var attachment_count: usize = 0;
-            var clients: telemetry_mod.ClientSample = .{ .count = application.clients.count };
-
-            for (&application.clients.items) |*slot| {
-                const session = slot.* orelse continue;
-                attachment_stores[attachment_count] = &session.attachments;
-                attachment_count += 1;
-                clients.response_queue_depth += session.delivery.responses.len;
-                clients.response_queue_high_water += session.delivery.responses.high_water;
-                clients.response_queue_dropped +|= session.delivery.responses.dropped;
-            }
-
-            clients.attachment_stores = attachment_stores[0..attachment_count];
-
-            const proxy_metrics = application.proxy_runtime.metrics();
-            const workspaces = application.workspaceReader();
-
-            return formatRuntimeTelemetry(buffer, .{
-                .io = application.io,
-                .metrics = &application.metrics,
-                .clients = clients,
-                .workspace_count = workspaces.count(),
-                .tab_count = workspaces.totalTabs(),
-                .panes = &application.model.panes,
-                .history_service = application.history_service,
-                .proxy = .{
-                    .active = application.proxy_runtime.active(),
-                    .active_connections = proxy_metrics.active_connections,
-                    .event_queue_depth = proxy_metrics.queued_events,
-                    .event_queue_high_water = proxy_metrics.event_queue_high_water,
-                    .dropped_events = proxy_metrics.dropped_events,
-                    .rejected_connections = proxy_metrics.rejected_connections,
-                    .invalid_authorization_rejections = proxy_metrics.invalid_authorization_rejections,
-                    .unknown_credential_rejections = proxy_metrics.unknown_credential_rejections,
-                    .connection_limit_drops = proxy_metrics.connection_limit_drops,
-                    .h2_decode_failures = proxy_metrics.h2_decode_failures,
-                    .passthrough_connections = proxy_metrics.passthrough_connections,
-                    .upstream_connect_failures = proxy_metrics.upstream_connect_failures,
-                    .tls_context_failures = proxy_metrics.tls_context_failures,
-                    .tls_upstream_handshake_failures = proxy_metrics.tls_upstream_handshake_failures,
-                    .tls_downstream_handshake_failures = proxy_metrics.tls_downstream_handshake_failures,
-                    .tls_mint_failures = proxy_metrics.tls_mint_failures,
-                    .claude_inference_requests = proxy_metrics.claude_inference_requests,
-                    .claude_sse_payload_fragments = proxy_metrics.claude_sse_payload_fragments,
-                    .claude_turn_completions = proxy_metrics.claude_turn_completions,
-                    .claude_successful_responses = proxy_metrics.claude_successful_responses,
-                    .claude_failure_observations = proxy_metrics.claude_failure_observations,
-                },
-                .heap = application.heap,
-            });
-        }
-
-        fn scheduleTelemetryWrite(application: *Application, state: *TelemetryState, line: []const u8) !void {
-            try application.select.concurrent(.telemetry_written, writeDiagnostics, .{ application.io, state, line });
         }
 
         const pane_observation_runtime_port: pane_observation_coordinator.RuntimePort(Application) = .{
