@@ -16,7 +16,6 @@ pub const std_options: std.Options = .{ .log_level = .err };
 
 const Cli = cli_mod.Cli;
 const ConfigCheckOptions = cli_mod.ConfigCheckOptions;
-const NotificationOptions = cli_mod.NotificationOptions;
 const PluginCommand = cli_mod.PluginCommand;
 const PluginOptions = cli_mod.PluginOptions;
 const RunOptions = cli_mod.RunOptions;
@@ -680,55 +679,6 @@ fn writeTrustStore(
     committed = true;
 }
 
-fn runNotification(init: std.process.Init, options: NotificationOptions) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
-    var connection = connector.connect() catch |err| switch (err) {
-        error.FileNotFound, error.ConnectionRefused => {
-            std.debug.print("telar notification: runtime is not running\n", .{});
-            return error.RuntimeNotRunning;
-        },
-        else => |other| return other,
-    };
-    defer connection.deinit(init.io);
-
-    var send_buffer: [
-        1 + 8 + 1 + 4 + 1 + 8 + 2 +
-            core.schema.max_notification_title_bytes + 2 +
-            core.schema.max_notification_message_bytes
-    ]u8 = undefined;
-    try connection.send(init.io, try core.schema.encodeShowNotification(&send_buffer, .{
-        .request_id = @enumFromInt(1),
-        .notification = .{
-            .level = options.level,
-            .duration_ms = options.duration_ms,
-            .target = options.target,
-            .title = std.mem.span(options.title),
-            .message = if (options.body) |body| std.mem.span(body) else "",
-        },
-    }));
-
-    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
-    defer init.gpa.free(receive_buffer);
-    const response = try core.schema.decodeServer(
-        try connection.receive(init.io, receive_buffer),
-    );
-    switch (response) {
-        .notification_shown => |shown| {
-            if (shown.request_id != @as(core.schema.RequestId, @enumFromInt(1)))
-                return error.UnexpectedRuntimeResponse;
-            if (shown.delivered_clients == 0) {
-                std.debug.print("telar notification: no UI client is connected\n", .{});
-                return error.NoNotificationClients;
-            }
-        },
-        .request_failed => |failure| {
-            std.debug.print("telar notification: {s}\n", .{failure.message});
-            return error.NotificationFailed;
-        },
-        else => return error.UnexpectedRuntimeResponse,
-    }
-}
-
 const usage =
     \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
     \\       telar server
@@ -816,7 +766,7 @@ pub fn main(init: std.process.Init) !void {
         .version => try File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try runServer(init, options),
         .history => |options| try cli_mod.history.run(init, options),
-        .notification => |options| try runNotification(init, options),
+        .notification => |options| try cli_mod.notification.run(init, options),
         .config_check => |options| try runConfigCheck(init, options),
         .plugin_worker => |options| try frontend.plugins.runWorker(
             init,

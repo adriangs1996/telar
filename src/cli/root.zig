@@ -4,6 +4,7 @@ const parser = @import("parser.zig");
 const runtime_connection = @import("runtime_connection.zig");
 
 pub const history = @import("history.zig");
+pub const notification = @import("notification.zig");
 
 pub const Cli = parser.Cli;
 pub const ConfigCheckOptions = parser.ConfigCheckOptions;
