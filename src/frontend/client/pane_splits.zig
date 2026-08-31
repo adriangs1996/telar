@@ -6,6 +6,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_geometry = @import("pane_geometry.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
@@ -119,7 +120,7 @@ fn applyConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) 
                 return error.UnexpectedPaneSplit;
             }
 
-            try client.resizeAttached(&tab.model, client.view.workbench());
+            try pane_geometry.offerAttached(client, &tab.model, client.view.workbench());
             try pane_focus.syncResources(client);
         },
         .inactive => {

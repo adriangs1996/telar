@@ -46,9 +46,9 @@ the existing client behavior, now owned by the model transition.
 
 The adapter verifies the exact active tab, focused pane and committed pane
 revision before it touches resources. It invalidates host graphics placements,
-then `Client.resizeAttached` enqueues one `pane_resize` for each attached pane
-that has visible geometry. A tiled layout normally sends every attached pane;
-a fullscreen layout sends only the focused pane.
+then `pane_geometry.offerAttached` enqueues one `pane_resize` for each attached
+pane that has visible geometry. A tiled layout normally sends every attached
+pane; a fullscreen layout sends only the focused pane.
 
 The outbox keeps a fixed bound and replaces an obsolete unsent resize for the
 same pane. The runtime dispatches each message through
@@ -80,8 +80,10 @@ rollback because the `pane_resize` protocol has no acknowledgement.
   fullscreen preservation and pane-version ownership.
 - `src/frontend/client/application/resize_pane.zig` proves
   commit-before-effects ordering and the post-commit failure contract.
-- `src/frontend/client/client_test.zig` proves exact resize messages,
-  presenter observation and directionless no-ops through a substituted runtime
-  socket.
+- `src/frontend/client/pane_geometry.zig` owns translation from committed
+  multiplexer geometry to runtime `pane_resize` messages.
+- `src/frontend/client/client_test.zig` proves exact resize messages, detached
+  pane filtering, presenter observation and directionless no-ops through a
+  substituted runtime socket.
 - `src/backend/runtime/pane_resize_test.zig` proves lease checks and runtime
   synchronization order.

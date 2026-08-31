@@ -4,6 +4,7 @@ const std = @import("std");
 const lua_config = @import("../config/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
 const reload_worker = @import("config_reload.zig");
@@ -142,7 +143,7 @@ fn applyAdoption(raw_context: *anyopaque, commit: client_model.ConfigurationComm
     } else if (commit.pane_gaps_changed) {
         client.graphics_store.invalidatePlacements();
         if (client.model.workspace.active()) |active| {
-            try client.resizeAttached(&active.model, client.view.workbench());
+            try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
         }
     }
 

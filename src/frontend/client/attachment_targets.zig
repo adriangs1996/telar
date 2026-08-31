@@ -1,6 +1,7 @@
 //! Synchronizes the focused agent's client-owned attachment shelf.
 
 const Client = @import("client.zig");
+const pane_geometry = @import("pane_geometry.zig");
 
 /// Reconciles the focused attachment target and re-offers pane geometry when
 /// the shelf changes the workbench.
@@ -15,7 +16,7 @@ pub fn sync(client: *Client) !bool {
     }
 
     const active = client.model.workspace.active() orelse return true;
-    try client.resizeAttached(&active.model, client.view.workbench());
+    try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
 
     return true;
 }

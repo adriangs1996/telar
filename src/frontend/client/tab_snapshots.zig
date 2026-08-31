@@ -6,6 +6,7 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_geometry = @import("pane_geometry.zig");
 const pane_resources = @import("pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
@@ -88,7 +89,7 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
     }
 
     try pane_focus.syncResources(client);
-    try client.resizeAttached(&tab.model, client.view.workbench());
+    try pane_geometry.offerAttached(client, &tab.model, client.view.workbench());
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {
         if (pane.attached or request_lifecycle.hasPane(client, .attachment, pane.id)) {

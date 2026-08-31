@@ -57,8 +57,8 @@ value outside the model.
 `ResizeHostHandler` commits before calling its effect port. A grid change
 resizes the presenter's front and back buffers and the client view. A changed
 cell size configures pixel-aware sidebar resources. Every accepted geometry
-invalidates physical graphics placements and offers each attached pane in the
-active tab its size within the new workbench.
+invalidates physical graphics placements. `pane_geometry.offerAttached` then
+offers each attached pane in the active tab its size within the new workbench.
 
 The model commit remains active if buffer allocation, sidebar configuration or
 the bounded client outbox fails. The error terminates that client session;
@@ -79,9 +79,9 @@ handler nor its adapter requests a draw.
 
 At the client-loop boundary, `presentation_lifecycle.observe` publishes
 `Version.host` and `Version.host_capabilities`. The presenter compares them
-with the versions last painted and folds a change into its paced frame. A fully repeated measurement
-still sends the two pixel queries and rearms the watcher, but schedules no
-frame.
+with the versions last painted and folds a change into its paced frame. A fully
+repeated measurement still sends the two pixel queries and rearms the watcher,
+but schedules no frame.
 
 ## Proof
 
@@ -93,6 +93,8 @@ frame.
   effect ordering and retained commits after effect failure.
 - `src/frontend/client/host_resizes.zig` owns platform measurement, resource
   synchronization, pixel queries and watcher rearming.
+- `src/frontend/client/pane_geometry.zig` owns translation and bounded delivery
+  of visible attached pane sizes.
 - `src/frontend/client/client_test.zig` proves exact pane geometry,
   backpressure policy, capability-response consistency and presenter-owned
   frame scheduling.

@@ -13,6 +13,7 @@ const client_actions = @import("actions.zig");
 const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const lua_actions = @import("lua_actions.zig");
+const pane_geometry = @import("pane_geometry.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_pastes = @import("pane_pastes.zig");
 const pane_viewports = @import("pane_viewports.zig");
@@ -273,7 +274,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     }
     if (interaction.layout_changed) {
         handler.client.graphics_store.invalidatePlacements();
-        try handler.client.resizeAttached(model, handler.client.view.workbench());
+        try pane_geometry.offerAttached(handler.client, model, handler.client.view.workbench());
     }
     handler.redraw = handler.redraw or interaction.redraw;
     if (interaction.consumed or agent_handoff or interaction.select_tab != null or

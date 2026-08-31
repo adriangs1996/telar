@@ -4,6 +4,7 @@ const std = @import("std");
 const attachments = @import("../attachments/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
 const clipboard_image = client_application.clipboard_image;
@@ -120,7 +121,7 @@ fn resize(raw_context: *anyopaque) !void {
     const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
     const active = context.client.model.workspace.active() orelse return;
 
-    try context.client.resizeAttached(&active.model, context.client.view.workbench());
+    try pane_geometry.offerAttached(context.client, &active.model, context.client.view.workbench());
 }
 
 fn handleOutcome(client: *Client, outcome: clipboard_image.CompletionOutcome) !void {

@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const platform = @import("../platform/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
 const host_resize = client_application.host_resize;
@@ -114,7 +115,7 @@ pub fn sync(client: *Client, commit: client_model.HostResizeCommit) !void {
     client.graphics_store.invalidatePlacements();
     const active = client.model.workspace.active() orelse return;
 
-    try client.resizeAttached(&active.model, client.view.workbench());
+    try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
 }
 
 fn queryPixels(client: *Client) !void {

@@ -18,7 +18,6 @@ const sound_capability = @import("../sound/root.zig");
 const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
-const multiplexer = workspace_capability.multiplexer;
 const navigation = workspace_capability.navigation;
 const term = presentation.screen;
 const platform = @import("../platform/root.zig");
@@ -30,7 +29,6 @@ const theme = ui_capability.theme;
 const Io = std.Io;
 const File = Io.File;
 const schema = core.schema;
-const ui = core.ui;
 
 const ConfiguredBinding = lua_config.ConfiguredBinding;
 pub const InputRouter = host_inputs.Router;
@@ -74,6 +72,7 @@ const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_timers = @import("notification_timers.zig");
 const notification_flow = @import("notifications.zig");
+const pane_geometry = @import("pane_geometry.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
 const request_lifecycle_mod = @import("request_lifecycle.zig");
@@ -291,7 +290,7 @@ pub fn syncSidebarVisibility(client: *Client, change: client_model.SidebarVisibi
     client.graphics_store.invalidatePlacements();
     const active = client.model.workspace.active() orelse return;
 
-    try client.resizeAttached(&active.model, client.view.workbench());
+    try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
 }
 
 /// Entrypoint for one completed local clipboard image capture.
@@ -339,20 +338,6 @@ pub fn handleConfigReloadEvent(client: *Client, result: anyerror!config_reload.C
 /// Entrypoint for one finished plugin action: authorize and apply its effects.
 pub fn handlePluginResultEvent(client: *Client, completion: plugin_actions.Completion) !bool {
     return plugin_actions.complete(client, completion);
-}
-
-/// Re-offers this client's pane sizes to the runtime for every attached
-/// pane of one model.
-pub fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
-    var panes = model.paneIterator();
-    while (panes.next()) |pane| {
-        if (!pane.attached) continue;
-        const size = model.contentSize(pane.id, area) orelse continue;
-        try runtime_transport_mod.enqueue(client, .{ .pane_resize = .{
-            .pane_id = pane.id,
-            .size = size,
-        } });
-    }
 }
 
 pub fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {

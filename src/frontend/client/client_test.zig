@@ -41,6 +41,7 @@ const notification_flow = @import("notifications.zig");
 const pane_clipboards = @import("pane_clipboards.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
+const pane_geometry = @import("pane_geometry.zig");
 const pane_openings = @import("pane_openings.zig");
 const presentation_lifecycle = @import("presentation_lifecycle.zig");
 const plugin_actions = @import("plugin_actions.zig");
@@ -2179,6 +2180,33 @@ test "mouse focus precedes forwarding its triggering press" {
     try std.testing.expect(focused_input == .pane_input);
     try std.testing.expectEqual(first, focused_input.pane_input.pane_id);
     try std.testing.expectEqualStrings("\x1b[I\x1b[<0;1;1M", focused_input.pane_input.bytes);
+}
+
+test "pane geometry delivery offers only attached visible panes" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const area = client.view.workbench();
+    const active = &client.model.workspace.active().?.model;
+    const expected_size = active.contentSize(TestHarness.bootstrap_pane, area).?;
+
+    try pane_geometry.offerAttached(client, active, area);
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    const offered = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(offered == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, offered.pane_resize.pane_id);
+    try std.testing.expectEqual(expected_size, offered.pane_resize.size);
+
+    const detached_location = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
+    const detached = &client.model.workspace.find(detached_location.tab_id).?.model;
+    try pane_geometry.offerAttached(client, detached, area);
+
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expect(!client.runtime_transport.outbox.inFlight());
 }
 
 test "pane resize publishes committed geometry before presentation" {

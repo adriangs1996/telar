@@ -7,6 +7,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const attachment_targets = @import("attachment_targets.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
+const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
 const focus_pane = client_application.focus_pane;
@@ -57,7 +58,7 @@ fn applyFocus(context: *anyopaque, focus: client_model.PaneFocus, area: ui.Rect)
     }
 
     client.graphics_store.invalidatePlacements();
-    try client.resizeAttached(&active.model, area);
+    try pane_geometry.offerAttached(client, &active.model, area);
 }
 
 fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
