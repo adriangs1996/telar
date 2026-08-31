@@ -84,6 +84,12 @@ Before spawning Lua, the broker copies the configured package into a private
 owner-only directory and rehashes the copy. The worker executes that invocation
 snapshot, closing the inspection-to-execution mutation window.
 
+Each invocation also carries a client-owned execution identity and the active
+configuration generation. Only its exact completion can clear the run. A
+completion from a replaced configuration is consumed without authorizing or
+applying its effects. See [Plugin action](flows/plugin-action.md) for the full
+client lifecycle.
+
 `runtime.control` is currently required for effects that create, rename, move,
 or close runtime-owned panes or tabs, or detach the client. Other declared
 capabilities are reserved until a typed broker API exists; declaring or

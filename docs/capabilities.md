@@ -118,7 +118,7 @@ All client handlers are in `src/frontend/client/root.zig`.
 | Agent sound completion | `Client.handleSoundPlayedEvent` |
 | Telemetry tick/write | `Client.handleTelemetryTickEvent`, `Client.handleTelemetryWrittenEvent` |
 | Config reload | `Client.handleConfigReloadEvent` |
-| Plugin worker result | `Client.handlePluginResultEvent` |
+| Plugin worker result | [`Client.handlePluginResultEvent`](flows/plugin-action.md) |
 
 ### Runtime
 

@@ -14,7 +14,7 @@ response.
 ```text
 native direction / workbench click / notification / sidebar agent
         |
-InputHandler.focusPane
+client_actions.focusPane
         |
 FocusPane { target, area }
         |
@@ -29,10 +29,11 @@ focus-out -> focus-in -> fullscreen resize
 Client.observeModel -> Presenter
 ```
 
-`InputHandler` translates every source into either a stable pane identity or a
-direction. `View.handleMouse` reports a pane identity and does not receive or
-mutate the workspace model. Sidebar navigation may select the pane's tab
-first, then sends the same identity through this transition.
+The source adapter translates its intent into either a stable pane identity or
+a direction before calling `client_actions.focusPane`. `View.handleMouse`
+reports a pane identity and does not receive or mutate the workspace model.
+Sidebar navigation may select the pane's tab first, then sends the same
+identity through this transition.
 
 `ClientModel.focusPane` resolves the target only inside the active tab. A
 missing identity, the already focused identity, a direction without a

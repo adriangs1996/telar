@@ -12,7 +12,7 @@ the bounded client outbox, allocates no queue and waits for no runtime reply.
 ```text
 native, Lua or plugin fullscreen action
         |
-InputHandler.togglePaneFullscreen
+client_actions.apply
         |
 TogglePaneFullscreen { area }
         |
@@ -27,8 +27,8 @@ pane_resize messages             Client.observeModel
 runtime socket                   Presenter
 ```
 
-`InputHandler` supplies the current workbench rectangle and delegates. It does
-not inspect the layout, invalidate `View` or set `redraw`.
+The shared action dispatcher supplies the current workbench rectangle and
+delegates. It does not inspect the layout, invalidate `View` or request a draw.
 
 `ClientModel.togglePaneFullscreen` rejects an absent active tab or a tab with
 fewer than two panes. A commit keeps the focused pane identity, toggles the

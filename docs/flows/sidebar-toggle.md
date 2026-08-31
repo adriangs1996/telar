@@ -13,7 +13,7 @@ reply.
 ```text
 native, Lua or plugin sidebar action
         |
-InputHandler.toggleSidebar
+client_actions.apply
         |
 ToggleSidebarHandler
         |
@@ -33,8 +33,9 @@ advances only `ClientModel.Version.chrome` and returns the committed value and
 revision. Explicit configuration updates use `setSidebarVisible`; applying an
 identical value is a no-op.
 
-`InputHandler` only translates the action and delegates. Lua callback context
-also reads the committed model value, never the disposable view projection.
+The shared action dispatcher only translates the action and delegates. Lua
+callback context also reads the committed model value, never the disposable
+view projection.
 
 ## Effects and presentation
 

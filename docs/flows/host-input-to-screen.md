@@ -89,11 +89,12 @@ A complete configured sequence returns `.action` from `Router.routeKey`.
 
 `InputHandler.action` separates three action sources:
 
-- built-in actions go to `InputHandler.applyNativeAction`;
+- built-in actions go to the shared `client_actions.apply` dispatcher;
 - explicit Lua callbacks run in the bounded client-owned config VM and return
   semantic effects;
-- plugin actions schedule an isolated worker and apply its validated semantic
-  effects later through `.plugin_result`.
+- plugin actions enter `plugin_actions.start`, then apply a current authorized
+  semantic batch through the same dispatcher after `.plugin_result`. See
+  [Plugin action](plugin-action.md) for its lifecycle and authority checks.
 
 Actions may mutate disposable client state or enqueue a typed runtime request.
 They never call runtime internals. The unit test `a configured sequence runs

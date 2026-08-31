@@ -13,7 +13,7 @@ wait for.
 ```text
 native, Lua, plugin or top-bar action
         |
-InputHandler.toggleWorkspaceList
+client_actions.apply
         |
 ToggleWorkspaceListHandler
         |
@@ -31,8 +31,8 @@ advances only `ClientModel.Version.chrome` and returns the committed value and
 revision. Explicit assignment of the current value is a no-op.
 
 `View.handleMouse` reports `Interaction.toggle_workspace_list` without
-changing its projection. `InputHandler` routes that intent and configured
-actions through the same use case.
+changing its projection. The input adapter and configured action sources route
+that intent through the shared dispatcher and the same use case.
 
 ## Presentation
 
@@ -61,5 +61,5 @@ with the default expanded list; no runtime process or PTY is affected.
 - `src/frontend/client/view.zig` proves top-bar clicks return intent without
   mutating the projection.
 - `src/frontend/client/client_test.zig` proves the projection remains stale
-  until presenter observation, the toggle never sets `InputHandler.redraw` and
-  no runtime message is emitted.
+  until presenter observation, the dispatcher does not request a draw and no
+  runtime message is emitted.

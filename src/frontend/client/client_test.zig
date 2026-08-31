@@ -23,6 +23,7 @@ const term = presentation.screen;
 
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
+const client_actions = @import("actions.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
@@ -35,6 +36,7 @@ const notification_flow = @import("notifications.zig");
 const pane_clipboards = @import("pane_clipboards.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_openings = @import("pane_openings.zig");
+const plugin_actions = @import("plugin_actions.zig");
 const resync_requirements = @import("resync_requirements.zig");
 const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
@@ -405,6 +407,46 @@ fn testingConfigAdoption(number: u64, changed: bool) !config_reloads.Adoption {
     };
 }
 
+const TestingPlugin = struct {
+    action: input_capability.action.PluginAction,
+    digest: core.plugin.Digest,
+};
+
+const testing_plugin_context: lua_config.CallbackContext = .{
+    .sidebar_visible = true,
+    .tab_count = 1,
+    .active_tab_index = 0,
+    .pane_count = 1,
+    .focused_pane_id = @intFromEnum(TestHarness.bootstrap_pane),
+};
+
+fn installTestingPlugin(client: *Client) !TestingPlugin {
+    std.debug.assert(client.plugin_registry == null);
+    const manifest = try core.plugin.parseManifest(
+        client.gpa,
+        "{\"api_version\":1,\"id\":\"dev.telar.client-test\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"run\"],\"capabilities\":[\"runtime.control\"]}",
+    );
+    const digest: core.plugin.Digest = @splat(7);
+    const registry = try client.gpa.create(plugin_broker.Registry);
+    registry.* = .{};
+    registry.packages[0] = .{
+        .manifest = manifest,
+        .digest = digest,
+        .root_len = 0,
+        .entry_len = 0,
+    };
+    registry.count = 1;
+    client.plugin_registry = registry;
+
+    return .{
+        .action = .{
+            .plugin = core.plugin.stableId(manifest.id()),
+            .action = core.plugin.stableId("run"),
+        },
+        .digest = digest,
+    };
+}
+
 test "host input arriving while no tab exists is dropped, not a crash" {
     // The workspace-handoff window: `tabs.deinit()` has run and the new
     // pane has not been confirmed. A keystroke here used to null-unwrap.
@@ -516,8 +558,8 @@ test "new tab request captures launch source geometry and continuation without m
     const version_before_request = harness.client.model.version();
     const pending_updates_before_request = harness.client.presenter.pending_updates;
 
-    var handler: InputHandler = .{ .client = harness.client };
-    _ = try handler.applyNativeAction(.new_tab);
+    const handler: InputHandler = .{ .client = harness.client };
+    _ = try client_actions.apply(handler.client, .new_tab);
     try harness.settle();
 
     var buffer: [512]u8 = undefined;
@@ -547,8 +589,8 @@ test "new pane inherits cwd from the focused runtime pane" {
     try harness.bootstrap();
     harness.client.options.arguments = &.{"/bin/sh"};
 
-    var handler: InputHandler = .{ .client = harness.client };
-    _ = try handler.applyNativeAction(.{ .split_pane = .horizontal });
+    const handler: InputHandler = .{ .client = harness.client };
+    _ = try client_actions.apply(handler.client, .{ .split_pane = .horizontal });
     try harness.settle();
 
     var buffer: [512]u8 = undefined;
@@ -568,7 +610,7 @@ test "new workspace inherits cwd from the focused runtime pane" {
     harness.client.requests = .{};
 
     var handler: InputHandler = .{ .client = harness.client };
-    _ = try handler.applyNativeAction(.new_workspace);
+    _ = try client_actions.apply(handler.client, .new_workspace);
     try handler.forward("agents\r");
     try harness.settle();
 
@@ -596,8 +638,8 @@ test "workspace handoff opens the pane remembered for that workspace" {
     });
     const version_before_departure = client.model.version();
     const pending_updates_before_departure = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
-    try handler.switchWorkspaceResolved(@enumFromInt(2));
+    const handler: InputHandler = .{ .client = client };
+    try client_actions.switchWorkspaceResolved(handler.client, @enumFromInt(2));
 
     try std.testing.expect(client.model.workspaceLocation() == null);
     try std.testing.expectEqual(@as(usize, 0), client.model.workspace.count);
@@ -674,9 +716,12 @@ test "workspace handoff capacity failure preserves the source model" {
     }
     const version_before = client.model.version();
     const focus_before = client.reported_focus;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    try std.testing.expectError(error.ClientOutboxFull, handler.switchWorkspaceResolved(@enumFromInt(2)));
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        client_actions.switchWorkspaceResolved(handler.client, @enumFromInt(2)),
+    );
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -1614,9 +1659,9 @@ test "pane focus commits before reports resize and presentation" {
     client.reported_focus_events = true;
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .focus_pane = .left });
+    _ = try client_actions.apply(handler.client, .{ .focus_pane = .left });
 
     try std.testing.expectEqual(TestHarness.bootstrap_pane, model.layout.focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
@@ -1650,7 +1695,7 @@ test "pane focus commits before reports resize and presentation" {
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
-    _ = try handler.applyNativeAction(.{ .focus_pane = .left });
+    _ = try client_actions.apply(handler.client, .{ .focus_pane = .left });
     try client.observeModel();
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -1744,9 +1789,9 @@ test "pane resize publishes committed geometry before presentation" {
     const second_before = model.contentSize(second, area).?;
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .resize_pane = .left });
+    _ = try client_actions.apply(handler.client, .{ .resize_pane = .left });
 
     const first_after = model.contentSize(first, area).?;
     const second_after = model.contentSize(second, area).?;
@@ -1781,7 +1826,7 @@ test "pane resize publishes committed geometry before presentation" {
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
-    _ = try handler.applyNativeAction(.{ .resize_pane = .up });
+    _ = try client_actions.apply(handler.client, .{ .resize_pane = .up });
     try client.observeModel();
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -1817,9 +1862,9 @@ test "pane fullscreen publishes visible geometry without direct redraw" {
     const second_tiled = model.contentSize(second, area).?;
     const version_before_enter = client.model.version();
     const pending_updates_before_enter = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.toggle_pane_fullscreen);
+    _ = try client_actions.apply(handler.client, .toggle_pane_fullscreen);
 
     try std.testing.expect(model.layout.isFullscreen());
     try std.testing.expect(model.contentSize(first, area) == null);
@@ -1845,7 +1890,7 @@ test "pane fullscreen publishes visible geometry without direct redraw" {
 
     const version_before_exit = client.model.version();
     const pending_updates_before_exit = client.presenter.pending_updates;
-    _ = try handler.applyNativeAction(.toggle_pane_fullscreen);
+    _ = try client_actions.apply(handler.client, .toggle_pane_fullscreen);
 
     try std.testing.expect(!model.layout.isFullscreen());
     try std.testing.expectEqual(first_tiled, model.contentSize(first, area).?);
@@ -1880,9 +1925,9 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     const shown_area = client.view.workbench();
     const version_before_hide = client.model.version();
     const pending_updates_before_hide = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.toggle_sidebar);
+    _ = try client_actions.apply(handler.client, .toggle_sidebar);
 
     const hidden_area = client.view.workbench();
     try std.testing.expect(hidden_area.w > shown_area.w);
@@ -1916,7 +1961,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
 
     const version_before_show = client.model.version();
     const pending_updates_before_show = client.presenter.pending_updates;
-    _ = try handler.applyNativeAction(.toggle_sidebar);
+    _ = try client_actions.apply(handler.client, .toggle_sidebar);
 
     try std.testing.expect(client.model.sidebarVisible());
     try std.testing.expect(client.view.sidebar_requested);
@@ -1949,9 +1994,9 @@ test "workspace list toggle is projected only by the presenter" {
     const client = harness.client;
     const version_before_collapse = client.model.version();
     const pending_updates_before_collapse = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.toggle_workspace_list);
+    _ = try client_actions.apply(handler.client, .toggle_workspace_list);
 
     try std.testing.expect(client.model.workspaceListCollapsed());
     try std.testing.expect(!client.view.workspace_list_collapsed);
@@ -1974,7 +2019,7 @@ test "workspace list toggle is projected only by the presenter" {
 
     const version_before_expand = client.model.version();
     const pending_updates_before_expand = client.presenter.pending_updates;
-    _ = try handler.applyNativeAction(.toggle_workspace_list);
+    _ = try client_actions.apply(handler.client, .toggle_workspace_list);
 
     try std.testing.expect(!client.model.workspaceListCollapsed());
     try std.testing.expect(client.view.workspace_list_collapsed);
@@ -2471,8 +2516,8 @@ test "a created workspace bookmarks and replaces the prior layout" {
 
     // Return through the same runtime handoff used by workspace selection.
     client.requests = .{};
-    var handler: InputHandler = .{ .client = client };
-    try handler.switchWorkspaceResolved(prior_location.workspace.workspace);
+    const handler: InputHandler = .{ .client = client };
+    try client_actions.switchWorkspaceResolved(handler.client, prior_location.workspace.workspace);
     try harness.settle();
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);
@@ -2930,9 +2975,9 @@ test "move tab waits for the canonical response and preserves active identity" {
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_request = client.model.version();
     const pending_updates_before_request = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .move_tab = .previous });
+    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
@@ -2985,9 +3030,9 @@ test "pending tab operation suppresses a move request" {
     try client.requests.add(@enumFromInt(90), .{ .rename_tab = second });
     const request_count = client.requests.count;
     const next_request_id = client.next_request_id;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .move_tab = .previous });
+    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
 
     try std.testing.expectEqual(request_count, client.requests.count);
     try std.testing.expectEqual(next_request_id, client.next_request_id);
@@ -3001,9 +3046,9 @@ test "canonical tab move at an edge does not advance or schedule the model" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .move_tab = .previous });
+    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -3037,9 +3082,9 @@ test "tab move response must match the requested identity" {
     const client = harness.client;
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_response = client.model.version();
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .move_tab = .previous });
+    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -3069,9 +3114,9 @@ test "a failed tab move preserves order and notifies" {
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_failure = client.model.version();
     const active_before_failure = client.model.activeTabLocation().?;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .move_tab = .previous });
+    _ = try client_actions.apply(handler.client, .{ .move_tab = .previous });
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&message_buffer);
@@ -3104,9 +3149,9 @@ test "select tab detaches the current tab before requesting the target snapshot"
     selected_model.composition_invalidated = false;
     const version_before_selection = client.model.version();
     const pending_updates_before_selection = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .select_tab = 1 });
+    _ = try client_actions.apply(handler.client, .{ .select_tab = 1 });
 
     try std.testing.expectEqual(second, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before_selection.tabs, client.model.version().tabs);
@@ -3146,16 +3191,16 @@ test "tab selection offset wraps while full turns remain no-ops" {
     const version_before_selection = client.model.version();
     const request_id_before_selection = client.next_request_id;
     const pending_updates_before_selection = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .select_tab_offset = 2 });
+    _ = try client_actions.apply(handler.client, .{ .select_tab_offset = 2 });
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before_selection, client.model.version());
     try std.testing.expectEqual(request_id_before_selection, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
 
-    _ = try handler.applyNativeAction(.{ .select_tab_offset = -1 });
+    _ = try client_actions.apply(handler.client, .{ .select_tab_offset = -1 });
 
     try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
@@ -3179,9 +3224,9 @@ test "pending tab snapshot suppresses tab selection without effects" {
     _ = try harness.addInactiveTab(@enumFromInt(2), second_pane);
     const version_before_selection = client.model.version();
     const next_request_id = client.next_request_id;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .select_tab = 1 });
+    _ = try client_actions.apply(handler.client, .{ .select_tab = 1 });
 
     try std.testing.expectEqual(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
@@ -3201,9 +3246,9 @@ test "close tab request detaches before delivery and rejection requests restorat
     client.requests = .{};
     const version_before_request = client.model.version();
     const pending_updates_before_request = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.close_tab);
+    _ = try client_actions.apply(handler.client, .close_tab);
 
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
@@ -3251,9 +3296,12 @@ test "close tab capacity failure preserves attachment and request state" {
     const version_before = client.model.version();
     const focus_before = client.reported_focus;
     const next_request_id = client.next_request_id;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    try std.testing.expectError(error.ClientOutboxFull, handler.applyNativeAction(.close_tab));
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        client_actions.apply(handler.client, .close_tab),
+    );
 
     try std.testing.expectEqual(client_outbox.capacity - 1, @as(usize, client.outbox.len));
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
@@ -3875,9 +3923,9 @@ test "close pane request waits for the authoritative exit before committing" {
     });
     const version_before_request = client.model.version();
     const pending_updates_before_request = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.close_pane);
+    _ = try client_actions.apply(handler.client, .close_pane);
 
     try std.testing.expect(client.model.workspace.findPane(closing_pane) != null);
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
@@ -4501,9 +4549,9 @@ test "workspace position navigation resolves the committed client model" {
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(list));
     const pending_updates_before = client.presenter.pending_updates;
-    var handler: InputHandler = .{ .client = client };
+    const handler: InputHandler = .{ .client = client };
 
-    _ = try handler.applyNativeAction(.{ .select_workspace = 1 });
+    _ = try client_actions.apply(handler.client, .{ .select_workspace = 1 });
 
     try std.testing.expect(client.model.workspaceLocation() == null);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
@@ -4969,6 +5017,178 @@ test "a configuration version alone schedules presenter observation" {
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
+test "plugin completion applies one authorized batch through model observation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const installed = try installTestingPlugin(client);
+    const execution = (try client.model.beginPluginExecution()).?;
+    var batch: lua_config.EffectBatch = .{};
+    batch.items[0] = .toggle_workspace_list;
+    batch.len = 1;
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+
+    const exit = try client.handlePluginResultEvent(.{
+        .execution_id = execution.id,
+        .result = plugin_broker.WorkerResult{
+            .package_index = 0,
+            .plugin_id = installed.action.plugin,
+            .digest = installed.digest,
+            .batch = batch,
+        },
+    });
+
+    try std.testing.expect(!exit);
+    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expectEqual(version_before.chrome + 1, client.model.version().chrome);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+    try std.testing.expect(!client.view.workspace_list_collapsed);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(client.view.workspace_list_collapsed);
+}
+
+test "plugin completion from an old configuration is consumed without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const installed = try installTestingPlugin(client);
+    const execution = (try client.model.beginPluginExecution()).?;
+    var batch: lua_config.EffectBatch = .{};
+    batch.items[0] = .toggle_workspace_list;
+    batch.len = 1;
+
+    _ = try client.model.applyConfiguration(.{
+        .generation = 1,
+        .sidebar_visible = true,
+        .pane_gaps = true,
+    });
+    const version_after_reload = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+
+    const exit = try client.handlePluginResultEvent(.{
+        .execution_id = execution.id,
+        .result = plugin_broker.WorkerResult{
+            .package_index = 0,
+            .plugin_id = installed.action.plugin,
+            .digest = installed.digest,
+            .batch = batch,
+        },
+    });
+
+    try std.testing.expect(!exit);
+    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(!client.model.workspaceListCollapsed());
+    try std.testing.expectEqualDeep(version_after_reload, client.model.version());
+    try std.testing.expectEqual(@as(u16, 0), client.config_diagnostic.len);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+}
+
+test "plugin authorization denial consumes the run before publishing failure" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const installed = try installTestingPlugin(client);
+    const execution = (try client.model.beginPluginExecution()).?;
+    var batch: lua_config.EffectBatch = .{};
+    batch.items[0] = .close_pane;
+    batch.len = 1;
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+
+    const exit = try client.handlePluginResultEvent(.{
+        .execution_id = execution.id,
+        .result = plugin_broker.WorkerResult{
+            .package_index = 0,
+            .plugin_id = installed.action.plugin,
+            .digest = installed.digest,
+            .batch = batch,
+        },
+    });
+
+    try std.testing.expect(!exit);
+    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) != null);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expect(client.model.version().notifications > version_before.notifications);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        client.config_diagnostic.message(),
+        "CapabilityNotGranted",
+    ) != null);
+    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+}
+
+test "plugin worker failure and unmatched completion preserve lifecycle identity" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const execution = (try client.model.beginPluginExecution()).?;
+
+    try std.testing.expect(!try client.handlePluginResultEvent(.{
+        .execution_id = @enumFromInt(@intFromEnum(execution.id) + 1),
+        .result = error.TestPluginWorkerFailure,
+    }));
+    try std.testing.expectEqualDeep(execution, client.model.pluginExecution().?);
+    try std.testing.expectEqual(@as(u16, 0), client.config_diagnostic.len);
+
+    try std.testing.expect(!try client.handlePluginResultEvent(.{
+        .execution_id = execution.id,
+        .result = error.TestPluginWorkerFailure,
+    }));
+    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        client.config_diagnostic.message(),
+        "TestPluginWorkerFailure",
+    ) != null);
+    try std.testing.expect(client.notification_tick_pending);
+}
+
+test "busy plugin start skips resolution and a rejected action leaves no run" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const installed = try installTestingPlugin(client);
+    const execution = (try client.model.beginPluginExecution()).?;
+
+    const busy = try plugin_actions.start(client, installed.action, testing_plugin_context);
+
+    try std.testing.expect(busy == .busy);
+    try std.testing.expectEqualDeep(execution, client.model.pluginExecution().?);
+    _ = client.model.finishPluginExecution(execution.id);
+
+    const rejected = try plugin_actions.start(client, .{
+        .plugin = installed.action.plugin,
+        .action = core.plugin.stableId("missing"),
+    }, testing_plugin_context);
+
+    try std.testing.expect(rejected == .rejected);
+    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(client.notification_tick_pending);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        client.config_diagnostic.message(),
+        "UnknownPluginAction",
+    ) != null);
+}
+
 test "host resize commits before resources and presents by model version" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -5341,7 +5561,10 @@ test "copy mode round trip: enter, select, copy, leave" {
     const pending_updates_before = client.presenter.pending_updates;
 
     var handler: InputHandler = .{ .client = client };
-    try std.testing.expectEqual(keybind.Control.continue_routing, try handler.applyNativeAction(.enter_copy_mode));
+    try std.testing.expectEqual(
+        keybind.Control.continue_routing,
+        try client_actions.apply(handler.client, .enter_copy_mode),
+    );
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!handler.capturesKeys());
     try std.testing.expect(!name_prompts.beginActiveTabRename(client));
@@ -5432,7 +5655,7 @@ test "a full outbox keeps copy mode and its selection active" {
     }
 
     var handler: InputHandler = .{ .client = client };
-    _ = try handler.applyNativeAction(.enter_copy_mode);
+    _ = try client_actions.apply(handler.client, .enter_copy_mode);
     try handler.key(try keybind.parseKey("v"));
     const version = client.model.version();
 

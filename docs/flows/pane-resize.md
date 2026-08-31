@@ -13,7 +13,7 @@ and waits for no runtime response.
 ```text
 native, Lua or plugin resize action
         |
-InputHandler.resizePane
+client_actions.apply
         |
 ResizePane { direction, area }
         |
@@ -28,7 +28,7 @@ pane_resize messages             Client.observeModel
 runtime socket                   Presenter
 ```
 
-`InputHandler` translates the action direction and supplies the current
+The shared action dispatcher translates the direction and supplies the current
 workbench rectangle. It does not inspect layout nodes, invalidate graphics or
 request a frame.
 
@@ -57,9 +57,9 @@ attachments and geometry-lease rejection. The handler applies or defers an
 authorized PTY resize and then synchronizes observation, media and the client
 cell projection. The protocol has no success reply.
 
-Neither the use case nor the adapter invalidates `View` or sets
-`InputHandler.redraw`. After the input event, `Client.observeModel` lets
-`Presenter` observe the pane revision and schedule one paced frame.
+Neither the use case nor the adapter invalidates `View` or requests a draw.
+After the event, `Client.observeModel` lets `Presenter` observe the pane
+revision and schedule one paced frame.
 
 ## Failure and recovery
 

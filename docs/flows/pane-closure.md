@@ -8,7 +8,7 @@ therefore handles requested closure and a child that exits by itself.
 ## Explicit request
 
 ```text
-InputHandler.closeFocused
+client_actions.apply
         |
 RequestClosePaneHandler
         |

@@ -12,7 +12,7 @@ outbox and the fixed continuation tracker. Only one tab snapshot may be pending.
 ```text
 select_tab / select_tab_offset / mouse identity
         |
-InputHandler.selectTab
+client_actions.selectTab
         |
 SelectTab { target }
         |
@@ -27,11 +27,11 @@ detach previous panes -> request selected tab snapshot
 Client.observeModel -> Presenter
 ```
 
-`InputHandler` translates each source into a `Target`. Numeric bindings provide
-a zero-based position, next and previous bindings provide a signed offset, and
-mouse, sidebar and notification interactions provide a stable tab identity.
-The input handler does not inspect the workspace slot array or calculate the
-next index.
+Each source adapter translates its intent into a `Target` before calling
+`client_actions.selectTab`. Numeric bindings provide a zero-based position,
+next and previous bindings provide a signed offset, and mouse, sidebar and
+notification interactions provide a stable tab identity. The adapter does not
+inspect the workspace slot array or calculate the next index.
 
 `SelectTabHandler` rejects selection while a tab snapshot is pending. It then
 delegates target resolution and the semantic commit to `ClientModel`. A missing

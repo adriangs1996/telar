@@ -10,31 +10,20 @@ const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
-const plugin_broker = @import("../plugins/root.zig");
+const client_actions = @import("actions.zig");
 const host_capabilities = @import("host_capabilities.zig");
-const pane_closures = @import("pane_closures.zig");
-const pane_focus = @import("pane_focus.zig");
-const pane_geometry = @import("pane_geometry.zig");
 const pane_inputs = @import("pane_inputs.zig");
-const pane_splits = @import("pane_splits.zig");
 const pane_viewports = @import("pane_viewports.zig");
+const plugin_actions = @import("plugin_actions.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
-const sidebar_toggles = @import("sidebar_toggles.zig");
-const tab_attachments = @import("tab_attachments.zig");
-const tab_closures = @import("tab_closures.zig");
-const tab_creations = @import("tab_creations.zig");
-const tab_moves = @import("tab_moves.zig");
-const tab_selections = @import("tab_selections.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
-const workspace_list_toggles = @import("workspace_list_toggles.zig");
 const view_mod = @import("view.zig");
 const action_mod = input_capability.action;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
 const mouse_protocol = input_capability.mouse_protocol;
-const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
 const term = presentation.screen;
 
@@ -67,51 +56,15 @@ pub fn capturesKeys(handler: *const InputHandler) bool {
     return handler.client.model.name_prompt.active() or handler.client.view.hasAttachmentModal();
 }
 
-fn selectTab(handler: *InputHandler, target: tab_selections.Target) !void {
-    var use_case = tab_selections.selectionHandler(handler.client);
-
-    _ = try use_case.execute(.{ .target = target });
-}
-
-fn focusPane(handler: *InputHandler, target: pane_focus.Target) !void {
-    var use_case = pane_focus.handler(handler.client);
-
-    _ = try use_case.execute(.{
-        .target = target,
-        .area = handler.client.view.workbench(),
-    });
-}
-
-/// Switching targets the runtime identity, not its path. Multiple explicit
-/// workspaces may share one cwd and must remain independently selectable.
-fn switchWorkspace(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
-    const client = handler.client;
-    if (client.requests.count != 0) return;
-    if (!client.model.knowsWorkspace(workspace)) {
-        return;
-    }
-    if (client.model.workspace.workspace) |current| switch (current) {
-        .workspace => |id| if (id == workspace) return,
-        .worktree => {},
-    };
-    try handler.switchWorkspaceResolved(workspace);
-}
-
-/// Starts a handoff chosen from runtime-owned workspace state. Unlike an
-/// interactive selection, it must not consult the client's stale list.
-pub fn switchWorkspaceResolved(handler: *InputHandler, workspace: schema.WorkspaceId) !void {
-    _ = try workspace_handoffs.requestWorkspace(handler.client, workspace);
-}
-
 fn focusSidebarAgent(handler: *InputHandler, agent_key: agents.AgentKey) !bool {
     const plan = handler.client.model.planAgentNavigation(agent_key) orelse return false;
     switch (plan) {
         .local => |local| {
             if (local.select_tab) |tab_id| {
-                try handler.selectTab(.{ .tab_id = tab_id });
+                try client_actions.selectTab(handler.client, .{ .tab_id = tab_id });
             }
 
-            try handler.focusPane(.{ .pane_id = local.pane_id });
+            try client_actions.focusPane(handler.client, .{ .pane_id = local.pane_id });
             return false;
         },
         .handoff => |handoff| {
@@ -143,9 +96,9 @@ fn applyNotificationIntent(handler: *InputHandler, intent: view_mod.Notification
 fn followNotificationTarget(handler: *InputHandler, target: notifications.Target) !void {
     switch (target) {
         .none => {},
-        .select_tab => |tab_id| try handler.selectTab(.{ .tab_id = tab_id }),
-        .select_workspace => |workspace| try handler.switchWorkspace(workspace),
-        .focus_pane => |pane_id| try handler.focusPane(.{ .pane_id = pane_id }),
+        .select_tab => |tab_id| try client_actions.selectTab(handler.client, .{ .tab_id = tab_id }),
+        .select_workspace => |workspace| try client_actions.switchWorkspace(handler.client, workspace),
+        .focus_pane => |pane_id| try client_actions.focusPane(handler.client, .{ .pane_id = pane_id }),
     }
 }
 
@@ -275,25 +228,27 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
 
     const interaction = handler.client.view.handleMouse(cell_event);
     if (interaction.toggle_sidebar) {
-        try handler.toggleSidebar();
+        _ = try client_actions.apply(handler.client, .toggle_sidebar);
     }
     if (interaction.toggle_workspace_list) {
-        handler.toggleWorkspaceList();
+        _ = try client_actions.apply(handler.client, .toggle_workspace_list);
     }
     const agent_handoff = if (interaction.focus_agent) |agent_key|
         try handler.focusSidebarAgent(agent_key)
     else
         false;
     if (interaction.select_tab) |tab_id| {
-        try handler.selectTab(.{ .tab_id = tab_id });
+        try client_actions.selectTab(handler.client, .{ .tab_id = tab_id });
     }
     if (interaction.focus_pane) |pane_id| {
-        try handler.focusPane(.{ .pane_id = pane_id });
+        try client_actions.focusPane(handler.client, .{ .pane_id = pane_id });
     }
     if (interaction.rename_tab) |tab_id| {
         _ = name_prompts.beginTabRename(handler.client, tab_id);
     }
-    if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
+    if (interaction.select_workspace) |workspace| {
+        try client_actions.switchWorkspace(handler.client, workspace);
+    }
     if (interaction.notification) |intent| {
         try handler.applyNotificationIntent(intent, monotonic(handler.client.io));
     }
@@ -467,92 +422,15 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
             return .continue_routing;
         },
         .plugin => |requested| {
-            if (handler.client.plugin_pending) return .continue_routing;
-            const registry = handler.client.plugin_registry orelse
-                return .continue_routing;
-            const invocation = registry.resolve(requested) catch |err| {
-                handler.client.config_diagnostic.set(
-                    "plugin action cannot be resolved: {s}",
-                    .{@errorName(err)},
-                );
-                handler.redraw = true;
-                return .continue_routing;
-            };
-            const request = try registry.workerRequest(
-                invocation,
+            _ = try plugin_actions.start(
+                handler.client,
+                requested,
                 handler.callbackContext(),
             );
-            try handler.client.schedulePluginAction(request);
             return .continue_routing;
         },
-        else => return handler.applyNativeAction(value),
+        else => return client_actions.apply(handler.client, value),
     }
-}
-
-pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control {
-    switch (value) {
-        .enter_copy_mode => {},
-        else => {
-            if (handler.client.model.copyModeActive()) {
-                _ = try copy_modes.leave(handler.client);
-            }
-        },
-    }
-    switch (value) {
-        .split_pane => |direction| try handler.beginSplit(switch (direction) {
-            .horizontal => .horizontal,
-            .vertical => .vertical,
-        }),
-        .focus_pane => |direction| try handler.focusPane(.{ .direction = switch (direction) {
-            .left => .left,
-            .right => .right,
-            .up => .up,
-            .down => .down,
-        } }),
-        .resize_pane => |direction| try handler.resizePane(switch (direction) {
-            .left => .left,
-            .right => .right,
-            .up => .up,
-            .down => .down,
-        }),
-        .toggle_pane_fullscreen => try handler.togglePaneFullscreen(),
-        .toggle_sidebar => try handler.toggleSidebar(),
-        .toggle_workspace_list => handler.toggleWorkspaceList(),
-        .new_workspace => _ = name_prompts.beginWorkspaceCreate(handler.client),
-        .rename_workspace => _ = name_prompts.beginWorkspaceRename(handler.client),
-        .select_workspace => |position| try handler.selectWorkspacePosition(position),
-        .close_pane => try handler.closeFocused(),
-        .new_tab => try handler.createTab(),
-        .select_tab_offset => |offset| try handler.selectTab(.{ .offset = offset }),
-        .select_tab => |position| try handler.selectTab(.{ .position = position }),
-        .rename_tab => _ = name_prompts.beginActiveTabRename(handler.client),
-        .close_tab => try handler.closeTab(),
-        .move_tab => |direction| try handler.moveTab(switch (direction) {
-            .previous => .previous,
-            .next => .next,
-        }),
-        .detach => {
-            var tabs = handler.client.model.workspace.tabIterator();
-            while (tabs.next()) |tab| try tab_attachments.detach(handler.client, tab);
-            return .stop;
-        },
-        .enter_copy_mode => _ = copy_modes.enter(handler.client),
-        .notification => |*notification| {
-            const request_id = try handler.client.nextId();
-            try handler.client.enqueueNotificationRequest(.{
-                .request_id = request_id,
-                .notification = .{
-                    .level = notification.level,
-                    .duration_ms = notification.duration_ms,
-                    .target = notification.target,
-                    .title = notification.title(),
-                    .message = notification.message(),
-                },
-            });
-        },
-        .lua_callback, .lua_expr, .plugin => unreachable,
-    }
-    return .continue_routing;
 }
 
 fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
@@ -571,67 +449,6 @@ fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
         .pane_count = @intCast(model.pane_count),
         .focused_pane_id = if (focused) |pane| schema.id.raw(pane.id) else 0,
     };
-}
-
-fn beginSplit(handler: *InputHandler, axis: layout_mod.Axis) !void {
-    var use_case = pane_splits.requestHandler(handler.client);
-    _ = try use_case.execute(.{
-        .axis = axis,
-        .area = handler.client.view.workbench(),
-    });
-}
-
-fn resizePane(handler: *InputHandler, direction: layout_mod.Direction) !void {
-    var use_case = pane_geometry.resizeHandler(handler.client);
-
-    _ = try use_case.execute(.{
-        .direction = direction,
-        .area = handler.client.view.workbench(),
-    });
-}
-
-fn togglePaneFullscreen(handler: *InputHandler) !void {
-    var use_case = pane_geometry.fullscreenHandler(handler.client);
-
-    _ = try use_case.execute(.{ .area = handler.client.view.workbench() });
-}
-
-fn toggleSidebar(handler: *InputHandler) !void {
-    var use_case = sidebar_toggles.handler(handler.client);
-
-    _ = try use_case.execute();
-}
-
-fn toggleWorkspaceList(handler: *InputHandler) void {
-    var use_case = workspace_list_toggles.handler(handler.client);
-
-    _ = use_case.execute();
-}
-
-fn closeFocused(handler: *InputHandler) !void {
-    var use_case = pane_closures.requestHandler(handler.client);
-    _ = try use_case.execute();
-}
-
-fn createTab(handler: *InputHandler) !void {
-    var use_case = tab_creations.requestHandler(handler.client);
-    _ = try use_case.execute(.{});
-}
-
-fn selectWorkspacePosition(handler: *InputHandler, position: usize) !void {
-    const workspace = handler.client.model.workspaceAtPosition(position) orelse return;
-    try handler.switchWorkspace(workspace);
-}
-
-fn closeTab(handler: *InputHandler) !void {
-    var use_case = tab_closures.requestHandler(handler.client);
-
-    _ = try use_case.execute();
-}
-
-fn moveTab(handler: *InputHandler, direction: schema.TabMoveDirection) !void {
-    var use_case = tab_moves.requestHandler(handler.client);
-    _ = try use_case.execute(.{ .direction = direction });
 }
 
 test "only an unmodified control-v triggers local image inspection" {

@@ -53,9 +53,9 @@ canonical no-ops. This presentation revision is local to the client and is
 separate from the runtime revision retained in the snapshot.
 
 The model exposes bounded queries for stable identity and zero-based position.
-`InputHandler` uses those queries when a top-bar click, native binding, Lua
-binding or plugin action selects a workspace. `View` is not navigation
-authority and owns no second copy of the list.
+The shared client action dispatcher uses those queries when a top-bar click,
+native binding, Lua binding or plugin action selects a workspace. `View` is
+not navigation authority and owns no second copy of the list.
 
 ## Presentation
 

@@ -167,6 +167,16 @@ pub const ConfigurationCommit = struct {
     panes_revision: u64,
 };
 
+pub const PluginExecutionId = enum(u64) {
+    none = 0,
+    _,
+};
+
+pub const PluginExecution = struct {
+    id: PluginExecutionId,
+    configuration_generation: u64,
+};
+
 pub const InitialClientState = struct {
     pane_gaps: bool,
     configuration_generation: u64 = 0,
@@ -674,6 +684,8 @@ pub const Model = struct {
     workspace_revision: u64 = 0,
     configuration_generation: u64 = 0,
     configuration_revision: u64 = 0,
+    plugin_execution: ?PluginExecution = null,
+    next_plugin_execution_id: u64 = 1,
     host_size: schema.TerminalSize,
     host_revision: u64 = 0,
     host_capabilities: HostCapabilities,
@@ -794,6 +806,55 @@ pub const Model = struct {
     /// ```
     pub fn configurationGeneration(model: *const Model) u64 {
         return model.configuration_generation;
+    }
+
+    /// Returns the single plugin execution currently owned by the client.
+    ///
+    /// ```zig
+    /// if (model.pluginExecution() != null) {
+    ///     return;
+    /// }
+    /// ```
+    pub fn pluginExecution(model: *const Model) ?PluginExecution {
+        return model.plugin_execution;
+    }
+
+    /// Reserves one plugin execution against the current configuration.
+    ///
+    /// ```zig
+    /// const execution = try model.beginPluginExecution() orelse return;
+    /// ```
+    pub fn beginPluginExecution(model: *Model) !?PluginExecution {
+        if (model.plugin_execution != null) {
+            return null;
+        }
+        if (model.next_plugin_execution_id == 0) {
+            return error.PluginExecutionIdExhausted;
+        }
+
+        const execution: PluginExecution = .{
+            .id = @enumFromInt(model.next_plugin_execution_id),
+            .configuration_generation = model.configuration_generation,
+        };
+        model.next_plugin_execution_id +%= 1;
+        model.plugin_execution = execution;
+
+        return execution;
+    }
+
+    /// Finishes only the matching plugin execution and preserves newer work.
+    ///
+    /// ```zig
+    /// const execution = model.finishPluginExecution(id) orelse return;
+    /// ```
+    pub fn finishPluginExecution(model: *Model, id: PluginExecutionId) ?PluginExecution {
+        const execution = model.plugin_execution orelse return null;
+        if (execution.id != id) {
+            return null;
+        }
+
+        model.plugin_execution = null;
+        return execution;
     }
 
     /// Returns the pane-gap preference used by current and future tabs.
@@ -4090,6 +4151,55 @@ test "configuration adoption rejects an old generation without partial state" {
     try std.testing.expect(model.sidebarVisible());
     try std.testing.expect(model.paneGaps());
     try std.testing.expectEqualDeep(version, model.version());
+}
+
+test "plugin execution is single flight and completion matches its exact identity" {
+    var model = Model.initWithConfiguration(std.testing.allocator, true, 7);
+    defer model.deinit();
+
+    const first = (try model.beginPluginExecution()).?;
+
+    try std.testing.expectEqual(@as(u64, 1), @intFromEnum(first.id));
+    try std.testing.expectEqual(@as(u64, 7), first.configuration_generation);
+    try std.testing.expectEqualDeep(first, model.pluginExecution().?);
+    try std.testing.expect((try model.beginPluginExecution()) == null);
+    try std.testing.expect(model.finishPluginExecution(@enumFromInt(99)) == null);
+    try std.testing.expectEqualDeep(first, model.pluginExecution().?);
+    try std.testing.expectEqualDeep(first, model.finishPluginExecution(first.id).?);
+    try std.testing.expect(model.pluginExecution() == null);
+
+    const second = (try model.beginPluginExecution()).?;
+
+    try std.testing.expectEqual(@as(u64, 2), @intFromEnum(second.id));
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "plugin execution retains its launch generation across configuration reload" {
+    var model = Model.initWithConfiguration(std.testing.allocator, true, 3);
+    defer model.deinit();
+    const execution = (try model.beginPluginExecution()).?;
+
+    _ = try model.applyConfiguration(.{
+        .generation = 4,
+        .sidebar_visible = true,
+        .pane_gaps = true,
+    });
+
+    try std.testing.expectEqual(@as(u64, 3), model.pluginExecution().?.configuration_generation);
+    try std.testing.expectEqualDeep(execution, model.finishPluginExecution(execution.id).?);
+}
+
+test "plugin execution identity exhaustion cannot publish a partial reservation" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    model.next_plugin_execution_id = std.math.maxInt(u64);
+
+    const last = (try model.beginPluginExecution()).?;
+
+    try std.testing.expectEqual(std.math.maxInt(u64), @intFromEnum(last.id));
+    _ = model.finishPluginExecution(last.id);
+    try std.testing.expectError(error.PluginExecutionIdExhausted, model.beginPluginExecution());
+    try std.testing.expect(model.pluginExecution() == null);
 }
 
 test "host resize commits resolved geometry once" {

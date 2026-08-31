@@ -106,6 +106,7 @@ const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
+const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
 const server_messages = @import("server_messages.zig");
 
@@ -125,7 +126,7 @@ pub const ClientEvent = union(enum) {
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!config_reload.ConfigReload,
-    plugin_result: anyerror!plugin_broker.WorkerResult,
+    plugin_result: plugin_actions.Completion,
     clipboard_image: anyerror!*attachments.Capture,
 };
 
@@ -196,7 +197,6 @@ trust_store: ?*core.plugin.TrustStore,
 reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
 sound_config: lua_config.SoundConfig,
-plugin_pending: bool = false,
 attachment_capture: attachments.CaptureState = .{},
 paste_pane: ?schema.PaneId = null,
 
@@ -917,17 +917,6 @@ pub fn requestWorkspaceSnapshot(client: *Client, workspace: schema.WorkspaceLoca
     );
 }
 
-/// Schedules one plugin action on the worker; its result re-enters the
-/// loop as a `.plugin_result` event. The only place a plugin task starts.
-pub fn schedulePluginAction(client: *Client, request: plugin_broker.WorkerRequest) !void {
-    try client.select.concurrent(
-        .plugin_result,
-        plugin_broker.executeWorker,
-        .{ client.io, client.gpa, request },
-    );
-    client.plugin_pending = true;
-}
-
 pub fn scheduleConfigReload(client: *Client) !void {
     const path = client.options.config_path orelse return;
     try config_reload.schedule(&client.reload, client.io, client.gpa, &client.select, .{
@@ -947,37 +936,8 @@ pub fn handleConfigReloadEvent(client: *Client, result: anyerror!config_reload.C
 }
 
 /// Entrypoint for one finished plugin action: authorize and apply its effects.
-pub fn handlePluginResultEvent(
-    client: *Client,
-    result: anyerror!plugin_broker.WorkerResult,
-) !bool {
-    client.plugin_pending = false;
-    const worker_result = result catch |err| {
-        client.config_diagnostic.set("plugin worker failed: {s}", .{@errorName(err)});
-        try client.notifyDiagnostic("Plugin failed");
-        return false;
-    };
-    const registry = client.plugin_registry orelse {
-        client.config_diagnostic.set("plugin registry changed while action was running", .{});
-        try client.notifyDiagnostic("Plugin failed");
-        return false;
-    };
-    registry.authorizeBatch(
-        worker_result.package_index,
-        worker_result.plugin_id,
-        worker_result.digest,
-        &worker_result.batch,
-    ) catch |err| {
-        client.config_diagnostic.set("plugin effect denied: {s}", .{@errorName(err)});
-        try client.notifyDiagnostic("Plugin denied");
-        return false;
-    };
-    client.config_diagnostic.len = 0;
-    var handler: InputHandler = .{ .client = client };
-    for (worker_result.batch.slice()) |effect|
-        if (try handler.applyNativeAction(effect) == .stop) return true;
-    if (handler.redraw) try client.presenter.requestDraw();
-    return false;
+pub fn handlePluginResultEvent(client: *Client, completion: plugin_actions.Completion) !bool {
+    return plugin_actions.complete(client, completion);
 }
 
 /// Re-offers this client's pane sizes to the runtime for every attached

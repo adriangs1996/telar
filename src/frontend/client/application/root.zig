@@ -19,6 +19,7 @@ pub const pane_frame = @import("pane_frame.zig");
 pub const pane_graphics = @import("pane_graphics.zig");
 pub const pane_input = @import("pane_input.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
+pub const plugin_action = @import("plugin_action.zig");
 pub const proxy_status = @import("proxy_status.zig");
 pub const request_failure = @import("request_failure.zig");
 pub const resync_required = @import("resync_required.zig");
@@ -57,6 +58,7 @@ test {
     _ = pane_graphics;
     _ = pane_input;
     _ = pane_metadata;
+    _ = plugin_action;
     _ = proxy_status;
     _ = request_failure;
     _ = resync_required;

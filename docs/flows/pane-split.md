@@ -8,7 +8,7 @@ commit.
 ## Flow
 
 ```text
-InputHandler.beginSplit
+client_actions.apply
         |
 RequestPaneSplitHandler
         |
