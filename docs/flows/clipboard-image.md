@@ -12,6 +12,8 @@ Ctrl+V
   |
 InputHandler.key
   |
+key_routing adapter -> KeyRoutingHandler
+  |
 pane_inputs.send -> client outbox
   |
 clipboard_images.start
@@ -35,11 +37,13 @@ Store.ingressVersion
 presentation_lifecycle.observe -> Presenter -> paced cell and media passes
 ```
 
-`InputHandler.key` completes `pane_inputs.send` before it calls
-`clipboard_images.start`. The runtime drains that outbox to the PTY
+`InputHandler.key` delegates the semantic key without recognizing `Ctrl+V`.
+`KeyRoutingHandler` completes its pane effect before it asks for a preview, and
+the adapter maps those effects to `pane_inputs.send` followed by
+`clipboard_images.start`. The runtime drains the outbox to the PTY
 independently. A missing target, unsupported platform, busy worker or
 scheduling failure can drop the preview, but none can retract or delay an
-already accepted pane input transaction.
+already accepted pane input transaction. See [Key routing](key-routing.md).
 
 ## State and worker ownership
 

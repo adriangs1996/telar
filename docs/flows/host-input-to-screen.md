@@ -21,10 +21,14 @@ keybind.Router.feed -> term.parse -> Router.routeKey
       v                                                      v
 InputHandler.key / forward / mouse                 InputHandler.action
       |                                                      |
-pane_inputs adapter                               native / Lua / plugin action
+key_routing / pane_mouse_inputs                  native / Lua / plugin action
       |                                                      |
-PaneInputHandler                                  consumed by Telar
+application owner handler                         consumed by Telar
       |                                                      |
+pane_inputs when child-owned
+      |
+PaneInputHandler
+      |
 ClientModel.planPaneInput -> input.host.encodeKey
       |
 SetPaneViewportHandler(.bottom)
@@ -130,14 +134,20 @@ They never call runtime internals. The unit test `a configured sequence runs
 once and does not reach the pane` in `src/frontend/input/keybind.zig` proves
 that the matched branch is consumed.
 
-## 2B. Pane input branch
+## 2B. Key and pane input branch
 
-An unmatched semantic key reaches `InputHandler.key`, which delegates one
-input command to the `pane_inputs` adapter. `PaneInputHandler` resolves an
-attached target through `ClientModel.planPaneInput` and calls
-`input.host.encodeKey` from `src/frontend/input/host.zig`. Encoding uses the
-pane's last acknowledged cursor/application, modify-key and bracketed-paste
-modes; host bytes are not copied blindly into the child.
+An unmatched semantic key or replayed byte slice reaches `InputHandler`, which
+delegates it to `key_routing`. `KeyRoutingHandler` selects one attachment
+modal, name prompt, copy-mode or pane owner. Only a pane-owned value enters
+`PaneInputHandler`. See [Key routing](key-routing.md) for capture, priority,
+failure and `Ctrl+V` follow-up policy.
+
+`PaneInputHandler` resolves an attached target through
+`ClientModel.planPaneInput` and calls `input.host.encodeKey` from
+`src/frontend/input/host.zig` for semantic keys. Encoding uses the pane's last
+acknowledged cursor/application, modify-key and bracketed-paste modes. Replayed
+byte slices have already passed parser and binding classification before they
+enter the bounded pane-input bytes path.
 
 The pane-input boundary also owns raw routed chunks, Lua paste,
 alternate-scroll cursor sequences and SGR mouse reports. Streamed paste first

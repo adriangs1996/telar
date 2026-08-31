@@ -8,18 +8,16 @@ const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const client_actions = @import("actions.zig");
-const clipboard_images = @import("clipboard_images.zig");
 const host_capabilities = @import("host_capabilities.zig");
+const key_routing = @import("key_routing.zig");
 const lua_actions = @import("lua_actions.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 const paste_routing = @import("paste_routing.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const copy_modes = @import("copy_modes.zig");
-const name_prompts = @import("name_prompts.zig");
 const view_interactions = @import("view_interactions.zig");
 const action_mod = input_capability.action;
-const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
 const multiplexer = workspace_capability.multiplexer;
 const term = presentation.screen;
@@ -42,58 +40,32 @@ fn activeModel(handler: *InputHandler) ?*multiplexer.Model {
     return handler.client.model.activeTabModel();
 }
 
+/// Returns whether the current modal or prompt must bypass configured keys.
+///
+/// ```zig
+/// if (handler.capturesKeys()) routeDirectly();
+/// ```
 pub fn capturesKeys(handler: *const InputHandler) bool {
-    return handler.client.model.name_prompt.active() or handler.client.view.hasAttachmentModal();
+    return key_routing.captures(handler.client);
 }
 
+/// Routes one borrowed byte slice after the native router has replayed it.
+///
+/// ```zig
+/// try handler.forward(bytes);
+/// ```
 pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
-    if (bytes.len == 0) return;
-    if (handler.client.model.name_prompt.active()) {
-        _ = try name_prompts.handleInput(handler.client, bytes);
-        return;
-    }
-    if (handler.client.model.copyModeActive()) {
-        return;
-    }
-
-    _ = try pane_inputs.send(handler.client, .{
-        .target = .focused,
-        .source = .host,
-        .payload = .{ .bytes = bytes },
-    });
+    _ = try key_routing.apply(handler.client, .{ .bytes = bytes });
 }
 
+/// Routes one semantic host key after native binding resolution.
+///
+/// ```zig
+/// try handler.key(pressed);
+/// ```
 pub fn key(handler: *InputHandler, value: keybind.Key) !void {
-    if (handler.client.view.hasAttachmentModal()) {
-        if (value.code == .escape) _ = handler.client.view.closeAttachmentModal();
-        handler.redraw = true;
-        return;
-    }
-    if (handler.client.model.name_prompt.active()) {
-        var editing_bytes: [32]u8 = undefined;
-        _ = try name_prompts.handleInput(
-            handler.client,
-            try input_mod.encodeKey(&editing_bytes, value, .{}),
-        );
-        return;
-    }
-    if (handler.client.model.copyModeActive()) {
-        _ = try copy_modes.key(handler.client, value);
-        return;
-    }
-
-    _ = try pane_inputs.send(handler.client, .{
-        .target = .focused,
-        .source = .host,
-        .payload = .{ .key = value },
-    }) orelse return;
-    if (isClipboardImagePasteKey(value)) {
-        _ = clipboard_images.start(handler.client) catch {};
-    }
-}
-
-fn isClipboardImagePasteKey(value: keybind.Key) bool {
-    return value.isCtrl('v') and !value.mods.alt and !value.mods.shift;
+    const outcome = try key_routing.apply(handler.client, .{ .key = value });
+    handler.redraw = handler.redraw or outcome.redraw;
 }
 
 fn sendPaste(handler: *InputHandler, text: []const u8) !void {
@@ -226,15 +198,4 @@ fn applyLuaAction(handler: *InputHandler, command: lua_actions.Command) !keybind
     }
 
     return .continue_routing;
-}
-
-test "only an unmodified control-v triggers local image inspection" {
-    const control_v = try keybind.parseKey("ctrl+v");
-    try std.testing.expect(isClipboardImagePasteKey(control_v));
-    var shifted = control_v;
-    shifted.mods.shift = true;
-    try std.testing.expect(!isClipboardImagePasteKey(shifted));
-    try std.testing.expect(!isClipboardImagePasteKey(try keybind.parseKey("ctrl+shift+left")));
-    try std.testing.expect(!isClipboardImagePasteKey(try keybind.parseKey("alt+v")));
-    try std.testing.expect(!isClipboardImagePasteKey(try keybind.parseKey("v")));
 }

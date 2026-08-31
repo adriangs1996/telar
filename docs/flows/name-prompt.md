@@ -24,9 +24,11 @@ ClientModel.Version.prompt
 
 host key input                     streamed paste phase
         |                                  |
-InputHandler key branch             paste_routing adapter
+key_routing adapter                 paste_routing adapter
         |                                  |
-name_prompts.handleInput       PasteRoutingHandler -> prompt owner
+KeyRoutingHandler -> prompt    PasteRoutingHandler -> prompt owner
+        |                                  |
+name_prompts.handleInput                    |
         |                                  |
         +----------------+-----------------+
                          |
@@ -41,8 +43,10 @@ NamePromptHandler.execute -> name_prompt.State.apply
 paste, `paste_routing` snapshots those modes plus the attachment modal and
 `PasteRoutingHandler` selects one owner. A paste that starts in the prompt
 records `Prompt.pasting`; its later chunks and closing boundary stay with that
-editor. Mouse input and configured actions are suppressed while the prompt is
-active.
+editor. For normal host keys, `KeyRoutingHandler` selects prompt authority
+before copy mode or pane input. `capturesKeys` bypasses configured bindings
+while the prompt is active. Mouse input and configured actions are suppressed
+in that interval. See [Key routing](key-routing.md).
 
 The terminal adapter translates bytes into semantic editor commands. The state
 component handles grapheme-aware editing and records a revision only for a

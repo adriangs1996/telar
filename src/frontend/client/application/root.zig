@@ -14,6 +14,7 @@ pub const create_workspace = @import("create_workspace.zig");
 pub const host_capabilities = @import("host_capabilities.zig");
 pub const host_resize = @import("host_resize.zig");
 pub const focus_pane = @import("focus_pane.zig");
+pub const key_routing = @import("key_routing.zig");
 pub const lua_action = @import("lua_action.zig");
 pub const move_tab = @import("move_tab.zig");
 pub const name_prompt = @import("name_prompt.zig");
@@ -62,6 +63,7 @@ test {
     _ = host_capabilities;
     _ = host_resize;
     _ = focus_pane;
+    _ = key_routing;
     _ = lua_action;
     _ = move_tab;
     _ = name_prompt;

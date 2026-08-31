@@ -82,7 +82,8 @@ the sequence.
 An expression returns `consume`, `forward_binding`, semantic keys or bounded
 paste. After a successful invocation, the application handler clears any older
 diagnostic and returns the value to `InputHandler`. Keys pass through
-`InputHandler.key`; paste passes through `pane_inputs.expressionPaste`. Both use
+`InputHandler.key` and `KeyRoutingHandler`; paste passes through
+`pane_inputs.expressionPaste`. Both use
 the focused child's acknowledged terminal modes and the existing pane-input
 target checks.
 

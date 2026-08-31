@@ -16,7 +16,7 @@ request containing only coordinates.
 ```text
 host key, mouse wheel or native action
         |
-InputHandler
+key_routing / InputHandler.mouse / client_actions
         |
 copy_modes adapter
         |
@@ -35,10 +35,12 @@ ClientModel.Version.copy and optional viewport
 
 Entry resolves the attached focused pane and captures its current viewport.
 An active name prompt, missing pane or repeated entry is a no-op. While copy
-mode is active, raw keyboard and paste input never reaches the child. The mouse
+mode is active, `KeyRoutingHandler` sends semantic keys to copy mode and
+consumes replayed bytes. Neither reaches the child. Copy mode does not make
+`capturesKeys` true, so configured prefix bindings remain available. The mouse
 is also captured; only wheel events over the target pane move the copy cursor.
-Configured prefix bindings remain available. Any native action other than
-copy-mode entry first leaves copy mode and restores its entry viewport.
+Any native action other than copy-mode entry first leaves copy mode and
+restores its entry viewport. See [Key routing](key-routing.md).
 
 `ClientModel.planCopyMode` applies the pure motion component to a local state
 copy. Unhandled keys and boundary motions return no plan and advance no

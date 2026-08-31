@@ -6456,6 +6456,50 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     try std.testing.expectEqual(expected.diagnostic, client.presenter.presented_model_version.diagnostic);
 }
 
+test "attachment modal captures semantic keys until escape closes it" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try installTestingAttachmentTarget(client, 1);
+    const capture = try client.gpa.create(attachments.Capture);
+    capture.* = .{
+        .request = .{ .target = target, .sequence = 81 },
+        .png = try client.gpa.dupe(u8, "png"),
+        .width = 2,
+        .height = 2,
+    };
+    var capture_owned = true;
+    errdefer if (capture_owned) {
+        capture.deinit(client.gpa);
+    };
+    _ = try client.view.adoptAttachment(capture);
+    capture_owned = false;
+    const snapshot = client.view.kittyAttachments().snapshot();
+    try std.testing.expectEqual(@as(u8, 1), snapshot.len);
+    try std.testing.expect(client.view.kittyAttachments().openModal(snapshot.items[0].id));
+    const version = client.model.version();
+    var handler: InputHandler = .{ .client = client };
+
+    try std.testing.expect(handler.capturesKeys());
+    try handler.key(try keybind.parseKey("x"));
+
+    try std.testing.expect(client.view.hasAttachmentModal());
+    try std.testing.expect(handler.redraw);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+
+    handler.redraw = false;
+    try handler.key(try keybind.parseKey("escape"));
+
+    try std.testing.expect(!client.view.hasAttachmentModal());
+    try std.testing.expect(!handler.capturesKeys());
+    try std.testing.expect(handler.redraw);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+}
+
 test "control-v reaches the pane when no clipboard preview target exists" {
     var harness: TestHarness = undefined;
     try harness.init();

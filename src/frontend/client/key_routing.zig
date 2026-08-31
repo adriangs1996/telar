@@ -1,0 +1,96 @@
+//! Wires host-key ownership policy to existing client input use cases.
+
+const input_capability = @import("../input/root.zig");
+const client_application = @import("application/root.zig");
+const clipboard_images = @import("clipboard_images.zig");
+const copy_modes = @import("copy_modes.zig");
+const name_prompts = @import("name_prompts.zig");
+const pane_inputs = @import("pane_inputs.zig");
+
+const Client = @import("client.zig");
+const host_input = input_capability.host;
+const key_routing = client_application.key_routing;
+
+pub const Command = key_routing.Command;
+pub const Outcome = key_routing.Outcome;
+
+/// Returns whether modal or prompt authority must bypass configured bindings.
+/// Copy mode deliberately leaves native bindings available.
+///
+/// ```zig
+/// if (captures(client)) routeDirectly();
+/// ```
+pub fn captures(client: *const Client) bool {
+    return key_routing.captures(authority(client));
+}
+
+/// Routes one semantic key or borrowed byte slice to a single current owner.
+///
+/// ```zig
+/// const outcome = try apply(client, .{ .key = key });
+/// ```
+pub fn apply(client: *Client, command: Command) !Outcome {
+    var use_case: key_routing.KeyRoutingHandler = .{
+        .effects = .{
+            .context = client,
+            .close_modal = closeModal,
+            .prompt = routePrompt,
+            .copy_key = routeCopyKey,
+            .pane = routePane,
+            .preview = startPreview,
+        },
+    };
+
+    return use_case.execute(command, authority(client));
+}
+
+fn authority(client: *const Client) key_routing.Authority {
+    return .{
+        .attachment_modal_active = client.view.hasAttachmentModal(),
+        .prompt_active = client.model.name_prompt.active(),
+        .copy_mode_active = client.model.copyModeActive(),
+    };
+}
+
+fn closeModal(raw_context: *anyopaque) void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    _ = client.view.closeAttachmentModal();
+}
+
+fn routePrompt(raw_context: *anyopaque, command: Command) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+    var encoded: [32]u8 = undefined;
+    const bytes = switch (command) {
+        .bytes => |value| value,
+        .key => |value| try host_input.encodeKey(&encoded, value, .{}),
+    };
+
+    _ = try name_prompts.handleInput(client, bytes);
+}
+
+fn routeCopyKey(raw_context: *anyopaque, key: input_capability.keybind.Key) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    _ = try copy_modes.key(client, key);
+}
+
+fn routePane(raw_context: *anyopaque, command: Command) !bool {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+    const delivery = try pane_inputs.send(client, .{
+        .target = .focused,
+        .source = .host,
+        .payload = switch (command) {
+            .bytes => |bytes| .{ .bytes = bytes },
+            .key => |key| .{ .key = key },
+        },
+    });
+
+    return delivery != null;
+}
+
+fn startPreview(raw_context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    _ = try clipboard_images.start(client);
+}

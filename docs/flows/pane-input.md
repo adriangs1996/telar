@@ -18,15 +18,15 @@ semantic key, routed bytes, paste or pointer event
                          |
                   InputHandler
                          |
-         +---------------+----------------------+
-         |               |                      |
-  paste_routing   pane_mouse_inputs       pane_inputs
-         |               |                      |
-  PanePasteHandler  PaneMouseHandler             |
-         |               |                      |
- ClientModel.pane_paste  SGR / alternate bytes   |
-         |               |                      |
-         +---------------+----------------------+
+         +----------------+----------------+----------------+
+         |                |                |                |
+   key_routing      paste_routing   pane_mouse_inputs  pane_inputs
+         |                |                |                |
+ KeyRoutingHandler  PanePasteHandler PaneMouseHandler       |
+         |                |                |                |
+  pane-owned input  captured paste  SGR / alternate bytes   |
+         |                |                |                |
+         +----------------+----------------+----------------+
                          |
                  PaneInputHandler
                          |
@@ -45,11 +45,12 @@ semantic key, routed bytes, paste or pointer event
  runtime_transport.enqueueInput -> Outbox -> pane_input
 ```
 
-`InputHandler` classifies keys and Telar actions. It delegates paste phases to
-`paste_routing` without deciding their owner. After prompt, copy-mode and view
-ownership, it delegates pane-local pointer events to `pane_mouse_inputs`. It
-does not resolve pane storage, inspect child mouse modes, encode child input,
-restore scrollback, write pane-input telemetry or enqueue pane bytes.
+`InputHandler` delegates semantic keys and replayed bytes to `key_routing`
+without deciding their owner. It delegates paste phases to `paste_routing` and
+pane-local pointer events to `pane_mouse_inputs`. It does not inspect prompt,
+copy-mode or pane authority, resolve pane storage, inspect child mouse modes,
+encode child input, restore scrollback, write pane-input telemetry or enqueue
+pane bytes. See [Key routing](key-routing.md) for keyboard ownership.
 
 `PaneMouseHandler` selects viewport, alternate-scroll or child-report policy.
 Only the latter two enter `PaneInputHandler`. See
@@ -110,10 +111,11 @@ and cleanup releases the session through `ClientModel`. Lua paste decisions do
 not create a streamed session; they read the focused child's current mode and
 frame one bounded value in one delivery.
 
-An unmodified `Ctrl+V` follows the normal pane-input transaction first. Only
-after delivery does the client schedule its best-effort local image preview.
-See [Clipboard image preview](clipboard-image.md) for its media worker,
-identity, bounds and presentation path.
+An unmodified `Ctrl+V` follows the normal pane-input transaction first.
+`KeyRoutingHandler` requests its best-effort local image preview only after a
+confirmed delivery. See [Key routing](key-routing.md) for that ordering and
+[Clipboard image preview](clipboard-image.md) for its media worker, identity,
+bounds and presentation path.
 
 ## Effects and failure policy
 
