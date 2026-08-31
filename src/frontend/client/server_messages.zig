@@ -19,6 +19,7 @@ const client_mod = @import("client.zig");
 const Client = client_mod;
 const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
+const pane_frames = @import("pane_frames.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -116,7 +117,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .tab_renamed => |renamed| try handleTabRenamed(client, renamed),
         .tab_closed => |closed| return handleTabClosed(client, closed),
         .tab_moved => |moved| try handleTabMoved(client, moved),
-        .pane_frame => |frame| try handlePaneFrame(client, frame),
+        .pane_frame => |frame| _ = try pane_frames.apply(client, frame),
         .pane_cwd => |cwd| try handlePaneCwd(client, cwd),
         .pane_foreground => |foreground| try handlePaneForeground(client, foreground),
         .pane_clipboard => |clipboard| try handlePaneClipboard(client, clipboard),
@@ -502,45 +503,6 @@ fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
 
     var use_case = tab_moves.confirmationHandler(client);
     _ = use_case.execute(tab_moves.confirmation(moved)) catch return error.UnexpectedTabMoved;
-}
-
-/// One pane frame: apply the patch or ask for a snapshot on a broken base.
-fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
-    const pane = client.model.workspace.findPane(frame.pane_id) orelse return error.UnexpectedPane;
-    if (!pane.attached) return;
-    if (frame.base_frame_id != 0 and
-        frame.base_frame_id != pane.applied_frame_id)
-    {
-        try client.enqueue(.{ .request_snapshot = .{
-            .pane_id = frame.pane_id,
-            .known_frame_id = pane.applied_frame_id,
-        } });
-        return;
-    }
-    const apply_started = diagnostics.now(client.io);
-    const previous_scroll_offset = pane.scroll.offset;
-    const tab = client.model.workspace.tabForPane(frame.pane_id) orelse
-        return error.UnexpectedPane;
-    const applied = try tab.model.applyFrame(frame);
-    const should_show_graphics = frame.scroll.atBottom(frame.rows) and
-        client.model.workspace.active() != null and
-        std.meta.eql(client.model.workspace.active().?.location, tab.location);
-    if (client.graphics_store.paneVisible(frame.pane_id) != should_show_graphics)
-        try client.graphics_store.setPaneVisible(frame.pane_id, should_show_graphics);
-    _ = client.model.reconcileCopyModeFrame(.{
-        .pane_id = frame.pane_id,
-        .previous_offset = previous_scroll_offset,
-        .scroll = frame.scroll,
-    });
-    if (comptime diagnostics.enabled) {
-        client.metrics.frames += 1;
-        client.metrics.frame_cells += applied.cells;
-        client.metrics.frame_spans += applied.spans;
-        if (frame.base_frame_id == 0) client.metrics.snapshots += 1;
-        client.metrics.apply.observe(diagnostics.elapsed(apply_started, diagnostics.now(client.io)));
-    }
-    if (client.model.workspace.active()) |active| try client.syncPaneFocus(&active.model);
-    try client.presenter.requestDraw();
 }
 
 /// A pane's child ended: drop the pane and every piece of client state on it.

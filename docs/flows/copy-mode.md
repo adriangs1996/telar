@@ -58,19 +58,20 @@ frame repairs the operational projection. Copy mode uses the same
 ```text
 schema.pane_frame
         |
-multiplexer.Model.applyFrame
+pane_frames -> ApplyPaneFrameHandler
         |
-ClientModel.reconcileCopyModeFrame
+ClientModel.applyPaneFrame
         |
-copy_mode.onFrame
+screen commit + copy_mode.onFrame
         |
-ClientModel.Version.copy when state changed
+Version.frame always + Version.copy when copy state changed
 ```
 
 A frame can prune retained rows or confirm a requested viewport. Reconciliation
-pulls absolute selection coordinates across pruned history, clamps them to the
-new row count and adopts the runtime viewport. Unrelated or identical frames
-do not advance the copy revision.
+is internal to the frame transaction. It pulls absolute selection coordinates
+across pruned history, clamps them to the new row count and adopts the runtime
+viewport. Unrelated or identical copy projections do not advance the copy
+revision.
 
 Pane and tab cleanup call `ClientModel.releaseCopyMode` through
 `pane_resources`. Only retirement of the target pane closes the mode. Paste,

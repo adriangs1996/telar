@@ -72,10 +72,11 @@ single host read may fold movements from different panes, or restore a pane
 and select another tab before the next 60 Hz frame. An inactive tab must not
 retain cells composed for an older offset.
 
-Neither the model transition nor the application handler touches
+Neither the viewport model transition nor its application handler touches
 `composition_invalidated` or `InputHandler.redraw`. Runtime `pane_frame`
 messages remain a separate reconciliation path. Applying a frame replaces the
-pane's scroll projection, marks rendering damage and requests presentation.
+pane's scroll projection, records rendering damage and advances the frame
+revision; the presenter observes that revision and schedules presentation.
 
 ## Runtime projection
 
@@ -90,7 +91,7 @@ cell.Sync viewport pin
         |
 pane_frame
         |
-client handlePaneFrame
+pane_frames -> ApplyPaneFrameHandler -> ClientModel.applyPaneFrame
 ```
 
 The attachment clamps the requested row against terminal history and pins the

@@ -47,9 +47,9 @@ Server.handlePaneIngestedEvent -> Server.pump
 runtime.encoder.encodeFrame -> schema.pane_frame -> socket
       |
       v
-Client.handleServerEvent -> handleServerMessage -> handlePaneFrame
+Client.handleServerEvent -> server_messages -> pane_frames
       |
-Client.presentDue -> Client.present -> presentation.Screen.flush
+Client.observeModel -> Presenter.presentDue -> presentation.Screen.flush
       |
       v
 host TTY bytes
@@ -220,11 +220,17 @@ as a replay.
 
 The client socket read completes at `Client.handleServerEvent`. That entrypoint
 decodes the message, accounts flow-control credits, delegates to
-`Client.handleServerMessage`, and schedules the next read.
+`server_messages.handleServerMessage`, and schedules the next read.
 
-The `.pane_frame` case calls `Client.handlePaneFrame`, which validates the base
-frame, applies spans to the disposable workspace model, updates scroll and
-input-mode state, and requests a paced draw.
+The `.pane_frame` case delegates through the `pane_frames` adapter and
+`ApplyPaneFrameHandler` to `ClientModel.applyPaneFrame`. The model validates the
+base, applies spans to the disposable workspace, reconciles scroll, input modes
+and copy state, then publishes `ClientModel.Version.frame`. A broken base
+requests a fresh snapshot without changing state.
+
+After dispatch, the client loop calls `Client.observeModel`. `Presenter`
+detects the new frame revision and schedules the paced draw; the frame use case
+does not decide whether to paint.
 
 The `.draw` event calls `Client.handleDrawEvent`, then `Client.presentDue` and
 `Client.present`:

@@ -19,6 +19,7 @@ pub const Version = struct {
     tabs: u64 = 0,
     active_tab: u64 = 0,
     panes: u64 = 0,
+    frame: u64 = 0,
     chrome: u64 = 0,
     prompt: u64 = 0,
     copy: u64 = 0,
@@ -151,6 +152,28 @@ pub const PaneInputPlan = struct {
     input_modes: schema.frame.InputModes,
 };
 
+pub const PaneFrameRecovery = struct {
+    pane_id: schema.PaneId,
+    known_frame_id: u64,
+};
+
+pub const PaneFrameCommit = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    frame_id: u64,
+    graphics_visible: bool,
+    snapshot: bool,
+    spans: u64,
+    cells: u64,
+    frame_revision: u64,
+};
+
+pub const PaneFrameOutcome = union(enum) {
+    detached,
+    resync: PaneFrameRecovery,
+    applied: PaneFrameCommit,
+};
+
 pub const PaneViewportTarget = union(enum) {
     absolute: u32,
     relative: i32,
@@ -180,7 +203,7 @@ pub const CopyModeProjection = struct {
     view: copy_mode.View,
 };
 
-pub const CopyModeFrame = struct {
+const CopyModeFrame = struct {
     pane_id: schema.PaneId,
     previous_offset: u32,
     scroll: schema.frame.Scroll,
@@ -371,6 +394,7 @@ pub const Model = struct {
     chrome_revision: u64 = 0,
     copy_state: ?copy_mode.State = null,
     copy_revision: u64 = 0,
+    frame_revision: u64 = 0,
     viewport_revision: u64 = 0,
 
     /// Creates the client model with the configured pane appearance.
@@ -405,6 +429,7 @@ pub const Model = struct {
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
+            .frame = model.frame_revision,
             .chrome = model.chrome_revision,
             .prompt = model.name_prompt.version(),
             .copy = model.copy_revision,
@@ -512,6 +537,49 @@ pub const Model = struct {
             .pane_id = pane.id,
             .input_modes = pane.input_modes,
         };
+    }
+
+    /// Applies one attached runtime frame and copy-mode reconciliation as one
+    /// client-model commit. Broken patch bases request recovery without
+    /// changing state; frames already made stale by detach are ignored.
+    ///
+    /// ```zig
+    /// const outcome = try model.applyPaneFrame(frame);
+    /// ```
+    pub fn applyPaneFrame(model: *Model, frame: schema.frame.FrameView) !PaneFrameOutcome {
+        const tab = model.workspace.tabForPane(frame.pane_id) orelse return error.UnexpectedPane;
+        const pane = tab.model.find(frame.pane_id) orelse return error.UnexpectedPane;
+        if (!pane.attached) {
+            return .detached;
+        }
+        if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id) {
+            return .{ .resync = .{
+                .pane_id = frame.pane_id,
+                .known_frame_id = pane.applied_frame_id,
+            } };
+        }
+
+        const previous_scroll_offset = pane.scroll.offset;
+        const applied = try tab.model.applyFrame(frame);
+        _ = model.reconcileCopyModeFrame(.{
+            .pane_id = frame.pane_id,
+            .previous_offset = previous_scroll_offset,
+            .scroll = frame.scroll,
+        });
+        model.frame_revision +%= 1;
+        const active = model.workspace.activeConst();
+
+        return .{ .applied = .{
+            .pane_id = frame.pane_id,
+            .location = tab.location,
+            .frame_id = frame.frame_id,
+            .graphics_visible = frame.scroll.atBottom(frame.rows) and
+                active != null and std.meta.eql(active.?.location, tab.location),
+            .snapshot = frame.base_frame_id == 0,
+            .spans = applied.spans,
+            .cells = applied.cells,
+            .frame_revision = model.frame_revision,
+        } };
     }
 
     /// Commits one viewport intent for an attached pane in the active tab.
@@ -688,13 +756,9 @@ pub const Model = struct {
         return true;
     }
 
-    /// Reconciles one active copy cursor with an applied runtime frame.
-    /// Unrelated and semantically unchanged frames preserve the revision.
-    ///
-    /// ```zig
-    /// _ = model.reconcileCopyModeFrame(command);
-    /// ```
-    pub fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrame) bool {
+    // Reconcile copy state inside the frame transaction so callers cannot
+    // publish screen state without the matching retained-history projection.
+    fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrame) bool {
         const state = model.copy_state orelse return false;
         if (state.pane_id != command.pane_id) {
             return false;
@@ -1576,6 +1640,39 @@ fn testingTabSnapshot(buffer: []u8, snapshot: schema.TabSnapshot) !schema.TabSna
     return (try schema.decodeServer(try schema.encodeTabSnapshot(buffer, snapshot))).tab_snapshot;
 }
 
+const TestingPaneFrame = struct {
+    pane_id: schema.PaneId,
+    frame_id: u64 = 1,
+    base_frame_id: u64 = 0,
+    cols: u16 = 2,
+    rows: u16 = 2,
+    cursor: schema.frame.Cursor = .{},
+    input_modes: schema.frame.InputModes = .{},
+    scroll: schema.frame.Scroll = .{ .total_rows = 2, .offset = 0 },
+    cells: ?[]const ui.Cell = null,
+};
+
+fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !schema.frame.FrameView {
+    var spans: [1]schema.frame.Span = undefined;
+    const encoded_spans: []const schema.frame.Span = if (input.cells) |cells| block: {
+        spans[0] = .{ .start = 0, .cells = cells };
+        break :block &spans;
+    } else &.{};
+    const encoded = try schema.encodePaneFrame(buffer, .{
+        .pane_id = input.pane_id,
+        .frame_id = input.frame_id,
+        .base_frame_id = input.base_frame_id,
+        .cols = input.cols,
+        .rows = input.rows,
+        .cursor = input.cursor,
+        .input_modes = input.input_modes,
+        .scroll = input.scroll,
+        .spans = encoded_spans,
+    });
+
+    return (try schema.decodeServer(encoded)).pane_frame;
+}
+
 test "pane input planning resolves one attached active target without mutation" {
     var model = Model.init(std.testing.allocator, true);
     defer model.deinit();
@@ -1636,6 +1733,120 @@ test "pane input planning yields ownership to prompts and copy mode" {
     const copy_version = model.version();
     try std.testing.expect(model.planPaneInput(.{ .pane = pane_id }) == null);
     try std.testing.expectEqualDeep(copy_version, model.version());
+}
+
+test "pane frame application commits screen copy state and one frame revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.scroll = .{ .total_rows = 4, .offset = 2 };
+    pane.cursor = .{ .visible = true, .x = 0, .y = 1 };
+    try std.testing.expect(model.enterCopyMode());
+    const cells = [_]ui.Cell{
+        .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (ui.Cell.max_bytes - 1) },
+        .{},
+        .{},
+        .{},
+    };
+    var encoded: [512]u8 = undefined;
+
+    const outcome = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+        .pane_id = pane_id,
+        .frame_id = 7,
+        .cursor = .{ .visible = true, .x = 1, .y = 1 },
+        .input_modes = .{ .cursor_keys = true },
+        .scroll = .{ .total_rows = 3, .offset = 1 },
+        .cells = &cells,
+    }));
+    const commit = outcome.applied;
+
+    try std.testing.expectEqual(pane_id, commit.pane_id);
+    try std.testing.expectEqualDeep(location, commit.location);
+    try std.testing.expectEqual(@as(u64, 7), commit.frame_id);
+    try std.testing.expect(commit.graphics_visible);
+    try std.testing.expect(commit.snapshot);
+    try std.testing.expectEqual(@as(u64, 1), commit.spans);
+    try std.testing.expectEqual(@as(u64, 4), commit.cells);
+    try std.testing.expectEqual(@as(u64, 1), commit.frame_revision);
+    try std.testing.expectEqualStrings("x", pane.buffer.cells[0].text());
+    try std.testing.expect(pane.input_modes.cursor_keys);
+    try std.testing.expectEqual(@as(u64, 7), pane.applied_frame_id);
+    try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
+    try std.testing.expectEqual(@as(u32, 2), model.copyModeProjection().?.view.cursor.y);
+    try std.testing.expectEqualDeep(Version{ .copy = 2, .frame = 1 }, model.version());
+}
+
+test "pane frame application separates stale detach recovery and invalid input" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.applied_frame_id = 3;
+    var encoded: [512]u8 = undefined;
+
+    const recovery = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+        .pane_id = pane_id,
+        .frame_id = 4,
+        .base_frame_id = 2,
+    }));
+
+    try std.testing.expectEqualDeep(PaneFrameRecovery{
+        .pane_id = pane_id,
+        .known_frame_id = 3,
+    }, recovery.resync);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
+
+    pane.attached = false;
+    const detached = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+        .pane_id = pane_id,
+        .frame_id = 5,
+        .cells = &[_]ui.Cell{ .{}, .{}, .{}, .{} },
+    }));
+    try std.testing.expect(detached == .detached);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+
+    try std.testing.expectError(error.UnexpectedPane, model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+        .pane_id = @enumFromInt(9),
+        .cells = &[_]ui.Cell{ .{}, .{}, .{}, .{} },
+    })));
+    try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "pane frame apply failure does not publish a frame revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.applied_frame_id = 3;
+    var encoded: [256]u8 = undefined;
+
+    try std.testing.expectError(error.PatchSizeMismatch, model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+        .pane_id = pane_id,
+        .frame_id = 4,
+        .base_frame_id = 3,
+        .cols = 3,
+    })));
+
+    try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);
+    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "pane viewport intents are bounded versioned and reserved by copy mode" {

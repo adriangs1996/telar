@@ -31,6 +31,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.copy, actual.copy);
     try std.testing.expectEqual(expected.viewport, actual.viewport);
@@ -41,6 +42,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
     try std.testing.expectEqual(expected.viewport, actual.viewport);
@@ -51,6 +53,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
 }
@@ -60,6 +63,7 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
     try std.testing.expectEqual(expected.copy, actual.copy);
@@ -934,6 +938,8 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
             .spans = &.{.{ .start = 0, .cells = &cells }},
         });
         _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
+        try harness.client.observeModel();
+        try harness.settleModelPresentation();
         const host_bytes = "\x1b[13;2u\x1b[27;2;13~\r\n";
         var chunk: InputChunk = .{};
         @memcpy(chunk.bytes[0..host_bytes.len], host_bytes);
@@ -2857,6 +2863,9 @@ test "a patch against an unknown base requests a fresh snapshot" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+    const frames = client.metrics.frames;
 
     var payload: [512]u8 = undefined;
     const patch = try schema.encodePaneFrame(&payload, .{
@@ -2869,16 +2878,24 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .spans = &.{},
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(patch));
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(frames, client.metrics.frames);
+    }
+
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .request_snapshot);
     try std.testing.expectEqual(@as(u64, 0), message.request_snapshot.known_frame_id);
 
-    // A full snapshot applies and is acknowledged on the next present. A
-    // snapshot must carry exactly one span covering the whole grid.
+    // A full snapshot must carry exactly one span covering the whole grid.
     const blank: core.ui.Cell = .{};
     const cells: [4]core.ui.Cell = @splat(blank);
+    try client.graphics_store.setPaneVisible(TestHarness.bootstrap_pane, false);
     const snapshot = try schema.encodePaneFrame(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .frame_id = 5,
@@ -2889,11 +2906,72 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+
     try std.testing.expectEqual(
         @as(u64, 5),
-        client.model.workspace.findPane(TestHarness.bootstrap_pane).?.applied_frame_id,
+        pane.applied_frame_id,
     );
+    try std.testing.expectEqual(@as(u64, 5), pane.pending_frame_id);
+    try std.testing.expectEqual(version.frame + 1, client.model.version().frame);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expect(client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(frames + 1, client.metrics.frames);
+        try std.testing.expectEqual(@as(u64, 1), client.metrics.snapshots);
+        try std.testing.expectEqual(@as(u64, 1), client.metrics.frame_spans);
+        try std.testing.expectEqual(@as(u64, 4), client.metrics.frame_cells);
+    }
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try harness.settle();
+
+    const ack = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(ack == .frame_ack);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, ack.frame_ack.pane_id);
+    try std.testing.expectEqual(@as(u64, 5), ack.frame_ack.frame_id);
+}
+
+test "a frame made stale by detach has no state resources or presentation effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.attached = false;
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+    const graphics_visible = client.graphics_store.paneVisible(TestHarness.bootstrap_pane);
+    const frames = client.metrics.frames;
+    const cells = [_]core.ui.Cell{.{}};
+    var payload: [256]u8 = undefined;
+    const snapshot = try schema.encodePaneFrame(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .frame_id = 8,
+        .base_frame_id = 0,
+        .cols = 1,
+        .rows = 1,
+        .scroll = .{ .total_rows = 1, .offset = 0 },
+        .spans = &.{.{ .start = 0, .cells = &cells }},
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(u64, 0), pane.applied_frame_id);
+    try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
+    try std.testing.expectEqual(graphics_visible, client.graphics_store.paneVisible(pane.id));
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(frames, client.metrics.frames);
+    }
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 }
 
 test "a pane cwd report lands on the pane" {
