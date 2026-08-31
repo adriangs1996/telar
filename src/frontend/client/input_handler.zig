@@ -14,6 +14,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_splits = @import("pane_splits.zig");
+const pane_viewports = @import("pane_viewports.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
@@ -235,38 +236,16 @@ pub fn pasteEnd(handler: *InputHandler) !void {
         try handler.sendPaneBytes(pane, "\x1b[201~");
 }
 
-fn sendPaneBytes(
-    handler: *InputHandler,
-    pane: *multiplexer.Pane,
-    bytes: []const u8,
-) !void {
+fn sendPaneBytes(handler: *InputHandler, pane: *multiplexer.Pane, bytes: []const u8) !void {
     const started = diagnostics.now(handler.client.io);
-    if (!pane.scroll.atBottom(pane.buffer.h)) {
-        const bottom = pane.scroll.maxOffset(pane.buffer.h);
-        try handler.setViewport(pane, bottom);
-    }
+    var viewport = pane_viewports.handler(handler.client);
+    _ = try viewport.execute(.{ .pane_id = pane.id, .target = .bottom });
     try handler.client.enqueueInput(pane.id, bytes);
     if (comptime diagnostics.enabled) {
         handler.client.metrics.input_events += 1;
         handler.client.metrics.input_bytes += bytes.len;
         handler.client.metrics.input_enqueue.observe(diagnostics.elapsed(started, diagnostics.now(handler.client.io)));
     }
-}
-
-fn setViewport(handler: *InputHandler, pane: *multiplexer.Pane, offset: u32) !void {
-    const clamped = @min(offset, pane.scroll.maxOffset(pane.buffer.h));
-    if (pane.scroll.offset == clamped) return;
-    pane.scroll.offset = clamped;
-    try handler.client.graphics_store.setPaneVisible(
-        pane.id,
-        pane.scroll.atBottom(pane.buffer.h),
-    );
-    if (handler.activeModel()) |model| model.composition_invalidated = true;
-    try handler.client.enqueue(.{ .set_pane_viewport = .{
-        .pane_id = pane.id,
-        .offset = clamped,
-    } });
-    handler.redraw = true;
 }
 
 pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
@@ -354,9 +333,11 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
                 const bytes = if (delta < 0) "\x1b[A" else "\x1b[B";
                 for (0..@abs(delta)) |_| try handler.client.enqueueInput(pane.id, bytes);
             } else {
-                const current: i64 = pane.scroll.offset;
-                const wanted: u32 = @intCast(@max(0, current + delta));
-                try handler.setViewport(pane, wanted);
+                var viewport = pane_viewports.handler(handler.client);
+                _ = try viewport.execute(.{
+                    .pane_id = pane.id,
+                    .target = .{ .relative = delta },
+                });
             }
             return;
         }

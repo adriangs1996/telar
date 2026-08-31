@@ -44,6 +44,7 @@ test {
     _ = @import("pane_geometry.zig");
     _ = @import("pane_resources.zig");
     _ = @import("pane_splits.zig");
+    _ = @import("pane_viewports.zig");
     _ = @import("presenter.zig");
     _ = @import("server_messages.zig");
     _ = @import("sidebar_toggles.zig");

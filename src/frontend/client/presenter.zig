@@ -139,9 +139,14 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.prompt;
     const copy_changed = presenter.presented_model_version.copy !=
         presenter.observed_model_version.copy;
+    const viewport_changed = presenter.presented_model_version.viewport !=
+        presenter.observed_model_version.viewport;
     const copy_projection = client.model.copyModeProjection();
     const copy_status_changed = (presenter.presented_copy_mode == null) !=
         (copy_projection == null);
+    if (viewport_changed) {
+        invalidateViewportCompositions(&client.model);
+    }
     if (copy_changed) {
         projectCopyMode(&client.model, presenter.presented_copy_mode, copy_projection);
     }
@@ -182,6 +187,13 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
             );
     }
     if (model != null and presenter.mediaWorkPending(client)) try presenter.requestMedia();
+}
+
+fn invalidateViewportCompositions(model: *client_model.Model) void {
+    var tabs = model.workspace.tabIterator();
+    while (tabs.next()) |tab| {
+        tab.model.composition_invalidated = true;
+    }
 }
 
 fn projectCopyMode(model: *client_model.Model, previous: ?client_model.CopyModeProjection, next: ?client_model.CopyModeProjection) void {

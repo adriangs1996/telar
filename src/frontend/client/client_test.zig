@@ -33,6 +33,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.panes, actual.panes);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.copy, actual.copy);
+    try std.testing.expectEqual(expected.viewport, actual.viewport);
 }
 
 fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
@@ -42,6 +43,26 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.panes, actual.panes);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
+    try std.testing.expectEqual(expected.viewport, actual.viewport);
+}
+
+fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+    try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.tabs, actual.tabs);
+    try std.testing.expectEqual(expected.active_tab, actual.active_tab);
+    try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.chrome, actual.chrome);
+    try std.testing.expectEqual(expected.prompt, actual.prompt);
+}
+
+fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+    try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.tabs, actual.tabs);
+    try std.testing.expectEqual(expected.active_tab, actual.active_tab);
+    try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.chrome, actual.chrome);
+    try std.testing.expectEqual(expected.prompt, actual.prompt);
+    try std.testing.expectEqual(expected.copy, actual.copy);
 }
 
 // ---------------------------------------------------------------------------
@@ -3271,6 +3292,111 @@ test "a capability expiry reconfigures the sidebar without a tab" {
     try harness.settle();
 }
 
+test "pane viewport intent commits before IPC and presenter-owned recomposition" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const inactive_location = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
+    const inactive = client.model.workspace.find(inactive_location.tab_id).?;
+    const active = client.model.workspace.active().?;
+    pane.scroll = .{
+        .total_rows = @as(u32, pane.buffer.h) + 10,
+        .offset = 10,
+    };
+    active.model.composition_invalidated = false;
+    inactive.model.composition_invalidated = false;
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+    const pane_view = active.model.viewForPane(pane.id, client.view.workbench()).?;
+    var handler: InputHandler = .{ .client = client };
+    try handler.mouse(.{
+        .x = pane_view.content.x,
+        .y = pane_view.content.y,
+        .kind = .move,
+    });
+    handler.redraw = false;
+
+    try handler.mouse(.{
+        .x = pane_view.content.x,
+        .y = pane_view.content.y,
+        .kind = .scroll_up,
+    });
+
+    try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
+    try std.testing.expect(!client.graphics_store.paneVisible(pane.id));
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expect(!active.model.composition_invalidated);
+    try std.testing.expect(!inactive.model.composition_invalidated);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try handler.key(try keybind.parseKey("x"));
+
+    try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
+    try std.testing.expect(client.graphics_store.paneVisible(pane.id));
+    try std.testing.expectEqual(version.viewport + 2, client.model.version().viewport);
+    try expectNonViewportVersionEqual(version, client.model.version());
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expect(!active.model.composition_invalidated);
+    try std.testing.expect(!inactive.model.composition_invalidated);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const scrolled = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(scrolled == .set_pane_viewport);
+    try std.testing.expectEqual(pane.id, scrolled.set_pane_viewport.pane_id);
+    try std.testing.expectEqual(@as(u32, 7), scrolled.set_pane_viewport.offset);
+    const restored = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(restored == .set_pane_viewport);
+    try std.testing.expectEqual(pane.id, restored.set_pane_viewport.pane_id);
+    try std.testing.expectEqual(@as(u32, 10), restored.set_pane_viewport.offset);
+    const input = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(input == .pane_input);
+    try std.testing.expectEqual(pane.id, input.pane_input.pane_id);
+    try std.testing.expectEqualStrings("x", input.pane_input.bytes);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(inactive.model.composition_invalidated);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "a full outbox preserves the committed pane viewport and rejects input" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.scroll = .{
+        .total_rows = @as(u32, pane.buffer.h) + 10,
+        .offset = 0,
+    };
+    try client.graphics_store.setPaneVisible(pane.id, false);
+    while (client.outbox.hasCapacity()) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = pane.id } });
+    }
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        handler.key(try keybind.parseKey("x")),
+    );
+
+    try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
+    try std.testing.expect(client.graphics_store.paneVisible(pane.id));
+    try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
+    try expectNonViewportVersionEqual(version, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+}
+
 test "copy mode round trip: enter, select, copy, leave" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -3279,6 +3405,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     const client = harness.client;
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = 30, .offset = 6 };
+    pane.cursor = .{ .visible = true, .x = 0, .y = 0 };
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
 
@@ -3318,6 +3445,8 @@ test "copy mode round trip: enter, select, copy, leave" {
         .kind = .scroll_up,
     });
     try std.testing.expectEqual(mouse_version.copy + 1, client.model.version().copy);
+    try std.testing.expectEqual(mouse_version.viewport + 1, client.model.version().viewport);
+    try expectNonCopyOrViewportVersionEqual(mouse_version, client.model.version());
     try std.testing.expectEqual(painted_cursor_y - 3, client.model.copyModeProjection().?.view.cursor.y);
     try std.testing.expectEqual(painted_cursor_y, pane.copy_view.?.cursor.y);
     try std.testing.expect(!handler.redraw);
@@ -3335,8 +3464,9 @@ test "copy mode round trip: enter, select, copy, leave" {
     const version_before_copy = client.model.version();
     try handler.key(try keybind.parseKey("enter"));
     try std.testing.expect(!client.model.copyModeActive());
-    try expectNonCopyVersionEqual(version_before_copy, client.model.version());
+    try expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
+    try std.testing.expectEqual(version_before_copy.viewport + 1, client.model.version().viewport);
     try std.testing.expect(pane.copy_view != null);
     try client.observeModel();
     try harness.settleModelPresentation();

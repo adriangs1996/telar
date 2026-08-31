@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../../input/root.zig");
 const client_model = @import("../model.zig");
+const set_pane_viewport = @import("set_pane_viewport.zig");
 
 const keybind = input_capability.keybind;
 const schema = core.schema;
@@ -11,7 +12,7 @@ const schema = core.schema;
 pub const CopyModeEffects = struct {
     context: *anyopaque,
     copy: *const fn (*anyopaque, schema.CopySelection) anyerror!void,
-    set_viewport: *const fn (*anyopaque, client_model.CopyModeViewport) anyerror!void,
+    viewport: set_pane_viewport.PaneViewportEffects,
 };
 
 pub const Outcome = enum {
@@ -48,7 +49,7 @@ pub const CopyModeHandler = struct {
 
         const commit = handler.model.commitCopyMode(plan) orelse return .unchanged;
         if (commit.viewport) |viewport| {
-            try handler.effects.set_viewport(handler.effects.context, viewport);
+            try handler.effects.viewport.sync(handler.effects.viewport.context, viewport);
         }
 
         return if (commit.active) .changed else .exited;
@@ -92,7 +93,7 @@ const EffectsCapture = struct {
     viewport_observed_commit: bool = false,
     viewport_observed_active: bool = false,
     copied: ?schema.CopySelection = null,
-    viewport: ?client_model.CopyModeViewport = null,
+    viewport: ?client_model.PaneViewportChange = null,
     fail_copy: bool = false,
     fail_viewport: bool = false,
 
@@ -100,7 +101,10 @@ const EffectsCapture = struct {
         return .{
             .context = capture,
             .copy = copy,
-            .set_viewport = setViewport,
+            .viewport = .{
+                .context = capture,
+                .sync = syncViewport,
+            },
         };
     }
 
@@ -115,7 +119,7 @@ const EffectsCapture = struct {
         }
     }
 
-    fn setViewport(context: *anyopaque, viewport: client_model.CopyModeViewport) !void {
+    fn syncViewport(context: *anyopaque, viewport: client_model.PaneViewportChange) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         const pane = capture.model.workspace.findPane(viewport.pane_id).?;
         capture.viewport_calls += 1;
@@ -162,6 +166,8 @@ test "CopyModeHandler copies before exit and synchronizes the committed viewport
     try std.testing.expect(capture.viewport_observed_commit);
     try std.testing.expect(!capture.viewport_observed_active);
     try std.testing.expectEqual(@as(u32, 10), capture.viewport.?.offset);
+    try std.testing.expectEqual(@as(u64, 2), capture.viewport.?.viewport_revision);
+    try std.testing.expectEqual(@as(u64, 2), testing.model.version().viewport);
     try std.testing.expect(!testing.model.copyModeActive());
 }
 
@@ -200,6 +206,7 @@ test "CopyModeHandler preserves a movement commit when viewport sync fails" {
 
     try std.testing.expect(testing.model.copyModeActive());
     try std.testing.expectEqual(version.copy + 1, testing.model.version().copy);
+    try std.testing.expectEqual(version.viewport + 1, testing.model.version().viewport);
     try std.testing.expectEqual(@as(u32, 0), testing.model.workspace.findPane(testing.pane_id).?.scroll.offset);
     try std.testing.expect(capture.viewport_observed_commit);
     try std.testing.expect(capture.viewport_observed_active);

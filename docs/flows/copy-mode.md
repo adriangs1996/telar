@@ -5,6 +5,7 @@ retained history and selecting text. `ClientModel.copy_state` is its only
 authority. It owns the target pane, absolute cursor and anchor, selection mode,
 entry viewport and current viewport. `ClientModel.Version.copy` identifies
 committed changes independently from workspace, pane, chrome and prompt state.
+Viewport commits advance `ClientModel.Version.viewport` separately.
 
 The state and its motions allocate nothing. The runtime still owns scrollback
 and performs the actual copy; the client sends a bounded `copy_selection`
@@ -29,7 +30,7 @@ ClientModel.commitCopyMode
         |
 optional set_pane_viewport effect after commit
         |
-ClientModel.Version.copy
+ClientModel.Version.copy and optional viewport
 ```
 
 Entry resolves the attached focused pane and captures its current viewport.
@@ -48,7 +49,9 @@ Copy delivery is intentionally ordered before the exit commit. If the outbox
 is full, the selection and copy-mode revision remain intact and the user can
 retry. Viewport synchronization follows the commit. If that effect fails, the
 client retains the committed disposable state; reconnection or a later runtime
-frame repairs the operational projection.
+frame repairs the operational projection. Copy mode uses the same
+`PaneViewportChange` effect port as normal scrolling, so graphics and
+`set_pane_viewport` policy stay in `pane_viewports`.
 
 ## Runtime frames and pane retirement
 
@@ -84,6 +87,10 @@ model version. `Presenter` compares the `copy` revision with its last presented
 version, projects the latest immutable `CopyModeProjection` into the
 multiplexer damage cache and folds it into the paced frame.
 
+When copy movement also changes the viewport, `Presenter` observes the
+independent viewport revision and invalidates tab composition caches. The copy
+use case does not mutate rendering caches.
+
 The presenter retains only the projection it last painted. It clears the old
 pane when the target changes or copy mode exits. Entering and leaving invalidate
 the status bar; cursor and selection movement use exact pane damage instead of
@@ -99,8 +106,9 @@ cache, never semantic authority.
   release.
 - `src/frontend/client/application/copy_mode.zig` proves copy-before-exit and
   viewport-after-commit ordering, including both failure policies.
-- `src/frontend/client/copy_modes.zig` owns the outbox, graphics and viewport
-  adapters.
+- `src/frontend/client/copy_modes.zig` owns the selection outbox adapter.
+- `src/frontend/client/pane_viewports.zig` owns graphics visibility and
+  runtime viewport synchronization for both normal input and copy mode.
 - `src/frontend/client/client_test.zig` proves routing, backpressure and
   presenter-only projection through the real client boundary.
 - `src/frontend/client/presenter.zig` is the only client component that writes

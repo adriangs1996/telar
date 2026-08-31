@@ -22,6 +22,7 @@ pub const Version = struct {
     chrome: u64 = 0,
     prompt: u64 = 0,
     copy: u64 = 0,
+    viewport: u64 = 0,
 };
 
 pub const Change = enum {
@@ -140,6 +141,24 @@ pub const WorkspaceListCollapse = struct {
     chrome_revision: u64,
 };
 
+pub const PaneViewportTarget = union(enum) {
+    absolute: u32,
+    relative: i32,
+    bottom,
+};
+
+pub const PaneViewportCommand = struct {
+    pane_id: schema.PaneId,
+    target: PaneViewportTarget,
+};
+
+pub const PaneViewportChange = struct {
+    pane_id: schema.PaneId,
+    offset: u32,
+    at_bottom: bool,
+    viewport_revision: u64,
+};
+
 pub const CopyModeCommand = union(enum) {
     key: keybind.Key,
     vertical: i32,
@@ -149,11 +168,6 @@ pub const CopyModeCommand = union(enum) {
 pub const CopyModeProjection = struct {
     pane_id: schema.PaneId,
     view: copy_mode.View,
-};
-
-pub const CopyModeViewport = struct {
-    pane_id: schema.PaneId,
-    offset: u32,
 };
 
 pub const CopyModeFrame = struct {
@@ -167,12 +181,12 @@ pub const CopyModePlan = struct {
     previous: copy_mode.State,
     next: ?copy_mode.State,
     selection: ?schema.CopySelection = null,
-    viewport: ?CopyModeViewport = null,
+    viewport: ?schema.SetPaneViewport = null,
 };
 
 pub const CopyModeCommit = struct {
     active: bool,
-    viewport: ?CopyModeViewport,
+    viewport: ?PaneViewportChange,
     copy_revision: u64,
 };
 
@@ -347,6 +361,7 @@ pub const Model = struct {
     chrome_revision: u64 = 0,
     copy_state: ?copy_mode.State = null,
     copy_revision: u64 = 0,
+    viewport_revision: u64 = 0,
 
     /// Creates the client model with the configured pane appearance.
     ///
@@ -383,6 +398,7 @@ pub const Model = struct {
             .chrome = model.chrome_revision,
             .prompt = model.name_prompt.version(),
             .copy = model.copy_revision,
+            .viewport = model.viewport_revision,
         };
     }
 
@@ -460,6 +476,26 @@ pub const Model = struct {
     /// ```
     pub fn toggleWorkspaceList(model: *Model) WorkspaceListCollapse {
         return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
+    }
+
+    /// Commits one viewport intent for an attached pane in the active tab.
+    /// Copy mode owns its viewport transaction while it is active.
+    ///
+    /// ```zig
+    /// const change = model.setPaneViewport(command) orelse return;
+    /// ```
+    pub fn setPaneViewport(model: *Model, command: PaneViewportCommand) ?PaneViewportChange {
+        if (model.copy_state != null) {
+            return null;
+        }
+
+        const active = model.workspace.active() orelse return null;
+        const pane = active.model.find(command.pane_id) orelse return null;
+        if (!pane.attached) {
+            return null;
+        }
+
+        return commitPaneViewport(model, pane, paneViewportOffset(pane, command.target));
     }
 
     /// Reports whether copy mode currently owns pane input.
@@ -579,6 +615,7 @@ pub const Model = struct {
             }
         }
 
+        var viewport_change: ?PaneViewportChange = null;
         if (plan.viewport) |viewport| {
             const active = model.workspace.active() orelse return null;
             const pane = active.model.find(viewport.pane_id) orelse return null;
@@ -586,8 +623,7 @@ pub const Model = struct {
                 return null;
             }
 
-            pane.scroll.offset = viewport.offset;
-            active.model.composition_invalidated = true;
+            viewport_change = commitPaneViewport(model, pane, viewport.offset);
         }
 
         model.copy_state = plan.next;
@@ -595,7 +631,7 @@ pub const Model = struct {
 
         return .{
             .active = plan.next != null,
-            .viewport = plan.viewport,
+            .viewport = viewport_change,
             .copy_revision = model.copy_revision,
         };
     }
@@ -1386,8 +1422,38 @@ pub const Model = struct {
     }
 };
 
-fn copyModeViewport(pane: *const multiplexer.Pane, wanted: u32) ?CopyModeViewport {
-    const offset = @min(wanted, pane.scroll.maxOffset(pane.buffer.h));
+fn paneViewportOffset(pane: *const multiplexer.Pane, target: PaneViewportTarget) u32 {
+    const maximum = pane.scroll.maxOffset(pane.buffer.h);
+
+    return switch (target) {
+        .absolute => |offset| @min(offset, maximum),
+        .relative => |delta| @intCast(std.math.clamp(
+            @as(i64, pane.scroll.offset) + @as(i64, delta),
+            0,
+            @as(i64, maximum),
+        )),
+        .bottom => maximum,
+    };
+}
+
+fn commitPaneViewport(model: *Model, pane: *multiplexer.Pane, offset: u32) ?PaneViewportChange {
+    if (pane.scroll.offset == offset) {
+        return null;
+    }
+
+    pane.scroll.offset = offset;
+    model.viewport_revision +%= 1;
+
+    return .{
+        .pane_id = pane.id,
+        .offset = offset,
+        .at_bottom = pane.scroll.atBottom(pane.buffer.h),
+        .viewport_revision = model.viewport_revision,
+    };
+}
+
+fn copyModeViewport(pane: *const multiplexer.Pane, wanted: u32) ?schema.SetPaneViewport {
+    const offset = paneViewportOffset(pane, .{ .absolute = wanted });
     if (pane.scroll.offset == offset) {
         return null;
     }
@@ -1472,6 +1538,70 @@ fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !s
 
 fn testingTabSnapshot(buffer: []u8, snapshot: schema.TabSnapshot) !schema.TabSnapshotView {
     return (try schema.decodeServer(try schema.encodeTabSnapshot(buffer, snapshot))).tab_snapshot;
+}
+
+test "pane viewport intents are bounded versioned and reserved by copy mode" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.scroll = .{ .total_rows = 20, .offset = 10 };
+    pane.cursor = .{ .visible = true, .x = 2, .y = 4 };
+
+    const top = model.setPaneViewport(.{
+        .pane_id = pane_id,
+        .target = .{ .relative = -100 },
+    }).?;
+
+    try std.testing.expectEqual(@as(u32, 0), top.offset);
+    try std.testing.expect(!top.at_bottom);
+    try std.testing.expectEqual(@as(u64, 1), top.viewport_revision);
+    try std.testing.expectEqualDeep(Version{ .viewport = 1 }, model.version());
+    try std.testing.expect(model.setPaneViewport(.{
+        .pane_id = pane_id,
+        .target = .{ .absolute = 0 },
+    }) == null);
+
+    const bottom = model.setPaneViewport(.{
+        .pane_id = pane_id,
+        .target = .{ .absolute = std.math.maxInt(u32) },
+    }).?;
+
+    try std.testing.expectEqual(@as(u32, 15), bottom.offset);
+    try std.testing.expect(bottom.at_bottom);
+    try std.testing.expectEqual(@as(u64, 2), bottom.viewport_revision);
+    try std.testing.expect(model.setPaneViewport(.{
+        .pane_id = pane_id,
+        .target = .bottom,
+    }) == null);
+    try std.testing.expect(model.setPaneViewport(.{
+        .pane_id = @enumFromInt(9),
+        .target = .bottom,
+    }) == null);
+    try std.testing.expectEqualDeep(Version{ .viewport = 2 }, model.version());
+
+    pane.scroll.offset = 10;
+    try std.testing.expect(model.enterCopyMode());
+    const copy_version = model.version();
+    try std.testing.expect(model.setPaneViewport(.{
+        .pane_id = pane_id,
+        .target = .bottom,
+    }) == null);
+    try std.testing.expectEqualDeep(copy_version, model.version());
+
+    const copy_commit = model.commitCopyMode(model.planCopyMode(.{
+        .key = try keybind.parseKey("g"),
+    }).?).?;
+
+    try std.testing.expectEqual(@as(u32, 0), copy_commit.viewport.?.offset);
+    try std.testing.expectEqual(@as(u64, 3), copy_commit.viewport.?.viewport_revision);
+    try std.testing.expectEqual(copy_version.copy + 1, model.version().copy);
+    try std.testing.expectEqual(copy_version.viewport + 1, model.version().viewport);
 }
 
 test "copy mode entry owns one independent model revision" {

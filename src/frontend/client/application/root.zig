@@ -13,6 +13,7 @@ pub const rename_tab = @import("rename_tab.zig");
 pub const rename_workspace = @import("rename_workspace.zig");
 pub const resize_pane = @import("resize_pane.zig");
 pub const select_tab = @import("select_tab.zig");
+pub const set_pane_viewport = @import("set_pane_viewport.zig");
 pub const split_pane = @import("split_pane.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
 pub const toggle_pane_fullscreen = @import("toggle_pane_fullscreen.zig");
@@ -35,6 +36,7 @@ test {
     _ = rename_workspace;
     _ = resize_pane;
     _ = select_tab;
+    _ = set_pane_viewport;
     _ = split_pane;
     _ = tab_snapshot;
     _ = toggle_pane_fullscreen;

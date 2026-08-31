@@ -23,7 +23,9 @@ InputHandler.key / forward                         InputHandler.action
       |                                                      |
 input.host.encodeKey                              native / Lua / plugin action
       |                                                      |
-Client.enqueueInput                              consumed by Telar
+SetPaneViewportHandler(.bottom)                   consumed by Telar
+      |
+Client.enqueueInput
       |
 Outbox.encodeNext -> schema.pane_input -> socket
       |
@@ -61,9 +63,12 @@ that completion to `Client.handleHostInput`.
 2. stop on EOF;
 3. record input activity for media pacing;
 4. call `keybind.Router.feed` with an `InputHandler`;
-5. request a draw if routing changed client state;
+5. request a draw for immediate `View` changes that have no model revision;
 6. schedule input and binding deadlines;
 7. schedule the next TTY read.
+
+After the entrypoint returns, the event loop publishes `ClientModel.Version`.
+The presenter schedules a paced draw when a model-owned slice changed.
 
 The router is in `src/frontend/input/keybind.zig`. `Router.feed` buffers split
 terminal sequences, `term.parse` produces semantic events, and `routeKey`
@@ -129,7 +134,10 @@ The encodings follow the
 
 ### Enqueueing input
 
-`InputHandler.sendPaneBytes` then calls, in order:
+`InputHandler.sendPaneBytes` first executes `SetPaneViewportHandler` with a
+`.bottom` intent. If the pane is scrolled back, that use case commits the
+client viewport, updates graphics visibility and queues `set_pane_viewport`.
+It then calls, in order:
 
 1. `Client.enqueueInput`;
 2. `client.Outbox.pushInput` in `src/frontend/client/outbox.zig`;
@@ -140,7 +148,8 @@ The encodings follow the
    `src/core/transport/root.zig`.
 
 The outbox is bounded, owns copied input bytes and coalesces adjacent input for
-the same pane. Only one socket send is in flight.
+the same pane. Only one socket send is in flight. When the viewport changes,
+wire order is `set_pane_viewport` followed by `pane_input`.
 
 ## 3. Runtime input entry
 
