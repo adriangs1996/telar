@@ -70,7 +70,6 @@ const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_timers = @import("notification_timers.zig");
-const pane_geometry = @import("pane_geometry.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
 const request_lifecycle_mod = @import("request_lifecycle.zig");
@@ -254,26 +253,6 @@ pub fn deinit(client: *Client) void {
     client.presenter.deinit();
     client.runtime_transport.deinit(gpa);
     gpa.destroy(client);
-}
-
-/// Synchronizes a committed sidebar preference with disposable view,
-/// graphics and runtime geometry resources.
-///
-/// ```zig
-/// try client.syncSidebarVisibility(change);
-/// ```
-pub fn syncSidebarVisibility(client: *Client, change: client_model.SidebarVisibility) !void {
-    if (client.model.sidebarVisible() != change.visible or
-        client.model.version().chrome != change.chrome_revision)
-    {
-        return error.UnexpectedSidebarVisibility;
-    }
-
-    client.view.setSidebarVisible(change.visible);
-    client.graphics_store.invalidatePlacements();
-    const active = client.model.workspace.active() orelse return;
-
-    try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
 }
 
 /// Entrypoint for one completed local clipboard image capture.

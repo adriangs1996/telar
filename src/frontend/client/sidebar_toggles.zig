@@ -2,6 +2,7 @@
 
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const sidebar_projection = @import("sidebar_projection.zig");
 
 const Client = @import("client.zig");
 const toggle_sidebar = client_application.toggle_sidebar;
@@ -25,5 +26,5 @@ pub fn handler(client: *Client) toggle_sidebar.ToggleSidebarHandler {
 fn applyVisibility(context: *anyopaque, change: client_model.SidebarVisibility) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.syncSidebarVisibility(change);
+    try sidebar_projection.apply(client, change);
 }

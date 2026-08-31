@@ -21,7 +21,7 @@ ClientModel.toggleSidebar
         |
 sidebar_toggles.applyVisibility
         |
-Client.syncSidebarVisibility
+sidebar_projection.apply
         |                         |
 View projection and pane_resize  presentation_lifecycle.observe
         |                         |
@@ -39,11 +39,12 @@ view projection.
 
 ## Effects and presentation
 
-After the commit, the adapter verifies the visibility and chrome revision. It
-projects the value into `View`, invalidates graphics placements and publishes
-the resulting size for every attached pane in the active tab. This immediate
-projection gives geometry effects the same workbench that the next frame will
-show.
+After the commit, `sidebar_projection.apply` verifies the visibility and chrome
+revision. It projects the value into `View`, invalidates graphics placements
+and publishes the resulting size for every attached pane in the active tab.
+Configuration reload uses the same projection after its model transaction.
+This immediate projection gives geometry effects the same workbench that the
+next frame will show.
 
 Neither the use case nor the adapter requests a frame. After the input event,
 the client loop calls `presentation_lifecycle.observe`. `Presenter` detects the chrome
@@ -74,8 +75,11 @@ roll back the client preference.
   assignment and chrome-revision isolation.
 - `src/frontend/client/application/toggle_sidebar.zig` proves
   commit-before-effects ordering and post-commit failure behavior.
+- `src/frontend/client/sidebar_projection.zig` owns commit validation and the
+  complete disposable projection shared with configuration reload.
 - `src/frontend/client/view.zig` proves the top-bar click returns intent
   without mutating the requested visibility.
 - `src/frontend/client/client_test.zig` proves exact expanded and contracted
-  `pane_resize` messages, absence of direct handler redraw and presenter-only
-  frame scheduling through a substituted runtime socket.
+  `pane_resize` messages, rejection before partial effects, absence of direct
+  handler redraw and presenter-only frame scheduling through a substituted
+  runtime socket.

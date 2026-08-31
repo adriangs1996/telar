@@ -50,6 +50,7 @@ const resync_requirements = @import("resync_requirements.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const server_messages = @import("server_messages.zig");
 const sidebar_animations = @import("sidebar_animations.zig");
+const sidebar_projection = @import("sidebar_projection.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -2430,6 +2431,40 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     try std.testing.expectEqual(pending_updates_before_show + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "sidebar projection rejects changes that are not the current model commit" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.view.dirty = false;
+    client.graphics_store.damage = false;
+    const shown_area = client.view.workbench();
+    const committed = client.model.toggleSidebar();
+
+    try std.testing.expectError(error.UnexpectedSidebarVisibility, sidebar_projection.apply(client, .{
+        .visible = true,
+        .chrome_revision = committed.chrome_revision - 1,
+    }));
+    try std.testing.expectError(error.UnexpectedSidebarVisibility, sidebar_projection.apply(client, .{
+        .visible = committed.visible,
+        .chrome_revision = committed.chrome_revision - 1,
+    }));
+
+    try std.testing.expect(client.view.sidebar_requested);
+    try std.testing.expectEqualDeep(shown_area, client.view.workbench());
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expect(!client.graphics_store.damage);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+
+    try sidebar_projection.apply(client, committed);
+
+    try std.testing.expect(!client.view.sidebar_requested);
+    try std.testing.expect(client.view.workbench().w > shown_area.w);
+    try std.testing.expect(client.view.dirty);
+    try std.testing.expect(client.graphics_store.damage);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "workspace list toggle is projected only by the presenter" {

@@ -71,8 +71,9 @@ synchronous operation.
 Theme, icon and sidebar resources are updated after the ownership swap. CLI
 theme and sidebar-renderer locks still override reloaded values. A sidebar or
 pane-gap change invalidates host graphics placements and re-offers the current
-pane geometry to the runtime. The adapter publishes the success notification
-last.
+pane geometry to the runtime. Sidebar changes pass through
+`sidebar_projection.apply`, the same exact-commit projection used by explicit
+toggles. The adapter publishes the success notification last.
 
 Fallible resource work does not roll back either commit. If pane geometry
 cannot enter the bounded outbox, the model and all new configuration owners
@@ -98,5 +99,7 @@ trigger.
   effect ordering and retained commits after effect failure.
 - `src/frontend/client/config_reloads.zig` owns the concrete resource and
   configuration-object swap.
+- `src/frontend/client/sidebar_projection.zig` owns the shared sidebar
+  projection and rejects any change that is not the current model commit.
 - `src/frontend/client/client_test.zig` proves ownership replacement, stale
   cleanup, post-commit geometry failure and presenter-owned drawing.

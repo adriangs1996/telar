@@ -6,6 +6,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const notification_flow = @import("notifications.zig");
 const pane_geometry = @import("pane_geometry.zig");
+const sidebar_projection = @import("sidebar_projection.zig");
 
 const Client = @import("client.zig");
 const reload_worker = @import("config_reload.zig");
@@ -140,7 +141,7 @@ fn applyAdoption(raw_context: *anyopaque, commit: client_model.ConfigurationComm
     );
 
     if (commit.sidebar) |change| {
-        try client.syncSidebarVisibility(change);
+        try sidebar_projection.apply(client, change);
     } else if (commit.pane_gaps_changed) {
         client.graphics_store.invalidatePlacements();
         if (client.model.workspace.active()) |active| {
