@@ -17,6 +17,7 @@ const sidebar_animations = @import("sidebar_animations.zig");
 const Client = @import("client.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const client_telemetry = @import("telemetry.zig");
+const clipboard_images = @import("clipboard_images.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
@@ -131,7 +132,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             .telemetry_written => |result| client_telemetry.handleWritten(client, result),
             .config_reload => |result| _ = try config_reloads.handle(client, result),
             .plugin_result => |result| if (try plugin_actions.complete(client, result)) return 0,
-            .clipboard_image => |result| try client.handleClipboardImageEvent(result),
+            .clipboard_image => |result| try clipboard_images.complete(client, result),
         }
 
         try presentation_lifecycle.observe(client);

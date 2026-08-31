@@ -123,7 +123,7 @@ entrypoints below.
 | Telemetry tick/write | [`telemetry.handleTick`, `telemetry.handleWritten`](flows/client-telemetry.md) |
 | Config reload | [`config_reloads.handle`](flows/config-reload.md) |
 | Plugin worker result | [`plugin_actions.complete`](flows/plugin-action.md) |
-| Clipboard image result | [`Client.handleClipboardImageEvent`](flows/clipboard-image.md) |
+| Clipboard image result | [`clipboard_images.complete`](flows/clipboard-image.md) |
 
 ### Runtime
 

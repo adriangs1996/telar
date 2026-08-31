@@ -251,15 +251,6 @@ pub fn deinit(client: *Client) void {
     gpa.destroy(client);
 }
 
-/// Entrypoint for one completed local clipboard image capture.
-///
-/// ```zig
-/// try client.handleClipboardImageEvent(completion);
-/// ```
-pub fn handleClipboardImageEvent(client: *Client, completion: clipboard_images.Completion) !void {
-    try clipboard_images.complete(client, completion);
-}
-
 pub fn monotonic(io: Io) u64 {
     const timestamp = Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));

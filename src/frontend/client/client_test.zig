@@ -32,6 +32,7 @@ const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
 const client_telemetry = @import("telemetry.zig");
+const clipboard_images = @import("clipboard_images.zig");
 const config_reload_worker = @import("config_reload.zig");
 const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
@@ -6209,7 +6210,7 @@ test "clipboard image completion publishes resource ingress before presentation"
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
 
-    try client.handleClipboardImageEvent(.{
+    try clipboard_images.complete(client, .{
         .execution_id = execution.id,
         .result = completed,
     });
@@ -6249,7 +6250,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
 
-    try client.handleClipboardImageEvent(.{
+    try clipboard_images.complete(client, .{
         .execution_id = execution.id,
         .result = completed,
     });
@@ -6275,7 +6276,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     const no_image = (try client.model.beginClipboardCapture(target)).?;
     const version_before_empty = client.model.version();
 
-    try client.handleClipboardImageEvent(.{
+    try clipboard_images.complete(client, .{
         .execution_id = no_image.id,
         .result = error.NoImageOnClipboard,
     });
@@ -6286,7 +6287,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
 
     const too_large = (try client.model.beginClipboardCapture(target)).?;
     const version_before_large = client.model.version();
-    try client.handleClipboardImageEvent(.{
+    try clipboard_images.complete(client, .{
         .execution_id = too_large.id,
         .result = error.ClipboardImageTooLarge,
     });
@@ -6300,7 +6301,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     const completed = try testingClipboardCapture(client, invalid, "invalid");
     completed.width = 0;
     const version_before_invalid = client.model.version();
-    try client.handleClipboardImageEvent(.{
+    try clipboard_images.complete(client, .{
         .execution_id = invalid.id,
         .result = completed,
     });
