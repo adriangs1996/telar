@@ -59,9 +59,10 @@ painted, invalidates chrome and passes `ClientModel.proxyTlsActive()` into the
 next paced frame. `View` uses that immutable input while composing the top bar
 and stores no proxy state.
 
-The notification center may request its own frame because notifications are
-separate disposable UI state. That does not make it the authority for the
-badge. The badge always comes from `ClientModel` through `Presenter`.
+The notification center advances its own model version because notifications
+are separate disposable UI state. `Client.observeModel` folds that version
+with the proxy transition into the next paced frame. The badge still comes
+from `ClientModel` through `Presenter`.
 
 A reconnect starts with the inactive client default. The new runtime delivery
 cursor sends the process's current value, which reconstructs the badge and

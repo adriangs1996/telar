@@ -10,6 +10,7 @@ pub const create_workspace = @import("create_workspace.zig");
 pub const focus_pane = @import("focus_pane.zig");
 pub const move_tab = @import("move_tab.zig");
 pub const name_prompt = @import("name_prompt.zig");
+pub const notifications = @import("notifications.zig");
 pub const pane_frame = @import("pane_frame.zig");
 pub const pane_input = @import("pane_input.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
@@ -40,6 +41,7 @@ test {
     _ = focus_pane;
     _ = move_tab;
     _ = name_prompt;
+    _ = notifications;
     _ = pane_frame;
     _ = pane_input;
     _ = pane_metadata;

@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const attachments = @import("../attachments/root.zig");
+const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const client_model = @import("model.zig");
@@ -23,6 +24,7 @@ const widgets = @import("../widgets/root.zig");
 
 const schema = core.schema;
 const empty_agent_snapshot: agents.Snapshot = .{};
+const empty_notifications: notifications.Center = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
 
 pub const sidebar_width = widgets.layout.sidebar_width;
@@ -32,6 +34,11 @@ pub const Regions = widgets.layout.Regions;
 pub const Action = widgets.Action;
 
 const Hits = widgets.Hits;
+
+pub const NotificationIntent = union(enum) {
+    activate: notifications.Id,
+    dismiss: notifications.Id,
+};
 
 pub const Interaction = struct {
     redraw: bool = false,
@@ -46,7 +53,7 @@ pub const Interaction = struct {
     /// Intent only: the client model owns prompt creation; the view never
     /// enters the editor on its own.
     rename_tab: ?schema.TabId = null,
-    notification_target: ?widgets.notification.Target = null,
+    notification: ?NotificationIntent = null,
 };
 
 pub const RenderStats = struct {
@@ -58,6 +65,7 @@ pub const RenderInput = struct {
     tabs: ?*const tabs_mod.Model = null,
     model: *multiplexer.Model,
     agents: *const agents.Snapshot = &empty_agent_snapshot,
+    notifications: *const notifications.Center = &empty_notifications,
     workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
     proxy_tls_active: bool = false,
@@ -91,7 +99,6 @@ pub const State = struct {
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
-    notifications: widgets.notification.Center = .{},
     toast_overlay_drawn: bool = false,
     kitty_sidebar: kitty.KittySidebarRenderer,
     kitty_icons: icon_graphics.Renderer,
@@ -207,29 +214,6 @@ pub const State = struct {
 
         state.hovered = null;
         state.dirty = true;
-    }
-
-    pub fn notify(
-        state: *State,
-        now_ns: u64,
-        input: widgets.notification.Input,
-    ) widgets.notification.Id {
-        state.dirty = true;
-        return state.notifications.push(now_ns, input);
-    }
-
-    pub fn nextNotificationDeadline(
-        state: *const State,
-        now_ns: u64,
-        frame_interval_ns: u64,
-    ) ?u64 {
-        return state.notifications.nextDeadline(now_ns, frame_interval_ns);
-    }
-
-    pub fn advanceNotifications(state: *State, now_ns: u64) bool {
-        if (!state.notifications.advance(now_ns)) return false;
-        state.dirty = true;
-        return true;
     }
 
     /// Projects the committed workspace-list preference into client chrome.
@@ -356,13 +340,17 @@ pub const State = struct {
     /// Applies the latest allocation-free render plan after the cell frame is
     /// already visible. A newer render simply replaces this fixed-size plan,
     /// so media work never builds a visual replay behind interactive work.
-    pub fn prepareGraphics(state: *State, media_idle: bool) !bool {
+    ///
+    /// ```zig
+    /// _ = try view.prepareGraphics(model.notificationSnapshot(), media_idle);
+    /// ```
+    pub fn prepareGraphics(state: *State, snapshot: *const notifications.Center, media_idle: bool) !bool {
         if (!state.graphics_plan_dirty and
             !(media_idle and state.kitty_toasts.preparationDeferred())) return false;
         state.kitty_toasts.setMediaIdle(media_idle);
         state.kitty_toasts.prepareThemed(
             state.graphics_plan.toast_area,
-            &state.notifications,
+            snapshot,
             state.palette(),
             state.icon_theme,
         );
@@ -389,8 +377,13 @@ pub const State = struct {
         return state.graphics_plan_dirty;
     }
 
-    pub fn graphicalToastsCover(state: *const State) bool {
-        return state.kitty_toasts.covers(&state.notifications);
+    /// Reports whether prepared toast rasters exactly cover this snapshot.
+    ///
+    /// ```zig
+    /// const covered = view.graphicalToastsCover(model.notificationSnapshot());
+    /// ```
+    pub fn graphicalToastsCover(state: *const State, snapshot: *const notifications.Center) bool {
+        return state.kitty_toasts.covers(snapshot);
     }
 
     pub fn graphicalModalCovers(state: *const State, area: ui.Rect) bool {
@@ -401,7 +394,13 @@ pub const State = struct {
         return state.graphicalModalCovers(state.graphics_plan.modal_area);
     }
 
-    pub fn handleMouse(state: *State, mouse: term.Event.Mouse, now_ns: u64) Interaction {
+    /// Maps one pointer event to semantic intent without mutating client
+    /// application state.
+    ///
+    /// ```zig
+    /// const interaction = view.handleMouse(mouse);
+    /// ```
+    pub fn handleMouse(state: *State, mouse: term.Event.Mouse) Interaction {
         var result: Interaction = .{};
         if (state.attachment_store.hasModal()) result.consumed = true;
         const hovered = state.hits.at(mouse.x, mouse.y);
@@ -443,16 +442,12 @@ pub const State = struct {
                 result.redraw = true;
             },
             .notification_activate => |id| {
-                result.notification_target = state.notifications.activate(id, now_ns);
-                if (result.notification_target != null) {
-                    state.dirty = true;
-                    result.redraw = true;
-                }
+                result.notification = .{ .activate = id };
+                result.consumed = true;
             },
-            .notification_dismiss => |id| if (state.notifications.dismiss(id, now_ns)) {
-                result.notification_target = .none;
-                state.dirty = true;
-                result.redraw = true;
+            .notification_dismiss => |id| {
+                result.notification = .{ .dismiss = id };
+                result.consumed = true;
             },
             .attachment_open => |id| {
                 result.consumed = true;
@@ -514,7 +509,7 @@ pub const State = struct {
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, input.diagnostic);
         if (!input.force and !state.dirty and !state.attachment_store.hasModal() and
-            !state.notifications.hasItems() and !state.toast_overlay_drawn)
+            !input.notifications.hasItems() and !state.toast_overlay_drawn)
             return .{};
         state.hits.clear();
         state.scratch.clear(.{});
@@ -574,15 +569,15 @@ pub const State = struct {
             !std.meta.eql(current_modal_area, state.modal_overlay_area))
             input.model.copyComposedArea(&state.scratch, current_modal_area);
         const toast_area = widgets.toast.overlayArea(state.regions.workbench);
-        const has_toasts = state.notifications.hasItems() and !toast_area.isEmpty();
-        const graphical_toasts = state.kitty_toasts.covers(&state.notifications);
+        const has_toasts = input.notifications.hasItems() and !toast_area.isEmpty();
+        const graphical_toasts = state.kitty_toasts.covers(input.notifications);
         if (has_toasts or state.toast_overlay_drawn) {
             input.model.copyComposedArea(&state.scratch, toast_area);
             if (has_toasts) {
                 if (graphical_toasts)
-                    widgets.toast.registerHits(&context, toast_area, &state.notifications)
+                    widgets.toast.registerHits(&context, toast_area, input.notifications)
                 else
-                    widgets.toast.render(&context, toast_area, &state.notifications);
+                    widgets.toast.render(&context, toast_area, input.notifications);
             }
         }
         const drawn_modal_area = widgets.attachment_preview.renderModal(
@@ -758,13 +753,13 @@ test "workbench clicks return focus intent without mutating pane layout" {
         .y = second_view.content.y,
         .kind = .move,
     };
-    _ = state.handleMouse(point, 0);
+    _ = state.handleMouse(point);
     state.dirty = false;
     const revision = model.layout.currentRevision();
 
     var click = point;
     click.kind = .press;
-    const interaction = state.handleMouse(click, 0);
+    const interaction = state.handleMouse(click);
 
     try std.testing.expectEqual(second, interaction.focus_pane.?);
     try std.testing.expect(!interaction.redraw);
@@ -808,10 +803,10 @@ test "sidebar agent snapshots focus linked panes and stable hover requests no ex
     _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
 
     const first_row = term.Event.Mouse{ .x = 4, .y = 4, .kind = .move };
-    try std.testing.expect(state.handleMouse(first_row, 0).redraw);
-    try std.testing.expect(!state.handleMouse(first_row, 0).redraw);
+    try std.testing.expect(state.handleMouse(first_row).redraw);
+    try std.testing.expect(!state.handleMouse(first_row).redraw);
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
-    const interaction = state.handleMouse(click, 0);
+    const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(agent_entries[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
 }
@@ -869,7 +864,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .x = point.x,
         .y = point.y,
         .kind = .press,
-    }, 0);
+    });
     try std.testing.expect(opened.consumed);
     try std.testing.expect(state.hasAttachmentModal());
 
@@ -878,7 +873,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .x = state.regions.workbench.x,
         .y = state.regions.workbench.y,
         .kind = .scroll_down,
-    }, 0);
+    });
     try std.testing.expect(modal_scroll.consumed);
 }
 
@@ -997,13 +992,13 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
-    _ = try state.prepareGraphics(true);
+    _ = try state.prepareGraphics(&empty_notifications, true);
     try std.testing.expect(state.kittySidebar().focused_card != null);
     try std.testing.expectEqualDeep(
         Action{ .sidebar_focus_agent = agent_entries[0].key },
         state.hits.at(4, 4).?,
     );
-    const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press }, 0);
+    const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press });
     try std.testing.expect(interaction.redraw);
     try std.testing.expectEqualDeep(agent_entries[0].key, interaction.focus_agent.?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
@@ -1040,7 +1035,7 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
         screen.back.at(workspace_mark.?.area.x, workspace_mark.?.area.y).?.text(),
     );
     try std.testing.expect(state.graphics_plan.icons.len != 0);
-    _ = try state.prepareGraphics(true);
+    _ = try state.prepareGraphics(&empty_notifications, true);
     try std.testing.expect(state.kittyIcons().retainedBytes() != 0);
     try std.testing.expect(state.kittyIcons().damaged());
 }
@@ -1089,20 +1084,25 @@ test "cell rendering leaves toast rasterization to the media pass" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 28 });
-    _ = state.notify(0, .{ .title = "Ready", .message = "Open result" });
+    var center: notifications.Center = .{};
+    _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .notifications = &center,
+        .force = true,
+    });
 
     try std.testing.expectEqual(@as(usize, 0), state.kittyToasts().retainedBytes());
-    _ = try state.prepareGraphics(false);
+    _ = try state.prepareGraphics(&center, false);
     try std.testing.expectEqual(@as(usize, 0), state.kittyToasts().retainedBytes());
     try std.testing.expect(state.kittyToasts().preparationDeferred());
 
     // The same fixed plan is retried after the idle boundary; it does not need
     // another cell composition to make progress.
-    _ = try state.prepareGraphics(true);
+    _ = try state.prepareGraphics(&center, true);
     try std.testing.expect(
         state.kittyToasts().retainedBytes() > kitty.transmission_budget_per_frame,
     );
@@ -1168,15 +1168,16 @@ test "clickable toast restores pane cells after its exit animation" {
     };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 28 });
     const overlay = widgets.toast.overlayArea(state.workbench());
-    _ = state.notify(100, .{
+    var center: notifications.Center = .{};
+    const notification_id = center.push(100, .{
         .level = .success,
         .title = "Ready",
         .message = "Open tab",
         .target = .{ .select_tab = location.tab_id },
     });
     const first_frame_ns = std.time.ns_per_s / 60;
-    _ = state.advanceNotifications(100 + first_frame_ns);
-    const visible_width = state.notifications.itemAt(0).?.animatedWidth(overlay.w);
+    _ = center.advance(100 + first_frame_ns);
+    const visible_width = center.itemAt(0).?.animatedWidth(overlay.w);
     const click_x = overlay.x + overlay.w - visible_width;
     const click_y = overlay.y;
     model.find(@enumFromInt(1)).?.buffer.setCell(
@@ -1189,19 +1190,22 @@ test "clickable toast restores pane cells after its exit animation" {
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try model.render(&screen, state.workbench());
-    _ = try state.render(&screen, .{ .model = &model });
+    _ = try state.render(&screen, .{ .model = &model, .notifications = &center });
 
     const interaction = state.handleMouse(.{
         .x = click_x,
         .y = click_y,
         .kind = .press,
-    }, 200);
-    try std.testing.expectEqual(location.tab_id, interaction.notification_target.?.select_tab);
-    try std.testing.expect(
-        state.advanceNotifications(200 + widgets.notification.transition_duration_ns),
+    });
+    try std.testing.expectEqualDeep(
+        NotificationIntent{ .activate = notification_id },
+        interaction.notification.?,
     );
-    try std.testing.expect(!state.notifications.hasItems());
-    _ = try state.render(&screen, .{ .model = &model });
+    const target = center.activate(notification_id, 200).?;
+    try std.testing.expectEqual(location.tab_id, target.select_tab);
+    try std.testing.expect(center.advance(200 + notifications.transition_duration_ns));
+    try std.testing.expect(!center.hasItems());
+    _ = try state.render(&screen, .{ .model = &model, .notifications = &center });
 
     const restored = screen.back.cells[@as(usize, click_y) * screen.back.w + click_x];
     try std.testing.expectEqualStrings("u", restored.text());
@@ -1246,7 +1250,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
     // last sixteen columns of the bottom row.
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
-    const interaction = state.handleMouse(click, 0);
+    const interaction = state.handleMouse(click);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), interaction.select_tab.?);
 
     // A right click only reports the intent: entering the rename prompt is
@@ -1256,7 +1260,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .y = 23,
         .kind = .press,
         .button = 2,
-    }, 0);
+    });
     try std.testing.expect(rename.select_tab == null);
     try std.testing.expectEqual(@as(schema.TabId, @enumFromInt(4)), rename.rename_tab.?);
 }
@@ -1290,7 +1294,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     });
 
     const sidebar_requested = state.sidebar_requested;
-    const sidebar_toggle = state.handleMouse(.{ .x = 0, .y = 0, .kind = .press }, 0);
+    const sidebar_toggle = state.handleMouse(.{ .x = 0, .y = 0, .kind = .press });
     try std.testing.expect(sidebar_toggle.toggle_sidebar);
     try std.testing.expectEqual(sidebar_requested, state.sidebar_requested);
 
@@ -1311,7 +1315,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .x = workspace_x.?,
         .y = 0,
         .kind = .press,
-    }, 0);
+    });
     try std.testing.expectEqual(
         @as(schema.WorkspaceId, @enumFromInt(2)),
         interaction.select_workspace.?,
@@ -1321,7 +1325,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .x = marker_x.?,
         .y = 0,
         .kind = .press,
-    }, 0);
+    });
     try std.testing.expect(workspace_list_toggle.toggle_workspace_list);
     try std.testing.expect(!state.workspace_list_collapsed);
 }

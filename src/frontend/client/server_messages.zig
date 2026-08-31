@@ -6,9 +6,9 @@
 const std = @import("std");
 const core = @import("telar-core");
 const graphics = @import("../graphics/root.zig");
+const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const client_requests = @import("requests.zig");
-const widgets = @import("../widgets/root.zig");
 const term = presentation.screen;
 
 const Io = std.Io;
@@ -69,7 +69,7 @@ fn failureTitle(continuation: client_requests.Continuation) []const u8 {
 
 fn notificationTarget(
     continuation: client_requests.Continuation,
-) widgets.notification.Target {
+) notifications.Target {
     return switch (continuation) {
         .split => |split| .{ .focus_pane = split.target_pane },
         .close_pane, .attach_pane => |operation| .{ .select_tab = operation.location.tab_id },
@@ -82,7 +82,7 @@ fn notificationTarget(
     };
 }
 
-fn workspaceNotificationTarget(location: schema.WorkspaceLocation) widgets.notification.Target {
+fn workspaceNotificationTarget(location: schema.WorkspaceLocation) notifications.Target {
     return switch (location) {
         .workspace => |workspace| .{ .select_workspace = workspace },
         .worktree => .none,

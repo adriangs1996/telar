@@ -12,6 +12,7 @@ pub const input = @import("input/root.zig");
 pub const presentation = @import("presentation/root.zig");
 pub const workspace = @import("workspace/root.zig");
 pub const agents = @import("agents/root.zig");
+pub const notifications = @import("notifications/root.zig");
 pub const graphics = @import("graphics/root.zig");
 pub const attachments = @import("attachments/root.zig");
 pub const config = @import("config/root.zig");

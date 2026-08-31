@@ -14,7 +14,7 @@ const raster = @import("rasterizer.zig");
 const ui_icons = @import("../ui/root.zig").icons;
 const theme = @import("../ui/root.zig").theme;
 const widgets = @import("../widgets/root.zig");
-const notification = widgets.notification;
+const notifications = @import("../notifications/root.zig");
 const toast = widgets.toast;
 
 const ui = core.ui;
@@ -26,8 +26,8 @@ const first_placement_id: u32 = 0x80001100;
 const toast_z_index: i32 = 1000;
 
 const RenderKey = struct {
-    id: notification.Id,
-    level: notification.Level,
+    id: notifications.Id,
+    level: notifications.Level,
     cell_width: u16,
     cell_height: u16,
     card_columns: u16,
@@ -39,7 +39,7 @@ const RenderKey = struct {
 };
 
 const Slot = struct {
-    id: notification.Id = .invalid,
+    id: notifications.Id = .invalid,
     pixels: []u8 = &.{},
     width: u32 = 0,
     height: u32 = 0,
@@ -65,7 +65,7 @@ pub const Renderer = struct {
     frame_usable: bool = false,
     render_deferred: bool = false,
     visible_count: u8 = 0,
-    slots: [notification.max_items]Slot = @splat(.{}),
+    slots: [notifications.max_items]Slot = @splat(.{}),
 
     pub fn init(gpa: std.mem.Allocator) Renderer {
         return .{
@@ -114,7 +114,7 @@ pub const Renderer = struct {
     pub fn prepare(
         renderer: *Renderer,
         area: ui.Rect,
-        center: *const notification.Center,
+        center: *const notifications.Center,
         palette: *const theme.Palette,
     ) void {
         renderer.prepareThemed(area, center, palette, .unicode);
@@ -123,7 +123,7 @@ pub const Renderer = struct {
     pub fn prepareThemed(
         renderer: *Renderer,
         area: ui.Rect,
-        center: *const notification.Center,
+        center: *const notifications.Center,
         palette: *const theme.Palette,
         icon_theme: ui_icons.Theme,
     ) void {
@@ -243,7 +243,7 @@ pub const Renderer = struct {
 
     /// The notification center may change before the lower-priority media
     /// pass catches up. Never hide the cell fallback for a stale texture set.
-    pub fn covers(renderer: *const Renderer, center: *const notification.Center) bool {
+    pub fn covers(renderer: *const Renderer, center: *const notifications.Center) bool {
         if (!renderer.coversAll() or renderer.visible_count != center.count) return false;
         for (0..center.count) |index| {
             const id = center.itemAt(index).?.id;
@@ -376,7 +376,7 @@ pub const Renderer = struct {
         return written;
     }
 
-    fn slotFor(renderer: *Renderer, id: notification.Id) ?*Slot {
+    fn slotFor(renderer: *Renderer, id: notifications.Id) ?*Slot {
         for (&renderer.slots) |*slot| if (slot.id == id) return slot;
         for (&renderer.slots) |*slot| {
             if (slot.visible or slot.id != .invalid) continue;
@@ -409,7 +409,7 @@ pub const Renderer = struct {
     fn renderSlot(
         renderer: *Renderer,
         slot: *Slot,
-        item: *const notification.Item,
+        item: *const notifications.Item,
         key: RenderKey,
     ) !void {
         const width = std.math.mul(u32, key.card_columns, renderer.cell_width) catch
@@ -530,7 +530,7 @@ const Colors = struct {
     yellow: [3]u8,
     red: [3]u8,
 
-    fn level(colors: Colors, value: notification.Level) [3]u8 {
+    fn level(colors: Colors, value: notifications.Level) [3]u8 {
         return switch (value) {
             .info => colors.blue,
             .success => colors.green,
@@ -612,7 +612,7 @@ test "terminal-derived palettes keep the cell fallback" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.supported, 10, 20);
-    var center: notification.Center = .{};
+    var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     renderer.prepare(.{ .w = 48, .h = 4 }, &center, &theme.builtin(.terminal).palette);
     try std.testing.expect(!renderer.frame_usable);
@@ -625,9 +625,9 @@ test "Nerd Font theme rasterizes the close icon into graphical toasts" {
     try std.testing.expect(renderer.icons != null);
     _ = renderer.configure(.supported, 10, 20);
     renderer.setMediaIdle(true);
-    var center: notification.Center = .{};
+    var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
-    _ = center.advance(notification.transition_duration_ns);
+    _ = center.advance(notifications.transition_duration_ns);
     renderer.prepareThemed(
         .{ .w = 48, .h = 4 },
         &center,
@@ -650,14 +650,14 @@ test "large toast transmission is chunked across bounded media passes" {
     // one 48x4-cell toast is 1,056x232 pixels, or 979,968 retained RGBA bytes.
     _ = renderer.configure(.supported, 22, 58);
     renderer.setMediaIdle(true);
-    var center: notification.Center = .{};
+    var center: notifications.Center = .{};
     const id = center.push(0, .{
         .level = .success,
         .title = "Build complete",
         .message = "Open the result",
         .target = .{ .select_tab = @enumFromInt(7) },
     });
-    _ = center.advance(notification.transition_duration_ns);
+    _ = center.advance(notifications.transition_duration_ns);
     const area: ui.Rect = .{ .x = 20, .y = 1, .w = 48, .h = 4 };
     renderer.prepare(area, &center, &theme.default_theme.palette);
     try std.testing.expect(renderer.transmissionPending());
@@ -685,8 +685,8 @@ test "large toast transmission is chunked across bounded media passes" {
     try std.testing.expect(renderer.coversAll());
     try std.testing.expect(placed);
 
-    _ = center.dismiss(id, notification.transition_duration_ns);
-    _ = center.advance(notification.transition_duration_ns + notification.transition_duration_ns / 2);
+    _ = center.dismiss(id, notifications.transition_duration_ns);
+    _ = center.advance(notifications.transition_duration_ns + notifications.transition_duration_ns / 2);
     renderer.prepare(area, &center, &theme.default_theme.palette);
     var moving: Io.Writer.Allocating = .init(std.testing.allocator);
     defer moving.deinit();
@@ -694,7 +694,7 @@ test "large toast transmission is chunked across bounded media passes" {
     try std.testing.expect(std.mem.indexOf(u8, moving.written(), "a=t") == null);
     try std.testing.expect(std.mem.indexOf(u8, moving.written(), "a=p") != null);
 
-    _ = center.advance(notification.transition_duration_ns * 2);
+    _ = center.advance(notifications.transition_duration_ns * 2);
     renderer.prepare(area, &center, &theme.default_theme.palette);
     var removed: Io.Writer.Allocating = .init(std.testing.allocator);
     defer removed.deinit();
@@ -706,9 +706,9 @@ test "rasterization waits for media idle and oversized cells fall back" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.supported, 10, 20);
-    var center: notification.Center = .{};
+    var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
-    _ = center.advance(notification.transition_duration_ns);
+    _ = center.advance(notifications.transition_duration_ns);
     const area: ui.Rect = .{ .w = 48, .h = 4 };
 
     renderer.setMediaIdle(false);

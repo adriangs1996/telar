@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
+const notifications = @import("../notifications/root.zig");
 const name_prompt = @import("name_prompt.zig");
 const workspace_capability = @import("../workspace/root.zig");
 
@@ -22,6 +23,7 @@ pub const Version = struct {
     agents: u64 = 0,
     proxy_status: u64 = 0,
     system_metrics: u64 = 0,
+    notifications: u64 = 0,
     tabs: u64 = 0,
     active_tab: u64 = 0,
     panes: u64 = 0,
@@ -172,6 +174,20 @@ pub const SystemMetrics = struct {
 pub const SystemMetricsCommit = struct {
     runtime_revision: u64,
     system_metrics_revision: u64,
+};
+
+pub const NotificationPublication = struct {
+    id: notifications.Id,
+    notifications_revision: u64,
+};
+
+pub const NotificationChange = struct {
+    notifications_revision: u64,
+};
+
+pub const NotificationActivation = struct {
+    target: notifications.Target,
+    notifications_revision: u64,
 };
 
 pub const AgentStatusChange = struct {
@@ -502,6 +518,8 @@ pub const Model = struct {
     proxy_status_revision: u64 = 0,
     system_metrics: ?SystemMetrics = null,
     system_metrics_revision: u64 = 0,
+    notification_center: notifications.Center = .{},
+    notifications_revision: u64 = 0,
     tabs_revision: u64 = 0,
     active_tab_revision: u64 = 0,
     panes_revision: u64 = 0,
@@ -548,6 +566,7 @@ pub const Model = struct {
             .agents = model.agent_revision,
             .proxy_status = model.proxy_status_revision,
             .system_metrics = model.system_metrics_revision,
+            .notifications = model.notifications_revision,
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
@@ -755,6 +774,85 @@ pub const Model = struct {
     /// ```
     pub fn systemMetrics(model: *const Model) ?SystemMetrics {
         return model.system_metrics;
+    }
+
+    /// Publishes one bounded client notification and advances its isolated
+    /// version. The center owns all borrowed text before this call returns.
+    ///
+    /// ```zig
+    /// const publication = model.publishNotification(now_ns, input);
+    /// ```
+    pub fn publishNotification(model: *Model, now_ns: u64, input: notifications.Input) NotificationPublication {
+        const id = model.notification_center.push(now_ns, input);
+        model.notifications_revision +%= 1;
+
+        return .{
+            .id = id,
+            .notifications_revision = model.notifications_revision,
+        };
+    }
+
+    /// Borrows the immutable notification snapshot for one presentation.
+    ///
+    /// ```zig
+    /// const snapshot = model.notificationSnapshot();
+    /// ```
+    pub fn notificationSnapshot(model: *const Model) *const notifications.Center {
+        return &model.notification_center;
+    }
+
+    /// Returns the next notification lifecycle deadline without changing
+    /// client state.
+    ///
+    /// ```zig
+    /// const deadline = model.nextNotificationDeadline(now_ns, frame_ns);
+    /// ```
+    pub fn nextNotificationDeadline(model: *const Model, now_ns: u64, frame_interval_ns: u64) ?u64 {
+        return model.notification_center.nextDeadline(now_ns, frame_interval_ns);
+    }
+
+    /// Advances notification lifecycles to one monotonic timestamp.
+    ///
+    /// ```zig
+    /// const change = model.advanceNotifications(now_ns) orelse return;
+    /// ```
+    pub fn advanceNotifications(model: *Model, now_ns: u64) ?NotificationChange {
+        if (!model.notification_center.advance(now_ns)) {
+            return null;
+        }
+
+        model.notifications_revision +%= 1;
+        return .{ .notifications_revision = model.notifications_revision };
+    }
+
+    /// Starts one notification's exit transition and returns its semantic
+    /// target. Missing and already exiting identities are stale no-ops.
+    ///
+    /// ```zig
+    /// const activation = model.activateNotification(id, now_ns) orelse return;
+    /// ```
+    pub fn activateNotification(model: *Model, id: notifications.Id, now_ns: u64) ?NotificationActivation {
+        const target = model.notification_center.activate(id, now_ns) orelse return null;
+        model.notifications_revision +%= 1;
+
+        return .{
+            .target = target,
+            .notifications_revision = model.notifications_revision,
+        };
+    }
+
+    /// Starts one notification's exit transition without activating it.
+    ///
+    /// ```zig
+    /// const change = model.dismissNotification(id, now_ns) orelse return;
+    /// ```
+    pub fn dismissNotification(model: *Model, id: notifications.Id, now_ns: u64) ?NotificationChange {
+        if (!model.notification_center.dismiss(id, now_ns)) {
+            return null;
+        }
+
+        model.notifications_revision +%= 1;
+        return .{ .notifications_revision = model.notifications_revision };
     }
 
     /// Reconciles one newer runtime agent snapshot and records only status
@@ -3675,6 +3773,51 @@ test "rejected system metrics preserve the latest replica and version" {
 
     try std.testing.expectEqualDeep(initial, model.systemMetrics().?);
     try std.testing.expectEqual(Version{ .system_metrics = 1 }, model.version());
+}
+
+test "notification lifecycle is model-owned and versioned by semantic change" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var title = [_]u8{ 'R', 'e', 'a', 'd', 'y' };
+    const tab_id: schema.TabId = @enumFromInt(7);
+    const started_ns: u64 = 100;
+
+    const publication = model.publishNotification(started_ns, .{
+        .level = .success,
+        .title = &title,
+        .message = "Open completed tab",
+        .target = .{ .select_tab = tab_id },
+    });
+    @memset(&title, 'x');
+
+    try std.testing.expectEqual(Version{ .notifications = 1 }, model.version());
+    try std.testing.expectEqualStrings("Ready", model.notificationSnapshot().itemAt(0).?.title());
+    try std.testing.expectEqual(
+        started_ns + std.time.ns_per_s / 60,
+        model.nextNotificationDeadline(started_ns, std.time.ns_per_s / 60).?,
+    );
+
+    const activation_ns = started_ns + notifications.transition_duration_ns;
+    const activation = model.activateNotification(publication.id, activation_ns).?;
+
+    try std.testing.expectEqual(tab_id, activation.target.select_tab);
+    try std.testing.expectEqual(@as(u64, 2), activation.notifications_revision);
+    try std.testing.expectEqual(Version{ .notifications = 2 }, model.version());
+    try std.testing.expect(model.activateNotification(publication.id, activation_ns) == null);
+    try std.testing.expectEqual(Version{ .notifications = 2 }, model.version());
+
+    const removal = model.advanceNotifications(activation_ns + notifications.transition_duration_ns).?;
+
+    try std.testing.expectEqual(@as(u64, 3), removal.notifications_revision);
+    try std.testing.expect(!model.notificationSnapshot().hasItems());
+    try std.testing.expectEqual(Version{ .notifications = 3 }, model.version());
+
+    const second = model.publishNotification(1000, .{ .title = "Saved", .message = "Done" });
+    const dismissed = model.dismissNotification(second.id, 1001).?;
+
+    try std.testing.expectEqual(@as(u64, 5), dismissed.notifications_revision);
+    try std.testing.expect(model.dismissNotification(second.id, 1001) == null);
+    try std.testing.expectEqual(Version{ .notifications = 5 }, model.version());
 }
 
 test "agent reconciliation owns labels versions and existing status transitions" {

@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const widgets = @import("../widgets/root.zig");
+const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
 const agent_snapshot = client_application.agent_snapshot;
@@ -58,7 +58,7 @@ fn handler(client: *Client) agent_snapshot.ApplyAgentSnapshotHandler {
             .context = client,
             .reconcile = reconcile,
             .alert = alert,
-            .alert_limit = widgets.notification.max_items,
+            .alert_limit = notifications.max_items,
         },
     };
 }
@@ -97,7 +97,7 @@ fn alert(context: *anyopaque, change: client_model.AgentStatusChange) !void {
         .duration_ns = if (change.current == .failed)
             7 * std.time.ns_per_s
         else
-            widgets.notification.default_duration_ns,
+            notifications.default_duration_ns,
     });
 }
 

@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const ui = @import("../ui/root.zig");
 const theme = ui.theme;
 const icons = ui.icons;
-const notification = @import("notification.zig");
+const notifications = @import("../notifications/root.zig");
 const agents = @import("../agents/root.zig");
 const attachments = @import("../attachments/root.zig");
 
@@ -20,8 +20,8 @@ pub const Action = union(enum) {
     toggle_workspace_list,
     sidebar_focus_agent: agents.AgentKey,
     sidebar_scroll_to: u16,
-    notification_activate: notification.Id,
-    notification_dismiss: notification.Id,
+    notification_activate: notifications.Id,
+    notification_dismiss: notifications.Id,
     attachment_open: attachments.Id,
     attachment_dismiss: attachments.Id,
     attachment_modal_close,

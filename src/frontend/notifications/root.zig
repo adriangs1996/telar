@@ -1,8 +1,9 @@
-//! Bounded, client-owned notification state.
+//! Bounded notification state owned by `ClientModel`.
 //!
 //! Notifications are disposable UI state. Wire events are copied into this
-//! center, which never allocates after the client starts. When the four slots
-//! fill, a new notice replaces the oldest one.
+//! value, which never allocates after the client starts. Renderers borrow an
+//! immutable snapshot. When the four slots fill, a new notice replaces the
+//! oldest one.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -154,6 +155,12 @@ pub const Center = struct {
     count: u8 = 0,
     next_id: u64 = 1,
 
+    /// Copies one notice into bounded storage, refreshing an equivalent active
+    /// item instead of stacking it.
+    ///
+    /// ```zig
+    /// const id = center.push(now_ns, input);
+    /// ```
     pub fn push(center: *Center, now_ns: u64, input: Input) Id {
         var item: Item = .{
             .id = .invalid,
@@ -199,11 +206,11 @@ pub const Center = struct {
 
     /// Returns the next useful wakeup. Moving notifications follow the client
     /// frame cadence; stable notifications sleep until their exact expiry.
-    pub fn nextDeadline(
-        center: *const Center,
-        now_ns: u64,
-        frame_interval_ns: u64,
-    ) ?u64 {
+    ///
+    /// ```zig
+    /// const deadline = center.nextDeadline(now_ns, frame_interval_ns);
+    /// ```
+    pub fn nextDeadline(center: *const Center, now_ns: u64, frame_interval_ns: u64) ?u64 {
         std.debug.assert(frame_interval_ns != 0);
         if (center.count == 0) return null;
         var deadline: u64 = std.math.maxInt(u64);
@@ -216,6 +223,10 @@ pub const Center = struct {
 
     /// Advances every transition to its position at `now_ns`. Late frames do
     /// not stretch the animation because position derives from elapsed time.
+    ///
+    /// ```zig
+    /// const changed = center.advance(now_ns);
+    /// ```
     pub fn advance(center: *Center, now_ns: u64) bool {
         var changed = false;
         var index: usize = 0;
@@ -253,15 +264,28 @@ pub const Center = struct {
         return changed;
     }
 
+    /// Starts an item's exit transition without following its target.
+    ///
+    /// ```zig
+    /// const changed = center.dismiss(id, now_ns);
+    /// ```
     pub fn dismiss(center: *Center, id: Id, now_ns: u64) bool {
         const item = center.find(id) orelse return false;
         return item.beginExit(now_ns);
     }
 
+    /// Starts an item's exit transition and returns its semantic target once.
+    ///
+    /// ```zig
+    /// const target = center.activate(id, now_ns) orelse return;
+    /// ```
     pub fn activate(center: *Center, id: Id, now_ns: u64) ?Target {
         const item = center.find(id) orelse return null;
         const target = item.target;
-        _ = item.beginExit(now_ns);
+        if (!item.beginExit(now_ns)) {
+            return null;
+        }
+
         return target;
     }
 

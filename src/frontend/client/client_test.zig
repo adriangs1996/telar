@@ -7,8 +7,8 @@ const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
+const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
-const widgets = @import("../widgets/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const keybind = input_capability.keybind;
 
@@ -33,6 +33,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -50,6 +51,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -67,6 +69,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -83,6 +86,7 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.agents, actual.agents);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -92,6 +96,14 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
     try std.testing.expectEqual(expected.copy, actual.copy);
+}
+
+fn expectOnlyNotificationVersionChanged(expected: client_model.Version, actual: client_model.Version) !void {
+    try std.testing.expect(actual.notifications > expected.notifications);
+
+    var normalized = actual;
+    normalized.notifications = expected.notifications;
+    try std.testing.expectEqualDeep(expected, normalized);
 }
 
 // ---------------------------------------------------------------------------
@@ -1728,7 +1740,7 @@ test "a failed split never resizes the tab selected afterwards" {
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
 
     try std.testing.expectEqual(@as(u8, 0), client.outbox.len);
-    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before, client.model.version());
 }
 
 test "a failed split for a retired target is silent" {
@@ -1853,7 +1865,7 @@ test "a missing pane attachment keeps local membership until a canonical snapsho
 
     const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedBeforeSnapshot;
     try std.testing.expect(!pane.attached);
-    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(client.requests.has(.tab_snapshot));
     try harness.settle();
 
@@ -1885,7 +1897,7 @@ test "an internal pane attachment failure waits for a later resync" {
 
     const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedAfterInternalFailure;
     try std.testing.expect(!pane.attached);
-    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.requests.has(.tab_snapshot));
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
     try std.testing.expect(client.notification_tick_pending);
@@ -2097,7 +2109,7 @@ test "a failed workspace creation preserves the current projection" {
     });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
 
-    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) != null);
     try std.testing.expect(client.notification_tick_pending);
@@ -2314,7 +2326,7 @@ test "a failed tab creation preserves the current projection and notifies" {
 
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
 
-    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expect(client.notification_tick_pending);
@@ -2482,7 +2494,7 @@ test "a failed tab move preserves order and notifies" {
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
     try std.testing.expectEqualDeep(active_before_failure, client.model.activeTabLocation().?);
-    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.requests.has(.tab_operation));
     try std.testing.expect(client.notification_tick_pending);
 }
@@ -2631,7 +2643,7 @@ test "close tab request detaches before delivery and rejection requests restorat
         recovery.request_tab_snapshot.location,
     );
     try std.testing.expect(client.notification_tick_pending);
-    try std.testing.expectEqualDeep(version_before_request, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before_request, client.model.version());
 }
 
 test "close tab capacity failure preserves attachment and request state" {
@@ -3397,6 +3409,73 @@ test "runtime notifications and delivery failures reach the toasts" {
     try harness.settle();
 }
 
+test "toast activation commits by id before following its navigation target" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const active = &client.model.workspace.active().?.model;
+    const second_pane: schema.PaneId = @enumFromInt(11);
+    try active.split(
+        TestHarness.bootstrap_pane,
+        second_pane,
+        TestHarness.bootstrap_location,
+        .horizontal,
+        client.view.workbench(),
+    );
+    try std.testing.expect(active.focusPane(TestHarness.bootstrap_pane));
+
+    try client.notify(.{
+        .title = "Ready",
+        .message = "Open pane",
+        .target = .{ .focus_pane = second_pane },
+    });
+    const item = client.model.notificationSnapshot().itemAt(0).?;
+    const notification_id = item.id;
+    const visible_at_ns = item.transition_updated_ns + notifications.transition_duration_ns;
+    _ = client.model.advanceNotifications(visible_at_ns);
+
+    _ = try active.render(&client.presenter.screen, client.view.workbench());
+    _ = try client.view.render(&client.presenter.screen, .{
+        .model = active,
+        .notifications = client.model.notificationSnapshot(),
+        .force = true,
+    });
+    var click: ?term.Event.Mouse = null;
+    for (client.view.hits.registered()) |entry| switch (entry.action) {
+        .notification_activate => |id| {
+            if (id != notification_id) {
+                continue;
+            }
+
+            click = .{
+                .x = entry.rect.x + 1,
+                .y = entry.rect.y + 1,
+                .kind = .press,
+            };
+            break;
+        },
+        else => {},
+    };
+    const notification_click = click orelse return error.MissingNotificationHit;
+    const version_before_activation = client.model.version();
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.mouse(notification_click);
+
+    try std.testing.expectEqual(second_pane, active.layout.focused().?);
+    try std.testing.expectEqual(
+        version_before_activation.notifications + 1,
+        client.model.version().notifications,
+    );
+    const version_after_activation = client.model.version();
+
+    try handler.mouse(notification_click);
+
+    try std.testing.expectEqualDeep(version_after_activation, client.model.version());
+}
+
 test "proxy status commits before announcement and presenter-owned projection" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -3412,22 +3491,28 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     try std.testing.expect(client.model.proxyTlsActive());
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
+    try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
     try std.testing.expectEqual(version_before.proxy_status, client.presenter.observed_model_version.proxy_status);
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
-    try std.testing.expectEqualStrings("TLS interception active", client.view.notifications.itemAt(0).?.title());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
+    try std.testing.expectEqualStrings(
+        "TLS interception active",
+        client.model.notificationSnapshot().itemAt(0).?.title(),
+    );
 
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(enabled));
 
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
-    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
+    try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
 
     try client.observeModel();
+    const enabled_version = client.model.version();
 
-    try std.testing.expectEqual(pending_updates_before + 2, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(enabled_version, client.presenter.presented_model_version);
     const badge_index = @as(usize, client.presenter.screen.front.w) - 2;
     try std.testing.expectEqualStrings("\u{26e8}", client.presenter.screen.front.cells[badge_index].text());
 
@@ -3437,14 +3522,19 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     try std.testing.expect(!client.model.proxyTlsActive());
     try std.testing.expectEqual(version_before.proxy_status + 2, client.model.version().proxy_status);
-    try std.testing.expectEqual(pending_updates_after_enabled + 1, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u8, 2), client.view.notifications.count);
-    try std.testing.expectEqualStrings("TLS interception stopped", client.view.notifications.itemAt(0).?.title());
+    try std.testing.expectEqual(version_before.notifications + 2, client.model.version().notifications);
+    try std.testing.expectEqual(pending_updates_after_enabled, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u8, 2), client.model.notificationSnapshot().count);
+    try std.testing.expectEqualStrings(
+        "TLS interception stopped",
+        client.model.notificationSnapshot().itemAt(0).?.title(),
+    );
 
     try client.observeModel();
+    const disabled_version = client.model.version();
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(disabled_version, client.presenter.presented_model_version);
     try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", client.presenter.screen.front.cells[badge_index].text()));
 }
 
@@ -3657,28 +3747,28 @@ test "agent snapshot transitions raise bounded presentation alerts only once" {
     const initial = try encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(initial));
 
-    try std.testing.expectEqual(@as(u8, 0), client.view.notifications.count);
+    try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
     try std.testing.expectEqual(client_model.Version{ .agents = 1 }, client.model.version());
 
     const changed = try encodeTestingAgentSnapshot(&payload, 2, .blocked);
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(changed));
-    const notification = client.view.notifications.itemAt(0).?;
+    const notification = client.model.notificationSnapshot().itemAt(0).?;
 
-    try std.testing.expectEqual(client_model.Version{ .agents = 2 }, client.model.version());
-    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
-    try std.testing.expectEqual(widgets.notification.Level.warning, notification.level);
+    try std.testing.expectEqual(client_model.Version{ .agents = 2, .notifications = 1 }, client.model.version());
+    try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
+    try std.testing.expectEqual(notifications.Level.warning, notification.level);
     try std.testing.expectEqualStrings("Agent needs input", notification.title());
     try std.testing.expectEqualStrings("Claude in pane 3 is waiting for input", notification.message());
     try std.testing.expectEqualDeep(
-        widgets.notification.Target{ .focus_pane = TestHarness.bootstrap_pane },
+        notifications.Target{ .focus_pane = TestHarness.bootstrap_pane },
         notification.target,
     );
 
     const stale = try encodeTestingAgentSnapshot(&payload, 1, .failed);
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
 
-    try std.testing.expectEqual(client_model.Version{ .agents = 2 }, client.model.version());
-    try std.testing.expectEqual(@as(u8, 1), client.view.notifications.count);
+    try std.testing.expectEqual(client_model.Version{ .agents = 2, .notifications = 1 }, client.model.version());
+    try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
 }
 
 test "agent sounds validate exact identity against the client model" {
@@ -4286,7 +4376,7 @@ test "a failed tab rename preserves the label and notifies" {
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(response));
 
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
-    try std.testing.expectEqualDeep(version_before_failure, client.model.version());
+    try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.requests.has(.tab_operation));
     try std.testing.expect(client.notification_tick_pending);
 }

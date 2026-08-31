@@ -1,6 +1,6 @@
 //! Toast overlay rendering for the client notification center.
 
-const notification = @import("notification.zig");
+const notifications = @import("../notifications/root.zig");
 const widget = @import("context.zig");
 const ui = @import("../ui/root.zig");
 
@@ -16,7 +16,7 @@ pub fn overlayArea(workbench: ui.Rect) ui.Rect {
     const available_height = workbench.h -| vertical_margin;
     const height = @min(
         available_height,
-        @as(u16, notification.max_items) * (card_height + card_gap) - card_gap,
+        @as(u16, notifications.max_items) * (card_height + card_gap) - card_gap,
     );
     const width = @min(max_width, available_width);
     return .{
@@ -30,7 +30,7 @@ pub fn overlayArea(workbench: ui.Rect) ui.Rect {
 pub fn render(
     context: *widget.Context,
     area: ui.Rect,
-    center: *const notification.Center,
+    center: *const notifications.Center,
 ) void {
     renderMode(context, area, center, true);
 }
@@ -39,7 +39,7 @@ pub fn render(
 pub fn registerHits(
     context: *widget.Context,
     area: ui.Rect,
-    center: *const notification.Center,
+    center: *const notifications.Center,
 ) void {
     renderMode(context, area, center, false);
 }
@@ -47,7 +47,7 @@ pub fn registerHits(
 fn renderMode(
     context: *widget.Context,
     area: ui.Rect,
-    center: *const notification.Center,
+    center: *const notifications.Center,
     paint: bool,
 ) void {
     if (area.isEmpty() or !center.hasItems()) return;
@@ -74,7 +74,7 @@ fn renderMode(
 fn drawCard(
     context: *widget.Context,
     card: ui.Rect,
-    item: *const notification.Item,
+    item: *const notifications.Item,
     paint: bool,
 ) void {
     if (card.isEmpty()) return;
@@ -149,7 +149,7 @@ fn drawCard(
     }
 }
 
-fn levelColor(context: *const widget.Context, level: notification.Level) ui.Color {
+fn levelColor(context: *const widget.Context, level: notifications.Level) ui.Color {
     return switch (level) {
         .info => context.palette.blue,
         .success => context.palette.green,
@@ -164,13 +164,13 @@ test "toast cards register activation and a separate close target" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 80, 24);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var center: notification.Center = .{};
+    var center: notifications.Center = .{};
     const id = center.push(0, .{
         .title = "Build complete",
         .message = "Open the result",
         .target = .{ .select_tab = @enumFromInt(7) },
     });
-    _ = center.advance(notification.transition_duration_ns);
+    _ = center.advance(notifications.transition_duration_ns);
     var context: widget.Context = .{
         .buffer = &buffer,
         .hits = &hits,

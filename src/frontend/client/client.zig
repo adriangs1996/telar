@@ -15,6 +15,7 @@ const client_requests = @import("requests.zig");
 const client_telemetry = @import("telemetry.zig");
 const client_view = @import("view.zig");
 const client_model = @import("model.zig");
+const notification_capability = @import("../notifications/root.zig");
 const lua_config = @import("../config/root.zig");
 const sound_mod = @import("../sound.zig");
 const input_mod = input_capability.host;
@@ -101,6 +102,7 @@ pub const InputChunk = struct {
 };
 const InputHandler = @import("input_handler.zig");
 const config_reload = @import("config_reload.zig");
+const notification_flow = @import("notifications.zig");
 const presenter_mod = @import("presenter.zig");
 const server_messages = @import("server_messages.zig");
 
@@ -450,10 +452,8 @@ pub fn scheduleSidebarAnimation(client: *Client) !void {
     };
 }
 
-pub fn notify(client: *Client, input: widgets.notification.Input) !void {
-    _ = client.view.notify(monotonic(client.io), input);
-    try client.presenter.requestDraw();
-    try client.scheduleNotificationTick();
+pub fn notify(client: *Client, input: notification_capability.Input) !void {
+    _ = try notification_flow.publish(client, monotonic(client.io), input);
 }
 
 pub fn notifyDiagnostic(client: *Client, title: []const u8) !void {
@@ -467,7 +467,7 @@ pub fn notifyDiagnostic(client: *Client, title: []const u8) !void {
 
 pub fn scheduleNotificationTick(client: *Client) !void {
     const now_ns = monotonic(client.io);
-    const deadline_ns = client.view.nextNotificationDeadline(
+    const deadline_ns = client.model.nextNotificationDeadline(
         now_ns,
         client.presenter.pacer.interval,
     ) orelse return;
@@ -831,8 +831,7 @@ pub fn handleSidebarAnimationEvent(client: *Client, result: anyerror!void) !void
 pub fn handleNotificationTickEvent(client: *Client, result: anyerror!void) !void {
     try result;
     client.notification_tick_pending = false;
-    if (client.view.advanceNotifications(monotonic(client.io))) try client.presenter.requestDraw();
-    try client.scheduleNotificationTick();
+    _ = try notification_flow.advance(client, monotonic(client.io));
 }
 
 pub fn scheduleAgentSound(client: *Client, kind: sound_mod.Kind) !void {

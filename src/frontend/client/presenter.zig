@@ -135,6 +135,8 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.proxy_status;
     const system_metrics_changed = presenter.presented_model_version.system_metrics !=
         presenter.observed_model_version.system_metrics;
+    const notifications_changed = presenter.presented_model_version.notifications !=
+        presenter.observed_model_version.notifications;
     const tabs_changed = presenter.presented_model_version.tabs !=
         presenter.observed_model_version.tabs;
     const active_tab_changed = presenter.presented_model_version.active_tab !=
@@ -173,7 +175,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         client.view.clearHover();
     }
     if (workspace_changed or workspace_list_changed or agents_changed or
-        proxy_status_changed or system_metrics_changed or tabs_changed or
+        proxy_status_changed or system_metrics_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or prompt_changed or
         copy_status_changed)
     {
@@ -241,10 +243,11 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
     const model = presentableModel(&client.model.workspace) orelse return;
     const media_idle = monotonic(presenter.io) -| presenter.last_input_ns >=
         toast_graphics.idle_after_ns;
+    const notifications = client.model.notificationSnapshot();
     client.view.kittyAttachments().reapRetired();
-    const covered_before = client.view.graphicalToastsCover();
+    const covered_before = client.view.graphicalToastsCover(notifications);
     const modal_covered_before = client.view.graphicalModalCoversPlan();
-    const icon_fallback_changed = try client.view.prepareGraphics(media_idle);
+    const icon_fallback_changed = try client.view.prepareGraphics(notifications, media_idle);
     if (icon_fallback_changed) try presenter.requestDraw();
     if (!presenter.mediaWorkPending(client)) return;
     if (presenter.onlyWaitingForMediaIdle(client, media_idle)) {
@@ -285,7 +288,7 @@ pub fn presentMedia(presenter: *Presenter, client: *Client) !void {
         presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
     }
 
-    if (covered_before != client.view.graphicalToastsCover() or
+    if (covered_before != client.view.graphicalToastsCover(notifications) or
         modal_covered_before != client.view.graphicalModalCoversPlan())
     {
         client.view.invalidate();
@@ -351,6 +354,7 @@ fn present(presenter: *Presenter, client: *Client, model: *multiplexer.Model) !P
         .tabs = &client.model.workspace,
         .model = model,
         .agents = client.model.agentSnapshot(),
+        .notifications = client.model.notificationSnapshot(),
         .workspaces = client.model.workspaceListSnapshot(),
         .prompt = client.model.name_prompt.current(),
         .proxy_tls_active = client.model.proxyTlsActive(),

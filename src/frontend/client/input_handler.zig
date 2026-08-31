@@ -6,6 +6,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const input_capability = @import("../input/root.zig");
+const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const lua_config = @import("../config/root.zig");
@@ -18,6 +19,7 @@ const pane_splits = @import("pane_splits.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
+const notification_flow = @import("notifications.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
@@ -26,6 +28,7 @@ const tab_moves = @import("tab_moves.zig");
 const tab_selections = @import("tab_selections.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_list_toggles = @import("workspace_list_toggles.zig");
+const view_mod = @import("view.zig");
 const action_mod = input_capability.action;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
@@ -122,6 +125,26 @@ fn focusSidebarAgent(handler: *InputHandler, agent_key: agents.AgentKey) !bool {
             );
             return true;
         },
+    }
+}
+
+fn applyNotificationIntent(handler: *InputHandler, intent: view_mod.NotificationIntent, now_ns: u64) !void {
+    switch (intent) {
+        .activate => |id| {
+            const activation = try notification_flow.activate(handler.client, id, now_ns) orelse return;
+
+            try handler.followNotificationTarget(activation.target);
+        },
+        .dismiss => |id| _ = try notification_flow.dismiss(handler.client, id, now_ns),
+    }
+}
+
+fn followNotificationTarget(handler: *InputHandler, target: notifications.Target) !void {
+    switch (target) {
+        .none => {},
+        .select_tab => |tab_id| try handler.selectTab(.{ .tab_id = tab_id }),
+        .select_workspace => |workspace| try handler.switchWorkspace(workspace),
+        .focus_pane => |pane_id| try handler.focusPane(.{ .pane_id = pane_id }),
     }
 }
 
@@ -251,7 +274,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         return;
     }
 
-    const interaction = handler.client.view.handleMouse(cell_event, monotonic(handler.client.io));
+    const interaction = handler.client.view.handleMouse(cell_event);
     if (interaction.toggle_sidebar) {
         try handler.toggleSidebar();
     }
@@ -272,14 +295,9 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         _ = name_prompts.beginTabRename(handler.client, tab_id);
     }
     if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
-    if (interaction.notification_target) |target| switch (target) {
-        .none => {},
-        .select_tab => |tab_id| try handler.selectTab(.{ .tab_id = tab_id }),
-        .select_workspace => |workspace| try handler.switchWorkspace(workspace),
-        .focus_pane => |pane_id| try handler.focusPane(.{ .pane_id = pane_id }),
-    };
-    if (interaction.notification_target != null)
-        try handler.client.scheduleNotificationTick();
+    if (interaction.notification) |intent| {
+        try handler.applyNotificationIntent(intent, monotonic(handler.client.io));
+    }
     if (interaction.layout_changed) {
         handler.client.graphics_store.invalidatePlacements();
         try handler.client.resizeAttached(model, handler.client.view.workbench());
@@ -287,7 +305,6 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     handler.redraw = handler.redraw or interaction.redraw;
     if (interaction.consumed or agent_handoff or interaction.select_tab != null or
         interaction.focus_agent != null or
-        interaction.notification_target != null or
         !handler.client.view.workbench().contains(cell_event.x, cell_event.y)) return;
     const wheel_delta: ?i32 = switch (cell_event.kind) {
         .scroll_up => -3,

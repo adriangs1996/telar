@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const widgets = @import("../widgets/root.zig");
+const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
 const proxy_status = client_application.proxy_status;
@@ -44,6 +44,6 @@ fn announce(context: *anyopaque, commit: client_model.ProxyStatusCommit) !void {
         .duration_ns = if (commit.active)
             7 * std.time.ns_per_s
         else
-            widgets.notification.default_duration_ns,
+            notifications.default_duration_ns,
     });
 }
