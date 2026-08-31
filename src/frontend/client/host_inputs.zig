@@ -4,8 +4,8 @@ const std = @import("std");
 const input_capability = @import("../input/root.zig");
 const lua_config = @import("../config/root.zig");
 const widgets = @import("../widgets/root.zig");
-const client_outbox = @import("outbox.zig");
 const deadline_timer = @import("deadline_timer.zig");
+const runtime_transport = @import("runtime_transport.zig");
 
 const client_mod = @import("client.zig");
 const Client = client_mod;
@@ -27,7 +27,7 @@ pub const Router = keybind.Router(
 );
 
 comptime {
-    std.debug.assert(chunk_size <= client_outbox.max_input_bytes);
+    std.debug.assert(chunk_size <= runtime_transport.max_input_bytes);
 }
 
 pub const Chunk = struct {
@@ -136,7 +136,7 @@ const Expiry = enum {
 /// ```
 pub fn scheduleRead(client: *Client) !void {
     const state = &client.host_input;
-    if (state.read_pending or !client.outbox.hasCapacity()) {
+    if (state.read_pending or runtime_transport.availableCapacity(client) == 0) {
         return;
     }
 

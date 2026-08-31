@@ -5,7 +5,6 @@
 
 const std = @import("std");
 const input_capability = @import("../input/root.zig");
-const client_outbox = @import("outbox.zig");
 const client_view = @import("view.zig");
 const client_model = @import("model.zig");
 const host_capability_adapter = @import("host_capabilities.zig");
@@ -19,7 +18,6 @@ pub const run = @import("run.zig").run;
 
 pub const Action = action_mod.Action;
 pub const Options = Client.Options;
-pub const Outbox = client_outbox.Outbox;
 pub const View = client_view.State;
 pub const sidebar_width = client_view.sidebar_width;
 pub const ConfiguredBinding = lua_config.ConfiguredBinding;
@@ -74,6 +72,7 @@ test {
     _ = @import("plugin_actions.zig");
     _ = @import("presenter.zig");
     _ = @import("proxy_status.zig");
+    _ = @import("runtime_transport.zig");
     _ = @import("server_messages.zig");
     _ = @import("sidebar_animations.zig");
     _ = @import("sidebar_toggles.zig");

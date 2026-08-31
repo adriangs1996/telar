@@ -9,6 +9,7 @@ const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
 const pane_input = client_application.pane_input;
 const pane_paste = client_application.pane_paste;
+const runtime_transport = @import("runtime_transport.zig");
 
 /// Delivers one user-input command through the application boundary.
 ///
@@ -67,7 +68,7 @@ fn handler(client: *Client) pane_input.PaneInputHandler {
 fn enqueue(context: *anyopaque, effect: pane_input.PaneInputEffect) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.enqueueInput(effect.pane_id, effect.bytes);
+    try runtime_transport.enqueueInput(client, effect.pane_id, effect.bytes);
 }
 
 fn record(client: *Client, started: u64, delivery: ?pane_input.Delivery) ?pane_input.Delivery {

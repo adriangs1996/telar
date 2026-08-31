@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const client_outbox = @import("outbox.zig");
+const runtime_transport = @import("runtime_transport.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 
@@ -172,7 +172,7 @@ fn detachCurrent(context: *anyopaque) !void {
             required_capacity += @intFromBool(pane.attached);
         }
     }
-    const available_capacity = client_outbox.capacity - @as(usize, client.outbox.len);
+    const available_capacity = runtime_transport.availableCapacity(client);
     if (required_capacity > available_capacity) {
         return error.ClientOutboxFull;
     }
@@ -186,16 +186,16 @@ fn detachCurrent(context: *anyopaque) !void {
 fn sendHandoff(context: *anyopaque, command: workspace_handoff.WorkspaceHandoff) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .initial_open = .{ .fallback_workspace = command.fallback_workspace } },
-        .{ .open_pane = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .initial_open = .{ .fallback_workspace = command.fallback_workspace } },
+        .message = .{ .open_pane = .{
             .request_id = request_id,
             .target = command.target,
             .size = command.size,
             .launch = null,
         } },
-    );
+    });
 }
 
 fn restoreCurrent(context: *anyopaque) !void {
@@ -232,14 +232,14 @@ fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) void {
 fn retryWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .initial_open = .{} },
-        .{ .open_pane = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .initial_open = .{} },
+        .message = .{ .open_pane = .{
             .request_id = request_id,
             .target = .{ .workspace = workspace },
             .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
             .launch = null,
         } },
-    );
+    });
 }

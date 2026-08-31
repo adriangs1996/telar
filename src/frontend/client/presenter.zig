@@ -26,6 +26,7 @@ const icon_graphics = graphics.icons;
 const client_mod = @import("client.zig");
 const Client = client_mod;
 const ClientEvent = client_mod.ClientEvent;
+const runtime_transport = @import("runtime_transport.zig");
 const ClientMetrics = client_telemetry.Metrics;
 const monotonic = client_mod.monotonic;
 const presentableModel = client_mod.presentableModel;
@@ -223,10 +224,10 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
     presenter.pending_updates = 0;
-    try client.returnGraphicsCredits();
+    try runtime_transport.flushGraphicsCredits(client);
     for (presented.acks.items[0..presented.acks.len]) |ack| {
         const ack_started = diagnostics.now(presenter.io);
-        try client.enqueue(.{ .frame_ack = ack });
+        try runtime_transport.enqueue(client, .{ .frame_ack = ack });
         if (comptime diagnostics.enabled)
             presenter.metrics.ack_enqueue.observe(
                 diagnostics.elapsed(ack_started, diagnostics.now(presenter.io)),

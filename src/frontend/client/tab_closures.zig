@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const client_outbox = @import("outbox.zig");
 const client_requests = @import("requests.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
@@ -14,6 +13,7 @@ const workspace_handoffs = @import("workspace_handoffs.zig");
 
 const Client = @import("client.zig");
 const close_tab = client_application.close_tab;
+const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
 
@@ -149,7 +149,7 @@ fn prepareClose(context: *anyopaque, location: schema.TabLocation) !void {
         required_capacity += @intFromBool(pane.attached or attachment_pending);
     }
 
-    const available_capacity = client_outbox.capacity - @as(usize, client.outbox.len);
+    const available_capacity = runtime_transport.availableCapacity(client);
     if (required_capacity > available_capacity) {
         return error.ClientOutboxFull;
     }
@@ -166,14 +166,14 @@ fn sendClose(context: *anyopaque, intent: close_tab.TabCloseIntent) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try client.nextId();
 
-    try client.enqueueRequest(
-        request_id,
-        .{ .close_tab = intent.location },
-        .{ .close_tab = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .close_tab = intent.location },
+        .message = .{ .close_tab = .{
             .request_id = request_id,
             .location = intent.location,
         } },
-    );
+    });
 }
 
 fn restoreClose(context: *anyopaque, location: schema.TabLocation) !void {

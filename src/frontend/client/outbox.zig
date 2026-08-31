@@ -164,6 +164,15 @@ pub const Stats = struct {
     coalesced_ack: u64 = 0,
 };
 
+pub const Snapshot = struct {
+    depth: u8 = 0,
+    high_water: u8 = 0,
+    saturated: u64 = 0,
+    coalesced_input: u64 = 0,
+    coalesced_resize: u64 = 0,
+    coalesced_ack: u64 = 0,
+};
+
 pub const Outbox = struct {
     items: [capacity]Message = undefined,
     input_bytes: [capacity][max_input_bytes]u8 = undefined,
@@ -177,6 +186,31 @@ pub const Outbox = struct {
 
     pub fn hasCapacity(outbox: *const Outbox) bool {
         return outbox.len < capacity;
+    }
+
+    /// Reports how many complete messages the bounded queue can still own.
+    ///
+    /// ```zig
+    /// const available = outbox.availableCapacity();
+    /// ```
+    pub fn availableCapacity(outbox: *const Outbox) usize {
+        return capacity - @as(usize, outbox.len);
+    }
+
+    /// Copies the stable counters needed by client telemetry.
+    ///
+    /// ```zig
+    /// const snapshot = outbox.snapshot();
+    /// ```
+    pub fn snapshot(outbox: *const Outbox) Snapshot {
+        return .{
+            .depth = outbox.len,
+            .high_water = outbox.stats.high_water,
+            .saturated = outbox.stats.saturated,
+            .coalesced_input = outbox.stats.coalesced_input,
+            .coalesced_resize = outbox.stats.coalesced_resize,
+            .coalesced_ack = outbox.stats.coalesced_ack,
+        };
     }
 
     pub fn push(outbox: *Outbox, message: Message) !void {
@@ -308,6 +342,22 @@ pub const Outbox = struct {
     pub fn sendFailed(outbox: *Outbox) void {
         std.debug.assert(outbox.send_pending);
         outbox.send_pending = false;
+    }
+
+    /// Releases one completed send claim. A failed socket write retains the
+    /// queued message for terminal cleanup and propagates its error.
+    ///
+    /// ```zig
+    /// try outbox.finishSend(result);
+    /// ```
+    pub fn finishSend(outbox: *Outbox, result: anyerror!void) !void {
+        result catch |err| {
+            outbox.sendFailed();
+
+            return err;
+        };
+
+        outbox.popSent();
     }
 
     /// True while a claimed send has neither completed nor failed.
@@ -686,6 +736,22 @@ test "resize folding never crosses an ordered input message" {
     } });
     try std.testing.expectEqual(@as(u8, 3), outbox.len);
     try std.testing.expectEqual(@as(u64, 0), outbox.stats.coalesced_resize);
+}
+
+test "send completion releases its claim on success and failure" {
+    var outbox: Outbox = .{};
+    var buffer: [64]u8 = undefined;
+    try outbox.push(.{ .detach_pane = .{ .pane_id = @enumFromInt(1) } });
+
+    _ = (try outbox.beginSend(&buffer)).?;
+    try std.testing.expectError(error.SocketFailed, outbox.finishSend(error.SocketFailed));
+    try std.testing.expect(!outbox.inFlight());
+    try std.testing.expectEqual(@as(u8, 1), outbox.len);
+
+    _ = (try outbox.beginSend(&buffer)).?;
+    try outbox.finishSend({});
+    try std.testing.expect(!outbox.inFlight());
+    try std.testing.expectEqual(@as(u8, 0), outbox.len);
 }
 
 test "a full outbox reports saturation" {

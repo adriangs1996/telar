@@ -9,7 +9,6 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const graphics = @import("../graphics/root.zig");
 const attachments = @import("../attachments/root.zig");
-const client_outbox = @import("outbox.zig");
 const client_requests = @import("requests.zig");
 const client_telemetry = @import("telemetry.zig");
 const client_view = @import("view.zig");
@@ -35,7 +34,6 @@ const theme = ui_capability.theme;
 const Io = std.Io;
 const File = Io.File;
 const schema = core.schema;
-const diagnostics = core.diagnostics;
 const ui = core.ui;
 
 const ConfiguredBinding = lua_config.ConfiguredBinding;
@@ -43,7 +41,7 @@ pub const InputRouter = host_inputs.Router;
 pub const InputChunk = host_inputs.Chunk;
 
 comptime {
-    std.debug.assert(lua_config.max_expression_paste_bytes + 16 <= client_outbox.max_input_bytes);
+    std.debug.assert(lua_config.max_expression_paste_bytes + 16 <= runtime_transport_mod.max_input_bytes);
 }
 
 pub const Options = struct {
@@ -82,7 +80,7 @@ const notification_timers = @import("notification_timers.zig");
 const notification_flow = @import("notifications.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
-const server_messages = @import("server_messages.zig");
+const runtime_transport_mod = @import("runtime_transport.zig");
 const sidebar_animations = @import("sidebar_animations.zig");
 
 pub const ClientEvent = union(enum) {
@@ -109,6 +107,12 @@ pub const ClientEvent = union(enum) {
 /// `Client.nextId`.
 pub const initial_request_id: schema.RequestId = @enumFromInt(1);
 
+pub const RequestDelivery = struct {
+    request_id: schema.RequestId,
+    continuation: client_requests.Continuation,
+    message: runtime_transport_mod.Message,
+};
+
 const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
 
 /// The platform resources a client cannot fabricate: everything else it
@@ -130,10 +134,7 @@ const Params = struct {
 
 io: Io,
 gpa: std.mem.Allocator,
-connection: *core.transport.SocketChannel,
-send_buffer: []u8,
-receive_buffer: []u8,
-outbox: client_outbox.Outbox = .{},
+runtime_transport: runtime_transport_mod.State,
 writer: *Io.Writer,
 select: Io.Select(ClientEvent),
 select_storage: [client_event_count]ClientEvent = undefined,
@@ -210,10 +211,8 @@ pub fn init(params: Params) !*Client {
     else
         kitty.Store.init(gpa);
     errdefer graphics_store.deinit();
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
-    errdefer gpa.free(receive_buffer);
-    const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
-    errdefer gpa.free(send_buffer);
+    var runtime_transport_state = try runtime_transport_mod.State.init(gpa, params.connection);
+    errdefer runtime_transport_state.deinit(gpa);
     const host_input = try host_inputs.State.init(params.input_file, .{
         .prefix = params.options.prefix,
         .bindings = params.options.bindings,
@@ -223,9 +222,7 @@ pub fn init(params: Params) !*Client {
     client.* = .{
         .io = params.io,
         .gpa = gpa,
-        .connection = params.connection,
-        .send_buffer = send_buffer,
-        .receive_buffer = receive_buffer,
+        .runtime_transport = runtime_transport_state,
         .writer = params.writer,
         .select = undefined,
         .options = params.options,
@@ -272,8 +269,7 @@ pub fn deinit(client: *Client) void {
     client.model.deinit();
     client.view.deinit();
     client.presenter.deinit();
-    gpa.free(client.send_buffer);
-    gpa.free(client.receive_buffer);
+    client.runtime_transport.deinit(gpa);
     gpa.destroy(client);
 }
 
@@ -294,104 +290,74 @@ pub fn observeModel(client: *Client) !void {
     });
 }
 
-pub fn enqueue(client: *Client, message: client_outbox.Message) !void {
-    try client.outbox.push(message);
-    try client.pumpOutbox();
+/// Records one typed continuation and queues its message as one fallible
+/// transaction.
+///
+/// ```zig
+/// try client.enqueueRequest(delivery);
+/// ```
+pub fn enqueueRequest(client: *Client, delivery: RequestDelivery) !void {
+    try client.requests.add(delivery.request_id, delivery.continuation);
+    errdefer _ = client.requests.take(delivery.request_id);
+    try runtime_transport_mod.enqueue(client, delivery.message);
 }
 
-pub fn enqueueInput(client: *Client, pane_id: schema.PaneId, bytes: []const u8) !void {
-    try client.outbox.pushInput(pane_id, bytes);
-    try client.pumpOutbox();
-}
-
-fn enqueueRename(client: *Client, rename: schema.RenameTab) !void {
-    try client.outbox.pushRename(rename);
-    try client.pumpOutbox();
-}
-
-fn enqueueWorkspaceRename(client: *Client, rename: schema.RenameWorkspace) !void {
-    try client.outbox.pushWorkspaceRename(rename);
-    try client.pumpOutbox();
-}
-
-pub fn enqueueRequest(
-    client: *Client,
-    request_id: schema.RequestId,
-    continuation: client_requests.Continuation,
-    message: client_outbox.Message,
-) !void {
-    try client.requests.add(request_id, continuation);
-    errdefer _ = client.requests.take(request_id);
-    try client.enqueue(message);
-}
-
-pub fn enqueueRenameRequest(
-    client: *Client,
-    rename: schema.RenameTab,
-    continuation: client_requests.Continuation,
-) !void {
+/// Records and queues one rename whose label needs bounded ownership.
+///
+/// ```zig
+/// try client.enqueueRenameRequest(rename, continuation);
+/// ```
+pub fn enqueueRenameRequest(client: *Client, rename: schema.RenameTab, continuation: client_requests.Continuation) !void {
     try client.requests.add(rename.request_id, continuation);
     errdefer _ = client.requests.take(rename.request_id);
-    try client.enqueueRename(rename);
+    try runtime_transport_mod.enqueueRename(client, rename);
 }
 
-pub fn enqueueWorkspaceRenameRequest(
-    client: *Client,
-    rename: schema.RenameWorkspace,
-) !void {
+/// Records and queues one workspace rename with its canonical continuation.
+///
+/// ```zig
+/// try client.enqueueWorkspaceRenameRequest(rename);
+/// ```
+pub fn enqueueWorkspaceRenameRequest(client: *Client, rename: schema.RenameWorkspace) !void {
     try client.requests.add(rename.request_id, .{ .rename_workspace = rename.workspace });
     errdefer _ = client.requests.take(rename.request_id);
-    try client.enqueueWorkspaceRename(rename);
+    try runtime_transport_mod.enqueueWorkspaceRename(client, rename);
 }
 
+/// Records and queues one workspace creation with owned launch data.
+///
+/// ```zig
+/// try client.enqueueCreateWorkspaceRequest(request);
+/// ```
 pub fn enqueueCreateWorkspaceRequest(client: *Client, request: schema.CreateWorkspace) !void {
     try client.requests.add(request.request_id, .{ .create_workspace = request.size });
     errdefer _ = client.requests.take(request.request_id);
-    try client.outbox.pushCreateWorkspace(request);
-    try client.pumpOutbox();
+    try runtime_transport_mod.enqueueCreateWorkspace(client, request);
 }
 
+/// Records and queues one tab creation with owned launch data.
+///
+/// ```zig
+/// try client.enqueueCreateTabRequest(request);
+/// ```
 pub fn enqueueCreateTabRequest(client: *Client, request: schema.CreateTab) !void {
     try client.requests.add(request.request_id, .{ .create_tab = .{
         .workspace = request.workspace,
         .size = request.size,
     } });
     errdefer _ = client.requests.take(request.request_id);
-    try client.outbox.pushCreateTab(request);
-    try client.pumpOutbox();
+    try runtime_transport_mod.enqueueCreateTab(client, request);
 }
 
-pub fn enqueueNotificationRequest(
-    client: *Client,
-    request: schema.ShowNotification,
-) !void {
+/// Records and queues one bounded runtime notification request.
+///
+/// ```zig
+/// try client.enqueueNotificationRequest(request);
+/// ```
+pub fn enqueueNotificationRequest(client: *Client, request: schema.ShowNotification) !void {
     try client.requests.add(request.request_id, .notification);
     errdefer _ = client.requests.take(request.request_id);
-    try client.outbox.pushNotification(request);
-    try client.pumpOutbox();
-}
-
-fn pumpOutbox(client: *Client) !void {
-    const payload = try client.outbox.beginSend(client.send_buffer) orelse return;
-    client.select.concurrent(.sent, sendClient, .{
-        client.io,
-        client.connection,
-        payload,
-    }) catch |err| {
-        client.outbox.sendFailed();
-        return err;
-    };
-}
-
-pub fn returnGraphicsCredits(client: *Client) !void {
-    while (client.graphics_store.peekCredit()) |credit| {
-        client.outbox.push(.{ .graphics_credit = .{
-            .pane_id = credit.pane_id,
-            .bytes = @intCast(credit.bytes),
-        } }) catch break;
-        client.graphics_store.consumeCredit(credit);
-    }
-    try client.pumpOutbox();
+    try runtime_transport_mod.enqueueNotification(client, request);
 }
 
 pub fn notify(client: *Client, input: notification_capability.Input) !void {
@@ -438,55 +404,6 @@ pub fn handleClipboardImageEvent(client: *Client, completion: clipboard_images.C
     try clipboard_images.complete(client, completion);
 }
 
-/// Entrypoint for one completed runtime socket read. It owns decode,
-/// message dispatch, flow-control credit and receive rescheduling.
-pub fn handleServerEvent(client: *Client, result: anyerror![]u8) !?u8 {
-    const payload = try result;
-    const decode_started = diagnostics.now(client.io);
-    const message = try schema.decodeServer(payload);
-    if (comptime diagnostics.enabled) {
-        client.telemetry.metrics.server_messages += 1;
-        client.telemetry.metrics.server_bytes += payload.len;
-        switch (message) {
-            .graphics_snapshot,
-            .graphics_image,
-            .graphics_shared_image,
-            .graphics_image_chunk,
-            .graphics_placement,
-            .graphics_delete_image,
-            .graphics_delete_placement,
-            => {
-                client.telemetry.metrics.graphics_messages += 1;
-                client.telemetry.metrics.graphics_bytes += payload.len;
-            },
-            else => {},
-        }
-        client.telemetry.metrics.decode.observe(
-            diagnostics.elapsed(decode_started, diagnostics.now(client.io)),
-        );
-    }
-    const status = server_messages.handleServerMessage(client, message) catch |err| {
-        switch (message) {
-            .request_failed => |failure| std.debug.print("telar runtime: {s}\n", .{failure.message}),
-            else => {},
-        }
-
-        return err;
-    };
-
-    if (status) |exit_status| {
-        return exit_status;
-    }
-
-    try client.returnGraphicsCredits();
-    try client.select.concurrent(.server, receive, .{
-        client.io,
-        client.connection,
-        client.receive_buffer,
-    });
-    return null;
-}
-
 /// Entrypoint for the capability-probe deadline: settle what the host never answered.
 pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !void {
     try result;
@@ -500,14 +417,6 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
 /// ```
 pub fn handleResizeEvent(client: *Client, result: anyerror!void, source: host_resizes.Source) !void {
     _ = try host_resizes.handle(client, result, source);
-}
-
-/// Entrypoint for one completed socket send: pop it and pump the next.
-pub fn handleSentEvent(client: *Client, result: anyerror!void) !void {
-    try result;
-    client.outbox.popSent();
-    try client.returnGraphicsCredits();
-    try host_inputs.scheduleRead(client);
 }
 
 /// Entrypoint for the paced draw deadline.
@@ -525,28 +434,28 @@ pub fn handleMediaTickEvent(client: *Client, result: anyerror!void) !void {
 /// Asks the runtime for a fresh snapshot of one tab, tracking the reply.
 pub fn requestTabSnapshot(client: *Client, location: schema.TabLocation) !void {
     const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .tab_snapshot = location },
-        .{ .request_tab_snapshot = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .tab_snapshot = location },
+        .message = .{ .request_tab_snapshot = .{
             .request_id = request_id,
             .location = location,
         } },
-    );
+    });
 }
 
 /// Asks the runtime for a fresh snapshot of one workspace, tracking the
 /// reply.
 pub fn requestWorkspaceSnapshot(client: *Client, workspace: schema.WorkspaceLocation) !void {
     const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .workspace_snapshot = workspace },
-        .{ .request_workspace_snapshot = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .workspace_snapshot = workspace },
+        .message = .{ .request_workspace_snapshot = .{
             .request_id = request_id,
             .workspace = workspace,
         } },
-    );
+    });
 }
 
 pub fn scheduleConfigReload(client: *Client) !void {
@@ -579,7 +488,7 @@ pub fn resizeAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect)
     while (panes.next()) |pane| {
         if (!pane.attached) continue;
         const size = model.contentSize(pane.id, area) orelse continue;
-        try client.enqueue(.{ .pane_resize = .{
+        try runtime_transport_mod.enqueue(client, .{ .pane_resize = .{
             .pane_id = pane.id,
             .size = size,
         } });
@@ -596,18 +505,6 @@ pub fn presentableModel(tabs: *tabs_mod.Model) ?*multiplexer.Model {
 
 pub fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {
     return watcher.wait(io);
-}
-
-pub fn receive(io: Io, connection: *core.transport.SocketChannel, buffer: []u8) anyerror![]u8 {
-    return connection.receive(io, buffer);
-}
-
-fn sendClient(
-    io: Io,
-    connection: *core.transport.SocketChannel,
-    payload: []const u8,
-) anyerror!void {
-    return connection.send(io, payload);
 }
 
 pub fn waitCapabilityTimeout(io: Io) anyerror!void {

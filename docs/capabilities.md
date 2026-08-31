@@ -113,8 +113,8 @@ entrypoints below.
 | Partial binding deadline | [`host_inputs.handleBindingTimeout`](flows/host-input-to-screen.md) |
 | Host capability deadline | [`Client.handleCapabilityTimeoutEvent`](flows/host-capabilities.md) |
 | Host resize | [`Client.handleResizeEvent`](flows/host-resize.md) |
-| Runtime socket read | `Client.handleServerEvent` |
-| Completed socket write | `Client.handleSentEvent` |
+| Runtime socket read | [`runtime_transport.handleRead`](flows/runtime-transport.md) |
+| Completed socket write | [`runtime_transport.handleSent`](flows/runtime-transport.md) |
 | Scheduled draw | `Client.handleDrawEvent` -> `Client.presentDue` |
 | Sidebar animation tick | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
 | Notification tick | [`notifications.handleTick`](flows/notifications.md) |

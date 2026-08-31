@@ -4,6 +4,7 @@ const client_application = @import("application/root.zig");
 
 const Client = @import("client.zig");
 const pane_focus_reporting = client_application.pane_focus_reporting;
+const runtime_transport = @import("runtime_transport.zig");
 
 pub const Outcome = pane_focus_reporting.Outcome;
 
@@ -46,5 +47,5 @@ fn deliver(raw_context: *anyopaque, delivery: pane_focus_reporting.Delivery) !vo
         .focus_in => "\x1b[I",
     };
 
-    try client.enqueueInput(delivery.pane_id, bytes);
+    try runtime_transport.enqueueInput(client, delivery.pane_id, bytes);
 }

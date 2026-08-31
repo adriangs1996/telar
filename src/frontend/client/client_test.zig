@@ -44,6 +44,7 @@ const pane_focus = @import("pane_focus.zig");
 const pane_openings = @import("pane_openings.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const resync_requirements = @import("resync_requirements.zig");
+const runtime_transport = @import("runtime_transport.zig");
 const server_messages = @import("server_messages.zig");
 const sidebar_animations = @import("sidebar_animations.zig");
 const tab_attachments = @import("tab_attachments.zig");
@@ -220,9 +221,9 @@ const TestHarness = struct {
     /// Drives the real dispatch until the outbox is drained, so a test
     /// observes exactly what the runtime peer would receive.
     fn settle(harness: *TestHarness) !void {
-        while (harness.client.outbox.inFlight() or harness.client.outbox.len != 0) {
+        while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
             switch (try harness.client.select.await()) {
-                .sent => |result| try harness.client.handleSentEvent(result),
+                .sent => |result| try runtime_transport.handleSent(harness.client, result),
                 .draw => |result| try harness.client.handleDrawEvent(result),
                 .sidebar_animation_tick => |result| {
                     _ = try sidebar_animations.handleTick(harness.client, result);
@@ -247,7 +248,7 @@ const TestHarness = struct {
         {
             switch (try harness.client.select.await()) {
                 .draw => |result| try harness.client.handleDrawEvent(result),
-                .sent => |result| try harness.client.handleSentEvent(result),
+                .sent => |result| try runtime_transport.handleSent(harness.client, result),
                 .media_tick => |result| try harness.client.handleMediaTickEvent(result),
                 .sidebar_animation_tick => |result| {
                     _ = try sidebar_animations.handleTick(harness.client, result);
@@ -549,34 +550,137 @@ test "host input arriving while no tab exists is dropped, not a crash" {
     chunk.bytes[0] = 'x';
     chunk.len = 1;
     try std.testing.expect(!try host_inputs.handleRead(harness.client, chunk));
-    try std.testing.expectEqual(@as(usize, 0), harness.client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), harness.client.runtime_transport.outbox.len);
 }
 
 test "host input reads pause at outbox capacity and resume with one token" {
-    const io = std.testing.io;
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    while (client.outbox.hasCapacity()) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
     try host_inputs.scheduleRead(client);
     try std.testing.expect(!client.host_input.read_pending);
 
-    client.outbox = .{};
-    try host_inputs.scheduleRead(client);
-    try host_inputs.scheduleRead(client);
-    try std.testing.expect(client.host_input.read_pending);
-    try harness.input_write.writeStreamingAll(io, "x");
-
     switch (try client.select.await()) {
-        .input => |result| try std.testing.expect(!try host_inputs.handleRead(client, result)),
+        .sent => |result| try runtime_transport.handleSent(client, result),
         else => return error.UnexpectedEvent,
     }
+    try std.testing.expectEqual(client_outbox.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expect(client.runtime_transport.outbox.inFlight());
     try std.testing.expect(client.host_input.read_pending);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    try host_inputs.scheduleRead(client);
+    try std.testing.expect(client.host_input.read_pending);
+}
+
+test "runtime reads own one token and do not rearm after shutdown" {
+    const io = std.testing.io;
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+
+    try runtime_transport.scheduleRead(client);
+    try runtime_transport.scheduleRead(client);
+    try std.testing.expect(client.runtime_transport.receive_pending);
+
+    var payload: [64]u8 = undefined;
+    const metrics = try schema.encodeSystemMetrics(&payload, .{
+        .revision = 1,
+        .cpu_percent = 50,
+        .memory_used_decigib = 10,
+        .has_battery = false,
+        .battery_percent = 0,
+    });
+    try harness.peer.send(io, metrics);
+    switch (try client.select.await()) {
+        .server => |result| try std.testing.expectEqual(
+            @as(?u8, null),
+            try runtime_transport.handleRead(client, result),
+        ),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expect(client.runtime_transport.receive_pending);
+    try std.testing.expectEqual(@as(u64, 1), client.model.systemMetrics().?.runtime_revision);
+
+    try harness.peer.send(io, try schema.encodeRuntimeStopping(&payload));
+    switch (try client.select.await()) {
+        .server => |result| try std.testing.expectEqual(
+            @as(?u8, 0),
+            try runtime_transport.handleRead(client, result),
+        ),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expect(!client.runtime_transport.receive_pending);
+
+    client.runtime_transport.receive_pending = true;
+    try std.testing.expectError(
+        error.RuntimeReadFailed,
+        runtime_transport.handleRead(client, error.RuntimeReadFailed),
+    );
+    try std.testing.expect(!client.runtime_transport.receive_pending);
+}
+
+test "graphics credits remain owned until the outbox accepts them" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const pane_id: schema.PaneId = @enumFromInt(7);
+    try client.graphics_store.applyImage(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgba,
+            .width = 1,
+            .height = 1,
+            .byte_len = 4,
+        },
+    });
+    try client.graphics_store.applySnapshot(.{
+        .pane_id = pane_id,
+        .revision = 2,
+        .phase = .begin,
+    });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = pane_id } });
+    }
+
+    try runtime_transport.flushGraphicsCredits(client);
+    try std.testing.expectEqual(@as(usize, 4), client.graphics_store.peekCredit().?.bytes);
+    try std.testing.expect(client.runtime_transport.outbox.inFlight());
+
+    switch (try client.select.await()) {
+        .sent => |result| try runtime_transport.handleSent(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expect(client.graphics_store.peekCredit() == null);
+    try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expect(client.runtime_transport.outbox.inFlight());
+}
+
+test "runtime write errors release the outbound token" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    try client.runtime_transport.outbox.push(.{
+        .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
+    });
+    _ = (try client.runtime_transport.outbox.beginSend(client.runtime_transport.send_buffer)).?;
+
+    try std.testing.expectError(
+        error.RuntimeWriteFailed,
+        runtime_transport.handleSent(client, error.RuntimeWriteFailed),
+    );
+    try std.testing.expect(!client.runtime_transport.outbox.inFlight());
+    try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
 }
 
 test "bootstrap answers the initial open with both snapshot requests" {
@@ -615,7 +719,7 @@ test "pane opening rejects an unknown request without client effects" {
     }));
 
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
@@ -639,7 +743,7 @@ test "pane opening consumes an incompatible continuation before rejection" {
     try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, opened));
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectError(error.UnexpectedRequest, pane_openings.apply(client, opened));
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
@@ -662,7 +766,7 @@ test "pane opening consumes an ignored continuation without client effects" {
     }));
 
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
@@ -829,8 +933,8 @@ test "workspace handoff capacity failure preserves the source model" {
     try harness.bootstrap();
     const client = harness.client;
     client.requests = .{};
-    while (client.outbox.len < client_outbox.capacity - 1) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.len < client_outbox.capacity - 1) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
     const focus_before = client.model.reportedPaneFocus();
@@ -863,8 +967,8 @@ test "workspace handoff reserves its focus-out message" {
     const focus_in = try harness.nextClientMessage(&buffer);
     try std.testing.expect(focus_in == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
-    while (client.outbox.len < client_outbox.capacity - 2) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.len < client_outbox.capacity - 2) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
     const reported = client.model.reportedPaneFocus();
@@ -895,8 +999,8 @@ test "workspace handoff reserves its captured paste closing marker" {
     const opening = try harness.nextClientMessage(&buffer);
     try std.testing.expect(opening == .pane_input);
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
-    while (client.outbox.len < client_outbox.capacity - 2) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.len < client_outbox.capacity - 2) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
 
@@ -1228,7 +1332,7 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
     try std.testing.expectEqual(request_count_before, client.requests.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab snapshot consumes an incompatible continuation before rejection" {
@@ -1250,7 +1354,7 @@ test "tab snapshot consumes an incompatible continuation before rejection" {
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectError(error.UnexpectedTabSnapshot, tab_snapshots.apply(client, snapshot));
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab snapshot consumes a mismatched location before rejection" {
@@ -1276,7 +1380,7 @@ test "tab snapshot consumes a mismatched location before rejection" {
     );
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab snapshot consumes correlation before a model rejection" {
@@ -1299,7 +1403,7 @@ test "tab snapshot consumes correlation before a model rejection" {
     );
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "an unexpected workspace snapshot is rejected without effects" {
@@ -1332,7 +1436,7 @@ test "an unexpected workspace snapshot is rejected without effects" {
     try std.testing.expectEqual(request_count_before, client.requests.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "workspace snapshot consumes an incompatible continuation before rejection" {
@@ -1360,7 +1464,7 @@ test "workspace snapshot consumes an incompatible continuation before rejection"
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectError(error.UnexpectedWorkspaceSnapshot, workspace_snapshots.apply(client, snapshot));
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "workspace snapshot consumes a mismatched workspace before rejection" {
@@ -1391,7 +1495,7 @@ test "workspace snapshot consumes a mismatched workspace before rejection" {
     );
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "workspace snapshot consumes correlation before a model rejection" {
@@ -1422,7 +1526,7 @@ test "workspace snapshot consumes correlation before a model rejection" {
     );
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "workspace snapshots commit semantic revisions before presentation" {
@@ -1520,7 +1624,7 @@ test "workspace reconciliation retires removed state and restores the new active
     try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(20)), reportedPaneId(client));
     const version_before_late_snapshot = client.model.version();
     const pending_updates_before_late_snapshot = client.presenter.pending_updates;
-    const outbox_len_before_late_snapshot = client.outbox.len;
+    const outbox_len_before_late_snapshot = client.runtime_transport.outbox.len;
     const request_count_before_late_snapshot = client.requests.count;
     const late_snapshot = try schema.encodeTabSnapshot(&payload, .{
         .request_id = @enumFromInt(3),
@@ -1535,7 +1639,7 @@ test "workspace reconciliation retires removed state and restores the new active
     try std.testing.expectEqual(request_count_before_late_snapshot - 1, client.requests.count);
     try std.testing.expectEqualDeep(version_before_late_snapshot, client.model.version());
     try std.testing.expectEqual(pending_updates_before_late_snapshot, client.presenter.pending_updates);
-    try std.testing.expectEqual(outbox_len_before_late_snapshot, client.outbox.len);
+    try std.testing.expectEqual(outbox_len_before_late_snapshot, client.runtime_transport.outbox.len);
     try std.testing.expect(client.requests.take(@enumFromInt(90)).? == .ignored);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try harness.settle();
@@ -1573,7 +1677,7 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     const first = try harness.nextClientMessage(&buffer);
     try std.testing.expect(first == .request_workspace_snapshot);
     try std.testing.expect(client.requests.has(.workspace_snapshot));
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
@@ -1595,7 +1699,7 @@ test "resync rejects a workspace other than the current projection" {
     );
     try std.testing.expectEqual(next_request_id, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "resync keeps a closed bookmark forgotten when predecessor handoff is blocked" {
@@ -1622,7 +1726,7 @@ test "resync keeps a closed bookmark forgotten when predecessor handoff is block
         client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
     );
     try std.testing.expectEqual(@as(usize, 1), client.requests.count);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
 }
 
@@ -1917,7 +2021,7 @@ test "pane focus commits before reports resize and presentation" {
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(!handler.redraw);
 }
 
@@ -2047,7 +2151,7 @@ test "pane resize publishes committed geometry before presentation" {
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expect(!handler.redraw);
 }
@@ -2224,7 +2328,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expectEqual(pending_updates_before_collapse, client.presenter.pending_updates);
     try std.testing.expect(!client.view.dirty);
     try std.testing.expect(!handler.redraw);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try client.observeModel();
 
@@ -2242,7 +2346,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expectEqual(version_before_expand.chrome + 1, client.model.version().chrome);
     try std.testing.expectEqual(pending_updates_before_expand, client.presenter.pending_updates);
     try std.testing.expect(!handler.redraw);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try client.observeModel();
 
@@ -2430,7 +2534,7 @@ test "a failed split never resizes the tab selected afterwards" {
 
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
 
-    try std.testing.expectEqual(@as(u8, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
     try expectOnlyNotificationVersionChanged(version_before, client.model.version());
 }
 
@@ -2459,7 +2563,7 @@ test "a failed split for a retired target is silent" {
 
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(failed));
 
-    try std.testing.expectEqual(@as(u8, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
 
@@ -2619,7 +2723,7 @@ test "tab detachment preserves focus reported by another tab" {
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);
     try std.testing.expectEqual(inactive_pane, detached.detach_pane.pane_id);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "a missing pane attachment keeps local membership until a canonical snapshot" {
@@ -2677,7 +2781,7 @@ test "an internal pane attachment failure waits for a later resync" {
     try std.testing.expect(!pane.attached);
     try expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.requests.has(.tab_snapshot));
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(client.notification_scheduler.pending);
 }
 
@@ -2737,7 +2841,7 @@ test "a late failed pane attachment does not notify or draw" {
 
     try std.testing.expectEqual(pending_updates_before_failure, client.presenter.pending_updates);
     try std.testing.expect(!client.notification_scheduler.pending);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "a created workspace bookmarks and replaces the prior layout" {
@@ -2921,7 +3025,7 @@ test "an unexpected tab creation is rejected without effects" {
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab creation consumes an incompatible continuation before rejection" {
@@ -2946,7 +3050,7 @@ test "tab creation consumes an incompatible continuation before rejection" {
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab creation consumes a mismatched workspace before rejection" {
@@ -2973,7 +3077,7 @@ test "tab creation consumes a mismatched workspace before rejection" {
     try std.testing.expectError(error.UnexpectedTabCreated, tab_creations.apply(client, created));
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab lifecycle: created, renamed, moved, closed" {
@@ -3169,7 +3273,7 @@ test "rejected tab creation leaves the active tab attached" {
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(version_before_creation, client.model.version());
     try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "a failed tab creation preserves the current projection and notifies" {
@@ -3220,7 +3324,7 @@ test "an unexpected tab move is rejected without effects" {
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(TestHarness.bootstrap_location.tab_id));
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab move consumes an incompatible continuation before rejection" {
@@ -3339,7 +3443,7 @@ test "pending tab operation suppresses a move request" {
 
     try std.testing.expectEqual(request_count, client.requests.count);
     try std.testing.expectEqual(next_request_id, client.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(@as(?usize, 1), client.model.workspace.indexOf(second.tab_id));
 }
 
@@ -3512,7 +3616,7 @@ test "tab selection offset wraps while full turns remain no-ops" {
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before_selection, client.model.version());
     try std.testing.expectEqual(request_id_before_selection, client.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     _ = try client_actions.apply(handler.client, .{ .select_tab_offset = -1 });
 
@@ -3520,7 +3624,7 @@ test "tab selection offset wraps while full turns remain no-ops" {
     try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(request_id_before_selection + 1, client.next_request_id);
     try std.testing.expect(client.requests.has(.tab_snapshot));
-    try std.testing.expectEqual(@as(usize, 2), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 2), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates_before_selection, client.presenter.pending_updates);
     try std.testing.expect(!handler.redraw);
 
@@ -3547,7 +3651,7 @@ test "pending tab snapshot suppresses tab selection without effects" {
     try std.testing.expect(!client.model.workspace.findPane(second_pane).?.attached);
     try std.testing.expectEqualDeep(version_before_selection, client.model.version());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(!handler.redraw);
 }
 
@@ -3604,8 +3708,8 @@ test "close tab capacity failure preserves attachment and request state" {
     try harness.bootstrap();
     const client = harness.client;
     client.requests = .{};
-    while (client.outbox.len < client_outbox.capacity - 1) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.len < client_outbox.capacity - 1) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
     const focus_before = client.model.reportedPaneFocus();
@@ -3617,7 +3721,7 @@ test "close tab capacity failure preserves attachment and request state" {
         client_actions.apply(handler.client, .close_tab),
     );
 
-    try std.testing.expectEqual(client_outbox.capacity - 1, @as(usize, client.outbox.len));
+    try std.testing.expectEqual(client_outbox.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
@@ -3639,8 +3743,8 @@ test "close tab reserves its focus-out message" {
     const focus_in = try harness.nextClientMessage(&buffer);
     try std.testing.expect(focus_in == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
-    while (client.outbox.len < client_outbox.capacity - 2) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.len < client_outbox.capacity - 2) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
     const reported = client.model.reportedPaneFocus();
@@ -3673,8 +3777,8 @@ test "close tab reserves its captured paste closing marker" {
     const opening = try harness.nextClientMessage(&buffer);
     try std.testing.expect(opening == .pane_input);
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
-    while (client.outbox.len < client_outbox.capacity - 2) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.len < client_outbox.capacity - 2) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
     const next_request_id = client.next_request_id;
@@ -3712,7 +3816,7 @@ test "an unexpected tab closure is rejected without effects" {
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab closure consumes an incompatible continuation before rejection" {
@@ -3839,7 +3943,7 @@ test "inactive tab lifecycle closure changes only the tab collection" {
     try std.testing.expectEqual(pending_updates_before_close, client.presenter.pending_updates);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(second_pane));
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try client.observeModel();
 
@@ -3889,7 +3993,7 @@ test "invalid last tab closure has no semantic or cleanup effects" {
     try std.testing.expect(client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expectEqualDeep(version_before_close, client.model.version());
     try std.testing.expectEqual(pending_updates_before_close, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(client.requests.take(@enumFromInt(90)).? == .tab_snapshot);
 }
 
@@ -4028,7 +4132,7 @@ test "resync forgets the final workspace before exiting" {
         client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
     );
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
 }
@@ -4141,7 +4245,7 @@ test "a frame made stale by detach has no state resources or presentation effect
     try std.testing.expectEqual(@as(u64, 0), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expectEqual(graphics_visible, client.graphics_store.paneVisible(pane.id));
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     if (comptime core.diagnostics.enabled) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
@@ -4177,7 +4281,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     try std.testing.expect(!active.model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try client.observeModel();
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
@@ -4244,7 +4348,7 @@ test "pane foreground invalidates compositions only when the presenter observes 
     try std.testing.expect(!active.model.composition_invalidated);
     try std.testing.expect(!inactive.model.composition_invalidated);
     try std.testing.expect(!client.view.dirty);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try client.observeModel();
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
@@ -4453,7 +4557,7 @@ test "an inactive pane exit retires only inactive state" {
     try std.testing.expect(client.requests.take(@enumFromInt(4)) == null);
     try std.testing.expect(client.requests.take(@enumFromInt(5)).? == .ignored);
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try client.observeModel();
 
@@ -5487,8 +5591,8 @@ test "configuration adoption keeps new ownership after geometry failure" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    while (client.outbox.hasCapacity()) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const adoption = try testingConfigAdoption(1, true);
     const generation = adoption.generation;
@@ -5501,7 +5605,7 @@ test "configuration adoption keeps new ownership after geometry failure" {
     try std.testing.expect(!client.model.sidebarVisible());
     try std.testing.expect(!client.model.paneGaps());
     try std.testing.expect(!client.view.sidebar_requested);
-    try std.testing.expectEqual(@as(usize, client_outbox.capacity), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, client_outbox.capacity), client.runtime_transport.outbox.len);
 }
 
 test "a configuration version alone schedules presenter observation" {
@@ -5629,7 +5733,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.pluginExecution() == null);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) != null);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(client.model.version().notifications > version_before.notifications);
     try std.testing.expect(std.mem.indexOf(
         u8,
@@ -6074,7 +6178,7 @@ test "host resize commits before resources and presents by model version" {
     const pending_after = client.presenter.pending_updates;
     try std.testing.expect((try host_resizes.apply(client, measurement)) == null);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
 }
 
@@ -6084,8 +6188,8 @@ test "host resize retains committed geometry after outbox backpressure" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    while (client.outbox.hasCapacity()) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const pending_updates = client.presenter.pending_updates;
     const measurement: platform.Size = .{
@@ -6108,7 +6212,7 @@ test "host resize retains committed geometry after outbox backpressure" {
     try std.testing.expect(client.presenter.screen.sizeMatches(90, 28));
     try std.testing.expectEqual(@as(u16, 90), client.view.scratch.w);
     try std.testing.expectEqual(@as(u16, 28), client.view.scratch.h);
-    try std.testing.expectEqual(@as(usize, client_outbox.capacity), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, client_outbox.capacity), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 }
 
@@ -6130,7 +6234,7 @@ test "oversized host measurement changes neither model nor capabilities" {
     try std.testing.expectEqualDeep(host_size, client.model.hostSize());
     try std.testing.expectEqualDeep(capabilities, client.model.hostCapabilities());
     try std.testing.expectEqualDeep(client_model.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "terminal pixel response keeps model host geometry authoritative" {
@@ -6367,8 +6471,8 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
         .offset = 0,
     };
     try client.graphics_store.setPaneVisible(pane.id, false);
-    while (client.outbox.hasCapacity()) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = pane.id } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = pane.id } });
     }
     const version = client.model.version();
     const pending_updates = client.presenter.pending_updates;
@@ -6489,8 +6593,8 @@ test "a full outbox keeps copy mode and its selection active" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    while (client.outbox.hasCapacity()) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
     var handler: InputHandler = .{ .client = client };
@@ -6506,7 +6610,7 @@ test "a full outbox keeps copy mode and its selection active" {
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(client.model.copyModeProjection().?.view.anchor != null);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.outbox.len));
+    try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(!handler.redraw);
 }
 
@@ -6614,7 +6718,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
@@ -6644,7 +6748,7 @@ test "an unexpected tab rename is rejected without effects" {
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
 test "tab rename consumes an incompatible continuation before rejection" {
@@ -6876,7 +6980,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
@@ -6893,8 +6997,8 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     const client = harness.client;
     client.requests = .{};
     const version_before_request = client.model.version();
-    while (client.outbox.hasCapacity()) {
-        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
     try std.testing.expect(name_prompts.beginTabRename(client, TestHarness.bootstrap_location.tab_id));
@@ -6905,7 +7009,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.requests.has(.tab_operation));
-    try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.outbox.len));
+    try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
     try expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);

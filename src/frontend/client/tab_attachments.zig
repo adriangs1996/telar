@@ -5,6 +5,7 @@ const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_pastes = @import("pane_pastes.zig");
 
 const Client = @import("client.zig");
+const runtime_transport = @import("runtime_transport.zig");
 const tabs_mod = workspace_capability.tabs;
 
 /// Finishes a captured paste, clears reported focus and then detaches every
@@ -35,7 +36,7 @@ pub fn detach(client: *Client, tab: *tabs_mod.Tab) !void {
             continue;
         }
 
-        try client.enqueue(.{ .detach_pane = .{ .pane_id = pane.id } });
+        try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane.id } });
         _ = client.requests.ignoreAttachment(pane.id);
         try client.graphics_store.setPaneVisible(pane.id, false);
     }

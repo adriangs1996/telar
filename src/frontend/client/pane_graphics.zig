@@ -6,6 +6,7 @@ const client_application = @import("application/root.zig");
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
 const pane_graphics = client_application.pane_graphics;
+const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 
 /// Reconciles one decoded runtime graphics command through the application
@@ -92,11 +93,11 @@ fn applyResources(context: *anyopaque, command: pane_graphics.Command) !pane_gra
 fn requestSnapshot(context: *anyopaque, pane_id: schema.PaneId) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.enqueue(.{ .request_graphics_snapshot = .{ .pane_id = pane_id } });
+    try runtime_transport.enqueue(client, .{ .request_graphics_snapshot = .{ .pane_id = pane_id } });
 }
 
 fn disableShared(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.enqueue(.{ .configure_graphics = .{ .shared = false } });
+    try runtime_transport.enqueue(client, .{ .configure_graphics = .{ .shared = false } });
 }

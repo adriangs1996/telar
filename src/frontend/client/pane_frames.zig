@@ -9,6 +9,7 @@ const pane_focus = @import("pane_focus.zig");
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
 const pane_frame = client_application.pane_frame;
+const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 
 /// Reconciles one decoded runtime frame through the client application
@@ -49,7 +50,7 @@ fn handler(client: *Client) pane_frame.ApplyPaneFrameHandler {
 fn requestSnapshot(context: *anyopaque, recovery: client_model.PaneFrameRecovery) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.enqueue(.{ .request_snapshot = .{
+    try runtime_transport.enqueue(client, .{ .request_snapshot = .{
         .pane_id = recovery.pane_id,
         .known_frame_id = recovery.known_frame_id,
     } });

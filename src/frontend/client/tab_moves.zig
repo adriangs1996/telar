@@ -67,13 +67,13 @@ fn tabOperationPending(context: *anyopaque) bool {
 fn sendMove(context: *anyopaque, intent: move_tab.TabMoveIntent) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .move_tab = intent.location },
-        .{ .move_tab = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .move_tab = intent.location },
+        .message = .{ .move_tab = .{
             .request_id = request_id,
             .location = intent.location,
             .direction = intent.direction,
         } },
-    );
+    });
 }

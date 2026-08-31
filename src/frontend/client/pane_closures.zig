@@ -60,17 +60,17 @@ fn paneOperationPending(context: *anyopaque) bool {
 fn sendClosure(context: *anyopaque, closure: client_model.PaneClosure) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .close_pane = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .close_pane = .{
             .pane_id = closure.pane_id,
             .location = closure.location,
         } },
-        .{ .close_pane = .{
+        .message = .{ .close_pane = .{
             .request_id = request_id,
             .pane_id = closure.pane_id,
         } },
-    );
+    });
 }
 
 fn applyExitEffects(context: *anyopaque, transition: client_model.PaneExit) !void {

@@ -4,6 +4,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
+const runtime_transport = @import("runtime_transport.zig");
 const set_pane_viewport = client_application.set_pane_viewport;
 
 pub const Target = client_model.PaneViewportTarget;
@@ -45,7 +46,7 @@ fn sync(context: *anyopaque, change: client_model.PaneViewportChange) !void {
     }
 
     try client.graphics_store.setPaneVisible(change.pane_id, change.at_bottom);
-    try client.enqueue(.{ .set_pane_viewport = .{
+    try runtime_transport.enqueue(client, .{ .set_pane_viewport = .{
         .pane_id = change.pane_id,
         .offset = change.offset,
     } });

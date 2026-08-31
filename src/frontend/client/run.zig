@@ -11,7 +11,6 @@ const kitty = graphics.kitty;
 const multiplexer = workspace_capability.multiplexer;
 
 const Io = std.Io;
-const schema = core.schema;
 const diagnostics = core.diagnostics;
 const sidebar_animations = @import("sidebar_animations.zig");
 
@@ -21,6 +20,7 @@ const client_telemetry = @import("telemetry.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
+const runtime_transport = @import("runtime_transport.zig");
 const Options = Client.Options;
 const rectSize = multiplexer.rectSize;
 
@@ -87,30 +87,21 @@ pub fn run(
     // itself is torn down.
     defer client.deinit();
 
-    // Declared before the first pane opens, so every attachment the runtime
-    // creates for this session already knows whether it may hand this client
-    // shared memory names instead of pixel chunks.
-    const configure_payload = try schema.encodeConfigureGraphics(client.send_buffer, .{
-        .shared = kitty.clientSupportsSharedMemory(),
-    });
-    try connection.send(io, configure_payload);
-
-    const runtime_state_payload = try schema.encodeRequestRuntimeState(client.send_buffer);
-    try connection.send(io, runtime_state_payload);
-
-    const open_payload = try schema.encodeOpenPane(client.send_buffer, .{
-        .request_id = Client.initial_request_id,
-        .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-        .launch = .{
-            .cwd = options.cwd,
-            .arguments = options.arguments,
+    try client.runtime_transport.bootstrap(io, .{
+        .graphics_shared = kitty.clientSupportsSharedMemory(),
+        .open = .{
+            .request_id = Client.initial_request_id,
+            .size = rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+            .launch = .{
+                .cwd = options.cwd,
+                .arguments = options.arguments,
+            },
         },
     });
-    try connection.send(io, open_payload);
     try client.requests.add(Client.initial_request_id, .{ .initial_open = .{} });
 
     try client.select.concurrent(.resized, Client.waitResize, .{ io, &watcher });
-    try client.select.concurrent(.server, Client.receive, .{ io, connection, client.receive_buffer });
+    try runtime_transport.scheduleRead(client);
     try client.select.concurrent(.capability_timeout, Client.waitCapabilityTimeout, .{io});
     try client_telemetry.start(client);
     try client.scheduleConfigReload();
@@ -128,8 +119,8 @@ pub fn run(
                 .tty = &tty,
                 .watcher = &watcher,
             }),
-            .server => |result| if (try client.handleServerEvent(result)) |status| return status,
-            .sent => |result| try client.handleSentEvent(result),
+            .server => |result| if (try runtime_transport.handleRead(client, result)) |status| return status,
+            .sent => |result| try runtime_transport.handleSent(client, result),
             .draw => |result| try client.handleDrawEvent(result),
             .media_tick => |result| try client.handleMediaTickEvent(result),
             .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),

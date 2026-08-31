@@ -8,6 +8,7 @@ const pane_viewports = @import("pane_viewports.zig");
 const Client = @import("client.zig");
 const copy_mode = client_application.copy_mode;
 const keybind = input_capability.keybind;
+const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 
 /// Enters copy mode on the attached focused pane.
@@ -68,5 +69,5 @@ fn handler(client: *Client) copy_mode.CopyModeHandler {
 fn copySelection(context: *anyopaque, selection: schema.CopySelection) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.enqueue(.{ .copy_selection = selection });
+    try runtime_transport.enqueue(client, .{ .copy_selection = selection });
 }

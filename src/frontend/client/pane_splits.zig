@@ -8,6 +8,7 @@ const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
 
 const Client = @import("client.zig");
+const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 const split_pane = client_application.split_pane;
 const tabs_mod = workspace_capability.tabs;
@@ -73,7 +74,7 @@ fn paneOperationPending(context: *anyopaque) bool {
 
 fn resizePane(context: *anyopaque, resize: client_model.PaneResize) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    try client.enqueue(.{ .pane_resize = .{
+    try runtime_transport.enqueue(client, .{ .pane_resize = .{
         .pane_id = resize.pane_id,
         .size = resize.size,
     } });
@@ -82,15 +83,15 @@ fn resizePane(context: *anyopaque, resize: client_model.PaneResize) !void {
 fn sendSplit(context: *anyopaque, plan: client_model.PaneSplitPlan) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try client.nextId();
-    try client.enqueueRequest(
-        request_id,
-        .{ .split = .{
+    try client.enqueueRequest(.{
+        .request_id = request_id,
+        .continuation = .{ .split = .{
             .target_pane = plan.split.target_pane,
             .location = plan.split.location,
             .axis = plan.split.axis,
             .area = plan.split.area,
         } },
-        .{ .create_pane = .{
+        .message = .{ .create_pane = .{
             .request_id = request_id,
             .location = plan.split.location,
             .size = plan.new_pane_size,
@@ -100,7 +101,7 @@ fn sendSplit(context: *anyopaque, plan: client_model.PaneSplitPlan) !void {
                 .arguments = client.options.arguments,
             },
         } },
-    );
+    });
 }
 
 fn applyConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) !void {
@@ -127,11 +128,11 @@ fn applyConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) 
                 }
             }
 
-            try client.enqueue(.{ .detach_pane = .{ .pane_id = commit.pane_id } });
+            try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = commit.pane_id } });
             try client.graphics_store.setPaneVisible(commit.pane_id, false);
         },
         .stale => {
-            try client.enqueue(.{ .detach_pane = .{ .pane_id = commit.pane_id } });
+            try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = commit.pane_id } });
             const workspace = client.model.workspace.workspace orelse return;
             if (!std.meta.eql(workspace, commit.location.workspace) or
                 client.requests.has(.workspace_snapshot))

@@ -42,7 +42,7 @@ semantic key, routed bytes, paste or mouse report
                          |
                   send effect
                          |
- Client.enqueueInput -> Outbox -> pane_input
+ runtime_transport.enqueueInput -> Outbox -> pane_input
 ```
 
 `InputHandler` classifies attachment-modal, name-prompt, copy-mode, Telar-action
@@ -102,8 +102,10 @@ identity, bounds and presentation path.
 ## Effects and failure policy
 
 `pane_inputs` wires the application ports to the shared `pane_viewports` effect
-and `Client.enqueueInput`. The outbox copies the borrowed bytes, coalesces
-adjacent input for the same pane and preserves protocol order.
+and `runtime_transport.enqueueInput`. The outbox copies the borrowed bytes,
+coalesces adjacent input for the same pane and preserves protocol order. See
+[Client runtime transport](runtime-transport.md) for send-token and
+backpressure ownership.
 
 Validation and key-encoding failures happen before viewport or delivery
 effects. A viewport synchronization failure leaves the committed client
@@ -122,9 +124,9 @@ latency.
 
 Terminal focus reports are deliberately outside this use case. They pass
 through `PaneFocusReportingHandler` and the `pane_focus_reports` adapter, not
-the user-input handler. The adapter uses `Client.enqueueInput`, so focus bytes
-remain outside user-input telemetry and can target the pane that just lost
-focus.
+the user-input handler. The adapter uses `runtime_transport.enqueueInput`, so
+focus bytes remain outside user-input telemetry and can target the pane that
+just lost focus.
 
 ## Presentation and runtime
 

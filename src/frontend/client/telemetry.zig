@@ -3,8 +3,8 @@
 const std = @import("std");
 const core = @import("telar-core");
 const Client = @import("client.zig");
-const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
+const runtime_transport = @import("runtime_transport.zig");
 const kitty = @import("../graphics/root.zig").kitty;
 const pace = @import("../presentation/root.zig").pace;
 
@@ -146,7 +146,7 @@ pub const Snapshot = struct {
     pending_updates: usize,
     draw_pending: bool,
     media_pending: bool,
-    outbox: *const client_outbox.Outbox,
+    outbox: runtime_transport.Snapshot,
     capabilities: client_model.HostCapabilities,
     sidebar_rendering: kitty.ResolvedSidebarRendering,
     lua_used: usize,
@@ -203,12 +203,12 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         state.pending_updates,
         @intFromBool(state.draw_pending),
         @intFromBool(state.media_pending),
-        state.outbox.len,
-        state.outbox.stats.high_water,
-        state.outbox.stats.saturated,
-        state.outbox.stats.coalesced_input,
-        state.outbox.stats.coalesced_resize,
-        state.outbox.stats.coalesced_ack,
+        state.outbox.depth,
+        state.outbox.high_water,
+        state.outbox.saturated,
+        state.outbox.coalesced_input,
+        state.outbox.coalesced_resize,
+        state.outbox.coalesced_ack,
         @tagName(state.capabilities.kitty_graphics),
         @tagName(state.capabilities.kitty_zlib),
         @tagName(state.capabilities.mouse_pixels),
@@ -411,7 +411,7 @@ fn capture(client: *Client, heap: diagnostics.Heap.Snapshot) ?Snapshot {
         .pending_updates = client.presenter.pending_updates,
         .draw_pending = client.presenter.draw_pending,
         .media_pending = client.presenter.media_tick_pending,
-        .outbox = &client.outbox,
+        .outbox = runtime_transport.snapshot(client),
         .capabilities = client.model.hostCapabilities(),
         .sidebar_rendering = client.view.sidebar_rendering,
         .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
@@ -450,7 +450,6 @@ fn writeDiagnostics(io: Io, sink: *diagnostics.Sink, bytes: []const u8) anyerror
 
 test "client telemetry reports lua kitty and heap retained bytes" {
     const io = std.testing.io;
-    var outbox: client_outbox.Outbox = .{};
     const capabilities: client_model.HostCapabilities = .{};
     const pacer: pace.Pacer = .{};
     const metrics: Metrics = .{ .started_ns = 0 };
@@ -469,7 +468,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
             .pending_updates = 0,
             .draw_pending = false,
             .media_pending = true,
-            .outbox = &outbox,
+            .outbox = .{},
             .capabilities = capabilities,
             .sidebar_rendering = .cells,
             .lua_used = 123,

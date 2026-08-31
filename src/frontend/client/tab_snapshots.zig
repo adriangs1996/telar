@@ -97,19 +97,19 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
         const size = tab.model.contentSize(pane.id, client.view.workbench()) orelse
             return error.PaneTooSmall;
         const request_id = try client.nextId();
-        try client.enqueueRequest(
-            request_id,
-            .{ .attach_pane = .{
+        try client.enqueueRequest(.{
+            .request_id = request_id,
+            .continuation = .{ .attach_pane = .{
                 .pane_id = pane.id,
                 .location = tab.location,
             } },
-            .{ .open_pane = .{
+            .message = .{ .open_pane = .{
                 .request_id = request_id,
                 .target = .{ .pane = pane.id },
                 .size = size,
                 .launch = null,
             } },
-        );
+        });
     }
 }
 

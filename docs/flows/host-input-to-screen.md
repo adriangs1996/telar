@@ -29,7 +29,7 @@ ClientModel.planPaneInput -> input.host.encodeKey
       |
 SetPaneViewportHandler(.bottom)
       |
-Client.enqueueInput
+runtime_transport.enqueueInput
       |
 Outbox.encodeNext -> schema.pane_input -> socket
       |
@@ -47,7 +47,7 @@ Server.handlePaneIngestedEvent -> Server.pump
 runtime.encoder.encodeFrame -> schema.pane_frame -> socket
       |
       v
-Client.handleServerEvent -> server_messages -> pane_frames
+runtime_transport.handleRead -> server_messages -> pane_frames
       |
 Client.observeModel -> Presenter.presentDue -> presentation.Screen.flush
       |
@@ -174,9 +174,9 @@ that use case commits the client viewport, updates graphics visibility and
 queues `set_pane_viewport`. The handler then invokes the adapter's send effect,
 which calls, in order:
 
-1. `Client.enqueueInput`;
-2. `client.Outbox.pushInput` in `src/frontend/client/outbox.zig`;
-3. `Client.pumpOutbox`;
+1. `runtime_transport.enqueueInput`;
+2. `Outbox.pushInput` inside `runtime_transport.State`;
+3. `runtime_transport.pump`;
 4. `Outbox.encodeNext`;
 5. `schema.encodePaneInput` in `src/core/schema/root.zig`;
 6. `core.transport.SocketChannel.send` in
@@ -242,9 +242,12 @@ as a replay.
 
 ## 6. Client frame and host presentation
 
-The client socket read completes at `Client.handleServerEvent`. That entrypoint
-decodes the message, accounts flow-control credits, delegates to
-`server_messages.handleServerMessage`, and schedules the next read.
+The client socket read completes at `runtime_transport.handleRead`. That
+entrypoint releases its read token, decodes the message, delegates to
+`server_messages.handleServerMessage`, accounts flow-control credits and
+schedules the next read only for a non-terminal outcome. See
+[Client runtime transport](runtime-transport.md) for buffer ownership, queue
+capacity and socket failure policy.
 
 The `.pane_frame` case delegates through the `pane_frames` adapter and
 `ApplyPaneFrameHandler` to `ClientModel.applyPaneFrame`. The model validates the
@@ -274,8 +277,8 @@ The `.draw` event calls `Client.handleDrawEvent`, then `Client.presentDue` and
 - `src/frontend/client/host_inputs.zig` proves owned timeout configuration,
   router replacement without duplicate workers and prefix-status projection.
 - `host input reads pause at outbox capacity and resume with one token` in
-  `src/frontend/client/client_test.zig` proves real pipe backpressure, one read
-  token and rearming after routing.
+  `src/frontend/client/client_test.zig` proves bounded backpressure, one real
+  socket completion and one resumed TTY read token.
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
 - The persistent-prefix, invalid-suffix, Escape-cancellation, and global-timeout
