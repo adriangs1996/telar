@@ -16,8 +16,6 @@ pub const std_options: std.Options = .{ .log_level = .err };
 
 const Cli = cli_mod.Cli;
 const ConfigCheckOptions = cli_mod.ConfigCheckOptions;
-const HistoryAction = cli_mod.HistoryAction;
-const HistoryOptions = cli_mod.HistoryOptions;
 const NotificationOptions = cli_mod.NotificationOptions;
 const PluginCommand = cli_mod.PluginCommand;
 const PluginOptions = cli_mod.PluginOptions;
@@ -682,48 +680,6 @@ fn writeTrustStore(
     committed = true;
 }
 
-fn runHistory(init: std.process.Init, options: HistoryOptions) !void {
-    const connector = try RuntimeConnector.init(init, options.socket);
-    var connection = try connector.connectOrStart(.{});
-    defer connection.deinit(init.io);
-
-    var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const scope_value: []const u8 = switch (options.scope) {
-        .cwd => cwd: {
-            const len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
-            break :cwd cwd_buffer[0..len];
-        },
-        .workspace => std.mem.span(options.scope_value.?),
-        .global, .pane => "",
-    };
-    const query = if (options.query) |value| std.mem.span(value) else "";
-
-    var send_buffer: [schema_history_request_size]u8 = undefined;
-    try connection.send(init.io, try core.schema.encodeQueryHistory(&send_buffer, .{
-        .request_id = @enumFromInt(1),
-        .query = query,
-        .scope = options.scope,
-        .scope_value = scope_value,
-        .pane_id = options.pane_id,
-        .failed_only = options.failed_only,
-        .limit = options.limit,
-    }));
-
-    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
-    defer init.gpa.free(receive_buffer);
-    const response = try core.schema.decodeServer(
-        try connection.receive(init.io, receive_buffer),
-    );
-    switch (response) {
-        .history_results => |results| try printHistory(init.io, results),
-        .request_failed => |failure| {
-            std.debug.print("telar history: {s}\n", .{failure.message});
-            return error.HistoryQueryFailed;
-        },
-        else => return error.UnexpectedRuntimeResponse,
-    }
-}
-
 fn runNotification(init: std.process.Init, options: NotificationOptions) !void {
     const connector = try RuntimeConnector.init(init, options.socket);
     var connection = connector.connect() catch |err| switch (err) {
@@ -771,88 +727,6 @@ fn runNotification(init: std.process.Init, options: NotificationOptions) !void {
         },
         else => return error.UnexpectedRuntimeResponse,
     }
-}
-
-const schema_history_request_size = core.schema.max_history_query_bytes +
-    core.schema.max_cwd_bytes + 64;
-
-fn printHistory(io: Io, results: core.schema.HistoryResultsView) !void {
-    var output_buffer: [16 * 1024]u8 = undefined;
-    var output = File.stdout().writerStreaming(io, &output_buffer);
-    const writer = &output.interface;
-    var entries = results.entries();
-    while (try entries.next()) |entry| {
-        const timestamp = utcTimestamp(entry.started_at_ms);
-        try writer.print(
-            "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}Z  ",
-            .{
-                timestamp.year,
-                timestamp.month,
-                timestamp.day,
-                timestamp.hour,
-                timestamp.minute,
-                timestamp.second,
-            },
-        );
-        switch (entry.status) {
-            .interrupted => try writer.writeAll("INT  "),
-            .completed => if (entry.exit_code) |exit_code| {
-                if (exit_code < 0)
-                    try writer.print("-{d}  ", .{@as(u64, @intCast(-@as(i64, exit_code)))})
-                else
-                    try writer.print("{d}  ", .{@as(u32, @intCast(exit_code))});
-            } else {
-                try writer.writeAll("?  ");
-            },
-        }
-        const duration_ms: u64 = @intCast(@max(
-            @as(i64, 0),
-            @divTrunc(entry.duration_ns, std.time.ns_per_ms),
-        ));
-        try writer.print("{d}ms  ", .{duration_ms});
-        try writeHistoryField(writer, entry.cwd);
-        try writer.writeAll("  ");
-        try writeHistoryField(writer, entry.command);
-        try writer.writeByte('\n');
-    }
-    try writer.flush();
-}
-
-const UtcTimestamp = struct {
-    year: u16,
-    month: u8,
-    day: u8,
-    hour: u8,
-    minute: u8,
-    second: u8,
-};
-
-fn utcTimestamp(milliseconds: i64) UtcTimestamp {
-    const seconds: u64 = @intCast(@max(@as(i64, 0), @divFloor(milliseconds, 1000)));
-    const epoch = std.time.epoch.EpochSeconds{ .secs = seconds };
-    const year_day = epoch.getEpochDay().calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const day_seconds = epoch.getDaySeconds();
-    return .{
-        .year = year_day.year,
-        .month = @intFromEnum(month_day.month),
-        .day = month_day.day_index + 1,
-        .hour = day_seconds.getHoursIntoDay(),
-        .minute = day_seconds.getMinutesIntoHour(),
-        .second = day_seconds.getSecondsIntoMinute(),
-    };
-}
-
-fn writeHistoryField(writer: *Io.Writer, value: []const u8) !void {
-    for (value) |byte| switch (byte) {
-        '\n' => try writer.writeAll("\\n"),
-        '\r' => try writer.writeAll("\\r"),
-        '\t' => try writer.writeAll("\\t"),
-        else => if (byte < 0x20 or byte == 0x7f)
-            try writer.print("\\x{x:0>2}", .{byte})
-        else
-            try writer.writeByte(byte),
-    };
 }
 
 const usage =
@@ -941,7 +815,7 @@ pub fn main(init: std.process.Init) !void {
         .help => try File.stdout().writeStreamingAll(init.io, usage),
         .version => try File.stdout().writeStreamingAll(init.io, "telar " ++ version ++ "\n"),
         .server => |options| try runServer(init, options),
-        .history => |options| try runHistory(init, options),
+        .history => |options| try cli_mod.history.run(init, options),
         .notification => |options| try runNotification(init, options),
         .config_check => |options| try runConfigCheck(init, options),
         .plugin_worker => |options| try frontend.plugins.runWorker(
@@ -964,11 +838,4 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(code);
         },
     }
-}
-
-test "history fields escape terminal control bytes" {
-    var storage: [128]u8 = undefined;
-    var writer = Io.Writer.fixed(&storage);
-    try writeHistoryField(&writer, "echo\n\x1b[31m");
-    try std.testing.expectEqualStrings("echo\\n\\x1b[31m", writer.buffered());
 }
