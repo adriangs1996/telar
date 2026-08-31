@@ -2,10 +2,6 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agent_mod = @import("../../agent/root.zig");
-const coordinators = @import("coordinators/root.zig");
-const agent_description_coordinator = coordinators.agent_description;
-const agent_maintenance_coordinator = coordinators.agent_maintenance;
 const agent_process = @import("../../process/root.zig");
 const history = @import("../../history/root.zig");
 const event_entrypoints = @import("../entrypoints/events/root.zig");
@@ -16,6 +12,7 @@ const client_store = client_runtime.store;
 const runtime_config = @import("../config.zig");
 const runtime_event = @import("../event.zig");
 const event_sources = @import("../event_sources.zig");
+const agent_event_dispatcher = @import("event_dispatcher/agent.zig");
 const client_event_dispatcher = @import("event_dispatcher/client.zig");
 const history_event_dispatcher = @import("event_dispatcher/history.zig");
 const request_dispatch = @import("request_dispatch.zig");
@@ -31,7 +28,6 @@ const pane_output_pipeline = pane_events.output;
 const pane_response_pump = pane_events.response;
 const pane_mod = @import("../../pane/root.zig");
 const media_mod = @import("../../media/root.zig");
-const proxy_observation_adapter = event_entrypoints.proxy_observation;
 const observability = @import("../observability/root.zig");
 const system_metrics_mod = observability.system_metrics;
 const system_metrics_coordinator = observability.system_metrics_coordinator;
@@ -65,6 +61,7 @@ const ClientSession = client_session.Session;
 /// const Actors = Bindings(Application);
 /// ```
 pub fn Bindings(comptime Application: type) type {
+    const AgentEvents = agent_event_dispatcher.Dispatcher(Application);
     const ClientEvents = client_event_dispatcher.Dispatcher(Application);
     const HistoryEvents = history_event_dispatcher.Dispatcher(Application);
 
@@ -95,16 +92,13 @@ pub fn Bindings(comptime Application: type) type {
                     try HistoryEvents.handle(application, result);
                 },
                 .proxy_event => |result| {
-                    var adapter = proxyObservationAdapter(application);
-                    try adapter.handle(result);
+                    try AgentEvents.handleProxyObservation(application, result);
                 },
                 .agent_tick => |result| {
-                    var coordinator = agentMaintenanceCoordinator(application);
-                    try coordinator.handle(result);
+                    try AgentEvents.handleMaintenance(application, result);
                 },
                 .agent_description => |result| {
-                    var coordinator = agentDescriptionCoordinator(application);
-                    coordinator.handle(result);
+                    AgentEvents.handleDescription(application, result);
                 },
                 .metrics_tick => |result| {
                     var coordinator = systemMetricsCoordinator(application);
@@ -390,68 +384,6 @@ pub fn Bindings(comptime Application: type) type {
             application.revokePaneCredential(pane);
         }
 
-        const agent_description_runtime_port: agent_description_coordinator.RuntimePort(Application) = .{
-            .start = startAgentDescription,
-            .persist = persistAgentDescription,
-            .pump_clients = pumpRuntimeClients,
-        };
-
-        const RuntimeAgentDescriptionCoordinator = agent_description_coordinator.Coordinator(Application, agent_description_runtime_port);
-
-        fn agentDescriptionCoordinator(application: *Application) RuntimeAgentDescriptionCoordinator {
-            const command: ?agent_mod.description.Command = if (application.agent_description_options) |options|
-                .{ .arguments = options.arguments, .timeout_ms = options.timeout_ms }
-            else
-                null;
-
-            return RuntimeAgentDescriptionCoordinator.init(application, .{
-                .agents = &application.model.agents,
-                .state = &application.agent_description_state,
-                .command = command,
-            });
-        }
-
-        fn startAgentDescription(application: *Application, command: agent_mod.description.Command, job_value: agent_mod.description.Job) !void {
-            var job = job_value;
-            defer std.crypto.secureZero(u8, &job.query);
-
-            try application.select.concurrent(
-                .agent_description,
-                agent_mod.description.generate,
-                .{ application.io, application.gpa, .{ .command = command, .job = job } },
-            );
-        }
-
-        fn persistAgentDescription(application: *Application, finished: agent_mod.DescriptionFinished) void {
-            _ = application.history_service.setSessionTitle(application.io, .{
-                .id = finished.session_id,
-                .title = finished.titleSlice(),
-                .source = finished.source,
-                .state = finished.state,
-            });
-        }
-
-        const agent_maintenance_runtime_port: agent_maintenance_coordinator.RuntimePort(Application) = .{
-            .rearm_tick = rearmAgentMaintenance,
-            .now_ms = runtimeWallClockMs,
-            .pump_clients = pumpRuntimeClients,
-        };
-
-        const RuntimeAgentMaintenanceCoordinator = agent_maintenance_coordinator.Coordinator(Application, agent_maintenance_runtime_port);
-
-        fn agentMaintenanceCoordinator(application: *Application) RuntimeAgentMaintenanceCoordinator {
-            return RuntimeAgentMaintenanceCoordinator.init(application, .{ .agents = &application.model.agents });
-        }
-
-        fn rearmAgentMaintenance(application: *Application) !void {
-            var sources = eventSources(application);
-            try sources.waitForAgentMaintenance();
-        }
-
-        fn runtimeWallClockMs(application: *Application) i64 {
-            return Io.Timestamp.now(application.io, .real).toMilliseconds();
-        }
-
         const system_metrics_runtime_port: system_metrics_coordinator.RuntimePort(Application) = .{
             .rearm_tick = rearmSystemMetrics,
             .sample = sampleSystemMetrics,
@@ -471,27 +403,6 @@ pub fn Bindings(comptime Application: type) type {
 
         fn sampleSystemMetrics(_: *Application, sampler: *system_metrics_mod.Sampler) void {
             sampler.sample();
-        }
-
-        const proxy_observation_runtime_port: proxy_observation_adapter.RuntimePort(Application) = .{
-            .rearm_receive = rearmProxyObservation,
-            .schedule_description = scheduleAgentDescriptionWork,
-            .pump_clients = pumpRuntimeClients,
-        };
-
-        const RuntimeProxyObservationAdapter = proxy_observation_adapter.Adapter(Application, proxy_observation_runtime_port);
-
-        fn proxyObservationAdapter(application: *Application) RuntimeProxyObservationAdapter {
-            return RuntimeProxyObservationAdapter.init(application, .{
-                .panes = &application.model.panes,
-                .agents = &application.model.agents,
-                .metrics = &application.metrics,
-            });
-        }
-
-        fn rearmProxyObservation(application: *Application) !void {
-            var sources = eventSources(application);
-            try sources.receiveProxyObservation(application.proxy_runtime);
         }
 
         const telemetry_tick_runtime_port: telemetry_tick_coordinator.RuntimePort(Application) = .{
@@ -586,7 +497,7 @@ pub fn Bindings(comptime Application: type) type {
         const pane_observation_runtime_port: pane_observation_coordinator.RuntimePort(Application) = .{
             .start = startPaneObservation,
             .publish_sound = publishObservedAgentSound,
-            .schedule_description = scheduleAgentDescriptionWork,
+            .schedule_description = AgentEvents.scheduleDescription,
             .collect = collectPaneLifecycle,
             .pump_clients = pumpRuntimeClients,
         };
@@ -627,11 +538,6 @@ pub fn Bindings(comptime Application: type) type {
 
         fn publishObservedAgentSound(application: *Application, notification: schema.AgentSoundNotification) void {
             application.publishAgentSound(notification);
-        }
-
-        fn scheduleAgentDescriptionWork(application: *Application) void {
-            var coordinator = agentDescriptionCoordinator(application);
-            _ = coordinator.schedule();
         }
 
         const pane_media_runtime_port: pane_media_coordinator.RuntimePort(Application) = .{
