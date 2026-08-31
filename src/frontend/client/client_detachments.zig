@@ -1,7 +1,13 @@
 //! Detaches every runtime pane attachment owned by one client.
 
+const core = @import("telar-core");
+const client_application = @import("application/root.zig");
+
 const Client = @import("client.zig");
 const tab_attachments = @import("tab_attachments.zig");
+
+const client_detachment = client_application.client_detachment;
+const schema = core.schema;
 
 /// Detaches every tab in stable client order before the event loop exits.
 ///
@@ -9,8 +15,16 @@ const tab_attachments = @import("tab_attachments.zig");
 /// try apply(client);
 /// ```
 pub fn apply(client: *Client) !void {
-    var tabs = client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        try tab_attachments.detach(client, tab.location);
-    }
+    var use_case: client_detachment.DetachClientHandler = .{
+        .model = &client.model,
+        .effects = .{ .context = client, .detach_tab = detachTab },
+    };
+
+    try use_case.execute();
+}
+
+fn detachTab(raw_context: *anyopaque, location: schema.TabLocation) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    try tab_attachments.detach(client, location);
 }

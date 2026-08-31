@@ -12,6 +12,8 @@ client_actions.apply
         |
 client_detachments.apply
         |
+DetachClientHandler
+        |
 RetireTabAttachmentsHandler for every tab identity
         |
 finish captured paste -> report focus-out -> detach_pane messages
@@ -21,12 +23,14 @@ mark local attachments hidden and detached
 return Control.stop
 ```
 
-`client_detachments.apply` iterates tab identities in their stable client
-order. Each identity enters `RetireTabAttachmentsHandler`, which finishes a
-captured bracketed paste and reports focus-out before it enqueues that tab's
-`detach_pane` messages. Pending attachment requests are retired so a late
-confirmation cannot restore client ownership. `ClientModel` validates and
-commits the fixed detachment plan only after every effect succeeds.
+`DetachClientHandler` captures every current `TabLocation` in stable client
+order before the first effect, then delivers each identity through one port.
+`client_detachments.apply` supplies that port by composing
+`RetireTabAttachmentsHandler`, which finishes a captured bracketed paste and
+reports focus-out before it enqueues that tab's `detach_pane` messages. Pending
+attachment requests are retired so a late confirmation cannot restore client
+ownership. `ClientModel` validates and commits the fixed detachment plan only
+after every per-tab effect succeeds.
 
 The operation advances no `ClientModel.Version` and schedules no frame. The
 event loop exits after every detach enters the bounded runtime outbox. Client
@@ -42,7 +46,10 @@ panes valid.
 
 - `src/frontend/client/application/tab_attachment_retirement.zig` proves
   paste, focus, pane and final model-commit ordering for one tab.
+- `src/frontend/client/application/client_detachment.zig` proves stable
+  whole-client planning, empty state and partial failure behavior.
 - `src/frontend/client/tab_attachments.zig` binds the concrete client effects.
-- `src/frontend/client/client_detachments.zig` owns traversal across all tabs.
+- `src/frontend/client/client_detachments.zig` binds the per-tab retirement
+  port without owning traversal policy.
 - `src/frontend/client/client_test.zig` proves stable multi-tab delivery,
   local attachment cleanup, version silence and the final stop control.
