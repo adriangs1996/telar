@@ -6277,6 +6277,27 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
     ) != null);
 }
 
+test "name prompt suppresses a configured action before source dispatch" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    try std.testing.expect(name_prompts.beginActiveTabRename(client));
+    const version = client.model.version();
+    const outbox_len = client.runtime_transport.outbox.len;
+    var handler: InputHandler = .{ .client = client };
+
+    const control = try handler.action(.toggle_sidebar);
+
+    try std.testing.expect(control == .continue_routing);
+    try std.testing.expect(client.model.name_prompt.active());
+    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    try std.testing.expect(!handler.redraw);
+}
+
 test "Lua callback applies a validated batch through model observation" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -6411,6 +6432,48 @@ test "Lua expression emits semantic keys through pane input" {
     try std.testing.expect(enter == .pane_input);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, enter.pane_input.pane_id);
     try std.testing.expectEqualStrings("\r", enter.pane_input.bytes);
+}
+
+test "Lua expression paste uses pane modes and copy-mode authority" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    const configured = try installTestingLuaBinding(client,
+        \\local telar = require("telar")
+        \\return {
+        \\  api_version = 2,
+        \\  client = { keybindings = {
+        \\    telar.bind_expr({ "x" }, function(ctx)
+        \\      return telar.input.paste("hello")
+        \\    end),
+        \\  } },
+        \\}
+    );
+    const version = client.model.version();
+    var handler: InputHandler = .{ .client = client };
+
+    try std.testing.expectEqual(keybind.Control.continue_routing, try handler.action(configured));
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expect(!handler.redraw);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~", message.pane_input.bytes);
+
+    _ = try client_actions.apply(client, .enter_copy_mode);
+    const copy_version = client.model.version();
+    const outbox_len = client.runtime_transport.outbox.len;
+    try std.testing.expectEqual(keybind.Control.continue_routing, try handler.action(configured));
+
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expectEqualDeep(copy_version, client.model.version());
+    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    try std.testing.expect(!handler.redraw);
 }
 
 test "Lua callback failure commits one diagnostic without direct presentation" {

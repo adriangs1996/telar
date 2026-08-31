@@ -1,5 +1,6 @@
 //! Client application use cases.
 
+pub const action_routing = @import("action_routing.zig");
 pub const attach_pane = @import("attach_pane.zig");
 pub const agent_navigation = @import("agent_navigation.zig");
 pub const agent_sound = @import("agent_sound.zig");
@@ -50,6 +51,7 @@ pub const workspace_list_snapshot = @import("workspace_list_snapshot.zig");
 pub const workspace_snapshot = @import("workspace_snapshot.zig");
 
 test {
+    _ = action_routing;
     _ = attach_pane;
     _ = agent_navigation;
     _ = agent_sound;

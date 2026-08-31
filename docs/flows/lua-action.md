@@ -11,6 +11,8 @@ configured binding
       |
 keybind.Router -> InputHandler.action
       |
+action_routing -> ActionRoutingHandler
+      |
 lua_actions.execute
       |
 LuaActionHandler
@@ -23,7 +25,7 @@ client-owned Generation.invokeCallback / invokeExpression
       |                                  |
       |                         client_actions / plugin_actions
       |
-      +-- expression --> InputDecision --> InputHandler.key / pane_inputs
+      +-- expression --> InputDecision --> key_routing / pane_inputs
       |
       +-- failure --> ClientModel.replaceDiagnostic
                                |
@@ -32,11 +34,11 @@ client-owned Generation.invokeCallback / invokeExpression
                     presentation_lifecycle.observe -> Presenter
 ```
 
-`InputHandler` classifies the routed action and later translates an expression
-decision into semantic keys or paste. It does not access the Lua generation,
-plugin registry or diagnostic buffer. Built-in effects reuse
-`client_actions.apply`. Plugin effects reuse the separate asynchronous
-[`pluginAction`](plugin-action.md) slice.
+`InputHandler` only delegates the routed value. `ActionRoutingHandler`
+classifies its source and translates an expression decision into semantic keys
+or paste. It does not access the Lua generation, plugin registry or diagnostic
+buffer. Built-in effects reuse `client_actions.apply`. Plugin effects reuse
+the separate asynchronous [`pluginAction`](plugin-action.md) slice.
 
 ## State and ownership
 
@@ -81,16 +83,16 @@ the sequence.
 
 An expression returns `consume`, `forward_binding`, semantic keys or bounded
 paste. After a successful invocation, the application handler clears any older
-diagnostic and returns the value to `InputHandler`. Keys pass through
-`InputHandler.key` and `KeyRoutingHandler`; paste passes through
-`pane_inputs.expressionPaste`. Both use
-the focused child's acknowledged terminal modes and the existing pane-input
-target checks.
+diagnostic and returns the value to `ActionRoutingHandler`. Keys pass through
+`key_routing` and `KeyRoutingHandler`; paste passes through
+`pane_inputs.expressionPaste`. Both use the focused child's acknowledged
+terminal modes and the existing pane-input target checks.
 
 An expression does not return a terminal-encoding result. The client encodes
 semantic keys after Lua returns, while paste follows the child's bracketed
-paste mode. Copy mode and prompts keep their existing input ownership because
-the returned decision re-enters the normal semantic routing methods.
+paste mode. A name prompt suppresses the configured action before Lua runs.
+Copy mode receives returned keys through normal key routing and suppresses a
+returned paste before pane delivery.
 
 ## Failure and bounds
 
@@ -121,8 +123,11 @@ authority.
 - `src/frontend/client/application/lua_action.zig` proves invocation,
   validate-before-apply order, diagnostic order, sequential exit and failure
   classification.
+- `src/frontend/client/application/action_routing.zig` proves source
+  classification, router control, semantic-key reinjection and copy-mode paste
+  suppression without VM knowledge.
 - `src/frontend/config/root.zig` proves immutable context, callback quotas,
   bounded result parsing and semantic input construction.
 - `src/frontend/client/client_test.zig` proves real VM evaluation, complete
-  plugin prevalidation, semantic key delivery and presenter observation of
-  callback failures.
+  plugin prevalidation, semantic key and bracketed-paste delivery, copy-mode
+  suppression and presenter observation of callback failures.

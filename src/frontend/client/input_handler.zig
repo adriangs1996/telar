@@ -7,15 +7,12 @@ const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
-const client_actions = @import("actions.zig");
+const action_routing = @import("action_routing.zig");
 const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const key_routing = @import("key_routing.zig");
-const lua_actions = @import("lua_actions.zig");
-const pane_inputs = @import("pane_inputs.zig");
 const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 const paste_routing = @import("paste_routing.zig");
-const plugin_actions = @import("plugin_actions.zig");
 const view_interactions = @import("view_interactions.zig");
 const action_mod = input_capability.action;
 const keybind = input_capability.keybind;
@@ -66,14 +63,6 @@ pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
 pub fn key(handler: *InputHandler, value: keybind.Key) !void {
     const outcome = try key_routing.apply(handler.client, .{ .key = value });
     handler.redraw = handler.redraw or outcome.redraw;
-}
-
-fn sendPaste(handler: *InputHandler, text: []const u8) !void {
-    if (handler.client.model.copyModeActive()) {
-        return;
-    }
-
-    _ = try pane_inputs.expressionPaste(handler.client, text);
 }
 
 pub fn pasteStart(handler: *InputHandler) !void {
@@ -142,38 +131,5 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
 }
 
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
-    if (handler.client.model.name_prompt.active()) {
-        return .continue_routing;
-    }
-
-    switch (value) {
-        .lua_callback => |reference| return handler.applyLuaAction(.{ .callback = reference }),
-        .lua_expr => |reference| return handler.applyLuaAction(.{ .expression = reference }),
-        .plugin => |requested| {
-            _ = try plugin_actions.start(
-                handler.client,
-                requested,
-                handler.client.model.callbackContext(),
-            );
-            return .continue_routing;
-        },
-        else => return client_actions.apply(handler.client, value),
-    }
-}
-
-fn applyLuaAction(handler: *InputHandler, command: lua_actions.Command) !keybind.Control {
-    const outcome = try lua_actions.execute(handler.client, command);
-    switch (outcome) {
-        .applied, .unavailable, .invocation_failed, .validation_failed => return .continue_routing,
-        .exit => return .stop,
-        .input => |decision| switch (decision) {
-            .consume => {},
-            .forward_binding, .keys => |keys| for (keys.slice()) |key_value| {
-                try handler.key(key_value);
-            },
-            .paste => |paste| try handler.sendPaste(paste.slice()),
-        },
-    }
-
-    return .continue_routing;
+    return action_routing.apply(handler.client, value, &handler.redraw);
 }

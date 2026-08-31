@@ -21,13 +21,13 @@ keybind.Router.feed -> term.parse -> Router.routeKey
       v                                                      v
 InputHandler.key / forward / mouse                 InputHandler.action
       |                                                      |
-key_routing / pane_mouse_inputs                  native / Lua / plugin action
+key_routing / pane_mouse_inputs                 action_routing adapter
       |                                                      |
-application owner handler                         consumed by Telar
+application owner handler                     ActionRoutingHandler
       |                                                      |
-pane_inputs when child-owned
-      |
-PaneInputHandler
+pane_inputs when child-owned                  native / Lua / plugin action
+      |                                                      |
+PaneInputHandler                                      consumed by Telar
       |
 ClientModel.planPaneInput -> input.host.encodeKey
       |
@@ -108,7 +108,9 @@ A complete configured sequence returns `.action` from `Router.routeKey`.
 `Router.drain` calls `InputHandler.action` in
 `src/frontend/client/input_handler.zig`; it does not forward the matched bytes.
 
-`InputHandler.action` classifies three action sources:
+`InputHandler.action` delegates the matched value and its redraw accumulator to
+`action_routing`. The adapter snapshots prompt and copy-mode authority, then
+`ActionRoutingHandler` classifies three action sources:
 
 - built-in actions go to the shared `client_actions.apply` dispatcher;
 - explicit Lua callbacks go through `lua_actions` and `LuaActionHandler`, then
@@ -116,6 +118,12 @@ A complete configured sequence returns `.action` from `Router.routeKey`.
 - plugin actions enter `plugin_actions.start`, then apply a current authorized
   semantic batch through the same dispatcher after `.plugin_result`. See
   [Plugin action](plugin-action.md) for its lifecycle and authority checks.
+
+An active name prompt suppresses every source before its first effect. A Lua
+expression may return semantic keys or bounded paste. Keys re-enter
+`KeyRoutingHandler`; paste enters `PaneInputHandler` only when copy mode is not
+active. The adapter retains no returned slice after the synchronous call and
+preserves redraw from each successful re-entered key.
 
 The Lua branch does not expose the VM, registry or diagnostic storage to input
 routing. See [Lua action](lua-action.md) for callback context, complete batch
@@ -341,6 +349,12 @@ The `.draw` event calls `presentation_lifecycle.handleDraw`, then
   socket completion and one resumed TTY read token.
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
+- `src/frontend/client/application/action_routing.zig` proves prompt
+  suppression, source selection, Lua router control, input reinjection and
+  selected-effect failure ordering.
+- The configured-action, Lua key and Lua paste tests in
+  `src/frontend/client/client_test.zig` prove the adapter against prompt,
+  copy-mode and acknowledged pane-mode authority.
 - The persistent-prefix, invalid-suffix, Escape-cancellation, and global-timeout
   tests in the same file prove that prefix mode has no timing window without
   changing global multi-key sequence recovery.

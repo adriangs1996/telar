@@ -34,6 +34,7 @@ const mouseTracked = mouse_protocol.tracked;
 
 test {
     // The client capability's own files, collected for the suite.
+    _ = @import("action_routing.zig");
     _ = @import("application/root.zig");
     _ = @import("actions.zig");
     _ = @import("agent_navigation.zig");

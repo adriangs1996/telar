@@ -12,6 +12,8 @@ configured plugin action
         |
 InputHandler.action
         |
+action_routing -> ActionRoutingHandler
+        |
 plugin_actions.start
         |
 StartPluginActionHandler
@@ -36,6 +38,10 @@ presentation_lifecycle.observe -> Presenter
 ```
 
 ## Start ownership and order
+
+`ActionRoutingHandler` selects the plugin start port after prompt authority has
+accepted the configured action. It does not resolve a package, reserve model
+state or schedule work.
 
 `plugin_actions.start` adapts the configured stable plugin and action IDs to
 `StartPluginActionHandler`. The application handler owns this order:
@@ -105,6 +111,8 @@ presenter compare versions and schedule at most the required paced frame.
 - `src/frontend/client/application/plugin_action.zig` proves prepare/commit/
   schedule order, rollback, stale suppression, completion ordering and failure
   classification.
+- `src/frontend/client/application/action_routing.zig` proves that configured
+  plugin values select only the asynchronous start port.
 - `src/frontend/client/client_test.zig` proves authorized application through
   presenter observation, stale-result suppression, capability denial, worker
   failure, unmatched identities and busy-start behavior on a real client.
