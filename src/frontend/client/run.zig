@@ -23,6 +23,7 @@ const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
 const presentation_lifecycle = @import("presentation_lifecycle.zig");
+const plugin_actions = @import("plugin_actions.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const Options = Client.Options;
@@ -129,7 +130,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             .telemetry_tick => |result| client_telemetry.handleTick(client, result, heap.snapshot()),
             .telemetry_written => |result| client_telemetry.handleWritten(client, result),
             .config_reload => |result| _ = try config_reloads.handle(client, result),
-            .plugin_result => |result| if (try client.handlePluginResultEvent(result)) return 0,
+            .plugin_result => |result| if (try plugin_actions.complete(client, result)) return 0,
             .clipboard_image => |result| try client.handleClipboardImageEvent(result),
         }
 

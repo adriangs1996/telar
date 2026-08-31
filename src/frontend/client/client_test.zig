@@ -5839,7 +5839,7 @@ test "plugin completion applies one authorized batch through model observation" 
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
 
-    const exit = try client.handlePluginResultEvent(.{
+    const exit = try plugin_actions.complete(client, .{
         .execution_id = execution.id,
         .result = plugin_broker.WorkerResult{
             .package_index = 0,
@@ -5882,7 +5882,7 @@ test "plugin completion from an old configuration is consumed without effects" {
     const version_after_reload = client.model.version();
     const pending_before = client.presenter.pending_updates;
 
-    const exit = try client.handlePluginResultEvent(.{
+    const exit = try plugin_actions.complete(client, .{
         .execution_id = execution.id,
         .result = plugin_broker.WorkerResult{
             .package_index = 0,
@@ -5914,7 +5914,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     const version_before = client.model.version();
     const pending_before = client.presenter.pending_updates;
 
-    const exit = try client.handlePluginResultEvent(.{
+    const exit = try plugin_actions.complete(client, .{
         .execution_id = execution.id,
         .result = plugin_broker.WorkerResult{
             .package_index = 0,
@@ -5948,14 +5948,14 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
     const client = harness.client;
     const execution = (try client.model.beginPluginExecution()).?;
 
-    try std.testing.expect(!try client.handlePluginResultEvent(.{
+    try std.testing.expect(!try plugin_actions.complete(client, .{
         .execution_id = @enumFromInt(@intFromEnum(execution.id) + 1),
         .result = error.TestPluginWorkerFailure,
     }));
     try std.testing.expectEqualDeep(execution, client.model.pluginExecution().?);
     try std.testing.expect(client.model.diagnostic() == null);
 
-    try std.testing.expect(!try client.handlePluginResultEvent(.{
+    try std.testing.expect(!try plugin_actions.complete(client, .{
         .execution_id = execution.id,
         .result = error.TestPluginWorkerFailure,
     }));

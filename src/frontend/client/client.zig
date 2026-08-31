@@ -260,11 +260,6 @@ pub fn handleClipboardImageEvent(client: *Client, completion: clipboard_images.C
     try clipboard_images.complete(client, completion);
 }
 
-/// Entrypoint for one finished plugin action: authorize and apply its effects.
-pub fn handlePluginResultEvent(client: *Client, completion: plugin_actions.Completion) !bool {
-    return plugin_actions.complete(client, completion);
-}
-
 pub fn monotonic(io: Io) u64 {
     const timestamp = Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));
