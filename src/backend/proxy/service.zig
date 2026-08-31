@@ -5,9 +5,7 @@ const core = @import("telar-core");
 const diagnostics = core.diagnostics;
 const ca = @import("ca.zig");
 const connection_admission = @import("connection_admission.zig");
-const connect_authentication = @import("connect_authentication.zig");
 const credential_registry = @import("credential_registry.zig");
-const http = @import("http/root.zig");
 const identity = @import("identity.zig");
 const metrics_mod = @import("metrics.zig");
 const middleware = @import("middleware.zig");
@@ -15,10 +13,7 @@ const observation_queue = @import("observation_queue.zig");
 const passthrough_policy = @import("passthrough_policy.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
-const tunnel_exchange = @import("tunnel/exchange.zig");
-const tunnel_h2 = @import("tunnel/h2.zig");
-const tunnel_http1 = @import("tunnel/http1.zig");
-const tunnel_tls = @import("tunnel/tls.zig");
+const tunnel_mod = @import("tunnel/root.zig");
 
 const Io = std.Io;
 const net = Io.net;
@@ -182,12 +177,6 @@ const connection_admission_port: connection_admission.Port(Service, net.Stream) 
 
 const ConnectionAdmission = connection_admission.Runner(Service, net.Stream, connection_admission_port);
 
-const connect_credential_port: connect_authentication.CredentialPort(Service) = .{
-    .contains = containsCredential,
-};
-
-const ConnectAuthentication = connect_authentication.Command(Service, connect_credential_port);
-
 fn acceptConnection(service: *Service) !net.Stream {
     return service.listener.accept(service.io);
 }
@@ -197,7 +186,32 @@ fn acquireConnection(service: *Service) bool {
 }
 
 fn startConnection(service: *Service, connections: *Io.Group, stream: net.Stream) !void {
-    try connections.concurrent(service.io, tunnel, .{ service, stream });
+    try connections.concurrent(service.io, serveConnection, .{ service, stream });
+}
+
+fn serveConnection(service: *Service, stream: net.Stream) Io.Cancelable!void {
+    defer service.connection_slots.release();
+
+    var tunnel = tunnel_mod.Tunnel.init(.{
+        .dependencies = .{
+            .tls = .{
+                .io = service.io,
+                .gpa = service.gpa,
+                .authority = &service.authority,
+                .roots = &service.roots,
+                .passthrough = &service.passthrough_hosts,
+                .telemetry = &service.telemetry,
+            },
+            .credentials = &service.credentials,
+            .pipeline = &service.pipeline,
+            .transforms = &service.transforms,
+            .has_custom_transformers = service.has_custom_transformers,
+            .connection_ids = &service.next_connection_id,
+        },
+        .child = stream,
+    });
+
+    return tunnel.run();
 }
 
 fn releaseConnection(service: *Service) void {
@@ -210,10 +224,6 @@ fn closeConnection(service: *Service, stream: net.Stream) void {
 
 fn cancelConnections(service: *Service, connections: *Io.Group) void {
     connections.cancel(service.io);
-}
-
-fn containsCredential(service: *Service, credential: *const identity.Credential) bool {
-    return service.credentials.contains(service.io, credential);
 }
 
 fn observationCredentialIsLive(context: *anyopaque, credential: *const identity.Credential) bool {
@@ -243,113 +253,6 @@ test "proxy listeners own distinct loopback ports" {
     var second = try listen(io);
     defer second.listener.deinit(io);
     try std.testing.expect(first.port != second.port);
-}
-
-const TunnelContext = tunnel_exchange.Exchange;
-
-fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
-    const path = diagnostics.enter(.observation);
-    defer path.restore();
-    defer {
-        stream.close(service.io);
-        service.connection_slots.release();
-    }
-    var head: [http.max_head_bytes]u8 = undefined;
-    defer std.crypto.secureZero(u8, &head);
-    const head_len = readConnectHead(service.io, stream, &head) orelse return;
-    var authenticated = switch (ConnectAuthentication.execute(service, head[0..head_len])) {
-        .authenticated => |value| value,
-        .rejected => |rejection| {
-            if (rejection.metric) |metric| {
-                recordAuthenticationRejection(service, metric);
-            }
-
-            reply(service.io, stream, rejection.response);
-            return;
-        },
-    };
-    defer std.crypto.secureZero(u8, &authenticated.credential.token);
-    const target = authenticated.target;
-    var context: TunnelContext = .{
-        .io = service.io,
-        .pipeline = &service.pipeline,
-        .telemetry = &service.telemetry,
-        .credential = authenticated.credential,
-        .provider = provider.identify(target.host.bytes),
-        .connection_id = service.next_connection_id.fetchAdd(1, .monotonic),
-        .protocol = .http11,
-    };
-    defer std.crypto.secureZero(u8, &context.credential.token);
-    const upstream = connectUpstream(target.host, service.io, target.port) catch {
-        service.telemetry.record(.upstream_connect_failure);
-        context.publish(.request_failed, 0);
-        reply(service.io, stream, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
-        return;
-    };
-    defer upstream.close(service.io);
-    reply(service.io, stream, "HTTP/1.1 200 Connection Established\r\n\r\n");
-
-    var tls_establisher: tunnel_tls.Establisher = .{
-        .resources = .{
-            .io = service.io,
-            .gpa = service.gpa,
-            .authority = &service.authority,
-            .roots = &service.roots,
-            .passthrough = &service.passthrough_hosts,
-            .telemetry = &service.telemetry,
-        },
-        .exchange = &context,
-    };
-    const route = tls_establisher.establish(.{
-        .host = target.host.bytes,
-        .child = stream,
-        .origin = upstream,
-    }) orelse return;
-
-    var negotiated_h2 = false;
-    const session = switch (route) {
-        .passthrough => {
-            relayPassthrough(service.io, stream, upstream);
-            return;
-        },
-        .http11 => |established| established,
-        .h2 => |established| block: {
-            negotiated_h2 = true;
-            break :block established;
-        },
-    };
-    defer session.deinit();
-
-    context.protocol = if (negotiated_h2) .h2 else .http11;
-    if (negotiated_h2) {
-        var h2_connection = tunnel_h2.Connection.init(.{
-            .io = service.io,
-            .gpa = service.gpa,
-            .transforms = &service.transforms,
-            .has_custom_transformers = service.has_custom_transformers,
-            .session = session,
-            .exchange = &context,
-        });
-
-        h2_connection.run();
-        return;
-    }
-
-    var http1_connection = tunnel_http1.Connection.init(.{
-        .io = service.io,
-        .transforms = &service.transforms,
-        .session = session,
-        .exchange = &context,
-    });
-    http1_connection.run();
-}
-
-fn recordAuthenticationRejection(service: *Service, rejection: connect_authentication.RejectionMetric) void {
-    service.telemetry.record(.rejected_connection);
-    switch (rejection) {
-        .invalid_authorization => service.telemetry.record(.invalid_authorization_rejection),
-        .unknown_credential => service.telemetry.record(.unknown_credential_rejection),
-    }
 }
 
 const TestServiceFixture = struct {
@@ -406,68 +309,6 @@ test "service negotiates identity encoding for Claude message requests" {
 
     try std.testing.expect(changed);
     try std.testing.expectEqualStrings("identity", headers.find("accept-encoding").?);
-}
-
-fn relayPassthrough(io: Io, child: net.Stream, origin: net.Stream) void {
-    var outbound = io.concurrent(pumpPassthrough, .{ io, child, origin }) catch return;
-    pumpPassthrough(io, origin, child);
-    outbound.await(io);
-}
-
-fn pumpPassthrough(io: Io, source: net.Stream, destination: net.Stream) void {
-    var read_buffer: [16 * 1024]u8 = undefined;
-    var write_buffer: [16 * 1024]u8 = undefined;
-    var reader = source.reader(io, &read_buffer);
-    var writer = destination.writer(io, &write_buffer);
-    while (true) {
-        const copied = reader.interface.stream(&writer.interface, .unlimited) catch break;
-        writer.interface.flush() catch break;
-        if (copied == 0) break;
-    }
-    destination.shutdown(io, .send) catch {};
-}
-
-fn readConnectHead(io: Io, stream: net.Stream, buffer: []u8) ?usize {
-    var read_buffer: [8 * 1024]u8 = undefined;
-    defer std.crypto.secureZero(u8, &read_buffer);
-    var reader = stream.reader(io, &read_buffer);
-    var len: usize = 0;
-    while (len < buffer.len) {
-        const byte = reader.interface.takeByte() catch return null;
-        buffer[len] = byte;
-        len += 1;
-        if (len >= 4 and std.mem.eql(u8, buffer[len - 4 .. len], "\r\n\r\n")) return len;
-    }
-    return null;
-}
-
-fn reply(io: Io, stream: net.Stream, bytes: []const u8) void {
-    var buffer: [1024]u8 = undefined;
-    var writer = stream.writer(io, &buffer);
-    writer.interface.writeAll(bytes) catch return;
-    writer.interface.flush() catch {};
-}
-
-// Resolve asynchronously but connect sequentially. This avoids a Zig 0.16
-// Darwin race where concurrent connect attempts can report EISCONN.
-fn connectUpstream(host: net.HostName, io: Io, port: u16) !net.Stream {
-    var lookup_storage: [32]net.HostName.LookupResult = undefined;
-    var resolved: Io.Queue(net.HostName.LookupResult) = .init(&lookup_storage);
-    var lookup = io.async(net.HostName.lookup, .{ host, io, &resolved, .{ .port = port } });
-    defer lookup.cancel(io) catch {};
-    var last_error: ?anyerror = null;
-    while (resolved.getOne(io)) |result| switch (result) {
-        .canonical_name => continue,
-        .address => |address| {
-            if (address.connect(io, .{ .mode = .stream })) |stream| return stream else |err| last_error = err;
-        },
-    } else |err| switch (err) {
-        error.Canceled => return error.Canceled,
-        error.Closed => {
-            try lookup.await(io);
-            return last_error orelse error.UnknownHostName;
-        },
-    }
 }
 
 fn echoOpaquePayload(io: Io, listener: *net.Server, expected: []const u8) !void {
