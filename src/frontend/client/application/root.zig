@@ -9,6 +9,7 @@ pub const close_pane = @import("close_pane.zig");
 pub const close_tab = @import("close_tab.zig");
 pub const config_reload = @import("config_reload.zig");
 pub const copy_mode = @import("copy_mode.zig");
+pub const copy_mode_pointer = @import("copy_mode_pointer.zig");
 pub const create_tab = @import("create_tab.zig");
 pub const create_workspace = @import("create_workspace.zig");
 pub const host_capabilities = @import("host_capabilities.zig");
@@ -58,6 +59,7 @@ test {
     _ = close_tab;
     _ = config_reload;
     _ = copy_mode;
+    _ = copy_mode_pointer;
     _ = create_tab;
     _ = create_workspace;
     _ = host_capabilities;

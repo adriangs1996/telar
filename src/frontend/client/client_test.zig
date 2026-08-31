@@ -7122,6 +7122,38 @@ test "copy mode round trip: enter, select, copy, leave" {
     }
 }
 
+test "copy-mode pointer consumes outside wheels and exits a missing target" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const model = &client.model.workspace.active().?.model;
+    var handler: InputHandler = .{ .client = client };
+    _ = try client_actions.apply(handler.client, .enter_copy_mode);
+    const active_version = client.model.version();
+
+    try handler.mouse(.{
+        .x = std.math.maxInt(u16),
+        .y = std.math.maxInt(u16),
+        .kind = .scroll_up,
+    });
+
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expectEqualDeep(active_version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expect(!handler.redraw);
+
+    try std.testing.expect(model.removePane(TestHarness.bootstrap_pane));
+    try handler.mouse(.{ .x = 0, .y = 0, .kind = .move });
+
+    try std.testing.expect(!client.model.copyModeActive());
+    try expectNonCopyVersionEqual(active_version, client.model.version());
+    try std.testing.expectEqual(active_version.copy + 1, client.model.version().copy);
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expect(!handler.redraw);
+}
+
 test "a full outbox keeps copy mode and its selection active" {
     var harness: TestHarness = undefined;
     try harness.init();

@@ -47,6 +47,7 @@ test {
     _ = @import("clock.zig");
     _ = @import("config_reload.zig");
     _ = @import("config_reloads.zig");
+    _ = @import("copy_mode_pointer.zig");
     _ = @import("copy_modes.zig");
     _ = @import("deadline_timer.zig");
     _ = @import("host_capabilities.zig");

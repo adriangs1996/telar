@@ -2002,6 +2002,17 @@ pub const Model = struct {
         return model.copy_state != null;
     }
 
+    /// Returns the pane captured by active copy mode.
+    ///
+    /// ```zig
+    /// const pane_id = model.copyModeTarget() orelse return;
+    /// ```
+    pub fn copyModeTarget(model: *const Model) ?schema.PaneId {
+        const state = model.copy_state orelse return null;
+
+        return state.pane_id;
+    }
+
     /// Returns the immutable copy-mode projection consumed by presenters.
     ///
     /// ```zig
@@ -3605,9 +3616,11 @@ test "copy mode entry owns one independent model revision" {
     pane.scroll = .{ .total_rows = 15, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 4, .y = 2 };
 
+    try std.testing.expect(model.copyModeTarget() == null);
     try std.testing.expect(model.enterCopyMode());
 
     try std.testing.expect(model.copyModeActive());
+    try std.testing.expectEqual(pane_id, model.copyModeTarget().?);
     try std.testing.expectEqualDeep(CopyModeProjection{
         .pane_id = pane_id,
         .view = .{

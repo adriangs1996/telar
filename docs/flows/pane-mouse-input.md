@@ -19,7 +19,11 @@ InputHandler.mouse
         |
 raw pixels -> host cells
         |
-prompt / copy mode / View.handleMouse
+prompt / copy_mode_pointer
+        |
+unowned only
+        |
+View.handleMouse
         |
 DispatchViewInteractionHandler
         |
@@ -43,11 +47,13 @@ SetPaneViewportHandler      +---------+----------+
 ```
 
 `InputHandler` owns host parsing concerns. It counts the event, suppresses it
-while a name prompt is active, converts supported raw pixel coordinates to
-host cells and gives copy mode first refusal. The view then resolves client
-chrome. A consumed view command ends the event. Pane focus is different: the
-focus command commits first, then the same press may continue to the newly
-focused child.
+while a name prompt is active and converts supported raw pixel coordinates to
+host cells. It then delegates first refusal to `copy_mode_pointer` without
+reading copy state, pane storage or pane geometry. `CopyModePointerHandler`
+owns copy-mode pointer policy; only its `unowned` result continues to the view.
+The view then resolves client chrome. A consumed view command ends the event.
+Pane focus is different: the focus command commits first, then the same press
+may continue to the newly focused child. See [Copy mode](copy-mode.md).
 
 After those owners finish, `InputHandler` delegates the remaining event. It
 does not inspect pane mouse modes, choose scroll policy, encode SGR bytes or

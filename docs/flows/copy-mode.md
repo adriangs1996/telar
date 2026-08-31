@@ -16,7 +16,7 @@ request containing only coordinates.
 ```text
 host key, mouse wheel or native action
         |
-key_routing / InputHandler.mouse / client_actions
+key_routing / copy_mode_pointer / client_actions
         |
 copy_modes adapter
         |
@@ -37,10 +37,23 @@ Entry resolves the attached focused pane and captures its current viewport.
 An active name prompt, missing pane or repeated entry is a no-op. While copy
 mode is active, `KeyRoutingHandler` sends semantic keys to copy mode and
 consumes replayed bytes. Neither reaches the child. Copy mode does not make
-`capturesKeys` true, so configured prefix bindings remain available. The mouse
-is also captured; only wheel events over the target pane move the copy cursor.
-Any native action other than copy-mode entry first leaves copy mode and
-restores its entry viewport. See [Key routing](key-routing.md).
+`capturesKeys` true, so configured prefix bindings remain available. See
+[Key routing](key-routing.md).
+
+`copy_mode_pointer` resolves a fixed authority snapshot from copy state and
+the active multiplexer geometry. Active copy mode owns every pointer event.
+Non-wheel events and wheels outside the captured pane are consumed; a wheel
+inside moves the cursor by three rows. If the captured pane no longer exists,
+the event leaves copy mode. Temporarily unavailable geometry consumes the
+event without surrendering ownership. Only an inactive copy mode returns the
+event to view and pane routing.
+
+`CopyModePointerHandler` selects that policy without reading either model or
+mutating state. The adapter applies selected movement and exit effects through
+the existing `CopyModeHandler`. It allocates nothing, retains no pane pointer
+and adds no queue. A selected effect failure propagates and cannot fall through
+to view or pane mouse handling. Any native action other than copy-mode entry
+also first leaves copy mode and restores its entry viewport.
 
 `ClientModel.planCopyMode` applies the pure motion component to a local state
 copy. Unhandled keys and boundary motions return no plan and advance no
@@ -134,13 +147,15 @@ cache, never semantic authority.
   release.
 - `src/frontend/client/application/copy_mode.zig` proves copy-before-exit and
   viewport-after-commit ordering, including both failure policies.
+- `src/frontend/client/application/copy_mode_pointer.zig` proves exclusive
+  pointer ownership, bounded wheel movement and selected-effect failures.
 - `src/frontend/client/copy_modes.zig` owns the selection outbox adapter.
 - `src/frontend/presentation/screen.zig` proves exact OSC 52 encoding,
   multi-chunk payloads and the terminal-side size bound.
 - `src/frontend/client/pane_viewports.zig` owns graphics visibility and
   runtime viewport synchronization for both normal input and copy mode.
-- `src/frontend/client/client_test.zig` proves routing, backpressure,
-  clipboard delivery and presenter-only projection through the real client
-  boundary.
+- `src/frontend/client/client_test.zig` proves key and pointer routing,
+  outside-wheel consumption, missing-target exit, backpressure, clipboard
+  delivery and presenter-only projection through the real client boundary.
 - `src/frontend/client/presenter.zig` is the only client component that writes
   `multiplexer.Pane.copy_view`.

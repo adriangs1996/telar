@@ -159,11 +159,17 @@ and telemetry policy.
 
 ## 2C. Pointer interaction branch
 
-`InputHandler.mouse` converts host pixel coordinates to cells and gives copy
-mode first refusal. It then asks `View.handleMouse` for one
-`view_interaction.Command`. The command contains one exclusive semantic intent
-plus redraw, layout and pointer-capture facts. The view does not select tabs,
-focus panes, start prompts or navigate notifications.
+`InputHandler.mouse` converts host pixel coordinates to cells and delegates
+copy-mode ownership to `copy_mode_pointer`. The adapter resolves a fixed copy
+and geometry snapshot; `CopyModePointerHandler` consumes every pointer event
+while copy mode is active and selects only bounded vertical movement or exit.
+`InputHandler` neither reads copy projections nor resolves panes. Only an
+`unowned` result reaches `View.handleMouse`. See [Copy mode](copy-mode.md).
+
+`View.handleMouse` returns one `view_interaction.Command`. The command contains
+one exclusive semantic intent plus redraw, layout and pointer-capture facts.
+The view does not select tabs, focus panes, start prompts or navigate
+notifications.
 
 `view_interactions.apply` wires that command to
 `DispatchViewInteractionHandler`. The application handler applies the semantic

@@ -8,6 +8,7 @@ const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const client_actions = @import("actions.zig");
+const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const key_routing = @import("key_routing.zig");
 const lua_actions = @import("lua_actions.zig");
@@ -15,7 +16,6 @@ const pane_inputs = @import("pane_inputs.zig");
 const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 const paste_routing = @import("paste_routing.zig");
 const plugin_actions = @import("plugin_actions.zig");
-const copy_modes = @import("copy_modes.zig");
 const view_interactions = @import("view_interactions.zig");
 const action_mod = input_capability.action;
 const keybind = input_capability.keybind;
@@ -108,8 +108,10 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         cell_event.y = std.math.cast(u16, event.raw_y / host_size.cell_height_px) orelse
             std.math.maxInt(u16);
     }
+
     const model = handler.activeModel() orelse return;
-    if (try handler.copyModeMouse(cell_event, model)) {
+
+    if (try copy_mode_pointer.apply(handler.client, model, cell_event)) {
         return;
     }
 
@@ -128,30 +130,6 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         .cell_width_px = host_size.cell_width_px,
         .cell_height_px = host_size.cell_height_px,
     });
-}
-
-fn copyModeMouse(handler: *InputHandler, event: term.Event.Mouse, model: *multiplexer.Model) !bool {
-    if (!handler.client.model.copyModeActive()) {
-        return false;
-    }
-
-    const delta: i32 = switch (event.kind) {
-        .scroll_up => -3,
-        .scroll_down => 3,
-        else => return true,
-    };
-    const projection = handler.client.model.copyModeProjection() orelse return true;
-    const pane = model.find(projection.pane_id) orelse {
-        _ = try copy_modes.leave(handler.client);
-        return true;
-    };
-    const pane_view = model.viewForPane(pane.id, handler.client.view.workbench()) orelse return true;
-    if (!pane_view.content.contains(event.x, event.y)) {
-        return true;
-    }
-
-    _ = try copy_modes.vertical(handler.client, delta);
-    return true;
 }
 
 /// Reconciles one host-terminal capability response without forwarding it.
