@@ -1785,7 +1785,7 @@ test "pane creation releases every partial allocation" {
     const gpa = std.testing.allocator;
     var history_service = try history.Service.init(gpa, ":memory:");
     defer history_service.deinit(io);
-    const argv = [_][*:0]const u8{"/bin/true"};
+    const argv = [_][*:0]const u8{"/usr/bin/true"};
     const command = try pty.Command.fromArgv(&argv);
     const limits: GraphicsLimits = .{};
     var fail_index: usize = 0;

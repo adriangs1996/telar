@@ -56,10 +56,26 @@ const CLD = struct {
 extern "c" fn waitid(idtype: c_int, id: c_uint, infop: *std.c.siginfo_t, options: c_int) c_int;
 extern "c" fn openpty(amaster: *std.c.fd_t, aslave: *std.c.fd_t, name: ?[*]u8, termp: ?*const std.posix.termios, winp: ?*const std.posix.winsize) c_int;
 
-extern "c" fn execvp(file: [*:0]const u8, argv: [*:null]const ?[*:0]const u8) c_int;
 extern "c" fn _NSGetEnviron() *[*:null]?[*:0]u8;
 extern "c" var environ: [*:null]?[*:0]u8;
 extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
+
+const default_path = "/usr/local/bin:/bin:/usr/bin";
+
+const ChildFailureStage = enum(c_int) {
+    session,
+    controlling_terminal,
+    working_directory,
+    stdin,
+    stdout,
+    stderr,
+    exec,
+};
+
+const ChildFailure = extern struct {
+    stage: ChildFailureStage,
+    errno_code: c_int,
+};
 
 /// The immutable environment presented by Telar's terminal to every child.
 /// It is built once by the runtime, before pane launches enter the interactive
@@ -200,26 +216,57 @@ pub const Session = struct {
                 std.math.maxInt(u16),
         };
 
-        var master: std.c.fd_t = undefined;
-        var slave: std.c.fd_t = undefined;
-        if (openpty(&master, &slave, null, null, &window) < 0) return error.OpenPtyFailed;
-        errdefer _ = std.c.close(master);
-        errdefer _ = std.c.close(slave);
+        var master: std.c.fd_t = -1;
+        errdefer closeDescriptor(&master);
+        var slave: std.c.fd_t = -1;
+        errdefer closeDescriptor(&slave);
+        if (openpty(&master, &slave, null, null, &window) < 0) {
+            return error.OpenPtyFailed;
+        }
 
         // Close-on-exec keeps this pair out of every *other* pane's child:
         // without it each spawned process inherits every older master and can
         // read its siblings' terminals. The child's own copies survive
         // because `dup2` onto stdio clears the flag on the duplicates.
-        _ = std.c.fcntl(master, std.c.F.SETFD, @as(c_int, 1)); // FD_CLOEXEC
-        _ = std.c.fcntl(slave, std.c.F.SETFD, @as(c_int, 1)); // FD_CLOEXEC
+        try setCloseOnExec(master);
+        try setCloseOnExec(slave);
+
+        var error_pipe = try openCloseOnExecPipe();
+        errdefer closeDescriptor(&error_pipe[0]);
+        errdefer closeDescriptor(&error_pipe[1]);
+
+        const child_environment = commandEnvironment(command);
+        const path = environmentValue(child_environment, "PATH") orelse default_path;
 
         const pid = std.c.fork();
-        if (pid < 0) return error.ForkFailed;
+        if (pid < 0) {
+            return error.ForkFailed;
+        }
         if (pid == 0) {
-            childExec(.{ .master = master, .slave = slave, .cwd_fd = cwd_fd, .command = command });
+            _ = std.c.close(error_pipe[0]);
+            childExec(.{
+                .master = master,
+                .slave = slave,
+                .cwd_fd = cwd_fd,
+                .error_fd = error_pipe[1],
+                .command = command,
+                .environment = child_environment,
+                .path = path,
+            });
         }
 
-        _ = std.c.close(slave);
+        var spawned_pid: ?std.c.pid_t = pid;
+        errdefer if (spawned_pid) |child_pid| terminateAndReap(child_pid);
+
+        closeDescriptor(&slave);
+        closeDescriptor(&error_pipe[1]);
+        const child_failure = readChildFailure(error_pipe[0]) catch return error.ChildBootstrapReadFailed;
+        closeDescriptor(&error_pipe[0]);
+        if (child_failure) |failure| {
+            return childFailureError(failure);
+        }
+
+        spawned_pid = null;
         return .{ .master = master, .pid = pid };
     }
 
@@ -407,13 +454,121 @@ fn cwdLinux(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
     return buffer[0..@intCast(result)];
 }
 
+fn closeDescriptor(fd: *std.c.fd_t) void {
+    if (fd.* < 0) {
+        return;
+    }
+
+    _ = std.c.close(fd.*);
+    fd.* = -1;
+}
+
+fn setCloseOnExec(fd: std.c.fd_t) !void {
+    const result = std.c.fcntl(fd, std.c.F.SETFD, @as(c_int, std.posix.FD_CLOEXEC));
+    if (result < 0) {
+        return error.SetCloseOnExecFailed;
+    }
+}
+
+fn openCloseOnExecPipe() ![2]std.c.fd_t {
+    var pipe: [2]std.c.fd_t = undefined;
+    if (std.c.pipe(&pipe) < 0) {
+        return error.OpenChildErrorPipeFailed;
+    }
+    errdefer closeDescriptor(&pipe[0]);
+    errdefer closeDescriptor(&pipe[1]);
+
+    try setCloseOnExec(pipe[0]);
+    try setCloseOnExec(pipe[1]);
+    return pipe;
+}
+
+fn currentEnvironment() [*:null]const ?[*:0]const u8 {
+    return switch (builtin.os.tag) {
+        .macos => @ptrCast(_NSGetEnviron().*),
+        .linux => @ptrCast(environ),
+        else => unreachable,
+    };
+}
+
+fn commandEnvironment(command: *const Command) [*:null]const ?[*:0]const u8 {
+    if (command.environment) |environment| {
+        return environment.block.slice.ptr;
+    }
+
+    return currentEnvironment();
+}
+
+fn environmentValue(environment: [*:null]const ?[*:0]const u8, name: []const u8) ?[]const u8 {
+    var index: usize = 0;
+    while (environment[index]) |entry| : (index += 1) {
+        const bytes = std.mem.span(entry);
+        if (bytes.len <= name.len or bytes[name.len] != '=') {
+            continue;
+        }
+        if (!std.mem.eql(u8, bytes[0..name.len], name)) {
+            continue;
+        }
+
+        return bytes[name.len + 1 ..];
+    }
+
+    return null;
+}
+
+fn readChildFailure(fd: std.c.fd_t) !?ChildFailure {
+    var failure: ChildFailure = undefined;
+    const bytes: [*]u8 = @ptrCast(&failure);
+    var read_len: usize = 0;
+
+    while (read_len < @sizeOf(ChildFailure)) {
+        const result = std.c.read(fd, bytes + read_len, @sizeOf(ChildFailure) - read_len);
+        if (result > 0) {
+            read_len += @intCast(result);
+            continue;
+        }
+        if (result == 0) {
+            return if (read_len == 0) null else error.IncompleteChildFailure;
+        }
+        if (std.posix.errno(result) == .INTR) {
+            continue;
+        }
+
+        return error.ReadChildFailureFailed;
+    }
+
+    return failure;
+}
+
+fn childFailureError(failure: ChildFailure) anyerror {
+    const errno: std.posix.E = @enumFromInt(failure.errno_code);
+    return switch (failure.stage) {
+        .working_directory => error.InvalidWorkingDirectory,
+        .exec => switch (errno) {
+            .NOENT, .NOTDIR => error.ExecutableNotFound,
+            .ACCES, .PERM => error.ExecutableAccessDenied,
+            .NOEXEC => error.InvalidExecutable,
+            else => error.ExecFailed,
+        },
+        else => error.ChildSetupFailed,
+    };
+}
+
+fn terminateAndReap(pid: std.c.pid_t) void {
+    _ = std.c.kill(pid, .KILL);
+    _ = waitPid(pid) catch {};
+}
+
 /// Only async-signal-safe calls are allowed between fork and exec. In
 /// particular, no allocator or error unwinding may run in this branch.
 const ChildExec = struct {
     master: std.c.fd_t,
     slave: std.c.fd_t,
     cwd_fd: ?std.c.fd_t,
+    error_fd: std.c.fd_t,
     command: *const Command,
+    environment: [*:null]const ?[*:0]const u8,
+    path: []const u8,
 };
 
 fn childExec(child: ChildExec) noreturn {
@@ -422,27 +577,134 @@ fn childExec(child: ChildExec) noreturn {
     const cwd_fd = child.cwd_fd;
     const command = child.command;
 
-    if (std.c.setsid() < 0) std.c._exit(1);
-    if (std.c.ioctl(slave, TIOC.SCTTY, @as(c_int, 0)) != 0) std.c._exit(1);
-    if (cwd_fd) |fd| if (std.c.fchdir(fd) != 0) std.c._exit(126);
+    const session_result = std.c.setsid();
+    if (session_result < 0) {
+        childFail(child.error_fd, .session, std.posix.errno(session_result));
+    }
+    const terminal_result = std.c.ioctl(slave, TIOC.SCTTY, @as(c_int, 0));
+    if (terminal_result != 0) {
+        childFail(child.error_fd, .controlling_terminal, std.posix.errno(terminal_result));
+    }
+    if (cwd_fd) |fd| {
+        const directory_result = std.c.fchdir(fd);
+        if (directory_result != 0) {
+            childFail(child.error_fd, .working_directory, std.posix.errno(directory_result));
+        }
+    }
 
-    if (std.c.dup2(slave, std.c.STDIN_FILENO) < 0) std.c._exit(1);
-    if (std.c.dup2(slave, std.c.STDOUT_FILENO) < 0) std.c._exit(1);
-    if (std.c.dup2(slave, std.c.STDERR_FILENO) < 0) std.c._exit(1);
+    duplicateChildDescriptor(.{ .error_fd = child.error_fd, .source = slave, .target = std.c.STDIN_FILENO, .stage = .stdin });
+    duplicateChildDescriptor(.{ .error_fd = child.error_fd, .source = slave, .target = std.c.STDOUT_FILENO, .stage = .stdout });
+    duplicateChildDescriptor(.{ .error_fd = child.error_fd, .source = slave, .target = std.c.STDERR_FILENO, .stage = .stderr });
 
     _ = std.c.close(master);
-    if (slave > std.c.STDERR_FILENO) _ = std.c.close(slave);
+    if (slave > std.c.STDERR_FILENO) {
+        _ = std.c.close(slave);
+    }
 
-    // `fork` gave this child a private address space. Repointing libc's
-    // environment here cannot race with the runtime and lets `execvp` retain
-    // its existing PATH search and ENOEXEC fallback semantics.
-    if (command.environment) |environment| switch (builtin.os.tag) {
-        .macos => _NSGetEnviron().* = @ptrCast(@constCast(environment.block.slice.ptr)),
-        .linux => environ = @ptrCast(@constCast(environment.block.slice.ptr)),
-        else => unreachable,
+    const exec_error = execWithPath(.{
+        .file = command.file,
+        .argv = &command.argv,
+        .environment = child.environment,
+        .path = child.path,
+    });
+    childFail(child.error_fd, .exec, exec_error);
+}
+
+const ChildDescriptor = struct {
+    error_fd: std.c.fd_t,
+    source: std.c.fd_t,
+    target: std.c.fd_t,
+    stage: ChildFailureStage,
+};
+
+fn duplicateChildDescriptor(descriptor: ChildDescriptor) void {
+    const result = std.c.dup2(descriptor.source, descriptor.target);
+    if (result < 0) {
+        childFail(descriptor.error_fd, descriptor.stage, std.posix.errno(result));
+    }
+}
+
+const ExecRequest = struct {
+    file: [*:0]const u8,
+    argv: [*:null]const ?[*:0]const u8,
+    environment: [*:null]const ?[*:0]const u8,
+    path: []const u8,
+};
+
+fn execWithPath(request: ExecRequest) std.posix.E {
+    const file = std.mem.span(request.file);
+    if (std.mem.findScalar(u8, file, '/') != null) {
+        return execCandidate(request, request.file);
+    }
+
+    var path_buffer: [std.posix.PATH_MAX]u8 = undefined;
+    var paths = std.mem.splitScalar(u8, request.path, ':');
+    var access_denied = false;
+    while (paths.next()) |path_entry| {
+        const directory = if (path_entry.len == 0) "." else path_entry;
+        const candidate_len = directory.len + 1 + file.len;
+        if (candidate_len + 1 > path_buffer.len) {
+            return .NAMETOOLONG;
+        }
+
+        @memcpy(path_buffer[0..directory.len], directory);
+        path_buffer[directory.len] = '/';
+        @memcpy(path_buffer[directory.len + 1 ..][0..file.len], file);
+        path_buffer[candidate_len] = 0;
+        const candidate = path_buffer[0..candidate_len :0].ptr;
+
+        const exec_error = execCandidate(request, candidate);
+        switch (exec_error) {
+            .ACCES => access_denied = true,
+            .NOENT, .NOTDIR => {},
+            else => return exec_error,
+        }
+    }
+
+    return if (access_denied) .ACCES else .NOENT;
+}
+
+fn execCandidate(request: ExecRequest, candidate: [*:0]const u8) std.posix.E {
+    const result = std.c.execve(candidate, request.argv, request.environment);
+    const exec_error = std.posix.errno(result);
+    if (exec_error != .NOEXEC) {
+        return exec_error;
+    }
+
+    var shell_argv: [max_args + 1:null]?[*:0]const u8 = @splat(null);
+    shell_argv[0] = "/bin/sh";
+    shell_argv[1] = candidate;
+    var source_index: usize = 1;
+    var destination_index: usize = 2;
+    while (request.argv[source_index]) |argument| : (source_index += 1) {
+        shell_argv[destination_index] = argument;
+        destination_index += 1;
+    }
+
+    const shell_result = std.c.execve("/bin/sh", &shell_argv, request.environment);
+    return std.posix.errno(shell_result);
+}
+
+fn childFail(fd: std.c.fd_t, stage: ChildFailureStage, error_code: std.posix.E) noreturn {
+    const failure: ChildFailure = .{
+        .stage = stage,
+        .errno_code = @intCast(@intFromEnum(error_code)),
     };
+    const bytes: [*]const u8 = @ptrCast(&failure);
+    var written: usize = 0;
+    while (written < @sizeOf(ChildFailure)) {
+        const result = std.c.write(fd, bytes + written, @sizeOf(ChildFailure) - written);
+        if (result > 0) {
+            written += @intCast(result);
+            continue;
+        }
+        if (result < 0 and std.posix.errno(result) == .INTR) {
+            continue;
+        }
 
-    _ = execvp(command.file, &command.argv);
+        break;
+    }
+
     std.c._exit(127);
 }
 
@@ -647,6 +909,80 @@ test "spawn rejects an invalid working directory before forking" {
         error.InvalidWorkingDirectory,
         Session.spawn(&command, .{ .cols = 20, .rows = 5 }),
     );
+}
+
+test "spawn rejects a missing executable before returning a session" {
+    const args = [_][*:0]const u8{"/telar-test/missing-executable"};
+    const command = try Command.fromArgv(&args);
+
+    try std.testing.expectError(
+        error.ExecutableNotFound,
+        Session.spawn(&command, .{ .cols = 20, .rows = 5 }),
+    );
+}
+
+test "spawn rejects an executable without execute permission" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var file = try temp.dir.createFile(io, "not-executable", .{ .permissions = File.Permissions.fromMode(0o600) });
+    try file.writeStreamingAll(io, "exit 0");
+    file.close(io);
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(&path_buffer, "{s}/not-executable", .{directory_buffer[0..directory_len]});
+    const args = [_][*:0]const u8{path.ptr};
+    const command = try Command.fromArgv(&args);
+
+    try std.testing.expectError(
+        error.ExecutableAccessDenied,
+        Session.spawn(&command, .{ .cols = 20, .rows = 5 }),
+    );
+}
+
+test "spawn preserves execvp shell fallback semantics" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var script = try temp.dir.createFile(io, "script", .{ .permissions = File.Permissions.fromMode(0o700) });
+    try script.writeStreamingAll(io, "printf 'fallback-ok'");
+    script.close(io);
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const script_path = try std.fmt.bufPrintZ(&path_buffer, "{s}/script", .{directory_buffer[0..directory_len]});
+    const args = [_][*:0]const u8{script_path.ptr};
+    const command = try Command.fromArgv(&args);
+    var session = try Session.spawn(&command, .{ .cols = 20, .rows = 5 });
+    defer session.deinit();
+
+    var output: [32]u8 = undefined;
+    const len = try session.file().readStreaming(io, &.{&output});
+
+    try std.testing.expectEqualStrings("fallback-ok", output[0..len]);
+    try std.testing.expectEqual(Exit{ .exited = 0 }, try session.wait());
+}
+
+test "close-on-exec setup reports invalid descriptors" {
+    try std.testing.expectError(error.SetCloseOnExecFailed, setCloseOnExec(-1));
+}
+
+test "spawn marks the retained PTY master close-on-exec" {
+    const args = [_][*:0]const u8{ "/bin/sh", "-c", "exit 0" };
+    const command = try Command.fromArgv(&args);
+    var session = try Session.spawn(&command, .{ .cols = 20, .rows = 5 });
+    defer session.deinit();
+
+    const flags = std.c.fcntl(session.master, std.c.F.GETFD);
+
+    try std.testing.expect(flags >= 0);
+    try std.testing.expect(flags & std.posix.FD_CLOEXEC != 0);
+    try std.testing.expectEqual(Exit{ .exited = 0 }, try session.wait());
 }
 
 test "one argument past the limit is rejected" {
