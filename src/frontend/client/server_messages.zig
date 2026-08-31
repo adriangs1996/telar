@@ -10,6 +10,7 @@ const term = presentation.screen;
 const schema = core.schema;
 
 const Client = @import("client.zig");
+const agent_sounds = @import("agent_sounds.zig");
 const agent_snapshots = @import("agent_snapshots.zig");
 const notifications = @import("notifications.zig");
 const pane_closures = @import("pane_closures.zig");
@@ -50,7 +51,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .request_failed => |failure| _ = try request_failures.apply(client, failure),
         .notification => |notification| _ = try notifications.applyRuntime(client, notification),
         .notification_shown => |shown| _ = try notifications.applyDeliveryReport(client, shown),
-        .agent_sound => |sound| try handleAgentSound(client, sound),
+        .agent_sound => |sound| _ = try agent_sounds.apply(client, sound),
         .resync_required => |required| {
             if (try resync_requirements.apply(client, required) == .exit) {
                 return 0;
@@ -71,17 +72,6 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .graphics_delete_placement => |deleted| _ = try pane_graphics.apply(client, .{ .delete_placement = deleted }),
     }
     return null;
-}
-
-fn handleAgentSound(client: *Client, notification: schema.AgentSoundNotification) !void {
-    if (!client.model.knowsAgent(.{
-        .pane_id = notification.pane_id,
-        .pane_generation = notification.pane_generation,
-    })) {
-        return;
-    }
-
-    try client.scheduleAgentSound(notification.sound);
 }
 
 /// Entrypoint for a clipboard write a pane requested via OSC 52: the bytes

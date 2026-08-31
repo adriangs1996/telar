@@ -19,6 +19,7 @@ const term = presentation.screen;
 
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
+const agent_sounds = @import("agent_sounds.zig");
 const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
@@ -4558,8 +4559,9 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 2,
         .sound = .ready,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(unknown));
+    const stale = try agent_sounds.apply(client, (try schema.decodeServer(unknown)).agent_sound);
 
+    try std.testing.expectEqual(agent_sounds.Outcome.stale, stale);
     try std.testing.expect(!client.sound_pending);
 
     const known = try schema.encodeAgentSound(&payload, .{
@@ -4567,8 +4569,9 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 1,
         .sound = .ready,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(known));
+    const accepted = try agent_sounds.apply(client, (try schema.decodeServer(known)).agent_sound);
 
+    try std.testing.expectEqual(agent_sounds.Outcome.accepted, accepted);
     try std.testing.expect(client.sound_pending);
 }
 
