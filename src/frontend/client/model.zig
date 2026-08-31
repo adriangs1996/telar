@@ -479,6 +479,7 @@ pub const AgentSnapshotCommit = struct {
     runtime_revision: u64,
     count: usize,
     status_changes: AgentStatusChanges,
+    agent_revision_before: u64,
     agent_revision: u64,
 };
 
@@ -1678,6 +1679,7 @@ pub const Model = struct {
             });
         }
 
+        const agent_revision_before = model.agent_revision;
         const replaced = try model.agent_snapshot.replace(input);
         std.debug.assert(replaced);
         model.agent_revision +%= 1;
@@ -1686,6 +1688,7 @@ pub const Model = struct {
             .runtime_revision = model.agent_snapshot.revision,
             .count = model.agent_snapshot.count,
             .status_changes = status_changes,
+            .agent_revision_before = agent_revision_before,
             .agent_revision = model.agent_revision,
         };
     }
@@ -5937,6 +5940,8 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(@as(u64, 4), first.runtime_revision);
     try std.testing.expectEqual(@as(usize, 1), first.count);
     try std.testing.expectEqual(@as(usize, 0), first.status_changes.slice().len);
+    try std.testing.expectEqual(@as(u64, 0), first.agent_revision_before);
+    try std.testing.expectEqual(@as(u64, 1), first.agent_revision);
     try std.testing.expectEqual(Version{ .agents = 1 }, model.version());
     try std.testing.expectEqualStrings("first", model.agentSnapshot().find(key).?.sessionTitle());
     try std.testing.expect(model.knowsAgent(key));
@@ -5950,6 +5955,7 @@ test "agent reconciliation owns labels versions and existing status transitions"
     })).?;
     const change = second.status_changes.slice()[0];
 
+    try std.testing.expectEqual(@as(u64, 1), second.agent_revision_before);
     try std.testing.expectEqual(@as(u64, 2), second.agent_revision);
     try std.testing.expectEqual(@as(usize, 1), second.status_changes.slice().len);
     try std.testing.expectEqualDeep(key, change.key);

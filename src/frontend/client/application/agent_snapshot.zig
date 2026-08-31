@@ -1,4 +1,4 @@
-//! Application use case for reconciling runtime agent state and its effects.
+//! Application use case for committing one runtime agent snapshot.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -7,90 +7,54 @@ const client_model = @import("../model.zig");
 
 const schema = core.schema;
 
-pub const AgentSnapshotEffects = struct {
+pub const AgentSnapshotDelivery = struct {
     context: *anyopaque,
-    reconcile: *const fn (*anyopaque, *const client_model.AgentSnapshotCommit) anyerror!void,
-    alert: *const fn (*anyopaque, client_model.AgentStatusChange) anyerror!void,
-    alert_limit: usize,
+    deliver: *const fn (*anyopaque, *const client_model.AgentSnapshotCommit) anyerror!void,
 };
 
 pub const ApplyAgentSnapshotHandler = struct {
     model: *client_model.Model,
-    effects: AgentSnapshotEffects,
+    delivery: AgentSnapshotDelivery,
 
-    /// Commits one newer replica before synchronizing dependent resources.
-    /// Only actionable transitions for existing identities emit bounded alerts.
+    /// Commits one newer replica before delivering its exact result. Stale
+    /// snapshots and rejected candidates never cross the delivery boundary.
     ///
     /// ```zig
     /// const commit = try handler.execute(snapshot) orelse return;
     /// ```
     pub fn execute(handler: *ApplyAgentSnapshotHandler, snapshot: agents.SnapshotInput) !?client_model.AgentSnapshotCommit {
         const commit = try handler.model.reconcileAgentSnapshot(snapshot) orelse return null;
-        try handler.effects.reconcile(handler.effects.context, &commit);
-
-        var alert_count: usize = 0;
-        for (commit.status_changes.slice()) |change| {
-            if (!actionable(change.current)) {
-                continue;
-            }
-            if (alert_count == handler.effects.alert_limit) {
-                break;
-            }
-
-            try handler.effects.alert(handler.effects.context, change);
-            alert_count += 1;
-        }
+        try handler.delivery.deliver(handler.delivery.context, &commit);
 
         return commit;
     }
 };
 
-fn actionable(status: schema.AgentStatus) bool {
-    return status == .blocked or status == .ready or status == .failed;
-}
-
-const EffectsCapture = struct {
+const DeliveryCapture = struct {
     model: *const client_model.Model,
-    reconcile_count: usize = 0,
-    alerts: [agents.max_agents]client_model.AgentStatusChange = undefined,
-    alert_count: usize = 0,
+    calls: usize = 0,
     observed_commit: bool = false,
-    fail_reconcile: bool = false,
-    fail_alert: bool = false,
+    fail: bool = false,
 
-    fn port(capture: *EffectsCapture, alert_limit: usize) AgentSnapshotEffects {
-        return .{
-            .context = capture,
-            .reconcile = reconcile,
-            .alert = alert,
-            .alert_limit = alert_limit,
-        };
+    fn port(capture: *DeliveryCapture) AgentSnapshotDelivery {
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn reset(capture: *EffectsCapture) void {
-        capture.reconcile_count = 0;
-        capture.alert_count = 0;
+    fn reset(capture: *DeliveryCapture) void {
+        capture.calls = 0;
         capture.observed_commit = false;
     }
 
-    fn reconcile(context: *anyopaque, commit: *const client_model.AgentSnapshotCommit) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.reconcile_count += 1;
+    fn deliver(context: *anyopaque, commit: *const client_model.AgentSnapshotCommit) !void {
+        const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
+        capture.calls += 1;
         capture.observed_commit = capture.model.version().agents == commit.agent_revision and
-            capture.model.agentSnapshot().revision == commit.runtime_revision;
+            capture.model.agentSnapshot().revision == commit.runtime_revision and
+            capture.model.agentSnapshot().count == commit.count and
+            commit.agent_revision_before +% 1 == commit.agent_revision;
 
-        if (capture.fail_reconcile) {
-            return error.ReconcileFailed;
-        }
-    }
-
-    fn alert(context: *anyopaque, change: client_model.AgentStatusChange) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.alerts[capture.alert_count] = change;
-        capture.alert_count += 1;
-
-        if (capture.fail_alert) {
-            return error.AlertFailed;
+        if (capture.fail) {
+            return error.AgentSnapshotDeliveryFailed;
         }
     }
 };
@@ -108,13 +72,13 @@ fn agentInput(pane: u64, status: schema.AgentStatus) agents.AgentInput {
     };
 }
 
-test "ApplyAgentSnapshotHandler commits before reconciliation and bounds actionable alerts" {
+test "ApplyAgentSnapshotHandler commits before exact delivery" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: DeliveryCapture = .{ .model = &model };
     var handler: ApplyAgentSnapshotHandler = .{
         .model = &model,
-        .effects = capture.port(2),
+        .delivery = capture.port(),
     };
     const initial = [_]agents.AgentInput{
         agentInput(1, .working),
@@ -134,55 +98,49 @@ test "ApplyAgentSnapshotHandler commits before reconciliation and bounds actiona
     const commit = (try handler.execute(.{ .revision = 2, .agents = &changed })).?;
 
     try std.testing.expect(capture.observed_commit);
-    try std.testing.expectEqual(@as(usize, 1), capture.reconcile_count);
-    try std.testing.expectEqual(@as(usize, 2), capture.alert_count);
-    try std.testing.expectEqual(schema.AgentStatus.blocked, capture.alerts[0].current);
-    try std.testing.expectEqual(schema.AgentStatus.ready, capture.alerts[1].current);
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqual(@as(usize, 4), commit.status_changes.slice().len);
     try std.testing.expectEqual(client_model.Version{ .agents = 2 }, model.version());
 }
 
-test "ApplyAgentSnapshotHandler suppresses new stale and rejected alerts" {
+test "ApplyAgentSnapshotHandler suppresses delivery for stale and rejected snapshots" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: DeliveryCapture = .{ .model = &model };
     var handler: ApplyAgentSnapshotHandler = .{
         .model = &model,
-        .effects = capture.port(4),
+        .delivery = capture.port(),
     };
     const agent = agentInput(1, .blocked);
 
     _ = try handler.execute(.{ .revision = 1, .agents = &.{agent} });
 
-    try std.testing.expectEqual(@as(usize, 1), capture.reconcile_count);
-    try std.testing.expectEqual(@as(usize, 0), capture.alert_count);
+    try std.testing.expectEqual(@as(usize, 1), capture.calls);
     capture.reset();
     try std.testing.expect((try handler.execute(.{ .revision = 1, .agents = &.{agent} })) == null);
-    try std.testing.expectEqual(@as(usize, 0), capture.reconcile_count);
-    try std.testing.expectEqual(@as(usize, 0), capture.alert_count);
+    try std.testing.expectEqual(@as(usize, 0), capture.calls);
     try std.testing.expectError(error.DuplicateAgent, handler.execute(.{
         .revision = 2,
         .agents = &.{ agent, agent },
     }));
-    try std.testing.expectEqual(@as(usize, 0), capture.reconcile_count);
-    try std.testing.expectEqual(@as(usize, 0), capture.alert_count);
+    try std.testing.expectEqual(@as(usize, 0), capture.calls);
     try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
 }
 
-test "ApplyAgentSnapshotHandler preserves a model commit after effect failure" {
+test "ApplyAgentSnapshotHandler preserves a model commit after delivery failure" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{
+    var capture: DeliveryCapture = .{
         .model = &model,
-        .fail_reconcile = true,
+        .fail = true,
     };
     var handler: ApplyAgentSnapshotHandler = .{
         .model = &model,
-        .effects = capture.port(4),
+        .delivery = capture.port(),
     };
     const agent = agentInput(1, .working);
 
-    try std.testing.expectError(error.ReconcileFailed, handler.execute(.{
+    try std.testing.expectError(error.AgentSnapshotDeliveryFailed, handler.execute(.{
         .revision = 1,
         .agents = &.{agent},
     }));
@@ -190,19 +148,4 @@ test "ApplyAgentSnapshotHandler preserves a model commit after effect failure" {
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
     try std.testing.expect(model.knowsAgent(agent.key));
-
-    capture.fail_reconcile = false;
-    capture.fail_alert = true;
-    capture.reset();
-    var blocked = agent;
-    blocked.status = .blocked;
-    try std.testing.expectError(error.AlertFailed, handler.execute(.{
-        .revision = 2,
-        .agents = &.{blocked},
-    }));
-
-    try std.testing.expect(capture.observed_commit);
-    try std.testing.expectEqual(@as(usize, 1), capture.alert_count);
-    try std.testing.expectEqual(client_model.Version{ .agents = 2 }, model.version());
-    try std.testing.expectEqual(schema.AgentStatus.blocked, model.agentSnapshot().find(agent.key).?.status);
 }

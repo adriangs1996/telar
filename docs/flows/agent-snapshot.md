@@ -23,6 +23,8 @@ ClientModel.reconcileAgentSnapshot
              |
 agents.Snapshot + Version.agents
              |
+DeliverAgentSnapshotHandler
+             |
 attachment sync + actionable alerts
              |
 SidebarAnimationHandler.synchronize
@@ -37,10 +39,10 @@ pane position and bounded display labels immediately before encoding. Its
 per-client revision cursor sends the latest snapshot instead of replaying
 intermediate revisions.
 
-`agent_snapshots.apply` copies borrowed wire values into fixed stack inputs.
-It contains protocol translation and concrete client effects, but no semantic
-transition rules. `ApplyAgentSnapshotHandler` orders the model commit before
-resource reconciliation and alerts.
+`agent_snapshots.apply` copies borrowed wire values into fixed stack inputs and
+supplies only concrete client ports. `ApplyAgentSnapshotHandler` owns the model
+commit and delegates its exact result to `DeliverAgentSnapshotHandler`. The
+adapter contains no transition, alert or ordering policy.
 
 ## Model transaction
 
@@ -52,7 +54,9 @@ leave the previous snapshot and `Version.agents` unchanged.
 Each accepted newer snapshot advances the local agent version exactly once.
 During the transaction, the model compares exact pane generations with the
 previous snapshot and returns status changes only for identities that already
-existed. New agents do not look like transitions.
+existed. The commit carries the local revision before and after replacement so
+delivery can prove that it represents exactly one accepted snapshot. New
+agents do not look like transitions.
 
 The model also exposes bounded semantic queries. Input asks for an
 `AgentNavigationPlan`, attachment capture asks for the focused eligible agent,
@@ -63,18 +67,19 @@ focus or remote handoff selected from that plan.
 
 ## Effects and presentation
 
-After the commit, the application handler enters
+After validating the runtime revision, entry count, one-step local revision and
+every reported current identity, the delivery handler enters
 `DeliverActivePaneResourcesHandler.synchronizeAttachments`. It reconciles the
 attachment shelf and re-offers pane geometry only if shelf visibility changed
-the workbench; it cannot emit child focus reports. The agent handler then emits
-at most the notification center capacity of transitions to `blocked`, `ready`
-or `failed`. Failure in an effect does not roll back the committed runtime
-state.
+the workbench; it cannot emit child focus reports. Delivery then translates
+transitions to `blocked`, `ready` or `failed` into notification inputs and emits
+at most the notification center capacity. Failure in a delivery stage does not
+roll back the committed runtime state.
 
-The adapter then invokes the separate sidebar-animation use case. A working
-agent ensures that one future tick is armed; a snapshot does not advance the
-visible animation frame. Animation ownership and timer failure are documented
-in [Sidebar animation](sidebar-animation.md).
+Finally, the same delivery handler invokes the separate sidebar-animation use
+case. A working agent ensures that one future tick is armed; a snapshot does
+not advance the visible animation frame. Animation ownership and timer failure
+are documented in [Sidebar animation](sidebar-animation.md).
 
 The snapshot itself does not request a draw. At the event boundary,
 `presentation_lifecycle.observe` publishes the current version. `Presenter` compares
@@ -105,9 +110,12 @@ usable replica and its local version.
   exact identity lookup and atomic validation failure.
 - `src/frontend/client/model.zig` proves isolated versioning, transition
   detection, navigation, attachment eligibility and immutable queries.
-- `src/frontend/client/application/agent_snapshot.zig` proves commit-before-
-  effect ordering, actionable filtering, alert bounds and retained commits on
-  effect failure.
+- `src/frontend/client/application/agent_snapshot.zig` proves atomic commit
+  before exact delivery, stale suppression and retained commits on delivery
+  failure.
+- `src/frontend/client/application/agent_snapshot_delivery.zig` proves exact
+  commit validation, attachment-alert-animation ordering, alert policy and
+  bounds, and failure cutoffs.
 - `src/frontend/client/application/active_pane_resource_delivery.zig` proves
   attachment-only synchronization and conditional geometry delivery.
 - `src/frontend/client/application/sidebar_animation.zig` and

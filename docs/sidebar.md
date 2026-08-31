@@ -22,7 +22,9 @@ advance the agent revision.
 `agent_snapshots.apply` is the protocol adapter. It maps borrowed wire entries
 to `AgentInput` values and invokes `ApplyAgentSnapshotHandler`.
 `ClientModel.reconcileAgentSnapshot` owns the transaction, while
-`agents.Snapshot.replace` performs atomic bounded storage. Replacement:
+`agents.Snapshot.replace` performs atomic bounded storage. The resulting commit
+is validated and delivered by `DeliverAgentSnapshotHandler`, which owns
+attachment, alert and animation ordering. Replacement:
 
 - rejects revisions older than or equal to the current revision;
 - rejects duplicate `(id, generation)` task keys;

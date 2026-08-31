@@ -1,6 +1,5 @@
 //! Adapts runtime agent messages to the client application boundary.
 
-const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
@@ -12,6 +11,7 @@ const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
 const agent_snapshot = client_application.agent_snapshot;
+const agent_snapshot_delivery = client_application.agent_snapshot_delivery;
 const schema = core.schema;
 
 /// Maps one validated wire view into bounded agent inputs and synchronizes
@@ -45,78 +45,51 @@ pub fn apply(client: *Client, snapshot: schema.AgentSnapshotView) !?client_model
     }
 
     var use_case = handler(client);
-    const commit = try use_case.execute(.{
+    return use_case.execute(.{
         .revision = snapshot.revision,
         .agents = entries[0..count],
     });
-    _ = try sidebar_animations.synchronize(client);
-
-    return commit;
 }
 
 fn handler(client: *Client) agent_snapshot.ApplyAgentSnapshotHandler {
     return .{
         .model = &client.model,
-        .effects = .{
+        .delivery = .{
             .context = client,
-            .reconcile = reconcile,
-            .alert = alert,
-            .alert_limit = notifications.max_items,
+            .deliver = deliverCommit,
         },
     };
 }
 
-fn reconcile(context: *anyopaque, commit: *const client_model.AgentSnapshotCommit) !void {
-    _ = commit;
+fn deliverCommit(context: *anyopaque, commit: *const client_model.AgentSnapshotCommit) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    var use_case: agent_snapshot_delivery.DeliverAgentSnapshotHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .synchronize_attachments = synchronizeAttachments,
+            .publish_alert = publishAlert,
+            .synchronize_animation = synchronizeAnimation,
+        },
+    };
+
+    try use_case.execute(commit);
+}
+
+fn synchronizeAttachments(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = try active_pane_resources.synchronizeAttachments(client);
 }
 
-fn alert(context: *anyopaque, change: client_model.AgentStatusChange) !void {
+fn publishAlert(context: *anyopaque, input: notifications.Input) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var message_buffer: [64]u8 = undefined;
-    const message = std.fmt.bufPrint(
-        &message_buffer,
-        "{s} in pane {d} is {s}",
-        .{ providerName(change.provider), change.pane_index, statusName(change.current) },
-    ) catch "Agent status changed";
 
-    try notification_flow.publishNow(client, .{
-        .level = switch (change.current) {
-            .blocked => .warning,
-            .ready => .success,
-            .failed => .failure,
-            .unknown, .working => unreachable,
-        },
-        .title = switch (change.current) {
-            .blocked => "Agent needs input",
-            .ready => "Agent ready",
-            .failed => "Agent failed",
-            .unknown, .working => unreachable,
-        },
-        .message = message,
-        .target = .{ .focus_pane = change.key.pane_id },
-        .duration_ns = if (change.current == .failed)
-            7 * std.time.ns_per_s
-        else
-            notifications.default_duration_ns,
-    });
+    try notification_flow.publishNow(client, input);
 }
 
-fn providerName(provider: schema.AgentProvider) []const u8 {
-    return switch (provider) {
-        .unknown => "Agent",
-        .claude => "Claude",
-        .codex => "Codex",
-    };
-}
+fn synchronizeAnimation(context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-fn statusName(status: schema.AgentStatus) []const u8 {
-    return switch (status) {
-        .blocked => "waiting for input",
-        .ready => "ready",
-        .failed => "failed",
-        .unknown, .working => "active",
-    };
+    _ = try sidebar_animations.synchronize(client);
 }
