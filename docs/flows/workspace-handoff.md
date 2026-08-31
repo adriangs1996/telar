@@ -52,10 +52,10 @@ Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused
 pane, client-owned layout and every pane identity in fixed-capacity values,
 then advances the affected workspace, tab, active-tab and pane revisions once.
-Post-commit effects copy the bookmark into navigation history and release copy,
-paste, reported-focus and graphics resources for every retired pane.
+Post-commit effects copy the bookmark into navigation history and give every
+retired pane identity to `ReleasePaneResourcesHandler`.
 
-The use case neither invalidates the view nor requests a draw. The runtime loop
+The use case neither invalidates the view nor requests a draw. `client_events`
 publishes `ClientModel.Version` to `Presenter`, which presents the empty model
 as a normal blank cell grid and records that version. Re-observing it schedules
 nothing, so an outstanding runtime reply cannot produce a 60 Hz redraw loop.

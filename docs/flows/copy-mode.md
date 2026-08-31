@@ -113,9 +113,9 @@ across pruned history, clamps them to the new row count and adopts the runtime
 viewport. Unrelated or identical copy projections do not advance the copy
 revision.
 
-Pane and tab cleanup call `ClientModel.releaseCopyMode` through
-`pane_resources`. Only retirement of the target pane closes the mode. Paste,
-focus and graphics cleanup remain separate disposable effects. A model
+Pane and tab cleanup enter `ReleasePaneResourcesHandler`. Only retirement of
+the target pane closes the mode. The same handler releases paste and reported
+focus before the adapter clears physical graphics. A model
 transition that makes another tab active also releases copy authority, so
 routing cannot remain attached to an inactive pane after an asynchronous
 runtime response.

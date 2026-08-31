@@ -128,8 +128,8 @@ transition and commits the canonical fact through `ClientModel.removeTab`.
 Requested removals must still exist. Repeated or stale lifecycle facts are
 idempotent and only retire obsolete continuations.
 
-After a commit, the handler retires requests for the removed tab and releases
-its copy, paste, reported-focus and graphics state by pane identity. Removing
+After a commit, the handler retires requests for the removed tab and gives each
+pane identity to `ReleasePaneResourcesHandler`. Removing
 an inactive tab leaves the active report owner untouched. Removing the active
 tab exposes its successor, synchronizes attachment geometry and focus
 reporting, and requests that tab's canonical snapshot.

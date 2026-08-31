@@ -63,7 +63,7 @@ on a stale focus identity.
 
 The reconciliation result contains at most 64 removed pane IDs. After the
 model commit, the client adapter marks their pending operations as ignored and
-releases copy, paste, reported-focus and graphics state by exact pane identity.
+gives each exact identity to `ReleasePaneResourcesHandler`.
 Authoritative retirement sends no focus-out. For an active tab, the adapter
 synchronizes attachment geometry and focus reporting, re-offers attached pane
 sizes and requests an attachment for each detached pane. A pane with an
