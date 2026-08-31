@@ -6119,6 +6119,32 @@ test "config reload outcomes that carry no new generation" {
     try harness.settle();
 }
 
+test "resolved configuration adoption crosses delivery before watcher rearm" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const candidate = try testingConfigAdoption(1, false);
+    const generation = candidate.generation;
+
+    const outcome = try config_reloads.handle(client, .{ .loaded = .{
+        .generation = candidate.generation,
+        .registry = candidate.registry,
+        .trust_store = candidate.trust_store,
+        .mtime_ns = 19,
+    } });
+
+    try std.testing.expectEqual(@as(u64, 1), outcome.adopted.generation);
+    try std.testing.expect(client.lua_generation == generation);
+    try std.testing.expectEqual(@as(i128, 19), client.reload.mtime_ns);
+    try std.testing.expectEqual(client_model.Version{
+        .configuration = 1,
+        .notifications = 1,
+    }, client.model.version());
+    try std.testing.expect(client.notification_scheduler.pending);
+    try harness.settle();
+}
+
 test "configuration adoption swaps ownership after commit and presents by version" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -6180,7 +6206,6 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expectEqual(client_model.Version{
         .configuration = 2,
         .diagnostic = 2,
-        .notifications = 2,
         .panes = 1,
         .chrome = 1,
     }, client.model.version());

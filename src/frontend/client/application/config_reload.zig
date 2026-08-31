@@ -16,7 +16,6 @@ pub const Effects = struct {
     configure_sidebar: *const fn (*anyopaque) anyerror!void,
     apply_sidebar: *const fn (*anyopaque, client_model.SidebarVisibility) anyerror!void,
     sync_pane_layout: *const fn (*anyopaque) anyerror!void,
-    publish_success: *const fn (*anyopaque) anyerror!void,
 };
 
 pub const ApplyConfigHandler = struct {
@@ -44,8 +43,6 @@ pub const ApplyConfigHandler = struct {
             try handler.effects.sync_pane_layout(handler.effects.context);
         }
 
-        try handler.effects.publish_success(handler.effects.context);
-
         return commit;
     }
 };
@@ -56,7 +53,6 @@ const Event = enum {
     configure_sidebar,
     apply_sidebar,
     sync_pane_layout,
-    publish_success,
 };
 
 const Failure = enum {
@@ -64,7 +60,6 @@ const Failure = enum {
     configure_sidebar,
     apply_sidebar,
     sync_pane_layout,
-    publish_success,
 };
 
 const EffectsCapture = struct {
@@ -85,7 +80,6 @@ const EffectsCapture = struct {
             .configure_sidebar = configureSidebar,
             .apply_sidebar = applySidebar,
             .sync_pane_layout = syncPaneLayout,
-            .publish_success = publishSuccess,
         };
     }
 
@@ -131,16 +125,6 @@ const EffectsCapture = struct {
 
         if (capture.failure == .sync_pane_layout) {
             return error.PaneLayoutSyncFailed;
-        }
-    }
-
-    fn publishSuccess(context: *anyopaque) !void {
-        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.publish_success);
-        capture.observeCommit();
-
-        if (capture.failure == .publish_success) {
-            return error.SuccessNotificationFailed;
         }
     }
 
@@ -195,7 +179,6 @@ test "ApplyConfigHandler owns ordered sidebar adoption after the model commit" {
         .project_appearance,
         .configure_sidebar,
         .apply_sidebar,
-        .publish_success,
     }, capture.eventSlice());
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(commit, capture.commit.?);
@@ -234,7 +217,6 @@ test "ApplyConfigHandler selects pane layout and honors a locked theme" {
         .project_appearance,
         .configure_sidebar,
         .sync_pane_layout,
-        .publish_success,
     }, capture.eventSlice());
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(!capture.apply_theme.?);
@@ -290,18 +272,6 @@ test "ApplyConfigHandler preserves every applied stage after delivery failures" 
             .sidebar_changed = false,
             .expected_error = error.PaneLayoutSyncFailed,
             .expected_events = &.{ .adopt_resources, .project_appearance, .configure_sidebar, .sync_pane_layout },
-        },
-        .{
-            .failure = .publish_success,
-            .sidebar_changed = true,
-            .expected_error = error.SuccessNotificationFailed,
-            .expected_events = &.{
-                .adopt_resources,
-                .project_appearance,
-                .configure_sidebar,
-                .apply_sidebar,
-                .publish_success,
-            },
         },
     };
 

@@ -13,6 +13,7 @@ pub const client_diagnostic = @import("client_diagnostic.zig");
 pub const close_pane = @import("close_pane.zig");
 pub const close_tab = @import("close_tab.zig");
 pub const config_reload = @import("config_reload.zig");
+pub const config_reload_delivery = @import("config_reload_delivery.zig");
 pub const copy_mode = @import("copy_mode.zig");
 pub const copy_mode_pointer = @import("copy_mode_pointer.zig");
 pub const create_tab = @import("create_tab.zig");
@@ -87,6 +88,7 @@ test {
     _ = close_pane;
     _ = close_tab;
     _ = config_reload;
+    _ = config_reload_delivery;
     _ = copy_mode;
     _ = copy_mode_pointer;
     _ = create_tab;

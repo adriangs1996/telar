@@ -1,25 +1,21 @@
 //! Adapts asynchronous configuration reloads to one client's application state.
 
 const std = @import("std");
-const lua_config = @import("../config/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const notifications = @import("../notifications/root.zig");
 const notification_flow = @import("notifications.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const sidebar_projection = @import("sidebar_projection.zig");
 
 const Client = @import("client.zig");
-const client_diagnostics = @import("client_diagnostics.zig");
 const reload_worker = @import("config_reload.zig");
 const config_use_case = client_application.config_reload;
+const config_delivery = client_application.config_reload_delivery;
 
 pub const Adoption = reload_worker.Adoption;
 
-pub const Outcome = union(enum) {
-    unchanged,
-    rejected,
-    adopted: client_model.ConfigurationCommit,
-};
+pub const Outcome = config_delivery.Outcome;
 
 /// Schedules the next reload attempt when this client owns a watched
 /// configuration.
@@ -46,33 +42,43 @@ pub fn schedule(client: *Client) !void {
 /// ```
 pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Outcome {
     const reload = try result;
-    const outcome: Outcome = switch (reload_worker.resolve(&client.reload, client.gpa, reload, .{
+    var context: DeliveryContext = .{ .client = client };
+    defer context.releaseOwned();
+    const resolution: config_delivery.Resolution = switch (reload_worker.resolve(&client.reload, client.gpa, reload, .{
         .kitty_support = client.model.hostCapabilities().kitty_graphics,
         .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
         .current_sidebar = client.sidebar_rendering,
     })) {
         .unchanged => .unchanged,
-        .rejected => |diagnostic| rejected: {
-            try commitDiagnostic(client, diagnostic);
-            try notification_flow.publishDiagnostic(client, "Configuration rejected");
-            break :rejected .rejected;
+        .rejected => |diagnostic| .{ .rejected = diagnostic },
+        .adopted => |adoption| adopted: {
+            context.adoption = adoption;
+            break :adopted .adopted;
         },
-        .adopted => |adoption| .{ .adopted = try apply(client, adoption) },
     };
-    try schedule(client);
+    var use_case: config_delivery.DeliverConfigReloadHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = &context,
+            .apply_adoption = applyAdoption,
+            .publish_notification = publishNotification,
+            .rearm = rearm,
+        },
+    };
 
-    return outcome;
+    return use_case.execute(resolution);
 }
 
-fn commitDiagnostic(client: *Client, diagnostic: lua_config.Diagnostic) !void {
-    _ = try client_diagnostics.replace(client, .{
-        .diagnostic = diagnostic,
-        .invalid_fallback = client_diagnostics.formatted(
-            "configuration reload failed: invalid diagnostic text",
-            .{},
-        ),
-    });
-}
+const DeliveryContext = struct {
+    client: *Client,
+    adoption: ?Adoption = null,
+
+    fn releaseOwned(context: *DeliveryContext) void {
+        if (context.adoption) |adoption| {
+            adoption.deinit(context.client.gpa);
+        }
+    }
+};
 
 /// Adopts one validated generation through the client application boundary.
 ///
@@ -94,7 +100,6 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
             .configure_sidebar = configureSidebar,
             .apply_sidebar = applySidebar,
             .sync_pane_layout = syncPaneLayout,
-            .publish_success = publishSuccess,
         },
     };
     const snapshot = &adoption.generation.snapshot;
@@ -192,11 +197,23 @@ fn syncPaneLayout(raw_context: *anyopaque) !void {
     }
 }
 
-fn publishSuccess(raw_context: *anyopaque) !void {
-    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
-    try notification_flow.publishNow(context.client, .{
-        .level = .success,
-        .title = "Configuration reloaded",
-        .message = "The new settings are active",
-    });
+fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {
+    const context: *DeliveryContext = @ptrCast(@alignCast(raw_context));
+    const adoption = context.adoption orelse return error.ConfigReloadAdoptionMissing;
+    // `apply` either installs the concrete owners or releases them on failure.
+    context.adoption = null;
+
+    return apply(context.client, adoption);
+}
+
+fn publishNotification(raw_context: *anyopaque, input: notifications.Input) !void {
+    const context: *DeliveryContext = @ptrCast(@alignCast(raw_context));
+
+    try notification_flow.publishNow(context.client, input);
+}
+
+fn rearm(raw_context: *anyopaque) !void {
+    const context: *DeliveryContext = @ptrCast(@alignCast(raw_context));
+
+    try schedule(context.client);
 }
