@@ -9,6 +9,7 @@ const pane_mod = @import("../pane/root.zig");
 const pty = @import("../pty/root.zig");
 const identity = @import("identity.zig");
 const lifecycle_mod = @import("lifecycle.zig");
+const metrics_mod = @import("metrics.zig");
 const middleware = @import("middleware.zig");
 const service_mod = @import("service.zig");
 
@@ -36,28 +37,7 @@ pub const Observation = struct {
     observed_at_ms: i64,
 };
 
-pub const MetricsSnapshot = struct {
-    active_connections: u32 = 0,
-    queued_events: u64 = 0,
-    event_queue_high_water: u64 = 0,
-    dropped_events: u64 = 0,
-    rejected_connections: u64 = 0,
-    invalid_authorization_rejections: u64 = 0,
-    unknown_credential_rejections: u64 = 0,
-    connection_limit_drops: u64 = 0,
-    h2_decode_failures: u64 = 0,
-    passthrough_connections: u64 = 0,
-    upstream_connect_failures: u64 = 0,
-    tls_context_failures: u64 = 0,
-    tls_upstream_handshake_failures: u64 = 0,
-    tls_downstream_handshake_failures: u64 = 0,
-    tls_mint_failures: u64 = 0,
-    claude_inference_requests: u64 = 0,
-    claude_sse_payload_fragments: u64 = 0,
-    claude_turn_completions: u64 = 0,
-    claude_successful_responses: u64 = 0,
-    claude_failure_observations: u64 = 0,
-};
+pub const MetricsSnapshot = metrics_mod.Snapshot;
 
 /// Ephemeral child environment. Its proxy credential is scrubbed by
 /// `pty.Environment.deinit`; the runtime must not retain or inspect it.
@@ -206,32 +186,7 @@ pub const Proxy = struct {
     /// const snapshot = proxy.metrics();
     /// ```
     pub fn metrics(proxy: *const Proxy) MetricsSnapshot {
-        const service = proxy.lifecycle.service;
-        const connections = service.connection_slots.snapshot();
-        const observations = service.observations.metrics();
-
-        return .{
-            .active_connections = connections.active,
-            .queued_events = observations.queued,
-            .event_queue_high_water = observations.high_water,
-            .dropped_events = observations.dropped,
-            .rejected_connections = service.rejected_connections.load(.monotonic),
-            .invalid_authorization_rejections = service.invalid_authorization_rejections.load(.monotonic),
-            .unknown_credential_rejections = service.unknown_credential_rejections.load(.monotonic),
-            .connection_limit_drops = connections.limit_drops,
-            .h2_decode_failures = service.h2_decode_failures.load(.monotonic),
-            .passthrough_connections = service.passthrough_connections.load(.monotonic),
-            .upstream_connect_failures = service.upstream_connect_failures.load(.monotonic),
-            .tls_context_failures = service.tls_context_failures.load(.monotonic),
-            .tls_upstream_handshake_failures = service.tls_upstream_handshake_failures.load(.monotonic),
-            .tls_downstream_handshake_failures = service.tls_downstream_handshake_failures.load(.monotonic),
-            .tls_mint_failures = service.tls_mint_failures.load(.monotonic),
-            .claude_inference_requests = service.claude_inference_requests.load(.monotonic),
-            .claude_sse_payload_fragments = service.claude_sse_payload_fragments.load(.monotonic),
-            .claude_turn_completions = service.claude_turn_completions.load(.monotonic),
-            .claude_successful_responses = service.claude_successful_responses.load(.monotonic),
-            .claude_failure_observations = service.claude_failure_observations.load(.monotonic),
-        };
+        return proxy.lifecycle.service.metrics();
     }
 };
 

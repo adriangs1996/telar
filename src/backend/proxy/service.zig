@@ -9,6 +9,7 @@ const connect_authentication = @import("connect_authentication.zig");
 const h2 = @import("h2/root.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
+const metrics_mod = @import("metrics.zig");
 const middleware = @import("middleware.zig");
 const observation_queue = @import("observation_queue.zig");
 const provider = @import("provider/root.zig");
@@ -114,22 +115,8 @@ pub const Service = struct {
     configuration_mutex: Io.Mutex = .init,
     started: bool = false,
     observations: observation_queue.Channel = undefined,
-    rejected_connections: std.atomic.Value(u64) = .init(0),
-    invalid_authorization_rejections: std.atomic.Value(u64) = .init(0),
-    unknown_credential_rejections: std.atomic.Value(u64) = .init(0),
     connection_slots: connection_admission.Slots = .init(max_connections),
-    h2_decode_failures: std.atomic.Value(u64) = .init(0),
-    passthrough_connections: std.atomic.Value(u64) = .init(0),
-    upstream_connect_failures: std.atomic.Value(u64) = .init(0),
-    tls_context_failures: std.atomic.Value(u64) = .init(0),
-    tls_upstream_handshake_failures: std.atomic.Value(u64) = .init(0),
-    tls_downstream_handshake_failures: std.atomic.Value(u64) = .init(0),
-    tls_mint_failures: std.atomic.Value(u64) = .init(0),
-    claude_inference_requests: std.atomic.Value(u64) = .init(0),
-    claude_sse_payload_fragments: std.atomic.Value(u64) = .init(0),
-    claude_turn_completions: std.atomic.Value(u64) = .init(0),
-    claude_successful_responses: std.atomic.Value(u64) = .init(0),
-    claude_failure_observations: std.atomic.Value(u64) = .init(0),
+    telemetry: metrics_mod.Counters = .{},
     next_connection_id: std.atomic.Value(u64) = .init(1),
 
     pub fn create(io: Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
@@ -191,6 +178,19 @@ pub const Service = struct {
 
     pub fn receive(service: *Service, io: Io) anyerror!middleware.Event {
         return service.observations.receive(io);
+    }
+
+    /// Returns one lock-free snapshot without exposing queue, admission, or
+    /// counter storage to the caller.
+    ///
+    /// ```zig
+    /// const snapshot = service.metrics();
+    /// ```
+    pub fn metrics(service: *const Service) metrics_mod.Snapshot {
+        return service.telemetry.snapshot(.{
+            .connections = service.connection_slots.snapshot(),
+            .observations = service.observations.metrics(),
+        });
     }
 
     pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const identity.Credential) ![]const u8 {
@@ -424,16 +424,16 @@ const TunnelContext = struct {
 
     fn publishStatus(context: *TunnelContext, observation: StatusObservation) void {
         if (context.provider == .claude) {
-            const counter = switch (observation.phase) {
-                .request_started => &context.service.claude_inference_requests,
-                .provider_turn_completed => &context.service.claude_turn_completions,
-                .response_finished => &context.service.claude_successful_responses,
-                .request_failed => &context.service.claude_failure_observations,
+            const counter: ?metrics_mod.Counter = switch (observation.phase) {
+                .request_started => .claude_inference_request,
+                .provider_turn_completed => .claude_turn_completion,
+                .response_finished => .claude_successful_response,
+                .request_failed => .claude_failure_observation,
                 .auxiliary_request_started, .response_activity => null,
             };
 
             if (counter) |selected| {
-                _ = selected.fetchAdd(1, .monotonic);
+                context.service.telemetry.record(selected);
             }
         }
 
@@ -549,7 +549,7 @@ const H2EventObserver = struct {
                 const responses = observer.responses orelse return;
 
                 if (shouldInspectH2Body(body)) {
-                    _ = observer.context.service.claude_sse_payload_fragments.fetchAdd(1, .monotonic);
+                    observer.context.service.telemetry.record(.claude_sse_payload_fragment);
 
                     if (responses.feed(body.stream_id, body.bytes)) {
                         observer.context.publishStatus(.{ .phase = .provider_turn_completed, .stream_id = body.stream_id, .status_code = 0 });
@@ -642,7 +642,7 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     };
     defer std.crypto.secureZero(u8, &context.credential.token);
     const upstream = connectUpstream(target.host, service.io, target.port) catch {
-        _ = service.upstream_connect_failures.fetchAdd(1, .monotonic);
+        service.telemetry.record(.upstream_connect_failure);
         context.publish(.request_failed, 0);
         reply(service.io, stream, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
         return;
@@ -699,21 +699,22 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
 }
 
 fn recordAuthenticationRejection(service: *Service, rejection: connect_authentication.RejectionMetric) void {
-    _ = service.rejected_connections.fetchAdd(1, .monotonic);
+    service.telemetry.record(.rejected_connection);
     switch (rejection) {
-        .invalid_authorization => _ = service.invalid_authorization_rejections.fetchAdd(1, .monotonic),
-        .unknown_credential => _ = service.unknown_credential_rejections.fetchAdd(1, .monotonic),
+        .invalid_authorization => service.telemetry.record(.invalid_authorization_rejection),
+        .unknown_credential => service.telemetry.record(.unknown_credential_rejection),
     }
 }
 
 fn recordTlsFailure(service: *Service, failure: tls.Error) void {
-    const counter = switch (failure) {
-        error.ContextFailed => &service.tls_context_failures,
-        error.UpstreamHandshakeFailed => &service.tls_upstream_handshake_failures,
-        error.DownstreamHandshakeFailed => &service.tls_downstream_handshake_failures,
-        error.MintFailed => &service.tls_mint_failures,
+    const counter: metrics_mod.Counter = switch (failure) {
+        error.ContextFailed => .tls_context_failure,
+        error.UpstreamHandshakeFailed => .tls_upstream_handshake_failure,
+        error.DownstreamHandshakeFailed => .tls_downstream_handshake_failure,
+        error.MintFailed => .tls_mint_failure,
     };
-    _ = counter.fetchAdd(1, .monotonic);
+
+    service.telemetry.record(counter);
 }
 
 fn tlsPassthrough(context: *TlsTunnelContext, host: []const u8) bool {
@@ -721,7 +722,7 @@ fn tlsPassthrough(context: *TlsTunnelContext, host: []const u8) bool {
 }
 
 fn recordTlsPassthrough(context: *TlsTunnelContext) void {
-    _ = context.service.passthrough_connections.fetchAdd(1, .monotonic);
+    context.service.telemetry.record(.passthrough_connection);
 }
 
 fn interceptTls(context: *TlsTunnelContext, attempt: tls_tunnel.Attempt(net.Stream)) tls.Error!tls_tunnel.Established(*tls.Session) {
@@ -798,7 +799,7 @@ fn shouldTransformH2(context: *const H2Context, direction: h2.Direction) bool {
 }
 
 fn recordH2DecodeFailure(context: *H2Context, _: h2.Direction) void {
-    _ = context.service.h2_decode_failures.fetchAdd(1, .monotonic);
+    context.service.telemetry.record(.h2_decode_failure);
 }
 
 fn settleH2Connection(context: *H2Context) void {
@@ -988,7 +989,7 @@ const HttpResponseObserver = struct {
 
         if (observer.inspect_payload and fragment.payload.len != 0) {
             if (observer.response.provider == .claude) {
-                _ = observer.context.service.claude_sse_payload_fragments.fetchAdd(1, .monotonic);
+                observer.context.service.telemetry.record(.claude_sse_payload_fragment);
             }
 
             if (observer.response.feed(fragment.payload)) {
@@ -1141,7 +1142,7 @@ test "HTTP1 Claude request bodies refine route candidates before publication" {
         .{ .phase = .auxiliary_request_started, .protocol = .http11, .connection_id = 59, .stream_id = 0 },
         .{ .phase = .request_started, .protocol = .http11, .connection_id = 59, .stream_id = 0 },
     });
-    try std.testing.expectEqual(@as(u64, 1), service.claude_inference_requests.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
 }
 
 test "HTTP2 Claude request bodies refine interleaved route candidates per stream" {
@@ -1174,7 +1175,7 @@ test "HTTP2 Claude request bodies refine interleaved route candidates per stream
         .{ .phase = .auxiliary_request_started, .protocol = .h2, .connection_id = 61, .stream_id = 65 },
         .{ .phase = .request_started, .protocol = .h2, .connection_id = 61, .stream_id = 63 },
     });
-    try std.testing.expectEqual(@as(u64, 1), service.claude_inference_requests.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
 }
 
 test "provider payload inspection uses successful response bodies as evidence" {
@@ -1369,11 +1370,11 @@ test "HTTP1 Claude SSE publishes provider turn completion after forwarding" {
 
     try std.testing.expectEqualStrings(session.child_input, session.originOutput());
     try std.testing.expectEqualStrings(response, session.childOutput());
-    try std.testing.expectEqual(@as(u64, 1), service.claude_inference_requests.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 1), service.claude_sse_payload_fragments.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 1), service.claude_turn_completions.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 1), service.claude_successful_responses.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 0), service.claude_failure_observations.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_sse_payload_fragments);
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_turn_completions);
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_successful_responses);
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_failure_observations);
 }
 
 test "HTTP2 final DATA publishes Claude completion before transport completion" {
@@ -1432,11 +1433,11 @@ test "HTTP2 final DATA publishes Claude completion before transport completion" 
         .{ .phase = .provider_turn_completed, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
         .{ .phase = .response_finished, .protocol = .h2, .connection_id = 29, .stream_id = 31 },
     });
-    try std.testing.expectEqual(@as(u64, 1), service.claude_inference_requests.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 1), service.claude_sse_payload_fragments.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 1), service.claude_turn_completions.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 1), service.claude_successful_responses.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 0), service.claude_failure_observations.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_inference_requests);
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_sse_payload_fragments);
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_turn_completions);
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_successful_responses);
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_failure_observations);
 }
 
 test "Claude lifecycle counters ignore auxiliary traffic and other providers" {
@@ -1466,11 +1467,11 @@ test "Claude lifecycle counters ignore auxiliary traffic and other providers" {
     context.publish(.request_started, 0);
     context.publish(.provider_turn_completed, 0);
 
-    try std.testing.expectEqual(@as(u64, 0), service.claude_inference_requests.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 0), service.claude_sse_payload_fragments.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 0), service.claude_turn_completions.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 0), service.claude_successful_responses.load(.monotonic));
-    try std.testing.expectEqual(@as(u64, 1), service.claude_failure_observations.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_inference_requests);
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_sse_payload_fragments);
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_turn_completions);
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_successful_responses);
+    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_failure_observations);
 }
 
 test "HTTP response metadata preserves final routing semantics" {
@@ -1737,7 +1738,7 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
     try origin_worker.await(io);
     try std.testing.expectEqual(
         @as(u64, 1),
-        service.passthrough_connections.load(.monotonic),
+        service.metrics().passthrough_connections,
     );
 }
 
@@ -1811,14 +1812,14 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     try std.testing.expect(std.meta.eql(credential, event.credential));
     try std.testing.expectEqual(
         @as(u64, 1),
-        service.tls_upstream_handshake_failures.load(.monotonic),
+        service.metrics().tls_upstream_handshake_failures,
     );
-    try std.testing.expectEqual(@as(u64, 0), service.tls_context_failures.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().tls_context_failures);
     try std.testing.expectEqual(
         @as(u64, 0),
-        service.tls_downstream_handshake_failures.load(.monotonic),
+        service.metrics().tls_downstream_handshake_failures,
     );
-    try std.testing.expectEqual(@as(u64, 0), service.tls_mint_failures.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.metrics().tls_mint_failures);
 }
 
 test "proxy credentials are revoked with their pane" {
@@ -1953,11 +1954,11 @@ test "loopback service maps CONNECT authentication and target rejections" {
     ) != null);
     try std.testing.expectEqual(
         @as(u64, 1),
-        service.invalid_authorization_rejections.load(.monotonic),
+        service.metrics().invalid_authorization_rejections,
     );
     try std.testing.expectEqual(
         @as(u64, 0),
-        service.unknown_credential_rejections.load(.monotonic),
+        service.metrics().unknown_credential_rejections,
     );
 
     const unknown_client = try address.connect(io, .{ .mode = .stream });
@@ -1986,11 +1987,11 @@ test "loopback service maps CONNECT authentication and target rejections" {
     ));
     try std.testing.expectEqual(
         @as(u64, 1),
-        service.unknown_credential_rejections.load(.monotonic),
+        service.metrics().unknown_credential_rejections,
     );
     try std.testing.expectEqual(
         @as(u64, 2),
-        service.rejected_connections.load(.monotonic),
+        service.metrics().rejected_connections,
     );
 
     var credential = identity.parseProxyAuthorization(request).?;
@@ -2019,6 +2020,6 @@ test "loopback service maps CONNECT authentication and target rejections" {
     ));
     try std.testing.expectEqual(
         @as(u64, 2),
-        service.rejected_connections.load(.monotonic),
+        service.metrics().rejected_connections,
     );
 }
