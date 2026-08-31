@@ -47,6 +47,30 @@ oldest item at capacity. Invalid UTF-8 is replaced before storage. Publication
 does not request a frame directly. In particular, no title or message borrowed
 from a decoded runtime buffer survives the synchronous adapter call.
 
+## Runtime delivery request
+
+```text
+semantic notification action
+             |
+     client_actions.apply
+             |
+notifications.requestDelivery
+             |
+request_lifecycle.nextId + deliverNotification
+             |
+      show_notification
+```
+
+The action dispatcher delegates the complete bounded value. The notification
+adapter allocates its request identity, translates the semantic action to the
+wire value and registers a `notification` continuation before delivery. The
+outbox copies title and message bytes, so a configuration reload or plugin
+completion cannot invalidate queued text.
+
+Accepted delivery changes no `ClientModel.Version` and schedules no frame. If
+the bounded outbox rejects the request, request lifecycle removes the
+continuation and propagates the error. It does not reuse the allocated identity.
+
 ## Runtime delivery report
 
 ```text
@@ -152,8 +176,8 @@ new notifications after reconciliation.
   timer ordering, delivery policy, stale interaction behavior and retained
   commits when timer scheduling fails.
 - `src/frontend/client/notifications.zig` owns local timestamp acquisition,
-  diagnostic publication, runtime wire translation, delivery correlation and
-  timer event ordering.
+  diagnostic publication, outbound action translation, delivery correlation
+  and timer event ordering.
 - `src/frontend/client/notification_timers.zig` maps model deadlines to the
   shared scheduler and notification events.
 - `src/frontend/client/deadline_timer.zig` proves deadline replacement,
@@ -161,6 +185,6 @@ new notifications after reconciliation.
   completions.
 - `src/frontend/client/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
-- `src/frontend/client/client_test.zig` proves wire and local producers,
-  diagnostic ownership and duration, a real lifecycle tick, presenter-owned
-  projection and bounded agent alerts.
+- `src/frontend/client/client_test.zig` proves outbound delivery and rollback,
+  wire and local producers, diagnostic ownership and duration, a real lifecycle
+  tick, presenter-owned projection and bounded agent alerts.

@@ -4867,6 +4867,87 @@ test "a runtime notification translates and owns its wire payload" {
     try std.testing.expect(client.notification_scheduler.pending);
 }
 
+test "notification action delivers one correlated runtime request without model effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const request_id: schema.RequestId = @enumFromInt(client.request_lifecycle.next_request_id);
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    try runtime_transport.enqueue(client, .{
+        .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
+    });
+    var notification = try input_capability.action.Notification.init(
+        .warning,
+        2500,
+        .{ .tab = @enumFromInt(3) },
+        "Agent waiting",
+        "Review its question",
+    );
+
+    try std.testing.expectEqual(
+        keybind.Control.continue_routing,
+        try client_actions.apply(client, .{ .notification = notification }),
+    );
+
+    try std.testing.expect(request_lifecycle.has(client, .notification));
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    @memset(&notification.title_bytes, 'x');
+    @memset(&notification.message_bytes, 'y');
+
+    try harness.settle();
+    var message_buffer: [512]u8 = undefined;
+    const first = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(first == .detach_pane);
+    const message = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(message == .show_notification);
+    try std.testing.expectEqual(request_id, message.show_notification.request_id);
+    try std.testing.expectEqual(schema.NotificationLevel.warning, message.show_notification.notification.level);
+    try std.testing.expectEqual(@as(u32, 2500), message.show_notification.notification.duration_ms);
+    try std.testing.expectEqualDeep(
+        schema.NotificationTarget{ .tab = @enumFromInt(3) },
+        message.show_notification.notification.target,
+    );
+    try std.testing.expectEqualStrings("Agent waiting", message.show_notification.notification.title);
+    try std.testing.expectEqualStrings("Review its question", message.show_notification.notification.message);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+}
+
+test "notification request rolls correlation back when transport is full" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    while (client.runtime_transport.outbox.hasCapacity()) {
+        try client.runtime_transport.outbox.push(.{
+            .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
+        });
+    }
+    const next_request_id = client.request_lifecycle.next_request_id;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    const notification = try input_capability.action.Notification.init(
+        .info,
+        schema.default_notification_duration_ms,
+        .none,
+        "Build complete",
+        "Review the output",
+    );
+
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        notification_flow.requestDelivery(client, &notification),
+    );
+
+    try std.testing.expectEqual(next_request_id + 1, client.request_lifecycle.next_request_id);
+    try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+}
+
 test "diagnostic notification publication owns one bounded failure notice" {
     var harness: TestHarness = undefined;
     try harness.init();

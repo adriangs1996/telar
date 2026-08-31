@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const input_capability = @import("../input/root.zig");
 const notification_capability = @import("../notifications/root.zig");
 const client_application = @import("application/root.zig");
 const client_clock = @import("clock.zig");
@@ -9,11 +10,34 @@ const client_model = @import("model.zig");
 const notification_timers = @import("notification_timers.zig");
 
 const Client = @import("client.zig");
+const action = input_capability.action;
 const notification_use_cases = client_application.notifications;
 const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
 
 pub const DeliveryOutcome = notification_use_cases.DeliveryOutcome;
+
+/// Delivers one bounded semantic notification through the runtime and records
+/// the continuation consumed by its delivery report.
+///
+/// ```zig
+/// const request_id = try requestDelivery(client, &notification);
+/// ```
+pub fn requestDelivery(client: *Client, notification: *const action.Notification) !schema.RequestId {
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliverNotification(client, .{
+        .request_id = request_id,
+        .notification = .{
+            .level = notification.level,
+            .duration_ms = notification.duration_ms,
+            .target = notification.target,
+            .title = notification.title(),
+            .message = notification.message(),
+        },
+    });
+
+    return request_id;
+}
 
 /// Consumes one correlated runtime delivery report and applies its policy.
 ///

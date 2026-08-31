@@ -8,6 +8,7 @@ const Client = @import("client.zig");
 const client_detachments = @import("client_detachments.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
+const notification_flow = @import("notifications.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
@@ -82,19 +83,7 @@ pub fn apply(client: *Client, value: Action) !keybind.Control {
             return .stop;
         },
         .enter_copy_mode => _ = copy_modes.enter(client),
-        .notification => |*notification| {
-            const request_id = try request_lifecycle.nextId(client);
-            try request_lifecycle.deliverNotification(client, .{
-                .request_id = request_id,
-                .notification = .{
-                    .level = notification.level,
-                    .duration_ms = notification.duration_ms,
-                    .target = notification.target,
-                    .title = notification.title(),
-                    .message = notification.message(),
-                },
-            });
-        },
+        .notification => |*notification| _ = try notification_flow.requestDelivery(client, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }
 

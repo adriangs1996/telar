@@ -121,6 +121,10 @@ The detach action delegates to `client_detachments.apply`, which closes
 tab-owned paste and focus state before detaching every runtime pane. See
 [Client detach](client-detach.md) for ordering and failure semantics.
 
+The notification action delegates wire translation, request correlation and
+owned outbox delivery to `notifications.requestDelivery`. See
+[Notifications](notifications.md) for request and report handling.
+
 Actions may mutate disposable client state or enqueue a typed runtime request.
 They never call runtime internals. The unit test `a configured sequence runs
 once and does not reach the pane` in `src/frontend/input/keybind.zig` proves
