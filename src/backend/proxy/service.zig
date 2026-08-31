@@ -17,6 +17,7 @@ const passthrough_policy = @import("passthrough_policy.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
 const tls_tunnel = @import("tls_tunnel.zig");
+const tunnel_exchange = @import("tunnel/exchange.zig");
 
 const Io = std.Io;
 const net = Io.net;
@@ -243,79 +244,12 @@ test "proxy listeners own distinct loopback ports" {
     try std.testing.expect(first.port != second.port);
 }
 
-const StatusObservation = struct {
-    phase: middleware.Phase,
-    stream_id: u32,
-    status_code: u16,
-};
-
-const TransformTarget = struct {
-    direction: middleware.Direction,
-    kind: middleware.HeaderKind,
-    stream_id: u32,
-};
-
 const UpgradeRoute = struct {
     from: tls.Session.Side,
     to: tls.Session.Side,
 };
 
-const TunnelContext = struct {
-    service: *Service,
-    credential: identity.Credential,
-    provider: schema.AgentProvider,
-    connection_id: u64,
-    protocol: middleware.Protocol,
-    status_code: u16 = 0,
-
-    fn publish(context: *TunnelContext, phase: middleware.Phase, stream_id: u32) void {
-        context.publishStatus(.{ .phase = phase, .stream_id = stream_id, .status_code = context.status_code });
-    }
-
-    fn publishH2(context: *TunnelContext, lifecycle: h2.Lifecycle) void {
-        context.publishStatus(.{ .phase = lifecycle.phase, .stream_id = lifecycle.stream_id, .status_code = lifecycle.status_code });
-    }
-
-    fn publishStatus(context: *TunnelContext, observation: StatusObservation) void {
-        if (context.provider == .claude) {
-            const counter: ?metrics_mod.Counter = switch (observation.phase) {
-                .request_started => .claude_inference_request,
-                .provider_turn_completed => .claude_turn_completion,
-                .response_finished => .claude_successful_response,
-                .request_failed => .claude_failure_observation,
-                .auxiliary_request_started, .response_activity => null,
-            };
-
-            if (counter) |selected| {
-                context.service.telemetry.record(selected);
-            }
-        }
-
-        context.service.pipeline.publish(context.service.io, .{
-            .credential = context.credential,
-            .provider = context.provider,
-            .phase = observation.phase,
-            .protocol = context.protocol,
-            .connection_id = context.connection_id,
-            .stream_id = observation.stream_id,
-            .status_code = observation.status_code,
-            .observed_at_ms = Io.Timestamp.now(context.service.io, .real).toMilliseconds(),
-        });
-    }
-
-    fn transformContext(context: *const TunnelContext, target: TransformTarget) middleware.TransformContext {
-        return .{
-            .pane_id = context.credential.pane_id,
-            .pane_generation = context.credential.pane_generation,
-            .provider = context.provider,
-            .protocol = context.protocol,
-            .direction = target.direction,
-            .kind = target.kind,
-            .connection_id = context.connection_id,
-            .stream_id = target.stream_id,
-        };
-    }
-};
+const TunnelContext = tunnel_exchange.Exchange;
 
 const TlsTunnelContext = struct {
     service: *Service,
@@ -403,7 +337,7 @@ const H2EventObserver = struct {
                 const responses = observer.responses orelse return;
 
                 if (shouldInspectH2Body(body)) {
-                    observer.context.service.telemetry.record(.claude_sse_payload_fragment);
+                    observer.context.record(.claude_sse_payload_fragment);
 
                     if (responses.feed(body.stream_id, body.bytes)) {
                         observer.context.publishStatus(.{ .phase = .provider_turn_completed, .stream_id = body.stream_id, .status_code = 0 });
@@ -429,7 +363,11 @@ const H2EventObserver = struct {
             }
         }
 
-        observer.context.publishH2(lifecycle);
+        observer.context.publishStatus(.{
+            .phase = lifecycle.phase,
+            .stream_id = lifecycle.stream_id,
+            .status_code = lifecycle.status_code,
+        });
 
         if (observer.responses) |responses| {
             if (lifecycle.stream_id != 0 and
@@ -488,7 +426,9 @@ fn tunnel(service: *Service, stream: net.Stream) Io.Cancelable!void {
     defer std.crypto.secureZero(u8, &authenticated.credential.token);
     const target = authenticated.target;
     var context: TunnelContext = .{
-        .service = service,
+        .io = service.io,
+        .pipeline = &service.pipeline,
+        .telemetry = &service.telemetry,
         .credential = authenticated.credential,
         .provider = provider.identify(target.host.bytes),
         .connection_id = service.next_connection_id.fetchAdd(1, .monotonic),
@@ -843,7 +783,7 @@ const HttpResponseObserver = struct {
 
         if (observer.inspect_payload and fragment.payload.len != 0) {
             if (observer.response.provider == .claude) {
-                observer.context.service.telemetry.record(.claude_sse_payload_fragment);
+                observer.context.record(.claude_sse_payload_fragment);
             }
 
             if (observer.response.feed(fragment.payload)) {
@@ -935,7 +875,9 @@ fn testingTunnel(service: *Service, protocol: middleware.Protocol, connection_id
     try service.registerCredential(&credential);
 
     return .{
-        .service = service,
+        .io = service.io,
+        .pipeline = &service.pipeline,
+        .telemetry = &service.telemetry,
         .credential = credential,
         .provider = .claude,
         .connection_id = connection_id,
@@ -1174,7 +1116,9 @@ test "HTTP1 Claude SSE publishes provider turn completion after forwarding" {
     };
     try service.registerCredential(&credential);
     var tunnel_context: TunnelContext = .{
-        .service = service,
+        .io = service.io,
+        .pipeline = &service.pipeline,
+        .telemetry = &service.telemetry,
         .credential = credential,
         .provider = .claude,
         .connection_id = 19,
@@ -1246,7 +1190,9 @@ test "HTTP2 final DATA publishes Claude completion before transport completion" 
     };
     try service.registerCredential(&credential);
     var tunnel_context: TunnelContext = .{
-        .service = service,
+        .io = service.io,
+        .pipeline = &service.pipeline,
+        .telemetry = &service.telemetry,
         .credential = credential,
         .provider = .claude,
         .connection_id = 29,
@@ -1292,40 +1238,6 @@ test "HTTP2 final DATA publishes Claude completion before transport completion" 
     try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_turn_completions);
     try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_successful_responses);
     try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_failure_observations);
-}
-
-test "Claude lifecycle counters ignore auxiliary traffic and other providers" {
-    const io = std.testing.io;
-    var fixture: TestServiceFixture = .{};
-    try fixture.init(io, std.testing.allocator);
-    defer fixture.deinit();
-    const service = fixture.service.?;
-
-    const credential: identity.Credential = .{
-        .pane_id = try schema.id.pane(37),
-        .pane_generation = 41,
-        .token = .{0x18} ** identity.token_bytes,
-    };
-    try service.registerCredential(&credential);
-    var context: TunnelContext = .{
-        .service = service,
-        .credential = credential,
-        .provider = .claude,
-        .connection_id = 43,
-        .protocol = .http11,
-    };
-
-    context.publish(.auxiliary_request_started, 0);
-    context.publish(.request_failed, 0);
-    context.provider = .codex;
-    context.publish(.request_started, 0);
-    context.publish(.provider_turn_completed, 0);
-
-    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_inference_requests);
-    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_sse_payload_fragments);
-    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_turn_completions);
-    try std.testing.expectEqual(@as(u64, 0), service.metrics().claude_successful_responses);
-    try std.testing.expectEqual(@as(u64, 1), service.metrics().claude_failure_observations);
 }
 
 test "HTTP response metadata preserves final routing semantics" {
