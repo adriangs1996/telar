@@ -17,12 +17,7 @@ pub const Completion = struct {
     result: anyerror!*attachments.Capture,
 };
 
-pub const StartOutcome = union(enum) {
-    started: client_model.ClipboardCapture,
-    busy,
-    unsupported,
-    no_target,
-};
+pub const StartOutcome = clipboard_image.StartOutcome;
 
 const CompletionContext = struct {
     client: *Client,
@@ -35,11 +30,6 @@ const CompletionContext = struct {
 /// _ = try start(client);
 /// ```
 pub fn start(client: *Client) !StartOutcome {
-    if (!attachments.platformSupported()) {
-        return .unsupported;
-    }
-
-    const target = client.model.focusedAttachmentTarget() orelse return .no_target;
     var use_case: clipboard_image.StartClipboardImageHandler = .{
         .model = &client.model,
         .effects = .{
@@ -48,10 +38,7 @@ pub fn start(client: *Client) !StartOutcome {
         },
     };
 
-    return switch (try use_case.execute(target)) {
-        .started => |capture| .{ .started = capture },
-        .busy => .busy,
-    };
+    return use_case.execute(attachments.platformSupported());
 }
 
 /// Consumes one worker event and adopts only its current exact result.

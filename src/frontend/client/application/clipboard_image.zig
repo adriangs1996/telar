@@ -16,18 +16,26 @@ pub const StartEffects = struct {
 pub const StartOutcome = union(enum) {
     started: client_model.ClipboardCapture,
     busy,
+    unsupported,
+    no_target,
 };
 
 pub const StartClipboardImageHandler = struct {
     model: *client_model.Model,
     effects: StartEffects,
 
-    /// Commits one capture identity before scheduling its media worker.
+    /// Resolves one supported focused target and commits its capture identity
+    /// before scheduling the media worker.
     ///
     /// ```zig
-    /// const outcome = try handler.execute(target);
+    /// const outcome = try handler.execute(platform_supported);
     /// ```
-    pub fn execute(handler: *StartClipboardImageHandler, target: attachments.Target) !StartOutcome {
+    pub fn execute(handler: *StartClipboardImageHandler, platform_supported: bool) !StartOutcome {
+        if (!platform_supported) {
+            return .unsupported;
+        }
+
+        const target = handler.model.focusedAttachmentTarget() orelse return .no_target;
         const capture = (try handler.model.beginClipboardCapture(target)) orelse return .busy;
         errdefer {
             const rolled_back = handler.model.finishClipboardCapture(capture.id);
@@ -158,38 +166,52 @@ const StartCapture = struct {
 test "StartClipboardImageHandler commits before scheduling and suppresses a second capture" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const target: attachments.Target = .{
-        .pane_id = @enumFromInt(7),
-        .pane_generation = 2,
-    };
+    const target = try installFocusedTarget(&model);
     var capture: StartCapture = .{ .model = &model };
     var handler: StartClipboardImageHandler = .{
         .model = &model,
         .effects = capture.port(),
     };
 
-    const started = try handler.execute(target);
-    const busy = try handler.execute(target);
+    const started = try handler.execute(true);
+    const busy = try handler.execute(true);
 
     try std.testing.expect(started == .started);
+    try std.testing.expectEqualDeep(target, started.started.target);
     try std.testing.expect(busy == .busy);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
 }
 
+test "StartClipboardImageHandler owns unsupported and missing target outcomes" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var capture: StartCapture = .{ .model = &model };
+    var handler: StartClipboardImageHandler = .{
+        .model = &model,
+        .effects = capture.port(),
+    };
+
+    try std.testing.expect(try handler.execute(true) == .no_target);
+
+    _ = try installFocusedTarget(&model);
+
+    try std.testing.expect(try handler.execute(false) == .unsupported);
+    try std.testing.expectEqual(@as(usize, 0), capture.calls);
+    try std.testing.expect(model.clipboardCapture() == null);
+}
+
 test "StartClipboardImageHandler rolls back the exact reservation after scheduling failure" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
+    _ = try installFocusedTarget(&model);
     var capture: StartCapture = .{ .model = &model, .fail = true };
     var handler: StartClipboardImageHandler = .{
         .model = &model,
         .effects = capture.port(),
     };
 
-    try std.testing.expectError(error.CaptureScheduleFailed, handler.execute(.{
-        .pane_id = @enumFromInt(7),
-        .pane_generation = 2,
-    }));
+    try std.testing.expectError(error.CaptureScheduleFailed, handler.execute(true));
     try std.testing.expect(model.clipboardCapture() == null);
 }
 

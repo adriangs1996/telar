@@ -57,9 +57,12 @@ lifecycle state, not render state, so reserving or finishing it does not
 advance `ClientModel.Version`.
 
 `StartClipboardImageHandler` commits that reservation before scheduling the
-media worker. A scheduling error removes only the matching reservation. A
-second `Ctrl+V` still reaches the child, but its preview is skipped while the
-first capture remains active.
+media worker. The adapter supplies only the physical platform-support fact;
+the handler owns `unsupported`, resolves the focused target from `ClientModel`,
+owns `no_target` and `busy`, and returns the complete start outcome. A
+scheduling error removes only the matching reservation. A second `Ctrl+V`
+still reaches the child, but its preview is skipped while the first capture
+remains active.
 
 The platform worker receives copied IDs and values. It owns clipboard access,
 PNG allocation and format checks. `CaptureResources` retains only the result
@@ -119,8 +122,9 @@ event does not wipe megabytes synchronously.
 - `src/frontend/client/model.zig` proves single-flight capture identity, exact
   completion, target ownership, validation and identifier exhaustion.
 - `src/frontend/client/application/clipboard_image.zig` proves commit before
-  scheduling, exact consumption, stale suppression, adoption before resize and
-  failure classification before exact delivery.
+  scheduling, complete start classification, exact consumption, stale
+  suppression, adoption before resize and failure classification before exact
+  delivery.
 - `src/frontend/client/application/clipboard_image_delivery.zig` proves quiet
   outcomes, notification mapping and publication failure propagation.
 - `src/frontend/attachments/root.zig` proves cancellation ownership, image
