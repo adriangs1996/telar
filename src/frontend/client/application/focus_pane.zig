@@ -12,15 +12,15 @@ pub const FocusPane = client_model.PaneFocusRequest;
 
 pub const FocusEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.PaneFocus, ui.Rect) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.PaneFocus, ui.Rect) anyerror!void,
 };
 
 pub const FocusPaneHandler = struct {
     model: *client_model.Model,
     effects: FocusEffects,
 
-    /// Commits one focus change before synchronizing focus reports and
-    /// fullscreen geometry. A rejected or repeated target has no effects.
+    /// Commits one focus change before delivering it to active-pane resources.
+    /// A rejected or repeated target has no effects.
     ///
     /// ```zig
     /// const focus = try handler.execute(.{ .target = .{ .pane_id = pane_id }, .area = area });
@@ -28,7 +28,7 @@ pub const FocusPaneHandler = struct {
     pub fn execute(handler: *FocusPaneHandler, command: FocusPane) !?client_model.PaneFocus {
         const focus = handler.model.focusPane(command) orelse return null;
 
-        try handler.effects.apply(handler.effects.context, focus, command.area);
+        try handler.effects.deliver(handler.effects.context, focus, command.area);
         return focus;
     }
 };
@@ -79,10 +79,10 @@ const EffectsCapture = struct {
     fail: bool = false,
 
     fn port(capture: *EffectsCapture) FocusEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, focus: client_model.PaneFocus, area: ui.Rect) !void {
+    fn deliver(context: *anyopaque, focus: client_model.PaneFocus, area: ui.Rect) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.focus = focus;
@@ -96,7 +96,7 @@ const EffectsCapture = struct {
     }
 };
 
-test "FocusPaneHandler commits before synchronizing client resources" {
+test "FocusPaneHandler commits before delivering active-pane resources" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     try std.testing.expect(testing.model.workspace.active().?.model.toggleFullscreen());
@@ -114,6 +114,7 @@ test "FocusPaneHandler commits before synchronizing client resources" {
     try std.testing.expectEqual(testing.second, focus.previous);
     try std.testing.expectEqual(testing.first, focus.focused);
     try std.testing.expect(focus.geometry_changed);
+    try std.testing.expectEqual(@as(u64, 1), focus.panes_revision);
     try std.testing.expectEqualDeep(testing.area, effects.area.?);
     try std.testing.expectEqual(@as(usize, 1), effects.calls);
     try std.testing.expect(effects.observed_commit);

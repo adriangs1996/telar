@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const pane_focus = @import("pane_focus.zig");
+const active_pane_resources = @import("active_pane_resources.zig");
 
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
@@ -79,6 +79,6 @@ fn applyResources(context: *anyopaque, commit: client_model.PaneFrameCommit) !vo
         try client.graphics_store.setPaneVisible(commit.pane_id, commit.graphics_visible);
     }
     if (active != null) {
-        try pane_focus.syncResources(client);
+        try active_pane_resources.synchronize(client);
     }
 }

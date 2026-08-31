@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const pane_focus = @import("pane_focus.zig");
+const active_pane_resources = @import("active_pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
@@ -58,7 +58,7 @@ fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !vo
         try client.graphics_store.setPaneVisible(pane.id, true);
     }
 
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try request_lifecycle.requestTabSnapshot(client, selected.location);
 }
 

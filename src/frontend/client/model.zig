@@ -155,6 +155,7 @@ pub const PaneFocus = struct {
     previous: schema.PaneId,
     focused: schema.PaneId,
     geometry_changed: bool,
+    panes_revision: u64,
 };
 
 pub const ReportedPaneFocus = struct {
@@ -2629,8 +2630,9 @@ pub const Model = struct {
         }
     }
 
-    /// Changes focus inside the active tab and reports the committed identity.
-    /// Repeated, missing and directionless targets leave every version intact.
+    /// Changes focus inside the active tab and reports the committed identity
+    /// and pane revision. Repeated, missing and directionless targets leave
+    /// every version intact.
     ///
     /// ```zig
     /// const focus = model.focusPane(.{ .target = .{ .direction = .left }, .area = area }) orelse return;
@@ -2657,6 +2659,7 @@ pub const Model = struct {
             .previous = previous,
             .focused = focused,
             .geometry_changed = active.model.layout.isFullscreen(),
+            .panes_revision = model.panes_revision,
         };
     }
 
@@ -5676,6 +5679,7 @@ test "pane focus resolves identity and direction through one visible revision" {
     try std.testing.expectEqual(second, directional.previous);
     try std.testing.expectEqual(first, directional.focused);
     try std.testing.expect(!directional.geometry_changed);
+    try std.testing.expectEqual(@as(u64, 1), directional.panes_revision);
     try std.testing.expectEqual(@as(u64, 1), model.version().panes);
 
     try std.testing.expect(model.workspace.active().?.model.toggleFullscreen());
@@ -5687,6 +5691,7 @@ test "pane focus resolves identity and direction through one visible revision" {
     try std.testing.expectEqual(first, identified.previous);
     try std.testing.expectEqual(second, identified.focused);
     try std.testing.expect(identified.geometry_changed);
+    try std.testing.expectEqual(@as(u64, 2), identified.panes_revision);
     try std.testing.expect((model.focusPane(.{
         .target = .{ .pane_id = second },
         .area = area,

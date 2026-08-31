@@ -3,9 +3,9 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
+const active_pane_resources = @import("active_pane_resources.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const attachment_targets = @import("attachment_targets.zig");
 const notifications = @import("../notifications/root.zig");
 const notification_flow = @import("notifications.zig");
 const sidebar_animations = @import("sidebar_animations.zig");
@@ -70,7 +70,7 @@ fn reconcile(context: *anyopaque, commit: *const client_model.AgentSnapshotCommi
     _ = commit;
     const client: *Client = @ptrCast(@alignCast(context));
 
-    _ = try attachment_targets.sync(client);
+    _ = try active_pane_resources.synchronizeAttachments(client);
 }
 
 fn alert(context: *anyopaque, change: client_model.AgentStatusChange) !void {

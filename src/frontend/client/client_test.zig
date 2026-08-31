@@ -25,10 +25,10 @@ const term = presentation.screen;
 
 const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
+const active_pane_resources = @import("active_pane_resources.zig");
 const client_actions = @import("actions.zig");
 const agent_navigation = @import("agent_navigation.zig");
 const agent_sounds = @import("agent_sounds.zig");
-const attachment_targets = @import("attachment_targets.zig");
 const client_application = @import("application/root.zig");
 const client_events = @import("client_events.zig");
 const client_startup = @import("client_startup.zig");
@@ -543,7 +543,7 @@ fn installTestingAttachmentTarget(client: *Client, generation: u64) !attachments
             .status = .working,
         }},
     });
-    _ = try attachment_targets.sync(client);
+    _ = try active_pane_resources.synchronizeAttachments(client);
 
     return target;
 }
@@ -1169,7 +1169,7 @@ test "workspace handoff reserves its focus-out message" {
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&buffer);
@@ -1522,7 +1522,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
         .horizontal,
         client.view.workbench(),
     );
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try std.testing.expect(client.model.enterCopyMode());
     try client.graphics_store.applyImage(.{
         .pane_id = retired,
@@ -2343,7 +2343,7 @@ test "focus reporting emits focus-in only after the pane opts in" {
     const model = &client.model.workspace.active().?.model;
     model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     const input_events = client.telemetry.metrics.input_events;
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try harness.settle();
 
     try std.testing.expect(client.model.reportedPaneFocus().?.focus_events);
@@ -3147,7 +3147,7 @@ test "tab detachment sends focus-out before the pane detaches" {
     const client = harness.client;
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
 
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&message_buffer);
@@ -3174,7 +3174,7 @@ test "tab detachment preserves focus reported by another tab" {
     try harness.bootstrap();
     const client = harness.client;
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&message_buffer);
@@ -4232,7 +4232,7 @@ test "close tab reserves its focus-out message" {
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
     client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&buffer);
@@ -6766,7 +6766,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     const completed = try testingClipboardCapture(client, execution, "private png");
 
     _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
-    _ = try attachment_targets.sync(client);
+    _ = try active_pane_resources.synchronizeAttachments(client);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const version_before = client.model.version();

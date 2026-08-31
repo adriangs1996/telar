@@ -17,17 +17,18 @@ pane_focus handler adapter
         |
 FocusPaneHandler -> ClientModel.focusPane
         |
-pane_focus.syncResources
+DeliverActivePaneResourcesHandler.deliverFocus
         |
-        +-- attachment_targets.sync -> shelf geometry
+        +-- attachment target effect
+        |             |
+        |       changed workbench -> pane geometry
         |
         +-- PaneFocusReportingHandler
                     |
           ClientModel.syncReportedPaneFocus
                     |
           focus-out -> focus-in
-        |
-fullscreen resize
+        +-- fullscreen placement invalidation -> pane geometry
         |
 presentation_lifecycle.observe -> Presenter
 
@@ -49,6 +50,10 @@ missing identity, the already focused identity, a direction without a
 candidate, or an absent active tab is a no-op. A commit advances only
 `ClientModel.Version.panes` and returns the exact tab, previous pane, focused
 pane and whether fullscreen geometry changed.
+
+The commit also carries the exact `Version.panes` revision, so resource
+delivery rejects a superseded focus even if later navigation returned to the
+same pane.
 
 ## Reported focus
 
@@ -81,11 +86,19 @@ reserve the focus-out slot before they mutate attachment state.
 
 ## Geometry and presentation
 
-Focus reporting does not own attachment geometry. `attachment_targets.sync`
-reconciles the focused agent shelf and re-offers pane sizes if that shelf
-changes the workbench. `pane_focus.syncResources` fixes the order between that
-operation and focus reporting. A fullscreen focus change then invalidates
-graphics placements and resizes the newly visible pane.
+Focus reporting does not own attachment geometry.
+`DeliverActivePaneResourcesHandler` first gives the model-derived attachment
+target to a physical view effect. If the shelf changes the workbench, the
+effect returns its new rectangle and the handler re-offers pane sizes before
+focus reporting. A fullscreen focus change then invalidates graphics
+placements and re-offers the committed focus rectangle.
+
+The same handler exposes `synchronize` for tab, workspace, frame and snapshot
+flows whose committed state may change the active pane without entering
+`FocusPaneHandler`. Agent snapshots use `synchronizeAttachments`, because a
+new agent identity may change the shelf but cannot change child focus. These
+entrypoints prevent unrelated adapters from depending on the pane-focus
+adapter while preserving one resource order.
 
 A workbench click completes these resource effects before it sends the
 triggering mouse event to the new pane. No focus-reporting transition requests
@@ -105,12 +118,15 @@ runtime panes and PTYs continue running.
 - `src/frontend/client/model.zig` proves focus resolution, report transitions,
   exact retirement and the absence of presentation revisions for report state.
 - `src/frontend/client/application/focus_pane.zig` proves semantic
-  commit-before-effects ordering.
+  commit-before-delivery ordering.
+- `src/frontend/client/application/active_pane_resource_delivery.zig` proves
+  attachment, reporting and geometry order, stale-focus rejection and partial
+  failures.
 - `src/frontend/client/application/pane_focus_reporting.zig` proves reporting
   commit order, focus-out before focus-in, effect failure and silent,
   idempotent canonical retirement.
-- `src/frontend/client/attachment_targets.zig` keeps shelf geometry outside
-  focus-reporting policy.
+- `src/frontend/client/active_pane_resources.zig` implements view, transport,
+  graphics and geometry ports without selecting their order.
 - `src/frontend/client/client_test.zig` proves protocol order, mode opt-in,
   exact tab ownership, silent retirement, capacity reservation, mouse ordering
   and presentation through a substituted runtime socket.

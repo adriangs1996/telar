@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("model.zig");
 const host_inputs = @import("host_inputs.zig");
-const pane_focus = @import("pane_focus.zig");
+const active_pane_resources = @import("active_pane_resources.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_resources = @import("pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
@@ -73,7 +73,7 @@ pub fn activate(client: *Client, activation: Activation) !void {
         return error.UnexpectedRequest;
     }
 
-    try pane_focus.syncResources(client);
+    try active_pane_resources.synchronize(client);
     try host_inputs.scheduleRead(client);
     try request_lifecycle.requestWorkspaceSnapshot(client, activation.location.workspace);
     try request_lifecycle.requestTabSnapshot(client, activation.location);

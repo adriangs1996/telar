@@ -63,10 +63,13 @@ focus or remote handoff selected from that plan.
 
 ## Effects and presentation
 
-After the commit, the application handler first synchronizes attachment shelf
-resources. It then emits at most the notification center capacity of
-transitions to `blocked`, `ready` or `failed`. Failure in an effect does not
-roll back the committed runtime state.
+After the commit, the application handler enters
+`DeliverActivePaneResourcesHandler.synchronizeAttachments`. It reconciles the
+attachment shelf and re-offers pane geometry only if shelf visibility changed
+the workbench; it cannot emit child focus reports. The agent handler then emits
+at most the notification center capacity of transitions to `blocked`, `ready`
+or `failed`. Failure in an effect does not roll back the committed runtime
+state.
 
 The adapter then invokes the separate sidebar-animation use case. A working
 agent ensures that one future tick is armed; a snapshot does not advance the
@@ -105,6 +108,8 @@ usable replica and its local version.
 - `src/frontend/client/application/agent_snapshot.zig` proves commit-before-
   effect ordering, actionable filtering, alert bounds and retained commits on
   effect failure.
+- `src/frontend/client/application/active_pane_resource_delivery.zig` proves
+  attachment-only synchronization and conditional geometry delivery.
 - `src/frontend/client/application/sidebar_animation.zig` and
   `src/frontend/client/sidebar_animations.zig` separate active-state policy
   from the single pending timer.
