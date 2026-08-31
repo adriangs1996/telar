@@ -3,11 +3,12 @@
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const pane_viewports = @import("pane_viewports.zig");
+const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
 const pane_input = client_application.pane_input;
-const schema = core.schema;
+const pane_paste = client_application.pane_paste;
 
 /// Delivers one user-input command through the application boundary.
 ///
@@ -33,51 +34,23 @@ pub fn expressionPaste(client: *Client, text: []const u8) !?pane_input.Delivery 
     return record(client, started, try use_case.executePaste(.focused, text));
 }
 
-/// Captures the focused pane for a streamed host paste and emits its opening
-/// marker when the child's bracketed-paste mode requires one.
+/// Delivers one explicit marker for an exact model-owned paste session.
 ///
 /// ```zig
-/// const pane_id = try beginPaste(client) orelse return;
+/// _ = try pasteMarker(client, session, .start);
 /// ```
-pub fn beginPaste(client: *Client) !?schema.PaneId {
+pub fn pasteMarker(client: *Client, session: client_model.PanePasteSession, boundary: pane_paste.Boundary) !?pane_input.Delivery {
     const started = diagnostics.now(client.io);
     var use_case = handler(client);
-    const outcome = try use_case.executePasteBoundary(.{
-        .target = .focused,
-        .boundary = .start,
-    }) orelse return null;
-    _ = record(client, started, outcome.delivery);
-
-    return outcome.pane_id;
-}
-
-/// Delivers one streamed paste chunk to the pane captured at paste start.
-///
-/// ```zig
-/// _ = try continuePaste(client, pane_id, text);
-/// ```
-pub fn continuePaste(client: *Client, pane_id: schema.PaneId, text: []const u8) !?pane_input.Delivery {
-    return send(client, .{
-        .target = .{ .pane = pane_id },
-        .source = .paste,
-        .payload = .{ .bytes = text },
+    const delivery = try use_case.executePasteMarker(.{
+        .target = .{ .paste_session = session },
+        .marker = switch (boundary) {
+            .start => .start,
+            .finish => .finish,
+        },
     });
-}
 
-/// Emits the closing marker for a still-active bracketed paste target.
-///
-/// ```zig
-/// _ = try endPaste(client, pane_id);
-/// ```
-pub fn endPaste(client: *Client, pane_id: schema.PaneId) !?pane_input.Delivery {
-    const started = diagnostics.now(client.io);
-    var use_case = handler(client);
-    const outcome = try use_case.executePasteBoundary(.{
-        .target = .{ .pane = pane_id },
-        .boundary = .end,
-    }) orelse return null;
-
-    return record(client, started, outcome.delivery);
+    return record(client, started, delivery);
 }
 
 fn handler(client: *Client) pane_input.PaneInputHandler {

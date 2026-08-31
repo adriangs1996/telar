@@ -31,12 +31,12 @@ that the projected workspace disappeared. It forgets the closed workspace's
 bookmark first and uses the runtime's canonical predecessor as the target. A
 failed handoff cannot restore identity that no longer exists.
 
-The adapter checks that the fixed outbox has room for focus-out, every detach
-and the final open before it changes attachment state. The request handler then
-delivers detaches before `open_pane`; socket order prevents the new attachment
-from preceding retirement of the old ones. A local detach or open failure does
-not commit departure and requests a canonical tab snapshot to repair any
-provisional attachment effects.
+The adapter checks that the fixed outbox has room for a required paste-closing
+marker, focus-out, every detach and the final open before it changes attachment
+state. The request handler closes the paste and delivers detaches before
+`open_pane`; socket order prevents the new attachment from preceding retirement
+of the old ones. A local detach or open failure does not commit departure and
+requests a canonical tab snapshot to repair any provisional attachment effects.
 
 Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused

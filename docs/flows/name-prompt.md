@@ -33,9 +33,9 @@ semantic Command
 NamePromptHandler.execute -> name_prompt.State.apply
 ```
 
-`ClientModel` owns both prompt and copy-mode routing authority, and their entry
-adapters reject overlap. Prompt activity itself decides whether keyboard and
-paste input belongs to the editor, so routing and editor state cannot disagree.
+`ClientModel` owns prompt, copy-mode and pane-paste routing authority, and their
+entry adapters reject overlap. A paste that starts in the prompt records
+`Prompt.pasting`; its later chunks and closing boundary stay with that editor.
 Mouse input and configured actions are suppressed while the prompt is active.
 
 The terminal adapter translates bytes into semantic editor commands. The state

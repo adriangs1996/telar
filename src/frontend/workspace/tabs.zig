@@ -365,6 +365,22 @@ pub const Model = struct {
         return null;
     }
 
+    /// Finds the tab containing one pane without exposing mutable storage.
+    ///
+    /// ```zig
+    /// const tab = model.tabForPaneConst(pane_id) orelse return;
+    /// ```
+    pub fn tabForPaneConst(model: *const Model, pane_id: schema.PaneId) ?*const Tab {
+        for (model.items[0..model.count]) |*slot| {
+            const tab = if (slot.*) |*value| value else continue;
+            if (tab.model.findConst(pane_id) != null) {
+                return tab;
+            }
+        }
+
+        return null;
+    }
+
     /// Reconciles one canonical snapshot without replacing retained tab
     /// layouts. Validation completes before the first mutation.
     ///

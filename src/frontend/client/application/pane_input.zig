@@ -29,14 +29,14 @@ pub const Command = struct {
     payload: Payload,
 };
 
-pub const PasteBoundary = enum {
+pub const PasteMarker = enum {
     start,
-    end,
+    finish,
 };
 
-pub const PasteBoundaryCommand = struct {
+pub const PasteMarkerCommand = struct {
     target: client_model.PaneInputTarget,
-    boundary: PasteBoundary,
+    marker: PasteMarker,
 };
 
 pub const PaneInputEffect = struct {
@@ -49,11 +49,6 @@ pub const Delivery = struct {
     pane_id: schema.PaneId,
     byte_count: usize,
     source: Source,
-};
-
-pub const PasteBoundaryOutcome = struct {
-    pane_id: schema.PaneId,
-    delivery: ?Delivery,
 };
 
 pub const PaneInputEffects = struct {
@@ -109,28 +104,24 @@ pub const PaneInputHandler = struct {
         });
     }
 
-    /// Resolves a streamed paste target and conditionally delivers the marker
-    /// requested by bracketed-paste mode.
+    /// Delivers one explicit streamed-paste marker to an already captured
+    /// session. Framing policy belongs to the pane-paste use case.
     ///
     /// ```zig
-    /// const outcome = try handler.executePasteBoundary(command) orelse return;
+    /// _ = try handler.executePasteMarker(command) orelse return;
     /// ```
-    pub fn executePasteBoundary(handler: *PaneInputHandler, command: PasteBoundaryCommand) !?PasteBoundaryOutcome {
+    pub fn executePasteMarker(handler: *PaneInputHandler, command: PasteMarkerCommand) !?Delivery {
         const plan = handler.model.planPaneInput(command.target) orelse return null;
-        if (!plan.input_modes.bracketed_paste) {
-            return .{ .pane_id = plan.pane_id, .delivery = null };
-        }
 
-        const bytes = switch (command.boundary) {
+        const bytes = switch (command.marker) {
             .start => "\x1b[200~",
-            .end => "\x1b[201~",
+            .finish => "\x1b[201~",
         };
-        const delivery = try handler.deliver(plan, .{
+
+        return try handler.deliver(plan, .{
             .source = .paste,
             .bytes = bytes,
         });
-
-        return .{ .pane_id = plan.pane_id, .delivery = delivery };
     }
 
     const Prepared = struct {
@@ -341,7 +332,7 @@ test "PaneInputHandler frames expression paste inside the application boundary" 
     try std.testing.expectEqual(Source.paste, delivery.source);
 }
 
-test "PaneInputHandler resolves an unframed paste boundary without effects" {
+test "PaneInputHandler delivers an explicit paste marker independently of current mode" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: EffectsCapture = .{ .model = testing.model };
@@ -350,16 +341,16 @@ test "PaneInputHandler resolves an unframed paste boundary without effects" {
         .effects = capture.port(),
     };
 
-    const outcome = (try handler.executePasteBoundary(.{
+    const delivery = (try handler.executePasteMarker(.{
         .target = .focused,
-        .boundary = .start,
+        .marker = .start,
     })).?;
 
-    try std.testing.expectEqual(testing.pane_id, outcome.pane_id);
-    try std.testing.expect(outcome.delivery == null);
-    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
-    try std.testing.expectEqual(@as(u32, 10), testing.model.workspace.findPane(testing.pane_id).?.scroll.offset);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqual(testing.pane_id, delivery.pane_id);
+    try std.testing.expectEqualStrings("\x1b[200~", capture.input[0..capture.input_len]);
+    try std.testing.expectEqualSlices(EffectEvent, &.{ .viewport, .input }, capture.events[0..capture.event_count]);
+    try std.testing.expectEqual(@as(u32, 15), testing.model.workspace.findPane(testing.pane_id).?.scroll.offset);
+    try std.testing.expectEqual(client_model.Version{ .viewport = 1 }, testing.model.version());
 }
 
 test "PaneInputHandler rejects invalid payloads before viewport or delivery effects" {

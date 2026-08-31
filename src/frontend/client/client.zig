@@ -198,7 +198,6 @@ reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
 sound_config: lua_config.SoundConfig,
 clipboard_capture_resources: attachments.CaptureResources = .{},
-paste_pane: ?schema.PaneId = null,
 
 input_read_pending: bool = false,
 next_request_id: u64 = 2,

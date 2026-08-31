@@ -415,9 +415,15 @@ pub const AgentNavigationPlan = union(enum) {
     handoff: AgentHandoff,
 };
 
+pub const PanePasteSession = struct {
+    pane_id: schema.PaneId,
+    bracketed_paste: bool,
+};
+
 pub const PaneInputTarget = union(enum) {
     focused,
     pane: schema.PaneId,
+    paste_session: PanePasteSession,
 };
 
 pub const PaneInputPlan = struct {
@@ -725,6 +731,7 @@ pub const Model = struct {
     chrome_revision: u64 = 0,
     copy_state: ?copy_mode.State = null,
     copy_revision: u64 = 0,
+    pane_paste: ?PanePasteSession = null,
     frame_revision: u64 = 0,
     pane_metadata_revision: u64 = 0,
     pane_foreground_revision: u64 = 0,
@@ -1577,21 +1584,109 @@ pub const Model = struct {
         };
     }
 
+    /// Returns the pane paste currently owned by this client.
+    ///
+    /// ```zig
+    /// const session = model.panePasteSession() orelse return;
+    /// ```
+    pub fn panePasteSession(model: *const Model) ?PanePasteSession {
+        return model.pane_paste;
+    }
+
+    /// Reports whether a streamed pane paste owns host input.
+    ///
+    /// ```zig
+    /// if (model.panePasteActive()) return;
+    /// ```
+    pub fn panePasteActive(model: *const Model) bool {
+        return model.pane_paste != null;
+    }
+
+    /// Captures the attached focused pane and its current bracketed-paste mode.
+    ///
+    /// ```zig
+    /// const session = model.beginPanePaste() orelse return;
+    /// ```
+    pub fn beginPanePaste(model: *Model) ?PanePasteSession {
+        if (model.pane_paste != null) {
+            return null;
+        }
+
+        const plan = model.planPaneInput(.focused) orelse return null;
+        const session: PanePasteSession = .{
+            .pane_id = plan.pane_id,
+            .bracketed_paste = plan.input_modes.bracketed_paste,
+        };
+
+        model.pane_paste = session;
+        return session;
+    }
+
+    /// Finishes only the exact streamed paste that is still active.
+    ///
+    /// ```zig
+    /// std.debug.assert(model.finishPanePaste(session));
+    /// ```
+    pub fn finishPanePaste(model: *Model, session: PanePasteSession) bool {
+        const active = model.pane_paste orelse return false;
+        if (!std.meta.eql(active, session)) {
+            return false;
+        }
+
+        model.pane_paste = null;
+        return true;
+    }
+
+    /// Releases a streamed paste only when its pane is being retired.
+    ///
+    /// ```zig
+    /// _ = model.releasePanePaste(pane_id);
+    /// ```
+    pub fn releasePanePaste(model: *Model, pane_id: schema.PaneId) bool {
+        const session = model.pane_paste orelse return false;
+        if (session.pane_id != pane_id) {
+            return false;
+        }
+
+        model.pane_paste = null;
+        return true;
+    }
+
     /// Resolves one user-input target without exposing pane storage. Prompts
-    /// and copy mode retain exclusive ownership of pane input while active.
+    /// and copy mode own normal pane input exclusively, while a captured paste
+    /// keeps its exact owner until the terminal sends its closing boundary.
     ///
     /// ```zig
     /// const plan = model.planPaneInput(.focused) orelse return;
     /// ```
     pub fn planPaneInput(model: *const Model, target: PaneInputTarget) ?PaneInputPlan {
-        if (model.name_prompt.active() or model.copy_state != null) {
-            return null;
+        switch (target) {
+            .focused, .pane => {
+                if (model.name_prompt.active() or model.copy_state != null) {
+                    return null;
+                }
+            },
+            .paste_session => |expected| {
+                const active = model.pane_paste orelse return null;
+                if (!std.meta.eql(active, expected)) {
+                    return null;
+                }
+            },
         }
 
-        const active = model.workspace.activeConst() orelse return null;
         const pane = switch (target) {
-            .focused => active.model.focusedPaneConst() orelse return null,
-            .pane => |pane_id| active.model.findConst(pane_id) orelse return null,
+            .focused => focused: {
+                const active = model.workspace.activeConst() orelse return null;
+                break :focused active.model.focusedPaneConst() orelse return null;
+            },
+            .pane => |pane_id| explicit: {
+                const active = model.workspace.activeConst() orelse return null;
+                break :explicit active.model.findConst(pane_id) orelse return null;
+            },
+            .paste_session => |session| captured: {
+                const tab = model.workspace.tabForPaneConst(session.pane_id) orelse return null;
+                break :captured tab.model.findConst(session.pane_id) orelse return null;
+            },
         };
         if (!pane.attached) {
             return null;
@@ -1747,14 +1842,14 @@ pub const Model = struct {
         return .{ .pane_id = state.pane_id, .view = state.view() };
     }
 
-    /// Enters copy mode on the attached focused pane. An active prompt,
-    /// missing pane or repeated request leaves the copy revision intact.
+    /// Enters copy mode on the attached focused pane. An active prompt or
+    /// paste, missing pane or repeated request leaves the copy revision intact.
     ///
     /// ```zig
     /// if (model.enterCopyMode()) observe(model.version());
     /// ```
     pub fn enterCopyMode(model: *Model) bool {
-        if (model.copy_state != null or model.name_prompt.active()) {
+        if (model.copy_state != null or model.name_prompt.active() or model.pane_paste != null) {
             return false;
         }
 
@@ -2839,6 +2934,75 @@ test "pane input planning yields ownership to prompts and copy mode" {
     const copy_version = model.version();
     try std.testing.expect(model.planPaneInput(.{ .pane = pane_id }) == null);
     try std.testing.expectEqualDeep(copy_version, model.version());
+}
+
+test "pane paste captures one exact target and framing mode outside presentation versions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.input_modes.bracketed_paste = true;
+    const version = model.version();
+
+    const session = model.beginPanePaste().?;
+
+    try std.testing.expectEqualDeep(PanePasteSession{
+        .pane_id = pane_id,
+        .bracketed_paste = true,
+    }, session);
+    try std.testing.expectEqualDeep(session, model.panePasteSession().?);
+    try std.testing.expect(model.panePasteActive());
+    try std.testing.expect(model.beginPanePaste() == null);
+    try std.testing.expectEqualDeep(version, model.version());
+
+    const other_location: schema.TabLocation = .{
+        .workspace = location.workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    _ = try model.workspace.addCreated(.{
+        .location = other_location,
+        .position = 1,
+        .label = "other",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expectEqualDeep(other_location, model.workspace.activeConst().?.location);
+
+    pane.input_modes.bracketed_paste = false;
+    model.name_prompt.begin(.create_workspace);
+    try std.testing.expect(model.planPaneInput(.focused) == null);
+    const captured = model.planPaneInput(.{ .paste_session = session }).?;
+    try std.testing.expectEqual(pane_id, captured.pane_id);
+    try std.testing.expect(!captured.input_modes.bracketed_paste);
+
+    const wrong = PanePasteSession{ .pane_id = pane_id, .bracketed_paste = false };
+    try std.testing.expect(!model.finishPanePaste(wrong));
+    try std.testing.expect(!model.releasePanePaste(@enumFromInt(9)));
+    try std.testing.expect(model.finishPanePaste(session));
+    try std.testing.expect(!model.panePasteActive());
+}
+
+test "pane paste release and copy mode keep one input owner" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+
+    _ = model.beginPanePaste().?;
+    try std.testing.expect(!model.enterCopyMode());
+    try std.testing.expect(model.releasePanePaste(pane_id));
+    try std.testing.expect(!model.releasePanePaste(pane_id));
+
+    try std.testing.expect(model.enterCopyMode());
+    try std.testing.expect(model.beginPanePaste() == null);
 }
 
 test "pane frame application commits screen copy state and one frame revision" {

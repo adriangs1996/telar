@@ -157,6 +157,10 @@ fn detachCurrent(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     var required_capacity: usize = 1;
     required_capacity += @intFromBool(client.reported_focus_events);
+    if (client.model.panePasteSession()) |session| {
+        required_capacity += @intFromBool(session.bracketed_paste);
+    }
+
     var planned_tabs = client.model.workspace.tabIterator();
     while (planned_tabs.next()) |tab| {
         var panes = tab.model.paneIterator();

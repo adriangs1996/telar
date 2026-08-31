@@ -22,7 +22,7 @@ const term = presentation.screen;
 /// if (beginWorkspaceCreate(client)) return;
 /// ```
 pub fn beginWorkspaceCreate(client: *Client) bool {
-    if (client.model.copyModeActive() or client.requests.count != 0 or
+    if (client.model.copyModeActive() or client.model.panePasteActive() or client.requests.count != 0 or
         client.model.planWorkspaceCreation() == null)
     {
         return false;
@@ -39,7 +39,7 @@ pub fn beginWorkspaceCreate(client: *Client) bool {
 /// _ = beginWorkspaceRename(client);
 /// ```
 pub fn beginWorkspaceRename(client: *Client) bool {
-    if (client.model.copyModeActive()) {
+    if (client.model.copyModeActive() or client.model.panePasteActive()) {
         return false;
     }
 
@@ -69,7 +69,7 @@ pub fn beginActiveTabRename(client: *Client) bool {
 /// _ = beginTabRename(client, tab_id);
 /// ```
 pub fn beginTabRename(client: *Client, tab_id: schema.TabId) bool {
-    if (client.model.copyModeActive()) {
+    if (client.model.copyModeActive() or client.model.panePasteActive()) {
         return false;
     }
 

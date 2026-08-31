@@ -83,9 +83,9 @@ publishing it as active. Rejection preserves the existing tab and every model
 revision. A successful commit advances only the tab and active-tab versions.
 
 Attachment effects run after the commit. They detach the tab that was active
-immediately before confirmation and synchronize focus with the new root pane.
-An effect failure preserves the confirmed tab because the runtime already owns
-it.
+immediately before confirmation, closing its captured paste first, and
+synchronize focus with the new root pane. An effect failure preserves the
+confirmed tab because the runtime already owns it.
 
 The use cases do not invalidate the view or request a draw. The client loop
 publishes `ClientModel.Version` to `Presenter`, which schedules one paced frame

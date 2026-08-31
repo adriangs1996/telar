@@ -13,10 +13,7 @@ const schema = core.schema;
 /// ```
 pub fn release(client: *Client, pane_id: schema.PaneId) void {
     _ = client.model.releaseCopyMode(pane_id);
-
-    if (client.paste_pane == pane_id) {
-        client.paste_pane = null;
-    }
+    _ = client.model.releasePanePaste(pane_id);
 
     if (client.reported_focus == pane_id) {
         client.forgetPaneFocus();

@@ -792,6 +792,37 @@ test "workspace handoff capacity failure preserves the source model" {
     try std.testing.expect(client.requests.has(.tab_snapshot));
 }
 
+test "workspace handoff reserves its captured paste closing marker" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    var input_handler: InputHandler = .{ .client = client };
+    try input_handler.pasteStart();
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const opening = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(opening == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
+    while (client.outbox.len < client_outbox.capacity - 2) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        client_actions.switchWorkspaceResolved(client, @enumFromInt(2)),
+    );
+
+    try std.testing.expect(client.model.panePasteActive());
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+}
+
 test "clicking a sidebar agent hands off directly to its pane" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -1046,7 +1077,6 @@ test "tab reconciliation retires removed pane resources and continuations" {
     );
     try client.syncPaneFocus(model);
     try std.testing.expect(client.model.enterCopyMode());
-    client.paste_pane = retired;
     try client.graphics_store.applyImage(.{
         .pane_id = retired,
         .revision = 1,
@@ -1076,7 +1106,6 @@ test "tab reconciliation retires removed pane resources and continuations" {
     try std.testing.expect(client.model.workspace.findPane(retired) == null);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(retired));
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(client.paste_pane == null);
     try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
     try std.testing.expect(client.requests.take(@enumFromInt(91)).? == .ignored);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
@@ -1568,12 +1597,22 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
     }
 }
 
-test "streamed paste uses one captured pane and restores its live viewport" {
+test "streamed paste captures target and framing while restoring its live viewport" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const tab = &client.model.workspace.active().?.model;
+    const other_pane: schema.PaneId = @enumFromInt(11);
+    try tab.split(
+        TestHarness.bootstrap_pane,
+        other_pane,
+        TestHarness.bootstrap_location,
+        .horizontal,
+        client.view.workbench(),
+    );
+    try std.testing.expect(tab.focusPane(TestHarness.bootstrap_pane));
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.input_modes.bracketed_paste = true;
     pane.scroll = .{
@@ -1581,19 +1620,25 @@ test "streamed paste uses one captured pane and restores its live viewport" {
         .offset = 0,
     };
     const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
     const input_events = client.metrics.input_events;
     const input_bytes = client.metrics.input_bytes;
     const timing_count = client.metrics.input_enqueue.count;
     var handler: InputHandler = .{ .client = client };
 
     try handler.pasteStart();
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.panePasteSession().?.pane_id);
+    try std.testing.expect(client.model.panePasteSession().?.bracketed_paste);
+    pane.input_modes.bracketed_paste = false;
+    try std.testing.expect(tab.focusPane(other_pane));
     try handler.pasteContent("pasted");
     try handler.pasteEnd();
 
-    try std.testing.expect(client.paste_pane == null);
+    try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try expectNonViewportVersionEqual(version, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     if (comptime core.diagnostics.enabled) {
         try std.testing.expectEqual(input_events + 3, client.metrics.input_events);
         try std.testing.expectEqual(input_bytes + 18, client.metrics.input_bytes);
@@ -1610,6 +1655,30 @@ test "streamed paste uses one captured pane and restores its live viewport" {
     try std.testing.expect(input == .pane_input);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, input.pane_input.pane_id);
     try std.testing.expectEqualStrings("\x1b[200~pasted\x1b[201~", input.pane_input.bytes);
+}
+
+test "streamed pane paste excludes prompt and copy-mode ownership until finish" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version = client.model.version();
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.pasteStart();
+
+    try std.testing.expect(client.model.panePasteActive());
+    try std.testing.expect(!client.model.enterCopyMode());
+    try std.testing.expect(!name_prompts.beginWorkspaceRename(client));
+    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!client.model.name_prompt.active());
+    try std.testing.expectEqualDeep(version, client.model.version());
+
+    try handler.pasteEnd();
+
+    try std.testing.expect(!client.model.panePasteActive());
+    try std.testing.expect(name_prompts.beginWorkspaceRename(client));
 }
 
 test "mouse reports preserve scrollback and remain outside user-input telemetry" {
@@ -2380,6 +2449,35 @@ test "tab detachment retires an in-flight pane attachment" {
     try std.testing.expectEqual(pending_updates_before_confirmation, client.presenter.pending_updates);
 }
 
+test "tab detachment closes a captured bracketed paste before the pane detaches" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.pasteStart();
+    try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    const opening = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(opening == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
+
+    try tab_attachments.detach(client, client.model.workspace.active().?);
+
+    try std.testing.expect(!client.model.panePasteActive());
+    try harness.settle();
+    const closing = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(closing == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[201~", closing.pane_input.bytes);
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
+}
+
 test "a missing pane attachment keeps local membership until a canonical snapshot" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -2838,7 +2936,6 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .byte_len = 3,
     } });
     try std.testing.expect(client.model.enterCopyMode());
-    client.paste_pane = @enumFromInt(20);
     try std.testing.expect(client.graphics_store.hasPaneGraphics(@enumFromInt(20)));
     const version_before_close = client.model.version();
     const pending_updates_before_close = client.presenter.pending_updates;
@@ -2863,7 +2960,6 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(pending_updates_before_close, client.presenter.pending_updates);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(@enumFromInt(20)));
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(client.paste_pane == null);
 
     try client.observeModel();
 
@@ -3197,20 +3293,27 @@ test "a failed tab move preserves order and notifies" {
     try std.testing.expect(client.notification_tick_pending);
 }
 
-test "select tab detaches the current tab before requesting the target snapshot" {
+test "select tab closes captured paste before detaching and requesting the target snapshot" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
     try harness.allowTabSelection();
     const client = harness.client;
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    var handler: InputHandler = .{ .client = client };
+    try handler.pasteStart();
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const opening = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(opening == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
     const second_pane: schema.PaneId = @enumFromInt(20);
     const second = try harness.addInactiveTab(@enumFromInt(2), second_pane);
     const selected_model = &client.model.workspace.find(second.tab_id).?.model;
     selected_model.composition_invalidated = false;
     const version_before_selection = client.model.version();
     const pending_updates_before_selection = client.presenter.pending_updates;
-    const handler: InputHandler = .{ .client = client };
 
     _ = try client_actions.apply(handler.client, .{ .select_tab = 1 });
 
@@ -3224,13 +3327,17 @@ test "select tab detaches the current tab before requesting the target snapshot"
     try std.testing.expect(!client.model.workspace.findPane(second_pane).?.attached);
     try std.testing.expect(!client.graphics_store.paneVisible(TestHarness.bootstrap_pane));
     try std.testing.expect(client.graphics_store.paneVisible(second_pane));
+    try std.testing.expect(!client.model.panePasteActive());
 
     try client.observeModel();
 
     try std.testing.expectEqual(pending_updates_before_selection + 1, client.presenter.pending_updates);
     try harness.settle();
 
-    var message_buffer: [256]u8 = undefined;
+    const closing = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(closing == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, closing.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[201~", closing.pane_input.bytes);
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
@@ -3370,6 +3477,39 @@ test "close tab capacity failure preserves attachment and request state" {
     try std.testing.expectEqual(next_request_id, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
+}
+
+test "close tab reserves its captured paste closing marker" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    var input_handler: InputHandler = .{ .client = client };
+    try input_handler.pasteStart();
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const opening = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(opening == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
+    while (client.outbox.len < client_outbox.capacity - 2) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+    const next_request_id = client.next_request_id;
+
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        client_actions.apply(client, .close_tab),
+    );
+
+    try std.testing.expect(client.model.panePasteActive());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqual(next_request_id, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version, client.model.version());
 }
 
 test "an unexpected tab closure is rejected without effects" {
@@ -3970,7 +4110,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try client.observeModel();
     try harness.settleModelPresentation();
     client.reported_focus = closing_pane;
-    client.paste_pane = closing_pane;
+    try std.testing.expectEqual(closing_pane, client.model.beginPanePaste().?.pane_id);
     try client.graphics_store.applyImage(.{
         .pane_id = closing_pane,
         .revision = 1,
@@ -4000,7 +4140,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(requested == .close_pane);
     try std.testing.expectEqual(closing_pane, requested.close_pane.pane_id);
     try std.testing.expect(requested.close_pane.request_id != .none);
-    try std.testing.expect(client.model.enterCopyMode());
+    try std.testing.expect(!client.model.enterCopyMode());
 
     var payload: [128]u8 = undefined;
     const exited = try schema.encodePaneExited(&payload, .{
@@ -4015,7 +4155,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(client.paste_pane == null);
+    try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
     try std.testing.expect(!client.notification_tick_pending);
@@ -4044,7 +4184,6 @@ test "an unrequested pane exit removes the pane silently" {
     try harness.bootstrap();
     const client = harness.client;
     try std.testing.expect(client.model.enterCopyMode());
-    client.paste_pane = TestHarness.bootstrap_pane;
     try client.graphics_store.applyImage(.{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
@@ -4076,7 +4215,6 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(client.paste_pane == null);
     try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(!client.notification_tick_pending);
@@ -4097,7 +4235,6 @@ test "an inactive pane exit retires only inactive state" {
     client.requests = .{};
     const inactive_pane: schema.PaneId = @enumFromInt(20);
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
-    client.paste_pane = inactive_pane;
     try client.graphics_store.applyImage(.{
         .pane_id = inactive_pane,
         .revision = 1,
@@ -4133,7 +4270,6 @@ test "an inactive pane exit retires only inactive state" {
     try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
-    try std.testing.expect(client.paste_pane == null);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(inactive_pane));
     try std.testing.expect(client.requests.take(@enumFromInt(4)) == null);
     try std.testing.expect(client.requests.take(@enumFromInt(5)).? == .ignored);

@@ -114,10 +114,12 @@ attached target through `ClientModel.planPaneInput` and calls
 pane's last acknowledged cursor/application, modify-key and bracketed-paste
 modes; host bytes are not copied blindly into the child.
 
-The same application boundary owns raw routed chunks, streamed and Lua paste,
-alternate-scroll cursor sequences and SGR mouse reports. Prompts and copy mode
-retain exclusive input ownership. See [Pane input](pane-input.md) for target,
-viewport, failure and telemetry policy.
+The pane-input boundary also owns raw routed chunks, Lua paste,
+alternate-scroll cursor sequences and SGR mouse reports. Streamed paste first
+passes through `PanePasteHandler`, which captures one pane and then reuses pane
+input for every chunk and marker. Prompts, copy mode and an active paste keep
+their exact input ownership. See [Pane input](pane-input.md) for target,
+session, viewport, failure and telemetry policy.
 
 ### Modified Enter
 

@@ -131,6 +131,11 @@ fn prepareClose(context: *anyopaque, location: schema.TabLocation) !void {
     }
 
     var required_capacity: usize = 1;
+    if (client.model.panePasteSession()) |session| {
+        const closes_session = tab.model.findConst(session.pane_id) != null and session.bracketed_paste;
+        required_capacity += @intFromBool(closes_session);
+    }
+
     if (client.reported_focus_events) {
         if (client.reported_focus) |pane_id| {
             if (client.model.workspace.findPane(pane_id)) |pane| {
