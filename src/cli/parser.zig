@@ -7,6 +7,8 @@ const frontend = @import("telar-frontend");
 
 const pty = backend.pty;
 
+pub const max_args = pty.max_args;
+
 pub const RunOptions = struct {
     command: pty.Command,
     theme: frontend.theme.Theme = frontend.theme.default_theme,
@@ -145,6 +147,13 @@ pub const Cli = union(enum) {
     plugin: PluginOptions,
     run: RunOptions,
 
+    /// Parses one complete argv into a validated command without performing
+    /// filesystem, transport or process work.
+    ///
+    /// ```zig
+    /// const args = [_][*:0]const u8{ "telar", "server" };
+    /// const command = try Cli.parse(&args, .empty);
+    /// ```
     pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !Cli {
         if (args.len == 0) return error.MissingArgvZero;
         if (args.len == 1) return .{ .run = .{ .command = try defaultShell(environ) } };
@@ -588,6 +597,31 @@ test "CLI keeps plugin inspection installation and trust separate" {
     const parsed_trust = try Cli.parse(&trust, .empty);
     try std.testing.expectEqual(PluginCommand.trust, parsed_trust.plugin.command);
     try std.testing.expectEqual(core.plugin.Capability.history_read, parsed_trust.plugin.capabilities[0]);
+}
+
+test "CLI parses the isolated plugin worker context" {
+    const args = [_][*:0]const u8{
+        "telar",
+        "plugin-worker",
+        "/plugin/main.lua",
+        "refresh",
+        "true",
+        "4",
+        "2",
+        "3",
+        "42",
+    };
+
+    const cli = try Cli.parse(&args, .empty);
+
+    try std.testing.expect(cli == .plugin_worker);
+    try std.testing.expectEqualStrings("/plugin/main.lua", std.mem.span(cli.plugin_worker.entry));
+    try std.testing.expectEqualStrings("refresh", std.mem.span(cli.plugin_worker.action));
+    try std.testing.expect(cli.plugin_worker.context.sidebar_visible);
+    try std.testing.expectEqual(@as(u16, 4), cli.plugin_worker.context.tab_count);
+    try std.testing.expectEqual(@as(u16, 2), cli.plugin_worker.context.active_tab_index);
+    try std.testing.expectEqual(@as(u16, 3), cli.plugin_worker.context.pane_count);
+    try std.testing.expectEqual(@as(u64, 42), cli.plugin_worker.context.focused_pane_id);
 }
 
 test "CLI recognizes the runtime server" {

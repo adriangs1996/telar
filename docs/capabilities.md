@@ -19,6 +19,17 @@ answer "what happens after this external event?".
 The remaining files in `src/core/` are small pure support modules. Core owns no
 live runtime or client state and imports neither process package.
 
+## Executable entrypoints
+
+| Capability | Root | Responsibility |
+| --- | --- | --- |
+| Command line | `src/cli/root.zig` | Parse commands and own each process-specific startup flow |
+
+`src/main.zig` collects process arguments and selects one command-line
+entrypoint. The server entrypoint selects production dependencies and
+initializes the public runtime instance; the client entrypoint prepares the
+disposable frontend process.
+
 ## Runtime capabilities
 
 | Capability | Root | Owns |
@@ -33,9 +44,9 @@ live runtime or client state and imports neither process package.
 | Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |
 | Transport | `src/backend/transport/root.zig` | Runtime side of local connection and handshake |
 
-`src/main.zig` selects the production dependencies and initializes the public
-runtime instance. Behind `src/backend/runtime/root.zig`, the lifetime is split
-without changing that public contract:
+`src/cli/server.zig` selects the production dependencies and initializes the
+public runtime instance. Behind `src/backend/runtime/root.zig`, the lifetime is
+split without changing that public contract:
 
 | Runtime part | File | Responsibility |
 | --- | --- | --- |

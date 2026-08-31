@@ -11,10 +11,11 @@ public place to inject another implementation of a physical resource.
 
 ## Decision
 
-`main.zig` is the process composition root. It selects production
-implementations and initializes one public `Runtime` through a single
-`Initialization` value. `Initialization` separates borrowed `Dependencies`
-from runtime `Options`.
+`main.zig` is the process composition root. It parses the command line and
+selects one concrete entrypoint from `src/cli/root.zig`. The selected server
+entrypoint initializes one public `Runtime` through a single `Initialization`
+value. `Initialization` separates borrowed `Dependencies` from runtime
+`Options`.
 
 `Runtime` owns every live resource it opens through those dependencies. Its
 public lifecycle is `init`, `run` and `deinit`: initialization acquires
@@ -61,7 +62,7 @@ provider only when Telar has another implementation or needs a production
 failure boundary; the composition does not add dynamic dispatch pre-emptively.
 
 The public runtime contract can now be tested without entering through
-`serve`, and `main.zig` shows the complete lifetime directly. Client session
-storage, request routing and actor coordination no longer live in
-`instance.zig`, so changes to those policies do not enlarge the public runtime
-lifecycle.
+`serve`, and `src/cli/server.zig` shows the complete production lifetime
+selected by `main.zig`. Client session storage, request routing and actor
+coordination no longer live in `instance.zig`, so changes to those policies do
+not enlarge the public runtime lifecycle.

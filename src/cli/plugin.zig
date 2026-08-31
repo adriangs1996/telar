@@ -25,6 +25,21 @@ pub fn run(init: std.process.Init, options: PluginOptions) !void {
     }
 }
 
+/// Runs one isolated plugin callback process from the already validated
+/// internal worker arguments supplied by the client broker.
+///
+/// ```zig
+/// try plugin.runWorker(process_init, options);
+/// ```
+pub fn runWorker(init: std.process.Init, options: parser.PluginWorkerOptions) !void {
+    return frontend.plugins.runWorker(
+        init,
+        std.mem.span(options.entry),
+        std.mem.span(options.action),
+        options.context,
+    );
+}
+
 /// Resolves the trust-store path from XDG_CONFIG_HOME or HOME into the caller's
 /// buffer. The returned slice remains valid while that buffer does.
 ///

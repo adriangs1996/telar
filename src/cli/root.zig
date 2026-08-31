@@ -1,4 +1,4 @@
-//! Public command-line grammar for the Telar executable.
+//! Public command-line grammar and process entrypoints for the Telar executable.
 
 const parser = @import("parser.zig");
 const runtime_connection = @import("runtime_connection.zig");
@@ -24,3 +24,5 @@ pub const RuntimeConnector = runtime_connection.RuntimeConnector;
 pub const ServerAction = parser.ServerAction;
 pub const ServerMode = parser.ServerMode;
 pub const ServerOptions = parser.ServerOptions;
+pub const max_args = parser.max_args;
+pub const usage = @import("usage.zig").text;
