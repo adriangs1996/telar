@@ -5690,15 +5690,21 @@ test "config reload outcomes that carry no new generation" {
     defer harness.deinit();
     const client = harness.client;
 
-    try client.handleConfigReloadEvent(.{ .unchanged = 42 });
+    try std.testing.expectEqual(
+        config_reloads.Outcome.unchanged,
+        try config_reloads.handle(client, .{ .unchanged = 42 }),
+    );
     try std.testing.expectEqual(@as(i128, 42), client.reload.mtime_ns);
 
     var diagnostic: lua_config.Diagnostic = .{};
     diagnostic.set("bad config: {s}", .{"boom"});
-    try client.handleConfigReloadEvent(.{ .failed = .{
-        .diagnostic = diagnostic,
-        .mtime_ns = 7,
-    } });
+    try std.testing.expectEqual(
+        config_reloads.Outcome.rejected,
+        try config_reloads.handle(client, .{ .failed = .{
+            .diagnostic = diagnostic,
+            .mtime_ns = 7,
+        } }),
+    );
     try std.testing.expectEqual(@as(i128, 7), client.reload.mtime_ns);
     try std.testing.expect(client.notification_scheduler.pending);
     try std.testing.expect(client.model.diagnostic() != null);

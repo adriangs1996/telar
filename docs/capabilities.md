@@ -121,7 +121,7 @@ entrypoints below.
 | Notification tick | [`notifications.handleTick`](flows/notifications.md) |
 | Agent sound completion | [`agent_sounds.handlePlayed`](flows/agent-sound.md) |
 | Telemetry tick/write | [`telemetry.handleTick`, `telemetry.handleWritten`](flows/client-telemetry.md) |
-| Config reload | `Client.handleConfigReloadEvent` |
+| Config reload | [`config_reloads.handle`](flows/config-reload.md) |
 | Plugin worker result | [`Client.handlePluginResultEvent`](flows/plugin-action.md) |
 | Clipboard image result | [`Client.handleClipboardImageEvent`](flows/clipboard-image.md) |
 

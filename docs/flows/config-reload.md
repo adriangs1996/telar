@@ -13,8 +13,6 @@ config, local module, plugin or trust-store fingerprint changes
                             |
                   ConfigReload.loaded
                             |
-              Client.handleConfigReloadEvent
-                            |
                  config_reloads.handle
                             |
                   config_reload.resolve
@@ -34,8 +32,10 @@ config, local module, plugin or trust-store fingerprint changes
                        Presenter
 ```
 
-The worker loads a new Lua VM, typed snapshot, plugin registry and trust store
-without touching the active client. `config_reload.resolve` checks the sidebar
+`config_reloads.schedule` starts the watcher during bootstrap and rearms it
+after every handled outcome. The worker loads a new Lua VM, typed snapshot,
+plugin registry and trust store without touching the active client.
+`config_reload.resolve` checks the sidebar
 renderer against host capabilities, compiles the input router, clears the
 worker's orphan slots and transfers one `Adoption` to the adapter. Rejection
 frees all three owned objects in one place. A load or validation failure keeps
@@ -98,7 +98,7 @@ trigger.
 - `src/frontend/client/application/config_reload.zig` proves commit-before-
   effect ordering and retained commits after effect failure.
 - `src/frontend/client/config_reloads.zig` owns the concrete resource and
-  configuration-object swap.
+  configuration-object swap plus watcher start and rearm.
 - `src/frontend/client/sidebar_projection.zig` owns the shared sidebar
   projection and rejects any change that is not the current model commit.
 - `src/frontend/client/client_test.zig` proves ownership replacement, stale

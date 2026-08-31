@@ -20,6 +20,24 @@ pub const Outcome = union(enum) {
     adopted: client_model.ConfigurationCommit,
 };
 
+/// Schedules the next reload attempt when this client owns a watched
+/// configuration.
+///
+/// ```zig
+/// try schedule(client);
+/// ```
+pub fn schedule(client: *Client) !void {
+    const path = client.options.config_path orelse return;
+
+    try reload_worker.schedule(&client.reload, client.io, client.gpa, &client.select, .{
+        .path = path,
+        .profile = client.options.profile,
+        .trust_path = client.options.trust_path.?,
+        .current_generation = client.lua_generation.?,
+        .current_registry = client.plugin_registry.?,
+    });
+}
+
 /// Resolves one reload completion, applies its outcome and rearms the watcher.
 ///
 /// ```zig
@@ -40,7 +58,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
         },
         .adopted => |adoption| .{ .adopted = try apply(client, adoption) },
     };
-    try client.scheduleConfigReload();
+    try schedule(client);
 
     return outcome;
 }

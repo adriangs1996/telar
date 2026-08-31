@@ -17,6 +17,7 @@ const sidebar_animations = @import("sidebar_animations.zig");
 const Client = @import("client.zig");
 const agent_sounds = @import("agent_sounds.zig");
 const client_telemetry = @import("telemetry.zig");
+const config_reloads = @import("config_reloads.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
 const notification_flow = @import("notifications.zig");
@@ -102,7 +103,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     try runtime_transport.scheduleRead(client);
     try client.select.concurrent(.capability_timeout, Client.waitCapabilityTimeout, .{io});
     try client_telemetry.start(client);
-    try client.scheduleConfigReload();
+    try config_reloads.schedule(client);
 
     while (true) {
         const event = try client.select.await();
@@ -126,7 +127,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             .sound_played => |result| try agent_sounds.handlePlayed(client, result),
             .telemetry_tick => |result| client_telemetry.handleTick(client, result, heap.snapshot()),
             .telemetry_written => |result| client_telemetry.handleWritten(client, result),
-            .config_reload => |result| try client.handleConfigReloadEvent(result),
+            .config_reload => |result| _ = try config_reloads.handle(client, result),
             .plugin_result => |result| if (try client.handlePluginResultEvent(result)) return 0,
             .clipboard_image => |result| try client.handleClipboardImageEvent(result),
         }

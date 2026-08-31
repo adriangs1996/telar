@@ -65,7 +65,6 @@ pub const Options = struct {
 
 const clipboard_images = @import("clipboard_images.zig");
 const config_reload = @import("config_reload.zig");
-const config_reloads = @import("config_reloads.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
 const host_resizes = @import("host_resizes.zig");
@@ -277,24 +276,6 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
 /// ```
 pub fn handleResizeEvent(client: *Client, result: anyerror!void, source: host_resizes.Source) !void {
     _ = try host_resizes.handle(client, result, source);
-}
-
-pub fn scheduleConfigReload(client: *Client) !void {
-    const path = client.options.config_path orelse return;
-    try config_reload.schedule(&client.reload, client.io, client.gpa, &client.select, .{
-        .path = path,
-        .profile = client.options.profile,
-        .trust_path = client.options.trust_path.?,
-        .current_generation = client.lua_generation.?,
-        .current_registry = client.plugin_registry.?,
-    });
-}
-
-/// Entrypoint for one finished reload attempt: adopt the new
-/// configuration, surface the rejection, or note nothing changed — then
-/// keep watching.
-pub fn handleConfigReloadEvent(client: *Client, result: anyerror!config_reload.ConfigReload) !void {
-    _ = try config_reloads.handle(client, result);
 }
 
 /// Entrypoint for one finished plugin action: authorize and apply its effects.
