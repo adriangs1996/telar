@@ -141,6 +141,16 @@ pub const WorkspaceListCollapse = struct {
     chrome_revision: u64,
 };
 
+pub const PaneInputTarget = union(enum) {
+    focused,
+    pane: schema.PaneId,
+};
+
+pub const PaneInputPlan = struct {
+    pane_id: schema.PaneId,
+    input_modes: schema.frame.InputModes,
+};
+
 pub const PaneViewportTarget = union(enum) {
     absolute: u32,
     relative: i32,
@@ -476,6 +486,32 @@ pub const Model = struct {
     /// ```
     pub fn toggleWorkspaceList(model: *Model) WorkspaceListCollapse {
         return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
+    }
+
+    /// Resolves one user-input target without exposing pane storage. Prompts
+    /// and copy mode retain exclusive ownership of pane input while active.
+    ///
+    /// ```zig
+    /// const plan = model.planPaneInput(.focused) orelse return;
+    /// ```
+    pub fn planPaneInput(model: *const Model, target: PaneInputTarget) ?PaneInputPlan {
+        if (model.name_prompt.active() or model.copy_state != null) {
+            return null;
+        }
+
+        const active = model.workspace.activeConst() orelse return null;
+        const pane = switch (target) {
+            .focused => active.model.focusedPaneConst() orelse return null,
+            .pane => |pane_id| active.model.findConst(pane_id) orelse return null,
+        };
+        if (!pane.attached) {
+            return null;
+        }
+
+        return .{
+            .pane_id = pane.id,
+            .input_modes = pane.input_modes,
+        };
     }
 
     /// Commits one viewport intent for an attached pane in the active tab.
@@ -1538,6 +1574,68 @@ fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !s
 
 fn testingTabSnapshot(buffer: []u8, snapshot: schema.TabSnapshot) !schema.TabSnapshotView {
     return (try schema.decodeServer(try schema.encodeTabSnapshot(buffer, snapshot))).tab_snapshot;
+}
+
+test "pane input planning resolves one attached active target without mutation" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.input_modes = .{ .cursor_keys = true, .bracketed_paste = true };
+    const inactive_pane: schema.PaneId = @enumFromInt(2);
+    _ = try model.workspace.addCreated(.{
+        .location = .{
+            .workspace = location.workspace,
+            .tab_id = @enumFromInt(2),
+        },
+        .position = 1,
+        .label = "inactive",
+        .root_pane_id = inactive_pane,
+    }, .{ .cols = 20, .rows = 5 });
+    model.workspace.findPane(inactive_pane).?.attached = true;
+    try std.testing.expect(model.workspace.select(location.tab_id));
+    const version = model.version();
+    const expected: PaneInputPlan = .{
+        .pane_id = pane_id,
+        .input_modes = pane.input_modes,
+    };
+
+    try std.testing.expectEqualDeep(expected, model.planPaneInput(.focused).?);
+    try std.testing.expectEqualDeep(expected, model.planPaneInput(.{ .pane = pane_id }).?);
+    try std.testing.expect(model.planPaneInput(.{ .pane = inactive_pane }) == null);
+    try std.testing.expect(model.planPaneInput(.{ .pane = @enumFromInt(9) }) == null);
+    try std.testing.expectEqualDeep(version, model.version());
+
+    pane.attached = false;
+    try std.testing.expect(model.planPaneInput(.focused) == null);
+    try std.testing.expectEqualDeep(version, model.version());
+}
+
+test "pane input planning yields ownership to prompts and copy mode" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+
+    model.name_prompt.begin(.create_workspace);
+    const prompt_version = model.version();
+    try std.testing.expect(model.planPaneInput(.focused) == null);
+    try std.testing.expectEqualDeep(prompt_version, model.version());
+
+    try std.testing.expect(model.name_prompt.apply(.cancel) == .cancelled);
+    try std.testing.expect(model.enterCopyMode());
+    const copy_version = model.version();
+    try std.testing.expect(model.planPaneInput(.{ .pane = pane_id }) == null);
+    try std.testing.expectEqualDeep(copy_version, model.version());
 }
 
 test "pane viewport intents are bounded versioned and reserved by copy mode" {

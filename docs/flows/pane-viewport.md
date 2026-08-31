@@ -18,7 +18,7 @@ mouse wheel or pane input
         |
 InputHandler
         |
-pane_viewports adapter
+pane_viewports adapter or PaneInputHandler
         |
 SetPaneViewportHandler
         |
@@ -30,9 +30,11 @@ graphics visibility, then set_pane_viewport
 ```
 
 `PaneViewportCommand` supports an absolute row, a relative movement and the
-bottom of retained history. `InputHandler` uses relative movement for the
-mouse wheel and `.bottom` before pane input. It does not clamp offsets, change
-scroll state, hide graphics, send protocol messages or request a draw.
+bottom of retained history. `InputHandler` uses the standalone adapter for
+relative mouse-wheel movement. `PaneInputHandler` composes the same use case
+with a `.bottom` intent before keyboard and paste delivery. Neither caller
+clamps offsets, changes scroll state, hides graphics, sends viewport protocol
+messages or requests a draw.
 
 `ClientModel.setPaneViewport` resolves the intent against the attached pane in
 the active tab. It clamps the offset to `scroll.maxOffset`, commits it and
@@ -46,8 +48,10 @@ first updates client-owned graphics visibility and then sends
 client viewport. The client process may reconnect, and the next runtime frame
 rebuilds the operational projection.
 
-Pane input uses `.bottom` before it sends bytes to the child. This fixes the
-wire order as `set_pane_viewport` followed by `pane_input`. The user's input
+Keyboard and paste input use `.bottom` before sending bytes to the child. Mouse
+reports preserve scrollback because changing the viewport would alter the
+interaction they describe. When the viewport changes, wire order is
+`set_pane_viewport` followed by `pane_input`. The user's keyboard or paste
 cannot overtake the request to return to live output.
 
 ## Copy mode

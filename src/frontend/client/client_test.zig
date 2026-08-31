@@ -960,6 +960,100 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
     }
 }
 
+test "streamed paste uses one captured pane and restores its live viewport" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.input_modes.bracketed_paste = true;
+    pane.scroll = .{
+        .total_rows = @as(u32, pane.buffer.h) + 10,
+        .offset = 0,
+    };
+    const version = client.model.version();
+    const input_events = client.metrics.input_events;
+    const input_bytes = client.metrics.input_bytes;
+    const timing_count = client.metrics.input_enqueue.count;
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.pasteStart();
+    try handler.pasteContent("pasted");
+    try handler.pasteEnd();
+
+    try std.testing.expect(client.paste_pane == null);
+    try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
+    try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
+    try expectNonViewportVersionEqual(version, client.model.version());
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(input_events + 3, client.metrics.input_events);
+        try std.testing.expectEqual(input_bytes + 18, client.metrics.input_bytes);
+        try std.testing.expectEqual(timing_count + 3, client.metrics.input_enqueue.count);
+    }
+
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const viewport = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(viewport == .set_pane_viewport);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, viewport.set_pane_viewport.pane_id);
+    try std.testing.expectEqual(@as(u32, 10), viewport.set_pane_viewport.offset);
+    const input = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(input == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, input.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[200~pasted\x1b[201~", input.pane_input.bytes);
+}
+
+test "mouse reports preserve scrollback and remain outside user-input telemetry" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.mouse = .{ .tracking = .normal, .sgr = true };
+    pane.scroll = .{
+        .total_rows = @as(u32, pane.buffer.h) + 10,
+        .offset = 0,
+    };
+    const pane_view = client.model.workspace.active().?.model.viewForPane(
+        pane.id,
+        client.view.workbench(),
+    ).?;
+    const version = client.model.version();
+    const input_events = client.metrics.input_events;
+    const input_bytes = client.metrics.input_bytes;
+    const timing_count = client.metrics.input_enqueue.count;
+    const mouse_events = client.metrics.mouse_events;
+    var handler: InputHandler = .{ .client = client };
+    const point: term.Event.Mouse = .{
+        .x = pane_view.content.x,
+        .y = pane_view.content.y,
+        .kind = .move,
+    };
+
+    try handler.mouse(point);
+    var press = point;
+    press.kind = .press;
+    try handler.mouse(press);
+
+    try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(input_events, client.metrics.input_events);
+        try std.testing.expectEqual(input_bytes, client.metrics.input_bytes);
+        try std.testing.expectEqual(timing_count, client.metrics.input_enqueue.count);
+        try std.testing.expectEqual(mouse_events + 2, client.metrics.mouse_events);
+    }
+
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const input = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(input == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, input.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[<0;1;1M", input.pane_input.bytes);
+}
+
 test "focus reporting emits focus-in only after the pane opts in" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -974,10 +1068,14 @@ test "focus reporting emits focus-in only after the pane opts in" {
 
     const model = &client.model.workspace.active().?.model;
     model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    const input_events = client.metrics.input_events;
     try client.syncPaneFocus(model);
     try harness.settle();
 
     try std.testing.expect(client.reported_focus_events);
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(input_events, client.metrics.input_events);
+    }
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .pane_input);

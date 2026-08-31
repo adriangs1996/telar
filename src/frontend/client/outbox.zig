@@ -7,11 +7,12 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const pane_input = @import("application/pane_input.zig");
 
 const schema = core.schema;
 
 pub const capacity = schema.max_panes_per_tab + 16;
-pub const max_input_bytes = 8 * 1024;
+pub const max_input_bytes = pane_input.max_bytes;
 /// Request groups permit at most one pane launch, one tab launch, and one
 /// workspace launch at once. Keep one spare for bootstrap or recovery.
 pub const max_pending_launches = 4;

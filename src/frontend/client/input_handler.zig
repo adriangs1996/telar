@@ -13,6 +13,7 @@ const widgets = @import("../widgets/root.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
+const pane_inputs = @import("pane_inputs.zig");
 const pane_splits = @import("pane_splits.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const copy_modes = @import("copy_modes.zig");
@@ -128,10 +129,11 @@ pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
         return;
     }
 
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    try handler.sendPaneBytes(pane, bytes);
+    _ = try pane_inputs.send(handler.client, .{
+        .target = .focused,
+        .source = .host,
+        .payload = .{ .bytes = bytes },
+    });
 }
 
 pub fn key(handler: *InputHandler, value: keybind.Key) !void {
@@ -153,15 +155,13 @@ pub fn key(handler: *InputHandler, value: keybind.Key) !void {
         return;
     }
 
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    var encoded: [32]u8 = undefined;
-    try handler.sendPaneBytes(
-        pane,
-        try input_mod.encodeKey(&encoded, value, pane.input_modes),
-    );
+    _ = try pane_inputs.send(handler.client, .{
+        .target = .focused,
+        .source = .host,
+        .payload = .{ .key = value },
+    }) orelse return;
     if (isClipboardImagePasteKey(value)) {
+        const model = handler.activeModel() orelse return;
         if (handler.client.view.focusedAttachmentTarget(model)) |target|
             handler.client.scheduleAttachmentCapture(target) catch {};
     }
@@ -176,14 +176,7 @@ fn sendPaste(handler: *InputHandler, text: []const u8) !void {
         return;
     }
 
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    var encoded: [lua_config.max_expression_paste_bytes + 16]u8 = undefined;
-    try handler.sendPaneBytes(
-        pane,
-        try input_mod.encodePaste(&encoded, text, pane.input_modes),
-    );
+    _ = try pane_inputs.expressionPaste(handler.client, text);
 }
 
 pub fn pasteStart(handler: *InputHandler) !void {
@@ -196,12 +189,7 @@ pub fn pasteStart(handler: *InputHandler) !void {
         return;
     }
 
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    handler.client.paste_pane = pane.id;
-    if (pane.input_modes.bracketed_paste)
-        try handler.sendPaneBytes(pane, "\x1b[200~");
+    handler.client.paste_pane = try pane_inputs.beginPaste(handler.client) orelse return;
 }
 
 pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
@@ -215,8 +203,7 @@ pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
     }
 
     const pane_id = handler.client.paste_pane orelse return;
-    const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
-    if (pane.attached) try handler.sendPaneBytes(pane, text);
+    _ = try pane_inputs.continuePaste(handler.client, pane_id, text);
 }
 
 pub fn pasteEnd(handler: *InputHandler) !void {
@@ -231,21 +218,7 @@ pub fn pasteEnd(handler: *InputHandler) !void {
 
     const pane_id = handler.client.paste_pane orelse return;
     handler.client.paste_pane = null;
-    const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
-    if (pane.attached and pane.input_modes.bracketed_paste)
-        try handler.sendPaneBytes(pane, "\x1b[201~");
-}
-
-fn sendPaneBytes(handler: *InputHandler, pane: *multiplexer.Pane, bytes: []const u8) !void {
-    const started = diagnostics.now(handler.client.io);
-    var viewport = pane_viewports.handler(handler.client);
-    _ = try viewport.execute(.{ .pane_id = pane.id, .target = .bottom });
-    try handler.client.enqueueInput(pane.id, bytes);
-    if (comptime diagnostics.enabled) {
-        handler.client.metrics.input_events += 1;
-        handler.client.metrics.input_bytes += bytes.len;
-        handler.client.metrics.input_enqueue.observe(diagnostics.elapsed(started, diagnostics.now(handler.client.io)));
-    }
+    _ = try pane_inputs.endPaste(handler.client, pane_id);
 }
 
 pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
@@ -331,7 +304,13 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
                 pane.scroll.atBottom(pane.buffer.h))
             {
                 const bytes = if (delta < 0) "\x1b[A" else "\x1b[B";
-                for (0..@abs(delta)) |_| try handler.client.enqueueInput(pane.id, bytes);
+                for (0..@abs(delta)) |_| {
+                    _ = try pane_inputs.send(handler.client, .{
+                        .target = .{ .pane = pane.id },
+                        .source = .mouse,
+                        .payload = .{ .bytes = bytes },
+                    });
+                }
             } else {
                 var viewport = pane_viewports.handler(handler.client);
                 _ = try viewport.execute(.{
@@ -363,7 +342,11 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         exact_x,
         exact_y,
     );
-    try handler.client.enqueueInput(pane.id, bytes);
+    _ = try pane_inputs.send(handler.client, .{
+        .target = .{ .pane = pane.id },
+        .source = .mouse,
+        .payload = .{ .bytes = bytes },
+    });
 }
 
 fn copyModeMouse(handler: *InputHandler, event: term.Event.Mouse, model: *multiplexer.Model) !bool {

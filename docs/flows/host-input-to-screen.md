@@ -21,9 +21,13 @@ keybind.Router.feed -> term.parse -> Router.routeKey
       v                                                      v
 InputHandler.key / forward                         InputHandler.action
       |                                                      |
-input.host.encodeKey                              native / Lua / plugin action
+pane_inputs adapter                               native / Lua / plugin action
       |                                                      |
-SetPaneViewportHandler(.bottom)                   consumed by Telar
+PaneInputHandler                                  consumed by Telar
+      |                                                      |
+ClientModel.planPaneInput -> input.host.encodeKey
+      |
+SetPaneViewportHandler(.bottom)
       |
 Client.enqueueInput
       |
@@ -81,7 +85,7 @@ key. Partial global sequences retain the configured binding timeout.
 
 A complete configured sequence returns `.action` from `Router.routeKey`.
 `Router.drain` calls `InputHandler.action` in
-`src/frontend/client/root.zig`; it does not forward the matched bytes.
+`src/frontend/client/input_handler.zig`; it does not forward the matched bytes.
 
 `InputHandler.action` separates three action sources:
 
@@ -98,11 +102,17 @@ that the matched branch is consumed.
 
 ## 2B. Pane input branch
 
-An unmatched semantic key reaches `InputHandler.key`. It selects the focused,
-attached pane and calls `input.host.encodeKey` from
-`src/frontend/input/host.zig`. Encoding uses the pane's last acknowledged
-cursor/application, modify-key and bracketed-paste modes; host bytes are not
-copied blindly into the child.
+An unmatched semantic key reaches `InputHandler.key`, which delegates one
+input command to the `pane_inputs` adapter. `PaneInputHandler` resolves an
+attached target through `ClientModel.planPaneInput` and calls
+`input.host.encodeKey` from `src/frontend/input/host.zig`. Encoding uses the
+pane's last acknowledged cursor/application, modify-key and bracketed-paste
+modes; host bytes are not copied blindly into the child.
+
+The same application boundary owns raw routed chunks, streamed and Lua paste,
+alternate-scroll cursor sequences and SGR mouse reports. Prompts and copy mode
+retain exclusive input ownership. See [Pane input](pane-input.md) for target,
+viewport, failure and telemetry policy.
 
 ### Modified Enter
 
@@ -134,10 +144,11 @@ The encodings follow the
 
 ### Enqueueing input
 
-`InputHandler.sendPaneBytes` first executes `SetPaneViewportHandler` with a
-`.bottom` intent. If the pane is scrolled back, that use case commits the
-client viewport, updates graphics visibility and queues `set_pane_viewport`.
-It then calls, in order:
+For keyboard and paste sources, `PaneInputHandler` first executes
+`SetPaneViewportHandler` with a `.bottom` intent. If the pane is scrolled back,
+that use case commits the client viewport, updates graphics visibility and
+queues `set_pane_viewport`. The handler then invokes the adapter's send effect,
+which calls, in order:
 
 1. `Client.enqueueInput`;
 2. `client.Outbox.pushInput` in `src/frontend/client/outbox.zig`;
