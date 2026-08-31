@@ -14,6 +14,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_splits = @import("pane_splits.zig");
+const sidebar_toggles = @import("sidebar_toggles.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -357,6 +358,9 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     }
     const model = handler.activeModel() orelse return;
     const interaction = handler.client.view.handleMouse(cell_event, monotonic(handler.client.io));
+    if (interaction.toggle_sidebar) {
+        try handler.toggleSidebar();
+    }
     const agent_handoff = if (interaction.focus_agent) |agent_key|
         try handler.focusSidebarAgent(agent_key)
     else
@@ -594,17 +598,7 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
             .down => .down,
         }),
         .toggle_pane_fullscreen => try handler.togglePaneFullscreen(),
-        .toggle_sidebar => {
-            handler.client.view.toggleSidebar();
-            handler.client.graphics_store.invalidatePlacements();
-            if (handler.activeModel()) |model| {
-                try handler.client.resizeAttached(
-                    model,
-                    handler.client.view.workbench(),
-                );
-            }
-            handler.redraw = true;
-        },
+        .toggle_sidebar => try handler.toggleSidebar(),
         .toggle_workspace_list => {
             handler.client.view.toggleWorkspaceList();
             handler.redraw = true;
@@ -657,7 +651,7 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
 
 fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
     const model = handler.activeModel() orelse return .{
-        .sidebar_visible = handler.client.view.sidebar_requested,
+        .sidebar_visible = handler.client.model.sidebarVisible(),
         .tab_count = 0,
         .active_tab_index = 0,
         .pane_count = 0,
@@ -665,7 +659,7 @@ fn callbackContext(handler: *InputHandler) lua_config.CallbackContext {
     };
     const focused = model.focusedPane();
     return .{
-        .sidebar_visible = handler.client.view.sidebar_requested,
+        .sidebar_visible = handler.client.model.sidebarVisible(),
         .tab_count = @intCast(handler.client.model.workspace.count),
         .active_tab_index = @intCast(handler.client.model.workspace.activeIndex() orelse 0),
         .pane_count = @intCast(model.pane_count),
@@ -694,6 +688,12 @@ fn togglePaneFullscreen(handler: *InputHandler) !void {
     var use_case = pane_geometry.fullscreenHandler(handler.client);
 
     _ = try use_case.execute(.{ .area = handler.client.view.workbench() });
+}
+
+fn toggleSidebar(handler: *InputHandler) !void {
+    var use_case = sidebar_toggles.handler(handler.client);
+
+    _ = try use_case.execute();
 }
 
 fn closeFocused(handler: *InputHandler) !void {

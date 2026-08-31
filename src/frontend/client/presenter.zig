@@ -61,7 +61,7 @@ pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
     presenter.last_input_ns = now_ns;
 }
 
-/// Observes a committed semantic version and schedules presentation once.
+/// Observes a committed client-model version and schedules presentation once.
 ///
 /// ```zig
 /// try presenter.observeModel(model.version());
@@ -116,7 +116,7 @@ fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
     };
 }
 
-/// The `.draw` event: presents the latest semantic model, including its
+/// The `.draw` event: presents the latest client model, including its
 /// explicit empty state during startup and workspace handoff.
 pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     presenter.draw_pending = false;
@@ -132,7 +132,12 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.active_tab;
     const panes_changed = presenter.presented_model_version.panes !=
         presenter.observed_model_version.panes;
-    if (workspace_changed or tabs_changed or active_tab_changed or panes_changed) {
+    const chrome_changed = presenter.presented_model_version.chrome !=
+        presenter.observed_model_version.chrome;
+    if (chrome_changed) {
+        client.view.setSidebarVisible(client.model.sidebarVisible());
+    }
+    if (workspace_changed or tabs_changed or active_tab_changed or panes_changed or chrome_changed) {
         client.view.invalidate();
     }
     if (active_tab_changed or panes_changed) {

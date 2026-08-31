@@ -248,7 +248,7 @@ pub fn init(params: Params) !*Client {
         params.options.icon_theme,
     );
     errdefer view.deinit();
-    if (!params.options.sidebar_visible) view.toggleSidebar();
+    view.setSidebarVisible(params.options.sidebar_visible);
     try view.configureSidebar(
         params.options.sidebar_rendering,
         capabilities.kitty_graphics,
@@ -257,6 +257,7 @@ pub fn init(params: Params) !*Client {
     );
     var model = client_model.Model.init(gpa, params.options.pane_gaps);
     errdefer model.deinit();
+    _ = model.setSidebarVisible(params.options.sidebar_visible);
     var graphics_store = if (params.options.host_shared_memory)
         kitty.Store.initSharedMemory(gpa)
     else
@@ -332,7 +333,7 @@ pub fn nextId(client: *Client) !schema.RequestId {
     return nextRequestId(&client.next_request_id);
 }
 
-/// Publishes the semantic version after one client event has committed.
+/// Publishes the model version after one client event has committed.
 ///
 /// ```zig
 /// try client.observeModel();
@@ -542,6 +543,26 @@ pub fn beginWorkspaceCreatePrompt(client: *Client) void {
 pub fn finishNamePrompt(client: *Client) void {
     client.view.finishNamePrompt();
     client.mode = .normal;
+}
+
+/// Synchronizes a committed sidebar preference with disposable view,
+/// graphics and runtime geometry resources.
+///
+/// ```zig
+/// try client.syncSidebarVisibility(change);
+/// ```
+pub fn syncSidebarVisibility(client: *Client, change: client_model.SidebarVisibility) !void {
+    if (client.model.sidebarVisible() != change.visible or
+        client.model.version().chrome != change.chrome_revision)
+    {
+        return error.UnexpectedSidebarVisibility;
+    }
+
+    client.view.setSidebarVisible(change.visible);
+    client.graphics_store.invalidatePlacements();
+    const active = client.model.workspace.active() orelse return;
+
+    try client.resizeAttached(&active.model, client.view.workbench());
 }
 
 pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
@@ -989,7 +1010,11 @@ pub fn applyConfig(client: *Client, adoption: config_reload.Adoption) !void {
     if (!client.options.theme_locked) client.view.setTheme(snapshot.theme);
     client.view.setIconTheme(snapshot.icon_theme);
     client.sidebar_rendering = adoption.sidebar_rendering;
+    const sidebar_change = client.model.setSidebarVisible(snapshot.sidebar_visible);
     client.view.setSidebarVisible(snapshot.sidebar_visible);
+    if (sidebar_change != null) {
+        client.graphics_store.invalidatePlacements();
+    }
     client.model.workspace.setPaneGaps(snapshot.pane_gaps);
     client.sound_config = snapshot.sound;
     if (!client.sound_config.enabled) client.queued_sound = null;

@@ -1232,6 +1232,76 @@ test "pane fullscreen publishes visible geometry without direct redraw" {
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
+test "sidebar toggle commits chrome before geometry and presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const shown_area = client.view.workbench();
+    const version_before_hide = client.model.version();
+    const pending_updates_before_hide = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.toggle_sidebar);
+
+    const hidden_area = client.view.workbench();
+    try std.testing.expect(hidden_area.w > shown_area.w);
+    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.view.sidebar_requested);
+    try std.testing.expectEqual(version_before_hide.chrome + 1, client.model.version().chrome);
+    try std.testing.expectEqual(version_before_hide.workspace, client.model.version().workspace);
+    try std.testing.expectEqual(version_before_hide.tabs, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_hide.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(version_before_hide.panes, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_hide, client.presenter.pending_updates);
+    try std.testing.expect(client.view.dirty);
+    try std.testing.expect(!handler.redraw);
+
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const expanded = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(expanded == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, expanded.pane_resize.pane_id);
+    try std.testing.expectEqual(
+        schema.TerminalSize{ .cols = hidden_area.w, .rows = hidden_area.h },
+        expanded.pane_resize.size,
+    );
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_hide + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expect(!client.view.dirty);
+
+    const version_before_show = client.model.version();
+    const pending_updates_before_show = client.presenter.pending_updates;
+    _ = try handler.applyNativeAction(.toggle_sidebar);
+
+    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(client.view.sidebar_requested);
+    try std.testing.expectEqualDeep(shown_area, client.view.workbench());
+    try std.testing.expectEqual(version_before_show.chrome + 1, client.model.version().chrome);
+    try std.testing.expectEqual(pending_updates_before_show, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+
+    try harness.settle();
+    const contracted = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(contracted == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, contracted.pane_resize.pane_id);
+    try std.testing.expectEqual(
+        schema.TerminalSize{ .cols = shown_area.w, .rows = shown_area.h },
+        contracted.pane_resize.size,
+    );
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_show + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
 test "an active split commits once and presentation observes the model" {
     var harness: TestHarness = undefined;
     try harness.init();

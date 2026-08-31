@@ -1,4 +1,4 @@
-//! Passive semantic state owned by one disposable client.
+//! Passive state owned by one disposable client.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -15,6 +15,7 @@ pub const Version = struct {
     tabs: u64 = 0,
     active_tab: u64 = 0,
     panes: u64 = 0,
+    chrome: u64 = 0,
 };
 
 pub const Change = enum {
@@ -121,6 +122,11 @@ pub const PaneGeometryChange = struct {
 
 pub const TogglePaneFullscreenRequest = struct {
     area: ui.Rect,
+};
+
+pub const SidebarVisibility = struct {
+    visible: bool,
+    chrome_revision: u64,
 };
 
 pub const RequestPaneSplit = struct {
@@ -288,8 +294,10 @@ pub const Model = struct {
     tabs_revision: u64 = 0,
     active_tab_revision: u64 = 0,
     panes_revision: u64 = 0,
+    sidebar_visible: bool = true,
+    chrome_revision: u64 = 0,
 
-    /// Creates the semantic model with the configured pane appearance.
+    /// Creates the client model with the configured pane appearance.
     ///
     /// ```zig
     /// var model = Model.init(gpa, true);
@@ -321,7 +329,46 @@ pub const Model = struct {
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
+            .chrome = model.chrome_revision,
         };
+    }
+
+    /// Returns the sidebar preference committed in client state.
+    ///
+    /// ```zig
+    /// if (model.sidebarVisible()) showSidebar();
+    /// ```
+    pub fn sidebarVisible(model: *const Model) bool {
+        return model.sidebar_visible;
+    }
+
+    /// Commits an explicit sidebar preference. Repeated values preserve the
+    /// chrome revision and produce no projection work.
+    ///
+    /// ```zig
+    /// const change = model.setSidebarVisible(false) orelse return;
+    /// ```
+    pub fn setSidebarVisible(model: *Model, visible: bool) ?SidebarVisibility {
+        if (model.sidebar_visible == visible) {
+            return null;
+        }
+
+        model.sidebar_visible = visible;
+        model.chrome_revision +%= 1;
+
+        return .{
+            .visible = visible,
+            .chrome_revision = model.chrome_revision,
+        };
+    }
+
+    /// Toggles the sidebar preference and advances only the chrome revision.
+    ///
+    /// ```zig
+    /// const change = model.toggleSidebar();
+    /// ```
+    pub fn toggleSidebar(model: *Model) SidebarVisibility {
+        return model.setSidebarVisible(!model.sidebar_visible).?;
     }
 
     /// Returns the active tab identity without exposing workspace storage.
@@ -2026,6 +2073,30 @@ test "tab selection resolves identity position and wrapping offset" {
     try std.testing.expect((try model.selectTab(.{ .offset = 2 })) == null);
     try std.testing.expectError(error.TabNotFound, model.selectTab(.{ .tab_id = @enumFromInt(9) }));
     try std.testing.expectEqual(@as(u64, 4), model.version().active_tab);
+}
+
+test "sidebar visibility advances only the chrome revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    try std.testing.expect(model.sidebarVisible());
+    try std.testing.expect(model.setSidebarVisible(true) == null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+
+    const hidden = model.toggleSidebar();
+
+    try std.testing.expect(!hidden.visible);
+    try std.testing.expect(!model.sidebarVisible());
+    try std.testing.expectEqual(@as(u64, 1), hidden.chrome_revision);
+    try std.testing.expectEqual(Version{ .chrome = 1 }, model.version());
+    try std.testing.expect(model.setSidebarVisible(false) == null);
+
+    const shown = model.setSidebarVisible(true).?;
+
+    try std.testing.expect(shown.visible);
+    try std.testing.expect(model.sidebarVisible());
+    try std.testing.expectEqual(@as(u64, 2), shown.chrome_revision);
+    try std.testing.expectEqual(Version{ .chrome = 2 }, model.version());
 }
 
 test "pane focus resolves identity and direction through one visible revision" {

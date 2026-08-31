@@ -31,6 +31,7 @@ pub const Interaction = struct {
     redraw: bool = false,
     layout_changed: bool = false,
     consumed: bool = false,
+    toggle_sidebar: bool = false,
     focus_pane: ?schema.PaneId = null,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
@@ -182,7 +183,7 @@ pub const State = struct {
         state.dirty = true;
     }
 
-    pub fn toggleSidebar(state: *State) void {
+    fn toggleSidebar(state: *State) void {
         state.sidebar_requested = !state.sidebar_requested;
         state.recalculateRegions(state.scratch.w, state.scratch.h);
         state.hovered = null;
@@ -554,11 +555,7 @@ pub const State = struct {
         if (mouse.kind != .press) return result;
         const action = hovered orelse return result;
         switch (action) {
-            .toggle_sidebar => {
-                state.toggleSidebar();
-                result.redraw = true;
-                result.layout_changed = true;
-            },
+            .toggle_sidebar => result.toggle_sidebar = true,
             .focus_pane => |pane_id| result.focus_pane = pane_id,
             .select_tab => |tab_id| {
                 switch (mouse.button & 0b11) {
@@ -1437,6 +1434,11 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, null, &model, true, null);
+
+    const sidebar_requested = state.sidebar_requested;
+    const sidebar_toggle = state.handleMouse(.{ .x = 0, .y = 0, .kind = .press }, 0);
+    try std.testing.expect(sidebar_toggle.toggle_sidebar);
+    try std.testing.expectEqual(sidebar_requested, state.sidebar_requested);
 
     // Locate hits on the top row instead of pinning glyph widths.
     var workspace_x: ?u16 = null;
