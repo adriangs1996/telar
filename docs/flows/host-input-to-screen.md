@@ -28,15 +28,17 @@ Client.enqueueInput                              consumed by Telar
 Outbox.encodeNext -> schema.pane_input -> socket
       |
       v
-Runtime.run -> Bindings.handle(.client_message) -> Application.dispatchClientMessage
+Runtime.run -> application.handle(.client_message) -> ClientEvents.handleMessage
+      |
+Application.dispatchClientMessage
       |
 Pane input queue -> writePaneInput -> child PTY
       |
       | child emits output
       v
-Bindings.handle(.pane_output) -> pane output Pipeline -> Pane.ingest
+application.handle(.pane_output) -> PaneEvents.Pipeline -> Pane.ingest
       |
-Bindings.handle(.pane_ingested) -> pane ingest Coordinator -> Application.pump
+application.handle(.pane_ingested) -> pane ingest Coordinator -> Application.pump
       |
 Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
@@ -145,10 +147,10 @@ the same pane. Only one socket send is in flight.
 ## 3. Runtime input entry
 
 `receiveSession` completes as `.client_message`. `Runtime.run` delegates it
-through `application.handle` to `Bindings.handleClientMessageEvent` in
-`src/backend/runtime/application/actor_bindings.zig`. That entrypoint resolves
-the client generation, decodes the message, establishes the connection role,
-calls `Application.dispatchClientMessage`, pumps pending responses and
+through `application.handle` to `Dispatcher.handleMessage` in
+`src/backend/runtime/application/event_dispatcher/client.zig`. That adapter
+resolves the client generation, decodes the message, establishes the connection
+role, calls `Application.dispatchClientMessage`, pumps pending responses and
 schedules the next socket read.
 
 `RequestDispatcher.dispatch` in
@@ -158,9 +160,9 @@ through its request-scoped controller:
 1. resolves the client's attachment and rejects stale or exited panes;
 2. copies the bytes into the best-effort history observer;
 3. appends them to the pane's bounded input queue;
-4. calls `schedulePaneInput`.
+4. asks `operation_scheduler.zig` to schedule pane input.
 
-`schedulePaneInput` permits one in-flight write per pane.
+`PaneEvents.Io.scheduleInput` permits one in-flight write per pane.
 `writePaneInput` serializes PTY writes with terminal-query responses and writes
 the bytes to the child PTY. Its `.pane_input_written` completion consumes the
 queue prefix and schedules the next chunk. A blocked pane write does not block
@@ -173,8 +175,8 @@ There is no assumption that one key produces one frame.
 
 `readPane` completes as `.pane_output`, which delegates to
 `Pipeline.handle` in
-`src/backend/runtime/entrypoints/events/pane/output.zig` through the actor
-bindings. The pipeline:
+`src/backend/runtime/entrypoints/events/pane/output.zig` through
+`application/event_dispatcher/pane/pipeline.zig`. The pipeline:
 
 1. marks EOF or failure as completed output;
 2. feeds copies to the observation and media queues;

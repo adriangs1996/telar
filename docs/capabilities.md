@@ -56,7 +56,9 @@ split without changing that public contract:
 | Application | `src/backend/runtime/application/root.zig` | Own the live model, client application state and cross-capability invariants |
 | Runtime model | `src/backend/runtime/application/model.zig` | Hold authoritative semantic state without implementing behavior |
 | Pane launcher | `src/backend/runtime/application/pane_launcher.zig` | Commit or roll back pane creation and actor startup as one transaction |
-| Actor bindings | `src/backend/runtime/application/actor_bindings.zig` | Bind asynchronous completions to their capability coordinators |
+| Event sources | `src/backend/runtime/event_sources.zig` | Arm infrastructure work that produces runtime events |
+| Event dispatcher | `src/backend/runtime/application/event_dispatcher/root.zig` | Classify completions and delegate them to capability-specific adapters |
+| Operation scheduler | `src/backend/runtime/application/operation_scheduler.zig` | Start bounded asynchronous work requested by the application |
 | Request dispatch | `src/backend/runtime/application/request_dispatch.zig` | Build request-scoped controllers and application handlers |
 
 Below that composition layer, directory names describe runtime roles rather
@@ -166,12 +168,12 @@ All client handlers are in `src/frontend/client/root.zig`.
 
 `Runtime.run` receives every event and handles only stop completion. Every
 non-stop event crosses `application.handle` into
-`actor_bindings.Bindings.handle`, which delegates to the owning coordinator.
+`event_dispatcher.Dispatcher.handle`, which delegates to the owning adapter.
 
 | Event | Owner after classification |
 | --- | --- |
 | Accepted socket / completed handshake | `runtime/client/admission.zig` |
-| Client socket read | `Bindings.handleClientMessageEvent` -> `Application.dispatchClientMessage` |
+| Client socket read | `runtime/application/event_dispatcher/client.zig` -> `Application.dispatchClientMessage` |
 | Completed client write | `runtime/client/send_coordinator.zig` |
 | History worker result | `runtime/entrypoints/events/history_response.zig` |
 | Proxy observation | `runtime/entrypoints/events/proxy_observation.zig` |

@@ -122,7 +122,8 @@ long-lived runtime whose clients are disposable. Snapshot reconciliation is the
 recovery mechanism.
 
 `application/request_dispatch.zig` wires concrete repositories, subscribers
-and client queues at the request boundary. `application/actor_bindings.zig`
-wires asynchronous completions. They are the only layers that need to know
-those concrete participants. Command handlers and controllers remain
-allocation-free and use bounded fixed-size values for this flow.
+and client queues at the request boundary. `application/event_dispatcher/`
+wires asynchronous completions, while `application/operation_scheduler.zig`
+starts follow-up operations. They are the only layers that need to know those
+concrete participants. Command handlers and controllers remain allocation-free
+and use bounded fixed-size values for this flow.

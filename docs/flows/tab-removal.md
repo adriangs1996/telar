@@ -11,7 +11,7 @@ InputHandler.closeTab
         |
 schema.close_tab -> runtime socket
         |
-Runtime.run -> Bindings.handle(.client_message) -> RequestDispatcher.dispatch
+Runtime.run -> application.handle(.client_message) -> RequestDispatcher.dispatch
         |
 close_tab.Controller -> CloseTabHandler
         |

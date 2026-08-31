@@ -31,11 +31,12 @@ The implementation separates that lifetime into three owned parts:
 - `Application` owns the live model, client-facing application state and
   cross-capability invariants.
 
-`Runtime` composes those parts, starts the initial actors, delegates each event
+`Runtime` composes those parts, arms the initial event sources, delegates each event
 and maps the global shutdown order. It does not implement requests, actor
 completion policy or resource adapters itself. Request routing lives in
 `application/request_dispatch.zig`; asynchronous integration lives in
-`application/actor_bindings.zig`.
+`runtime/event_sources.zig`, `application/event_dispatcher/` and
+`application/operation_scheduler.zig`.
 
 `serve` remains a small adapter for concurrent integration tests and callers
 migrating to the explicit lifecycle. It cannot contain separate startup or
