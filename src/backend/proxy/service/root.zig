@@ -12,4 +12,5 @@ pub const Worker = implementation.Worker;
 
 test {
     std.testing.refAllDecls(implementation);
+    _ = @import("service_test.zig");
 }
