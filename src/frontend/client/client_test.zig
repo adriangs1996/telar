@@ -32,6 +32,8 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
     try std.testing.expectEqual(expected.frame, actual.frame);
+    try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
+    try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.copy, actual.copy);
     try std.testing.expectEqual(expected.viewport, actual.viewport);
@@ -43,6 +45,8 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
     try std.testing.expectEqual(expected.frame, actual.frame);
+    try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
+    try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
     try std.testing.expectEqual(expected.viewport, actual.viewport);
@@ -54,6 +58,8 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
     try std.testing.expectEqual(expected.frame, actual.frame);
+    try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
+    try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
 }
@@ -64,6 +70,8 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
     try std.testing.expectEqual(expected.frame, actual.frame);
+    try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
+    try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
     try std.testing.expectEqual(expected.copy, actual.copy);
@@ -2974,30 +2982,79 @@ test "a frame made stale by detach has no state resources or presentation effect
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
 }
 
-test "a pane cwd report lands on the pane" {
+test "pane cwd commits before presenter-owned metadata projection" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
+    const client = harness.client;
+    const active = client.model.workspace.active().?;
+    active.model.composition_invalidated = false;
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
     const cwd = try schema.encodePaneCwd(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .cwd = "/work/telar",
     });
-    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(cwd));
-    try harness.settle();
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(cwd));
+
     try std.testing.expectEqualStrings(
         "/work/telar",
-        harness.client.model.workspace.findPane(TestHarness.bootstrap_pane).?.cwdSlice(),
+        client.model.workspace.findPane(TestHarness.bootstrap_pane).?.cwdSlice(),
     );
+    try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
+    try std.testing.expectEqual(version.pane_foreground, client.model.version().pane_foreground);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expect(!active.model.composition_invalidated);
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(!active.model.composition_invalidated);
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const presented_version = client.model.version();
+    const presented_updates = client.presenter.pending_updates;
+    const same_name = try schema.encodePaneCwd(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .cwd = "/other/telar",
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(same_name));
+
+    try std.testing.expectEqualStrings(
+        "/other/telar",
+        client.model.workspace.findPane(TestHarness.bootstrap_pane).?.cwdSlice(),
+    );
+    try std.testing.expectEqualDeep(presented_version, client.model.version());
+    try client.observeModel();
+    try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
+
+    const stale = try schema.encodePaneCwd(&payload, .{
+        .pane_id = @enumFromInt(99),
+        .cwd = "/missing",
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
+    try std.testing.expectEqualDeep(presented_version, client.model.version());
 }
 
-test "a foreground report renames the pane" {
+test "pane foreground invalidates compositions only when the presenter observes it" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     try harness.bootstrap();
+    const client = harness.client;
+    const inactive_location = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
+    const active = client.model.workspace.active().?;
+    const inactive = client.model.workspace.find(inactive_location.tab_id).?;
+    active.model.composition_invalidated = false;
+    inactive.model.composition_invalidated = false;
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
 
     var payload: [128]u8 = undefined;
     const foreground = try schema.encodePaneForeground(&payload, .{
@@ -3005,14 +3062,42 @@ test "a foreground report renames the pane" {
         .name = "Claude Code",
     });
     _ = try server_messages.handleServerMessage(
-        harness.client,
+        client,
         try schema.decodeServer(foreground),
     );
-    try harness.settle();
+
     try std.testing.expectEqualStrings(
         "Claude Code",
-        harness.client.model.workspace.findPane(TestHarness.bootstrap_pane).?.foregroundName(),
+        client.model.workspace.findPane(TestHarness.bootstrap_pane).?.foregroundName(),
     );
+    try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
+    try std.testing.expectEqual(version.pane_foreground + 1, client.model.version().pane_foreground);
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+    try std.testing.expect(!active.model.composition_invalidated);
+    try std.testing.expect(!inactive.model.composition_invalidated);
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(!active.model.composition_invalidated);
+    try std.testing.expect(inactive.model.composition_invalidated);
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    inactive.model.composition_invalidated = false;
+    const presented_version = client.model.version();
+    const presented_updates = client.presenter.pending_updates;
+    _ = try server_messages.handleServerMessage(
+        client,
+        try schema.decodeServer(foreground),
+    );
+    try client.observeModel();
+
+    try std.testing.expectEqualDeep(presented_version, client.model.version());
+    try std.testing.expectEqual(presented_updates, client.presenter.pending_updates);
+    try std.testing.expect(!inactive.model.composition_invalidated);
 }
 
 test "close pane request waits for the authoritative exit before committing" {

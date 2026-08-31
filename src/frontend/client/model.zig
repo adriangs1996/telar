@@ -20,6 +20,8 @@ pub const Version = struct {
     active_tab: u64 = 0,
     panes: u64 = 0,
     frame: u64 = 0,
+    pane_metadata: u64 = 0,
+    pane_foreground: u64 = 0,
     chrome: u64 = 0,
     prompt: u64 = 0,
     copy: u64 = 0,
@@ -172,6 +174,32 @@ pub const PaneFrameOutcome = union(enum) {
     detached,
     resync: PaneFrameRecovery,
     applied: PaneFrameCommit,
+};
+
+pub const PaneMetadataKind = enum {
+    cwd,
+    foreground,
+};
+
+pub const PaneMetadataCommand = union(PaneMetadataKind) {
+    cwd: struct {
+        pane_id: schema.PaneId,
+        /// Borrowed only for the synchronous transition.
+        path: []const u8,
+    },
+    foreground: struct {
+        pane_id: schema.PaneId,
+        /// Borrowed only for the synchronous transition.
+        name: []const u8,
+    },
+};
+
+pub const PaneMetadataCommit = struct {
+    pane_id: schema.PaneId,
+    kind: PaneMetadataKind,
+    display_changed: bool,
+    pane_metadata_revision: u64,
+    pane_foreground_revision: u64,
 };
 
 pub const PaneViewportTarget = union(enum) {
@@ -395,6 +423,8 @@ pub const Model = struct {
     copy_state: ?copy_mode.State = null,
     copy_revision: u64 = 0,
     frame_revision: u64 = 0,
+    pane_metadata_revision: u64 = 0,
+    pane_foreground_revision: u64 = 0,
     viewport_revision: u64 = 0,
 
     /// Creates the client model with the configured pane appearance.
@@ -430,6 +460,8 @@ pub const Model = struct {
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
             .frame = model.frame_revision,
+            .pane_metadata = model.pane_metadata_revision,
+            .pane_foreground = model.pane_foreground_revision,
             .chrome = model.chrome_revision,
             .prompt = model.name_prompt.version(),
             .copy = model.copy_revision,
@@ -580,6 +612,46 @@ pub const Model = struct {
             .cells = applied.cells,
             .frame_revision = model.frame_revision,
         } };
+    }
+
+    /// Stores one runtime-owned pane metadata fact. Stale pane reports and
+    /// exact repeats are ignored. Cwd moves that retain the same bounded
+    /// display name commit storage without publishing a presentation change.
+    ///
+    /// ```zig
+    /// const commit = try model.updatePaneMetadata(command);
+    /// ```
+    pub fn updatePaneMetadata(model: *Model, command: PaneMetadataCommand) !?PaneMetadataCommit {
+        const pane_id = switch (command) {
+            .cwd => |cwd| cwd.pane_id,
+            .foreground => |foreground| foreground.pane_id,
+        };
+        const tab = model.workspace.tabForPane(pane_id) orelse return null;
+        const kind = std.meta.activeTag(command);
+        const change = switch (command) {
+            .cwd => |cwd| try tab.model.setPaneCwd(cwd.pane_id, cwd.path),
+            .foreground => |foreground| tab.model.setPaneForeground(foreground.pane_id, foreground.name),
+        };
+        if (change == .unchanged) {
+            return null;
+        }
+
+        const display_changed = change == .display_changed;
+        if (display_changed) {
+            model.pane_metadata_revision +%= 1;
+        }
+        if (kind == .foreground) {
+            std.debug.assert(display_changed);
+            model.pane_foreground_revision +%= 1;
+        }
+
+        return .{
+            .pane_id = pane_id,
+            .kind = kind,
+            .display_changed = display_changed,
+            .pane_metadata_revision = model.pane_metadata_revision,
+            .pane_foreground_revision = model.pane_foreground_revision,
+        };
     }
 
     /// Commits one viewport intent for an attached pane in the active tab.
@@ -1847,6 +1919,130 @@ test "pane frame apply failure does not publish a frame revision" {
     try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "pane cwd metadata stores exact paths and versions only display changes" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    const tab = model.workspace.active().?;
+    tab.model.composition_invalidated = false;
+
+    const visible = (try model.updatePaneMetadata(.{ .cwd = .{
+        .pane_id = pane_id,
+        .path = "/work/telar",
+    } })).?;
+
+    try std.testing.expectEqual(PaneMetadataKind.cwd, visible.kind);
+    try std.testing.expect(visible.display_changed);
+    try std.testing.expectEqual(@as(u64, 1), visible.pane_metadata_revision);
+    try std.testing.expectEqual(@as(u64, 0), visible.pane_foreground_revision);
+    try std.testing.expectEqualStrings("/work/telar", tab.model.find(pane_id).?.cwdSlice());
+    try std.testing.expectEqualDeep(Version{ .pane_metadata = 1 }, model.version());
+    try std.testing.expect(!tab.model.composition_invalidated);
+
+    const stored = (try model.updatePaneMetadata(.{ .cwd = .{
+        .pane_id = pane_id,
+        .path = "/other/telar",
+    } })).?;
+
+    try std.testing.expect(!stored.display_changed);
+    try std.testing.expectEqual(@as(u64, 1), stored.pane_metadata_revision);
+    try std.testing.expectEqualStrings("/other/telar", tab.model.find(pane_id).?.cwdSlice());
+    try std.testing.expectEqualDeep(Version{ .pane_metadata = 1 }, model.version());
+    try std.testing.expect((try model.updatePaneMetadata(.{ .cwd = .{
+        .pane_id = pane_id,
+        .path = "/other/telar",
+    } })) == null);
+    try std.testing.expect((try model.updatePaneMetadata(.{ .cwd = .{
+        .pane_id = @enumFromInt(9),
+        .path = "/missing",
+    } })) == null);
+
+    _ = (try model.updatePaneMetadata(.{ .cwd = .{
+        .pane_id = pane_id,
+        .path = "/other/api",
+    } })).?;
+    try std.testing.expectEqualDeep(Version{ .pane_metadata = 2 }, model.version());
+}
+
+test "pane foreground metadata versions display and composition independently" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    const tab = model.workspace.active().?;
+    tab.model.composition_invalidated = false;
+
+    const first = (try model.updatePaneMetadata(.{ .foreground = .{
+        .pane_id = pane_id,
+        .name = "zsh",
+    } })).?;
+
+    try std.testing.expectEqual(PaneMetadataKind.foreground, first.kind);
+    try std.testing.expect(first.display_changed);
+    try std.testing.expectEqual(@as(u64, 1), first.pane_metadata_revision);
+    try std.testing.expectEqual(@as(u64, 1), first.pane_foreground_revision);
+    try std.testing.expectEqualStrings("zsh", tab.model.find(pane_id).?.foregroundName());
+    try std.testing.expectEqualDeep(Version{
+        .pane_metadata = 1,
+        .pane_foreground = 1,
+    }, model.version());
+    try std.testing.expect(!tab.model.composition_invalidated);
+    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{
+        .pane_id = pane_id,
+        .name = "zsh",
+    } })) == null);
+    try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{
+        .pane_id = @enumFromInt(9),
+        .name = "bash",
+    } })) == null);
+
+    _ = (try model.updatePaneMetadata(.{ .foreground = .{
+        .pane_id = pane_id,
+        .name = "bash",
+    } })).?;
+    try std.testing.expectEqualDeep(Version{
+        .pane_metadata = 2,
+        .pane_foreground = 2,
+    }, model.version());
+}
+
+test "pane cwd allocation failure preserves metadata and revisions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    _ = (try model.updatePaneMetadata(.{ .cwd = .{
+        .pane_id = pane_id,
+        .path = "/work/telar",
+    } })).?;
+    const pane = model.workspace.findPane(pane_id).?;
+    const version = model.version();
+    const original_gpa = pane.gpa;
+    pane.gpa = std.testing.failing_allocator;
+    const result = model.updatePaneMetadata(.{ .cwd = .{
+        .pane_id = pane_id,
+        .path = "/work/api",
+    } });
+    pane.gpa = original_gpa;
+
+    try std.testing.expectError(error.OutOfMemory, result);
+    try std.testing.expectEqualStrings("/work/telar", pane.cwdSlice());
+    try std.testing.expectEqualDeep(version, model.version());
 }
 
 test "pane viewport intents are bounded versioned and reserved by copy mode" {

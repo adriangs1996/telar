@@ -20,6 +20,7 @@ const Client = client_mod;
 const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
+const pane_metadata = @import("pane_metadata.zig");
 const pane_splits = @import("pane_splits.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
@@ -118,8 +119,8 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .tab_closed => |closed| return handleTabClosed(client, closed),
         .tab_moved => |moved| try handleTabMoved(client, moved),
         .pane_frame => |frame| _ = try pane_frames.apply(client, frame),
-        .pane_cwd => |cwd| try handlePaneCwd(client, cwd),
-        .pane_foreground => |foreground| try handlePaneForeground(client, foreground),
+        .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
+        .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
         .pane_clipboard => |clipboard| try handlePaneClipboard(client, clipboard),
         .pane_exited => |exited| try handlePaneExited(client, exited),
         .request_failed => |failure| try handleRequestFailed(client, failure),
@@ -316,23 +317,6 @@ fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
         .memory_used_decigib = metrics.memory_used_decigib,
         .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
     });
-    try client.presenter.requestDraw();
-}
-
-/// A pane's observed working directory changed.
-fn handlePaneCwd(client: *Client, message: schema.PaneCwd) !void {
-    const pane = client.model.workspace.findPane(message.pane_id) orelse return;
-    if (!try pane.setCwd(message.cwd)) return;
-    client.view.invalidate();
-    try client.presenter.requestDraw();
-}
-
-fn handlePaneForeground(client: *Client, message: schema.PaneForeground) !void {
-    const pane = client.model.workspace.findPane(message.pane_id) orelse return;
-    if (!pane.setForegroundName(message.name)) return;
-    if (client.model.workspace.tabForPane(message.pane_id)) |tab|
-        tab.model.composition_invalidated = true;
-    client.view.invalidate();
     try client.presenter.requestDraw();
 }
 

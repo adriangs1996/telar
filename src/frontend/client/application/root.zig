@@ -11,6 +11,7 @@ pub const move_tab = @import("move_tab.zig");
 pub const name_prompt = @import("name_prompt.zig");
 pub const pane_frame = @import("pane_frame.zig");
 pub const pane_input = @import("pane_input.zig");
+pub const pane_metadata = @import("pane_metadata.zig");
 pub const rename_tab = @import("rename_tab.zig");
 pub const rename_workspace = @import("rename_workspace.zig");
 pub const resize_pane = @import("resize_pane.zig");
@@ -36,6 +37,7 @@ test {
     _ = name_prompt;
     _ = pane_frame;
     _ = pane_input;
+    _ = pane_metadata;
     _ = rename_tab;
     _ = rename_workspace;
     _ = resize_pane;

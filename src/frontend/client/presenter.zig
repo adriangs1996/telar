@@ -133,6 +133,10 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.active_tab;
     const panes_changed = presenter.presented_model_version.panes !=
         presenter.observed_model_version.panes;
+    const pane_metadata_changed = presenter.presented_model_version.pane_metadata !=
+        presenter.observed_model_version.pane_metadata;
+    const pane_foreground_changed = presenter.presented_model_version.pane_foreground !=
+        presenter.observed_model_version.pane_foreground;
     const chrome_changed = presenter.presented_model_version.chrome !=
         presenter.observed_model_version.chrome;
     const prompt_changed = presenter.presented_model_version.prompt !=
@@ -144,8 +148,8 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     const copy_projection = client.model.copyModeProjection();
     const copy_status_changed = (presenter.presented_copy_mode == null) !=
         (copy_projection == null);
-    if (viewport_changed) {
-        invalidateViewportCompositions(&client.model);
+    if (viewport_changed or pane_foreground_changed) {
+        invalidateAllCompositions(&client.model);
     }
     if (copy_changed) {
         projectCopyMode(&client.model, presenter.presented_copy_mode, copy_projection);
@@ -157,8 +161,8 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     if (prompt_changed) {
         client.view.clearHover();
     }
-    if (workspace_changed or tabs_changed or active_tab_changed or panes_changed or chrome_changed or
-        prompt_changed or copy_status_changed)
+    if (workspace_changed or tabs_changed or active_tab_changed or panes_changed or
+        pane_metadata_changed or chrome_changed or prompt_changed or copy_status_changed)
     {
         client.view.invalidate();
     }
@@ -189,7 +193,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     if (model != null and presenter.mediaWorkPending(client)) try presenter.requestMedia();
 }
 
-fn invalidateViewportCompositions(model: *client_model.Model) void {
+fn invalidateAllCompositions(model: *client_model.Model) void {
     var tabs = model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         tab.model.composition_invalidated = true;

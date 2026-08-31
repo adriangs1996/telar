@@ -17,6 +17,12 @@ const ui = core.ui;
 
 pub const max_panes = layout_mod.max_panes;
 
+pub const MetadataChange = enum {
+    unchanged,
+    stored,
+    display_changed,
+};
+
 const DamageRow = diff.DamageRow;
 const pane_index_capacity = max_panes * 2;
 const PaneIndex = core.fixed_index.SlotIndex(pane_index_capacity);
@@ -81,12 +87,18 @@ pub const Pane = struct {
         diff.markRows(pane.damage_rows, pane.buffer.w, start, count);
     }
 
-    pub fn setCwd(pane: *Pane, path: []const u8) !bool {
+    fn setCwd(pane: *Pane, path: []const u8) !bool {
         std.debug.assert(path.len != 0 and path.len <= schema.max_cwd_bytes);
-        if (std.mem.eql(u8, pane.cwd, path)) return false;
+        if (std.mem.eql(u8, pane.cwd, path)) {
+            return false;
+        }
+
         const display_changed = !std.mem.eql(u8, pane.cwdName(), displayCwdName(path));
         const replacement = try pane.gpa.dupe(u8, path);
-        if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
+        if (pane.cwd.len != 0) {
+            pane.gpa.free(pane.cwd);
+        }
+
         pane.cwd = replacement;
         return display_changed;
     }
@@ -107,9 +119,12 @@ pub const Pane = struct {
         return pane.cwd;
     }
 
-    pub fn setForegroundName(pane: *Pane, name: []const u8) bool {
+    fn setForegroundName(pane: *Pane, name: []const u8) bool {
         std.debug.assert(name.len != 0 and name.len <= pane.foreground_name.len);
-        if (std.mem.eql(u8, pane.foregroundName(), name)) return false;
+        if (std.mem.eql(u8, pane.foregroundName(), name)) {
+            return false;
+        }
+
         @memcpy(pane.foreground_name[0..name.len], name);
         pane.foreground_name_len = @intCast(name.len);
         return true;
@@ -271,6 +286,32 @@ pub const Model = struct {
         if (pane_id == .invalid) return null;
         const slot = model.pane_index.get(schema.id.raw(pane_id)) orelse return null;
         return &model.panes[slot].?;
+    }
+
+    /// Stores one pane working directory and reports whether its bounded
+    /// display name changed. Rendering caches remain untouched.
+    ///
+    /// ```zig
+    /// const change = try model.setPaneCwd(pane_id, "/work/telar");
+    /// ```
+    pub fn setPaneCwd(model: *Model, pane_id: schema.PaneId, path: []const u8) !MetadataChange {
+        const pane = model.find(pane_id) orelse return .unchanged;
+        if (std.mem.eql(u8, pane.cwdSlice(), path)) {
+            return .unchanged;
+        }
+
+        return if (try pane.setCwd(path)) .display_changed else .stored;
+    }
+
+    /// Stores one pane foreground label without mutating composition caches.
+    ///
+    /// ```zig
+    /// const change = model.setPaneForeground(pane_id, "zsh");
+    /// ```
+    pub fn setPaneForeground(model: *Model, pane_id: schema.PaneId, name: []const u8) MetadataChange {
+        const pane = model.find(pane_id) orelse return .unchanged;
+
+        return if (pane.setForegroundName(name)) .display_changed else .unchanged;
     }
 
     pub fn addRoot(
@@ -1036,8 +1077,8 @@ test "pane borders use the selected theme without coloring pane contents" {
     );
     const first = model.find(@enumFromInt(10)).?;
     const second = model.find(@enumFromInt(41)).?;
-    try std.testing.expect(first.setForegroundName("zsh"));
-    try std.testing.expect(second.setForegroundName("Claude Code"));
+    try std.testing.expectEqual(MetadataChange.display_changed, model.setPaneForeground(first.id, "zsh"));
+    try std.testing.expectEqual(MetadataChange.display_changed, model.setPaneForeground(second.id, "Claude Code"));
     first.buffer.setCell(0, 0, "x", 1, .{});
     const selected = theme.builtin(.tokyo_night);
     var screen = try term.Screen.init(gpa, 20, 4);

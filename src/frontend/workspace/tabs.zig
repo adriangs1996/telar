@@ -708,7 +708,10 @@ test "displayed workspace name stays canonical when pane cwd changes" {
     model.workspace_name_len = 5;
 
     const tab = model.active().?;
-    try std.testing.expect(try tab.model.find(@enumFromInt(1)).?.setCwd("/work/telar"));
+    try std.testing.expectEqual(
+        multiplexer.MetadataChange.display_changed,
+        try tab.model.setPaneCwd(@enumFromInt(1), "/work/telar"),
+    );
     try std.testing.expectEqualStrings("telar", model.displayedWorkspaceName());
     try tab.model.split(
         @enumFromInt(1),
@@ -717,7 +720,10 @@ test "displayed workspace name stays canonical when pane cwd changes" {
         .horizontal,
         .{ .x = 0, .y = 0, .w = 20, .h = 5 },
     );
-    try std.testing.expect(try tab.model.find(@enumFromInt(2)).?.setCwd("/work/agents/"));
+    try std.testing.expectEqual(
+        multiplexer.MetadataChange.display_changed,
+        try tab.model.setPaneCwd(@enumFromInt(2), "/work/agents/"),
+    );
     try std.testing.expect(tab.model.focusPane(@enumFromInt(2)));
     try std.testing.expectEqualStrings("telar", model.displayedWorkspaceName());
     try std.testing.expect(tab.model.focusPane(@enumFromInt(1)));
