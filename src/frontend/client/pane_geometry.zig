@@ -1,6 +1,5 @@
-//! Synchronizes committed pane geometry with graphics and the runtime.
+//! Adapts pane-geometry application commands to graphics and runtime ports.
 
-const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
@@ -8,10 +7,9 @@ const client_model = @import("model.zig");
 const runtime_transport = @import("runtime_transport.zig");
 
 const Client = @import("client.zig");
+const pane_geometry_delivery = client_application.pane_geometry_delivery;
 const resize_pane = client_application.resize_pane;
-const schema = core.schema;
 const multiplexer = workspace_capability.multiplexer;
-const tabs_mod = workspace_capability.tabs;
 const toggle_pane_fullscreen = client_application.toggle_pane_fullscreen;
 const ui = core.ui;
 
@@ -21,18 +19,14 @@ const ui = core.ui;
 /// try offerAttached(client, model, client.view.workbench());
 /// ```
 pub fn offerAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
-    var panes = model.paneIterator();
-    while (panes.next()) |pane| {
-        if (!pane.attached) {
-            continue;
-        }
+    var use_case: pane_geometry_delivery.OfferPaneGeometryHandler = .{
+        .effects = .{
+            .context = client,
+            .deliver_resize = deliverResize,
+        },
+    };
 
-        const size = model.contentSize(pane.id, area) orelse continue;
-        try runtime_transport.enqueue(client, .{ .pane_resize = .{
-            .pane_id = pane.id,
-            .size = size,
-        } });
-    }
+    _ = try use_case.execute(model, area);
 }
 
 /// Wires pane edge resizing to the shared geometry effect.
@@ -46,7 +40,7 @@ pub fn resizeHandler(client: *Client) resize_pane.ResizePaneHandler {
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = applyGeometry,
+            .deliver = deliverGeometry,
         },
     };
 }
@@ -62,31 +56,33 @@ pub fn fullscreenHandler(client: *Client) toggle_pane_fullscreen.TogglePaneFulls
         .model = &client.model,
         .effects = .{
             .context = client,
-            .apply = applyGeometry,
+            .deliver = deliverGeometry,
         },
     };
 }
 
-fn applyGeometry(context: *anyopaque, change: client_model.PaneGeometryChange) !void {
+fn deliverGeometry(context: *anyopaque, change: client_model.PaneGeometryChange) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const tab = findTab(&client.model.workspace, change.location) orelse return error.UnexpectedPaneGeometry;
-    const active = client.model.workspace.active() orelse return error.UnexpectedPaneGeometry;
-    if (active != tab or active.model.layout.focused() != change.focused or
-        active.model.layout.isFullscreen() != change.fullscreen or
-        client.model.version().panes != change.panes_revision)
-    {
-        return error.UnexpectedPaneGeometry;
-    }
+    var use_case: pane_geometry_delivery.DeliverPaneGeometryHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .invalidate_graphics_placements = invalidateGraphicsPlacements,
+            .deliver_resize = deliverResize,
+        },
+    };
 
-    client.graphics_store.invalidatePlacements();
-    try offerAttached(client, &active.model, change.area);
+    _ = try use_case.execute(change);
 }
 
-fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const tab = workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
+fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
 
-    return tab;
+    client.graphics_store.invalidatePlacements();
+}
+
+fn deliverResize(raw_context: *anyopaque, resize: core.schema.PaneResize) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    try runtime_transport.enqueue(client, .{ .pane_resize = resize });
 }

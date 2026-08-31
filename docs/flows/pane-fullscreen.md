@@ -20,7 +20,9 @@ TogglePaneFullscreenHandler
         |
 ClientModel.togglePaneFullscreen
         |
-pane_geometry.applyGeometry
+DeliverPaneGeometryHandler
+        |
+OfferPaneGeometryHandler
         |                         |
 pane_resize messages             presentation_lifecycle.observe
         |                         |
@@ -42,11 +44,12 @@ reveals the retained geometry.
 
 ## Geometry effects and presentation
 
-Fullscreen and edge resizing share `pane_geometry.applyGeometry` because both
-need the same resource synchronization after their separate model commits.
-The adapter verifies active tab, focus, pane revision and fullscreen state. It
-then invalidates host graphics placements and publishes current attached
-geometry.
+Fullscreen and edge resizing share `DeliverPaneGeometryHandler` because both
+need the same resource policy after their separate model commits. The handler
+verifies active tab, focus, pane revision and fullscreen state, then invalidates
+host graphics placements. `OfferPaneGeometryHandler` selects attached panes
+with visible content from one layout snapshot; the adapter only publishes the
+resulting commands.
 
 Entering fullscreen gives the entire workbench to the focused pane, so the
 client sends one `pane_resize`. Exiting restores the tiled snapshot and sends
@@ -75,7 +78,12 @@ telemetry. The client does not roll back an unacknowledged resize.
 - `src/frontend/client/model.zig` proves entry, exit, single-pane no-op and
   pane-version ownership.
 - `src/frontend/client/application/toggle_pane_fullscreen.zig` proves
-  commit-before-effects ordering and post-commit failure behavior.
+  commit-before-delivery ordering and post-commit failure behavior.
+- `src/frontend/client/application/pane_geometry_delivery.zig` proves shared
+  validation, visible-pane selection, delivery order and retained commits on
+  failure.
+- `src/frontend/client/pane_geometry.zig` implements the physical graphics and
+  runtime delivery ports.
 - `src/frontend/client/client_test.zig` proves the one-pane enter resize, the
   tiled exit resizes and presenter-only frame scheduling through a substituted
   runtime socket.

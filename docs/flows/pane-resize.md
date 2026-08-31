@@ -21,7 +21,9 @@ ResizePaneHandler
         |
 ClientModel.resizePane
         |
-pane_geometry.applyGeometry
+DeliverPaneGeometryHandler
+        |
+OfferPaneGeometryHandler
         |                         |
 pane_resize messages             presentation_lifecycle.observe
         |                         |
@@ -44,11 +46,14 @@ the existing client behavior, now owned by the model transition.
 
 ## Geometry effects and presentation
 
-The adapter verifies the exact active tab, focused pane and committed pane
-revision before it touches resources. It invalidates host graphics placements,
-then `pane_geometry.offerAttached` enqueues one `pane_resize` for each attached
-pane that has visible geometry. A tiled layout normally sends every attached
-pane; a fullscreen layout sends only the focused pane.
+`DeliverPaneGeometryHandler` verifies the exact active tab, focused pane,
+fullscreen state and committed pane revision before it touches resources. It
+invalidates host graphics placements and delegates selection to
+`OfferPaneGeometryHandler`. That handler computes one bounded layout snapshot
+and emits one semantic `PaneResize` for each attached pane with visible
+content. A tiled layout normally selects every attached pane; a fullscreen
+layout selects only the focused pane. The concrete adapter only enqueues those
+commands.
 
 The outbox keeps a fixed bound and replaces an obsolete unsent resize for the
 same pane. The runtime dispatches each message through
@@ -79,9 +84,12 @@ rollback because the `pane_resize` protocol has no acknowledgement.
 - `src/frontend/client/model.zig` proves semantic commit, no-op behavior,
   fullscreen preservation and pane-version ownership.
 - `src/frontend/client/application/resize_pane.zig` proves
-  commit-before-effects ordering and the post-commit failure contract.
-- `src/frontend/client/pane_geometry.zig` owns translation from committed
-  multiplexer geometry to runtime `pane_resize` messages.
+  commit-before-delivery ordering and the post-commit failure contract.
+- `src/frontend/client/application/pane_geometry_delivery.zig` proves exact
+  commit validation, attached-visible filtering, effect order and partial
+  delivery failure.
+- `src/frontend/client/pane_geometry.zig` implements placement invalidation and
+  runtime `pane_resize` delivery ports.
 - `src/frontend/client/client_test.zig` proves exact resize messages, detached
   pane filtering, presenter observation and directionless no-ops through a
   substituted runtime socket.

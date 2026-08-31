@@ -11,14 +11,14 @@ pub const TogglePaneFullscreen = client_model.TogglePaneFullscreenRequest;
 
 pub const FullscreenEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.PaneGeometryChange) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.PaneGeometryChange) anyerror!void,
 };
 
 pub const TogglePaneFullscreenHandler = struct {
     model: *client_model.Model,
     effects: FullscreenEffects,
 
-    /// Commits fullscreen state before synchronizing graphics and runtime
+    /// Commits fullscreen state before delivering graphics and runtime
     /// geometry. Tabs with fewer than two panes have no effects.
     ///
     /// ```zig
@@ -27,7 +27,7 @@ pub const TogglePaneFullscreenHandler = struct {
     pub fn execute(handler: *TogglePaneFullscreenHandler, command: TogglePaneFullscreen) !?client_model.PaneGeometryChange {
         const change = handler.model.togglePaneFullscreen(command) orelse return null;
 
-        try handler.effects.apply(handler.effects.context, change);
+        try handler.effects.deliver(handler.effects.context, change);
         return change;
     }
 };
@@ -78,10 +78,10 @@ const EffectsCapture = struct {
     fail: bool = false,
 
     fn port(capture: *EffectsCapture) FullscreenEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, change: client_model.PaneGeometryChange) !void {
+    fn deliver(context: *anyopaque, change: client_model.PaneGeometryChange) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         const active = capture.model.workspace.activeConst().?;
         capture.calls += 1;
@@ -97,7 +97,7 @@ const EffectsCapture = struct {
     }
 };
 
-test "TogglePaneFullscreenHandler commits before synchronizing geometry" {
+test "TogglePaneFullscreenHandler commits before delivering geometry" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var effects: EffectsCapture = .{

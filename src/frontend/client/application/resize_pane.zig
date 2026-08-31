@@ -11,14 +11,14 @@ pub const ResizePane = client_model.ResizePaneRequest;
 
 pub const ResizeEffects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, client_model.PaneGeometryChange) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.PaneGeometryChange) anyerror!void,
 };
 
 pub const ResizePaneHandler = struct {
     model: *client_model.Model,
     effects: ResizeEffects,
 
-    /// Commits one split-edge change before synchronizing runtime geometry.
+    /// Commits one split-edge change before delivering runtime geometry.
     /// Directions without a matching movable edge have no effects.
     ///
     /// ```zig
@@ -27,7 +27,7 @@ pub const ResizePaneHandler = struct {
     pub fn execute(handler: *ResizePaneHandler, command: ResizePane) !?client_model.PaneGeometryChange {
         const resize = handler.model.resizePane(command) orelse return null;
 
-        try handler.effects.apply(handler.effects.context, resize);
+        try handler.effects.deliver(handler.effects.context, resize);
         return resize;
     }
 };
@@ -77,10 +77,10 @@ const EffectsCapture = struct {
     fail: bool = false,
 
     fn port(capture: *EffectsCapture) ResizeEffects {
-        return .{ .context = capture, .apply = apply };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, resize: client_model.PaneGeometryChange) !void {
+    fn deliver(context: *anyopaque, resize: client_model.PaneGeometryChange) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         const active = capture.model.workspace.active().?;
         capture.calls += 1;
@@ -96,7 +96,7 @@ const EffectsCapture = struct {
     }
 };
 
-test "ResizePaneHandler commits before synchronizing runtime geometry" {
+test "ResizePaneHandler commits before delivering runtime geometry" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     const width_before = testing.model.workspace.active().?.model.contentSize(testing.first, testing.area).?.cols;
