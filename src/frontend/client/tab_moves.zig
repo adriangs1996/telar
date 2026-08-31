@@ -1,7 +1,9 @@
 //! Wires tab-move use cases to one client's protocol state.
 
+const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
+const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const move_tab = client_application.move_tab;
@@ -29,25 +31,31 @@ pub fn requestHandler(client: *Client) move_tab.RequestTabMoveHandler {
     };
 }
 
-/// Removes protocol-only correlation data from one canonical response.
+/// Consumes one correlated response and commits its canonical tab position.
 ///
 /// ```zig
-/// const command = confirmation(moved);
+/// const change = try apply(client, moved);
 /// ```
-pub fn confirmation(moved: schema.TabMoved) move_tab.ConfirmTabMove {
-    return .{
+pub fn apply(client: *Client, moved: schema.TabMoved) !client_model.Change {
+    const continuation = client.requests.take(moved.request_id) orelse
+        return error.UnexpectedTabMoved;
+    const expected_location = switch (continuation) {
+        .move_tab => |location| location,
+        else => return error.UnexpectedTabMoved,
+    };
+    if (!std.meta.eql(expected_location, moved.location)) {
+        return error.UnexpectedTabMoved;
+    }
+
+    var use_case = confirmationHandler(client);
+
+    return use_case.execute(.{
         .location = moved.location,
         .position = moved.position,
-    };
+    }) catch return error.UnexpectedTabMoved;
 }
 
-/// Wires a correlated runtime response to the passive client model.
-///
-/// ```zig
-/// var handler = confirmationHandler(client);
-/// _ = try handler.execute(command);
-/// ```
-pub fn confirmationHandler(client: *Client) move_tab.ConfirmTabMoveHandler {
+fn confirmationHandler(client: *Client) move_tab.ConfirmTabMoveHandler {
     return .{ .model = &client.model };
 }
 

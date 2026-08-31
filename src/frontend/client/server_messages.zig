@@ -45,7 +45,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
             .applied, .ignored => {},
             .exit => return 0,
         },
-        .tab_moved => |moved| try handleTabMoved(client, moved),
+        .tab_moved => |moved| _ = try tab_moves.apply(client, moved),
         .pane_frame => |frame| _ = try pane_frames.apply(client, frame),
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
@@ -128,20 +128,6 @@ fn handleNotificationShown(client: *Client, shown: schema.NotificationShown) !vo
         .title = "Notification not delivered",
         .message = "No connected client could accept the notification",
     });
-}
-
-/// A confirmed tab reorder.
-fn handleTabMoved(client: *Client, moved: schema.TabMoved) !void {
-    const continuation = client.requests.take(moved.request_id) orelse
-        return error.UnexpectedTabMoved;
-    if (continuation != .move_tab or
-        !std.meta.eql(continuation.move_tab, moved.location))
-    {
-        return error.UnexpectedTabMoved;
-    }
-
-    var use_case = tab_moves.confirmationHandler(client);
-    _ = use_case.execute(tab_moves.confirmation(moved)) catch return error.UnexpectedTabMoved;
 }
 
 /// A pane's child ended: drop the pane and every piece of client state on it.

@@ -62,6 +62,8 @@ identity.
 ```text
 tab_moved(move_tab continuation)
         |
+tab_moves.apply
+        |
 validate exact tab identity
         |
 ConfirmTabMoveHandler
@@ -71,10 +73,11 @@ ClientModel.applyTabPosition
 Presenter.observeModel
 ```
 
-The dispatcher consumes the continuation and requires the response location to
-match it. The confirmation handler applies only the absolute runtime position.
-Reordering preserves the active tab identity and advances only the tab
-collection version.
+The dispatcher only delegates the decoded response. `tab_moves.apply` consumes
+the continuation, requires its `move_tab` type, verifies the exact location and
+translates the wire payload before invoking `ConfirmTabMoveHandler`. The
+confirmation handler applies only the absolute runtime position. Reordering
+preserves the active tab identity and advances only the tab collection version.
 
 A repeated position is a semantic no-op. It leaves every model version
 unchanged, so `Presenter` schedules no frame. A changed position reaches the
@@ -82,12 +85,18 @@ presenter when the client loop observes the new model version. Neither move
 use case invalidates the view or requests a draw.
 
 A correlated `request_failed` leaves tab order and model versions unchanged.
-The client reports the runtime message through its notification flow.
-Reconnection rebuilds the ordered client replica from the canonical workspace
-snapshot, so an interrupted client never has to replay a move.
+The client reports the runtime message through its notification flow. An
+unknown request, another continuation type, a mismatched location or a
+canonical position the model cannot accept becomes `UnexpectedTabMoved`.
+Once found, the continuation is consumed before these checks, so a rejected or
+replayed response cannot change order later. Reconnection rebuilds the ordered
+client replica from the canonical workspace snapshot, so an interrupted client
+never has to replay a move.
 
 ## Proof
 
+- `src/frontend/client/tab_moves.zig` proves one-time response correlation,
+  exact identity validation, wire translation and protocol error mapping.
 - `src/frontend/client/application/move_tab.zig` proves request gating, absence
   of provisional mutation, delivery failure and canonical confirmation.
 - `src/frontend/client/model.zig` proves exact workspace, tab and position

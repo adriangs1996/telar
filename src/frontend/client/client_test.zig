@@ -29,6 +29,7 @@ const server_messages = @import("server_messages.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
+const tab_moves = @import("tab_moves.zig");
 const tab_renames = @import("tab_renames.zig");
 const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
@@ -2777,6 +2778,76 @@ test "a failed tab creation preserves the current projection and notifies" {
     try std.testing.expect(client.notification_tick_pending);
 }
 
+test "an unexpected tab move is rejected without effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
+    const moved: schema.TabMoved = .{
+        .request_id = @enumFromInt(99),
+        .location = TestHarness.bootstrap_location,
+        .position = 0,
+    };
+
+    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(TestHarness.bootstrap_location.tab_id));
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
+test "tab move consumes an incompatible continuation before rejection" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const request_id: schema.RequestId = @enumFromInt(90);
+    const version_before = client.model.version();
+    try client.requests.add(request_id, .notification);
+    const moved: schema.TabMoved = .{
+        .request_id = request_id,
+        .location = TestHarness.bootstrap_location,
+        .position = 0,
+    };
+
+    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(TestHarness.bootstrap_location.tab_id));
+}
+
+test "tab move consumes a canonical response rejected by the model" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    const request_id: schema.RequestId = @enumFromInt(90);
+    const version_before = client.model.version();
+    try client.requests.add(request_id, .{ .move_tab = TestHarness.bootstrap_location });
+    const moved: schema.TabMoved = .{
+        .request_id = request_id,
+        .location = TestHarness.bootstrap_location,
+        .position = 1,
+    };
+
+    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
+    try std.testing.expectError(error.UnexpectedTabMoved, tab_moves.apply(client, moved));
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(@as(?usize, 0), client.model.workspace.indexOf(TestHarness.bootstrap_location.tab_id));
+}
+
 test "move tab waits for the canonical response and preserves active identity" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -2874,7 +2945,10 @@ test "canonical tab move at an edge does not advance or schedule the model" {
         .location = message.move_tab.location,
         .position = 0,
     });
-    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(response));
+    try std.testing.expectEqual(
+        client_model.Change.unchanged,
+        try tab_moves.apply(client, (try schema.decodeServer(response)).tab_moved),
+    );
     try client.observeModel();
 
     try std.testing.expectEqualDeep(version_before_response, client.model.version());
