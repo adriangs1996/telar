@@ -174,6 +174,8 @@ pub const Session = struct {
     master: std.c.fd_t,
     pid: std.c.pid_t,
     reaped: std.atomic.Value(bool) = .init(false),
+    deinitialized: std.atomic.Value(bool) = .init(false),
+    lifecycle_mutex: std.c.pthread_mutex_t = .{},
 
     pub fn spawn(command: *const Command, initial_size: Size) !Session {
         const cwd_fd: ?std.c.fd_t = if (command.cwd) |cwd_path|
@@ -288,13 +290,28 @@ pub const Session = struct {
     }
 
     pub fn wait(session: *Session) !Exit {
-        if (session.reaped.load(.acquire)) return error.ChildAlreadyReaped;
+        if (session.deinitialized.load(.acquire)) {
+            return error.ChildAlreadyReaped;
+        }
 
-        // Observe the exit without releasing the PID (WNOWAIT), publish the
-        // reaped flag, and only then release the zombie. A concurrent
-        // `shutdown` that reads a stale `false` therefore signals a PID that
-        // is still held by the zombie, never one the kernel may have reused.
+        session.lockLifecycle();
+        if (session.reaped.load(.acquire)) {
+            session.unlockLifecycle();
+            return error.ChildAlreadyReaped;
+        }
+        session.unlockLifecycle();
+
+        // The blocking observation happens outside the mutex so shutdown can
+        // still terminate a running child. Once the child is a zombie, wait
+        // and shutdown serialize the decision to reap or signal it.
         try waitObserve(session.pid);
+
+        session.lockLifecycle();
+        defer session.unlockLifecycle();
+        if (session.reaped.load(.acquire)) {
+            return error.ChildAlreadyReaped;
+        }
+
         session.reaped.store(true, .release);
         return waitPid(session.pid);
     }
@@ -315,7 +332,16 @@ pub const Session = struct {
     /// session.shutdown();
     /// ```
     pub fn shutdown(session: *Session) void {
-        if (!session.reaped.load(.acquire)) _ = std.c.kill(session.pid, .KILL);
+        if (session.deinitialized.load(.acquire)) {
+            return;
+        }
+
+        session.lockLifecycle();
+        defer session.unlockLifecycle();
+
+        if (!session.reaped.load(.acquire)) {
+            _ = std.c.kill(session.pid, .KILL);
+        }
     }
 
     fn closeMaster(session: *Session) void {
@@ -329,8 +355,24 @@ pub const Session = struct {
         }
     }
 
+    fn lockLifecycle(session: *Session) void {
+        const result = std.c.pthread_mutex_lock(&session.lifecycle_mutex);
+        std.debug.assert(result == .SUCCESS);
+    }
+
+    fn unlockLifecycle(session: *Session) void {
+        const result = std.c.pthread_mutex_unlock(&session.lifecycle_mutex);
+        std.debug.assert(result == .SUCCESS);
+    }
+
     pub fn deinit(session: *Session) void {
+        if (session.deinitialized.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
+            return;
+        }
+
         session.closeMaster();
+
+        session.lockLifecycle();
         if (!session.reaped.load(.acquire)) {
             // The UI can only reach this path after an internal failure. The
             // child must not survive detached from the PTY that telar owned.
@@ -338,6 +380,10 @@ pub const Session = struct {
             _ = waitPid(session.pid) catch {};
             session.reaped.store(true, .release);
         }
+        session.unlockLifecycle();
+
+        const result = std.c.pthread_mutex_destroy(&session.lifecycle_mutex);
+        std.debug.assert(result == .SUCCESS);
     }
 };
 
@@ -617,6 +663,40 @@ test "wait reaps a real child once and shutdown after the reap is harmless" {
     try std.testing.expectError(error.ChildAlreadyReaped, session.wait());
     session.shutdown();
     session.deinit();
+}
+
+test "shutdown and wait coordinate ownership of the child PID" {
+    const WaitCapture = struct {
+        session: *Session,
+        started: std.atomic.Value(bool) = .init(false),
+        result: ?Exit = null,
+        failure: ?anyerror = null,
+
+        fn run(capture: *@This()) void {
+            capture.started.store(true, .release);
+            capture.result = capture.session.wait() catch |err| {
+                capture.failure = err;
+                return;
+            };
+        }
+    };
+
+    const args = [_][*:0]const u8{ "/bin/sh", "-c", "exec sleep 60" };
+    const command = try Command.fromArgv(&args);
+    var session = try Session.spawn(&command, .{ .cols = 20, .rows = 5 });
+    defer session.deinit();
+
+    var capture: WaitCapture = .{ .session = &session };
+    const thread = try std.Thread.spawn(.{}, WaitCapture.run, .{&capture});
+    while (!capture.started.load(.acquire)) {
+        std.atomic.spinLoopHint();
+    }
+
+    session.shutdown();
+    thread.join();
+
+    try std.testing.expectEqual(@as(?anyerror, null), capture.failure);
+    try std.testing.expectEqual(Exit{ .signaled = .KILL }, capture.result.?);
 }
 
 test "the process result maps to the conventional shell status" {
