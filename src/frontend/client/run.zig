@@ -99,7 +99,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
         },
     });
 
-    try client.select.concurrent(.resized, Client.waitResize, .{ io, &watcher });
+    try host_resizes.schedule(client, &watcher);
     try runtime_transport.scheduleRead(client);
     try client.select.concurrent(.capability_timeout, Client.waitCapabilityTimeout, .{io});
     try client_telemetry.start(client);
@@ -114,7 +114,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             .input_timeout => |result| if (try host_inputs.handleInputTimeout(client, result)) return 0,
             .binding_timeout => |result| if (try host_inputs.handleBindingTimeout(client, result)) return 0,
             .capability_timeout => |result| try client.handleCapabilityTimeoutEvent(result),
-            .resized => |result| try client.handleResizeEvent(result, .{
+            .resized => |result| _ = try host_resizes.handle(client, result, .{
                 .tty = &tty,
                 .watcher = &watcher,
             }),

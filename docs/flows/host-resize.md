@@ -12,8 +12,6 @@ SIGWINCH or Windows size poll
               |
      platform.ResizeWatcher
               |
-   Client.handleResizeEvent
-              |
       host_resizes.handle
               |
       one TTY measurement
@@ -72,7 +70,8 @@ latest-value outbox policy.
 
 ## Platform lifecycle and presentation
 
-After successful synchronization, the adapter writes `CSI 14 t` and
+`host_resizes.schedule` registers the initial observation during bootstrap.
+After successful synchronization, `host_resizes.handle` writes `CSI 14 t` and
 `CSI 16 t`. These queries refresh window and cell pixels after a font or
 display-scale change. It then rearms the same `ResizeWatcher`. Neither the
 handler nor its adapter requests a draw.

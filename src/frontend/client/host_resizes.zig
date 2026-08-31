@@ -18,6 +18,15 @@ pub const Source = struct {
     watcher: *platform.ResizeWatcher,
 };
 
+/// Registers the next platform resize observation for this client.
+///
+/// ```zig
+/// try schedule(client, watcher);
+/// ```
+pub fn schedule(client: *Client, watcher: *platform.ResizeWatcher) !void {
+    try client.select.concurrent(.resized, wait, .{ client.io, watcher });
+}
+
 /// Handles one completed platform resize event and rearms its watcher.
 ///
 /// ```zig
@@ -27,9 +36,13 @@ pub fn handle(client: *Client, result: anyerror!void, source: Source) !?client_m
     try result;
     const commit = try apply(client, source.tty.size());
     try queryPixels(client);
-    try client.select.concurrent(.resized, Client.waitResize, .{ client.io, source.watcher });
+    try schedule(client, source.watcher);
 
     return commit;
+}
+
+fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
+    return watcher.wait(io);
 }
 
 /// Resolves and applies one already measured host size.

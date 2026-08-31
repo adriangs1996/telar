@@ -19,7 +19,6 @@ const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
 const navigation = workspace_capability.navigation;
 const term = presentation.screen;
-const platform = @import("../platform/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const ui_capability = @import("../ui/root.zig");
 const icons = ui_capability.icons;
@@ -67,7 +66,6 @@ const clipboard_images = @import("clipboard_images.zig");
 const config_reload = @import("config_reload.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const host_inputs = @import("host_inputs.zig");
-const host_resizes = @import("host_resizes.zig");
 const notification_timers = @import("notification_timers.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
@@ -269,22 +267,9 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
     _ = try host_capabilities.expire(client);
 }
 
-/// Entrypoint for a host terminal resize: remeasure, reflow, and re-offer sizes.
-///
-/// ```zig
-/// try client.handleResizeEvent(result, source);
-/// ```
-pub fn handleResizeEvent(client: *Client, result: anyerror!void, source: host_resizes.Source) !void {
-    _ = try host_resizes.handle(client, result, source);
-}
-
 /// Entrypoint for one finished plugin action: authorize and apply its effects.
 pub fn handlePluginResultEvent(client: *Client, completion: plugin_actions.Completion) !bool {
     return plugin_actions.complete(client, completion);
-}
-
-pub fn waitResize(io: Io, watcher: *platform.ResizeWatcher) anyerror!void {
-    return watcher.wait(io);
 }
 
 pub fn waitCapabilityTimeout(io: Io) anyerror!void {
