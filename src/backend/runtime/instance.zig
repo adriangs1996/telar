@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const runtime_application = @import("application/root.zig");
 const runtime_config = @import("config.zig");
 const runtime_event = @import("event.zig");
+const event_sources = @import("event_sources.zig");
 const runtime_loop = @import("event_loop.zig");
 const runtime_shutdown_mod = @import("lifecycle/root.zig").shutdown_coordinator;
 const runtime_resources = @import("resources/root.zig");
@@ -80,9 +81,8 @@ pub const Runtime = struct {
     }
 
     fn scheduleInitialEvents(runtime: *Runtime) !void {
-        var actors: runtime_application.InitialActors = .{
-            .io = runtime.resources.io(),
-            .select = runtime.loop.selector(),
+        var initial_sources: event_sources.InitialSources = .{
+            .sources = event_sources.Sources.init(runtime.resources.io(), runtime.loop.selector()),
             .listener = &runtime.resources.listener,
             .stop_signal = runtime.loop.stopCoordinator(),
             .history_service = runtime.resources.history.service(),
@@ -90,7 +90,7 @@ pub const Runtime = struct {
             .telemetry_available = runtime.resources.telemetry.available(),
         };
 
-        try actors.schedule();
+        try initial_sources.schedule();
     }
 
     fn composeApplication(runtime: *Runtime, options: Options) Application {

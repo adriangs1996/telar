@@ -626,7 +626,6 @@ pub const Application = struct {
 const Actors = actor_bindings.Bindings(Application);
 const RequestDispatcher = request_dispatch.Dispatcher(Application, Actors.request_runtime_port);
 pub const EventResources = Actors.EventResources;
-pub const InitialActors = Actors.InitialActors;
 
 /// Delegates one runtime event to the capability that owns it and reports
 /// whether a requested shutdown has reached every client.

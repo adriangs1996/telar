@@ -20,6 +20,7 @@ const client_store = client_runtime.store;
 const runtime_config = @import("../config.zig");
 const delivery_mod = @import("../delivery/root.zig");
 const runtime_event = @import("../event.zig");
+const event_sources = @import("../event_sources.zig");
 const request_dispatch = @import("request_dispatch.zig");
 const pane_events = event_entrypoints.pane;
 const media_projection = pane_events.media_projection;
@@ -33,11 +34,7 @@ const pane_output_pipeline = pane_events.output;
 const pane_response_pump = pane_events.response;
 const pane_mod = @import("../../pane/root.zig");
 const media_mod = @import("../../media/root.zig");
-const lifecycle = @import("../lifecycle/root.zig");
-const stop_signal_mod = lifecycle.stop_signal;
-const proxy_mod = @import("../../proxy/root.zig");
 const proxy_observation_adapter = event_entrypoints.proxy_observation;
-const proxy_resource = @import("../resources/proxy.zig");
 const observability = @import("../observability/root.zig");
 const system_metrics_mod = observability.system_metrics;
 const system_metrics_coordinator = observability.system_metrics_coordinator;
@@ -223,42 +220,6 @@ pub fn Bindings(comptime Application: type) type {
             return application.shutdownDelivered();
         }
 
-        pub const InitialActors = struct {
-            io: Io,
-            select: *Io.Select(RuntimeEvent),
-            listener: *transport.local.LocalListener,
-            stop_signal: *stop_signal_mod.Coordinator,
-            history_service: *history.Service,
-            proxy_runtime: *proxy_resource.Runtime,
-            telemetry_available: bool,
-
-            /// Arms every long-lived source that can produce the first event.
-            ///
-            /// ```zig
-            /// try actors.schedule();
-            /// ```
-            pub fn schedule(actors: *InitialActors) !void {
-                try actors.select.concurrent(.accepted, acceptClient, .{ actors.io, actors.listener });
-
-                var stop_context: StopScheduleContext = .{ .io = actors.io, .select = actors.select };
-                try actors.stop_signal.arm(stop_context.scheduler());
-
-                try actors.select.concurrent(.history_response, history.receiveResponse, .{ actors.io, actors.history_service });
-
-                var proxy_context: ProxyScheduleContext = .{ .io = actors.io, .select = actors.select };
-                try actors.proxy_runtime.schedule(proxy_context.scheduler());
-
-                try actors.select.concurrent(.agent_tick, waitForAgentTick, .{actors.io});
-                try actors.select.concurrent(.metrics_tick, waitForMetricsTick, .{actors.io});
-
-                if (comptime diagnostics.enabled) {
-                    if (actors.telemetry_available) {
-                        try actors.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{actors.io});
-                    }
-                }
-            }
-        };
-
         fn queueFailure(responses: *ResponseQueue, failure: delivery_mod.PendingFailure) !void {
             try responses.push(.{ .request_failed = .{
                 .request_id = failure.request_id,
@@ -319,7 +280,8 @@ pub fn Bindings(comptime Application: type) type {
         }
 
         fn rearmClientAccept(runtime: *ClientAdmissionRuntime) !void {
-            try runtime.application.select.concurrent(.accepted, acceptClient, .{ runtime.application.io, runtime.listener });
+            var sources = eventSources(runtime.application);
+            try sources.acceptClient(runtime.listener);
         }
 
         fn clientAdmissionHasCapacity(runtime: *ClientAdmissionRuntime) bool {
@@ -575,20 +537,6 @@ pub fn Bindings(comptime Application: type) type {
             };
         }
 
-        fn waitForAgentTick(io: Io) anyerror!void {
-            try io.sleep(.fromSeconds(1), .awake);
-        }
-
-        /// Host metrics change slowly; two seconds keeps the cost noise-level while
-        /// the status bar still feels live.
-        fn waitForMetricsTick(io: Io) anyerror!void {
-            try io.sleep(.fromSeconds(2), .awake);
-        }
-
-        fn acceptClient(io: Io, listener: *transport.local.LocalListener) anyerror!core.transport.SocketChannel {
-            return listener.accept(io);
-        }
-
         fn handshakeClient(io: Io, connection: *core.transport.SocketChannel) anyerror!void {
             const response = try transport.handshake.perform(io, connection);
 
@@ -820,7 +768,8 @@ pub fn Bindings(comptime Application: type) type {
         }
 
         fn rearmAgentMaintenance(application: *Application) !void {
-            try application.select.concurrent(.agent_tick, waitForAgentTick, .{application.io});
+            var sources = eventSources(application);
+            try sources.waitForAgentMaintenance();
         }
 
         fn runtimeWallClockMs(application: *Application) i64 {
@@ -840,7 +789,8 @@ pub fn Bindings(comptime Application: type) type {
         }
 
         fn rearmSystemMetrics(application: *Application) !void {
-            try application.select.concurrent(.metrics_tick, waitForMetricsTick, .{application.io});
+            var sources = eventSources(application);
+            try sources.waitForSystemMetrics();
         }
 
         fn sampleSystemMetrics(_: *Application, sampler: *system_metrics_mod.Sampler) void {
@@ -863,37 +813,9 @@ pub fn Bindings(comptime Application: type) type {
             });
         }
 
-        const StopScheduleContext = struct {
-            io: Io,
-            select: *Io.Select(RuntimeEvent),
-
-            fn scheduler(context: *StopScheduleContext) stop_signal_mod.Scheduler {
-                return .{ .context = context, .schedule_fn = schedule };
-            }
-
-            fn schedule(context_value: *anyopaque, queue: *Io.Queue(u8)) !void {
-                const context: *StopScheduleContext = @ptrCast(@alignCast(context_value));
-                try context.select.concurrent(.stopped, stop_signal_mod.wait, .{ context.io, queue });
-            }
-        };
-
-        const ProxyScheduleContext = struct {
-            io: Io,
-            select: *Io.Select(RuntimeEvent),
-
-            fn scheduler(context: *ProxyScheduleContext) proxy_resource.ObservationScheduler {
-                return .{ .context = context, .schedule_fn = schedule };
-            }
-
-            fn schedule(context_value: *anyopaque, proxy: *proxy_mod.Proxy) !void {
-                const context: *ProxyScheduleContext = @ptrCast(@alignCast(context_value));
-                try context.select.concurrent(.proxy_event, proxy_mod.Proxy.receive, .{ proxy, context.io });
-            }
-        };
-
         fn rearmProxyObservation(application: *Application) !void {
-            var context: ProxyScheduleContext = .{ .io = application.io, .select = application.select };
-            try application.proxy_runtime.schedule(context.scheduler());
+            var sources = eventSources(application);
+            try sources.receiveProxyObservation(application.proxy_runtime);
         }
 
         const telemetry_tick_runtime_port: telemetry_tick_coordinator.RuntimePort(Application) = .{
@@ -919,7 +841,12 @@ pub fn Bindings(comptime Application: type) type {
         }
 
         fn scheduleTelemetryTick(application: *Application) !void {
-            try application.select.concurrent(.telemetry_tick, diagnostics.waitForTick, .{application.io});
+            var sources = eventSources(application);
+            try sources.waitForTelemetry();
+        }
+
+        fn eventSources(application: *Application) event_sources.Sources {
+            return event_sources.Sources.init(application.io, application.select);
         }
 
         fn formatTelemetrySample(application: *Application, buffer: []u8) ![]const u8 {
