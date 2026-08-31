@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const diagnostics = core.diagnostics;
+const configuration_mod = @import("configuration.zig");
 const connection_admission = @import("../connection_admission.zig");
 const credential_registry = @import("../credential_registry.zig");
 const identity = @import("../identity.zig");
@@ -11,7 +12,6 @@ const listener_mod = @import("listener.zig");
 const metrics_mod = @import("../metrics.zig");
 const middleware = @import("../middleware.zig");
 const observation_queue = @import("../observation_queue.zig");
-const provider = @import("../provider/root.zig");
 const tunnel_mod = @import("../tunnel/root.zig");
 
 const Io = std.Io;
@@ -43,10 +43,7 @@ pub const Service = struct {
     interception: interception_mod.Interception,
     credentials: credential_registry.Registry = .{},
     pipeline: middleware.Pipeline = .{},
-    transforms: middleware.TransformPipeline = .{},
-    has_custom_transformers: bool = false,
-    configuration_mutex: Io.Mutex = .init,
-    started: bool = false,
+    configuration: configuration_mod.Configuration,
     observations: observation_queue.Channel = undefined,
     connection_slots: connection_admission.Slots = .init(max_connections),
     telemetry: metrics_mod.Counters = .{},
@@ -59,6 +56,8 @@ pub const Service = struct {
         var listener = try listener_mod.Listener.bind(io);
         errdefer listener.deinit(io);
 
+        const configuration = try configuration_mod.Configuration.init();
+
         const service = try gpa.create(Service);
         errdefer gpa.destroy(service);
         service.* = .{
@@ -66,6 +65,7 @@ pub const Service = struct {
             .gpa = gpa,
             .listener = listener,
             .interception = interception,
+            .configuration = configuration,
             .observations = undefined,
         };
         service.observations.init(.{
@@ -73,7 +73,7 @@ pub const Service = struct {
             .is_live = observationCredentialIsLive,
         });
         try service.pipeline.add(service.observations.observer());
-        try service.transforms.add(provider.claudeRequestTransformer());
+
         return service;
     }
 
@@ -141,13 +141,7 @@ pub const Service = struct {
     fn run(service: *Service) anyerror!void {
         const path = diagnostics.enter(.observation);
         defer path.restore();
-        service.configuration_mutex.lockUncancelable(service.io);
-        if (service.started) {
-            service.configuration_mutex.unlock(service.io);
-            return error.ProxyAlreadyRunning;
-        }
-        service.started = true;
-        service.configuration_mutex.unlock(service.io);
+        try service.configuration.beginServing(service.io);
 
         return ConnectionAdmission.run(service);
     }
@@ -242,14 +236,7 @@ pub const Service = struct {
     /// try service.addTransformer(transformer);
     /// ```
     pub fn addTransformer(service: *Service, transformer: middleware.Transformer) !void {
-        service.configuration_mutex.lockUncancelable(service.io);
-        defer service.configuration_mutex.unlock(service.io);
-        if (service.started) {
-            return error.ProxyAlreadyRunning;
-        }
-
-        try service.transforms.add(transformer);
-        service.has_custom_transformers = true;
+        return service.configuration.add(service.io, transformer);
     }
 };
 
@@ -278,14 +265,15 @@ fn startConnection(service: *Service, connections: *Io.Group, stream: net.Stream
 
 fn serveConnection(service: *Service, stream: net.Stream) Io.Cancelable!void {
     defer service.connection_slots.release();
+    const configuration = service.configuration.view();
 
     var tunnel = tunnel_mod.Tunnel.init(.{
         .dependencies = .{
             .tls = service.interception.tunnelResources(&service.telemetry),
             .credentials = &service.credentials,
             .pipeline = &service.pipeline,
-            .transforms = &service.transforms,
-            .has_custom_transformers = service.has_custom_transformers,
+            .transforms = configuration.transforms,
+            .has_custom_transformers = configuration.has_custom_transformers,
             .connection_ids = &service.next_connection_id,
         },
         .child = stream,
@@ -368,7 +356,7 @@ test "service negotiates identity encoding for Claude message requests" {
     try headers.append(.{ .name = ":path", .value = "/v1/messages" });
     try headers.append(.{ .name = "accept-encoding", .value = "gzip, br" });
 
-    const changed = service.transforms.apply(.{
+    const changed = service.configuration.view().transforms.apply(.{
         .io = std.testing.io,
         .context = .{
             .pane_id = @enumFromInt(1),
