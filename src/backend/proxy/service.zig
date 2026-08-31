@@ -31,6 +31,19 @@ pub const Paths = struct {
     passthrough_hosts: []const []const u8 = &.{},
 };
 
+pub const Pane = struct {
+    id: schema.PaneId,
+    generation: u64,
+};
+
+pub const ClientConfiguration = struct {
+    port: u16,
+    certificate_path: []const u8,
+    bundle_path: []const u8,
+};
+
+pub const Worker = Io.Future(anyerror!void);
+
 pub const Service = struct {
     io: Io,
     gpa: std.mem.Allocator,
@@ -87,6 +100,13 @@ pub const Service = struct {
         return service;
     }
 
+    /// Releases the stopped service and scrubs its in-memory authority and
+    /// credentials. Call `cancel` and `close` before destroying a started
+    /// service.
+    ///
+    /// ```zig
+    /// service.destroy();
+    /// ```
     pub fn destroy(service: *Service) void {
         const gpa = service.gpa;
         service.listener.deinit(service.io);
@@ -95,7 +115,51 @@ pub const Service = struct {
         gpa.destroy(service);
     }
 
-    pub fn run(service: *Service) anyerror!void {
+    /// Starts the listener worker. The returned worker owns the running accept
+    /// loop until it is passed to `cancel`.
+    ///
+    /// ```zig
+    /// var worker = try service.start();
+    /// defer service.cancel(&worker);
+    /// ```
+    pub fn start(service: *Service) !Worker {
+        return service.io.concurrent(run, .{service});
+    }
+
+    /// Cancels and joins the listener worker before service resources are
+    /// released.
+    ///
+    /// ```zig
+    /// service.cancel(&worker);
+    /// ```
+    pub fn cancel(service: *Service, worker: *Worker) void {
+        _ = worker.cancel(service.io) catch {};
+    }
+
+    /// Closes observation delivery after the listener worker has stopped.
+    ///
+    /// ```zig
+    /// service.close();
+    /// ```
+    pub fn close(service: *Service) void {
+        service.observations.close(service.io);
+    }
+
+    /// Returns the stable connection and trust configuration inherited by
+    /// children registered with this service.
+    ///
+    /// ```zig
+    /// const client = service.clientConfiguration();
+    /// ```
+    pub fn clientConfiguration(service: *const Service) ClientConfiguration {
+        return .{
+            .port = service.port,
+            .certificate_path = service.certificate_path,
+            .bundle_path = service.bundle_path,
+        };
+    }
+
+    fn run(service: *Service) anyerror!void {
         const path = diagnostics.enter(.observation);
         defer path.restore();
         service.configuration_mutex.lockUncancelable(service.io);
@@ -109,6 +173,13 @@ pub const Service = struct {
         return ConnectionAdmission.run(service);
     }
 
+    /// Waits for the next live observation. Events for credentials revoked
+    /// while queued are discarded before this method returns.
+    ///
+    /// ```zig
+    /// var event = try service.receive(io);
+    /// defer std.crypto.secureZero(u8, &event.credential.token);
+    /// ```
     pub fn receive(service: *Service, io: Io) anyerror!middleware.Event {
         return service.observations.receive(io);
     }
@@ -126,8 +197,34 @@ pub const Service = struct {
         });
     }
 
+    /// Formats the loopback proxy URL for a credential into caller-owned
+    /// storage.
+    ///
+    /// ```zig
+    /// const url = try service.credentialUrl(&buffer, &credential);
+    /// ```
     pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const identity.Credential) ![]const u8 {
         return identity.formatUrl(buffer, service.port, credential);
+    }
+
+    /// Creates and registers a fresh capability for one pane generation. The
+    /// caller owns the returned secret and must scrub it after use.
+    ///
+    /// ```zig
+    /// var credential = try service.registerPane(.{ .id = pane_id, .generation = 2 });
+    /// defer std.crypto.secureZero(u8, &credential.token);
+    /// ```
+    pub fn registerPane(service: *Service, pane: Pane) !identity.Credential {
+        var credential: identity.Credential = .{
+            .pane_id = pane.id,
+            .pane_generation = pane.generation,
+            .token = identity.randomToken(service.io),
+        };
+        errdefer std.crypto.secureZero(u8, &credential.token);
+
+        try service.registerCredential(&credential);
+
+        return credential;
     }
 
     /// Credentials are live capabilities, not merely well-formed proxy URL
@@ -140,12 +237,23 @@ pub const Service = struct {
         return service.credentials.register(service.io, credential);
     }
 
+    /// Revokes one exact credential, including rollback of an incomplete pane
+    /// registration.
+    ///
+    /// ```zig
+    /// service.unregisterCredential(&credential);
+    /// ```
     pub fn unregisterCredential(service: *Service, credential: *const identity.Credential) void {
         service.credentials.remove(service.io, credential);
     }
 
-    pub fn unregisterPane(service: *Service, pane_id: schema.PaneId, pane_generation: u64) void {
-        service.credentials.removePane(service.io, .{ .id = pane_id, .generation = pane_generation });
+    /// Revokes every credential issued for one exact pane generation.
+    ///
+    /// ```zig
+    /// service.unregisterPane(.{ .id = pane_id, .generation = 2 });
+    /// ```
+    pub fn unregisterPane(service: *Service, pane: Pane) void {
+        service.credentials.removePane(service.io, .{ .id = pane.id, .generation = pane.generation });
     }
 
     /// Register before `run` starts. The immutable pipeline can later be
@@ -282,6 +390,26 @@ const TestServiceFixture = struct {
     }
 };
 
+test "pane registration creates one live capability for the requested generation" {
+    const io = std.testing.io;
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(io, std.testing.allocator);
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    const pane: Pane = .{ .id = try schema.id.pane(7), .generation = 3 };
+
+    var credential = try service.registerPane(pane);
+    defer std.crypto.secureZero(u8, &credential.token);
+
+    try std.testing.expectEqual(pane.id, credential.pane_id);
+    try std.testing.expectEqual(pane.generation, credential.pane_generation);
+    try std.testing.expect(service.credentials.contains(io, &credential));
+
+    service.unregisterCredential(&credential);
+
+    try std.testing.expect(!service.credentials.contains(io, &credential));
+}
+
 test "service negotiates identity encoding for Claude message requests" {
     var fixture: TestServiceFixture = .{};
     try fixture.init(std.testing.io, std.testing.allocator);
@@ -399,8 +527,8 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
         observation_metrics.high_water,
     );
     try std.testing.expectEqual(@as(u64, 1), observation_metrics.dropped);
-    var worker = try io.concurrent(Service.run, .{service});
-    defer worker.cancel(io) catch {};
+    var worker = try service.start();
+    defer service.cancel(&worker);
 
     const proxy_address = try net.IpAddress.parse("127.0.0.1", service.port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
@@ -469,8 +597,8 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
         .token = .{0x22} ** identity.token_bytes,
     };
     try service.registerCredential(&credential);
-    var worker = try io.concurrent(Service.run, .{service});
-    defer worker.cancel(io) catch {};
+    var worker = try service.start();
+    defer service.cancel(&worker);
 
     const proxy_address = try net.IpAddress.parse("127.0.0.1", service.port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
@@ -557,7 +685,7 @@ test "receive discards observations queued before pane revocation" {
         .connection_id = 1,
         .observed_at_ms = 1,
     });
-    service.unregisterPane(current.pane_id, current.pane_generation);
+    service.unregisterPane(.{ .id = current.pane_id, .generation = current.pane_generation });
     try service.registerCredential(&next);
     service.pipeline.publish(io, .{
         .credential = next,
@@ -591,8 +719,8 @@ test "loopback service maps CONNECT authentication and target rejections" {
         .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
     });
     defer service.destroy();
-    var worker = try io.concurrent(Service.run, .{service});
-    defer worker.cancel(io) catch {};
+    var worker = try service.start();
+    defer service.cancel(&worker);
 
     const address = try net.IpAddress.parse("127.0.0.1", service.port);
     const client = try address.connect(io, .{ .mode = .stream });

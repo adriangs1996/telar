@@ -7,7 +7,6 @@ const std = @import("std");
 const core = @import("telar-core");
 const pane_mod = @import("../pane/root.zig");
 const pty = @import("../pty/root.zig");
-const identity = @import("identity.zig");
 const lifecycle_mod = @import("lifecycle.zig");
 const metrics_mod = @import("metrics.zig");
 const middleware = @import("middleware.zig");
@@ -63,16 +62,14 @@ pub const PaneEnvironment = struct {
     }
 };
 
-const ProxyWorker = Io.Future(anyerror!void);
-
-const lifecycle_port: lifecycle_mod.Port(service_mod.Service, ProxyWorker) = .{
-    .start = startService,
-    .cancel = cancelService,
-    .close = closeServiceObservations,
-    .destroy = destroyService,
+const lifecycle_port: lifecycle_mod.Port(service_mod.Service, service_mod.Worker) = .{
+    .start = service_mod.Service.start,
+    .cancel = service_mod.Service.cancel,
+    .close = service_mod.Service.close,
+    .destroy = service_mod.Service.destroy,
 };
 
-const ServiceLifecycle = lifecycle_mod.Lifecycle(service_mod.Service, ProxyWorker, lifecycle_port);
+const ServiceLifecycle = lifecycle_mod.Lifecycle(service_mod.Service, service_mod.Worker, lifecycle_port);
 
 pub const Proxy = struct {
     gpa: std.mem.Allocator,
@@ -124,22 +121,18 @@ pub const Proxy = struct {
     /// ```
     pub fn registerPane(proxy: *Proxy, key: PaneKey, inherited: std.process.Environ) !PaneEnvironment {
         const service = proxy.lifecycle.service;
-        var credential: identity.Credential = .{
-            .pane_id = key.id,
-            .pane_generation = key.generation,
-            .token = identity.randomToken(service.io),
-        };
+        var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
         defer std.crypto.secureZero(u8, &credential.token);
-        try service.registerCredential(&credential);
         errdefer service.unregisterCredential(&credential);
 
         var url_buffer: [256]u8 = undefined;
         defer std.crypto.secureZero(u8, &url_buffer);
         const proxy_url = try service.credentialUrl(&url_buffer, &credential);
+        const client = service.clientConfiguration();
         const overrides = environmentOverrides(
             proxy_url,
-            service.certificate_path,
-            service.bundle_path,
+            client.certificate_path,
+            client.bundle_path,
         );
         return .{ .value = try pty.Environment.initWithOverrides(proxy.gpa, inherited, .{
             .term_program = "telar",
@@ -153,7 +146,7 @@ pub const Proxy = struct {
     /// proxy.revokePane(key);
     /// ```
     pub fn revokePane(proxy: *Proxy, key: PaneKey) void {
-        proxy.lifecycle.service.unregisterPane(key.id, key.generation);
+        proxy.lifecycle.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
     }
 
     /// Revocation rejects new tunnels and filters both queued and subsequent
@@ -188,23 +181,13 @@ pub const Proxy = struct {
     pub fn metrics(proxy: *const Proxy) MetricsSnapshot {
         return proxy.lifecycle.service.metrics();
     }
+
+    fn address(proxy: *const Proxy) Io.net.IpAddress {
+        const client = proxy.lifecycle.service.clientConfiguration();
+
+        return Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
+    }
 };
-
-fn startService(service: *service_mod.Service) !ProxyWorker {
-    return service.io.concurrent(service_mod.Service.run, .{service});
-}
-
-fn cancelService(service: *service_mod.Service, worker: *ProxyWorker) void {
-    _ = worker.cancel(service.io) catch {};
-}
-
-fn closeServiceObservations(service: *service_mod.Service) void {
-    service.observations.close(service.io);
-}
-
-fn destroyService(service: *service_mod.Service) void {
-    service.destroy();
-}
 
 const environment_override_count = 11;
 
@@ -323,7 +306,7 @@ test "proxy lifecycle accepts traffic and cancels an active tunnel during destru
         }
     }
 
-    const address = try Io.net.IpAddress.parse("127.0.0.1", proxy.?.lifecycle.service.port);
+    const address = proxy.?.address();
     const rejected = try address.connect(io, .{ .mode = .stream });
     defer rejected.close(io);
     var rejected_write_buffer: [64]u8 = undefined;
@@ -361,7 +344,7 @@ test "proxy connection admission enforces the real worker limit" {
     const proxy = try Proxy.create(io, gpa, files.config());
     defer proxy.destroy();
 
-    const address = try Io.net.IpAddress.parse("127.0.0.1", proxy.lifecycle.service.port);
+    const address = proxy.address();
     const connection_limit: usize = service_mod.max_connections;
     const client_count = connection_limit + 1;
     var clients: [client_count]?Io.net.Stream = @splat(null);
@@ -394,7 +377,7 @@ test {
     std.testing.refAllDecls(@import("connect_authentication.zig"));
     std.testing.refAllDecls(@import("h2/root.zig"));
     std.testing.refAllDecls(@import("http/root.zig"));
-    std.testing.refAllDecls(identity);
+    std.testing.refAllDecls(@import("identity.zig"));
     std.testing.refAllDecls(lifecycle_mod);
     std.testing.refAllDecls(middleware);
     std.testing.refAllDecls(@import("observation_queue.zig"));
