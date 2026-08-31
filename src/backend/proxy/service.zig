@@ -12,6 +12,7 @@ const identity = @import("identity.zig");
 const metrics_mod = @import("metrics.zig");
 const middleware = @import("middleware.zig");
 const observation_queue = @import("observation_queue.zig");
+const passthrough_policy = @import("passthrough_policy.zig");
 const provider = @import("provider/root.zig");
 const tls = @import("tls.zig");
 const tls_tunnel = @import("tls_tunnel.zig");
@@ -25,77 +26,12 @@ pub const port_attempts: u16 = 128;
 pub const max_connections: u32 = 64;
 pub const event_capacity = observation_queue.capacity;
 pub const max_credentials = schema.max_agent_snapshot_entries;
-pub const max_configured_passthrough_hosts = core.proxy.max_passthrough_hosts;
-pub const default_passthrough_hosts = [_][]const u8{
-    "api.github.com",
-    "ab.chatgpt.com",
-};
-const max_passthrough_hosts = max_configured_passthrough_hosts + default_passthrough_hosts.len;
 
 pub const Paths = struct {
     key: []const u8,
     certificate: []const u8,
     bundle: []const u8,
     passthrough_hosts: []const []const u8 = &.{},
-};
-
-const PassthroughHosts = struct {
-    storage: [max_passthrough_hosts][]const u8 = undefined,
-    count: u16 = 0,
-
-    fn init(configured: []const []const u8) !PassthroughHosts {
-        if (configured.len > max_configured_passthrough_hosts)
-            return error.TooManyProxyPassthroughHosts;
-        var hosts: PassthroughHosts = .{};
-        for (default_passthrough_hosts) |host| hosts.append(host);
-        for (configured) |host| {
-            if (host.len == 0 or host.len > core.proxy.max_hostname_bytes)
-                return error.InvalidProxyPassthroughHost;
-            hosts.append(host);
-        }
-        std.mem.sort(
-            []const u8,
-            hosts.storage[0..hosts.count],
-            {},
-            struct {
-                fn lessThan(_: void, left: []const u8, right: []const u8) bool {
-                    return core.proxy.orderHostname(left, right) == .lt;
-                }
-            }.lessThan,
-        );
-        hosts.deduplicate();
-        return hosts;
-    }
-
-    fn contains(hosts: *const PassthroughHosts, host: []const u8) bool {
-        return std.sort.binarySearch(
-            []const u8,
-            hosts.storage[0..hosts.count],
-            host,
-            struct {
-                fn compare(target: []const u8, candidate: []const u8) std.math.Order {
-                    return core.proxy.orderHostname(target, candidate);
-                }
-            }.compare,
-        ) != null;
-    }
-
-    fn append(hosts: *PassthroughHosts, host: []const u8) void {
-        hosts.storage[hosts.count] = host;
-        hosts.count += 1;
-    }
-
-    fn deduplicate(hosts: *PassthroughHosts) void {
-        var unique_count: usize = 0;
-        for (hosts.storage[0..hosts.count]) |host| {
-            if (unique_count != 0 and
-                core.proxy.orderHostname(hosts.storage[unique_count - 1], host) == .eq)
-                continue;
-            hosts.storage[unique_count] = host;
-            unique_count += 1;
-        }
-        hosts.count = @intCast(unique_count);
-    }
 };
 
 pub const Service = struct {
@@ -107,7 +43,7 @@ pub const Service = struct {
     roots: tls.Roots,
     certificate_path: []const u8,
     bundle_path: []const u8,
-    passthrough_hosts: PassthroughHosts,
+    passthrough_hosts: passthrough_policy.Policy,
     credentials: CredentialRegistry = .{},
     pipeline: middleware.Pipeline = .{},
     transforms: middleware.TransformPipeline = .{},
@@ -1598,19 +1534,6 @@ fn connectUpstream(host: net.HostName, io: Io, port: u16) !net.Stream {
             return last_error orelse error.UnknownHostName;
         },
     }
-}
-
-test "passthrough policy sorts, deduplicates, and binary searches exact hostnames" {
-    const hosts = try PassthroughHosts.init(&.{
-        "updates.example.com",
-        "API.GITHUB.COM",
-    });
-    try std.testing.expectEqual(@as(u16, 3), hosts.count);
-    try std.testing.expect(hosts.contains("api.github.com"));
-    try std.testing.expect(hosts.contains("AB.CHATGPT.COM"));
-    try std.testing.expect(hosts.contains("UPDATES.EXAMPLE.COM"));
-    try std.testing.expect(!hosts.contains("github.com"));
-    try std.testing.expect(!hosts.contains("evil-api.github.com"));
 }
 
 fn echoOpaquePayload(io: Io, listener: *net.Server, expected: []const u8) !void {
