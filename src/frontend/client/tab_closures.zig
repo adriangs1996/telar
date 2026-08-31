@@ -7,6 +7,7 @@ const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const client_outbox = @import("outbox.zig");
 const client_requests = @import("requests.zig");
+const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
 const tab_attachments = @import("tab_attachments.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
@@ -136,11 +137,9 @@ fn prepareClose(context: *anyopaque, location: schema.TabLocation) !void {
         required_capacity += @intFromBool(closes_session);
     }
 
-    if (client.reported_focus_events) {
-        if (client.reported_focus) |pane_id| {
-            if (client.model.workspace.findPane(pane_id)) |pane| {
-                required_capacity += @intFromBool(pane.attached);
-            }
+    if (client.model.reportedPaneFocus()) |reported| {
+        if (tab.model.findConst(reported.pane_id)) |pane| {
+            required_capacity += @intFromBool(reported.focus_events and pane.attached);
         }
     }
 
@@ -202,7 +201,7 @@ fn releaseResources(context: *anyopaque, removal_result: client_model.TabRemoval
         return;
     }
 
-    client.forgetPaneFocus();
+    _ = client.model.forgetReportedPaneFocus();
     const active_location = removal_result.active orelse return;
     const active = findTab(&client.model.workspace, active_location) orelse return error.UnexpectedTabRemoval;
 
@@ -211,7 +210,7 @@ fn releaseResources(context: *anyopaque, removal_result: client_model.TabRemoval
         try client.graphics_store.setPaneVisible(pane.id, true);
     }
 
-    try client.syncPaneFocus(&active.model);
+    try pane_focus.syncResources(client);
     if (!client.requests.has(.tab_snapshot)) {
         try client.requestTabSnapshot(active.location);
     }

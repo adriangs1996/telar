@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
@@ -97,7 +98,7 @@ fn applyExitEffects(context: *anyopaque, transition: client_model.PaneExit) !voi
     }
 
     client.graphics_store.invalidatePlacements();
-    try client.syncPaneFocus(&active.model);
+    try pane_focus.syncResources(client);
     if (!retirement.tab_empty) {
         try client.resizeAttached(&active.model, client.view.workbench());
     }

@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
@@ -85,7 +86,7 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
         return error.UnexpectedTabReconciliation;
     }
 
-    try client.syncPaneFocus(&tab.model);
+    try pane_focus.syncResources(client);
     try client.resizeAttached(&tab.model, client.view.workbench());
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {

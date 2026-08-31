@@ -5,6 +5,8 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const attachment_targets = @import("attachment_targets.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
 
 const Client = @import("client.zig");
 const focus_pane = client_application.focus_pane;
@@ -30,6 +32,17 @@ pub fn handler(client: *Client) focus_pane.FocusPaneHandler {
     };
 }
 
+/// Synchronizes attachment geometry and child focus reports from the active
+/// focused pane.
+///
+/// ```zig
+/// try syncResources(client);
+/// ```
+pub fn syncResources(client: *Client) !void {
+    _ = try attachment_targets.sync(client);
+    _ = try pane_focus_reports.sync(client);
+}
+
 fn applyFocus(context: *anyopaque, focus: client_model.PaneFocus, area: ui.Rect) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const tab = findTab(&client.model.workspace, focus.location) orelse return error.UnexpectedPaneFocus;
@@ -38,7 +51,7 @@ fn applyFocus(context: *anyopaque, focus: client_model.PaneFocus, area: ui.Rect)
         return error.UnexpectedPaneFocus;
     }
 
-    try client.syncPaneFocus(&active.model);
+    try syncResources(client);
     if (!focus.geometry_changed) {
         return;
     }

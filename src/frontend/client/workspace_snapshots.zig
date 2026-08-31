@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
@@ -76,13 +77,13 @@ fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.
     const active = findActive(client, reconciliation.active) orelse
         return error.UnexpectedWorkspaceReconciliation;
     if (reconciliation.active_tab_changed) {
-        client.forgetPaneFocus();
+        _ = client.model.forgetReportedPaneFocus();
         var panes = active.model.paneIterator();
         while (panes.next()) |pane| {
             try client.graphics_store.setPaneVisible(pane.id, true);
         }
 
-        try client.syncPaneFocus(&active.model);
+        try pane_focus.syncResources(client);
     }
 
     if (client.requests.has(.tab_snapshot)) {

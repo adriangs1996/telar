@@ -95,10 +95,10 @@ existing runtime target.
 
 Post-commit effects retain the navigation bookmark, release copy, paste,
 reported-focus and graphics resources for every retired pane, activate the
-confirmed root and request canonical workspace and tab snapshots. For reported
-focus, resource release only forgets the local value; it sends neither
-focus-out nor detach for the retired runtime attachments. Effect failure
-preserves the committed model.
+confirmed root and request canonical workspace and tab snapshots.
+`ClientModel.releaseReportedPaneFocus` forgets the exact retired owner without
+sending focus-out or detach for runtime attachments that were already replaced.
+Effect failure preserves the committed model.
 
 Neither creation use case invalidates the view nor requests a draw. The client
 runtime publishes `ClientModel.Version` to `Presenter`; the presenter compares

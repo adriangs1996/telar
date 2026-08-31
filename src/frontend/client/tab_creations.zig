@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_focus = @import("pane_focus.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("client.zig");
@@ -98,9 +99,13 @@ fn applyConfirmation(context: *anyopaque, creation: client_model.TabCreation) !v
     const workspace = &client.model.workspace;
     const previous = findTab(workspace, creation.previous) orelse return error.UnexpectedTabCreation;
     const created = findTab(workspace, creation.created) orelse return error.UnexpectedTabCreation;
+    const active = workspace.active() orelse return error.UnexpectedTabCreation;
+    if (active != created) {
+        return error.UnexpectedTabCreation;
+    }
 
     try tab_attachments.detach(client, previous);
-    try client.syncPaneFocus(&created.model);
+    try pane_focus.syncResources(client);
 }
 
 fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {

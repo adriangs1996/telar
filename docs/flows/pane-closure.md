@@ -70,10 +70,11 @@ revision once. Retirement in an inactive tab changes stored membership but no
 visible revision. A missing or repeated identity is stale and changes nothing.
 
 After the model commit, `pane_closures` completes a matching close
-continuation, retires a pending attachment, and releases copy, paste, focus and
-graphics state keyed by the pane. Active-tab retirement then synchronizes the
-new focused pane and re-offers attached sizes. Inactive and stale exits do not
-touch active focus or geometry.
+continuation, retires a pending attachment, and releases copy, paste,
+reported-focus and graphics state keyed by the pane. Report release is silent
+because the authoritative exit means no child remains to receive focus-out.
+Active-tab retirement then synchronizes the new focused pane and re-offers
+attached sizes. Inactive and stale exits do not touch active focus or geometry.
 
 The handler neither invalidates the view nor requests a draw. The presenter
 observes the model revision independently and folds an active retirement into

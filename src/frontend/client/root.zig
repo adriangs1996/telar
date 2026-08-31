@@ -39,6 +39,7 @@ test {
     _ = @import("application/root.zig");
     _ = @import("actions.zig");
     _ = @import("agent_snapshots.zig");
+    _ = @import("attachment_targets.zig");
     _ = @import("client.zig");
     _ = @import("client_test.zig");
     _ = @import("clipboard_images.zig");
@@ -56,6 +57,7 @@ test {
     _ = @import("pane_attachments.zig");
     _ = @import("pane_closures.zig");
     _ = @import("pane_focus.zig");
+    _ = @import("pane_focus_reports.zig");
     _ = @import("pane_frames.zig");
     _ = @import("pane_graphics.zig");
     _ = @import("pane_geometry.zig");

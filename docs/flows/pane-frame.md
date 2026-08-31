@@ -25,7 +25,7 @@ PaneFrameOutcome
        |
        +-- detached -> no effects
        +-- resync   -> request_snapshot
-       +-- applied  -> graphics, focus and telemetry
+       +-- applied  -> graphics, reported-focus sync and telemetry
                               |
                     ClientModel.Version.frame
                               |
@@ -55,8 +55,10 @@ detached frames do not advance it.
 `ApplyPaneFrameHandler` runs recovery or post-commit effects according to the
 model outcome. The `pane_frames` adapter maps a broken base to
 `request_snapshot`. After a valid commit it synchronizes pane graphics
-visibility, terminal focus reporting and frame telemetry against the committed
-state.
+visibility, delegates terminal focus modes to `PaneFocusReportingHandler` and
+records frame telemetry against the committed state. A focused pane that has
+just enabled focus events receives one focus-in. Report state advances no
+presentation revision.
 
 No use case or protocol adapter requests a draw. If a resource effect fails,
 the applied frame and copy-state reconciliation remain committed. Rolling them

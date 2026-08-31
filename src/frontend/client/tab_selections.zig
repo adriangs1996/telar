@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_focus = @import("pane_focus.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("client.zig");
@@ -44,6 +45,10 @@ fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !vo
     const workspace = &client.model.workspace;
     const previous = findTab(workspace, selection.previous) orelse return error.UnexpectedTabSelection;
     const selected = findTab(workspace, selection.selected) orelse return error.UnexpectedTabSelection;
+    const active = workspace.active() orelse return error.UnexpectedTabSelection;
+    if (active != selected) {
+        return error.UnexpectedTabSelection;
+    }
 
     try tab_attachments.detach(client, previous);
 
@@ -52,7 +57,7 @@ fn applySelection(context: *anyopaque, selection: client_model.TabSelection) !vo
         try client.graphics_store.setPaneVisible(pane.id, true);
     }
 
-    try client.syncPaneFocus(&selected.model);
+    try pane_focus.syncResources(client);
     try client.requestTabSnapshot(selected.location);
 }
 

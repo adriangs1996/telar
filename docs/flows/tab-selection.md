@@ -47,10 +47,12 @@ overflow for the full `isize` input range.
 
 A committed selection advances only `ClientModel.Version.active_tab`. The
 selection adapter first closes any bracketed paste captured by the previous
-tab, then clears reported focus and sends `detach_pane` for every attached or
-in-flight pane there. It hides their graphics and marks those panes detached.
-It then makes the selected tab's graphics visible, synchronizes pane focus and
-enqueues one `request_tab_snapshot` for the exact selected location.
+tab. If that tab owns `ClientModel.reported_pane_focus`, it sends focus-out and
+clears the state before every `detach_pane`. Detaching another tab cannot clear
+the active owner's report state. The adapter hides old graphics and marks those
+panes detached. It then makes the selected tab's graphics visible,
+synchronizes attachment geometry and focus reporting, and enqueues one
+`request_tab_snapshot` for the exact selected location.
 
 The runtime dispatches `detach_pane` through `detach_pane.Controller` and
 `DetachPaneHandler`. It dispatches `request_tab_snapshot` through

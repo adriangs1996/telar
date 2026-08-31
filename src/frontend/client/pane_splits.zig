@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const pane_focus = @import("pane_focus.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
@@ -115,7 +116,7 @@ fn applyConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) 
             }
 
             try client.resizeAttached(&tab.model, client.view.workbench());
-            try client.syncPaneFocus(&tab.model);
+            try pane_focus.syncResources(client);
         },
         .inactive => {
             const tab = findTab(&client.model.workspace, commit.location) orelse

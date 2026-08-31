@@ -1,6 +1,7 @@
 //! Synchronizes client-owned pane attachments during tab lifecycle changes.
 
 const workspace_capability = @import("../workspace/root.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_pastes = @import("pane_pastes.zig");
 
 const Client = @import("client.zig");
@@ -19,9 +20,13 @@ pub fn detach(client: *Client, tab: *tabs_mod.Tab) !void {
         }
     }
 
-    // Focus-out must leave before the pane detaches. Keeping both operations
-    // here prevents callers from violating that protocol ordering.
-    try client.clearPaneFocus();
+    if (client.model.reportedPaneFocus()) |reported| {
+        if (tab.model.findConst(reported.pane_id) != null) {
+            // Focus-out must leave before its pane detaches. Keeping both
+            // operations here prevents callers from violating that order.
+            _ = try pane_focus_reports.clear(client);
+        }
+    }
 
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {

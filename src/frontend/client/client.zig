@@ -207,8 +207,6 @@ notification_tick_pending: bool = false,
 notification_timer: NotificationTimer = .{},
 sound_pending: bool = false,
 queued_sound: ?sound_mod.Kind = null,
-reported_focus: ?schema.PaneId = null,
-reported_focus_events: bool = false,
 
 const Client = @This();
 
@@ -504,21 +502,6 @@ pub fn scheduleNotificationTick(client: *Client) !void {
     };
 }
 
-pub fn clearPaneFocus(client: *Client) !void {
-    const previous = client.reported_focus;
-    const reports = client.reported_focus_events;
-    client.forgetPaneFocus();
-    if (!reports) return;
-    const pane_id = previous orelse return;
-    const pane = client.model.workspace.findPane(pane_id) orelse return;
-    if (pane.attached) try client.enqueueInput(pane_id, "\x1b[O");
-}
-
-pub fn forgetPaneFocus(client: *Client) void {
-    client.reported_focus = null;
-    client.reported_focus_events = false;
-}
-
 /// Synchronizes a committed sidebar preference with disposable view,
 /// graphics and runtime geometry resources.
 ///
@@ -536,46 +519,6 @@ pub fn syncSidebarVisibility(client: *Client, change: client_model.SidebarVisibi
     client.graphics_store.invalidatePlacements();
     const active = client.model.workspace.active() orelse return;
 
-    try client.resizeAttached(&active.model, client.view.workbench());
-}
-
-pub fn syncPaneFocus(client: *Client, model: *multiplexer.Model) !void {
-    if (client.view.syncAttachmentTarget(client.model.focusedAttachmentTarget())) {
-        try client.resizeAttached(model, client.view.workbench());
-    }
-    const next_id = model.layout.focused();
-    const next = if (next_id) |pane_id| model.find(pane_id) else null;
-    const next_reports = if (next) |pane|
-        pane.attached and pane.input_modes.focus_events
-    else
-        false;
-
-    if (client.reported_focus == next_id) {
-        if (next_reports and !client.reported_focus_events)
-            try client.enqueueInput(next_id.?, "\x1b[I");
-        client.reported_focus_events = next_reports;
-        return;
-    }
-
-    try client.clearPaneFocus();
-    client.reported_focus = next_id;
-    client.reported_focus_events = next_reports;
-    if (next_reports) try client.enqueueInput(next_id.?, "\x1b[I");
-}
-
-/// Reconciles attachment resources after an agent snapshot commit. Any shelf
-/// geometry change is applied to the currently active pane model.
-///
-/// ```zig
-/// try client.syncAgentSnapshotResources();
-/// ```
-pub fn syncAgentSnapshotResources(client: *Client) !void {
-    const layout_changed = client.view.syncAttachmentTarget(client.model.focusedAttachmentTarget());
-    if (!layout_changed) {
-        return;
-    }
-
-    const active = client.model.workspace.active() orelse return;
     try client.resizeAttached(&active.model, client.view.workbench());
 }
 

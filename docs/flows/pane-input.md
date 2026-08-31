@@ -120,10 +120,11 @@ planning, encoding, optional viewport synchronization and enqueueing. Mouse has
 its existing event counter and is not double-counted as user-input enqueue
 latency.
 
-Terminal focus reports are deliberately outside this use case. They are
-protocol effects of focus synchronization, not user input, and focus-out must
-be able to target the pane that just lost focus. They call `Client.enqueueInput`
-directly and are excluded from user-input telemetry.
+Terminal focus reports are deliberately outside this use case. They pass
+through `PaneFocusReportingHandler` and the `pane_focus_reports` adapter, not
+the user-input handler. The adapter uses `Client.enqueueInput`, so focus bytes
+remain outside user-input telemetry and can target the pane that just lost
+focus.
 
 ## Presentation and runtime
 

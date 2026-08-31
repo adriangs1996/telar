@@ -26,6 +26,7 @@ const Client = @import("client.zig");
 const InputHandler = @import("input_handler.zig");
 const client_actions = @import("actions.zig");
 const agent_sounds = @import("agent_sounds.zig");
+const attachment_targets = @import("attachment_targets.zig");
 const client_application = @import("application/root.zig");
 const client_outbox = @import("outbox.zig");
 const client_model = @import("model.zig");
@@ -36,6 +37,7 @@ const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
 const pane_clipboards = @import("pane_clipboards.zig");
 const pane_closures = @import("pane_closures.zig");
+const pane_focus = @import("pane_focus.zig");
 const pane_openings = @import("pane_openings.zig");
 const plugin_actions = @import("plugin_actions.zig");
 const resync_requirements = @import("resync_requirements.zig");
@@ -49,6 +51,12 @@ const tab_snapshots = @import("tab_snapshots.zig");
 const workspace_snapshots = @import("workspace_snapshots.zig");
 const InputChunk = Client.InputChunk;
 const initial_request_id = Client.initial_request_id;
+
+fn reportedPaneId(client: *const Client) ?schema.PaneId {
+    const reported = client.model.reportedPaneFocus() orelse return null;
+
+    return reported.pane_id;
+}
 
 fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
@@ -486,7 +494,7 @@ fn installTestingAttachmentTarget(client: *Client, generation: u64) !attachments
             .status = .working,
         }},
     });
-    try client.syncAgentSnapshotResources();
+    _ = try attachment_targets.sync(client);
 
     return target;
 }
@@ -531,7 +539,7 @@ test "bootstrap answers the initial open with both snapshot requests" {
     try std.testing.expectEqual(@as(usize, 1), harness.client.model.workspace.count);
     const pane = harness.client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     try std.testing.expect(pane.attached);
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, harness.client.reported_focus);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, reportedPaneId(harness.client));
     try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().workspace);
     try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().active_tab);
@@ -709,7 +717,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     try std.testing.expectEqual(version_before_departure.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_departure.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_departure, client.presenter.pending_updates);
-    try std.testing.expect(client.reported_focus == null);
+    try std.testing.expect(client.model.reportedPaneFocus() == null);
 
     try client.observeModel();
 
@@ -776,7 +784,7 @@ test "workspace handoff capacity failure preserves the source model" {
         try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
-    const focus_before = client.reported_focus;
+    const focus_before = client.model.reportedPaneFocus();
     const handler: InputHandler = .{ .client = client };
 
     try std.testing.expectError(
@@ -787,9 +795,40 @@ test "workspace handoff capacity failure preserves the source model" {
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqual(focus_before, client.reported_focus);
+    try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
     try std.testing.expect(client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
     try std.testing.expect(client.requests.has(.tab_snapshot));
+}
+
+test "workspace handoff reserves its focus-out message" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    try pane_focus.syncResources(client);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const focus_in = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(focus_in == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
+    while (client.outbox.len < client_outbox.capacity - 2) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+    const reported = client.model.reportedPaneFocus();
+
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        client_actions.switchWorkspaceResolved(client, @enumFromInt(2)),
+    );
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
 }
 
 test "workspace handoff reserves its captured paste closing marker" {
@@ -1075,7 +1114,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
         .horizontal,
         client.view.workbench(),
     );
-    try client.syncPaneFocus(model);
+    try pane_focus.syncResources(client);
     try std.testing.expect(client.model.enterCopyMode());
     try client.graphics_store.applyImage(.{
         .pane_id = retired,
@@ -1106,7 +1145,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
     try std.testing.expect(client.model.workspace.findPane(retired) == null);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(retired));
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
+    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), reportedPaneId(client));
     try std.testing.expect(client.requests.take(@enumFromInt(91)).? == .ignored);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
@@ -1429,7 +1468,7 @@ test "workspace reconciliation retires removed state and restores the new active
     try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(client.graphics_store.paneVisible(@enumFromInt(20)));
-    try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(20)), client.reported_focus);
+    try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(20)), reportedPaneId(client));
     const version_before_late_snapshot = client.model.version();
     const pending_updates_before_late_snapshot = client.presenter.pending_updates;
     const outbox_len_before_late_snapshot = client.outbox.len;
@@ -1740,16 +1779,16 @@ test "focus reporting emits focus-in only after the pane opts in" {
 
     // Bootstrap synced focus while the pane had focus events off: the focus
     // is remembered, no byte was sent.
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.reported_focus);
-    try std.testing.expect(!client.reported_focus_events);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, reportedPaneId(client));
+    try std.testing.expect(!client.model.reportedPaneFocus().?.focus_events);
 
     const model = &client.model.workspace.active().?.model;
     model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     const input_events = client.metrics.input_events;
-    try client.syncPaneFocus(model);
+    try pane_focus.syncResources(client);
     try harness.settle();
 
-    try std.testing.expect(client.reported_focus_events);
+    try std.testing.expect(client.model.reportedPaneFocus().?.focus_events);
     if (comptime core.diagnostics.enabled) {
         try std.testing.expectEqual(input_events, client.metrics.input_events);
     }
@@ -1785,8 +1824,7 @@ test "pane focus commits before reports resize and presentation" {
     try client.observeModel();
     try harness.settleModelPresentation();
 
-    client.reported_focus = second;
-    client.reported_focus_events = true;
+    _ = client.model.syncReportedPaneFocus().?;
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
     const handler: InputHandler = .{ .client = client };
@@ -1860,8 +1898,7 @@ test "mouse focus precedes forwarding its triggering press" {
     try client.observeModel();
     try harness.settleModelPresentation();
 
-    client.reported_focus = second;
-    client.reported_focus_events = true;
+    _ = client.model.syncReportedPaneFocus().?;
     const first_view = model.viewForPane(first, area).?;
     const point = term.Event.Mouse{
         .x = first_view.content.x,
@@ -2478,6 +2515,64 @@ test "tab detachment closes a captured bracketed paste before the pane detaches"
     try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
 }
 
+test "tab detachment sends focus-out before the pane detaches" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+
+    try pane_focus.syncResources(client);
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const focus_in = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(focus_in == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
+
+    try tab_attachments.detach(client, client.model.workspace.active().?);
+
+    try std.testing.expect(client.model.reportedPaneFocus() == null);
+    try harness.settle();
+    const focus_out = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(focus_out == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, focus_out.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[O", focus_out.pane_input.bytes);
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
+}
+
+test "tab detachment preserves focus reported by another tab" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    try pane_focus.syncResources(client);
+    try harness.settle();
+    var message_buffer: [256]u8 = undefined;
+    const focus_in = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(focus_in == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
+
+    const inactive_pane: schema.PaneId = @enumFromInt(20);
+    const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
+    const tab = client.model.workspace.find(inactive.tab_id).?;
+    tab.model.find(inactive_pane).?.attached = true;
+    const reported = client.model.reportedPaneFocus().?;
+
+    try tab_attachments.detach(client, tab);
+
+    try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus().?);
+    try harness.settle();
+    const detached = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(inactive_pane, detached.detach_pane.pane_id);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+}
+
 test "a missing pane attachment keeps local membership until a canonical snapshot" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -2611,8 +2706,10 @@ test "a created workspace bookmarks and replaces the prior layout" {
     const prior_model = &client.model.workspace.active().?.model;
     try prior_model.split(left, top_right, prior_location, .horizontal, workbench);
     try prior_model.split(top_right, bottom_right, prior_location, .vertical, workbench);
-    client.reported_focus = left;
-    client.reported_focus_events = true;
+    prior_model.find(left).?.input_modes.focus_events = true;
+    try std.testing.expect(prior_model.focusPane(left));
+    _ = client.model.syncReportedPaneFocus().?;
+    try std.testing.expect(prior_model.focusPane(bottom_right));
     var expected_geometry: workspace_capability.layout.Snapshot = .{};
     prior_model.layout.snapshot(workbench, &expected_geometry);
 
@@ -2646,7 +2743,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expectEqual(version_before_creation.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_creation.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_creation, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(30)), client.reported_focus);
+    try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(30)), reportedPaneId(client));
 
     const bookmark = client.navigation_history.find(prior_location.workspace).?;
     try std.testing.expectEqual(prior_location, bookmark.location);
@@ -3462,7 +3559,7 @@ test "close tab capacity failure preserves attachment and request state" {
         try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
-    const focus_before = client.reported_focus;
+    const focus_before = client.model.reportedPaneFocus();
     const next_request_id = client.next_request_id;
     const handler: InputHandler = .{ .client = client };
 
@@ -3473,10 +3570,43 @@ test "close tab capacity failure preserves attachment and request state" {
 
     try std.testing.expectEqual(client_outbox.capacity - 1, @as(usize, client.outbox.len));
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqual(focus_before, client.reported_focus);
+    try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
+}
+
+test "close tab reserves its focus-out message" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.requests = .{};
+    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    try pane_focus.syncResources(client);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const focus_in = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(focus_in == .pane_input);
+    try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
+    while (client.outbox.len < client_outbox.capacity - 2) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+    const version = client.model.version();
+    const reported = client.model.reportedPaneFocus();
+    const next_request_id = client.next_request_id;
+
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        client_actions.apply(client, .close_tab),
+    );
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqual(next_request_id, client.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.requests.count);
 }
 
 test "close tab reserves its captured paste closing marker" {
@@ -3745,7 +3875,7 @@ test "closing the last workspace exits the client" {
     try std.testing.expectEqual(version_before_close.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_close.active_tab + 1, client.model.version().active_tab);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
-    try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
+    try std.testing.expectEqual(@as(?schema.PaneId, null), reportedPaneId(client));
 }
 
 test "tab removal follows the runtime predecessor after its workspace disappears" {
@@ -4109,7 +4239,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(split.change == .changed);
     try client.observeModel();
     try harness.settleModelPresentation();
-    client.reported_focus = closing_pane;
+    _ = client.model.syncReportedPaneFocus().?;
     try std.testing.expectEqual(closing_pane, client.model.beginPanePaste().?.pane_id);
     try client.graphics_store.applyImage(.{
         .pane_id = closing_pane,
@@ -4156,7 +4286,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
+    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
     try std.testing.expect(!client.notification_tick_pending);
 
@@ -4215,7 +4345,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
+    try std.testing.expectEqual(@as(?schema.PaneId, null), reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
     try std.testing.expect(!client.notification_tick_pending);
 
@@ -4269,7 +4399,7 @@ test "an inactive pane exit retires only inactive state" {
     try std.testing.expectEqualDeep(version_before_exit, client.model.version());
     try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
-    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
+    try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), reportedPaneId(client));
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(inactive_pane));
     try std.testing.expect(client.requests.take(@enumFromInt(4)) == null);
     try std.testing.expect(client.requests.take(@enumFromInt(5)).? == .ignored);
@@ -5632,7 +5762,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     const completed = try testingClipboardCapture(client, execution, "private png");
 
     _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
-    try client.syncAgentSnapshotResources();
+    _ = try attachment_targets.sync(client);
     try client.observeModel();
     try harness.settleModelPresentation();
     const version_before = client.model.version();

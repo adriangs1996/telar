@@ -33,10 +33,12 @@ failed handoff cannot restore identity that no longer exists.
 
 The adapter checks that the fixed outbox has room for a required paste-closing
 marker, focus-out, every detach and the final open before it changes attachment
-state. The request handler closes the paste and delivers detaches before
-`open_pane`; socket order prevents the new attachment from preceding retirement
-of the old ones. A local detach or open failure does not commit departure and
-requests a canonical tab snapshot to repair any provisional attachment effects.
+state. It reserves focus-out only when the reported pane still exists,
+remains attached and has focus events enabled. The request handler closes the
+paste and delivers detaches before `open_pane`; socket order prevents the new
+attachment from preceding retirement of the old ones. A local detach or open
+failure does not commit departure and requests a canonical tab snapshot to
+repair any provisional attachment effects.
 
 Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused
@@ -80,11 +82,11 @@ once. Construction failure therefore preserves the prior empty model and every
 revision.
 
 Operational effects run after the commit. They validate the active pane,
-synchronize reported focus, schedule host input, and request canonical
-workspace and tab snapshots. The tab snapshot restores the saved split tree
-only if the runtime still reports exactly the bookmarked pane set; otherwise
-normal deterministic display order wins. Effect failure does not roll the
-confirmed model back.
+synchronize attachment geometry and `ClientModel.reported_pane_focus`, schedule
+host input, and request canonical workspace and tab snapshots. The tab snapshot
+restores the saved split tree only if the runtime still reports exactly the
+bookmarked pane set; otherwise normal deterministic display order wins. Effect
+failure does not roll the confirmed model back.
 
 The dispatcher does not draw the arrival. The presenter observes its new
 version independently, invalidates the affected composition dimensions and

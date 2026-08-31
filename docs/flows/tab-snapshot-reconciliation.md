@@ -62,12 +62,12 @@ pane before restoration. This avoids committing the removal and then failing
 on a stale focus identity.
 
 The reconciliation result contains at most 64 removed pane IDs. After the
-model commit, the client adapter marks their pending operations as ignored,
-asks `ClientModel` to release copy mode for each retired identity, then clears
-paste state, reported focus and graphics. For an active tab, it synchronizes
-focus, re-offers attached pane sizes and requests an attachment for each
-detached pane. A pane with an attachment request already pending does not
-receive a duplicate request.
+model commit, the client adapter marks their pending operations as ignored and
+releases copy, paste, reported-focus and graphics state by exact pane identity.
+Authoritative retirement sends no focus-out. For an active tab, the adapter
+synchronizes attachment geometry and focus reporting, re-offers attached pane
+sizes and requests an attachment for each detached pane. A pane with an
+attachment request already pending does not receive a duplicate request.
 
 Resource effects still run for an identical snapshot. This lets a resync
 repair sizes or attachments without inventing a model change. The presenter

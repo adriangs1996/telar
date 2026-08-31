@@ -156,7 +156,11 @@ fn neverPending(_: *anyopaque) bool {
 fn detachCurrent(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     var required_capacity: usize = 1;
-    required_capacity += @intFromBool(client.reported_focus_events);
+    if (client.model.reportedPaneFocus()) |reported| {
+        if (client.model.workspace.findPane(reported.pane_id)) |pane| {
+            required_capacity += @intFromBool(reported.focus_events and pane.attached);
+        }
+    }
     if (client.model.panePasteSession()) |session| {
         required_capacity += @intFromBool(session.bracketed_paste);
     }

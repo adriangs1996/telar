@@ -134,6 +134,18 @@ pub const PaneFocus = struct {
     geometry_changed: bool,
 };
 
+pub const ReportedPaneFocus = struct {
+    pane_id: schema.PaneId,
+    focus_events: bool,
+};
+
+pub const PaneFocusReportTransition = struct {
+    previous: ?ReportedPaneFocus,
+    current: ?ReportedPaneFocus,
+    focus_out: ?schema.PaneId = null,
+    focus_in: ?schema.PaneId = null,
+};
+
 pub const ResizePaneRequest = struct {
     direction: layout_mod.Direction,
     area: ui.Rect,
@@ -731,6 +743,7 @@ pub const Model = struct {
     chrome_revision: u64 = 0,
     copy_state: ?copy_mode.State = null,
     copy_revision: u64 = 0,
+    reported_pane_focus: ?ReportedPaneFocus = null,
     pane_paste: ?PanePasteSession = null,
     frame_revision: u64 = 0,
     pane_metadata_revision: u64 = 0,
@@ -1582,6 +1595,113 @@ pub const Model = struct {
             .pane_id = key.pane_id,
             .pane_generation = key.pane_generation,
         };
+    }
+
+    /// Returns the pane identity and reporting mode last synchronized with the
+    /// child protocol.
+    ///
+    /// ```zig
+    /// const reported = model.reportedPaneFocus() orelse return;
+    /// ```
+    pub fn reportedPaneFocus(model: *const Model) ?ReportedPaneFocus {
+        return model.reported_pane_focus;
+    }
+
+    /// Commits the active focused pane as the protocol-reporting target. The
+    /// returned transition names the ordered focus messages, if any.
+    ///
+    /// ```zig
+    /// const transition = model.syncReportedPaneFocus() orelse return;
+    /// ```
+    pub fn syncReportedPaneFocus(model: *Model) ?PaneFocusReportTransition {
+        const current: ?ReportedPaneFocus = current: {
+            const active = model.workspace.active() orelse break :current null;
+            const pane_id = active.model.layout.focused() orelse break :current null;
+            const pane = active.model.find(pane_id) orelse break :current null;
+
+            break :current .{
+                .pane_id = pane_id,
+                .focus_events = pane.attached and pane.input_modes.focus_events,
+            };
+        };
+
+        return model.commitReportedPaneFocus(current);
+    }
+
+    /// Clears an intentional focus owner and returns any required focus-out.
+    ///
+    /// ```zig
+    /// const transition = model.clearReportedPaneFocus() orelse return;
+    /// ```
+    pub fn clearReportedPaneFocus(model: *Model) ?PaneFocusReportTransition {
+        return model.commitReportedPaneFocus(null);
+    }
+
+    /// Forgets protocol focus after canonical state made the old owner stale.
+    ///
+    /// ```zig
+    /// _ = model.forgetReportedPaneFocus();
+    /// ```
+    pub fn forgetReportedPaneFocus(model: *Model) bool {
+        if (model.reported_pane_focus == null) {
+            return false;
+        }
+
+        model.reported_pane_focus = null;
+        return true;
+    }
+
+    /// Releases protocol focus only when its pane is being retired.
+    ///
+    /// ```zig
+    /// _ = model.releaseReportedPaneFocus(pane_id);
+    /// ```
+    pub fn releaseReportedPaneFocus(model: *Model, pane_id: schema.PaneId) bool {
+        const reported = model.reported_pane_focus orelse return false;
+        if (reported.pane_id != pane_id) {
+            return false;
+        }
+
+        model.reported_pane_focus = null;
+        return true;
+    }
+
+    fn commitReportedPaneFocus(model: *Model, current: ?ReportedPaneFocus) ?PaneFocusReportTransition {
+        const previous = model.reported_pane_focus;
+        if (std.meta.eql(previous, current)) {
+            return null;
+        }
+
+        var transition: PaneFocusReportTransition = .{
+            .previous = previous,
+            .current = current,
+        };
+        if (previous) |reported| {
+            const moved = if (current) |focus|
+                focus.pane_id != reported.pane_id
+            else
+                true;
+            if (moved and reported.focus_events) {
+                if (model.workspace.findPane(reported.pane_id)) |pane| {
+                    if (pane.attached) {
+                        transition.focus_out = reported.pane_id;
+                    }
+                }
+            }
+        }
+
+        if (current) |reported| {
+            const entered = if (previous) |focus|
+                focus.pane_id != reported.pane_id or !focus.focus_events
+            else
+                true;
+            if (entered and reported.focus_events) {
+                transition.focus_in = reported.pane_id;
+            }
+        }
+
+        model.reported_pane_focus = current;
+        return transition;
     }
 
     /// Returns the pane paste currently owned by this client.
@@ -2934,6 +3054,86 @@ test "pane input planning yields ownership to prompts and copy mode" {
     const copy_version = model.version();
     try std.testing.expect(model.planPaneInput(.{ .pane = pane_id }) == null);
     try std.testing.expectEqualDeep(copy_version, model.version());
+}
+
+test "reported pane focus derives protocol edges outside presentation versions" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    try model.workspace.bootstrap(first, location, .{ .cols = 20, .rows = 5 });
+    const version = model.version();
+
+    const disabled = model.syncReportedPaneFocus().?;
+
+    try std.testing.expectEqualDeep(ReportedPaneFocus{
+        .pane_id = first,
+        .focus_events = false,
+    }, disabled.current.?);
+    try std.testing.expect(disabled.previous == null);
+    try std.testing.expect(disabled.focus_out == null);
+    try std.testing.expect(disabled.focus_in == null);
+    try std.testing.expect(model.syncReportedPaneFocus() == null);
+    try std.testing.expectEqualDeep(version, model.version());
+
+    model.workspace.findPane(first).?.input_modes.focus_events = true;
+    const enabled = model.syncReportedPaneFocus().?;
+    try std.testing.expectEqual(first, enabled.focus_in.?);
+    try std.testing.expect(enabled.focus_out == null);
+
+    try model.workspace.active().?.model.split(first, second, location, .horizontal, .{ .w = 20, .h = 5 });
+    model.workspace.findPane(second).?.input_modes.focus_events = true;
+    const moved = model.syncReportedPaneFocus().?;
+
+    try std.testing.expectEqual(first, moved.focus_out.?);
+    try std.testing.expectEqual(second, moved.focus_in.?);
+    try std.testing.expectEqualDeep(ReportedPaneFocus{
+        .pane_id = second,
+        .focus_events = true,
+    }, model.reportedPaneFocus().?);
+    try std.testing.expectEqualDeep(version, model.version());
+
+    model.workspace.findPane(second).?.input_modes.focus_events = false;
+    const opted_out = model.syncReportedPaneFocus().?;
+    try std.testing.expect(opted_out.focus_out == null);
+    try std.testing.expect(opted_out.focus_in == null);
+    try std.testing.expect(!model.reportedPaneFocus().?.focus_events);
+    try std.testing.expectEqualDeep(version, model.version());
+}
+
+test "reported pane focus distinguishes intentional clear from stale retirement" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.input_modes.focus_events = true;
+    _ = model.syncReportedPaneFocus().?;
+    const version = model.version();
+
+    pane.attached = false;
+    const clear = model.clearReportedPaneFocus().?;
+    try std.testing.expect(clear.focus_out == null);
+    try std.testing.expect(model.reportedPaneFocus() == null);
+    try std.testing.expect(model.clearReportedPaneFocus() == null);
+
+    _ = model.syncReportedPaneFocus().?;
+    try std.testing.expect(!model.releaseReportedPaneFocus(@enumFromInt(9)));
+    try std.testing.expect(model.releaseReportedPaneFocus(pane_id));
+    try std.testing.expect(!model.releaseReportedPaneFocus(pane_id));
+
+    _ = model.syncReportedPaneFocus().?;
+    try std.testing.expect(model.forgetReportedPaneFocus());
+    try std.testing.expect(!model.forgetReportedPaneFocus());
+    try std.testing.expectEqualDeep(version, model.version());
 }
 
 test "pane paste captures one exact target and framing mode outside presentation versions" {

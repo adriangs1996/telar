@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("model.zig");
+const pane_focus = @import("pane_focus.zig");
 const pane_resources = @import("pane_resources.zig");
 
 const Client = @import("client.zig");
@@ -51,6 +52,8 @@ pub fn release(client: *Client, departure: *const client_model.WorkspaceDepartur
     for (departure.panes.slice()) |pane_id| {
         pane_resources.release(client, pane_id);
     }
+
+    _ = client.model.forgetReportedPaneFocus();
 }
 
 /// Activates the root selected by the runtime, then requests both canonical
@@ -67,7 +70,7 @@ pub fn activate(client: *Client, activation: Activation) !void {
         return error.UnexpectedRequest;
     }
 
-    try client.syncPaneFocus(&active.model);
+    try pane_focus.syncResources(client);
     try client.scheduleInputRead();
     try client.requestWorkspaceSnapshot(activation.location.workspace);
     try client.requestTabSnapshot(activation.location);

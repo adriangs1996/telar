@@ -70,8 +70,9 @@ a presentation revision.
 
 The result holds at most 64 removed tabs and 4096 removed pane IDs. The
 reconciliation allocates no unbounded storage. After the commit, the client
-adapter ignores requests for removed tabs, releases their copy, paste, focus
-and graphics state, and restores the new active tab. It requests a tab snapshot
+adapter ignores requests for removed tabs and releases their copy, paste,
+reported-focus and graphics state by pane identity. It forgets stale report
+ownership before synchronizing the new active tab and requests a tab snapshot
 when needed. An otherwise current active tab re-offers its size to recover a
 lost geometry lease.
 

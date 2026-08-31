@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const attachment_targets = @import("attachment_targets.zig");
 const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
@@ -67,7 +68,7 @@ fn reconcile(context: *anyopaque, commit: *const client_model.AgentSnapshotCommi
     _ = commit;
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try client.syncAgentSnapshotResources();
+    _ = try attachment_targets.sync(client);
 }
 
 fn alert(context: *anyopaque, change: client_model.AgentStatusChange) !void {

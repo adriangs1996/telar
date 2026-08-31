@@ -14,10 +14,7 @@ const schema = core.schema;
 pub fn release(client: *Client, pane_id: schema.PaneId) void {
     _ = client.model.releaseCopyMode(pane_id);
     _ = client.model.releasePanePaste(pane_id);
-
-    if (client.reported_focus == pane_id) {
-        client.forgetPaneFocus();
-    }
+    _ = client.model.releaseReportedPaneFocus(pane_id);
 
     client.graphics_store.clearPane(pane_id);
 }

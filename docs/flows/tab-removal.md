@@ -129,9 +129,10 @@ Requested removals must still exist. Repeated or stale lifecycle facts are
 idempotent and only retire obsolete continuations.
 
 After a commit, the handler retires requests for the removed tab and releases
-its copy, paste, focus and graphics state. Removing an inactive tab leaves the
-active identity untouched. Removing the active tab exposes its successor,
-synchronizes focus and requests that tab's canonical snapshot.
+its copy, paste, reported-focus and graphics state by pane identity. Removing
+an inactive tab leaves the active report owner untouched. Removing the active
+tab exposes its successor, synchronizes attachment geometry and focus
+reporting, and requests that tab's canonical snapshot.
 
 If the last tab removed the workspace, the handler forgets its navigation
 bookmark. It starts a workspace handoff when the runtime supplied a canonical
