@@ -33,10 +33,10 @@ semantic Command
 NamePromptHandler.execute -> name_prompt.State.apply
 ```
 
-`Client.mode` owns only normal and copy routing. Prompt activity itself decides
-whether keyboard and paste input belongs to the editor, so routing and editor
-state cannot disagree. Mouse input and configured actions are suppressed while
-the prompt is active.
+`ClientModel` owns both prompt and copy-mode routing authority, and their entry
+adapters reject overlap. Prompt activity itself decides whether keyboard and
+paste input belongs to the editor, so routing and editor state cannot disagree.
+Mouse input and configured actions are suppressed while the prompt is active.
 
 The terminal adapter translates bytes into semantic editor commands. The state
 component handles grapheme-aware editing and records a revision only for a

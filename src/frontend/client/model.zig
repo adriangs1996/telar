@@ -2,9 +2,12 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const input_capability = @import("../input/root.zig");
 const name_prompt = @import("name_prompt.zig");
 const workspace_capability = @import("../workspace/root.zig");
 
+const copy_mode = input_capability.copy_mode;
+const keybind = input_capability.keybind;
 const schema = core.schema;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
@@ -18,6 +21,7 @@ pub const Version = struct {
     panes: u64 = 0,
     chrome: u64 = 0,
     prompt: u64 = 0,
+    copy: u64 = 0,
 };
 
 pub const Change = enum {
@@ -134,6 +138,42 @@ pub const SidebarVisibility = struct {
 pub const WorkspaceListCollapse = struct {
     collapsed: bool,
     chrome_revision: u64,
+};
+
+pub const CopyModeCommand = union(enum) {
+    key: keybind.Key,
+    vertical: i32,
+    leave,
+};
+
+pub const CopyModeProjection = struct {
+    pane_id: schema.PaneId,
+    view: copy_mode.View,
+};
+
+pub const CopyModeViewport = struct {
+    pane_id: schema.PaneId,
+    offset: u32,
+};
+
+pub const CopyModeFrame = struct {
+    pane_id: schema.PaneId,
+    previous_offset: u32,
+    scroll: schema.frame.Scroll,
+};
+
+pub const CopyModePlan = struct {
+    expected_revision: u64,
+    previous: copy_mode.State,
+    next: ?copy_mode.State,
+    selection: ?schema.CopySelection = null,
+    viewport: ?CopyModeViewport = null,
+};
+
+pub const CopyModeCommit = struct {
+    active: bool,
+    viewport: ?CopyModeViewport,
+    copy_revision: u64,
 };
 
 pub const RequestPaneSplit = struct {
@@ -305,6 +345,8 @@ pub const Model = struct {
     sidebar_visible: bool = true,
     workspace_list_collapsed: bool = false,
     chrome_revision: u64 = 0,
+    copy_state: ?copy_mode.State = null,
+    copy_revision: u64 = 0,
 
     /// Creates the client model with the configured pane appearance.
     ///
@@ -340,6 +382,7 @@ pub const Model = struct {
             .panes = model.panes_revision,
             .chrome = model.chrome_revision,
             .prompt = model.name_prompt.version(),
+            .copy = model.copy_revision,
         };
     }
 
@@ -419,6 +462,202 @@ pub const Model = struct {
         return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
     }
 
+    /// Reports whether copy mode currently owns pane input.
+    ///
+    /// ```zig
+    /// if (model.copyModeActive()) return;
+    /// ```
+    pub fn copyModeActive(model: *const Model) bool {
+        return model.copy_state != null;
+    }
+
+    /// Returns the immutable copy-mode projection consumed by presenters.
+    ///
+    /// ```zig
+    /// const projection = model.copyModeProjection() orelse return;
+    /// ```
+    pub fn copyModeProjection(model: *const Model) ?CopyModeProjection {
+        const state = model.copy_state orelse return null;
+
+        return .{ .pane_id = state.pane_id, .view = state.view() };
+    }
+
+    /// Enters copy mode on the attached focused pane. An active prompt,
+    /// missing pane or repeated request leaves the copy revision intact.
+    ///
+    /// ```zig
+    /// if (model.enterCopyMode()) observe(model.version());
+    /// ```
+    pub fn enterCopyMode(model: *Model) bool {
+        if (model.copy_state != null or model.name_prompt.active()) {
+            return false;
+        }
+
+        const active = model.workspace.active() orelse return false;
+        const pane = active.model.focusedPane() orelse return false;
+        if (!pane.attached) {
+            return false;
+        }
+
+        const cursor: copy_mode.Point = if (pane.cursor.visible)
+            .{ .x = pane.cursor.x, .y = pane.scroll.offset + pane.cursor.y }
+        else
+            .{ .x = 0, .y = pane.scroll.offset + pane.buffer.h -| 1 };
+        model.copy_state = copy_mode.State.init(pane.id, cursor, pane.scroll.offset);
+        model.copy_revision +%= 1;
+        return true;
+    }
+
+    /// Plans one copy-mode command without mutating state or performing
+    /// runtime effects. Missing targets plan a local exit.
+    ///
+    /// ```zig
+    /// const plan = model.planCopyMode(.{ .key = key }) orelse return;
+    /// ```
+    pub fn planCopyMode(model: *const Model, command: CopyModeCommand) ?CopyModePlan {
+        const previous = model.copy_state orelse return null;
+        const active = model.workspace.activeConst() orelse return model.planCopyModeExit(previous, null);
+        const pane = active.model.findConst(previous.pane_id) orelse
+            return model.planCopyModeExit(previous, null);
+        var next = previous;
+
+        switch (command) {
+            .key => |pressed| {
+                const effect = copy_mode.applyKey(&next, pressed, &pane.buffer, pane.scroll);
+                if (!effect.handled) {
+                    return null;
+                }
+                if (effect.exit) {
+                    const selection: ?schema.CopySelection = if (effect.copy and next.anchor != null) .{
+                        .pane_id = next.pane_id,
+                        .start_x = next.anchor.?.x,
+                        .start_y = next.anchor.?.y,
+                        .end_x = next.cursor.x,
+                        .end_y = next.cursor.y,
+                        .linewise = next.linewise,
+                    } else null;
+
+                    return model.planCopyModeExit(previous, selection);
+                }
+            },
+            .vertical => |delta| next.vertical(delta, pane.scroll, pane.buffer.h),
+            .leave => return model.planCopyModeExit(previous, null),
+        }
+
+        if (std.meta.eql(previous, next)) {
+            return null;
+        }
+
+        return .{
+            .expected_revision = model.copy_revision,
+            .previous = previous,
+            .next = next,
+            .viewport = copyModeViewport(pane, next.viewport_offset),
+        };
+    }
+
+    /// Commits a current copy-mode plan and returns the post-commit runtime
+    /// synchronization. Stale plans leave state untouched.
+    ///
+    /// ```zig
+    /// const commit = model.commitCopyMode(plan) orelse return;
+    /// ```
+    pub fn commitCopyMode(model: *Model, plan: CopyModePlan) ?CopyModeCommit {
+        if (model.copy_revision != plan.expected_revision) {
+            return null;
+        }
+
+        const current = model.copy_state orelse return null;
+        if (!std.meta.eql(current, plan.previous)) {
+            return null;
+        }
+
+        if (plan.next) |next| {
+            const active = model.workspace.active() orelse return null;
+            if (active.model.find(next.pane_id) == null) {
+                return null;
+            }
+        }
+
+        if (plan.viewport) |viewport| {
+            const active = model.workspace.active() orelse return null;
+            const pane = active.model.find(viewport.pane_id) orelse return null;
+            if (viewport.offset > pane.scroll.maxOffset(pane.buffer.h)) {
+                return null;
+            }
+
+            pane.scroll.offset = viewport.offset;
+            active.model.composition_invalidated = true;
+        }
+
+        model.copy_state = plan.next;
+        model.copy_revision +%= 1;
+
+        return .{
+            .active = plan.next != null,
+            .viewport = plan.viewport,
+            .copy_revision = model.copy_revision,
+        };
+    }
+
+    /// Releases copy mode only when it targets the retired pane.
+    ///
+    /// ```zig
+    /// _ = model.releaseCopyMode(pane_id);
+    /// ```
+    pub fn releaseCopyMode(model: *Model, pane_id: schema.PaneId) bool {
+        const state = model.copy_state orelse return false;
+        if (state.pane_id != pane_id) {
+            return false;
+        }
+
+        model.copy_state = null;
+        model.copy_revision +%= 1;
+        return true;
+    }
+
+    /// Reconciles one active copy cursor with an applied runtime frame.
+    /// Unrelated and semantically unchanged frames preserve the revision.
+    ///
+    /// ```zig
+    /// _ = model.reconcileCopyModeFrame(command);
+    /// ```
+    pub fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrame) bool {
+        const state = model.copy_state orelse return false;
+        if (state.pane_id != command.pane_id) {
+            return false;
+        }
+
+        var next = state;
+        copy_mode.onFrame(&next, command.previous_offset, command.scroll);
+        if (std.meta.eql(state, next)) {
+            return false;
+        }
+
+        model.copy_state = next;
+        model.copy_revision +%= 1;
+        return true;
+    }
+
+    fn planCopyModeExit(model: *const Model, previous: copy_mode.State, selection: ?schema.CopySelection) CopyModePlan {
+        const pane = if (model.workspace.activeConst()) |active|
+            active.model.findConst(previous.pane_id)
+        else
+            null;
+        const viewport = if (pane) |target|
+            copyModeViewport(target, previous.entry_offset)
+        else
+            null;
+
+        return .{
+            .expected_revision = model.copy_revision,
+            .previous = previous,
+            .next = null,
+            .selection = selection,
+            .viewport = viewport,
+        };
+    }
+
     /// Returns the active tab identity without exposing workspace storage.
     ///
     /// ```zig
@@ -485,6 +724,7 @@ pub const Model = struct {
     pub fn departWorkspace(model: *Model) WorkspaceDeparture {
         const departure = captureWorkspace(model);
         if (departure.source == null) {
+            releaseInvalidCopyMode(model);
             return departure;
         }
 
@@ -503,6 +743,7 @@ pub const Model = struct {
         if (had_visible_panes) {
             model.panes_revision +%= 1;
         }
+        releaseInvalidCopyMode(model);
 
         return departure;
     }
@@ -528,6 +769,7 @@ pub const Model = struct {
         model.tabs_revision +%= 1;
         model.active_tab_revision +%= 1;
         model.panes_revision +%= 1;
+        releaseInvalidCopyMode(model);
     }
 
     /// Replaces the current projection with one runtime-created workspace in
@@ -558,6 +800,7 @@ pub const Model = struct {
         model.tabs_revision +%= 1;
         model.active_tab_revision +%= 1;
         model.panes_revision +%= 1;
+        releaseInvalidCopyMode(model);
 
         return .{
             .departure = departure,
@@ -646,6 +889,7 @@ pub const Model = struct {
         if (reconciliation.active_tab_changed) {
             model.active_tab_revision +%= 1;
         }
+        releaseInvalidCopyMode(model);
 
         return reconciliation;
     }
@@ -1055,6 +1299,7 @@ pub const Model = struct {
         _ = try model.workspace.addCreated(command.created, command.size);
         model.tabs_revision +%= 1;
         model.active_tab_revision +%= 1;
+        releaseInvalidCopyMode(model);
 
         return .{
             .previous = previous,
@@ -1098,6 +1343,7 @@ pub const Model = struct {
         if (was_active) {
             model.active_tab_revision +%= 1;
         }
+        releaseInvalidCopyMode(model);
 
         return .{
             .removed = command.location,
@@ -1134,10 +1380,33 @@ pub const Model = struct {
             .selected = model.workspace.activeConst().?.location,
         };
         model.active_tab_revision +%= 1;
+        releaseInvalidCopyMode(model);
 
         return selection;
     }
 };
+
+fn copyModeViewport(pane: *const multiplexer.Pane, wanted: u32) ?CopyModeViewport {
+    const offset = @min(wanted, pane.scroll.maxOffset(pane.buffer.h));
+    if (pane.scroll.offset == offset) {
+        return null;
+    }
+
+    return .{ .pane_id = pane.id, .offset = offset };
+}
+
+fn releaseInvalidCopyMode(model: *Model) void {
+    const state = model.copy_state orelse return;
+    const active = model.workspace.activeConst() orelse {
+        _ = model.releaseCopyMode(state.pane_id);
+        return;
+    };
+    if (active.model.findConst(state.pane_id) != null) {
+        return;
+    }
+
+    _ = model.releaseCopyMode(state.pane_id);
+}
 
 fn captureWorkspace(model: *Model) WorkspaceDeparture {
     const source = model.workspace.workspace orelse return .{};
@@ -1203,6 +1472,133 @@ fn testingWorkspaceSnapshot(buffer: []u8, snapshot: schema.WorkspaceSnapshot) !s
 
 fn testingTabSnapshot(buffer: []u8, snapshot: schema.TabSnapshot) !schema.TabSnapshotView {
     return (try schema.decodeServer(try schema.encodeTabSnapshot(buffer, snapshot))).tab_snapshot;
+}
+
+test "copy mode entry owns one independent model revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.scroll = .{ .total_rows = 15, .offset = 10 };
+    pane.cursor = .{ .visible = true, .x = 4, .y = 2 };
+
+    try std.testing.expect(model.enterCopyMode());
+
+    try std.testing.expect(model.copyModeActive());
+    try std.testing.expectEqualDeep(CopyModeProjection{
+        .pane_id = pane_id,
+        .view = .{
+            .cursor = .{ .x = 4, .y = 12 },
+            .anchor = null,
+            .linewise = false,
+        },
+    }, model.copyModeProjection().?);
+    try std.testing.expectEqualDeep(Version{ .copy = 1 }, model.version());
+    try std.testing.expect(!model.enterCopyMode());
+    try std.testing.expectEqualDeep(Version{ .copy = 1 }, model.version());
+
+    const leave = model.planCopyMode(.leave).?;
+    _ = model.commitCopyMode(leave).?;
+    model.name_prompt.begin(.create_workspace);
+    const copy_revision = model.version().copy;
+
+    try std.testing.expect(!model.enterCopyMode());
+    try std.testing.expectEqual(copy_revision, model.version().copy);
+}
+
+test "copy mode plans reject no-ops and stale commits" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.enterCopyMode());
+    const version = model.version();
+
+    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("left") }) == null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("z") }) == null);
+    try std.testing.expectEqualDeep(version, model.version());
+
+    const first = model.planCopyMode(.{ .key = try keybind.parseKey("right") }).?;
+    const stale = model.planCopyMode(.{ .key = try keybind.parseKey("right") }).?;
+    const commit = model.commitCopyMode(first).?;
+
+    try std.testing.expect(commit.active);
+    try std.testing.expectEqual(version.copy + 1, commit.copy_revision);
+    try std.testing.expect(model.commitCopyMode(stale) == null);
+    try std.testing.expectEqual(version.copy + 1, model.version().copy);
+}
+
+test "copy mode frame reconciliation and pane release are exact" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.scroll = .{ .total_rows = 15, .offset = 10 };
+    pane.cursor = .{ .visible = true, .x = 2, .y = 4 };
+    try std.testing.expect(model.enterCopyMode());
+    const version = model.version();
+
+    try std.testing.expect(!model.reconcileCopyModeFrame(.{
+        .pane_id = @enumFromInt(2),
+        .previous_offset = 10,
+        .scroll = .{ .total_rows = 10, .offset = 5 },
+    }));
+    try std.testing.expect(model.reconcileCopyModeFrame(.{
+        .pane_id = pane_id,
+        .previous_offset = 10,
+        .scroll = .{ .total_rows = 10, .offset = 5 },
+    }));
+
+    try std.testing.expectEqual(version.copy + 1, model.version().copy);
+    try std.testing.expectEqual(@as(u32, 9), model.copyModeProjection().?.view.cursor.y);
+    try std.testing.expect(!model.reconcileCopyModeFrame(.{
+        .pane_id = pane_id,
+        .previous_offset = 5,
+        .scroll = .{ .total_rows = 10, .offset = 5 },
+    }));
+    try std.testing.expect(!model.releaseCopyMode(@enumFromInt(2)));
+    try std.testing.expect(model.releaseCopyMode(pane_id));
+    try std.testing.expect(!model.copyModeActive());
+    try std.testing.expectEqual(version.copy + 2, model.version().copy);
+}
+
+test "an active tab transition releases copy authority" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    _ = try model.workspace.addCreated(.{
+        .location = second,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model.enterCopyMode());
+    const version = model.version();
+
+    const selection = (try model.selectTab(.{ .tab_id = second.tab_id })).?;
+
+    try std.testing.expectEqualDeep(first, selection.previous);
+    try std.testing.expectEqualDeep(second, selection.selected);
+    try std.testing.expect(!model.copyModeActive());
+    try std.testing.expectEqual(version.active_tab + 1, model.version().active_tab);
+    try std.testing.expectEqual(version.copy + 1, model.version().copy);
 }
 
 test "workspace creation planning requires the attached focused pane" {

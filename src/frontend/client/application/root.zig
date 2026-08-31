@@ -3,6 +3,7 @@
 pub const attach_pane = @import("attach_pane.zig");
 pub const close_pane = @import("close_pane.zig");
 pub const close_tab = @import("close_tab.zig");
+pub const copy_mode = @import("copy_mode.zig");
 pub const create_tab = @import("create_tab.zig");
 pub const create_workspace = @import("create_workspace.zig");
 pub const focus_pane = @import("focus_pane.zig");
@@ -24,6 +25,7 @@ test {
     _ = attach_pane;
     _ = close_pane;
     _ = close_tab;
+    _ = copy_mode;
     _ = create_tab;
     _ = create_workspace;
     _ = focus_pane;

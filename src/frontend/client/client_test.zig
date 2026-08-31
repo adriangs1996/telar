@@ -32,6 +32,16 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
+    try std.testing.expectEqual(expected.copy, actual.copy);
+}
+
+fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+    try std.testing.expectEqual(expected.workspace, actual.workspace);
+    try std.testing.expectEqual(expected.tabs, actual.tabs);
+    try std.testing.expectEqual(expected.active_tab, actual.active_tab);
+    try std.testing.expectEqual(expected.panes, actual.panes);
+    try std.testing.expectEqual(expected.chrome, actual.chrome);
+    try std.testing.expectEqual(expected.prompt, actual.prompt);
 }
 
 // ---------------------------------------------------------------------------
@@ -681,7 +691,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
         client.view.workbench(),
     );
     try client.syncPaneFocus(model);
-    client.mode = .{ .copy = .init(retired, .{ .x = 0, .y = 0 }, 0) };
+    try std.testing.expect(client.model.enterCopyMode());
     client.paste_pane = retired;
     try client.graphics_store.applyImage(.{
         .pane_id = retired,
@@ -711,7 +721,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
 
     try std.testing.expect(client.model.workspace.findPane(retired) == null);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(retired));
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.paste_pane == null);
     try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
     try std.testing.expect(client.requests.take(@enumFromInt(91)).? == .ignored);
@@ -2015,7 +2025,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .height = 1,
         .byte_len = 3,
     } });
-    client.mode = .{ .copy = .init(@enumFromInt(20), .{ .x = 0, .y = 0 }, 0) };
+    try std.testing.expect(client.model.enterCopyMode());
     client.paste_pane = @enumFromInt(20);
     try std.testing.expect(client.graphics_store.hasPaneGraphics(@enumFromInt(20)));
     const version_before_close = client.model.version();
@@ -2040,7 +2050,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(version_before_close.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_close, client.presenter.pending_updates);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(@enumFromInt(20)));
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.paste_pane == null);
 
     try client.observeModel();
@@ -2859,7 +2869,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(requested == .close_pane);
     try std.testing.expectEqual(closing_pane, requested.close_pane.pane_id);
     try std.testing.expect(requested.close_pane.request_id != .none);
-    client.mode = .{ .copy = .init(closing_pane, .{ .x = 0, .y = 0 }, 0) };
+    try std.testing.expect(client.model.enterCopyMode());
 
     var payload: [128]u8 = undefined;
     const exited = try schema.encodePaneExited(&payload, .{
@@ -2873,7 +2883,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_request, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.requests.count);
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.paste_pane == null);
     try std.testing.expectEqual(@as(?schema.PaneId, TestHarness.bootstrap_pane), client.reported_focus);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(closing_pane));
@@ -2900,7 +2910,7 @@ test "an unrequested pane exit removes the pane silently" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.mode = .{ .copy = .init(TestHarness.bootstrap_pane, .{ .x = 0, .y = 0 }, 0) };
+    try std.testing.expect(client.model.enterCopyMode());
     client.paste_pane = TestHarness.bootstrap_pane;
     try client.graphics_store.applyImage(.{
         .pane_id = TestHarness.bootstrap_pane,
@@ -2928,7 +2938,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.paste_pane == null);
     try std.testing.expectEqual(@as(?schema.PaneId, null), client.reported_focus);
     try std.testing.expect(!client.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
@@ -3267,16 +3277,72 @@ test "copy mode round trip: enter, select, copy, leave" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.scroll = .{ .total_rows = 30, .offset = 6 };
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
 
     var handler: InputHandler = .{ .client = client };
     try std.testing.expectEqual(keybind.Control.continue_routing, try handler.applyNativeAction(.enter_copy_mode));
-    try std.testing.expect(client.mode == .copy);
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(!handler.capturesKeys());
+    try std.testing.expect(!name_prompts.beginActiveTabRename(client));
+    try std.testing.expect(!client.model.name_prompt.active());
+    try expectNonCopyVersionEqual(version_before, client.model.version());
+    try std.testing.expectEqual(version_before.copy + 1, client.model.version().copy);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(pane.copy_view == null);
+    try std.testing.expect(!handler.redraw);
+
+    try client.observeModel();
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(pane.copy_view != null);
+    try std.testing.expectEqualDeep(client.model.copyModeProjection(), client.presenter.presented_copy_mode);
+    const painted_cursor_y = pane.copy_view.?.cursor.y;
+
+    const pane_view = client.model.workspace.active().?.model.viewForPane(
+        pane.id,
+        client.view.workbench(),
+    ).?;
+    const mouse_version = client.model.version();
+    try handler.mouse(.{
+        .x = pane_view.content.x,
+        .y = pane_view.content.y,
+        .kind = .press,
+    });
+    try std.testing.expectEqualDeep(mouse_version, client.model.version());
+    try handler.mouse(.{
+        .x = pane_view.content.x,
+        .y = pane_view.content.y,
+        .kind = .scroll_up,
+    });
+    try std.testing.expectEqual(mouse_version.copy + 1, client.model.version().copy);
+    try std.testing.expectEqual(painted_cursor_y - 3, client.model.copyModeProjection().?.view.cursor.y);
+    try std.testing.expectEqual(painted_cursor_y, pane.copy_view.?.cursor.y);
+    try std.testing.expect(!handler.redraw);
 
     // While in copy mode, keys route to the selection, not the pane.
     try handler.key(try keybind.parseKey("v"));
     try handler.key(try keybind.parseKey("l"));
+    try std.testing.expectEqual(@as(u16, 0), pane.copy_view.?.cursor.x);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(@as(u16, 1), pane.copy_view.?.cursor.x);
+    try std.testing.expect(pane.copy_view.?.anchor != null);
+
+    const version_before_copy = client.model.version();
     try handler.key(try keybind.parseKey("enter"));
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
+    try expectNonCopyVersionEqual(version_before_copy, client.model.version());
+    try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
+    try std.testing.expect(pane.copy_view != null);
+    try client.observeModel();
+    try harness.settleModelPresentation();
+    try std.testing.expect(pane.copy_view == null);
+    try std.testing.expect(client.presenter.presented_copy_mode == null);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -3292,6 +3358,33 @@ test "copy mode round trip: enter, select, copy, leave" {
             else => return error.UnexpectedClientMessage,
         }
     }
+}
+
+test "a full outbox keeps copy mode and its selection active" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    while (client.outbox.hasCapacity()) {
+        try client.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    }
+
+    var handler: InputHandler = .{ .client = client };
+    _ = try handler.applyNativeAction(.enter_copy_mode);
+    try handler.key(try keybind.parseKey("v"));
+    const version = client.model.version();
+
+    try std.testing.expectError(
+        error.ClientOutboxFull,
+        handler.key(try keybind.parseKey("enter")),
+    );
+
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(client.model.copyModeProjection().?.view.anchor != null);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.outbox.len));
+    try std.testing.expect(!handler.redraw);
 }
 
 test "workspace rename separates prompt submission canonical commit and presentation" {
@@ -3320,7 +3413,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     var handler: InputHandler = .{ .client = client };
     try handler.forward("mainx\r");
 
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("", client.model.workspace.workspaceName());
     try expectNonPromptVersionEqual(version_before_request, client.model.version());
@@ -3395,7 +3488,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     var handler: InputHandler = .{ .client = client };
     try handler.forward("x\r");
 
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
@@ -3403,7 +3496,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try handler.forward("\x1b");
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
 }
 
@@ -3423,7 +3516,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
 
     try handler.forward("x");
     try handler.forward("\r");
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualStrings("main", client.model.workspace.activeConst().?.labelSlice());
     try expectNonPromptVersionEqual(version_before_request, client.model.version());
@@ -3557,7 +3650,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     var handler: InputHandler = .{ .client = client };
     try handler.forward("x\r");
 
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
@@ -3565,7 +3658,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
     try handler.forward("\x1b");
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
 }
 
@@ -3586,7 +3679,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
 
     try std.testing.expectError(error.ClientOutboxFull, handler.forward("x\r"));
 
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.requests.has(.tab_operation));
     try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.outbox.len));
@@ -3605,9 +3698,9 @@ test "escaping the prompt editor closes model state without changing mode" {
 
     try std.testing.expect(name_prompts.beginWorkspaceCreate(client));
     try std.testing.expect(client.model.name_prompt.active());
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     var handler: InputHandler = .{ .client = client };
     try handler.forward("\x1b");
-    try std.testing.expect(client.mode == .normal);
+    try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
 }

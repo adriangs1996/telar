@@ -6,11 +6,9 @@
 const std = @import("std");
 const core = @import("telar-core");
 const graphics = @import("../graphics/root.zig");
-const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const client_requests = @import("requests.zig");
 const widgets = @import("../widgets/root.zig");
-const copy_mode = input_capability.copy_mode;
 const term = presentation.screen;
 
 const Io = std.Io;
@@ -529,13 +527,11 @@ fn handlePaneFrame(client: *Client, frame: schema.frame.FrameView) !void {
         std.meta.eql(client.model.workspace.active().?.location, tab.location);
     if (client.graphics_store.paneVisible(frame.pane_id) != should_show_graphics)
         try client.graphics_store.setPaneVisible(frame.pane_id, should_show_graphics);
-    if (client.mode == .copy) {
-        const state = &client.mode.copy;
-        if (state.pane_id == frame.pane_id) {
-            copy_mode.onFrame(state, previous_scroll_offset, frame.scroll);
-            tab.model.setPaneCopyView(frame.pane_id, state.view());
-        }
-    }
+    _ = client.model.reconcileCopyModeFrame(.{
+        .pane_id = frame.pane_id,
+        .previous_offset = previous_scroll_offset,
+        .scroll = frame.scroll,
+    });
     if (comptime diagnostics.enabled) {
         client.metrics.frames += 1;
         client.metrics.frame_cells += applied.cells;

@@ -12,9 +12,7 @@ const schema = core.schema;
 /// release(client, pane_id);
 /// ```
 pub fn release(client: *Client, pane_id: schema.PaneId) void {
-    if (client.mode == .copy and client.mode.copy.pane_id == pane_id) {
-        client.mode = .normal;
-    }
+    _ = client.model.releaseCopyMode(pane_id);
 
     if (client.paste_pane == pane_id) {
         client.paste_pane = null;

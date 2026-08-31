@@ -17,7 +17,6 @@ const client_view = @import("view.zig");
 const client_model = @import("model.zig");
 const lua_config = @import("../config/root.zig");
 const sound_mod = @import("../sound.zig");
-const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
 const mouse_protocol = input_capability.mouse_protocol;
@@ -146,13 +145,6 @@ pub const initial_request_id: schema.RequestId = @enumFromInt(1);
 
 const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
 
-/// Which non-modal consumer owns host input. The model-owned name prompt is
-/// checked before this mode because its active state is its routing authority.
-const Mode = union(enum) {
-    normal,
-    copy: copy_mode.State,
-};
-
 /// The platform resources a client cannot fabricate: everything else it
 /// owns. Substituting these — a pipe for the tty's read handle, a
 /// fixed-buffer writer, a scripted socket peer — is what makes the client
@@ -204,7 +196,6 @@ sound_config: lua_config.SoundConfig,
 plugin_pending: bool = false,
 attachment_capture: attachments.CaptureState = .{},
 paste_pane: ?schema.PaneId = null,
-mode: Mode = .normal,
 
 input_read_pending: bool = false,
 next_request_id: u64 = 2,
@@ -1101,10 +1092,7 @@ pub fn statusMode(client: *const Client) widgets.status_bar.Mode {
         }
         return .{ .prefix = hints };
     }
-    return switch (client.mode) {
-        .copy => .copy,
-        .normal => .normal,
-    };
+    return if (client.model.copyModeActive()) .copy else .normal;
 }
 
 fn syncPrefixStatus(

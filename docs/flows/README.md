@@ -7,6 +7,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 
 | Flow | Trigger | Visible result | Proof |
 | --- | --- | --- | --- |
+| [Copy mode](copy-mode.md) | User enters scrollback, moves or selects text | Model-owned copy state is projected on a paced frame, and an accepted selection reaches the runtime | Pure-state, model, effect-order, backpressure and presenter tests |
 | [Host input to screen](host-input-to-screen.md) | Bytes arrive from the host TTY | A Telar action is consumed, or child output is presented | Input router unit tests and transport integration tests |
 | [Name prompt](name-prompt.md) | User opens, edits, cancels or submits a naming prompt | One model-owned editor is presented, or its accepted intent reaches the matching request use case | State, effect-order, input-adapter and presenter tests |
 | [Pane launch](../adr/0001-pane-launch-is-a-runtime-transaction.md) | Client sends an open/create request | A running runtime pane is confirmed to the client | Launch fault-injection integration test |

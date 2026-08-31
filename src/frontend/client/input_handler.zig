@@ -14,6 +14,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_splits = @import("pane_splits.zig");
+const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
 const tab_attachments = @import("tab_attachments.zig");
@@ -24,7 +25,6 @@ const tab_selections = @import("tab_selections.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 const workspace_list_toggles = @import("workspace_list_toggles.zig");
 const action_mod = input_capability.action;
-const copy_mode = input_capability.copy_mode;
 const input_mod = input_capability.host;
 const keybind = input_capability.keybind;
 const mouse_protocol = input_capability.mouse_protocol;
@@ -123,16 +123,14 @@ pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
         _ = try name_prompts.handleInput(handler.client, bytes);
         return;
     }
-
-    switch (handler.client.mode) {
-        .copy => {},
-        .normal => {
-            const model = handler.activeModel() orelse return;
-            const pane = model.focusedPane() orelse return;
-            if (!pane.attached) return;
-            try handler.sendPaneBytes(pane, bytes);
-        },
+    if (handler.client.model.copyModeActive()) {
+        return;
     }
+
+    const model = handler.activeModel() orelse return;
+    const pane = model.focusedPane() orelse return;
+    if (!pane.attached) return;
+    try handler.sendPaneBytes(pane, bytes);
 }
 
 pub fn key(handler: *InputHandler, value: keybind.Key) !void {
@@ -149,23 +147,22 @@ pub fn key(handler: *InputHandler, value: keybind.Key) !void {
         );
         return;
     }
+    if (handler.client.model.copyModeActive()) {
+        _ = try copy_modes.key(handler.client, value);
+        return;
+    }
 
-    switch (handler.client.mode) {
-        .copy => try handler.copyModeKey(value),
-        .normal => {
-            const model = handler.activeModel() orelse return;
-            const pane = model.focusedPane() orelse return;
-            if (!pane.attached) return;
-            var encoded: [32]u8 = undefined;
-            try handler.sendPaneBytes(
-                pane,
-                try input_mod.encodeKey(&encoded, value, pane.input_modes),
-            );
-            if (isClipboardImagePasteKey(value)) {
-                if (handler.client.view.focusedAttachmentTarget(model)) |target|
-                    handler.client.scheduleAttachmentCapture(target) catch {};
-            }
-        },
+    const model = handler.activeModel() orelse return;
+    const pane = model.focusedPane() orelse return;
+    if (!pane.attached) return;
+    var encoded: [32]u8 = undefined;
+    try handler.sendPaneBytes(
+        pane,
+        try input_mod.encodeKey(&encoded, value, pane.input_modes),
+    );
+    if (isClipboardImagePasteKey(value)) {
+        if (handler.client.view.focusedAttachmentTarget(model)) |target|
+            handler.client.scheduleAttachmentCapture(target) catch {};
     }
 }
 
@@ -174,6 +171,10 @@ fn isClipboardImagePasteKey(value: keybind.Key) bool {
 }
 
 fn sendPaste(handler: *InputHandler, text: []const u8) !void {
+    if (handler.client.model.copyModeActive()) {
+        return;
+    }
+
     const model = handler.activeModel() orelse return;
     const pane = model.focusedPane() orelse return;
     if (!pane.attached) return;
@@ -190,18 +191,16 @@ pub fn pasteStart(handler: *InputHandler) !void {
         _ = try name_prompts.handleInput(handler.client, "\x1b[200~");
         return;
     }
-
-    switch (handler.client.mode) {
-        .copy => {},
-        .normal => {
-            const model = handler.activeModel() orelse return;
-            const pane = model.focusedPane() orelse return;
-            if (!pane.attached) return;
-            handler.client.paste_pane = pane.id;
-            if (pane.input_modes.bracketed_paste)
-                try handler.sendPaneBytes(pane, "\x1b[200~");
-        },
+    if (handler.client.model.copyModeActive()) {
+        return;
     }
+
+    const model = handler.activeModel() orelse return;
+    const pane = model.focusedPane() orelse return;
+    if (!pane.attached) return;
+    handler.client.paste_pane = pane.id;
+    if (pane.input_modes.bracketed_paste)
+        try handler.sendPaneBytes(pane, "\x1b[200~");
 }
 
 pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
@@ -210,15 +209,13 @@ pub fn pasteContent(handler: *InputHandler, text: []const u8) !void {
         _ = try name_prompts.handleInput(handler.client, text);
         return;
     }
-
-    switch (handler.client.mode) {
-        .copy => {},
-        .normal => {
-            const pane_id = handler.client.paste_pane orelse return;
-            const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
-            if (pane.attached) try handler.sendPaneBytes(pane, text);
-        },
+    if (handler.client.model.copyModeActive()) {
+        return;
     }
+
+    const pane_id = handler.client.paste_pane orelse return;
+    const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
+    if (pane.attached) try handler.sendPaneBytes(pane, text);
 }
 
 pub fn pasteEnd(handler: *InputHandler) !void {
@@ -227,17 +224,15 @@ pub fn pasteEnd(handler: *InputHandler) !void {
         _ = try name_prompts.handleInput(handler.client, "\x1b[201~");
         return;
     }
-
-    switch (handler.client.mode) {
-        .copy => {},
-        .normal => {
-            const pane_id = handler.client.paste_pane orelse return;
-            handler.client.paste_pane = null;
-            const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
-            if (pane.attached and pane.input_modes.bracketed_paste)
-                try handler.sendPaneBytes(pane, "\x1b[201~");
-        },
+    if (handler.client.model.copyModeActive()) {
+        return;
     }
+
+    const pane_id = handler.client.paste_pane orelse return;
+    handler.client.paste_pane = null;
+    const pane = handler.client.model.workspace.findPane(pane_id) orelse return;
+    if (pane.attached and pane.input_modes.bracketed_paste)
+        try handler.sendPaneBytes(pane, "\x1b[201~");
 }
 
 fn sendPaneBytes(
@@ -274,76 +269,6 @@ fn setViewport(handler: *InputHandler, pane: *multiplexer.Pane, offset: u32) !vo
     handler.redraw = true;
 }
 
-fn enterCopyMode(handler: *InputHandler) !void {
-    if (handler.client.mode != .normal) return;
-    const model = handler.activeModel() orelse return;
-    const pane = model.focusedPane() orelse return;
-    if (!pane.attached) return;
-    const cursor: copy_mode.Point = if (pane.cursor.visible)
-        .{ .x = pane.cursor.x, .y = pane.scroll.offset + pane.cursor.y }
-    else
-        .{ .x = 0, .y = pane.scroll.offset + pane.buffer.h -| 1 };
-    handler.client.mode = .{ .copy = .init(pane.id, cursor, pane.scroll.offset) };
-    model.setPaneCopyView(pane.id, handler.client.mode.copy.view());
-    handler.client.view.invalidate();
-    handler.redraw = true;
-}
-
-fn leaveCopyMode(handler: *InputHandler, copy: bool) !void {
-    const state = switch (handler.client.mode) {
-        .copy => |value| value,
-        else => return,
-    };
-    const model = handler.activeModel() orelse {
-        handler.client.mode = .normal;
-        handler.client.view.invalidate();
-        handler.redraw = true;
-        return;
-    };
-    const pane = model.find(state.pane_id);
-    if (copy and state.anchor != null) {
-        const anchor = state.anchor.?;
-        try handler.client.enqueue(.{ .copy_selection = .{
-            .pane_id = state.pane_id,
-            .start_x = anchor.x,
-            .start_y = anchor.y,
-            .end_x = state.cursor.x,
-            .end_y = state.cursor.y,
-            .linewise = state.linewise,
-        } });
-    }
-    if (pane) |value| {
-        model.setPaneCopyView(value.id, null);
-        try handler.setViewport(value, state.entry_offset);
-    }
-    handler.client.mode = .normal;
-    model.composition_invalidated = true;
-    handler.client.view.invalidate();
-    handler.redraw = true;
-}
-
-fn copyModeKey(handler: *InputHandler, pressed: keybind.Key) !void {
-    const state = &handler.client.mode.copy;
-    const model = handler.activeModel() orelse {
-        handler.client.mode = .normal;
-        handler.client.view.invalidate();
-        handler.redraw = true;
-        return;
-    };
-    const pane = model.find(state.pane_id) orelse {
-        handler.client.mode = .normal;
-        handler.client.view.invalidate();
-        handler.redraw = true;
-        return;
-    };
-    const effect = copy_mode.applyKey(state, pressed, &pane.buffer, pane.scroll);
-    if (effect.exit) return handler.leaveCopyMode(effect.copy);
-    if (!effect.handled) return;
-    model.setPaneCopyView(pane.id, state.view());
-    try handler.setViewport(pane, state.viewport_offset);
-    handler.redraw = true;
-}
-
 pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     if (comptime diagnostics.enabled) handler.client.metrics.mouse_events += 1;
     if (handler.client.model.name_prompt.active()) {
@@ -364,6 +289,10 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
             std.math.maxInt(u16);
     }
     const model = handler.activeModel() orelse return;
+    if (try handler.copyModeMouse(cell_event, model)) {
+        return;
+    }
+
     const interaction = handler.client.view.handleMouse(cell_event, monotonic(handler.client.io));
     if (interaction.toggle_sidebar) {
         try handler.toggleSidebar();
@@ -382,9 +311,7 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         try handler.focusPane(.{ .pane_id = pane_id });
     }
     if (interaction.rename_tab) |tab_id| {
-        if (handler.client.mode == .normal) {
-            _ = name_prompts.beginTabRename(handler.client, tab_id);
-        }
+        _ = name_prompts.beginTabRename(handler.client, tab_id);
     }
     if (interaction.select_workspace) |workspace| try handler.switchWorkspace(workspace);
     if (interaction.notification_target) |target| switch (target) {
@@ -420,16 +347,6 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     const pane_view = model.viewForPane(pane.id, handler.client.view.workbench()) orelse return;
     if (!pane_view.content.contains(cell_event.x, cell_event.y)) return;
     if (wheel_delta) |delta| {
-        if (handler.client.mode == .copy) {
-            const state = &handler.client.mode.copy;
-            if (state.pane_id == pane.id) {
-                state.vertical(delta, pane.scroll, pane.buffer.h);
-                model.setPaneCopyView(pane.id, state.view());
-                try handler.setViewport(pane, state.viewport_offset);
-                handler.redraw = true;
-                return;
-            }
-        }
         if (!pane.mouse.sgr or !mouseTracked(pane.mouse.tracking, cell_event.kind)) {
             if (pane.input_modes.alternate_screen and pane.input_modes.alternate_scroll and
                 pane.scroll.atBottom(pane.buffer.h))
@@ -466,6 +383,30 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
         exact_y,
     );
     try handler.client.enqueueInput(pane.id, bytes);
+}
+
+fn copyModeMouse(handler: *InputHandler, event: term.Event.Mouse, model: *multiplexer.Model) !bool {
+    if (!handler.client.model.copyModeActive()) {
+        return false;
+    }
+
+    const delta: i32 = switch (event.kind) {
+        .scroll_up => -3,
+        .scroll_down => 3,
+        else => return true,
+    };
+    const projection = handler.client.model.copyModeProjection() orelse return true;
+    const pane = model.find(projection.pane_id) orelse {
+        _ = try copy_modes.leave(handler.client);
+        return true;
+    };
+    const pane_view = model.viewForPane(pane.id, handler.client.view.workbench()) orelse return true;
+    if (!pane_view.content.contains(event.x, event.y)) {
+        return true;
+    }
+
+    _ = try copy_modes.vertical(handler.client, delta);
+    return true;
 }
 
 pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalResponse) !void {
@@ -584,8 +525,11 @@ pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
 pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control {
     switch (value) {
         .enter_copy_mode => {},
-        else => if (handler.client.mode == .copy)
-            try handler.leaveCopyMode(false),
+        else => {
+            if (handler.client.model.copyModeActive()) {
+                _ = try copy_modes.leave(handler.client);
+            }
+        },
     }
     switch (value) {
         .split_pane => |direction| try handler.beginSplit(switch (direction) {
@@ -625,7 +569,7 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
             while (tabs.next()) |tab| try tab_attachments.detach(handler.client, tab);
             return .stop;
         },
-        .enter_copy_mode => try handler.enterCopyMode(),
+        .enter_copy_mode => _ = copy_modes.enter(handler.client),
         .notification => |*notification| {
             const request_id = try handler.client.nextId();
             try handler.client.enqueueNotificationRequest(.{

@@ -40,6 +40,7 @@ screen: term.Screen,
 pacer: pace.Pacer = .{},
 observed_model_version: client_model.Version = .{},
 presented_model_version: client_model.Version = .{},
+presented_copy_mode: ?client_model.CopyModeProjection = null,
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
 media_tick_pending: bool = false,
@@ -136,6 +137,14 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.chrome;
     const prompt_changed = presenter.presented_model_version.prompt !=
         presenter.observed_model_version.prompt;
+    const copy_changed = presenter.presented_model_version.copy !=
+        presenter.observed_model_version.copy;
+    const copy_projection = client.model.copyModeProjection();
+    const copy_status_changed = (presenter.presented_copy_mode == null) !=
+        (copy_projection == null);
+    if (copy_changed) {
+        projectCopyMode(&client.model, presenter.presented_copy_mode, copy_projection);
+    }
     if (chrome_changed) {
         client.view.setSidebarVisible(client.model.sidebarVisible());
         client.view.setWorkspaceListCollapsed(client.model.workspaceListCollapsed());
@@ -144,7 +153,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         client.view.clearHover();
     }
     if (workspace_changed or tabs_changed or active_tab_changed or panes_changed or chrome_changed or
-        prompt_changed)
+        prompt_changed or copy_status_changed)
     {
         client.view.invalidate();
     }
@@ -159,6 +168,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     else
         try presenter.presentEmpty(client);
     presenter.presented_model_version = presenter.observed_model_version;
+    presenter.presented_copy_mode = copy_projection;
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
     presenter.pending_updates = 0;
@@ -172,6 +182,22 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
             );
     }
     if (model != null and presenter.mediaWorkPending(client)) try presenter.requestMedia();
+}
+
+fn projectCopyMode(model: *client_model.Model, previous: ?client_model.CopyModeProjection, next: ?client_model.CopyModeProjection) void {
+    if (previous) |projection| {
+        if (next == null or next.?.pane_id != projection.pane_id) {
+            if (model.workspace.tabForPane(projection.pane_id)) |tab| {
+                tab.model.setPaneCopyView(projection.pane_id, null);
+            }
+        }
+    }
+
+    if (next) |projection| {
+        if (model.workspace.tabForPane(projection.pane_id)) |tab| {
+            tab.model.setPaneCopyView(projection.pane_id, projection.view);
+        }
+    }
 }
 
 /// The media event never composes cells. A pending or scheduled cell frame

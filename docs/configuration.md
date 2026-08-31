@@ -138,10 +138,12 @@ The default bindings are `prefix`, then `shift+left`, `shift+right`, `shift+up`,
 or `shift+down`.
 
 `telar.action.copy_mode()` enters the focused pane's scrollback. Its default
-binding is `prefix`, then `[`. The mouse wheel scrolls three rows per notch;
-applications that own mouse reporting keep receiving wheel events, and an
-alternate-screen application with alternate-scroll enabled receives cursor
-keys instead. Normal pane input returns the viewport to the bottom.
+binding is `prefix`, then `[`. In copy mode, the mouse wheel scrolls three rows
+per notch while it is over the target pane and other mouse actions are ignored.
+Outside copy mode, applications that own mouse reporting keep receiving wheel
+events, and an alternate-screen application with alternate-scroll enabled
+receives cursor keys instead. Normal pane input returns the viewport to the
+bottom.
 
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
