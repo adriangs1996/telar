@@ -6,10 +6,9 @@ const presentation = @import("../presentation/root.zig");
 const client_application = @import("application/root.zig");
 const client_clock = @import("clock.zig");
 const client_model = @import("model.zig");
+const host_resources = @import("host_resources.zig");
 
 const Client = @import("client.zig");
-const host_resizes = @import("host_resizes.zig");
-const pane_graphics = @import("pane_graphics.zig");
 const host_capability = client_application.host_capabilities;
 const kitty = graphics.kitty;
 const term = presentation.screen;
@@ -71,7 +70,7 @@ fn handler(client: *Client) host_capability.Handler {
         .model = &client.model,
         .effects = .{
             .context = client,
-            .sync = syncResources,
+            .deliver = deliverResources,
         },
     };
 }
@@ -106,27 +105,10 @@ fn support(supported: bool) client_model.HostCapabilitySupport {
     return if (supported) .supported else .unsupported;
 }
 
-fn syncResources(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
+fn deliverResources(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    if (commit.capabilities) |capabilities| {
-        const graphics_changed = capabilities.previous.kitty_graphics !=
-            capabilities.current.kitty_graphics;
-        if (graphics_changed) {
-            pane_graphics.syncFallbacks(client);
-            const host_size = client.model.hostSize();
-            try client.view.configureSidebar(
-                client.sidebar_rendering,
-                capabilities.current.kitty_graphics,
-                host_size.cell_width_px,
-                host_size.cell_height_px,
-            );
-            client.graphics_store.invalidatePlacements();
-        }
-    }
 
-    if (commit.resize) |resize| {
-        try host_resizes.sync(client, resize);
-    }
+    try host_resources.deliver(client, commit);
 }
 
 test "Kitty probe replies translate by reserved image identity" {

@@ -5,7 +5,7 @@ const client_model = @import("../model.zig");
 
 pub const Effects = struct {
     context: *anyopaque,
-    sync: *const fn (*anyopaque, client_model.HostCommit) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.HostCommit) anyerror!void,
 };
 
 pub const Handler = struct {
@@ -20,7 +20,7 @@ pub const Handler = struct {
     pub fn observe(handler: *Handler, observation: client_model.HostCapabilityObservation) !?client_model.HostCommit {
         const commit = try handler.model.observeHostCapability(observation) orelse return null;
 
-        try handler.effects.sync(handler.effects.context, commit);
+        try handler.effects.deliver(handler.effects.context, commit);
         return commit;
     }
 
@@ -32,7 +32,7 @@ pub const Handler = struct {
     pub fn expire(handler: *Handler) !?client_model.HostCommit {
         const commit = try handler.model.expireHostCapabilities() orelse return null;
 
-        try handler.effects.sync(handler.effects.context, commit);
+        try handler.effects.deliver(handler.effects.context, commit);
         return commit;
     }
 };
@@ -44,10 +44,10 @@ const EffectsCapture = struct {
     fail: bool = false,
 
     fn port(capture: *EffectsCapture) Effects {
-        return .{ .context = capture, .sync = sync };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn sync(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
+    fn deliver(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
         const capabilities = commit.capabilities.?;
         capture.calls += 1;

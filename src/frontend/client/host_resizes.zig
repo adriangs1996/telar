@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const platform = @import("../platform/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
-const pane_geometry = @import("pane_geometry.zig");
+const host_resources = @import("host_resources.zig");
 
 const Client = @import("client.zig");
 const host_resize = client_application.host_resize;
@@ -61,7 +61,7 @@ fn applyUpdate(client: *Client, update: client_model.HostUpdate) !?client_model.
         .model = &client.model,
         .effects = .{
             .context = client,
-            .sync = syncResources,
+            .deliver = deliverResources,
         },
     };
     return use_case.execute(update);
@@ -99,36 +99,10 @@ fn resolve(current: client_model.HostCapabilities, measurement: platform.Size) c
     };
 }
 
-fn syncResources(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
+fn deliverResources(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    const resize = commit.resize orelse return;
 
-    try sync(client, resize);
-}
-
-/// Synchronizes physical geometry after an already committed host resize.
-///
-/// ```zig
-/// try sync(client, resize);
-/// ```
-pub fn sync(client: *Client, commit: client_model.HostResizeCommit) !void {
-    if (commit.grid_changed) {
-        try client.presenter.resize(commit.current.cols, commit.current.rows);
-        try client.view.resize(commit.current.cols, commit.current.rows);
-    }
-
-    if (commit.cell_size_changed) {
-        try client.view.configureSidebar(
-            client.sidebar_rendering,
-            client.model.hostCapabilities().kitty_graphics,
-            commit.current.cell_width_px,
-            commit.current.cell_height_px,
-        );
-    }
-    client.graphics_store.invalidatePlacements();
-    const active = client.model.workspace.active() orelse return;
-
-    try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
+    try host_resources.deliver(client, commit);
 }
 
 fn queryPixels(client: *Client) !void {

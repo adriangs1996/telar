@@ -56,6 +56,7 @@ test {
     _ = @import("deadline_timer.zig");
     _ = @import("host_capabilities.zig");
     _ = @import("host_inputs.zig");
+    _ = @import("host_resources.zig");
     _ = @import("host_resizes.zig");
     _ = @import("key_routing.zig");
     _ = @import("lua_actions.zig");

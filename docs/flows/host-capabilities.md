@@ -21,7 +21,9 @@ HostCapabilities.Handler.observe
        |
 ClientModel.observeHostCapability
        |
-resource synchronization
+DeliverHostResourcesHandler
+       |
+physical host effects
        |
 presentation_lifecycle.observe
        |
@@ -37,7 +39,9 @@ HostCapabilities.Handler.expire
        |
 ClientModel.expireHostCapabilities
        |
-fallback resource synchronization
+DeliverHostResourcesHandler
+       |
+fallback host effects
        |
 presentation_lifecycle.observe
        |
@@ -73,14 +77,16 @@ pixels and the geometry derived from them in one model transaction.
 
 ## Effects and consumers
 
-The application handler calls its effect port only after the complete model
-commit. A Kitty graphics transition enters
+The capability handler delivers its `HostCommit` only after the complete model
+transition. `DeliverHostResourcesHandler` validates that the commit is still
+current and owns every branch shared with host resizing. A Kitty graphics
+transition enters
 `SyncPaneGraphicsFallbacksHandler`, which reads that committed capability,
 reconciles every bounded pane cell fallback, and leaves physical-presence
-queries to the graphics adapter. The host adapter then configures sidebar and
-overlay resources and invalidates physical placements. A geometry transition
-delegates screen, view and pane-size synchronization to the host resize
-adapter.
+queries to the graphics adapter. The shared host adapter then configures
+sidebar and overlay resources and invalidates physical placements. A geometry
+transition executes the same ordered screen, view and pane-size effects without
+depending on the host-resize adapter.
 
 Kitty zlib needs no immediate resource mutation. The media presenter reads the
 committed value before transmission. Pixel mouse support is also effect-free;
@@ -110,12 +116,16 @@ fallback, so a failed timer changes no capability state.
 - `src/frontend/client/model.zig` proves independent probes, selective expiry,
   pixel precedence, atomic geometry and validation before mutation.
 - `src/frontend/client/application/host_capabilities.zig` proves
-  commit-before-effect ordering, no-op suppression and retained commits after
-  an effect failure.
+  commit-before-delivery ordering, no-op suppression and retained commits after
+  a delivery failure.
+- `src/frontend/client/application/host_resource_delivery.zig` proves graphics,
+  grid, cell-size and geometry branch ordering plus partial-failure behavior.
 - `src/frontend/client/application/pane_graphics.zig` proves capability-owned
   fallback decisions, bounded traversal and repeated-value suppression.
-- `src/frontend/client/host_capabilities.zig` owns terminal reply translation,
-  probe expiry and resource projection.
+- `src/frontend/client/host_capabilities.zig` owns terminal reply translation
+  and probe expiry.
+- `src/frontend/client/host_resources.zig` implements the physical host effect
+  ports shared with resize delivery.
 - `src/frontend/client/client_test.zig` proves fallback reconciliation,
   presenter-owned scheduling, timeout idempotence and retained state after a
   real resource failure.

@@ -20,7 +20,9 @@ SIGWINCH or Windows size poll
               |
      ClientModel.reconcileHost
               |
- screen, view, sidebar and graphics synchronization
+ DeliverHostResourcesHandler
+              |
+ screen, view, sidebar and graphics effects
               |
    pane_resize for each attached active pane
               |
@@ -52,11 +54,13 @@ value outside the model.
 
 ## Effects and failure
 
-`ResizeHostHandler` commits before calling its effect port. A grid change
-resizes the presenter's front and back buffers and the client view. A changed
-cell size configures pixel-aware sidebar resources. Every accepted geometry
-invalidates physical graphics placements. `pane_geometry.offerAttached` then
-offers each attached pane in the active tab its size within the new workbench.
+`ResizeHostHandler` commits before delivering its `HostCommit`.
+`DeliverHostResourcesHandler` rejects empty or stale commits before effects and
+owns their exact order. A grid change resizes the presenter's front and back
+buffers and then the client view. A changed cell size configures pixel-aware
+sidebar resources. Every accepted geometry invalidates physical graphics
+placements before pane geometry is offered. `host_resources` implements these
+ports for one concrete client; the resize adapter contains no resource policy.
 
 The model commit remains active if buffer allocation, sidebar configuration or
 the bounded client outbox fails. The error terminates that client session;
@@ -90,9 +94,13 @@ but schedules no frame.
 - `src/frontend/client/model.zig` proves validation, atomic capability and
   geometry commits, no-op behavior and isolated host revisions.
 - `src/frontend/client/application/host_resize.zig` proves commit-before-
-  effect ordering and retained commits after effect failure.
-- `src/frontend/client/host_resizes.zig` owns platform measurement, resource
-  synchronization, pixel queries and watcher rearming.
+  delivery ordering and retained commits after delivery failure.
+- `src/frontend/client/application/host_resource_delivery.zig` proves exact
+  branch ordering, no-op policy, stale-commit rejection and partial failures.
+- `src/frontend/client/host_resizes.zig` owns platform measurement, pixel
+  queries and watcher rearming.
+- `src/frontend/client/host_resources.zig` implements the physical host effect
+  ports shared by resize and capability delivery.
 - `src/frontend/client/pane_geometry.zig` owns translation and bounded delivery
   of visible attached pane sizes.
 - `src/frontend/client/client_test.zig` proves exact pane geometry,

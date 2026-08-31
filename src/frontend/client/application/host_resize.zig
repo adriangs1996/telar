@@ -8,7 +8,7 @@ const schema = core.schema;
 
 pub const Effects = struct {
     context: *anyopaque,
-    sync: *const fn (*anyopaque, client_model.HostCommit) anyerror!void,
+    deliver: *const fn (*anyopaque, client_model.HostCommit) anyerror!void,
 };
 
 pub const ResizeHostHandler = struct {
@@ -23,7 +23,7 @@ pub const ResizeHostHandler = struct {
     pub fn execute(handler: *ResizeHostHandler, update: client_model.HostUpdate) !?client_model.HostCommit {
         const commit = try handler.model.reconcileHost(update) orelse return null;
 
-        try handler.effects.sync(handler.effects.context, commit);
+        try handler.effects.deliver(handler.effects.context, commit);
         return commit;
     }
 };
@@ -36,10 +36,10 @@ const EffectsCapture = struct {
     fail: bool = false,
 
     fn port(capture: *EffectsCapture) Effects {
-        return .{ .context = capture, .sync = sync };
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn sync(context: *anyopaque, commit: client_model.HostCommit) !void {
+    fn deliver(context: *anyopaque, commit: client_model.HostCommit) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.commit = commit;
