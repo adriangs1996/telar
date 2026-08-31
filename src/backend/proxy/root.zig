@@ -10,7 +10,7 @@ const pty = @import("../pty/root.zig");
 const lifecycle_mod = @import("lifecycle.zig");
 const metrics_mod = @import("metrics.zig");
 const middleware = @import("middleware.zig");
-const service_mod = @import("service.zig");
+const service_mod = @import("service/root.zig");
 
 const Io = std.Io;
 
