@@ -18,7 +18,7 @@ const shutdown = @import("../lifecycle/root.zig").shutdown_authority;
 const proxy_resource = @import("../resources/proxy.zig");
 const observability = @import("../observability/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
-const actor_bindings = @import("actor_bindings.zig");
+const event_dispatcher = @import("event_dispatcher/root.zig");
 const operation_scheduler = @import("operation_scheduler.zig");
 const request_dispatch = @import("request_dispatch.zig");
 
@@ -624,10 +624,10 @@ pub const Application = struct {
     }
 };
 
-const Actors = actor_bindings.Bindings(Application);
+const RuntimeEvents = event_dispatcher.Dispatcher(Application);
 const Operations = operation_scheduler.Scheduler(Application);
 const RequestDispatcher = request_dispatch.Dispatcher(Application, Operations.request_runtime_port);
-pub const EventResources = Actors.EventResources;
+pub const EventResources = RuntimeEvents.EventResources;
 
 /// Delegates one runtime event to the capability that owns it and reports
 /// whether a requested shutdown has reached every client.
@@ -636,7 +636,7 @@ pub const EventResources = Actors.EventResources;
 /// const should_stop = try handle(&application, event, resources);
 /// ```
 pub fn handle(application: *Application, event: RuntimeEvent, resources: EventResources) !bool {
-    return Actors.handle(application, event, resources);
+    return RuntimeEvents.handle(application, event, resources);
 }
 
 fn deinitWorkspaces(application: *Application) void {

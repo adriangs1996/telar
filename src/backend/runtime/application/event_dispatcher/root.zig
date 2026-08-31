@@ -1,28 +1,28 @@
-//! Adapters between application state and asynchronous runtime actors.
+//! Routes runtime event completions to their owning application capability.
 
 const std = @import("std");
-const runtime_config = @import("../config.zig");
-const runtime_event = @import("../event.zig");
-const agent_event_dispatcher = @import("event_dispatcher/agent.zig");
-const client_event_dispatcher = @import("event_dispatcher/client.zig");
-const history_event_dispatcher = @import("event_dispatcher/history.zig");
-const observability_event_dispatcher = @import("event_dispatcher/observability.zig");
-const pane_event_dispatcher = @import("event_dispatcher/pane/root.zig");
-const observability = @import("../observability/root.zig");
-const telemetry_mod = observability.telemetry;
-const transport = @import("../../transport/root.zig");
+const runtime_config = @import("../../config.zig");
+const runtime_event = @import("../../event.zig");
+const agent_event_dispatcher = @import("agent.zig");
+const client_event_dispatcher = @import("client.zig");
+const history_event_dispatcher = @import("history.zig");
+const observability_event_dispatcher = @import("observability.zig");
+const pane_event_dispatcher = @import("pane/root.zig");
+const observability = @import("../../observability/root.zig");
+const transport = @import("../../../transport/root.zig");
 
-const TelemetryState = telemetry_mod.State;
+const TelemetryState = observability.telemetry.State;
 
 const IngestTestGate = runtime_config.IngestTestGate;
 const RuntimeEvent = runtime_event.Event;
 
-/// Builds the zero-allocation actor bindings for one application type.
+/// Builds the zero-allocation runtime event dispatcher for one Application
+/// type.
 ///
 /// ```zig
-/// const Actors = Bindings(Application);
+/// const RuntimeEvents = Dispatcher(Application);
 /// ```
-pub fn Bindings(comptime Application: type) type {
+pub fn Dispatcher(comptime Application: type) type {
     const AgentEvents = agent_event_dispatcher.Dispatcher(Application);
     const ClientEvents = client_event_dispatcher.Dispatcher(Application);
     const HistoryEvents = history_event_dispatcher.Dispatcher(Application);
@@ -38,10 +38,12 @@ pub fn Bindings(comptime Application: type) type {
             ingest_gate: ?*IngestTestGate,
         };
 
-        /// Routes one non-stop runtime event through its actor coordinator.
+        /// Classifies one non-stop runtime event and delegates its completion to
+        /// the capability that owns the affected state. The return value reports
+        /// whether client shutdown delivery has completed.
         ///
         /// ```zig
-        /// const should_stop = try Actors.handle(&application, event, resources);
+        /// const should_stop = try RuntimeEvents.handle(&application, event, resources);
         /// ```
         pub fn handle(application: *Application, event: RuntimeEvent, resources: EventResources) !bool {
             switch (event) {

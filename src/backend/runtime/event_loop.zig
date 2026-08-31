@@ -28,7 +28,7 @@ pub const Loop = struct {
         loop.select = Io.Select(Event).init(io, &loop.storage);
     }
 
-    /// Returns the selector borrowed by actor bindings.
+    /// Returns the selector borrowed by runtime event sources and dispatchers.
     ///
     /// ```zig
     /// const select = loop.selector();
