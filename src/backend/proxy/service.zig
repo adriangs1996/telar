@@ -6,6 +6,7 @@ const diagnostics = core.diagnostics;
 const ca = @import("ca.zig");
 const connection_admission = @import("connection_admission.zig");
 const connect_authentication = @import("connect_authentication.zig");
+const credential_registry = @import("credential_registry.zig");
 const h2 = @import("h2/root.zig");
 const http = @import("http/root.zig");
 const identity = @import("identity.zig");
@@ -25,7 +26,6 @@ pub const first_port: u16 = 45100;
 pub const port_attempts: u16 = 128;
 pub const max_connections: u32 = 64;
 pub const event_capacity = observation_queue.capacity;
-pub const max_credentials = schema.max_agent_snapshot_entries;
 
 pub const Paths = struct {
     key: []const u8,
@@ -44,7 +44,7 @@ pub const Service = struct {
     certificate_path: []const u8,
     bundle_path: []const u8,
     passthrough_hosts: passthrough_policy.Policy,
-    credentials: CredentialRegistry = .{},
+    credentials: credential_registry.Registry = .{},
     pipeline: middleware.Pipeline = .{},
     transforms: middleware.TransformPipeline = .{},
     has_custom_transformers: bool = false,
@@ -217,88 +217,6 @@ fn containsCredential(service: *Service, credential: *const identity.Credential)
 fn observationCredentialIsLive(context: *anyopaque, credential: *const identity.Credential) bool {
     const service: *Service = @ptrCast(@alignCast(context));
     return service.credentials.contains(service.io, credential);
-}
-
-const CredentialRegistry = struct {
-    mutex: Io.Mutex = .init,
-    slots: [max_credentials]?identity.Credential = @splat(null),
-
-    fn register(registry: *CredentialRegistry, io: Io, credential: *const identity.Credential) !void {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-        var free: ?*?identity.Credential = null;
-        for (&registry.slots) |*slot| {
-            if (slot.*) |*existing| {
-                if (sameCredential(existing, credential)) {
-                    return error.DuplicateProxyCredential;
-                }
-            } else if (free == null) {
-                free = slot;
-            }
-        }
-        const destination = free orelse return error.TooManyProxyCredentials;
-        destination.* = credential.*;
-    }
-
-    fn remove(registry: *CredentialRegistry, io: Io, credential: *const identity.Credential) void {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-        for (&registry.slots) |*slot| {
-            const existing = if (slot.*) |*value| value else continue;
-            if (!sameCredential(existing, credential)) {
-                continue;
-            }
-
-            std.crypto.secureZero(u8, &existing.token);
-            slot.* = null;
-            return;
-        }
-    }
-
-    fn removePane(registry: *CredentialRegistry, io: Io, pane: PaneGeneration) void {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-        for (&registry.slots) |*slot| {
-            const existing = if (slot.*) |*value| value else continue;
-
-            if (existing.pane_id != pane.id or existing.pane_generation != pane.generation) {
-                continue;
-            }
-
-            std.crypto.secureZero(u8, &existing.token);
-            slot.* = null;
-            return;
-        }
-    }
-
-    fn contains(registry: *CredentialRegistry, io: Io, credential: *const identity.Credential) bool {
-        registry.mutex.lockUncancelable(io);
-        defer registry.mutex.unlock(io);
-        for (&registry.slots) |*slot| {
-            const existing = if (slot.*) |*value| value else continue;
-            if (sameCredential(existing, credential)) {
-                return true;
-            }
-        }
-        return false;
-    }
-};
-
-const PaneGeneration = struct {
-    id: schema.PaneId,
-    generation: u64,
-};
-
-fn sameCredential(left: *const identity.Credential, right: *const identity.Credential) bool {
-    if (left.pane_id != right.pane_id or left.pane_generation != right.pane_generation) {
-        return false;
-    }
-
-    return std.crypto.timing_safe.eql(
-        [identity.token_bytes]u8,
-        left.token,
-        right.token,
-    );
 }
 
 const Bound = struct { listener: net.Server, port: u16 };
@@ -1743,41 +1661,6 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
         service.metrics().tls_downstream_handshake_failures,
     );
     try std.testing.expectEqual(@as(u64, 0), service.metrics().tls_mint_failures);
-}
-
-test "proxy credentials are revoked with their pane" {
-    const io = std.testing.io;
-    var registry: CredentialRegistry = .{};
-    const credential: identity.Credential = .{
-        .pane_id = try schema.id.pane(7),
-        .pane_generation = 2,
-        .token = .{0x5a} ** identity.token_bytes,
-    };
-    try registry.register(io, &credential);
-    try std.testing.expect(registry.contains(io, &credential));
-    try std.testing.expectError(error.DuplicateProxyCredential, registry.register(io, &credential));
-    registry.remove(io, &credential);
-    try std.testing.expect(!registry.contains(io, &credential));
-}
-
-test "pane revocation removes only that generation" {
-    const io = std.testing.io;
-    var registry: CredentialRegistry = .{};
-    const current: identity.Credential = .{
-        .pane_id = try schema.id.pane(7),
-        .pane_generation = 2,
-        .token = .{0x5a} ** identity.token_bytes,
-    };
-    const next: identity.Credential = .{
-        .pane_id = current.pane_id,
-        .pane_generation = 3,
-        .token = .{0x6b} ** identity.token_bytes,
-    };
-    try registry.register(io, &current);
-    try registry.register(io, &next);
-    registry.removePane(io, .{ .id = current.pane_id, .generation = current.pane_generation });
-    try std.testing.expect(!registry.contains(io, &current));
-    try std.testing.expect(registry.contains(io, &next));
 }
 
 test "receive discards observations queued before pane revocation" {
