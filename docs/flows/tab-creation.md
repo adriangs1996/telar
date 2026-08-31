@@ -63,6 +63,10 @@ ConfirmTabCreationHandler
         |
 ClientModel.createTab
         |
+TabCreation
+        |
+DeliverTabCreationHandler
+        |
 detach previous tab -> synchronize root-pane focus
         |
 presentation_lifecycle.observe -> paced presentation
@@ -80,14 +84,25 @@ before the handler returns.
 
 `ClientModel.createTab` constructs and inserts the confirmed tab before
 publishing it as active. Rejection preserves the existing tab and every model
-revision. A successful commit advances only the tab and active-tab versions.
+revision. A successful `TabCreation` captures both tab identities, the created
+root and position, both layout revisions, the pre-commit tab, active-tab and
+copy revisions, whether invalid copy mode was released, and the resulting
+workspace, tab, active-tab, pane and copy revisions.
 
-Attachment effects run after the commit. `RetireTabAttachmentsHandler`
-detaches the tab that was active immediately before confirmation, closing its
-captured paste and reported focus before its panes detach and committing their
-operational flags last. The adapter then synchronizes attachment geometry and
-focus reporting with the new root pane. An effect failure preserves the
-confirmed tab because the runtime already owns it.
+`DeliverTabCreationHandler` validates that exact commit before any disposable
+effect. It requires the created tab to remain active at its canonical position,
+the predecessor and created layouts to match, and the created tab to contain
+only its attached focused root pane. It then composes
+`RetireTabAttachmentsHandler` to detach the predecessor, closing its captured
+paste and reported focus before its panes detach and committing their
+operational flags last. Only after retirement completes does it synchronize
+attachment geometry and focus reporting with the new root pane. A delivery
+failure preserves the confirmed tab because the runtime already owns it; work
+completed before the failure is not rolled back.
+
+`tab_creations` owns response correlation and wire translation. Its delivery
+callback supplies paste, focus, attachment and active-resource ports, but it no
+longer looks tabs up or decides the post-commit sequence.
 
 The use cases do not invalidate the view or request a draw. `client_events`
 publishes `ClientModel.Version` to `Presenter`, which schedules one paced frame
@@ -104,9 +119,12 @@ active tab.
 
 - `src/frontend/client/application/create_tab.zig` proves request gating,
   label validation, exact planning, no provisional mutation,
-  commit-before-effects and post-commit failure behavior.
+  commit-before-delivery and post-commit failure behavior.
+- `src/frontend/client/application/tab_creation_delivery.zig` proves exact
+  revision, identity, root and layout validation, attachment-before-resource
+  order, ABA rejection and partial failure semantics.
 - `src/frontend/client/tab_creations.zig` owns response correlation and
-  wire-to-command translation.
+  wire-to-command translation plus physical port wiring.
 - `src/frontend/client/model.zig` proves attached-source planning,
   transactional insertion, identity checks and exact version changes.
 - `src/frontend/client/outbox.zig` proves queued creation owns its label and

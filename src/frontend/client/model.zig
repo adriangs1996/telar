@@ -83,6 +83,19 @@ pub const NewTab = struct {
 pub const TabCreation = struct {
     previous: schema.TabLocation,
     created: schema.TabLocation,
+    created_root_pane_id: schema.PaneId,
+    created_position: u16,
+    previous_layout_revision: u64,
+    created_layout_revision: u64,
+    tabs_revision_before: u64,
+    active_tab_revision_before: u64,
+    copy_revision_before: u64,
+    copy_released: bool,
+    workspace_revision: u64,
+    tabs_revision: u64,
+    active_tab_revision: u64,
+    panes_revision: u64,
+    copy_revision: u64,
 };
 
 pub const TabCreationPlan = struct {
@@ -3078,16 +3091,34 @@ pub const Model = struct {
     /// const creation = try model.createTab(command);
     /// ```
     pub fn createTab(model: *Model, command: NewTab) !TabCreation {
-        const previous = (model.workspace.activeConst() orelse return error.NoActiveTab).location;
+        const previous = model.workspace.activeConst() orelse return error.NoActiveTab;
+        const previous_location = previous.location;
+        const previous_layout_revision = previous.model.layout.currentRevision();
+        const tabs_revision_before = model.tabs_revision;
+        const active_tab_revision_before = model.active_tab_revision;
+        const copy_revision_before = model.copy_revision;
 
-        _ = try model.workspace.addCreated(command.created, command.size);
+        const created = try model.workspace.addCreated(command.created, command.size);
         model.tabs_revision +%= 1;
         model.active_tab_revision +%= 1;
         releaseInvalidCopyMode(model);
 
         return .{
-            .previous = previous,
+            .previous = previous_location,
             .created = command.created.location,
+            .created_root_pane_id = command.created.root_pane_id,
+            .created_position = command.created.position,
+            .previous_layout_revision = previous_layout_revision,
+            .created_layout_revision = created.model.layout.currentRevision(),
+            .tabs_revision_before = tabs_revision_before,
+            .active_tab_revision_before = active_tab_revision_before,
+            .copy_revision_before = copy_revision_before,
+            .copy_released = model.copy_revision != copy_revision_before,
+            .workspace_revision = model.workspace_revision,
+            .tabs_revision = model.tabs_revision,
+            .active_tab_revision = model.active_tab_revision,
+            .panes_revision = model.panes_revision,
+            .copy_revision = model.copy_revision,
         };
     }
 
@@ -4863,10 +4894,62 @@ test "tab creation advances collection and active identity revisions" {
 
     try std.testing.expectEqualDeep(first, creation.previous);
     try std.testing.expectEqualDeep(second, creation.created);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), creation.created_root_pane_id);
+    try std.testing.expectEqual(@as(u16, 0), creation.created_position);
+    try std.testing.expectEqual(
+        model.workspace.find(first.tab_id).?.model.layout.currentRevision(),
+        creation.previous_layout_revision,
+    );
+    try std.testing.expectEqual(
+        model.workspace.find(second.tab_id).?.model.layout.currentRevision(),
+        creation.created_layout_revision,
+    );
+    try std.testing.expectEqual(@as(u64, 0), creation.tabs_revision_before);
+    try std.testing.expectEqual(@as(u64, 0), creation.active_tab_revision_before);
+    try std.testing.expectEqual(@as(u64, 0), creation.copy_revision_before);
+    try std.testing.expect(!creation.copy_released);
+    try std.testing.expectEqual(model.version().workspace, creation.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, creation.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, creation.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, creation.panes_revision);
+    try std.testing.expectEqual(model.version().copy, creation.copy_revision);
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 2), model.workspace.count);
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
+}
+
+test "tab creation captures invalid copy-mode release" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(1),
+    };
+    const second: schema.TabLocation = .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(2),
+    };
+    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try std.testing.expect(model.enterCopyMode());
+    const version_before = model.version();
+
+    const creation = try model.createTab(.{
+        .created = .{
+            .location = second,
+            .position = 1,
+            .label = "logs",
+            .root_pane_id = @enumFromInt(2),
+        },
+        .size = .{ .cols = 20, .rows = 5 },
+    });
+
+    try std.testing.expect(creation.copy_released);
+    try std.testing.expectEqual(version_before.copy, creation.copy_revision_before);
+    try std.testing.expectEqual(version_before.copy +% 1, creation.copy_revision);
+    try std.testing.expect(!model.copyModeActive());
 }
 
 test "rejected tab creations preserve state and revisions" {

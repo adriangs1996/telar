@@ -6,6 +6,8 @@ const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
+const pane_focus_reports = @import("pane_focus_reports.zig");
+const pane_pastes = @import("pane_pastes.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
@@ -13,7 +15,7 @@ const Client = @import("client.zig");
 const create_tab = client_application.create_tab;
 const multiplexer = workspace_capability.multiplexer;
 const schema = core.schema;
-const tabs_mod = workspace_capability.tabs;
+const tab_creation_delivery = client_application.tab_creation_delivery;
 
 /// Wires an interactive tab creation to planning and owned request delivery.
 ///
@@ -67,11 +69,27 @@ pub fn apply(client: *Client, created: schema.TabCreated) !client_model.TabCreat
 fn confirmationHandler(client: *Client) create_tab.ConfirmTabCreationHandler {
     return .{
         .model = &client.model,
-        .effects = .{
+        .delivery = .{
             .context = client,
-            .apply = applyConfirmation,
+            .deliver = deliverConfirmation,
         },
     };
+}
+
+fn deliverConfirmation(context: *anyopaque, creation: client_model.TabCreation) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    var use_case: tab_creation_delivery.DeliverTabCreationHandler = .{
+        .model = &client.model,
+        .paste_effects = pane_pastes.effects(client),
+        .focus_effects = pane_focus_reports.effects(client),
+        .attachment_effects = tab_attachments.effects(client),
+        .effects = .{
+            .context = client,
+            .synchronize_active_resources = synchronizeActiveResources,
+        },
+    };
+
+    try use_case.execute(creation);
 }
 
 fn tabOperationPending(context: *anyopaque) bool {
@@ -95,25 +113,8 @@ fn sendCreation(context: *anyopaque, intent: create_tab.TabCreationIntent) !void
     });
 }
 
-fn applyConfirmation(context: *anyopaque, creation: client_model.TabCreation) !void {
+fn synchronizeActiveResources(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const workspace = &client.model.workspace;
-    const previous = findTab(workspace, creation.previous) orelse return error.UnexpectedTabCreation;
-    const created = findTab(workspace, creation.created) orelse return error.UnexpectedTabCreation;
-    const active = workspace.active() orelse return error.UnexpectedTabCreation;
-    if (active != created) {
-        return error.UnexpectedTabCreation;
-    }
 
-    try tab_attachments.detach(client, previous.location);
     try active_pane_resources.synchronize(client);
-}
-
-fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const tab = workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
-
-    return tab;
 }
