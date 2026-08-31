@@ -39,7 +39,9 @@ pub fn spawn(command: *const Command, window: *const std.posix.winsize) !Spawned
     else
         null;
     defer {
-        if (cwd_fd) |fd| _ = std.c.close(fd);
+        if (cwd_fd) |fd| {
+            _ = std.c.close(fd);
+        }
     }
 
     var pair = try native.openPty(window);
@@ -76,7 +78,11 @@ pub fn spawn(command: *const Command, window: *const std.posix.winsize) !Spawned
     }
 
     var spawned_pid: ?std.c.pid_t = pid;
-    errdefer if (spawned_pid) |child_pid| native.terminateAndReap(child_pid);
+    errdefer {
+        if (spawned_pid) |child_pid| {
+            native.terminateAndReap(child_pid);
+        }
+    }
 
     native.closeDescriptor(&pair.slave);
     native.closeDescriptor(&error_pipe[1]);

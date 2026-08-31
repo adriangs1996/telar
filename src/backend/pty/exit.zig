@@ -6,6 +6,11 @@ pub const Exit = union(enum) {
     exited: u8,
     signaled: std.posix.SIG,
 
+    /// Maps normal exits and signals to the status convention used by shells.
+    ///
+    /// ```zig
+    /// const status = exit.code();
+    /// ```
     pub fn code(exit: Exit) u8 {
         return switch (exit) {
             .exited => |status| status,

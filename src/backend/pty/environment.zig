@@ -19,6 +19,13 @@ pub const ChildEnvironment = struct {
         overrides: []const Override,
     };
 
+    /// Creates a child environment from the runtime environment and Telar's
+    /// terminal identity.
+    ///
+    /// ```zig
+    /// var environment = try ChildEnvironment.init(gpa, inherited, "telar");
+    /// defer environment.deinit();
+    /// ```
     pub fn init(gpa: std.mem.Allocator, inherited: std.process.Environ, term_program: []const u8) !ChildEnvironment {
         return initWithOverrides(gpa, inherited, .{ .term_program = term_program, .overrides = &.{} });
     }
@@ -40,7 +47,9 @@ pub const ChildEnvironment = struct {
         _ = map.swapRemove("TELAR_SOCKET");
         try map.put("TERM", "xterm-256color");
         try map.put("TERM_PROGRAM", configuration.term_program);
-        for (configuration.overrides) |entry| try map.put(entry.name, entry.value);
+        for (configuration.overrides) |entry| {
+            try map.put(entry.name, entry.value);
+        }
 
         const block = try map.createPosixBlock(gpa, .{});
         return .{
@@ -49,12 +58,18 @@ pub const ChildEnvironment = struct {
         };
     }
 
+    /// Scrubs every owned environment string before releasing its storage.
+    ///
+    /// ```zig
+    /// environment.deinit();
+    /// ```
     pub fn deinit(environment: *ChildEnvironment) void {
         for (environment.block.slice) |entry| {
             const bytes = std.mem.span(@constCast(entry.?));
             std.crypto.secureZero(u8, bytes);
             environment.gpa.free(bytes);
         }
+
         environment.gpa.free(environment.block.slice);
         environment.* = undefined;
     }
@@ -63,6 +78,7 @@ pub const ChildEnvironment = struct {
 test "terminal child environment removes inherited Ghostty identity" {
     var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
     defer inherited_map.deinit();
+
     try inherited_map.put("HOME", "/tmp/telar-home");
     try inherited_map.put("PATH", "/bin:/usr/bin");
     try inherited_map.put("TERM", "xterm-ghostty");
@@ -74,6 +90,7 @@ test "terminal child environment removes inherited Ghostty identity" {
 
     var environment = try ChildEnvironment.init(std.testing.allocator, .{ .block = inherited_block }, "telar");
     defer environment.deinit();
+
     const child: std.process.Environ = .{ .block = environment.block };
 
     try std.testing.expectEqualStrings("xterm-256color", std.process.Environ.getPosix(child, "TERM").?);
@@ -86,9 +103,11 @@ test "terminal child environment removes inherited Ghostty identity" {
 test "terminal child environment applies bounded proxy overrides" {
     var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
     defer inherited_map.deinit();
+
     try inherited_map.put("HTTPS_PROXY", "http://old.invalid");
     const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
     defer inherited_block.deinit(std.testing.allocator);
+
     var environment = try ChildEnvironment.initWithOverrides(std.testing.allocator, .{ .block = inherited_block }, .{
         .term_program = "telar",
         .overrides = &.{
@@ -97,6 +116,7 @@ test "terminal child environment applies bounded proxy overrides" {
         },
     });
     defer environment.deinit();
+
     const child: std.process.Environ = .{ .block = environment.block };
 
     try std.testing.expectEqualStrings("http://127.0.0.1:45100", std.process.Environ.getPosix(child, "HTTPS_PROXY").?);

@@ -36,9 +36,9 @@ disposable frontend process.
 | --- | --- | --- |
 | Runtime | `src/backend/runtime/root.zig` | Public lifecycle for one runtime instance |
 | Pane | `src/backend/pane/root.zig` | One child process, PTY terminal state, cell projection and pane lifecycle |
-| PTY | `src/backend/pty/root.zig` | Child process and pseudo-terminal platform adapter |
+| PTY | `src/backend/pty/root.zig` | Verified child launch, PTY I/O and child lifecycle |
 | Media | `src/backend/media/root.zig` | Bounded child Kitty-graphics ingestion |
-| Process | `src/backend/process/root.zig` | Bounded foreground-process observation |
+| Process | `src/backend/process/root.zig` | Native process metadata and bounded foreground-process observation |
 | Agent | `src/backend/agent/root.zig` | Agent evidence precedence and projected agent state |
 | History | `src/backend/history/root.zig` | Command observation, queries and durable storage |
 | Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |
