@@ -176,6 +176,7 @@ pub const Store = struct {
     pass_counter: u64 = 0,
     shared_expiries: u8 = 0,
     damage: bool = false,
+    ingress_revision: u64 = 0,
     partial: ?PartialTransmission = null,
     // Maps rather than `[max_panes_per_tab]` arrays: one store serves every
     // tab of the client, so its pane bound is tabs times panes, not one tab.
@@ -201,6 +202,16 @@ pub const Store = struct {
         store.revisions.deinit(store.gpa);
         store.hidden_panes.deinit(store.gpa);
         store.usage.deinit(store.gpa);
+    }
+
+    /// Returns the physical-resource revision observed by the client
+    /// presenter. Only accepted runtime graphics messages advance it.
+    ///
+    /// ```zig
+    /// const before = store.ingressVersion();
+    /// ```
+    pub fn ingressVersion(store: *const Store) u64 {
+        return store.ingress_revision;
     }
 
     fn allocatePixels(store: *Store, byte_len: usize) !PixelAllocation {
@@ -451,6 +462,8 @@ pub const Store = struct {
                 revision.snapshot = null;
             },
         }
+
+        store.noteIngressChange();
     }
 
     pub fn applyImage(store: *Store, message: schema.graphics.Image) !void {
@@ -459,6 +472,7 @@ pub const Store = struct {
         var allocation = try store.allocatePixels(byte_len);
         errdefer store.freeAllocation(&allocation);
         try store.commitImage(message.pane_id, message.image, &allocation, 0);
+        store.noteIngressChange();
     }
 
     /// A complete image whose pixels the runtime already froze into a shared
@@ -479,6 +493,7 @@ pub const Store = struct {
         errdefer store.freeAllocation(&allocation);
         try store.commitImage(message.pane_id, message.image, &allocation, byte_len);
         store.removeOtherGenerations(message.pane_id, message.image.key);
+        store.noteIngressChange();
     }
 
     fn mapSharedPixels(
@@ -601,6 +616,8 @@ pub const Store = struct {
             store.removeOtherGenerations(message.pane_id, key);
             store.damage = true;
         }
+
+        store.noteIngressChange();
     }
 
     pub fn applyPlacement(store: *Store, message: schema.graphics.Placement) !void {
@@ -628,20 +645,25 @@ pub const Store = struct {
             store.rememberPartialPlacement(pane_id, placement, external_id);
         }
         store.damage = true;
+        store.noteIngressChange();
     }
 
     pub fn deleteImage(store: *Store, message: schema.graphics.DeleteImage) !void {
         if (!try store.acceptRevision(message.pane_id, message.revision)) return;
-        store.deleteImageData(message.pane_id, message.key);
+        if (store.deleteImageData(message.pane_id, message.key)) {
+            store.noteIngressChange();
+        }
     }
 
-    fn deleteImageData(store: *Store, pane_id: schema.PaneId, key: graphics.ImageKey) void {
+    fn deleteImageData(store: *Store, pane_id: schema.PaneId, key: graphics.ImageKey) bool {
         const image_key = identity(pane_id, key);
-        const image = store.images.getPtr(image_key) orelse return;
+        const image = store.images.getPtr(image_key) orelse return false;
         image.retire_pending = true;
         store.removePlacementsForImage(pane_id, key);
         store.collectRetired(pane_id, key.image_id);
         store.damage = true;
+
+        return true;
     }
 
     fn removeImageData(store: *Store, key: ImageIdentity) void {
@@ -685,6 +707,11 @@ pub const Store = struct {
         } });
         store.collectRetired(message.pane_id, message.key.image_id);
         store.damage = true;
+        store.noteIngressChange();
+    }
+
+    fn noteIngressChange(store: *Store) void {
+        store.ingress_revision +%= 1;
     }
 
     /// Whether the host terminal accepts zlib-compressed transmissions.
@@ -3236,17 +3263,22 @@ test "graphics revisions ignore stale deltas and validate snapshots" {
         .byte_len = 4,
     };
     try store.applyImage(.{ .pane_id = pane_id, .revision = 5, .image = metadata });
+    try std.testing.expectEqual(@as(u64, 1), store.ingressVersion());
     try store.deleteImage(.{ .pane_id = pane_id, .revision = 4, .key = metadata.key });
     try std.testing.expect(store.images.contains(identity(pane_id, metadata.key)));
+    try std.testing.expectEqual(@as(u64, 1), store.ingressVersion());
 
     try store.applySnapshot(.{ .pane_id = pane_id, .revision = 8, .phase = .begin });
+    try std.testing.expectEqual(@as(u64, 2), store.ingressVersion());
     try std.testing.expectError(error.GraphicsResyncRequired, store.applyImage(.{
         .pane_id = pane_id,
         .revision = 9,
         .image = metadata,
     }));
+    try std.testing.expectEqual(@as(u64, 2), store.ingressVersion());
     try store.applySnapshot(.{ .pane_id = pane_id, .revision = 10, .phase = .begin });
     try store.applySnapshot(.{ .pane_id = pane_id, .revision = 10, .phase = .end });
+    try std.testing.expectEqual(@as(u64, 4), store.ingressVersion());
 }
 
 test "sidebar provider marks preserve aspect ratio and reuse their atlas" {

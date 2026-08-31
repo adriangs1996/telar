@@ -16,17 +16,19 @@ Application handlers commit that state without deciding whether or when to
 draw. A committed semantic change advances a bounded model version; a rejected
 operation or canonical no-op does not.
 
-After each client event, the client loop gives the current version to
-`Presenter`. The presenter stores observed and presented versions, coalesces
-changes onto its existing paced deadline, selects damaged presentation regions
-and caps cell presentation at 60 Hz. An unchanged idle client schedules no
-frame. Time-driven presentation work schedules its own ticks.
+After each client event, the client loop gives `Presenter` the current model
+version and the observable revisions of presentation-owned resource stores.
+The presenter stores observed and presented revisions, coalesces changes onto
+its existing paced deadline, selects damaged presentation regions and caps
+cell presentation at 60 Hz. An unchanged idle client schedules no frame.
+Time-driven presentation work schedules its own ticks.
 
 Operational state such as requests, delivery and workers does not belong to
 the model. Presentation state such as screen buffers, pacing, damage caches and
-host graphics also remains outside it. The target presentation boundary reads
-an immutable projection of `ClientModel`; rendering does not perform semantic
-mutations.
+host graphics also remains outside it. A physical store may expose a monotonic
+revision for presentation without moving its resources into `ClientModel`.
+The target presentation boundary reads an immutable projection of
+`ClientModel`; rendering does not perform semantic mutations.
 
 `moveTab` is the first vertical slice. The action records a continuation and
 emits the runtime request without reordering locally. The canonical runtime

@@ -5,7 +5,6 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const graphics = @import("../graphics/root.zig");
 const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const client_requests = @import("requests.zig");
@@ -21,6 +20,7 @@ const agent_snapshots = @import("agent_snapshots.zig");
 const pane_attachments = @import("pane_attachments.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
+const pane_graphics = @import("pane_graphics.zig");
 const pane_metadata = @import("pane_metadata.zig");
 const pane_splits = @import("pane_splits.zig");
 const proxy_status = @import("proxy_status.zig");
@@ -115,14 +115,13 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),
         .workspace_list => |list| _ = try workspace_lists.apply(client, list),
-        .graphics_snapshot,
-        .graphics_image,
-        .graphics_shared_image,
-        .graphics_image_chunk,
-        .graphics_placement,
-        .graphics_delete_image,
-        .graphics_delete_placement,
-        => try handleGraphics(client, message),
+        .graphics_snapshot => |snapshot| _ = try pane_graphics.apply(client, .{ .snapshot = snapshot }),
+        .graphics_image => |image| _ = try pane_graphics.apply(client, .{ .image = image }),
+        .graphics_shared_image => |image| _ = try pane_graphics.apply(client, .{ .shared_image = image }),
+        .graphics_image_chunk => |chunk| _ = try pane_graphics.apply(client, .{ .image_chunk = chunk }),
+        .graphics_placement => |placement| _ = try pane_graphics.apply(client, .{ .placement = placement }),
+        .graphics_delete_image => |deleted| _ = try pane_graphics.apply(client, .{ .delete_image = deleted }),
+        .graphics_delete_placement => |deleted| _ = try pane_graphics.apply(client, .{ .delete_placement = deleted }),
     }
     return null;
 }
@@ -410,73 +409,6 @@ pub fn handleResyncRequired(client: *Client, required: schema.ResyncRequired) !v
     if (!std.meta.eql(workspace, required.workspace)) return error.UnexpectedResync;
     if (client.requests.has(.workspace_snapshot)) return;
     try client.requestWorkspaceSnapshot(workspace);
-}
-
-/// One graphics message; a revision break asks for a graphics snapshot.
-fn handleGraphics(client: *Client, message: schema.ServerMessage) !void {
-    if (comptime diagnostics.enabled) switch (message) {
-        .graphics_image, .graphics_shared_image => client.metrics.graphics_images += 1,
-        else => {},
-    };
-    switch (message) {
-        .graphics_snapshot => |snapshot| client.graphics_store.applySnapshot(snapshot) catch |err| switch (err) {
-            error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, snapshot.pane_id),
-            else => return err,
-        },
-        .graphics_image => |image| {
-            client.graphics_store.applyImage(image) catch |err| switch (err) {
-                error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, image.pane_id),
-                else => return err,
-            };
-            if (client.model.workspace.tabForPane(image.pane_id)) |tab|
-                tab.model.setGraphicsPlaceholder(image.pane_id, client.capabilities.kitty_graphics != .supported);
-        },
-        .graphics_shared_image => |image| {
-            client.graphics_store.applySharedImage(image) catch |err| switch (err) {
-                error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, image.pane_id),
-                // The mapping should never fail on the machine this
-                // client declared it shares with the runtime. If it does,
-                // renegotiate down to pixel chunks and resynchronize
-                // instead of dying over one image.
-                error.GraphicsSharedMappingFailed => {
-                    try client.enqueue(.{ .configure_graphics = .{ .shared = false } });
-                    try requestGraphicsSnapshot(client, image.pane_id);
-                },
-                else => return err,
-            };
-            if (client.model.workspace.tabForPane(image.pane_id)) |tab|
-                tab.model.setGraphicsPlaceholder(image.pane_id, client.capabilities.kitty_graphics != .supported);
-        },
-        .graphics_image_chunk => |chunk| client.graphics_store.applyChunk(chunk) catch |err| switch (err) {
-            error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, chunk.pane_id),
-            else => return err,
-        },
-        .graphics_placement => |placement| client.graphics_store.applyPlacement(placement) catch |err| switch (err) {
-            error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, placement.pane_id),
-            else => return err,
-        },
-        .graphics_delete_image => |deleted| {
-            client.graphics_store.deleteImage(deleted) catch |err| switch (err) {
-                error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, deleted.pane_id),
-                else => return err,
-            };
-            if (client.model.workspace.tabForPane(deleted.pane_id)) |tab|
-                tab.model.setGraphicsPlaceholder(deleted.pane_id, client.capabilities.kitty_graphics != .supported and
-                    client.graphics_store.hasPaneGraphics(deleted.pane_id));
-        },
-        .graphics_delete_placement => |deleted| client.graphics_store.deletePlacement(deleted) catch |err| switch (err) {
-            error.GraphicsResyncRequired => try requestGraphicsSnapshot(client, deleted.pane_id),
-            else => return err,
-        },
-        else => unreachable,
-    }
-    try client.presenter.requestDraw();
-}
-
-fn requestGraphicsSnapshot(client: *Client, pane_id: schema.PaneId) !void {
-    try client.enqueue(.{ .request_graphics_snapshot = .{
-        .pane_id = pane_id,
-    } });
 }
 
 test "workspace closure exits only when no predecessor survives" {

@@ -40,6 +40,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
     try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
+    try std.testing.expectEqual(expected.pane_graphics, actual.pane_graphics);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.copy, actual.copy);
     try std.testing.expectEqual(expected.viewport, actual.viewport);
@@ -58,6 +59,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
     try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
+    try std.testing.expectEqual(expected.pane_graphics, actual.pane_graphics);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
     try std.testing.expectEqual(expected.viewport, actual.viewport);
@@ -76,6 +78,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
     try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
+    try std.testing.expectEqual(expected.pane_graphics, actual.pane_graphics);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
 }
@@ -93,6 +96,7 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.frame, actual.frame);
     try std.testing.expectEqual(expected.pane_metadata, actual.pane_metadata);
     try std.testing.expectEqual(expected.pane_foreground, actual.pane_foreground);
+    try std.testing.expectEqual(expected.pane_graphics, actual.pane_graphics);
     try std.testing.expectEqual(expected.chrome, actual.chrome);
     try std.testing.expectEqual(expected.prompt, actual.prompt);
     try std.testing.expectEqual(expected.copy, actual.copy);
@@ -174,7 +178,10 @@ const TestHarness = struct {
 
     fn settleModelPresentation(harness: *TestHarness) !void {
         const target = harness.client.model.version();
-        while (!std.meta.eql(harness.client.presenter.presented_model_version, target)) {
+        const graphics_target = harness.client.graphics_store.ingressVersion();
+        while (!std.meta.eql(harness.client.presenter.presented_model_version, target) or
+            harness.client.presenter.presented_graphics_ingress != graphics_target)
+        {
             switch (try harness.client.select.await()) {
                 .draw => |result| try harness.client.handleDrawEvent(result),
                 .sent => |result| try harness.client.handleSentEvent(result),
@@ -3345,7 +3352,7 @@ test "an inactive pane exit retires only inactive state" {
 
     try client.observeModel();
 
-    try std.testing.expectEqual(pending_updates_before_exit, client.presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
 }
 
 test "a failed request surfaces as a notification" {
@@ -3828,6 +3835,126 @@ test "a graphics revision break requests a graphics snapshot" {
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .request_graphics_snapshot);
+}
+
+test "pane graphics commit their cell fallback before presenter observation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.capabilities.kitty_graphics = .unsupported;
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+
+    var payload: [256]u8 = undefined;
+    const encoded = try schema.encodeGraphicsImage(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+
+    var committed = version_before;
+    committed.pane_graphics += 1;
+    try std.testing.expectEqualDeep(committed, client.model.version());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(committed, client.presenter.presented_model_version);
+}
+
+test "presenter observes physical graphics without a semantic fallback" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.capabilities.kitty_graphics = .supported;
+    const version_before = client.model.version();
+    const pending_before = client.presenter.pending_updates;
+
+    var payload: [256]u8 = undefined;
+    const encoded = try schema.encodeGraphicsImage(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 5,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.observed_graphics_ingress);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.presented_graphics_ingress);
+
+    const pending_after = client.presenter.pending_updates;
+    const stale = try schema.encodeGraphicsDeleteImage(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 4,
+        .key = .{ .image_id = 1, .generation = 1 },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(stale));
+    try client.observeModel();
+
+    try std.testing.expectEqual(@as(u64, 1), client.graphics_store.ingressVersion());
+    try std.testing.expectEqual(pending_after, client.presenter.pending_updates);
+}
+
+test "shared graphics mapping failure downgrades before resynchronizing" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before = client.model.version();
+
+    var payload: [256]u8 = undefined;
+    const encoded = try schema.encodeGraphicsSharedImage(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgb,
+            .width = 1,
+            .height = 1,
+            .byte_len = 3,
+        },
+        .name = try core.graphics.ShmName.init("/telar-missing"),
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    const downgrade = try harness.nextClientMessage(&buffer);
+    const recovery = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(downgrade == .configure_graphics);
+    try std.testing.expect(!downgrade.configure_graphics.shared);
+    try std.testing.expect(recovery == .request_graphics_snapshot);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, recovery.request_graphics_snapshot.pane_id);
+    try std.testing.expectEqual(@as(u64, 0), client.graphics_store.ingressVersion());
+    try std.testing.expectEqualDeep(version_before, client.model.version());
 }
 
 test "runtime stopping and stray history results" {

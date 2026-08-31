@@ -677,11 +677,18 @@ pub const Model = struct {
         model.composition_invalidated = true;
     }
 
-    pub fn setGraphicsPlaceholder(model: *Model, pane_id: schema.PaneId, visible: bool) void {
-        const pane = model.find(pane_id) orelse return;
-        if (pane.graphics_placeholder == visible) return;
+    /// Sets one pane's cell fallback and reports whether composition changed.
+    ///
+    /// ```zig
+    /// if (model.setGraphicsPlaceholder(pane_id, true)) scheduleObservation();
+    /// ```
+    pub fn setGraphicsPlaceholder(model: *Model, pane_id: schema.PaneId, visible: bool) bool {
+        const pane = model.find(pane_id) orelse return false;
+        if (pane.graphics_placeholder == visible) return false;
         pane.graphics_placeholder = visible;
         model.composition_invalidated = true;
+
+        return true;
     }
 
     fn clearPaneDamage(model: *Model) void {

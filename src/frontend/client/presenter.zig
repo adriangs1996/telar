@@ -32,6 +32,11 @@ const presentableModel = client_mod.presentableModel;
 
 const Presenter = @This();
 
+pub const Observation = struct {
+    model: client_model.Version,
+    graphics_ingress: u64,
+};
+
 io: Io,
 /// Borrowed from the client, whose heap address is stable.
 select: *Io.Select(ClientEvent),
@@ -40,6 +45,8 @@ screen: term.Screen,
 pacer: pace.Pacer = .{},
 observed_model_version: client_model.Version = .{},
 presented_model_version: client_model.Version = .{},
+observed_graphics_ingress: u64 = 0,
+presented_graphics_ingress: u64 = 0,
 presented_copy_mode: ?client_model.CopyModeProjection = null,
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
@@ -62,20 +69,23 @@ pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
     presenter.last_input_ns = now_ns;
 }
 
-/// Observes a committed client-model version and schedules presentation once.
+/// Observes semantic and physical client revisions and schedules one frame.
 ///
 /// ```zig
-/// try presenter.observeModel(model.version());
+/// try presenter.observe(.{ .model = model.version(), .graphics_ingress = store.ingressVersion() });
 /// ```
-pub fn observeModel(presenter: *Presenter, version: client_model.Version) !void {
-    const newly_observed = !std.meta.eql(presenter.observed_model_version, version);
+pub fn observe(presenter: *Presenter, observation: Observation) !void {
+    const newly_observed = !std.meta.eql(presenter.observed_model_version, observation.model) or
+        presenter.observed_graphics_ingress != observation.graphics_ingress;
     if (newly_observed) {
-        presenter.observed_model_version = version;
+        presenter.observed_model_version = observation.model;
+        presenter.observed_graphics_ingress = observation.graphics_ingress;
         try presenter.requestDraw();
         return;
     }
 
-    const presentation_stale = !std.meta.eql(presenter.presented_model_version, version);
+    const presentation_stale = !std.meta.eql(presenter.presented_model_version, observation.model) or
+        presenter.presented_graphics_ingress != observation.graphics_ingress;
     if (presentation_stale and !presenter.draw_pending) {
         try presenter.requestDraw();
     }
@@ -192,6 +202,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
     else
         try presenter.presentEmpty(client);
     presenter.presented_model_version = presenter.observed_model_version;
+    presenter.presented_graphics_ingress = presenter.observed_graphics_ingress;
     presenter.presented_copy_mode = copy_projection;
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);

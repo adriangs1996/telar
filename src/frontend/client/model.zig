@@ -30,6 +30,7 @@ pub const Version = struct {
     frame: u64 = 0,
     pane_metadata: u64 = 0,
     pane_foreground: u64 = 0,
+    pane_graphics: u64 = 0,
     chrome: u64 = 0,
     prompt: u64 = 0,
     copy: u64 = 0,
@@ -270,6 +271,12 @@ pub const PaneFrameOutcome = union(enum) {
     detached,
     resync: PaneFrameRecovery,
     applied: PaneFrameCommit,
+};
+
+pub const PaneGraphicsFallbackCommit = struct {
+    pane_id: schema.PaneId,
+    visible: bool,
+    pane_graphics_revision: u64,
 };
 
 pub const PaneMetadataKind = enum {
@@ -531,6 +538,7 @@ pub const Model = struct {
     frame_revision: u64 = 0,
     pane_metadata_revision: u64 = 0,
     pane_foreground_revision: u64 = 0,
+    pane_graphics_revision: u64 = 0,
     viewport_revision: u64 = 0,
 
     /// Creates the client model with the configured pane appearance.
@@ -573,6 +581,7 @@ pub const Model = struct {
             .frame = model.frame_revision,
             .pane_metadata = model.pane_metadata_revision,
             .pane_foreground = model.pane_foreground_revision,
+            .pane_graphics = model.pane_graphics_revision,
             .chrome = model.chrome_revision,
             .prompt = model.name_prompt.version(),
             .copy = model.copy_revision,
@@ -1037,6 +1046,27 @@ pub const Model = struct {
             .cells = applied.cells,
             .frame_revision = model.frame_revision,
         } };
+    }
+
+    /// Commits whether one pane needs a cell fallback for host graphics.
+    /// Unknown panes and repeated values preserve the semantic revision.
+    ///
+    /// ```zig
+    /// const commit = model.setPaneGraphicsFallback(pane_id, true) orelse return;
+    /// ```
+    pub fn setPaneGraphicsFallback(model: *Model, pane_id: schema.PaneId, visible: bool) ?PaneGraphicsFallbackCommit {
+        const tab = model.workspace.tabForPane(pane_id) orelse return null;
+        if (!tab.model.setGraphicsPlaceholder(pane_id, visible)) {
+            return null;
+        }
+
+        model.pane_graphics_revision +%= 1;
+
+        return .{
+            .pane_id = pane_id,
+            .visible = visible,
+            .pane_graphics_revision = model.pane_graphics_revision,
+        };
     }
 
     /// Stores one runtime-owned pane metadata fact. Stale pane reports and
@@ -2344,6 +2374,40 @@ test "pane frame apply failure does not publish a frame revision" {
     try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expectEqualDeep(Version{}, model.version());
+}
+
+test "pane graphics fallback versions only semantic changes" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    const tab = model.workspace.active().?;
+    tab.model.composition_invalidated = false;
+
+    const shown = model.setPaneGraphicsFallback(pane_id, true).?;
+
+    try std.testing.expect(shown.visible);
+    try std.testing.expectEqual(@as(u64, 1), shown.pane_graphics_revision);
+    try std.testing.expect(tab.model.find(pane_id).?.graphics_placeholder);
+    try std.testing.expect(tab.model.composition_invalidated);
+    try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
+
+    tab.model.composition_invalidated = false;
+    try std.testing.expect(model.setPaneGraphicsFallback(pane_id, true) == null);
+    try std.testing.expect(model.setPaneGraphicsFallback(@enumFromInt(9), true) == null);
+    try std.testing.expect(!tab.model.composition_invalidated);
+    try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
+
+    const hidden = model.setPaneGraphicsFallback(pane_id, false).?;
+
+    try std.testing.expect(!hidden.visible);
+    try std.testing.expectEqual(@as(u64, 2), hidden.pane_graphics_revision);
+    try std.testing.expect(!tab.model.find(pane_id).?.graphics_placeholder);
+    try std.testing.expectEqualDeep(Version{ .pane_graphics = 2 }, model.version());
 }
 
 test "pane cwd metadata stores exact paths and versions only display changes" {

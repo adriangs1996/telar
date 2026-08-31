@@ -103,6 +103,7 @@ pub const InputChunk = struct {
 const InputHandler = @import("input_handler.zig");
 const config_reload = @import("config_reload.zig");
 const notification_flow = @import("notifications.zig");
+const pane_graphics = @import("pane_graphics.zig");
 const presenter_mod = @import("presenter.zig");
 const server_messages = @import("server_messages.zig");
 
@@ -328,7 +329,10 @@ pub fn nextId(client: *Client) !schema.RequestId {
 /// try client.observeModel();
 /// ```
 pub fn observeModel(client: *Client) !void {
-    try client.presenter.observeModel(client.model.version());
+    try client.presenter.observe(.{
+        .model = client.model.version(),
+        .graphics_ingress = client.graphics_store.ingressVersion(),
+    });
 }
 
 pub fn enqueue(client: *Client, message: client_outbox.Message) !void {
@@ -744,16 +748,7 @@ pub fn handleCapabilityTimeoutEvent(client: *Client, result: anyerror!void) !voi
         cell_size.width,
         cell_size.height,
     );
-    var tabs = client.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |pane| {
-            tab.model.setGraphicsPlaceholder(
-                pane.id,
-                client.graphics_store.hasPaneGraphics(pane.id),
-            );
-        }
-    }
+    pane_graphics.syncFallbacks(client);
     client.view.invalidate();
     try client.presenter.requestDraw();
 }

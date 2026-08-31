@@ -14,6 +14,7 @@ const plugin_broker = @import("../plugins/root.zig");
 const pane_closures = @import("pane_closures.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_geometry = @import("pane_geometry.zig");
+const pane_graphics = @import("pane_graphics.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_splits = @import("pane_splits.zig");
 const pane_viewports = @import("pane_viewports.zig");
@@ -405,12 +406,8 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
     var tabs = handler.client.model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         tab.model.setCellSize(cell_size.width, cell_size.height);
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |pane| {
-            tab.model.setGraphicsPlaceholder(pane.id, handler.client.capabilities.kitty_graphics != .supported and
-                handler.client.graphics_store.hasPaneGraphics(pane.id));
-        }
     }
+    pane_graphics.syncFallbacks(handler.client);
     handler.client.graphics_store.invalidatePlacements();
     try handler.client.view.configureSidebar(
         handler.client.sidebar_rendering,

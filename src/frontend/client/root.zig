@@ -44,6 +44,7 @@ test {
     _ = @import("pane_closures.zig");
     _ = @import("pane_focus.zig");
     _ = @import("pane_frames.zig");
+    _ = @import("pane_graphics.zig");
     _ = @import("pane_geometry.zig");
     _ = @import("pane_inputs.zig");
     _ = @import("pane_metadata.zig");
