@@ -30,9 +30,13 @@ CompleteClipboardImageHandler
   |
 finish exact id -> validate returned target -> validate current target
   |
-attachments.Store.adopt -> optional pane resize
+attachments.Store.adopt -> Store.ingressVersion
   |
-Store.ingressVersion
+optional pane resize
+  |
+DeliverClipboardImageCompletionHandler
+  |
+quiet result or bounded failure notification
   |
 presentation_lifecycle.observe -> Presenter -> paced cell and media passes
 ```
@@ -77,12 +81,16 @@ adapter securely frees its PNG without changing the shelf.
 For a current result, the application handler orders resource adoption before
 geometry effects. `attachments.Store` validates the image again, owns the PNG
 and reports whether the shelf changed pane geometry. The adapter offers new
-pane sizes to the runtime only for that layout transition.
+pane sizes to the runtime only for that layout transition. The completion
+handler then delegates its classified outcome through an explicit delivery
+boundary.
 
-Clipboard-empty is a quiet result. Oversized and invalid images publish a
-bounded client notification. An adoption failure consumes the capture and
-frees its buffer. A resize delivery failure happens after adoption and remains
-an explicit client error, matching other committed geometry effects.
+`DeliverClipboardImageCompletionHandler` keeps applied, stale, ignored and
+clipboard-empty results quiet. It maps oversized, worker and adoption failures
+to bounded notification inputs; the adapter only publishes them. An adoption
+failure consumes the capture and frees its buffer. A resize delivery failure
+happens before outcome delivery, after adoption, and remains an explicit client
+error matching other committed geometry effects.
 
 ## Presentation and bounds
 
@@ -112,7 +120,9 @@ event does not wipe megabytes synchronously.
   completion, target ownership, validation and identifier exhaustion.
 - `src/frontend/client/application/clipboard_image.zig` proves commit before
   scheduling, exact consumption, stale suppression, adoption before resize and
-  failure classification.
+  failure classification before exact delivery.
+- `src/frontend/client/application/clipboard_image_delivery.zig` proves quiet
+  outcomes, notification mapping and publication failure propagation.
 - `src/frontend/attachments/root.zig` proves cancellation ownership, image
   bounds, retained-byte limits, target scoping and ingress revision.
 - `src/frontend/client/client_test.zig` proves pane delivery without a target,

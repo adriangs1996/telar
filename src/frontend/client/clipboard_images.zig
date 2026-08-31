@@ -4,11 +4,13 @@ const std = @import("std");
 const attachments = @import("../attachments/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
+const notification_capability = @import("../notifications/root.zig");
 const notification_flow = @import("notifications.zig");
 const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
 const clipboard_image = client_application.clipboard_image;
+const clipboard_image_delivery = client_application.clipboard_image_delivery;
 
 pub const Completion = struct {
     execution_id: client_model.ClipboardCaptureId,
@@ -82,10 +84,13 @@ pub fn complete(client: *Client, completion: Completion) !void {
             .adopt = adopt,
             .resize = resize,
         },
+        .delivery = .{
+            .context = &context,
+            .deliver = deliverOutcome,
+        },
     };
-    const outcome = try use_case.execute(command);
 
-    try handleOutcome(client, outcome);
+    _ = try use_case.execute(command);
 }
 
 fn schedule(raw_context: *anyopaque, capture: client_model.ClipboardCapture) !void {
@@ -125,23 +130,20 @@ fn resize(raw_context: *anyopaque) !void {
     try pane_geometry.offerAttached(context.client, &active.model, context.client.view.workbench());
 }
 
-fn handleOutcome(client: *Client, outcome: clipboard_image.CompletionOutcome) !void {
-    switch (outcome) {
-        .applied, .stale, .ignored, .no_image => {},
-        .too_large => try notification_flow.publishNow(client, .{
-            .level = .failure,
-            .title = "Image preview skipped",
-            .message = "The clipboard image exceeds Telar's local preview limit",
-        }),
-        .worker_failed => |err| try notification_flow.publishNow(client, .{
-            .level = .failure,
-            .title = "Image preview failed",
-            .message = @errorName(err),
-        }),
-        .adoption_failed => |err| try notification_flow.publishNow(client, .{
-            .level = .failure,
-            .title = "Image preview failed",
-            .message = @errorName(err),
-        }),
-    }
+fn deliverOutcome(raw_context: *anyopaque, outcome: clipboard_image.CompletionOutcome) !void {
+    const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
+    var use_case: clipboard_image_delivery.DeliverClipboardImageCompletionHandler = .{
+        .effects = .{
+            .context = context,
+            .publish_notification = publishNotification,
+        },
+    };
+
+    try use_case.execute(outcome);
+}
+
+fn publishNotification(raw_context: *anyopaque, input: notification_capability.Input) !void {
+    const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
+
+    try notification_flow.publishNow(context.client, input);
 }

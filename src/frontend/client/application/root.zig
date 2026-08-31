@@ -8,6 +8,7 @@ pub const agent_sound = @import("agent_sound.zig");
 pub const agent_snapshot = @import("agent_snapshot.zig");
 pub const agent_snapshot_delivery = @import("agent_snapshot_delivery.zig");
 pub const clipboard_image = @import("clipboard_image.zig");
+pub const clipboard_image_delivery = @import("clipboard_image_delivery.zig");
 pub const client_diagnostic = @import("client_diagnostic.zig");
 pub const close_pane = @import("close_pane.zig");
 pub const close_tab = @import("close_tab.zig");
@@ -80,6 +81,7 @@ test {
     _ = agent_snapshot;
     _ = agent_snapshot_delivery;
     _ = clipboard_image;
+    _ = clipboard_image_delivery;
     _ = client_diagnostic;
     _ = close_pane;
     _ = close_tab;
