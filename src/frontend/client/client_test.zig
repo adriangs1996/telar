@@ -7337,6 +7337,30 @@ test "copy mode round trip: enter, select, copy, leave" {
     }
 }
 
+test "native action preflight retires copy mode before concrete delivery" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = try client_actions.apply(client, .enter_copy_mode);
+    const version = client.model.version();
+
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expectEqual(
+        keybind.Control.continue_routing,
+        try client_actions.apply(client, .toggle_sidebar),
+    );
+
+    var expected = version;
+    expected.copy += 1;
+    expected.chrome += 1;
+    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expectEqualDeep(expected, client.model.version());
+}
+
 test "copy-mode pointer consumes outside wheels and exits a missing target" {
     var harness: TestHarness = undefined;
     try harness.init();

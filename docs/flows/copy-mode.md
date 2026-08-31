@@ -16,7 +16,7 @@ request containing only coordinates.
 ```text
 host key, mouse wheel or native action
         |
-key_routing / copy_mode_pointer / client_actions
+key_routing / copy_mode_pointer / NativeActionHandler
         |
 copy_modes adapter
         |
@@ -52,8 +52,13 @@ event to view and pane routing.
 mutating state. The adapter applies selected movement and exit effects through
 the existing `CopyModeHandler`. It allocates nothing, retains no pane pointer
 and adds no queue. A selected effect failure propagates and cannot fall through
-to view or pane mouse handling. Any native action other than copy-mode entry
-also first leaves copy mode and restores its entry viewport.
+to view or pane mouse handling.
+
+`NativeActionHandler` owns the exit rule for actions from host bindings, Lua
+batches and plugin batches. It receives a synchronous copy-mode authority
+snapshot, leaves copy mode before any action other than entry, then delegates
+the concrete action. A leave failure prevents that action; a later action
+failure retains the completed exit and restored entry viewport.
 
 `ClientModel.planCopyMode` applies the pure motion component to a local state
 copy. Unhandled keys and boundary motions return no plan and advance no
@@ -149,6 +154,8 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
   viewport-after-commit ordering, including both failure policies.
 - `src/frontend/client/application/copy_mode_pointer.zig` proves exclusive
   pointer ownership, bounded wheel movement and selected-effect failures.
+- `src/frontend/client/application/native_action.zig` proves source-independent
+  copy-mode preflight, the entry exception and partial failures.
 - `src/frontend/client/copy_modes.zig` owns the selection outbox adapter.
 - `src/frontend/presentation/screen.zig` proves exact OSC 52 encoding,
   multi-chunk payloads and the terminal-side size bound.

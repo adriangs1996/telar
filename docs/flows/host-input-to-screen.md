@@ -113,15 +113,19 @@ A complete configured sequence returns `.action` from `Router.routeKey`.
 adapter snapshots prompt and copy-mode authority, then
 `ActionRoutingHandler` classifies three action sources:
 
-- built-in actions go to the shared `client_actions.apply` dispatcher;
+- built-in actions go to the shared `client_actions.apply` adapter and its
+  `NativeActionHandler` preflight;
 - explicit Lua callbacks go through `lua_actions` and `LuaActionHandler`, then
   return semantic effects or semantic input;
 - plugin actions enter `plugin_actions.start`, then apply a current authorized
   semantic batch through the same dispatcher after `.plugin_result`. See
   [Plugin action](plugin-action.md) for its lifecycle and authority checks.
 
-An active name prompt suppresses every source before its first effect. A Lua
-expression may return semantic keys or bounded paste. Keys re-enter
+An active name prompt suppresses every source before its first effect. Native
+actions from host bindings, validated Lua batches and authorized plugin batches
+share `NativeActionHandler`: active copy mode exits before every action except
+copy-mode entry, then the adapter translates the action to its concrete use
+case. A Lua expression may return semantic keys or bounded paste. Keys re-enter
 `KeyRoutingHandler`; paste enters `PaneInputHandler` only when copy mode is not
 active. The adapter retains no returned slice after the synchronous call.
 Re-entered owners publish their own semantic or disposable revision.

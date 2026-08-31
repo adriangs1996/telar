@@ -3,6 +3,7 @@
 const core = @import("telar-core");
 const input = @import("../input/root.zig");
 const workspace = @import("../workspace/root.zig");
+const client_application = @import("application/root.zig");
 
 const Client = @import("client.zig");
 const client_detachments = @import("client_detachments.zig");
@@ -24,6 +25,7 @@ const workspace_list_toggles = @import("workspace_list_toggles.zig");
 const Action = input.action.Action;
 const keybind = input.keybind;
 const layout = workspace.layout;
+const native_action = client_application.native_action;
 const schema = core.schema;
 
 /// Applies one native semantic action from host input, Lua or a plugin.
@@ -34,14 +36,31 @@ const schema = core.schema;
 /// }
 /// ```
 pub fn apply(client: *Client, value: Action) !keybind.Control {
-    switch (value) {
-        .enter_copy_mode => {},
-        else => {
-            if (client.model.copyModeActive()) {
-                _ = try copy_modes.leave(client);
-            }
+    var use_case: native_action.NativeActionHandler = .{
+        .effects = .{
+            .context = client,
+            .leave_copy_mode = leaveCopyMode,
+            .deliver = deliver,
         },
-    }
+    };
+    const control = try use_case.execute(value, .{
+        .copy_mode_active = client.model.copyModeActive(),
+    });
+
+    return switch (control) {
+        .continue_routing => .continue_routing,
+        .stop => .stop,
+    };
+}
+
+fn leaveCopyMode(raw_context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    _ = try copy_modes.leave(client);
+}
+
+fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
 
     switch (value) {
         .split_pane => |direction| try beginSplit(client, switch (direction) {
