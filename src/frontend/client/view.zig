@@ -6,6 +6,7 @@ const agents = @import("../agents/root.zig");
 const attachments = @import("../attachments/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
+const client_model = @import("model.zig");
 const name_prompt = @import("name_prompt.zig");
 const diff = presentation.diff;
 const icon_graphics = @import("../graphics/root.zig").icons;
@@ -59,6 +60,7 @@ pub const RenderInput = struct {
     agents: *const agents.Snapshot = &empty_agent_snapshot,
     workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
+    system_metrics: ?client_model.SystemMetrics = null,
     status_mode: widgets.status_bar.Mode = .normal,
     force: bool = false,
     diagnostic: ?[]const u8 = null,
@@ -89,7 +91,6 @@ pub const State = struct {
     dirty: bool = true,
     sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
     proxy_tls_active: bool = false,
-    system_metrics: ?widgets.status_bar.Metrics = null,
     notifications: widgets.notification.Center = .{},
     toast_overlay_drawn: bool = false,
     kitty_sidebar: kitty.KittySidebarRenderer,
@@ -211,12 +212,6 @@ pub const State = struct {
     pub fn setProxyTlsActive(state: *State, active: bool) void {
         if (state.proxy_tls_active == active) return;
         state.proxy_tls_active = active;
-        state.dirty = true;
-    }
-
-    pub fn setSystemMetrics(state: *State, metrics: ?widgets.status_bar.Metrics) void {
-        if (std.meta.eql(state.system_metrics, metrics)) return;
-        state.system_metrics = metrics;
         state.dirty = true;
     }
 
@@ -559,7 +554,11 @@ pub const State = struct {
             .sidebar_rounded_focus = focused_card_color != null,
             .sidebar_animation_frame = state.sidebar_animation_frame,
             .proxy_tls_active = state.proxy_tls_active,
-            .system_metrics = state.system_metrics,
+            .system_metrics = if (input.system_metrics) |metrics| .{
+                .cpu_percent = metrics.cpu_percent,
+                .memory_used_decigib = metrics.memory_used_decigib,
+                .battery_percent = metrics.battery_percent,
+            } else null,
             .status_mode = input.status_mode,
             .workspaces = input.workspaces,
             .workspace_list_collapsed = state.workspace_list_collapsed,

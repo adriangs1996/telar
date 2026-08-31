@@ -1,7 +1,7 @@
 //! System metrics at the left edge of the bottom bar.
 //!
 //! The runtime samples cpu, memory, and battery off the interactive path and
-//! the client caches the latest values. Rendering only formats what is
+//! ClientModel caches the latest values. Rendering only formats what is
 //! already in memory, in fixed buffers, so the frame stays allocation free.
 
 const std = @import("std");

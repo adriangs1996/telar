@@ -23,6 +23,7 @@ const pane_closures = @import("pane_closures.zig");
 const pane_frames = @import("pane_frames.zig");
 const pane_metadata = @import("pane_metadata.zig");
 const pane_splits = @import("pane_splits.zig");
+const system_metrics = @import("system_metrics.zig");
 const tab_closures = @import("tab_closures.zig");
 const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
@@ -111,7 +112,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .history_results => return error.UnexpectedHistoryResults,
         .proxy_status => |status| try handleProxyStatus(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
-        .system_metrics => |metrics| try handleSystemMetrics(client, metrics),
+        .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),
         .workspace_list => |list| _ = try workspace_lists.apply(client, list),
         .graphics_snapshot,
         .graphics_image,
@@ -212,16 +213,6 @@ fn handleProxyStatus(client: *Client, status: schema.ProxyStatus) !void {
         else
             widgets.notification.default_duration_ns,
     });
-}
-
-/// Host health for the status bar.
-fn handleSystemMetrics(client: *Client, metrics: schema.SystemMetrics) !void {
-    client.view.setSystemMetrics(.{
-        .cpu_percent = metrics.cpu_percent,
-        .memory_used_decigib = metrics.memory_used_decigib,
-        .battery_percent = if (metrics.has_battery) metrics.battery_percent else null,
-    });
-    try client.presenter.requestDraw();
 }
 
 /// An open-pane reply: routed by the continuation that asked for it.

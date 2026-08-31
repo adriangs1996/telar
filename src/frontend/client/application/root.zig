@@ -19,6 +19,7 @@ pub const resize_pane = @import("resize_pane.zig");
 pub const select_tab = @import("select_tab.zig");
 pub const set_pane_viewport = @import("set_pane_viewport.zig");
 pub const split_pane = @import("split_pane.zig");
+pub const system_metrics = @import("system_metrics.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
 pub const toggle_pane_fullscreen = @import("toggle_pane_fullscreen.zig");
 pub const toggle_sidebar = @import("toggle_sidebar.zig");
@@ -47,6 +48,7 @@ test {
     _ = select_tab;
     _ = set_pane_viewport;
     _ = split_pane;
+    _ = system_metrics;
     _ = tab_snapshot;
     _ = toggle_pane_fullscreen;
     _ = toggle_sidebar;

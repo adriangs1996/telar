@@ -20,6 +20,7 @@ pub const Version = struct {
     workspace: u64 = 0,
     workspace_list: u64 = 0,
     agents: u64 = 0,
+    system_metrics: u64 = 0,
     tabs: u64 = 0,
     active_tab: u64 = 0,
     panes: u64 = 0,
@@ -152,6 +153,18 @@ pub const WorkspaceListCommit = struct {
     runtime_revision: u64,
     count: usize,
     workspace_list_revision: u64,
+};
+
+pub const SystemMetrics = struct {
+    runtime_revision: u64,
+    cpu_percent: u8,
+    memory_used_decigib: u16,
+    battery_percent: ?u8,
+};
+
+pub const SystemMetricsCommit = struct {
+    runtime_revision: u64,
+    system_metrics_revision: u64,
 };
 
 pub const AgentStatusChange = struct {
@@ -478,6 +491,8 @@ pub const Model = struct {
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
     agent_revision: u64 = 0,
+    system_metrics: ?SystemMetrics = null,
+    system_metrics_revision: u64 = 0,
     tabs_revision: u64 = 0,
     active_tab_revision: u64 = 0,
     panes_revision: u64 = 0,
@@ -522,6 +537,7 @@ pub const Model = struct {
             .workspace = model.workspace_revision,
             .workspace_list = model.workspace_list_revision,
             .agents = model.agent_revision,
+            .system_metrics = model.system_metrics_revision,
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
             .panes = model.panes_revision,
@@ -656,6 +672,48 @@ pub const Model = struct {
     /// ```
     pub fn workspaceAtPosition(model: *const Model, position: usize) ?schema.WorkspaceId {
         return model.workspace_list_snapshot.workspaceAtPosition(position);
+    }
+
+    /// Commits one newer host-health replica. Invalid newer values preserve
+    /// the last usable metrics and their local version.
+    ///
+    /// ```zig
+    /// const commit = try model.reconcileSystemMetrics(metrics) orelse return;
+    /// ```
+    pub fn reconcileSystemMetrics(model: *Model, metrics: SystemMetrics) !?SystemMetricsCommit {
+        if (metrics.runtime_revision == 0) {
+            return error.InvalidMetricsRevision;
+        }
+
+        const current_revision = if (model.system_metrics) |current| current.runtime_revision else 0;
+        if (metrics.runtime_revision <= current_revision) {
+            return null;
+        }
+        if (metrics.cpu_percent > 100) {
+            return error.InvalidMetricsValue;
+        }
+        if (metrics.battery_percent) |battery| {
+            if (battery > 100) {
+                return error.InvalidMetricsValue;
+            }
+        }
+
+        model.system_metrics = metrics;
+        model.system_metrics_revision +%= 1;
+
+        return .{
+            .runtime_revision = metrics.runtime_revision,
+            .system_metrics_revision = model.system_metrics_revision,
+        };
+    }
+
+    /// Returns the latest immutable host-health projection, when available.
+    ///
+    /// ```zig
+    /// const metrics = model.systemMetrics() orelse return;
+    /// ```
+    pub fn systemMetrics(model: *const Model) ?SystemMetrics {
+        return model.system_metrics;
     }
 
     /// Reconciles one newer runtime agent snapshot and records only status
@@ -3474,6 +3532,81 @@ test "workspace list reconciliation owns navigation state and one isolated revis
     }));
     try std.testing.expectEqual(Version{ .workspace_list = 1 }, model.version());
     try std.testing.expectEqualStrings("telar", model.workspaceListSnapshot().nameAt(0));
+}
+
+test "system metrics reconciliation owns the latest replica and one isolated revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    const first = (try model.reconcileSystemMetrics(.{
+        .runtime_revision = 4,
+        .cpu_percent = 25,
+        .memory_used_decigib = 123,
+        .battery_percent = null,
+    })).?;
+
+    try std.testing.expectEqual(@as(u64, 4), first.runtime_revision);
+    try std.testing.expectEqual(@as(u64, 1), first.system_metrics_revision);
+    try std.testing.expectEqual(Version{ .system_metrics = 1 }, model.version());
+    try std.testing.expectEqualDeep(SystemMetrics{
+        .runtime_revision = 4,
+        .cpu_percent = 25,
+        .memory_used_decigib = 123,
+        .battery_percent = null,
+    }, model.systemMetrics().?);
+
+    try std.testing.expect((try model.reconcileSystemMetrics(.{
+        .runtime_revision = 3,
+        .cpu_percent = 10,
+        .memory_used_decigib = 20,
+        .battery_percent = 90,
+    })) == null);
+    try std.testing.expectEqual(Version{ .system_metrics = 1 }, model.version());
+
+    const second = (try model.reconcileSystemMetrics(.{
+        .runtime_revision = 5,
+        .cpu_percent = 50,
+        .memory_used_decigib = 10,
+        .battery_percent = 80,
+    })).?;
+
+    try std.testing.expectEqual(@as(u64, 2), second.system_metrics_revision);
+    try std.testing.expectEqual(@as(?u8, 80), model.systemMetrics().?.battery_percent);
+    try std.testing.expectEqual(Version{ .system_metrics = 2 }, model.version());
+}
+
+test "rejected system metrics preserve the latest replica and version" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const initial: SystemMetrics = .{
+        .runtime_revision = 1,
+        .cpu_percent = 30,
+        .memory_used_decigib = 80,
+        .battery_percent = null,
+    };
+    _ = try model.reconcileSystemMetrics(initial);
+
+    try std.testing.expectError(error.InvalidMetricsRevision, model.reconcileSystemMetrics(.{
+        .runtime_revision = 0,
+        .cpu_percent = 30,
+        .memory_used_decigib = 80,
+        .battery_percent = null,
+    }));
+    try std.testing.expectError(error.InvalidMetricsValue, model.reconcileSystemMetrics(.{
+        .runtime_revision = 2,
+        .cpu_percent = 101,
+        .memory_used_decigib = 80,
+        .battery_percent = null,
+    }));
+    try std.testing.expectError(error.InvalidMetricsValue, model.reconcileSystemMetrics(.{
+        .runtime_revision = 3,
+        .cpu_percent = 30,
+        .memory_used_decigib = 80,
+        .battery_percent = 101,
+    }));
+
+    try std.testing.expectEqualDeep(initial, model.systemMetrics().?);
+    try std.testing.expectEqual(Version{ .system_metrics = 1 }, model.version());
 }
 
 test "agent reconciliation owns labels versions and existing status transitions" {

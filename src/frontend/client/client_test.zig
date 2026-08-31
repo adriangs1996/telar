@@ -31,6 +31,7 @@ fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_mo
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -46,6 +47,7 @@ fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_mode
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -61,6 +63,7 @@ fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: c
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -75,6 +78,7 @@ fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.workspace_list, actual.workspace_list);
     try std.testing.expectEqual(expected.agents, actual.agents);
+    try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
     try std.testing.expectEqual(expected.panes, actual.panes);
@@ -3402,22 +3406,59 @@ test "proxy status flips the interception indicator once" {
     try harness.settle();
 }
 
-test "system metrics schedule a redraw" {
+test "system metrics commit before presenter-owned projection" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before = client.model.version();
+    const pending_updates_before = client.presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
     const metrics = try schema.encodeSystemMetrics(&payload, .{
-        .revision = 1,
+        .revision = 7,
         .cpu_percent = 50,
         .memory_used_decigib = 10,
-        .has_battery = false,
-        .battery_percent = 0,
+        .has_battery = true,
+        .battery_percent = 80,
     });
-    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(metrics));
-    try std.testing.expect(harness.client.presenter.draw_pending);
-    try harness.settle();
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(metrics));
+
+    try std.testing.expectEqualDeep(client_model.SystemMetrics{
+        .runtime_revision = 7,
+        .cpu_percent = 50,
+        .memory_used_decigib = 10,
+        .battery_percent = 80,
+    }, client.model.systemMetrics().?);
+    try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+    try std.testing.expect(!client.view.dirty);
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(metrics));
+    try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
+    try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const status = client.view.regions.status;
+    var status_text_buffer: [512]u8 = undefined;
+    var status_text_len: usize = 0;
+    for (status.x..status.x + status.w) |x| {
+        const cell = client.presenter.screen.front.cells[@as(usize, status.y) * client.presenter.screen.front.w + x];
+        const text = cell.text();
+        @memcpy(status_text_buffer[status_text_len..][0..text.len], text);
+        status_text_len += text.len;
+    }
+    const status_text = status_text_buffer[0..status_text_len];
+
+    try std.testing.expect(std.mem.indexOf(u8, status_text, " 50%") != null);
+    try std.testing.expect(std.mem.indexOf(u8, status_text, " 1.0G") != null);
+    try std.testing.expect(std.mem.indexOf(u8, status_text, "80%") != null);
 }
 
 test "workspace list snapshots commit before presenter-owned projection" {
