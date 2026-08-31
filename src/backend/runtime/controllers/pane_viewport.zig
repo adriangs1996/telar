@@ -4,7 +4,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const pane_viewport_commands = @import("../commands/pane_viewport.zig");
-const telemetry_mod = @import("../telemetry.zig");
+const telemetry_mod = @import("../observability/root.zig").telemetry;
 
 const schema = core.schema;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;

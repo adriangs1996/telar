@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const runtime_stop_commands = @import("../commands/runtime_stop.zig");
-const shutdown_mod = @import("../shutdown.zig");
+const shutdown_mod = @import("../lifecycle/root.zig").shutdown_authority;
 
 pub const Controller = struct {
     runtime_stop: runtime_stop_commands.RuntimeStopExecutor,

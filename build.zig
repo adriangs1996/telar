@@ -286,7 +286,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/history/agent_detection.zig" },
-        .{ .path = "src/backend/runtime/system_metrics.zig" },
+        .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
         .{ .path = "src/frontend/widgets/workspace_model.zig" },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },

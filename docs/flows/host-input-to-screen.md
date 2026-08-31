@@ -38,7 +38,7 @@ Server.handlePaneOutputEvent -> ingestPane -> Pane.ingest
       |
 Server.handlePaneIngestedEvent -> Server.pump
       |
-runtime.encoder.encodeFrame -> schema.pane_frame -> socket
+Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
       v
 Client.handleServerEvent -> handleServerMessage -> handlePaneFrame
@@ -145,7 +145,7 @@ the same pane. Only one socket send is in flight.
 ## 3. Runtime input entry
 
 `receiveSession` completes as `.client_message`. The runtime loop delegates it
-to `Server.handleClientMessageEvent` in `src/backend/runtime/root.zig`. That
+to `Server.handleClientMessageEvent` in `src/backend/runtime/instance.zig`. That
 entrypoint resolves the client generation, decodes the message, establishes
 the connection role, calls `Server.dispatchClientMessage`, pumps pending
 responses and schedules the next socket read.
@@ -187,14 +187,13 @@ terminal responses and the next PTY read, then calls `Server.pumpAll`.
 ## 5. Runtime frame publication
 
 `Server.pump` publishes a pane only after ingestion is complete and only when
-that client's prior frame has been acknowledged. It calls
-`runtime.encoder.encodeFrame` in `src/backend/runtime/encoder.zig`.
-
-`encodeFrame` renders pending VT state through the pane projection, computes a
-bounded cell diff against that attachment's acknowledged buffer, and calls
-`schema.encodePaneFrame`. `startSessionSend` writes the `.pane_frame` message
-to that client. Intermediate visual states may be folded; they are not queued
-as a replay.
+that client's prior frame has been acknowledged. `Delivery.prepare` selects
+the attachment cell lane and calls `Attachment.prepareNextCells`. The internal
+`cell.Sync.prepare` in `src/backend/runtime/attachment/cell.zig` renders the
+pending VT state, computes a bounded cell diff against that attachment's
+acknowledged buffer and calls `schema.encodePaneFrame`. `startSessionSend`
+writes the `.pane_frame` message to that client. Intermediate visual states may
+be folded; they are not queued as a replay.
 
 ## 6. Client frame and host presentation
 

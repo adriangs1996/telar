@@ -1,7 +1,7 @@
 //! Application command for initiating runtime shutdown exactly once.
 
 const std = @import("std");
-const shutdown_mod = @import("../shutdown.zig");
+const shutdown_mod = @import("../lifecycle/root.zig").shutdown_authority;
 
 pub const RuntimeStop = struct {
     requester: shutdown_mod.ClientKey,

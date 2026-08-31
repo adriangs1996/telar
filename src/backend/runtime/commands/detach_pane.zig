@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const attachment_mod = @import("../attachment.zig");
+const attachment_mod = @import("../attachment/root.zig");
 
 const schema = core.schema;
 

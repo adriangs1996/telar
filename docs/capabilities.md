@@ -23,7 +23,7 @@ live runtime or client state and imports neither process package.
 
 | Capability | Root | Owns |
 | --- | --- | --- |
-| Runtime | `src/backend/runtime/root.zig` | Runtime event loop, client sessions and cross-capability orchestration |
+| Runtime | `src/backend/runtime/root.zig` | Public runtime API and composition namespace |
 | Pane | `src/backend/pane/root.zig` | One child process, PTY terminal state, cell projection and pane lifecycle |
 | PTY | `src/backend/pty/root.zig` | Child process and pseudo-terminal platform adapter |
 | Media | `src/backend/media/root.zig` | Bounded child Kitty-graphics ingestion |
@@ -33,8 +33,25 @@ live runtime or client state and imports neither process package.
 | Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |
 | Transport | `src/backend/transport/root.zig` | Runtime side of local connection and handshake |
 
-The runtime root is an orchestrator. High fan-out is expected there and is a
-defect in a leaf capability unless an invariant requires it.
+`src/backend/runtime/instance.zig` owns the event loop, client sessions and
+cross-capability wiring behind the runtime root. Runtime-owned support is
+grouped by responsibility:
+
+| Runtime namespace | Root | Responsibility |
+| --- | --- | --- |
+| Agent coordination | `src/backend/runtime/agent/root.zig` | Description work and evidence expiry |
+| Attachment | `src/backend/runtime/attachment/root.zig` | Per-client pane projection and acknowledgement |
+| Client coordination | `src/backend/runtime/client/root.zig` | Admission, request routing and send completion |
+| Delivery | `src/backend/runtime/delivery/root.zig` | Bounded response scheduling, encoding and send transactions |
+| History integration | `src/backend/runtime/history/root.zig` | History worker ownership and response routing |
+| Lifecycle | `src/backend/runtime/lifecycle/root.zig` | Stop authority, external stop signal and ordered teardown |
+| Model | `src/backend/runtime/model/root.zig` | Authoritative semantic state for one runtime |
+| Observability | `src/backend/runtime/observability/root.zig` | Host metrics and diagnostic telemetry |
+| Pane events | `src/backend/runtime/pane_events/root.zig` | Pane actor entrypoints and completion policy |
+| Proxy integration | `src/backend/runtime/proxy/root.zig` | Proxy ownership and observation translation |
+
+High fan-out belongs in `instance.zig`. It is a defect in a leaf capability
+unless an invariant requires it.
 
 ## Client capabilities
 
@@ -120,7 +137,7 @@ All client handlers are in `src/frontend/client/root.zig`.
 
 ### Runtime
 
-All runtime handlers are in `src/backend/runtime/root.zig`.
+All runtime handlers are composed in `src/backend/runtime/instance.zig`.
 
 | Event | Entrypoint |
 | --- | --- |

@@ -4,8 +4,8 @@ const std = @import("std");
 const core = @import("telar-core");
 const agent_mod = @import("../../agent/root.zig");
 const pane_mod = @import("../../pane/root.zig");
-const attachment_mod = @import("../attachment.zig");
-const telemetry_mod = @import("../telemetry.zig");
+const attachment_mod = @import("../attachment/root.zig");
+const telemetry_mod = @import("../observability/root.zig").telemetry;
 
 const Io = std.Io;
 const AttachmentStore = attachment_mod.AttachmentStore;

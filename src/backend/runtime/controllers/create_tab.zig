@@ -3,12 +3,12 @@
 const std = @import("std");
 const core = @import("telar-core");
 const create_tab_commands = @import("../commands/create_tab.zig");
-const response_queue = @import("../response_queue.zig");
+const delivery_mod = @import("../delivery/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 
 const schema = core.schema;
-const PendingTabCreated = response_queue.PendingTabCreated;
-const ResponseQueue = response_queue.ResponseQueue;
+const PendingTabCreated = delivery_mod.PendingTabCreated;
+const ResponseQueue = delivery_mod.ResponseQueue;
 
 pub const Controller = struct {
     responses: *ResponseQueue,

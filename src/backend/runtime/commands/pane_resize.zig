@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const pane_mod = @import("../../pane/root.zig");
-const attachment_mod = @import("../attachment.zig");
+const attachment_mod = @import("../attachment/root.zig");
 
 const schema = core.schema;
 const AttachmentStore = attachment_mod.AttachmentStore;

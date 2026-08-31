@@ -4,7 +4,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const frame_ack_commands = @import("../commands/frame_ack.zig");
-const telemetry_mod = @import("../telemetry.zig");
+const telemetry_mod = @import("../observability/root.zig").telemetry;
 
 const Io = std.Io;
 const schema = core.schema;

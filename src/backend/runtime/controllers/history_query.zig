@@ -4,13 +4,13 @@ const std = @import("std");
 const core = @import("telar-core");
 const history_mod = @import("../../history/root.zig");
 const history_query = @import("../queries/history.zig");
-const response_queue = @import("../response_queue.zig");
-const telemetry_mod = @import("../telemetry.zig");
+const delivery_mod = @import("../delivery/root.zig");
+const telemetry_mod = @import("../observability/root.zig").telemetry;
 
 const diagnostics = core.diagnostics;
 const schema = core.schema;
 const QueryOrigin = history_mod.model.QueryOrigin;
-const ResponseQueue = response_queue.ResponseQueue;
+const ResponseQueue = delivery_mod.ResponseQueue;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 
 const Failure = struct {

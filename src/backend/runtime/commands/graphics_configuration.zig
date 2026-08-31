@@ -1,7 +1,7 @@
 //! Application command for one client's graphics transport policy.
 
 const std = @import("std");
-const attachment_mod = @import("../attachment.zig");
+const attachment_mod = @import("../attachment/root.zig");
 
 const AttachmentStore = attachment_mod.AttachmentStore;
 
