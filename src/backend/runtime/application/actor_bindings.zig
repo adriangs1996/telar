@@ -9,16 +9,15 @@ const agent_maintenance_coordinator = coordinators.agent_maintenance;
 const agent_process = @import("../../process/root.zig");
 const history = @import("../../history/root.zig");
 const event_entrypoints = @import("../entrypoints/events/root.zig");
-const history_response_controller = event_entrypoints.history_response;
 const attachment_mod = @import("../attachment/root.zig");
 const client_runtime = @import("../client/root.zig");
 const client_session = client_runtime.session;
 const client_store = client_runtime.store;
 const runtime_config = @import("../config.zig");
-const delivery_mod = @import("../delivery/root.zig");
 const runtime_event = @import("../event.zig");
 const event_sources = @import("../event_sources.zig");
 const client_event_dispatcher = @import("event_dispatcher/client.zig");
+const history_event_dispatcher = @import("event_dispatcher/history.zig");
 const request_dispatch = @import("request_dispatch.zig");
 const pane_events = event_entrypoints.pane;
 const media_projection = pane_events.media_projection;
@@ -50,10 +49,8 @@ const enforceGraphicsQuotas = attachment_mod.enforceGraphicsQuotas;
 const TelemetryState = telemetry_mod.State;
 const formatRuntimeTelemetry = telemetry_mod.formatRuntimeTelemetry;
 const max_clients = client_store.max_clients;
-const ResponseQueue = delivery_mod.ResponseQueue;
 
 const IngestTestGate = runtime_config.IngestTestGate;
-const ClientKey = client_session.Key;
 const RuntimeEvent = runtime_event.Event;
 const PaneIngestEvent = pane_ingest_coordinator.Completion;
 const PaneObservationEvent = pane_observation_coordinator.Completion;
@@ -69,6 +66,7 @@ const ClientSession = client_session.Session;
 /// ```
 pub fn Bindings(comptime Application: type) type {
     const ClientEvents = client_event_dispatcher.Dispatcher(Application);
+    const HistoryEvents = history_event_dispatcher.Dispatcher(Application);
 
     return struct {
         pub const EventResources = struct {
@@ -94,8 +92,7 @@ pub fn Bindings(comptime Application: type) type {
                 .client_message => |value| return ClientEvents.handleMessage(application, value),
                 .client_sent => |value| return ClientEvents.handleSent(application, value),
                 .history_response => |result| {
-                    var controller = historyResponseController(application);
-                    try controller.handle(result);
+                    try HistoryEvents.handle(application, result);
                 },
                 .proxy_event => |result| {
                     var adapter = proxyObservationAdapter(application);
@@ -155,14 +152,6 @@ pub fn Bindings(comptime Application: type) type {
             return false;
         }
 
-        fn queueFailure(responses: *ResponseQueue, failure: delivery_mod.PendingFailure) !void {
-            try responses.push(.{ .request_failed = .{
-                .request_id = failure.request_id,
-                .code = failure.code,
-                .message = failure.message,
-            } });
-        }
-
         /// Schedules a bounded client write after delivery prepared its payload.
         ///
         /// ```zig
@@ -174,52 +163,6 @@ pub fn Bindings(comptime Application: type) type {
 
         fn writeDiagnostics(io: Io, state: *TelemetryState, bytes: []const u8) anyerror!void {
             try state.write(io, bytes);
-        }
-
-        const history_response_runtime_port: history_response_controller.RuntimePort(Application, *ClientSession) = .{
-            .rearm_receive = rearmHistoryResponse,
-            .resolve = resolveHistoryResponseClient,
-            .set_close_after_reply = setHistoryCloseAfterReply,
-            .enqueue_query_result = enqueueHistoryQueryResult,
-            .enqueue_failure = enqueueHistoryFailure,
-            .dispose_query_result = disposeHistoryQueryResult,
-            .pump_clients = pumpRuntimeClients,
-        };
-
-        const RuntimeHistoryResponseController = history_response_controller.Controller(Application, *ClientSession, history_response_runtime_port);
-
-        fn historyResponseController(application: *Application) RuntimeHistoryResponseController {
-            return RuntimeHistoryResponseController.init(application);
-        }
-
-        fn rearmHistoryResponse(application: *Application) !void {
-            try application.select.concurrent(.history_response, history.receiveResponse, .{ application.io, application.history_service });
-        }
-
-        fn resolveHistoryResponseClient(application: *Application, client: ClientKey) ?*ClientSession {
-            return application.clients.resolve(client);
-        }
-
-        fn setHistoryCloseAfterReply(_: *Application, session: *ClientSession, enabled: bool) void {
-            session.delivery.setCloseAfterReply(enabled);
-        }
-
-        fn enqueueHistoryQueryResult(_: *Application, session: *ClientSession, result: *history.model.QueryResult) bool {
-            session.delivery.responses.push(.{ .history_result = result }) catch return false;
-            return true;
-        }
-
-        fn enqueueHistoryFailure(_: *Application, session: *ClientSession, failure: history.model.Failure) bool {
-            queueFailure(&session.delivery.responses, .{
-                .request_id = failure.request_id,
-                .code = .internal,
-                .message = failure.message,
-            }) catch return false;
-            return true;
-        }
-
-        fn disposeHistoryQueryResult(_: *Application, result: *history.model.QueryResult) void {
-            result.deinit();
         }
 
         const pane_input_runtime_port: pane_input_pump.RuntimePort(Application) = .{
