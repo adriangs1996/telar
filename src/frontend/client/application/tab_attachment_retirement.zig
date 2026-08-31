@@ -9,6 +9,11 @@ const pane_paste = @import("pane_paste.zig");
 
 const schema = core.schema;
 
+pub const PendingAttachments = struct {
+    context: *anyopaque,
+    pending: *const fn (*anyopaque, schema.PaneId) bool,
+};
+
 pub const Effects = struct {
     context: *anyopaque,
     attachment_pending: *const fn (*anyopaque, schema.PaneId) bool,
@@ -16,6 +21,24 @@ pub const Effects = struct {
     retire_attachment: *const fn (*anyopaque, schema.PaneId) void,
     hide_graphics: *const fn (*anyopaque, schema.PaneId) anyerror!void,
 };
+
+/// Counts the exact outbound deliveries required by a captured tab retirement
+/// without changing model or request state.
+///
+/// ```zig
+/// const required = requiredDeliveryCapacity(&plan, pending_attachments);
+/// ```
+pub fn requiredDeliveryCapacity(plan: *const client_model.TabDetachmentPlan, pending_attachments: PendingAttachments) usize {
+    var required = @as(usize, @intFromBool(plan.paste_marker_required));
+    required += @intFromBool(plan.focus_out_required);
+
+    for (plan.slice()) |pane| {
+        const pending = pending_attachments.pending(pending_attachments.context, pane.pane_id);
+        required += @intFromBool(pane.attached or pending);
+    }
+
+    return required;
+}
 
 pub const RetireTabAttachmentsHandler = struct {
     model: *client_model.Model,
@@ -169,6 +192,13 @@ const Capture = struct {
         };
     }
 
+    fn pendingAttachments(capture: *Capture) PendingAttachments {
+        return .{
+            .context = capture,
+            .pending = attachmentPending,
+        };
+    }
+
     fn deliverPaste(context: *anyopaque, delivery: pane_paste.Delivery) !bool {
         const capture: *Capture = @ptrCast(@alignCast(context));
         capture.record(.paste);
@@ -261,6 +291,30 @@ fn testingHandler(testing: *TestingModel, capture: *Capture) RetireTabAttachment
         .focus_effects = capture.focusEffects(),
         .effects = capture.attachmentEffects(),
     };
+}
+
+test "tab retirement capacity counts only required deliveries" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var capture: Capture = .{
+        .model = testing.model,
+        .root = testing.root,
+        .sibling = testing.sibling,
+        .pending_pane = testing.sibling,
+    };
+    const plan = try testing.model.planTabDetachment(testing.target);
+
+    const required = requiredDeliveryCapacity(&plan, capture.pendingAttachments());
+
+    try std.testing.expectEqual(@as(usize, 4), required);
+    try std.testing.expectEqualDeep(&[_]Event{
+        .{ .pending = testing.root },
+        .{ .pending = testing.sibling },
+    }, capture.eventSlice());
+    try std.testing.expect(testing.model.panePasteActive());
+    try std.testing.expect(testing.model.reportedPaneFocus() != null);
+    try std.testing.expect(testing.model.workspace.findPane(testing.root).?.attached);
+    try std.testing.expect(!testing.model.workspace.findPane(testing.sibling).?.attached);
 }
 
 test "RetireTabAttachmentsHandler orders authorities and panes before commit" {

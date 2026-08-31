@@ -29,7 +29,7 @@ pub const PrepareWorkspaceHandoffHandler = struct {
     /// try handler.execute();
     /// ```
     pub fn execute(handler: *PrepareWorkspaceHandoffHandler) !void {
-        const required_capacity = handler.requiredCapacity();
+        const required_capacity = try handler.requiredCapacity();
         if (required_capacity > handler.capacity.available(handler.capacity.context)) {
             return error.ClientOutboxFull;
         }
@@ -46,28 +46,17 @@ pub const PrepareWorkspaceHandoffHandler = struct {
         }
     }
 
-    fn requiredCapacity(handler: *const PrepareWorkspaceHandoffHandler) usize {
+    fn requiredCapacity(handler: *const PrepareWorkspaceHandoffHandler) !usize {
         var required: usize = 1;
-        if (handler.model.panePasteSession()) |session| {
-            required += @intFromBool(session.bracketed_paste);
-        }
-
-        if (handler.model.reportedPaneFocus()) |reported| {
-            if (handler.model.workspace.findPane(reported.pane_id)) |pane| {
-                required += @intFromBool(reported.focus_events and pane.attached);
-            }
-        }
+        const pending_attachments: tab_attachment_retirement.PendingAttachments = .{
+            .context = handler.attachment_effects.context,
+            .pending = handler.attachment_effects.attachment_pending,
+        };
 
         var tabs = handler.model.workspace.tabIterator();
         while (tabs.next()) |tab| {
-            var panes = tab.model.paneIterator();
-            while (panes.next()) |pane| {
-                const pending = handler.attachment_effects.attachment_pending(
-                    handler.attachment_effects.context,
-                    pane.id,
-                );
-                required += @intFromBool(pane.attached or pending);
-            }
+            const plan = try handler.model.planTabDetachment(tab.location);
+            required += tab_attachment_retirement.requiredDeliveryCapacity(&plan, pending_attachments);
         }
 
         return required;

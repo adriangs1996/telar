@@ -47,7 +47,9 @@ it changes attachment state. It reserves focus-out only when the reported pane
 still exists, remains attached and has focus events enabled. Every attached
 pane and every unattached pane with an attachment request in flight reserves a
 detach slot. This prevents a pending attachment from consuming capacity that
-the old adapter preflight did not account for.
+the old adapter preflight did not account for. The per-tab count is owned by
+the same retirement rule used by tab closure, so both flows reserve identical
+paste, focus and attachment deliveries.
 
 After the capacity gate, the preparation handler delegates each tab to
 `RetireTabAttachmentsHandler`, which closes the paste and delivers detaches in

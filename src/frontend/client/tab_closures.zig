@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
@@ -15,7 +14,6 @@ const close_tab = client_application.close_tab;
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 const tab_removal_delivery = client_application.tab_removal_delivery;
-const tabs_mod = workspace_capability.tabs;
 
 pub const Outcome = enum {
     applied,
@@ -39,9 +37,22 @@ pub fn requestHandler(client: *Client) close_tab.RequestCloseTabHandler {
             .context = client,
             .pending = tabOperationPending,
         },
+        .preparation = .{
+            .requests = .{
+                .context = client,
+                .ensure = ensureCloseRequests,
+            },
+            .deliveries = .{
+                .context = client,
+                .available = availableDeliveryCapacity,
+            },
+            .pending_attachments = .{
+                .context = client,
+                .pending = attachmentPending,
+            },
+        },
         .effects = .{
             .context = client,
-            .prepare = prepareClose,
             .detach = detachForClose,
             .send = sendClose,
             .restore = restoreClose,
@@ -137,34 +148,22 @@ fn tabOperationPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_operation);
 }
 
-fn prepareClose(context: *anyopaque, location: schema.TabLocation) !void {
+fn ensureCloseRequests(context: *anyopaque, count: u64) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const tab = findTab(&client.model.workspace, location) orelse return error.UnexpectedTabClosure;
 
-    try request_lifecycle.ensureCanStart(client, 2);
+    try request_lifecycle.ensureCanStart(client, count);
+}
 
-    var required_capacity: usize = 1;
-    if (client.model.panePasteSession()) |session| {
-        const closes_session = tab.model.findConst(session.pane_id) != null and session.bracketed_paste;
-        required_capacity += @intFromBool(closes_session);
-    }
+fn availableDeliveryCapacity(context: *anyopaque) usize {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-    if (client.model.reportedPaneFocus()) |reported| {
-        if (tab.model.findConst(reported.pane_id)) |pane| {
-            required_capacity += @intFromBool(reported.focus_events and pane.attached);
-        }
-    }
+    return runtime_transport.availableCapacity(client);
+}
 
-    var panes = tab.model.paneIterator();
-    while (panes.next()) |pane| {
-        const attachment_pending = request_lifecycle.hasPane(client, .attachment, pane.id);
-        required_capacity += @intFromBool(pane.attached or attachment_pending);
-    }
+fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-    const available_capacity = runtime_transport.availableCapacity(client);
-    if (required_capacity > available_capacity) {
-        return error.ClientOutboxFull;
-    }
+    return request_lifecycle.hasPane(client, .attachment, pane_id);
 }
 
 fn detachForClose(context: *anyopaque, location: schema.TabLocation) !void {
@@ -240,13 +239,4 @@ fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) voi
 fn requestWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     _ = try workspace_handoffs.followWorkspace(client, workspace);
-}
-
-fn findTab(workspace: *tabs_mod.Model, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const tab = workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
-
-    return tab;
 }

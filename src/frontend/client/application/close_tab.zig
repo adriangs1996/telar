@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../model.zig");
+const tab_close_preparation = @import("tab_close_preparation.zig");
 
 const schema = core.schema;
 
@@ -17,7 +18,6 @@ pub const TabOperationGate = struct {
 
 pub const CloseRequestEffects = struct {
     context: *anyopaque,
-    prepare: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
     detach: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
     send: *const fn (*anyopaque, TabCloseIntent) anyerror!void,
     restore: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
@@ -26,6 +26,7 @@ pub const CloseRequestEffects = struct {
 pub const RequestCloseTabHandler = struct {
     model: *const client_model.Model,
     gate: TabOperationGate,
+    preparation: tab_close_preparation.PrepareTabCloseHandler,
     effects: CloseRequestEffects,
 
     /// Verifies delivery capacity, detaches the active tab and sends one close
@@ -43,7 +44,7 @@ pub const RequestCloseTabHandler = struct {
 
         const location = handler.model.activeTabLocation() orelse return false;
 
-        try handler.effects.prepare(handler.effects.context, location);
+        try handler.preparation.execute(handler.model, location);
         handler.effects.detach(handler.effects.context, location) catch |err| {
             handler.effects.restore(handler.effects.context, location) catch |restore_err| {
                 return restore_err;
@@ -183,10 +184,26 @@ const RequestCapture = struct {
     fn requestEffects(capture: *RequestCapture) CloseRequestEffects {
         return .{
             .context = capture,
-            .prepare = prepare,
             .detach = detach,
             .send = send,
             .restore = restore,
+        };
+    }
+
+    fn preparation(capture: *RequestCapture) tab_close_preparation.PrepareTabCloseHandler {
+        return .{
+            .requests = .{
+                .context = capture,
+                .ensure = prepare,
+            },
+            .deliveries = .{
+                .context = capture,
+                .available = availableCapacity,
+            },
+            .pending_attachments = .{
+                .context = capture,
+                .pending = attachmentPending,
+            },
         };
     }
 
@@ -199,12 +216,20 @@ const RequestCapture = struct {
         return capture.blocked;
     }
 
-    fn prepare(context: *anyopaque, _: schema.TabLocation) !void {
+    fn prepare(context: *anyopaque, _: u64) !void {
         const capture: *RequestCapture = @ptrCast(@alignCast(context));
         capture.record(.prepare);
         if (capture.prepare_failure) |failure| {
             return failure;
         }
+    }
+
+    fn availableCapacity(_: *anyopaque) usize {
+        return std.math.maxInt(usize);
+    }
+
+    fn attachmentPending(_: *anyopaque, _: schema.PaneId) bool {
+        return false;
     }
 
     fn detach(context: *anyopaque, _: schema.TabLocation) !void {
@@ -337,6 +362,7 @@ test "tab close request prepares and detaches before delivery" {
     var handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
+        .preparation = capture.preparation(),
         .effects = capture.requestEffects(),
     };
 
@@ -358,6 +384,7 @@ test "tab close request suppresses an absent active tab" {
     var handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
+        .preparation = capture.preparation(),
         .effects = capture.requestEffects(),
     };
 
@@ -372,6 +399,7 @@ test "tab close request rejects preparation without provisional effects" {
     var handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
+        .preparation = capture.preparation(),
         .effects = capture.requestEffects(),
     };
 
@@ -388,6 +416,7 @@ test "tab close request restores every failure after preparation" {
     var detach_handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = detach_failure.gate(),
+        .preparation = detach_failure.preparation(),
         .effects = detach_failure.requestEffects(),
     };
     try std.testing.expectError(error.DetachFailed, detach_handler.execute());
@@ -397,6 +426,7 @@ test "tab close request restores every failure after preparation" {
     var send_handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = send_failure.gate(),
+        .preparation = send_failure.preparation(),
         .effects = send_failure.requestEffects(),
     };
     try std.testing.expectError(error.SendFailed, send_handler.execute());

@@ -165,6 +165,8 @@ pub const TabDetachmentPlan = struct {
     len: u8 = 0,
     owns_paste: bool = false,
     owns_reported_focus: bool = false,
+    paste_marker_required: bool = false,
+    focus_out_required: bool = false,
 
     pub const Pane = struct {
         pane_id: schema.PaneId,
@@ -2749,11 +2751,17 @@ pub const Model = struct {
         }
 
         if (model.pane_paste) |session| {
-            plan.owns_paste = tab.model.findConst(session.pane_id) != null;
+            if (tab.model.findConst(session.pane_id) != null) {
+                plan.owns_paste = true;
+                plan.paste_marker_required = session.bracketed_paste;
+            }
         }
 
         if (model.reported_pane_focus) |reported| {
-            plan.owns_reported_focus = tab.model.findConst(reported.pane_id) != null;
+            if (tab.model.findConst(reported.pane_id)) |pane| {
+                plan.owns_reported_focus = true;
+                plan.focus_out_required = reported.focus_events and pane.attached;
+            }
         }
 
         return plan;
@@ -4791,6 +4799,8 @@ test "tab detachment plans exact operational state before a silent commit" {
     try std.testing.expectEqualDeep(TabDetachmentPlan.Pane{ .pane_id = sibling, .attached = false }, plan.slice()[1]);
     try std.testing.expect(plan.owns_paste);
     try std.testing.expect(plan.owns_reported_focus);
+    try std.testing.expect(plan.paste_marker_required);
+    try std.testing.expect(plan.focus_out_required);
 
     var invalid = plan;
     invalid.panes[1] = invalid.panes[0];

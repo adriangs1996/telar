@@ -26,10 +26,15 @@ runtime socket
 ```
 
 `RequestCloseTabHandler` resolves the active tab identity without changing the
-semantic model. Its adapter calls `request_lifecycle.ensureCanStart` and checks
-outbox capacity before the first provisional effect. The check accounts for
-the close request, its recovery identity, a required paste-closing marker,
-focus output and every pane detach.
+semantic model. `PrepareTabCloseHandler` then owns the preflight policy before
+the first provisional effect. It reserves the close request and its recovery
+identity, and checks outbox capacity for the final request, a required
+paste-closing marker, focus output and every pane detach.
+
+The per-tab retirement count is the same application rule used by workspace
+handoff. Adapters only report request availability, current outbox capacity
+and whether a pane attachment is pending; they do not decide what closing a
+tab requires.
 
 After that check, the handler closes any captured paste, detaches the active tab
 and asks the adapter to send one `close_tab` message. The request lifecycle
