@@ -136,6 +136,7 @@ pub fn presentDue(presenter: *Presenter, client: *Client) !void {
         presenter.observed_model_version.chrome;
     if (chrome_changed) {
         client.view.setSidebarVisible(client.model.sidebarVisible());
+        client.view.setWorkspaceListCollapsed(client.model.workspaceListCollapsed());
     }
     if (workspace_changed or tabs_changed or active_tab_changed or panes_changed or chrome_changed) {
         client.view.invalidate();

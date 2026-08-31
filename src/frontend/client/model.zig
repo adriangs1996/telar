@@ -129,6 +129,11 @@ pub const SidebarVisibility = struct {
     chrome_revision: u64,
 };
 
+pub const WorkspaceListCollapse = struct {
+    collapsed: bool,
+    chrome_revision: u64,
+};
+
 pub const RequestPaneSplit = struct {
     axis: layout_mod.Axis,
     area: ui.Rect,
@@ -295,6 +300,7 @@ pub const Model = struct {
     active_tab_revision: u64 = 0,
     panes_revision: u64 = 0,
     sidebar_visible: bool = true,
+    workspace_list_collapsed: bool = false,
     chrome_revision: u64 = 0,
 
     /// Creates the client model with the configured pane appearance.
@@ -369,6 +375,44 @@ pub const Model = struct {
     /// ```
     pub fn toggleSidebar(model: *Model) SidebarVisibility {
         return model.setSidebarVisible(!model.sidebar_visible).?;
+    }
+
+    /// Returns whether the top-bar workspace list is collapsed.
+    ///
+    /// ```zig
+    /// if (model.workspaceListCollapsed()) showActiveWorkspaceOnly();
+    /// ```
+    pub fn workspaceListCollapsed(model: *const Model) bool {
+        return model.workspace_list_collapsed;
+    }
+
+    /// Commits an explicit workspace-list collapse preference. Repeated
+    /// values preserve the chrome revision.
+    ///
+    /// ```zig
+    /// const change = model.setWorkspaceListCollapsed(true) orelse return;
+    /// ```
+    pub fn setWorkspaceListCollapsed(model: *Model, collapsed: bool) ?WorkspaceListCollapse {
+        if (model.workspace_list_collapsed == collapsed) {
+            return null;
+        }
+
+        model.workspace_list_collapsed = collapsed;
+        model.chrome_revision +%= 1;
+
+        return .{
+            .collapsed = collapsed,
+            .chrome_revision = model.chrome_revision,
+        };
+    }
+
+    /// Toggles the workspace-list preference and advances only chrome.
+    ///
+    /// ```zig
+    /// const change = model.toggleWorkspaceList();
+    /// ```
+    pub fn toggleWorkspaceList(model: *Model) WorkspaceListCollapse {
+        return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
     }
 
     /// Returns the active tab identity without exposing workspace storage.
@@ -2096,6 +2140,30 @@ test "sidebar visibility advances only the chrome revision" {
     try std.testing.expect(shown.visible);
     try std.testing.expect(model.sidebarVisible());
     try std.testing.expectEqual(@as(u64, 2), shown.chrome_revision);
+    try std.testing.expectEqual(Version{ .chrome = 2 }, model.version());
+}
+
+test "workspace list collapse advances only the chrome revision" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+
+    try std.testing.expect(!model.workspaceListCollapsed());
+    try std.testing.expect(model.setWorkspaceListCollapsed(false) == null);
+    try std.testing.expectEqualDeep(Version{}, model.version());
+
+    const collapsed = model.toggleWorkspaceList();
+
+    try std.testing.expect(collapsed.collapsed);
+    try std.testing.expect(model.workspaceListCollapsed());
+    try std.testing.expectEqual(@as(u64, 1), collapsed.chrome_revision);
+    try std.testing.expectEqual(Version{ .chrome = 1 }, model.version());
+    try std.testing.expect(model.setWorkspaceListCollapsed(true) == null);
+
+    const expanded = model.setWorkspaceListCollapsed(false).?;
+
+    try std.testing.expect(!expanded.collapsed);
+    try std.testing.expect(!model.workspaceListCollapsed());
+    try std.testing.expectEqual(@as(u64, 2), expanded.chrome_revision);
     try std.testing.expectEqual(Version{ .chrome = 2 }, model.version());
 }
 

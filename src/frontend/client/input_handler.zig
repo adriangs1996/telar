@@ -23,6 +23,7 @@ const tab_renames = @import("tab_renames.zig");
 const tab_selections = @import("tab_selections.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
+const workspace_list_toggles = @import("workspace_list_toggles.zig");
 const workspace_renames = @import("workspace_renames.zig");
 const action_mod = input_capability.action;
 const copy_mode = input_capability.copy_mode;
@@ -361,6 +362,9 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     if (interaction.toggle_sidebar) {
         try handler.toggleSidebar();
     }
+    if (interaction.toggle_workspace_list) {
+        handler.toggleWorkspaceList();
+    }
     const agent_handoff = if (interaction.focus_agent) |agent_key|
         try handler.focusSidebarAgent(agent_key)
     else
@@ -599,10 +603,7 @@ pub fn applyNativeAction(handler: *InputHandler, value: Action) !keybind.Control
         }),
         .toggle_pane_fullscreen => try handler.togglePaneFullscreen(),
         .toggle_sidebar => try handler.toggleSidebar(),
-        .toggle_workspace_list => {
-            handler.client.view.toggleWorkspaceList();
-            handler.redraw = true;
-        },
+        .toggle_workspace_list => handler.toggleWorkspaceList(),
         .new_workspace => try handler.beginWorkspaceCreate(),
         .rename_workspace => if (handler.client.model.workspace.workspace) |workspace| {
             handler.client.beginWorkspaceRenamePrompt(
@@ -694,6 +695,12 @@ fn toggleSidebar(handler: *InputHandler) !void {
     var use_case = sidebar_toggles.handler(handler.client);
 
     _ = try use_case.execute();
+}
+
+fn toggleWorkspaceList(handler: *InputHandler) void {
+    var use_case = workspace_list_toggles.handler(handler.client);
+
+    _ = use_case.execute();
 }
 
 fn closeFocused(handler: *InputHandler) !void {

@@ -1302,6 +1302,56 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
+test "workspace list toggle is projected only by the presenter" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version_before_collapse = client.model.version();
+    const pending_updates_before_collapse = client.presenter.pending_updates;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.applyNativeAction(.toggle_workspace_list);
+
+    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expect(!client.view.workspace_list_collapsed);
+    try std.testing.expectEqual(version_before_collapse.chrome + 1, client.model.version().chrome);
+    try std.testing.expectEqual(version_before_collapse.workspace, client.model.version().workspace);
+    try std.testing.expectEqual(version_before_collapse.tabs, client.model.version().tabs);
+    try std.testing.expectEqual(version_before_collapse.active_tab, client.model.version().active_tab);
+    try std.testing.expectEqual(version_before_collapse.panes, client.model.version().panes);
+    try std.testing.expectEqual(pending_updates_before_collapse, client.presenter.pending_updates);
+    try std.testing.expect(!client.view.dirty);
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_collapse + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(client.view.workspace_list_collapsed);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+
+    const version_before_expand = client.model.version();
+    const pending_updates_before_expand = client.presenter.pending_updates;
+    _ = try handler.applyNativeAction(.toggle_workspace_list);
+
+    try std.testing.expect(!client.model.workspaceListCollapsed());
+    try std.testing.expect(client.view.workspace_list_collapsed);
+    try std.testing.expectEqual(version_before_expand.chrome + 1, client.model.version().chrome);
+    try std.testing.expectEqual(pending_updates_before_expand, client.presenter.pending_updates);
+    try std.testing.expect(!handler.redraw);
+    try std.testing.expectEqual(@as(usize, 0), client.outbox.len);
+
+    try client.observeModel();
+
+    try std.testing.expectEqual(pending_updates_before_expand + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expect(!client.view.workspace_list_collapsed);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
 test "an active split commits once and presentation observes the model" {
     var harness: TestHarness = undefined;
     try harness.init();

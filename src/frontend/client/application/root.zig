@@ -15,6 +15,7 @@ pub const split_pane = @import("split_pane.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
 pub const toggle_pane_fullscreen = @import("toggle_pane_fullscreen.zig");
 pub const toggle_sidebar = @import("toggle_sidebar.zig");
+pub const toggle_workspace_list = @import("toggle_workspace_list.zig");
 pub const workspace_handoff = @import("workspace_handoff.zig");
 pub const workspace_snapshot = @import("workspace_snapshot.zig");
 
@@ -34,6 +35,7 @@ test {
     _ = tab_snapshot;
     _ = toggle_pane_fullscreen;
     _ = toggle_sidebar;
+    _ = toggle_workspace_list;
     _ = workspace_handoff;
     _ = workspace_snapshot;
 }

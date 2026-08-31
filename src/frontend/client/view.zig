@@ -32,6 +32,7 @@ pub const Interaction = struct {
     layout_changed: bool = false,
     consumed: bool = false,
     toggle_sidebar: bool = false,
+    toggle_workspace_list: bool = false,
     focus_pane: ?schema.PaneId = null,
     select_tab: ?schema.TabId = null,
     select_workspace: ?schema.WorkspaceId = null,
@@ -243,8 +244,17 @@ pub const State = struct {
         return true;
     }
 
-    pub fn toggleWorkspaceList(state: *State) void {
-        state.workspace_list_collapsed = !state.workspace_list_collapsed;
+    /// Projects the committed workspace-list preference into client chrome.
+    ///
+    /// ```zig
+    /// view.setWorkspaceListCollapsed(model.workspaceListCollapsed());
+    /// ```
+    pub fn setWorkspaceListCollapsed(state: *State, collapsed: bool) void {
+        if (state.workspace_list_collapsed == collapsed) {
+            return;
+        }
+
+        state.workspace_list_collapsed = collapsed;
         state.hovered = null;
         state.dirty = true;
     }
@@ -566,10 +576,7 @@ pub const State = struct {
             },
             .active_workspace => {},
             .select_workspace => |workspace| result.select_workspace = workspace,
-            .toggle_workspace_list => {
-                state.toggleWorkspaceList();
-                result.redraw = true;
-            },
+            .toggle_workspace_list => result.toggle_workspace_list = true,
             .sidebar_focus_agent => |key| result.focus_agent = key,
             .sidebar_scroll_to => |row| {
                 state.sidebar.scroll = row;
@@ -1463,8 +1470,13 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         interaction.select_workspace.?,
     );
 
-    _ = state.handleMouse(.{ .x = marker_x.?, .y = 0, .kind = .press }, 0);
-    try std.testing.expect(state.workspace_list_collapsed);
+    const workspace_list_toggle = state.handleMouse(.{
+        .x = marker_x.?,
+        .y = 0,
+        .kind = .press,
+    }, 0);
+    try std.testing.expect(workspace_list_toggle.toggle_workspace_list);
+    try std.testing.expect(!state.workspace_list_collapsed);
 }
 
 test "rename input consumes an unparseable tail instead of spinning" {
