@@ -26,7 +26,11 @@ tab_snapshots.apply -> ApplyTabSnapshotHandler
         |
 ClientModel.reconcileTab -> tabs.Model.reconcileTab
         |
-ReconciliationEffects -> resource cleanup / focus / resize / attach
+TabReconciliation commit
+        |
+DeliverTabSnapshotHandler
+        |
+retirement -> active resources -> geometry -> missing attachments
         |
 presentation_lifecycle.observe -> Presenter
 ```
@@ -56,18 +60,26 @@ pane membership. Reconciliation of an inactive tab does not advance a visible
 revision. Selecting that tab later advances `active_tab_revision` and presents
 its current state. An identical snapshot changes no revision.
 
+The commit also captures the exact workspace, tabs, active-tab and pane
+revisions, the tab-local layout revision, `snapshot_loaded` and the workbench
+area used for reconciliation. The tab-local revision is required because an
+inactive tab can change membership without advancing the visible pane version.
+Delivery rejects a stale commit in O(1) before touching disposable resources.
+
 Initial reconciliation restores runtime display order or a saved client split
 tree. If the previously focused pane vanished, the layout selects a surviving
 pane before restoration. This avoids committing the removal and then failing
 on a stale focus identity.
 
 The reconciliation result contains at most 64 removed pane IDs. After the
-model commit, the client adapter marks their pending operations as ignored and
-gives each exact identity to `ReleasePaneResourcesHandler`.
-Authoritative retirement sends no focus-out. For an active tab, the adapter
-synchronizes attachment geometry and focus reporting, re-offers attached pane
-sizes and requests an attachment for each detached pane. A pane with an
-attachment request already pending does not receive a duplicate request.
+model commit, `DeliverTabSnapshotHandler` marks their pending operations as
+ignored and gives each exact identity to `ReleasePaneResourcesHandler`.
+Authoritative retirement sends no focus-out. For an active tab, the handler
+synchronizes attachment geometry and focus reporting, delegates exact attached
+pane sizes to `OfferPaneGeometryHandler`, then plans one attachment request for
+each detached pane. A pane with an attachment request already pending does not
+receive a duplicate request. The adapter owns request identities, registration
+and protocol encoding, not attachment selection policy.
 
 Resource effects still run for an identical snapshot. This lets a resync
 repair sizes or attachments without inventing a model change. The presenter
@@ -92,6 +104,9 @@ uses the same fixed bound and allocates no unbounded retirement list.
 
 - `frontend/client/application/tab_snapshot.zig` checks commit ordering,
   canonical no-ops, model rejection and post-commit effect failure.
+- `frontend/client/application/tab_snapshot_delivery.zig` checks exact active
+  and inactive validation, retirement, geometry and attachment ordering,
+  coalescence and partial failure semantics.
 - `frontend/client/model.zig` checks active and inactive revision semantics,
   removed pane capture, membership bounds and cross-tab pane identity
   rejection.

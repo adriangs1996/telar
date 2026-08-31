@@ -7,17 +7,17 @@ const client_model = @import("../model.zig");
 const schema = core.schema;
 const ui = core.ui;
 
-pub const ReconciliationEffects = struct {
+pub const Effects = struct {
     context: *anyopaque,
-    apply: *const fn (*anyopaque, *const client_model.TabReconciliation) anyerror!void,
+    deliver: *const fn (*anyopaque, *const client_model.TabReconciliation) anyerror!void,
 };
 
 pub const ApplyTabSnapshotHandler = struct {
     model: *client_model.Model,
     area: ui.Rect,
-    effects: ReconciliationEffects,
+    effects: Effects,
 
-    /// Commits canonical pane membership before repairing client resources.
+    /// Commits canonical pane membership before delivering client resources.
     /// Model failures have no effects; effect failures preserve the commit.
     ///
     /// ```zig
@@ -25,7 +25,7 @@ pub const ApplyTabSnapshotHandler = struct {
     /// ```
     pub fn execute(handler: *ApplyTabSnapshotHandler, snapshot: client_model.TabSnapshot) !void {
         const reconciliation = try handler.model.reconcileTab(snapshot, handler.area);
-        try handler.effects.apply(handler.effects.context, &reconciliation);
+        try handler.effects.deliver(handler.effects.context, &reconciliation);
     }
 };
 
@@ -38,17 +38,20 @@ const EffectsCapture = struct {
     panes_changed: bool = false,
     fail: bool = false,
 
-    fn port(capture: *EffectsCapture) ReconciliationEffects {
-        return .{ .context = capture, .apply = apply };
+    fn port(capture: *EffectsCapture) Effects {
+        return .{ .context = capture, .deliver = deliver };
     }
 
-    fn apply(context: *anyopaque, reconciliation: *const client_model.TabReconciliation) !void {
+    fn deliver(context: *anyopaque, reconciliation: *const client_model.TabReconciliation) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.active = reconciliation.active;
         capture.panes_changed = reconciliation.panes_changed;
         capture.observed_commit = capture.model.workspace.findPane(capture.expected_pane) != null and
-            capture.model.version().panes == 1;
+            capture.model.version().workspace == reconciliation.workspace_revision and
+            capture.model.version().tabs == reconciliation.tabs_revision and
+            capture.model.version().active_tab == reconciliation.active_tab_revision and
+            capture.model.version().panes == reconciliation.panes_revision;
 
         if (capture.fail) {
             return error.ReconciliationSyncFailed;
@@ -100,7 +103,7 @@ const TestingModel = struct {
     }
 };
 
-test "ApplyTabSnapshotHandler commits before reconciling client resources" {
+test "ApplyTabSnapshotHandler commits before delivering client resources" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: EffectsCapture = .{

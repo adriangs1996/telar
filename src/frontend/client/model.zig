@@ -689,9 +689,16 @@ pub const TabRemoval = struct {
 
 pub const TabReconciliation = struct {
     location: schema.TabLocation,
+    area: ui.Rect,
     removed_panes: RemovedPanes = .{},
     active: bool,
     panes_changed: bool,
+    snapshot_loaded: bool = false,
+    layout_revision: u64 = 0,
+    workspace_revision: u64 = 0,
+    tabs_revision: u64 = 0,
+    active_tab_revision: u64 = 0,
+    panes_revision: u64 = 0,
 };
 
 pub const WorkspaceTabInput = tabs_mod.WorkspaceTabInput;
@@ -2549,6 +2556,7 @@ pub const Model = struct {
         const previous_layout_revision = tab.model.layout.currentRevision();
         var reconciliation: TabReconciliation = .{
             .location = snapshot.location,
+            .area = area,
             .active = active,
             .panes_changed = false,
         };
@@ -2564,6 +2572,13 @@ pub const Model = struct {
         if (reconciliation.active and reconciliation.panes_changed) {
             model.panes_revision +%= 1;
         }
+
+        reconciliation.snapshot_loaded = reconciled.snapshot_loaded;
+        reconciliation.layout_revision = reconciled.model.layout.currentRevision();
+        reconciliation.workspace_revision = model.workspace_revision;
+        reconciliation.tabs_revision = model.tabs_revision;
+        reconciliation.active_tab_revision = model.active_tab_revision;
+        reconciliation.panes_revision = model.panes_revision;
 
         return reconciliation;
     }
@@ -4337,6 +4352,13 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     try std.testing.expectEqual(@as(usize, 0), addition.removed_panes.slice().len);
     try std.testing.expect(model.workspace.findPane(second) != null);
     try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
+    try std.testing.expectEqualDeep(ui.Rect{ .w = 40, .h = 10 }, addition.area);
+    try std.testing.expect(addition.snapshot_loaded);
+    try std.testing.expectEqual(model.workspace.activeConst().?.model.layout.currentRevision(), addition.layout_revision);
+    try std.testing.expectEqual(model.version().workspace, addition.workspace_revision);
+    try std.testing.expectEqual(model.version().tabs, addition.tabs_revision);
+    try std.testing.expectEqual(model.version().active_tab, addition.active_tab_revision);
+    try std.testing.expectEqual(model.version().panes, addition.panes_revision);
 
     const unchanged = try model.reconcileTab(discovered, .{ .w = 40, .h = 10 });
 
@@ -4413,6 +4435,9 @@ test "inactive tab reconciliation does not advance the visible pane revision" {
     try std.testing.expect(reconciliation.panes_changed);
     try std.testing.expect(model.workspace.findPane(@enumFromInt(3)) != null);
     try std.testing.expectEqualDeep(Version{}, model.version());
+    try std.testing.expect(reconciliation.snapshot_loaded);
+    try std.testing.expectEqual(model.workspace.find(inactive.tab_id).?.model.layout.currentRevision(), reconciliation.layout_revision);
+    try std.testing.expectEqual(model.version().panes, reconciliation.panes_revision);
 }
 
 test "tab reconciliation rejects pane identities owned by another tab" {

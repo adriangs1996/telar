@@ -2,18 +2,16 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const workspace_capability = @import("../workspace/root.zig");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
-const pane_resources = @import("pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
-const tabs_mod = workspace_capability.tabs;
 const tab_snapshot = client_application.tab_snapshot;
+const tab_snapshot_delivery = client_application.tab_snapshot_delivery;
 
 pub const Outcome = enum {
     applied,
@@ -64,64 +62,69 @@ fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {
         .area = client.view.workbench(),
         .effects = .{
             .context = client,
-            .apply = applyReconciliation,
+            .deliver = deliverReconciliation,
         },
     };
 }
 
-fn applyReconciliation(context: *anyopaque, reconciliation: *const client_model.TabReconciliation) !void {
+fn deliverReconciliation(context: *anyopaque, reconciliation: *const client_model.TabReconciliation) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    for (reconciliation.removed_panes.slice()) |pane_id| {
-        request_lifecycle.ignorePane(client, pane_id);
-        pane_resources.release(client, pane_id);
-    }
+    var use_case: tab_snapshot_delivery.DeliverTabSnapshotHandler = .{
+        .model = &client.model,
+        .geometry_effects = pane_geometry.offerEffects(client),
+        .effects = .{
+            .context = client,
+            .ignore_pane_requests = ignorePaneRequests,
+            .clear_pane_graphics = clearPaneGraphics,
+            .synchronize_active_resources = synchronizeActiveResources,
+            .attachment_pending = attachmentPending,
+            .request_attachment = requestAttachment,
+        },
+    };
 
-    const tab = findTab(client, reconciliation.location) orelse
-        return error.UnexpectedTabReconciliation;
-    if (!reconciliation.active) {
-        return;
-    }
-
-    const active = client.model.workspace.active() orelse
-        return error.UnexpectedTabReconciliation;
-    if (active != tab) {
-        return error.UnexpectedTabReconciliation;
-    }
-
-    try active_pane_resources.synchronize(client);
-    try pane_geometry.offerAttached(client, &tab.model, client.view.workbench());
-    var panes = tab.model.paneIterator();
-    while (panes.next()) |pane| {
-        if (pane.attached or request_lifecycle.hasPane(client, .attachment, pane.id)) {
-            continue;
-        }
-
-        const size = tab.model.contentSize(pane.id, client.view.workbench()) orelse
-            return error.PaneTooSmall;
-        const request_id = try request_lifecycle.nextId(client);
-        try request_lifecycle.deliver(client, .{
-            .registration = .{
-                .request_id = request_id,
-                .continuation = .{ .attach_pane = .{
-                    .pane_id = pane.id,
-                    .location = tab.location,
-                } },
-            },
-            .message = .{ .open_pane = .{
-                .request_id = request_id,
-                .target = .{ .pane = pane.id },
-                .size = size,
-                .launch = null,
-            } },
-        });
-    }
+    try use_case.execute(reconciliation);
 }
 
-fn findTab(client: *Client, location: schema.TabLocation) ?*tabs_mod.Tab {
-    const tab = client.model.workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
+fn ignorePaneRequests(context: *anyopaque, pane_id: schema.PaneId) void {
+    const client: *Client = @ptrCast(@alignCast(context));
 
-    return tab;
+    request_lifecycle.ignorePane(client, pane_id);
+}
+
+fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    client.graphics_store.clearPane(pane_id);
+}
+
+fn synchronizeActiveResources(context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try active_pane_resources.synchronize(client);
+}
+
+fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    return request_lifecycle.hasPane(client, .attachment, pane_id);
+}
+
+fn requestAttachment(context: *anyopaque, request: tab_snapshot_delivery.PaneAttachmentRequest) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    const request_id = try request_lifecycle.nextId(client);
+    try request_lifecycle.deliver(client, .{
+        .registration = .{
+            .request_id = request_id,
+            .continuation = .{ .attach_pane = .{
+                .pane_id = request.pane_id,
+                .location = request.location,
+            } },
+        },
+        .message = .{ .open_pane = .{
+            .request_id = request_id,
+            .target = .{ .pane = request.pane_id },
+            .size = request.size,
+            .launch = null,
+        } },
+    });
 }

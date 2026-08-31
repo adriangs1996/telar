@@ -51,6 +51,7 @@ pub const split_pane = @import("split_pane.zig");
 pub const system_metrics = @import("system_metrics.zig");
 pub const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
+pub const tab_snapshot_delivery = @import("tab_snapshot_delivery.zig");
 pub const toggle_pane_fullscreen = @import("toggle_pane_fullscreen.zig");
 pub const toggle_sidebar = @import("toggle_sidebar.zig");
 pub const toggle_workspace_list = @import("toggle_workspace_list.zig");
@@ -113,6 +114,7 @@ test {
     _ = system_metrics;
     _ = tab_attachment_retirement;
     _ = tab_snapshot;
+    _ = tab_snapshot_delivery;
     _ = toggle_pane_fullscreen;
     _ = toggle_sidebar;
     _ = toggle_workspace_list;
