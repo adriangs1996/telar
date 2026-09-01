@@ -11,6 +11,7 @@ pub const control = @import("control.zig");
 pub const pane = @import("pane.zig");
 pub const remote = @import("remote.zig");
 pub const skill = @import("skill.zig");
+pub const workspace = @import("workspace.zig");
 pub const history = @import("history.zig");
 pub const hook = @import("hook.zig");
 pub const integration = @import("integration.zig");
@@ -27,6 +28,7 @@ pub const IntegrationOptions = parser.IntegrationOptions;
 pub const PaneAction = parser.PaneAction;
 pub const PaneOptions = parser.PaneOptions;
 pub const Target = parser.Target;
+pub const WorkspaceOptions = parser.WorkspaceOptions;
 pub const ConfigCheckOptions = parser.ConfigCheckOptions;
 pub const HistoryAction = parser.HistoryAction;
 pub const HistoryOptions = parser.HistoryOptions;
@@ -60,4 +62,5 @@ test {
     _ = runtime_connection;
     _ = server;
     _ = skill;
+    _ = workspace;
 }

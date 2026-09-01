@@ -16,6 +16,7 @@ pub const text =
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar pane read|send-keys <pane|--current> [options]
+    \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar api schema [--json]
     \\       telar integration install|uninstall|status claude [--settings PATH]
     \\       telar hook claude
@@ -39,6 +40,7 @@ pub const text =
     \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
     \\  pane send-keys   Send raw text (and --enter) to any pane
+    \\  workspace create Add a git worktree and open a workspace on it
     \\  api schema       Print the wire contract of this binary
     \\  integration      Register telar's lifecycle hooks in an agent's settings
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)
@@ -124,6 +126,7 @@ test "usage names every public subcommand" {
         "history list",
         "history search",
         "notification show",
+        "workspace create",
     }) |command| {
         try std.testing.expect(std.mem.indexOf(u8, text, command) != null);
     }

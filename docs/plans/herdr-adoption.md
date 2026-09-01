@@ -381,11 +381,17 @@ agent alerts, runtime notices and local diagnostics all follow one setting.
 
 ---
 
-## P10. Git in the sidebar, worktrees per workspace — status done; worktrees pending
+## P10. Git in the sidebar, worktrees per workspace — done
 
 Branch and dirty state are observed per workspace on the maintenance tick
-and rendered in the workspace list. `telar workspace create --worktree`
-remains open.
+and rendered in the workspace list. `telar workspace create --worktree
+<branch> [--name] [--directory]` adds the worktree and creates a workspace
+rooted at it. Deviation: git runs in the CLI process with the user's
+environment and credentials, not in a runtime worker, and the target
+directory comes from `--directory` (default: the sibling
+`<repo>-worktrees/<branch>`) instead of `runtime.worktrees.directory` —
+the runtime never executes git on behalf of a client, and no new wire
+messages were needed (the existing `create_workspace` request carries it).
 
 - Observation worker in the runtime: branch from reading `.git/HEAD` (no
   subprocess, ≤ 4 KiB), dirty flag from `git status --porcelain` at

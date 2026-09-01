@@ -192,6 +192,7 @@ pub const Cli = union(enum) {
     plugin: PluginOptions,
     agent: AgentOptions,
     pane: PaneOptions,
+    workspace: WorkspaceOptions,
     api: ApiOptions,
     hook: HookOptions,
     integration: IntegrationOptions,
@@ -228,6 +229,9 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "pane")) {
             return .{ .pane = try PaneOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "workspace")) {
+            return .{ .workspace = try WorkspaceOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "api")) {
             return .{ .api = try ApiOptions.parse(args[2..]) };
@@ -872,6 +876,108 @@ pub const PaneOptions = struct {
     }
 };
 
+pub const WorkspaceAction = enum { create };
+
+pub const max_worktree_branch_bytes = 200;
+
+pub const WorkspaceOptions = struct {
+    action: WorkspaceAction,
+    branch: ?[*:0]const u8 = null,
+    name: ?[*:0]const u8 = null,
+    directory: ?[*:0]const u8 = null,
+    socket: ?[*:0]const u8 = null,
+    json: bool = false,
+
+    fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
+        if (args.len == 0) {
+            return error.MissingWorkspaceAction;
+        }
+
+        if (!std.mem.eql(u8, std.mem.span(args[0]), "create")) {
+            return error.UnknownWorkspaceAction;
+        }
+
+        var options: WorkspaceOptions = .{ .action = .create };
+        var index: usize = 1;
+        while (index < args.len) {
+            const arg = std.mem.span(args[index]);
+            if (std.mem.eql(u8, arg, "--worktree")) {
+                if (index + 1 >= args.len) {
+                    return error.MissingWorktreeBranch;
+                }
+                if (options.branch != null) {
+                    return error.DuplicateWorktreeOption;
+                }
+
+                try validateWorktreeBranch(std.mem.span(args[index + 1]));
+                options.branch = args[index + 1];
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--name")) {
+                if (index + 1 >= args.len) {
+                    return error.MissingWorkspaceName;
+                }
+                if (options.name != null) {
+                    return error.DuplicateNameOption;
+                }
+
+                options.name = args[index + 1];
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--directory")) {
+                if (index + 1 >= args.len) {
+                    return error.MissingWorktreeDirectory;
+                }
+                if (options.directory != null) {
+                    return error.DuplicateDirectoryOption;
+                }
+
+                options.directory = args[index + 1];
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--socket")) {
+                if (index + 1 >= args.len) {
+                    return error.MissingSocketPath;
+                }
+                if (options.socket != null) {
+                    return error.DuplicateSocketOption;
+                }
+
+                options.socket = args[index + 1];
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--json")) {
+                options.json = true;
+                index += 1;
+            } else {
+                return error.UnknownWorkspaceOption;
+            }
+        }
+
+        if (options.branch == null) {
+            return error.MissingWorktreeBranch;
+        }
+
+        return options;
+    }
+};
+
+/// Rejects names git could parse as options or refs with traversal, so the
+/// worktree argv stays positional and the derived directory stays contained.
+fn validateWorktreeBranch(branch: []const u8) !void {
+    if (branch.len == 0 or branch.len > max_worktree_branch_bytes) {
+        return error.InvalidWorktreeBranch;
+    }
+    if (branch[0] == '-' or branch[0] == '.') {
+        return error.InvalidWorktreeBranch;
+    }
+    if (std.mem.indexOf(u8, branch, "..") != null) {
+        return error.InvalidWorktreeBranch;
+    }
+
+    for (branch) |byte| {
+        if (byte <= ' ' or byte == 0x7f or byte == '~' or byte == '^' or byte == ':') {
+            return error.InvalidWorktreeBranch;
+        }
+    }
+}
+
 pub const HookAgent = enum { claude };
 
 pub const HookOptions = struct {
@@ -1494,4 +1600,24 @@ test "CLI parses the remote destination and the server endpoint action" {
 
     const endpoint = [_][*:0]const u8{ "telar", "server", "endpoint" };
     try std.testing.expectEqual(ServerAction.endpoint, (try Cli.parse(&endpoint, .empty)).server.action);
+}
+
+test "workspace create parses worktree flags and rejects unsafe branches" {
+    const args = [_][*:0]const u8{ "telar", "workspace", "create", "--worktree", "fix/tabs", "--name", "fix", "--json" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqualStrings("fix/tabs", std.mem.span(cli.workspace.branch.?));
+    try std.testing.expectEqualStrings("fix", std.mem.span(cli.workspace.name.?));
+    try std.testing.expect(cli.workspace.json);
+
+    const missing = [_][*:0]const u8{ "telar", "workspace", "create" };
+    try std.testing.expectError(error.MissingWorktreeBranch, Cli.parse(&missing, .empty));
+
+    const dash = [_][*:0]const u8{ "telar", "workspace", "create", "--worktree", "-evil" };
+    try std.testing.expectError(error.InvalidWorktreeBranch, Cli.parse(&dash, .empty));
+
+    const traversal = [_][*:0]const u8{ "telar", "workspace", "create", "--worktree", "a/../b" };
+    try std.testing.expectError(error.InvalidWorktreeBranch, Cli.parse(&traversal, .empty));
+
+    const unknown = [_][*:0]const u8{ "telar", "workspace", "remove" };
+    try std.testing.expectError(error.UnknownWorkspaceAction, Cli.parse(&unknown, .empty));
 }

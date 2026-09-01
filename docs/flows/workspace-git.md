@@ -42,3 +42,14 @@ subprocess is only consulted for cleanliness.
 - `src/backend/workspace/workspace.zig` proves bounded storage and change
   detection.
 - `src/core/schema_contract_test.zig` pins the extended workspace list bytes.
+
+## Worktrees from the CLI
+
+`telar workspace create --worktree <branch>` runs `git rev-parse` and
+`git worktree add` in the CLI process (creating the branch when it does not
+exist), then sends the ordinary `create_workspace` request with the worktree
+path as the launch cwd. The runtime treats it like any other workspace; the
+observer above picks up its branch and dirty state on the next maintenance
+tick. Branch names are validated at parse time so the git argv stays
+positional. `src/cli/workspace.zig` owns the derivation and the git calls;
+`src/cli/parser.zig` proves the validation.

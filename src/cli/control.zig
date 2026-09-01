@@ -312,6 +312,36 @@ pub const Session = struct {
         }
     }
 
+    pub const WorkspaceCreation = struct {
+        name: []const u8,
+        cwd: []const u8,
+        arguments: []const []const u8,
+    };
+
+    /// Creates a named workspace rooted at an explicit path and returns the
+    /// runtime workspace id. The size only shapes the root pane until a UI
+    /// client attaches and resizes it.
+    ///
+    /// ```zig
+    /// const id = try session.createWorkspace(.{ .name = "fix", .cwd = "/src/fix", .arguments = &.{"/bin/sh"} });
+    /// ```
+    pub fn createWorkspace(session: *Session, request: WorkspaceCreation) !u64 {
+        var send_buffer: [8192]u8 = undefined;
+        try session.connection.send(session.io, try schema.encodeCreateWorkspace(&send_buffer, .{
+            .request_id = session.requestId(),
+            .size = .{ .cols = 80, .rows = 24 },
+            .name = request.name,
+            .launch = .{ .cwd = request.cwd, .arguments = request.arguments },
+        }));
+
+        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+        switch (response) {
+            .pane_opened => |opened| return schema.id.raw(opened.location.workspace.workspace),
+            .request_failed => |failure| return failureError(failure),
+            else => return error.UnexpectedRuntimeResponse,
+        }
+    }
+
     pub fn nowMs(session: *const Session) i64 {
         return Io.Timestamp.now(session.io, .real).toMilliseconds();
     }
