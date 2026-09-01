@@ -47,10 +47,14 @@ id changes nothing and is not a protocol error.
 
 ## Submit
 
-Enter pastes the selected command into the focused pane through the ordinary
-pane-paste path (`pane_inputs.expressionPaste`) without executing it, then
-closes the prompt. An empty result list just closes the palette. Escape
-closes it without side effects.
+Enter first closes the prompt, then pastes the selected command into the
+focused pane through the ordinary pane-paste path
+(`pane_inputs.expressionPaste`) without executing it. The order matters:
+`planPaneInput(.focused)` refuses input while a prompt owns it, so the
+submit effect only accepts the closure and the paste runs from a
+pre-dispatch snapshot of the selection once the prompt is gone. The goto
+picker defers its navigation the same way. An empty result list just
+closes the palette. Escape closes it without side effects.
 
 Deviations from herdr: global scope only (scope toggles pending) and
 keyboard-only interaction.

@@ -68,20 +68,19 @@ pub fn apply(client: *Client, view: schema.HistoryResultsView) !bool {
     return client.model.history_palette.apply(schema.id.raw(view.request_id), storage[0..count]);
 }
 
-/// Pastes the selected command into the focused pane. Called by the prompt
-/// submit effect; an empty result list simply closes the palette.
+/// Pastes the selected command into the focused pane. Runs after the prompt
+/// closed, because `planPaneInput(.focused)` refuses input while a prompt is
+/// active; an empty result list means there is nothing to paste.
 ///
 /// ```zig
-/// _ = try submitSelection(client);
+/// try pasteSelection(client, selection);
 /// ```
-pub fn submitSelection(client: *Client) !bool {
+pub fn pasteSelection(client: *Client, selection: u16) !void {
     const palette = &client.model.history_palette;
     if (palette.len == 0) {
-        return true;
+        return;
     }
 
-    const prompt = client.model.name_prompt.currentConst() orelse return true;
-    const index = @min(prompt.selection, @as(u16, palette.len) - 1);
+    const index = @min(selection, @as(u16, palette.len) - 1);
     _ = try pane_inputs.expressionPaste(client, palette.slice()[index].commandSlice());
-    return true;
 }

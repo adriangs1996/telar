@@ -24,6 +24,7 @@ pub const Row = struct {
 };
 
 pub const Input = struct {
+    title: []const u8,
     field: *Field,
     rows: []const Row,
     total: u16,
@@ -74,7 +75,7 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
         .bg = context.palette.surface0,
     }, null);
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
-    _ = context.buffer.writeTruncated(title, title.x, title.y, "goto", title.w, .{
+    _ = context.buffer.writeTruncated(title, title.x, title.y, input.title, title.w, .{
         .fg = context.palette.accent,
         .bg = context.palette.surface0,
         .flags = .{ .bold = true },

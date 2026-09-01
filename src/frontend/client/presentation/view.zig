@@ -552,6 +552,7 @@ pub const State = struct {
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, input.diagnostic);
         if (!input.force and !state.dirty and !state.attachment_store.hasModal() and
+            pickerPrompt(input.prompt) == null and
             !input.notifications.hasItems() and !state.toast_overlay_drawn)
             return .{};
         state.hits.clear();
@@ -825,6 +826,7 @@ fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: Pick
     }
 
     return widgets.goto_picker.render(context, workbench, .{
+        .title = "goto",
         .field = &sources.prompt.field,
         .rows = rows[0..window],
         .total = total,
@@ -852,6 +854,7 @@ fn renderHistoryPalette(context: *widgets.Context, workbench: ui.Rect, sources: 
     }
 
     return widgets.goto_picker.render(context, workbench, .{
+        .title = "history",
         .field = &sources.prompt.field,
         .rows = rows[0..window],
         .total = total,

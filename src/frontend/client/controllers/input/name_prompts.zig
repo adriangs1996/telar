@@ -114,42 +114,72 @@ pub fn beginHistoryPalette(client: *Client) bool {
 pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     var use_case = handler(client);
 
-    const query_before = historyQuerySnapshot(client);
+    const before = listSnapshot(client);
     const outcome = try dispatchInput(&use_case, bytes);
     clampPickerSelection(client);
-    try refreshHistoryQuery(client, query_before);
+    try refreshHistoryQuery(client, before);
+    if (outcome == .finished) {
+        try finishListSubmission(client, before);
+    }
     return outcome;
 }
 
-const HistoryQuerySnapshot = struct {
-    active: bool = false,
+const ListSnapshot = struct {
+    kind: enum { none, goto, history } = .none,
+    selection: u16 = 0,
     text: [schema.max_tab_label_bytes]u8 = undefined,
     len: u8 = 0,
+
+    fn textSlice(snapshot: *const ListSnapshot) []const u8 {
+        return snapshot.text[0..snapshot.len];
+    }
 };
 
-fn historyQuerySnapshot(client: *Client) HistoryQuerySnapshot {
+fn listSnapshot(client: *Client) ListSnapshot {
     const prompt = client.model.name_prompt.currentConst() orelse return .{};
-    if (prompt.target != .history) {
-        return .{};
-    }
+    var snapshot: ListSnapshot = switch (prompt.target) {
+        .goto => .{ .kind = .goto },
+        .history => .{ .kind = .history },
+        else => return .{},
+    };
 
-    var snapshot: HistoryQuerySnapshot = .{ .active = true };
+    snapshot.selection = prompt.selection;
     const text = prompt.field.text();
     snapshot.len = @intCast(text.len);
     @memcpy(snapshot.text[0..text.len], text);
     return snapshot;
 }
 
+/// Applies the accepted list submission after the prompt closed. Pastes and
+/// navigation are gated on prompt authority (`planPaneInput`, handoffs), so
+/// they must not run inside the submit effect while the prompt is active.
+fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
+    switch (before.kind) {
+        .none => {},
+        .history => try history_palettes.pasteSelection(client, before.selection),
+        .goto => {
+            var results: goto_picker.Results = .{};
+            goto_picker.collect(pickerSources(client), before.textSlice(), &results);
+            if (results.len == 0) {
+                return;
+            }
+
+            const index = @min(before.selection, @as(u16, results.len) - 1);
+            try navigatePickerItem(client, results.slice()[index].item);
+        },
+    }
+}
+
 /// Requeries the runtime only when the palette's query text actually
 /// changed, so selection moves and pastes stay local.
-fn refreshHistoryQuery(client: *Client, before: HistoryQuerySnapshot) !void {
+fn refreshHistoryQuery(client: *Client, before: ListSnapshot) !void {
     const prompt = client.model.name_prompt.currentConst() orelse return;
     if (prompt.target != .history) {
         return;
     }
 
     const text = prompt.field.text();
-    if (before.active and std.mem.eql(u8, before.text[0..before.len], text)) {
+    if (before.kind == .history and std.mem.eql(u8, before.textSlice(), text)) {
         return;
     }
 
@@ -246,19 +276,9 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
                 .label = submission.name,
             });
         },
-        .goto => blk: {
-            var results: goto_picker.Results = .{};
-            goto_picker.collect(pickerSources(client), submission.name, &results);
-            if (results.len == 0) {
-                break :blk true;
-            }
-
-            const prompt = client.model.name_prompt.currentConst() orelse break :blk true;
-            const index = @min(prompt.selection, @as(u16, results.len) - 1);
-            try navigatePickerItem(client, results.slice()[index].item);
-            break :blk true;
-        },
-        .history => try history_palettes.submitSelection(client),
+        // List targets only close here; the picked entry is applied by
+        // `finishListSubmission` once the prompt no longer owns input.
+        .goto, .history => true,
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;
             const request_id = try request_lifecycle.nextId(client);
