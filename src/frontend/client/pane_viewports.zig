@@ -1,11 +1,14 @@
 //! Wires committed pane viewports to graphics and the runtime attachment.
 
+const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const runtime_transport = @import("runtime_transport.zig");
+const pane_viewport_delivery = client_application.pane_viewport_delivery;
 const set_pane_viewport = client_application.set_pane_viewport;
+const schema = core.schema;
 
 pub const Target = client_model.PaneViewportTarget;
 
@@ -22,7 +25,7 @@ pub fn handler(client: *Client) set_pane_viewport.SetPaneViewportHandler {
     };
 }
 
-/// Returns the viewport effect port reused by compound client transactions.
+/// Returns the viewport delivery port reused by compound client transactions.
 ///
 /// ```zig
 /// const viewport_effects = effects(client);
@@ -36,18 +39,26 @@ pub fn effects(client: *Client) set_pane_viewport.PaneViewportEffects {
 
 fn sync(context: *anyopaque, change: client_model.PaneViewportChange) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const active = client.model.workspace.active() orelse return error.UnexpectedPaneViewport;
-    const pane = active.model.find(change.pane_id) orelse return error.UnexpectedPaneViewport;
-    if (!pane.attached or pane.scroll.offset != change.offset or
-        pane.scroll.atBottom(pane.buffer.h) != change.at_bottom or
-        client.model.version().viewport != change.viewport_revision)
-    {
-        return error.UnexpectedPaneViewport;
-    }
+    const delivery_handler: pane_viewport_delivery.DeliverPaneViewportHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .set_graphics_visible = setGraphicsVisible,
+            .deliver_viewport = deliverViewport,
+        },
+    };
 
-    try client.graphics_store.setPaneVisible(change.pane_id, change.at_bottom);
-    try runtime_transport.enqueue(client, .{ .set_pane_viewport = .{
-        .pane_id = change.pane_id,
-        .offset = change.offset,
-    } });
+    try delivery_handler.execute(change);
+}
+
+fn setGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try client.graphics_store.setPaneVisible(pane_id, visible);
+}
+
+fn deliverViewport(context: *anyopaque, viewport: schema.SetPaneViewport) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    try runtime_transport.enqueue(client, .{ .set_pane_viewport = viewport });
 }

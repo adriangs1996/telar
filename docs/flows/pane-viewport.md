@@ -28,6 +28,8 @@ ClientModel.setPaneViewport
         |
 PaneViewportChange
         |
+DeliverPaneViewportHandler
+        |
 graphics visibility, then set_pane_viewport
 ```
 
@@ -46,10 +48,14 @@ advances only the viewport revision. An unchanged offset produces no change
 and no effects. While copy mode is active, its transaction has exclusive
 control of the viewport, so the standalone transition is rejected.
 
-`SetPaneViewportHandler` calls the shared effect port after commit. The adapter
-first updates client-owned graphics visibility and then sends
-`set_pane_viewport` to the runtime. An effect failure does not roll back the
-client viewport. The client process may reconnect, and the next runtime frame
+`SetPaneViewportHandler` calls the shared delivery port after commit.
+`DeliverPaneViewportHandler` requires the exact active attached pane, offset,
+bottom state and viewport revision before effects. It then updates
+client-owned graphics visibility before sending `set_pane_viewport` to the
+runtime. A stale commit executes neither effect. A graphics failure prevents
+runtime delivery; a runtime failure retains the completed graphics change and
+never rolls back the client viewport. The adapter supplies only those two
+physical ports. The client process may reconnect, and the next runtime frame
 rebuilds the operational projection.
 
 Keyboard and paste input use `.bottom` before sending bytes to the child. Mouse
@@ -63,8 +69,9 @@ cannot overtake the request to return to live output.
 Copy-mode cursor movement and exit restore are part of the copy transaction,
 not a second viewport use case. `ClientModel.commitCopyMode` commits both
 states and returns the same `PaneViewportChange` value. `CopyModeHandler` then
-uses the effect port from `pane_viewports`. This keeps copy delivery ordering
-inside copy mode while leaving graphics and IPC knowledge in one adapter.
+uses the delivery port from `pane_viewports`. This keeps copy delivery ordering
+inside copy mode while reusing the same exact commit validation and leaving
+graphics and IPC knowledge in one adapter.
 
 ## Presentation
 
@@ -107,6 +114,8 @@ death drops the attachment projection without changing the PTY or terminal.
   independent revisions, no-ops and copy-mode exclusivity.
 - `src/frontend/client/application/set_pane_viewport.zig` proves commit-before-
   effect ordering and the failure policy.
+- `src/frontend/client/application/pane_viewport_delivery.zig` proves exact
+  commit validation, graphics-before-runtime order and partial failures.
 - `src/frontend/client/client_test.zig` proves graphics visibility, folded
   revisions, presenter-owned composition and wire ordering before pane input.
 - `src/backend/runtime/attachment/cell.zig` proves attachment-local viewport
