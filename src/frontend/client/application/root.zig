@@ -77,6 +77,7 @@ pub const workspace_creation_delivery = @import("workspace_creation_delivery.zig
 pub const workspace_handoff = @import("workspace_handoff.zig");
 pub const workspace_handoff_preparation = @import("workspace_handoff_preparation.zig");
 pub const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
+pub const workspace_handoff_targeting = @import("workspace_handoff_targeting.zig");
 pub const workspace_snapshot_delivery = @import("workspace_snapshot_delivery.zig");
 pub const workspace_transition_delivery = @import("workspace_transition_delivery.zig");
 pub const workspace_list_snapshot = @import("workspace_list_snapshot.zig");
@@ -160,6 +161,7 @@ test {
     _ = workspace_handoff;
     _ = workspace_handoff_preparation;
     _ = workspace_handoff_restoration;
+    _ = workspace_handoff_targeting;
     _ = workspace_snapshot_delivery;
     _ = workspace_transition_delivery;
     _ = workspace_list_snapshot;

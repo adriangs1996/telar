@@ -12,6 +12,8 @@ workspace position or identity -> SelectWorkspaceHandler --+
                                                            |
 sidebar agent, resync or workspace closure ----------------+
                                                            |
+                                      PlanWorkspaceHandoffHandler
+                                                           |
                                       RequestWorkspaceHandoffHandler
                                                            |
                                       PrepareWorkspaceHandoffHandler
@@ -32,11 +34,14 @@ committed workspace-list replica. It suppresses unknown, already active and
 request-blocked selections without changing client state. This policy is
 shared by configured actions, workspace-list clicks and notification targets.
 
-`workspace_handoffs` resolves an accepted workspace bookmark to its last
-focused pane. Without a bookmark it targets the workspace identity. A sidebar
-agent can target its pane directly and retains a workspace fallback only when
-the pane belongs to an ordinary workspace. [Agent navigation](agent-navigation.md)
-owns that local-or-remote decision.
+`PlanWorkspaceHandoffHandler` owns outbound targeting. A workspace request
+prefers its last focused pane when one is bookmarked and always retains the
+workspace identity as recovery fallback. Without a bookmark it targets the
+workspace directly. An explicit pane request is preserved exactly and does not
+query navigation history; a sidebar agent supplies a fallback only when the
+pane belongs to an ordinary workspace. [Agent navigation](agent-navigation.md)
+owns that local-or-remote decision. The `workspace_handoffs` adapter exposes
+only a remembered-pane lookup and executes the resulting plan.
 
 `HandleResyncRequiredHandler` also requests a handoff when the runtime reports
 that the projected workspace disappeared. It forgets the closed workspace's
@@ -162,6 +167,8 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
 - `src/frontend/client/application/workspace_handoff.zig` checks selection,
   gating, request ordering, local recovery, commit-before-effects and exact
   retry conditions.
+- `src/frontend/client/application/workspace_handoff_targeting.zig` checks
+  bookmarked and direct workspace targets plus exact pane fallback handling.
 - `src/frontend/client/application/pane_open_delivery.zig` checks
   successful-open routing, retired work and delivery failure propagation.
 - `src/frontend/client/application/workspace_handoff_preparation.zig` checks
