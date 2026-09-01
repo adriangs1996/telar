@@ -65,16 +65,49 @@ const OwnedCreateWorkspace = struct {
 };
 
 const OwnedCreateTab = struct {
+    const max_owned_arguments = 8;
+    const max_owned_argument_bytes = 224;
+
     request_id: schema.RequestId,
     workspace: schema.WorkspaceLocation,
     label: [schema.max_tab_label_bytes]u8 = undefined,
     label_len: u8,
     size: schema.TerminalSize,
     launch: schema.Launch,
+    /// NUL-free bytes of a bounded owned argv; zero count borrows
+    /// `launch.arguments`, which is only safe for process-lifetime slices.
+    argument_storage: [max_owned_argument_bytes]u8 = undefined,
+    argument_lens: [max_owned_arguments]u8 = undefined,
+    argument_count: u8 = 0,
 
-    fn view(value: *const OwnedCreateTab, cwd: []const u8) schema.CreateTab {
+    fn ownArguments(value: *OwnedCreateTab, arguments: []const []const u8) bool {
+        if (arguments.len == 0 or arguments.len > max_owned_arguments) return false;
+        var total: usize = 0;
+        for (arguments) |argument| total += argument.len;
+        if (total > max_owned_argument_bytes) return false;
+
+        var offset: usize = 0;
+        for (arguments, 0..) |argument, index| {
+            @memcpy(value.argument_storage[offset .. offset + argument.len], argument);
+            value.argument_lens[index] = @intCast(argument.len);
+            offset += argument.len;
+        }
+        value.argument_count = @intCast(arguments.len);
+        return true;
+    }
+
+    fn view(value: *const OwnedCreateTab, cwd: []const u8, scratch: *[max_owned_arguments][]const u8) schema.CreateTab {
         var launch = value.launch;
         launch.cwd = cwd;
+        if (value.argument_count != 0) {
+            var offset: usize = 0;
+            for (0..value.argument_count) |index| {
+                const len = value.argument_lens[index];
+                scratch[index] = value.argument_storage[offset .. offset + len];
+                offset += len;
+            }
+            launch.arguments = scratch[0..value.argument_count];
+        }
 
         return .{
             .request_id = value.request_id,
@@ -335,6 +368,7 @@ pub const Outbox = struct {
             .launch = request.launch,
         };
         @memcpy(owned.label[0..request.label.len], request.label);
+        _ = owned.ownArguments(request.launch.arguments);
         try outbox.append(.{ .create_tab = owned });
     }
 
@@ -462,10 +496,13 @@ pub const Outbox = struct {
             },
             .close_pane => |value| schema.encodeClosePane(buffer, value),
             .request_workspace_snapshot => |value| schema.encodeRequestWorkspaceSnapshot(buffer, value),
-            .create_tab => |*value| schema.encodeCreateTab(
-                buffer,
-                value.view(outbox.launchCwd(outbox.head)),
-            ),
+            .create_tab => |*value| encode: {
+                var argument_scratch: [OwnedCreateTab.max_owned_arguments][]const u8 = undefined;
+                break :encode schema.encodeCreateTab(
+                    buffer,
+                    value.view(outbox.launchCwd(outbox.head), &argument_scratch),
+                );
+            },
             .rename_tab => |*value| schema.encodeRenameTab(buffer, .{
                 .request_id = value.request_id,
                 .location = value.location,
@@ -948,4 +985,38 @@ test "a full outbox reports saturation" {
         .pane_id = @enumFromInt(1),
     } }));
     try std.testing.expectEqual(@as(u64, 1), outbox.stats.saturated);
+}
+
+test "queued tab creation owns argument bytes until encoding" {
+    var outbox: Outbox = .{};
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try outbox.push(.{ .pane_resize = .{
+        .pane_id = pane_id,
+        .size = .{ .cols = 20, .rows = 10 },
+    } });
+    var buffer: [512]u8 = undefined;
+    _ = (try outbox.beginSend(&buffer)).?;
+
+    var command = "lazygit".*;
+    var flag = "-p".*;
+    try outbox.pushCreateTab(.{
+        .request_id = @enumFromInt(2),
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .label = "git",
+        .size = .{ .cols = 30, .rows = 12 },
+        .launch = .{
+            .cwd = "/work/source",
+            .cwd_source = pane_id,
+            .arguments = &.{ &command, &flag },
+        },
+    });
+    @memset(&command, 'x');
+    @memset(&flag, 'y');
+
+    outbox.popSent();
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expectEqual(@as(u16, 2), decoded.create_tab.launch.argument_count);
+    var iterator = decoded.create_tab.launch.arguments();
+    try std.testing.expectEqualStrings("lazygit", (try iterator.next()).?);
+    try std.testing.expectEqualStrings("-p", (try iterator.next()).?);
 }

@@ -359,7 +359,7 @@ agent alerts, runtime notices and local diagnostics all follow one setting.
 
 ---
 
-## P9. Popup panes
+## P9. Popup panes — status: done as command tabs; floating placement pending
 
 - A popup is an ordinary runtime pane; only placement is client state.
   `ClientLayoutUpdateView` gains `popup: ?PaneId`; the layout tree is
@@ -369,6 +369,15 @@ agent alerts, runtime notices and local diagnostics all follow one setting.
   argv and cwd of the focused pane, renders it over the layout using the
   modal border, routes input to it while visible, and closes it on
   `pane_exited`.
+- Deviation: shipped as `telar.action.command_tab({ command = {...}, label })`
+  instead of a floating overlay. The command runs in an ordinary transient
+  tab (the runtime already closes a tab whose last pane exits), inheriting
+  the focused pane's cwd through the existing tab-creation flow, so no new
+  wire messages or compositor work were needed. `CommandTab` keeps a bounded
+  inline argv (8 args, 224 bytes, 32-byte label) so the `Action` union stays
+  small enough for by-value keymaps; the outbox copies the argv with the
+  same caps. Floating placement over the layout remains open and can reuse
+  this action unchanged.
 
 ---
 

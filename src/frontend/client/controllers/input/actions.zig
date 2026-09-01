@@ -106,6 +106,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
             return .stop;
         },
         .enter_copy_mode => _ = copy_modes.enter(client),
+        .command_tab => |*command| try createCommandTab(client, command),
         .notification => |*notification| _ = try notification_flow.requestDelivery(client, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }
@@ -171,6 +172,19 @@ fn closeFocused(client: *Client) !void {
     var use_case = pane_closures.requestHandler(client);
 
     _ = try use_case.execute();
+}
+
+fn createCommandTab(client: *Client, command: *const input.action.CommandTab) !void {
+    var arguments: [input.action.CommandTab.max_arguments][]const u8 = undefined;
+    for (0..command.argument_count) |index| {
+        arguments[index] = command.argument(index);
+    }
+
+    var use_case = tab_creations.requestHandler(client);
+    _ = try use_case.execute(.{
+        .label = command.label(),
+        .arguments = arguments[0..command.argument_count],
+    });
 }
 
 fn createTab(client: *Client) !void {

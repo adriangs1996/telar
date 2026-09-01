@@ -1872,6 +1872,54 @@ pub const Generation = struct {
                 return error.InvalidConfig;
             } };
         }
+        if (std.mem.eql(u8, kind, "command-tab")) {
+            try ensureOnlyFields(
+                state,
+                absolute,
+                &.{ "kind", "command", "label" },
+                "action",
+                diagnostic,
+            );
+            _ = lua.lua_getfield(state, absolute, "command");
+            defer pop(state, 1);
+            if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+                diagnostic.set("command-tab action needs a command array", .{});
+                return error.InvalidConfig;
+            }
+            const command_table = lua.lua_absindex(state, -1);
+            const count = lua.lua_rawlen(state, command_table);
+            if (count == 0 or count > action_mod.CommandTab.max_arguments) {
+                diagnostic.set("command-tab command must contain 1..{d} arguments", .{action_mod.CommandTab.max_arguments});
+                return error.InvalidConfig;
+            }
+            try ensureArrayOnly(state, command_table, count, "command-tab command", diagnostic);
+            var argument_storage: [action_mod.CommandTab.max_arguments][]const u8 = undefined;
+            for (1..count + 1) |item| {
+                _ = lua.lua_rawgeti(state, command_table, @intCast(item));
+                defer pop(state, 1);
+                var len: usize = 0;
+                var text: []const u8 = "";
+                if (lua.lua_type(state, -1) == lua.LUA_TSTRING) {
+                    if (lua.lua_tolstring(state, -1, &len)) |raw| text = raw[0..len];
+                }
+                if (text.len == 0) {
+                    diagnostic.set("command-tab command[{d}] must be a string", .{item});
+                    return error.InvalidConfig;
+                }
+                argument_storage[item - 1] = text;
+            }
+            var label: []const u8 = "";
+            _ = lua.lua_getfield(state, absolute, "label");
+            if (lua.lua_type(state, -1) == lua.LUA_TSTRING) {
+                var len: usize = 0;
+                if (lua.lua_tolstring(state, -1, &len)) |raw| label = raw[0..len];
+            }
+            defer pop(state, 1);
+            return .{ .command_tab = action_mod.CommandTab.init(argument_storage[0..count], label) catch {
+                diagnostic.set("command-tab command or label is invalid or too long", .{});
+                return error.InvalidConfig;
+            } };
+        }
         if (std.mem.eql(u8, kind, "notification")) {
             try ensureOnlyFields(
                 state,
@@ -2094,6 +2142,9 @@ const bootstrap =
     \\end
     \\function telar.action.plugin(options)
     \\  return { kind = "plugin", plugin = options.plugin, action = options.action }
+    \\end
+    \\function telar.action.command_tab(options)
+    \\  return { kind = "command-tab", command = options.command, label = options.label }
     \\end
     \\function telar.action.notification(options)
     \\  return {
@@ -4163,6 +4214,34 @@ test "appearance themes parse and reject unknown names" {
         std.testing.allocator,
         std.testing.io,
         "return { api_version = 2, client = { appearance = { light = \"neon\" } } }",
+        "@config.lua",
+        1,
+        &invalid,
+    ));
+}
+
+test "command-tab actions parse a bounded argv and reject empty commands" {
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { keybindings = { telar.bind({ \"ctrl+g\" }, telar.action.command_tab({ command = { \"lazygit\", \"-p\" }, label = \"git\" })) } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    const parsed = generation.snapshot.bindings[0].action.command_tab;
+    try std.testing.expectEqualStrings("lazygit", parsed.argument(0));
+    try std.testing.expectEqualStrings("-p", parsed.argument(1));
+    try std.testing.expectEqualStrings("git", parsed.label());
+
+    var invalid: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { keybindings = { telar.bind({ \"ctrl+g\" }, telar.action.command_tab({ command = {} })) } } }",
         "@config.lua",
         1,
         &invalid,

@@ -17,6 +17,10 @@ owned outbox create_tab
 runtime socket
 ```
 
+`command_tab` enters the same flow with a bounded argv and optional label
+copied inline by the action; the intent's arguments replace the client's
+default launch command and the tab closes itself when that command exits.
+
 The request handler rejects another pending tab operation and requires an
 attached focused pane in the active tab. The model returns only the current
 workspace identity and cwd source. Planning does not mutate the tab collection
@@ -127,8 +131,8 @@ active tab.
   wire-to-command translation plus physical port wiring.
 - `src/frontend/client/model.zig` proves attached-source planning,
   transactional insertion, identity checks and exact version changes.
-- `src/frontend/client/outbox.zig` proves queued creation owns its label and
-  cwd until encoding.
+- `src/frontend/client/outbox.zig` proves queued creation owns its label,
+  cwd and argument bytes until encoding.
 - `src/frontend/client/client_test.zig` proves request correlation, preserved
   geometry, failure notification, attachment order and presenter observation.
 - `src/backend/runtime/commands/create_tab.zig` and

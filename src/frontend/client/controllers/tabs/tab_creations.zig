@@ -108,7 +108,7 @@ fn sendCreation(context: *anyopaque, intent: create_tab.TabCreationIntent) !void
         .launch = .{
             .cwd = client.options.cwd,
             .cwd_source = intent.cwd_source,
-            .arguments = client.options.arguments,
+            .arguments = if (intent.arguments.len != 0) intent.arguments else client.options.arguments,
         },
     });
 }

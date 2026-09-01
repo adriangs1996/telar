@@ -9,6 +9,9 @@ const schema = core.schema;
 pub const RequestTabCreation = struct {
     /// Empty asks the runtime aggregate to generate its canonical label.
     label: []const u8 = "",
+    /// Empty launches the client's default command; otherwise this argv runs
+    /// in the new tab. Borrowed only for the synchronous send callback.
+    arguments: []const []const u8 = &.{},
 };
 
 pub const TabCreationIntent = struct {
@@ -16,6 +19,7 @@ pub const TabCreationIntent = struct {
     cwd_source: schema.PaneId,
     /// Borrowed only for the synchronous send callback.
     label: []const u8,
+    arguments: []const []const u8 = &.{},
 };
 
 pub const TabOperationGate = struct {
@@ -50,6 +54,7 @@ pub const RequestTabCreationHandler = struct {
             .workspace = plan.workspace,
             .cwd_source = plan.cwd_source,
             .label = request.label,
+            .arguments = request.arguments,
         };
         try handler.effects.send(handler.effects.context, intent);
 
