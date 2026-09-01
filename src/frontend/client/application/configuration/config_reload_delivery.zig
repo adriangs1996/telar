@@ -4,7 +4,7 @@ const std = @import("std");
 const lua_config = @import("../../../config/root.zig");
 const notification_capability = @import("../../../notifications/root.zig");
 const client_diagnostic = @import("client_diagnostic.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 pub const Resolution = union(enum) {
     unchanged,

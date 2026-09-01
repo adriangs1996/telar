@@ -2,14 +2,14 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../agents/root.zig");
-const attachments = @import("../attachments/root.zig");
-const lua_config = @import("../config/root.zig");
-const graphics = @import("../graphics/root.zig");
-const input_capability = @import("../input/root.zig");
-const notifications = @import("../notifications/root.zig");
+const agents = @import("../../agents/root.zig");
+const attachments = @import("../../attachments/root.zig");
+const lua_config = @import("../../config/root.zig");
+const graphics = @import("../../graphics/root.zig");
+const input_capability = @import("../../input/root.zig");
+const notifications = @import("../../notifications/root.zig");
 const name_prompt = @import("name_prompt.zig");
-const workspace_capability = @import("../workspace/root.zig");
+const workspace_capability = @import("../../workspace/root.zig");
 
 const copy_mode = input_capability.copy_mode;
 const keybind = input_capability.keybind;

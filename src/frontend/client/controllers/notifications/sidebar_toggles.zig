@@ -1,7 +1,7 @@
 //! Wires committed sidebar state to disposable client resources.
 
 const notifications_application = @import("../../application/notifications/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const sidebar_projection = @import("sidebar_projection.zig");
 
 const Client = @import("../../client.zig");

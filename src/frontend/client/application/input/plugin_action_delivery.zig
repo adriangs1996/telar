@@ -4,7 +4,7 @@ const std = @import("std");
 const config = @import("../../../config/root.zig");
 const notification_capability = @import("../../../notifications/root.zig");
 const client_diagnostic = @import("../configuration/client_diagnostic.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const plugin_action = @import("plugin_action.zig");
 
 pub const Effects = struct {

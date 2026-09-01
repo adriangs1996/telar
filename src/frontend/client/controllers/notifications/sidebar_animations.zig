@@ -3,7 +3,7 @@
 const std = @import("std");
 const notifications_application = @import("../../application/notifications/root.zig");
 const client_clock = @import("../../clock.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 const Client = @import("../../client.zig");
 const Io = std.Io;

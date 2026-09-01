@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const tab_snapshot_recovery = @import("../tabs/tab_snapshot_recovery.zig");
 
 const schema = core.schema;

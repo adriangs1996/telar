@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const agents_application = @import("../../application/agents/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const notifications = @import("../../../notifications/root.zig");
 
 const Client = @import("../../client.zig");

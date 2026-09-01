@@ -1,7 +1,7 @@
 //! Application use cases for host-capability observations and expiry.
 
 const std = @import("std");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 pub const Effects = struct {
     context: *anyopaque,

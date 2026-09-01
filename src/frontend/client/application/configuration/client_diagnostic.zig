@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const lua_config = @import("../../../config/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 pub const Replacement = struct {
     diagnostic: lua_config.Diagnostic,

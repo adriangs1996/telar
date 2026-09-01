@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const runtime_transport = @import("../../runtime_transport.zig");
 
 const Client = @import("../../client.zig");

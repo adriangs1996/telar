@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const configuration_application = @import("../../application/configuration/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const notifications = @import("../../../notifications/root.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");

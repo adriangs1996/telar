@@ -3,7 +3,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const workspace_transition_delivery = @import("workspace_transition_delivery.zig");
 
 const schema = core.schema;

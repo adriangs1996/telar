@@ -6,7 +6,7 @@
 const std = @import("std");
 const input_capability = @import("../input/root.zig");
 const client_view = @import("view.zig");
-const client_model = @import("model.zig");
+const client_model = @import("model/root.zig");
 const host_capability_adapter = @import("controllers/host/host_capabilities.zig");
 const lua_config = @import("../config/root.zig");
 const action_mod = input_capability.action;
@@ -44,8 +44,8 @@ test {
     _ = @import("deadline_timer.zig");
     _ = @import("entrypoints/runtime_messages.zig");
     _ = @import("input_handler.zig");
-    _ = @import("model.zig");
-    _ = @import("name_prompt.zig");
+    _ = @import("model/root.zig");
+    _ = @import("model/name_prompt.zig");
     _ = @import("notification_timers.zig");
     _ = @import("presentation_lifecycle.zig");
     _ = @import("presentation_projection.zig");

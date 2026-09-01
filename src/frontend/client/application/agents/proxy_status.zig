@@ -1,7 +1,7 @@
 //! Application use case for reconciling runtime TLS interception state.
 
 const std = @import("std");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 pub const ProxyStatusDelivery = struct {
     context: *anyopaque,

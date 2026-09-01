@@ -2,7 +2,7 @@
 
 const workspace_capability = @import("../../../workspace/root.zig");
 const notifications_application = @import("../../application/notifications/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 
 const Client = @import("../../client.zig");

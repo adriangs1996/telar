@@ -1,7 +1,7 @@
 //! Application admission policy for starting one workspace handoff.
 
 const std = @import("std");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 pub const Authority = enum {
     requested_departure,

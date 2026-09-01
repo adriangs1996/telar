@@ -5,7 +5,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../../../agents/root.zig");
 const notification_capability = @import("../../../notifications/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 const schema = core.schema;
 

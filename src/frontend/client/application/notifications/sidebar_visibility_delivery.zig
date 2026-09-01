@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const workspace_capability = @import("../../../workspace/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 const multiplexer = workspace_capability.multiplexer;
 

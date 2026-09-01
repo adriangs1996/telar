@@ -3,7 +3,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const pane_focus_reporting = @import("../panes/pane_focus_reporting.zig");
 const pane_paste = @import("../input/pane_paste.zig");
 

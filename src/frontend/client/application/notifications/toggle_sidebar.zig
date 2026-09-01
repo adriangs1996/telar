@@ -1,7 +1,7 @@
 //! Application use case for toggling one client's sidebar preference.
 
 const std = @import("std");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 pub const SidebarEffects = struct {
     context: *anyopaque,

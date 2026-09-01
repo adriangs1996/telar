@@ -1,7 +1,7 @@
 //! Application boundary for the bounded client name prompt.
 
 const std = @import("std");
-const name_prompt = @import("../../name_prompt.zig");
+const name_prompt = @import("../../model/name_prompt.zig");
 
 pub const SubmitEffects = struct {
     context: *anyopaque,

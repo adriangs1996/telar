@@ -1,7 +1,7 @@
 //! Adapts runtime host-health messages to the client application boundary.
 
 const core = @import("telar-core");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 const Client = @import("../../client.zig");
 const schema = core.schema;

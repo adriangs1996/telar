@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const tabs_application = @import("../../application/tabs/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");

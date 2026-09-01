@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const input_capability = @import("../input/root.zig");
+const input_capability = @import("../../input/root.zig");
 
 const edit = input_capability.edit;
 const schema = core.schema;

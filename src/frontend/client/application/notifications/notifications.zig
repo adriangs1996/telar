@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const notification_capability = @import("../../../notifications/root.zig");
-const client_model = @import("../../model.zig");
+const client_model = @import("../../model/root.zig");
 
 pub const TimerEffects = struct {
     context: *anyopaque,
