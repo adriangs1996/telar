@@ -8,7 +8,7 @@ const ui = @import("../ui/root.zig");
 const schema = core.schema;
 
 pub const Field = edit.Field(schema.max_tab_label_bytes);
-pub const Kind = enum { rename_tab, create_workspace, rename_workspace };
+pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward };
 
 pub const Output = widget.Cursor;
 
@@ -17,6 +17,8 @@ pub fn render(context: *widget.Context, area: ui.Rect, field: *Field, kind: Kind
         .rename_tab => " rename tab: ",
         .create_workspace => " new workspace: ",
         .rename_workspace => " rename workspace: ",
+        .copy_search_forward => " /",
+        .copy_search_backward => " ?",
     };
     _ = context.buffer.writeText(area, area.x, area.y, prefix, .{
         .fg = context.palette.accent,

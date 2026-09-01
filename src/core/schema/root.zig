@@ -38,6 +38,9 @@ pub const max_agent_provider_index = types.max_agent_provider_index;
 pub const max_agent_provider_name_bytes = types.max_agent_provider_name_bytes;
 pub const max_agent_session_reference_bytes = types.max_agent_session_reference_bytes;
 pub const max_pane_text_rows = types.max_pane_text_rows;
+pub const max_search_needle_bytes = types.max_search_needle_bytes;
+pub const max_search_matches = types.max_search_matches;
+pub const SearchMatch = types.SearchMatch;
 pub const max_pane_text_bytes = types.max_pane_text_bytes;
 pub const max_pane_text_input_bytes = types.max_pane_text_input_bytes;
 pub const max_history_command_bytes = types.max_history_command_bytes;
@@ -153,6 +156,7 @@ pub const ClientTag = enum(u8) {
     send_pane_text = 0x1e,
     report_agent_session = 0x1f,
     report_agent = 0x20,
+    search_pane = 0x21,
 };
 
 pub const ServerTag = enum(u8) {
@@ -190,6 +194,7 @@ pub const ServerTag = enum(u8) {
     pane_text = 0xa0,
     request_completed = 0xa1,
     pane_title = 0xa2,
+    pane_matches = 0xa3,
 };
 
 pub const LaunchView = struct {
@@ -463,6 +468,50 @@ pub const ReportAgent = struct {
     session: []const u8 = "",
 };
 
+/// Copy-mode text search over one attached pane's retained history.
+pub const SearchPane = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    needle: []const u8,
+};
+
+/// Reply to `search_pane`: every match in document order, at most
+/// `max_search_matches`. `truncated` reports that older rows or later
+/// matches were not examined.
+pub const PaneMatches = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    truncated: bool,
+    matches: []const SearchMatch,
+};
+
+pub const PaneMatchesView = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    truncated: bool,
+    match_count: u16,
+    encoded_matches: []const u8,
+
+    pub fn matches(view: PaneMatchesView) SearchMatchIterator {
+        return .{ .decoder = .init(view.encoded_matches), .remaining = view.match_count };
+    }
+};
+
+pub const SearchMatchIterator = struct {
+    decoder: wire.Decoder,
+    remaining: u16,
+
+    pub fn next(iterator: *SearchMatchIterator) !?SearchMatch {
+        if (iterator.remaining == 0) return null;
+        iterator.remaining -= 1;
+        return .{
+            .x = try iterator.decoder.readInt(u16),
+            .y = try iterator.decoder.readInt(u32),
+            .len = try iterator.decoder.readInt(u16),
+        };
+    }
+};
+
 /// Reply to `read_pane`. `truncated` reports that older rows were omitted to
 /// respect `max_pane_text_bytes`.
 pub const PaneText = struct {
@@ -660,6 +709,7 @@ pub const ClientMessage = union(enum) {
     send_pane_text: SendPaneText,
     report_agent_session: ReportAgentSession,
     report_agent: ReportAgent,
+    search_pane: SearchPane,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -1004,6 +1054,7 @@ pub const ServerMessage = union(enum) {
     pane_text: PaneText,
     request_completed: RequestCompleted,
     pane_title: PaneTitle,
+    pane_matches: PaneMatchesView,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -1331,6 +1382,68 @@ fn decodeReportAgentSession(decoder: *wire.Decoder) !ReportAgentSession {
     };
 }
 
+pub fn encodeSearchPane(buffer: []u8, message: SearchPane) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    try validateBytes(message.needle, max_search_needle_bytes, false);
+    if (!std.unicode.utf8ValidateSlice(message.needle)) return error.InvalidUtf8;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.search_pane));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeSized16(message.needle);
+    return encoder.finish();
+}
+
+fn decodeSearchPane(decoder: *wire.Decoder) !SearchPane {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const needle = try decoder.readSized16();
+    try validateBytes(needle, max_search_needle_bytes, false);
+    if (!std.unicode.utf8ValidateSlice(needle)) return error.InvalidUtf8;
+    return .{ .request_id = request_id, .pane_id = pane_id, .needle = needle };
+}
+
+pub fn encodePaneMatches(buffer: []u8, message: PaneMatches) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    if (message.matches.len > max_search_matches) return error.TooManySearchMatches;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.pane_matches));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeByte(@intFromBool(message.truncated));
+    try encoder.writeInt(u16, @intCast(message.matches.len));
+    for (message.matches) |match| {
+        if (match.len == 0) return error.InvalidSearchMatch;
+        try encoder.writeInt(u16, match.x);
+        try encoder.writeInt(u32, match.y);
+        try encoder.writeInt(u16, match.len);
+    }
+    return encoder.finish();
+}
+
+fn decodePaneMatches(decoder: *wire.Decoder) !PaneMatchesView {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const truncated = try decoder.readBool();
+    const match_count = try decoder.readInt(u16);
+    if (match_count > max_search_matches) return error.TooManySearchMatches;
+    const start = decoder.index;
+    for (0..match_count) |_| {
+        _ = try decoder.readInt(u16);
+        _ = try decoder.readInt(u32);
+        if (try decoder.readInt(u16) == 0) return error.InvalidSearchMatch;
+    }
+    return .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .truncated = truncated,
+        .match_count = match_count,
+        .encoded_matches = decoder.consumed(start),
+    };
+}
+
 pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
     try validateRequestId(message.request_id);
     try validatePaneId(message.pane_id);
@@ -1513,6 +1626,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .send_pane_text => .{ .send_pane_text = try decodeSendPaneText(&decoder) },
         .report_agent_session => .{ .report_agent_session = try decodeReportAgentSession(&decoder) },
         .report_agent => .{ .report_agent = try decodeReportAgent(&decoder) },
+        .search_pane => .{ .search_pane = try decodeSearchPane(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -1873,6 +1987,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .pane_text => .{ .pane_text = try decodePaneText(&decoder) },
         .request_completed => .{ .request_completed = try Derived(RequestCompleted).decode(&decoder) },
         .pane_title => .{ .pane_title = try decodePaneTitle(&decoder) },
+        .pane_matches => .{ .pane_matches = try decodePaneMatches(&decoder) },
     };
     if (message == .agent_sound and message.agent_sound.pane_generation == 0)
         return error.InvalidPaneGeneration;

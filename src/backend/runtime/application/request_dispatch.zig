@@ -17,6 +17,8 @@ const send_pane_text_commands = @import("commands/send_pane_text.zig");
 const send_pane_text_controller = @import("../entrypoints/requests/send_pane_text.zig");
 const report_agent_session_commands = @import("commands/report_agent_session.zig");
 const report_agent_session_controller = @import("../entrypoints/requests/report_agent_session.zig");
+const search_pane_commands = @import("commands/search_pane.zig");
+const search_pane_controller = @import("../entrypoints/requests/search_pane.zig");
 const report_agent_commands = @import("commands/report_agent.zig");
 const report_agent_controller = @import("../entrypoints/requests/report_agent.zig");
 const pane_observation_events = @import("../entrypoints/events/pane/observation.zig");
@@ -90,6 +92,7 @@ const QueryAgentsController = query_agents_controller.Controller(*Delivery);
 const SendPaneTextController = send_pane_text_controller.Controller(*send_pane_text_commands.SendPaneTextHandler);
 const ReportAgentSessionController = report_agent_session_controller.Controller(*report_agent_session_commands.ReportAgentSessionHandler);
 const ReportAgentController = report_agent_controller.Controller(*report_agent_commands.ReportAgentHandler);
+const SearchPaneController = search_pane_controller.Controller(*search_pane_commands.SearchPaneHandler);
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
@@ -176,6 +179,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .send_pane_text = routeSendPaneText,
             .report_agent_session = routeReportAgentSession,
             .report_agent = routeReportAgent,
+            .search_pane = routeSearchPane,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -664,6 +668,15 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                 .pane_generation = report.pane_generation,
                 .sound = sound,
             });
+        }
+
+        fn routeSearchPane(request: *ClientRequestContext, search: schema.SearchPane) !void {
+            var handler: search_pane_commands.SearchPaneHandler = .{
+                .attachments = &request.session.attachments,
+            };
+            var controller = SearchPaneController.init(&request.session.delivery.responses, &handler);
+
+            try controller.searchPane(search);
         }
 
         fn routeCopySelection(request: *ClientRequestContext, selection: schema.CopySelection) !void {

@@ -86,6 +86,21 @@ const OwnedCreateTab = struct {
     }
 };
 
+pub const OwnedSearch = struct {
+    request_id: schema.RequestId,
+    pane_id: schema.PaneId,
+    needle: [schema.max_search_needle_bytes]u8 = undefined,
+    needle_len: u8 = 0,
+
+    fn view(value: *const OwnedSearch) schema.SearchPane {
+        return .{
+            .request_id = value.request_id,
+            .pane_id = value.pane_id,
+            .needle = value.needle[0..value.needle_len],
+        };
+    }
+};
+
 const OwnedNotification = struct {
     request_id: schema.RequestId,
     level: schema.NotificationLevel,
@@ -157,6 +172,7 @@ pub const Message = union(enum) {
     show_notification: OwnedNotification,
     client_layout: u8,
     acknowledge_agent: schema.AcknowledgeAgent,
+    search_pane: OwnedSearch,
 };
 
 fn messageLaunchCwd(message: Message) ?[]const u8 {
@@ -474,6 +490,7 @@ pub const Outbox = struct {
             .show_notification => |*value| schema.encodeShowNotification(buffer, value.view()),
             .client_layout => |slot| outbox.client_layouts[slot].slice(),
             .acknowledge_agent => |value| schema.encodeAcknowledgeAgent(buffer, value),
+            .search_pane => |*value| schema.encodeSearchPane(buffer, value.view()),
         };
     }
 

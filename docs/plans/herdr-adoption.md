@@ -316,7 +316,11 @@ that never becomes a dependency.
 
 ---
 
-## P7. Search in the UI
+## P7. Search in the UI — copy-mode search done; pickers pending
+
+`/`, `?`, `n`, `N` work in copy mode through `search_pane`/`pane_matches`.
+The goto picker and the history palette remain open; they need a list-modal
+capability that does not exist yet.
 
 Nothing in the client searches today; `copy_mode.zig` has no find.
 

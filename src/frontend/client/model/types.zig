@@ -627,7 +627,14 @@ pub const PaneViewportChange = struct {
 pub const CopyModeCommand = union(enum) {
     key: keybind.Key,
     vertical: i32,
+    matches: CopyModeMatches,
     leave,
+};
+
+pub const CopyModeMatches = struct {
+    pane_id: schema.PaneId,
+    /// Borrowed only for the synchronous transition.
+    matches: []const schema.SearchMatch,
 };
 
 pub const CopyModeProjection = struct {
@@ -647,6 +654,8 @@ pub const CopyModePlan = struct {
     next: ?copy_mode.State,
     selection: ?schema.CopySelection = null,
     viewport: ?schema.SetPaneViewport = null,
+    /// Open the search input in this direction after the commit.
+    search: ?copy_mode.Direction = null,
 };
 
 pub const CopyModeCommit = struct {

@@ -13,6 +13,9 @@ pub const Intent = union(enum) {
     rename_workspace,
     rename_active_tab,
     rename_tab: schema.TabId,
+    /// Copy-mode search input; the only prompt allowed while copy mode is
+    /// active, and meaningless outside it.
+    copy_search: name_prompt.Direction,
 };
 
 pub const WorkspaceCreationGate = struct {
@@ -32,7 +35,18 @@ pub const OpenNamePromptHandler = struct {
     /// if (!handler.execute(.rename_active_tab)) return;
     /// ```
     pub fn execute(handler: *OpenNamePromptHandler, intent: Intent) bool {
-        if (handler.model.copyModeActive() or handler.model.panePasteActive()) {
+        if (handler.model.panePasteActive()) {
+            return false;
+        }
+        if (intent == .copy_search) {
+            if (!handler.model.copyModeActive()) {
+                return false;
+            }
+
+            handler.model.name_prompt.begin(.{ .copy_search = intent.copy_search });
+            return true;
+        }
+        if (handler.model.copyModeActive()) {
             return false;
         }
 
@@ -62,6 +76,7 @@ pub const OpenNamePromptHandler = struct {
                 const tab = handler.model.workspace.find(tab_id) orelse return false;
                 break :rename renameTab(tab_id, tab.labelSlice());
             },
+            .copy_search => unreachable,
         };
 
         handler.model.name_prompt.begin(command);

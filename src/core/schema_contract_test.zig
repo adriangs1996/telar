@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 69;
+const corpus_len = 71;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -353,6 +353,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
             .state = .blocked,
             .session = "abc",
+        }),
+    ));
+    helper.add("search_pane", .client, false, golden.search_pane, helper.commit(
+        try schema.encodeSearchPane(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .needle = "err",
         }),
     ));
 
@@ -716,6 +723,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .title = "vim",
         }),
     ));
+    helper.add("pane_matches", .server, false, golden.pane_matches, helper.commit(
+        try schema.encodePaneMatches(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .truncated = false,
+            .matches = &.{.{ .x = 2, .y = 7, .len = 3 }},
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -760,6 +775,8 @@ const golden = struct {
     pub const send_pane_text = "1e0500000000000000050000000000000003000000000000000102006c73";
     pub const report_agent_session = "1f0500000000000000050000000000000003000000000000000300616263";
     pub const report_agent = "20050000000000000005000000000000000300000000000000010300616263";
+    pub const search_pane = "21050000000000000005000000000000000300657272";
+    pub const pane_matches = "a3050000000000000005000000000000000001000200070000000300";
     pub const pane_text = "a00500000000000000050000000000000000020000006869";
     pub const request_completed = "a10500000000000000";
     pub const pane_title = "a20500000000000000030076696d";

@@ -1682,6 +1682,15 @@ pub const Model = struct {
                 if (!effect.handled) {
                     return null;
                 }
+                if (effect.search) |direction| {
+                    return .{
+                        .expected_revision = model.copy_revision,
+                        .previous = previous,
+                        .next = next,
+                        .viewport = copyModeViewport(pane, next.viewport_offset),
+                        .search = direction,
+                    };
+                }
                 if (effect.exit) {
                     const selection: ?schema.CopySelection = if (effect.copy and next.anchor != null) .{
                         .pane_id = next.pane_id,
@@ -1696,6 +1705,13 @@ pub const Model = struct {
                 }
             },
             .vertical => |delta| next.vertical(delta, pane.scroll, pane.buffer.h),
+            .matches => |found| {
+                if (found.pane_id != previous.pane_id) {
+                    return null;
+                }
+
+                next.applyMatches(found.matches, pane.scroll, pane.buffer.h);
+            },
             .leave => return model.planCopyModeExit(previous, null),
         }
 

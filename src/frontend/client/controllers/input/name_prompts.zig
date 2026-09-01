@@ -7,6 +7,9 @@ const presentation = @import("../../../presentation/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const prompt_state = @import("../../model/name_prompt.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const connection_outbox = @import("../../connection/outbox.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
+const input_capability = @import("../../../input/root.zig");
 const tab_renames = @import("../tabs/tab_renames.zig");
 const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
@@ -69,6 +72,17 @@ pub fn beginTabRename(client: *Client, tab_id: schema.TabId) bool {
 /// ```zig
 /// _ = try handleInput(client, bytes);
 /// ```
+/// Opens the copy-mode search input. Only valid while copy mode is active.
+///
+/// ```zig
+/// _ = beginCopySearch(client, .forward);
+/// ```
+pub fn beginCopySearch(client: *Client, direction: input_capability.copy_mode.Direction) bool {
+    var use_case = openingHandler(client);
+
+    return use_case.execute(.{ .copy_search = direction });
+}
+
 pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     var use_case = handler(client);
 
@@ -122,6 +136,18 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
                 .tab_id = tab_id,
                 .label = submission.name,
             });
+        },
+        .copy_search => blk: {
+            const pane_id = client.model.copyModeTarget() orelse break :blk true;
+            const request_id = try request_lifecycle.nextId(client);
+            var owned: connection_outbox.OwnedSearch = .{
+                .request_id = request_id,
+                .pane_id = pane_id,
+                .needle_len = @intCast(submission.name.len),
+            };
+            @memcpy(owned.needle[0..submission.name.len], submission.name);
+            try runtime_transport.enqueue(client, .{ .search_pane = owned });
+            break :blk true;
         },
     };
 }

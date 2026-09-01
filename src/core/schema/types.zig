@@ -27,6 +27,8 @@ pub const max_agent_cwd_label_bytes = 48;
 pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
+pub const max_search_needle_bytes = 128;
+pub const max_search_matches = 64;
 pub const max_pane_text_rows = 200;
 pub const max_pane_text_bytes = 64 * 1024;
 pub const max_pane_text_input_bytes = 16 * 1024;
@@ -172,6 +174,13 @@ pub const FailureCode = enum(u16) {
 pub const PaneTextSource = enum(u8) {
     screen = 0,
     recent = 1,
+};
+
+/// One text match in absolute scrollback coordinates.
+pub const SearchMatch = struct {
+    x: u16,
+    y: u32,
+    len: u16,
 };
 
 /// How text sent to a pane is delivered. `prompt` wraps it in bracketed paste

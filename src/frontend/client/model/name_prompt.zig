@@ -5,6 +5,9 @@ const core = @import("telar-core");
 const input_capability = @import("../../input/root.zig");
 
 const edit = input_capability.edit;
+const copy_mode = input_capability.copy_mode;
+
+pub const Direction = copy_mode.Direction;
 const schema = core.schema;
 
 pub const Field = edit.Field(schema.max_tab_label_bytes);
@@ -13,9 +16,12 @@ pub const Target = union(enum) {
     rename_tab: schema.TabId,
     create_workspace,
     rename_workspace: schema.WorkspaceLocation,
+    /// Copy-mode search input; the direction was chosen by `/` or `?`.
+    copy_search: copy_mode.Direction,
 };
 
 pub const Begin = union(enum) {
+    copy_search: copy_mode.Direction,
     rename_tab: struct {
         tab_id: schema.TabId,
         label: []const u8,
@@ -84,6 +90,10 @@ pub const State = struct {
             .rename_workspace => |rename| .{
                 .target = .{ .rename_workspace = rename.workspace },
                 .field = .init(if (rename.name.len <= schema.max_tab_label_bytes) rename.name else ""),
+            },
+            .copy_search => |direction| .{
+                .target = .{ .copy_search = direction },
+                .field = .init(""),
             },
         };
         state.revision +%= 1;

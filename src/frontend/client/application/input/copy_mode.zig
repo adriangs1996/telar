@@ -12,6 +12,7 @@ const schema = core.schema;
 pub const CopyModeEffects = struct {
     context: *anyopaque,
     copy: *const fn (*anyopaque, schema.CopySelection) anyerror!void,
+    open_search: *const fn (*anyopaque, input_capability.copy_mode.Direction) anyerror!void,
     viewport: set_pane_viewport.PaneViewportEffects,
 };
 
@@ -50,6 +51,9 @@ pub const CopyModeHandler = struct {
         const commit = handler.model.commitCopyMode(plan) orelse return .unchanged;
         if (commit.viewport) |viewport| {
             try handler.effects.viewport.sync(handler.effects.viewport.context, viewport);
+        }
+        if (plan.search) |direction| {
+            try handler.effects.open_search(handler.effects.context, direction);
         }
 
         return if (commit.active) .changed else .exited;
@@ -95,17 +99,24 @@ const EffectsCapture = struct {
     copied: ?schema.CopySelection = null,
     viewport: ?client_model.PaneViewportChange = null,
     fail_copy: bool = false,
+    search_opened: ?input_capability.copy_mode.Direction = null,
     fail_viewport: bool = false,
 
     fn port(capture: *EffectsCapture) CopyModeEffects {
         return .{
             .context = capture,
             .copy = copy,
+            .open_search = openSearch,
             .viewport = .{
                 .context = capture,
                 .sync = syncViewport,
             },
         };
+    }
+
+    fn openSearch(context: *anyopaque, direction: input_capability.copy_mode.Direction) !void {
+        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
+        capture.search_opened = direction;
     }
 
     fn copy(context: *anyopaque, selection: schema.CopySelection) !void {

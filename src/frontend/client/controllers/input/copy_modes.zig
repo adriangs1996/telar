@@ -55,15 +55,42 @@ pub fn leave(client: *Client) !copy_mode.Outcome {
     return use_case.execute(.leave);
 }
 
+/// Applies one runtime search reply to the active copy-mode state.
+///
+/// ```zig
+/// _ = try matches(client, view);
+/// ```
+pub fn matches(client: *Client, view: schema.PaneMatchesView) !copy_mode.Outcome {
+    var storage: [input_capability.copy_mode.max_matches]schema.SearchMatch = undefined;
+    var count: usize = 0;
+    var iterator = view.matches();
+    while (try iterator.next()) |match| {
+        if (count == storage.len) break;
+        storage[count] = match;
+        count += 1;
+    }
+
+    var use_case = handler(client);
+    return use_case.execute(.{ .matches = .{ .pane_id = view.pane_id, .matches = storage[0..count] } });
+}
+
 fn handler(client: *Client) copy_mode.CopyModeHandler {
     return .{
         .model = &client.model,
         .effects = .{
             .context = client,
             .copy = copySelection,
+            .open_search = openSearch,
             .viewport = pane_viewports.effects(client),
         },
     };
+}
+
+fn openSearch(context: *anyopaque, direction: input_capability.copy_mode.Direction) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    const name_prompts = @import("name_prompts.zig");
+
+    _ = name_prompts.beginCopySearch(client, direction);
 }
 
 fn copySelection(context: *anyopaque, selection: schema.CopySelection) !void {

@@ -9,6 +9,10 @@ const keybind = @import("keybind.zig");
 const schema = core.schema;
 const ui = core.ui;
 
+pub const Direction = enum { forward, backward };
+
+pub const max_matches = core.schema.max_search_matches;
+
 pub const Point = struct {
     x: u16,
     /// Absolute row from the beginning of the retained screen history.
@@ -43,6 +47,10 @@ pub const State = struct {
     linewise: bool = false,
     entry_offset: u32,
     viewport_offset: u32,
+    search_direction: Direction = .forward,
+    matches: [max_matches]schema.SearchMatch = @splat(.{ .x = 0, .y = 0, .len = 0 }),
+    match_count: u8 = 0,
+    match_index: u8 = 0,
 
     pub fn init(
         pane_id: schema.PaneId,
@@ -116,6 +124,79 @@ pub const State = struct {
         state.cursor.x = cols -| 1;
     }
 
+    /// Stores search results and selects the first match at or after the
+    /// cursor (forward) or before it (backward). The current match becomes
+    /// the selection so it is visibly highlighted.
+    ///
+    /// ```zig
+    /// state.applyMatches(results, scroll, rows);
+    /// ```
+    pub fn applyMatches(state: *State, results: []const schema.SearchMatch, scroll: schema.frame.Scroll, rows: u16) void {
+        state.match_count = @intCast(@min(results.len, state.matches.len));
+        @memcpy(state.matches[0..state.match_count], results[0..state.match_count]);
+        if (state.match_count == 0) {
+            return;
+        }
+
+        var selected: ?u8 = null;
+        switch (state.search_direction) {
+            .forward => {
+                for (state.matchSlice(), 0..) |match, index| {
+                    if (less(state.cursor, .{ .x = match.x, .y = match.y })) {
+                        selected = @intCast(index);
+                        break;
+                    }
+                }
+            },
+            .backward => {
+                var index: usize = state.match_count;
+                while (index > 0) {
+                    index -= 1;
+                    const match = state.matches[index];
+                    if (less(.{ .x = match.x, .y = match.y }, state.cursor)) {
+                        selected = @intCast(index);
+                        break;
+                    }
+                }
+            },
+        }
+
+        state.gotoMatch(selected orelse switch (state.search_direction) {
+            .forward => 0,
+            .backward => state.match_count - 1,
+        }, scroll, rows);
+    }
+
+    /// Moves to the next or previous stored match, wrapping around.
+    ///
+    /// ```zig
+    /// state.cycleMatch(1, scroll, rows);
+    /// ```
+    pub fn cycleMatch(state: *State, delta: i2, scroll: schema.frame.Scroll, rows: u16) void {
+        if (state.match_count == 0) {
+            return;
+        }
+
+        const count: i16 = state.match_count;
+        var index: i16 = state.match_index;
+        index = @mod(index + delta, count);
+        state.gotoMatch(@intCast(index), scroll, rows);
+    }
+
+    pub fn matchSlice(state: *const State) []const schema.SearchMatch {
+        return state.matches[0..state.match_count];
+    }
+
+    fn gotoMatch(state: *State, index: u8, scroll: schema.frame.Scroll, rows: u16) void {
+        const match = state.matches[index];
+        state.match_index = index;
+        state.anchor = .{ .x = match.x, .y = match.y };
+        state.linewise = false;
+        state.cursor = .{ .x = match.x + match.len - 1, .y = match.y };
+        state.cursor.y = @min(state.cursor.y, scroll.total_rows -| 1);
+        state.reveal(rows, scroll);
+    }
+
     fn reveal(state: *State, rows: u16, scroll: schema.frame.Scroll) void {
         if (state.cursor.y < state.viewport_offset) {
             state.viewport_offset = state.cursor.y;
@@ -137,6 +218,8 @@ pub const Effect = struct {
     handled: bool = true,
     exit: bool = false,
     copy: bool = false,
+    /// Ask the client to open the search input in this direction.
+    search: ?Direction = null,
 };
 
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
@@ -198,6 +281,16 @@ pub fn applyKey(
             state.top();
         } else if (char.eql("G")) {
             state.bottom(scroll, buffer.h);
+        } else if (char.eql("/")) {
+            state.search_direction = .forward;
+            return .{ .search = .forward };
+        } else if (char.eql("?")) {
+            state.search_direction = .backward;
+            return .{ .search = .backward };
+        } else if (char.eql("n")) {
+            state.cycleMatch(if (state.search_direction == .forward) 1 else -1, scroll, buffer.h);
+        } else if (char.eql("N")) {
+            state.cycleMatch(if (state.search_direction == .forward) -1 else 1, scroll, buffer.h);
         } else if (char.eql("v") or char.eql(" ")) {
             state.toggleSelection(false);
         } else if (char.eql("V")) {
@@ -464,4 +557,46 @@ test "a pruning frame pulls cursor and anchor up before clamping" {
     onFrame(&state, 99, .{ .total_rows = 20, .offset = 0 });
     try std.testing.expectEqual(@as(u32, 19), state.cursor.y);
     try std.testing.expectEqual(@as(u32, 19), state.anchor.?.y);
+}
+
+test "matches select relative to the cursor, highlight and cycle with wrap" {
+    const scroll: schema.frame.Scroll = .{ .total_rows = 40, .offset = 0 };
+    var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 10 }, 0);
+    const results = [_]schema.SearchMatch{
+        .{ .x = 2, .y = 4, .len = 3 },
+        .{ .x = 1, .y = 12, .len = 2 },
+        .{ .x = 5, .y = 30, .len = 4 },
+    };
+
+    state.applyMatches(&results, scroll, 5);
+    try std.testing.expectEqual(@as(u8, 1), state.match_index);
+    try std.testing.expectEqualDeep(Point{ .x = 1, .y = 12 }, state.anchor.?);
+    try std.testing.expectEqualDeep(Point{ .x = 2, .y = 12 }, state.cursor);
+
+    state.cycleMatch(1, scroll, 5);
+    try std.testing.expectEqual(@as(u8, 2), state.match_index);
+    state.cycleMatch(1, scroll, 5);
+    try std.testing.expectEqual(@as(u8, 0), state.match_index);
+    try std.testing.expect(state.viewport_offset <= 4);
+
+    state.search_direction = .backward;
+    state.cursor = .{ .x = 0, .y = 10 };
+    state.applyMatches(&results, scroll, 5);
+    try std.testing.expectEqual(@as(u8, 0), state.match_index);
+
+    state.applyMatches(&.{}, scroll, 5);
+    try std.testing.expectEqual(@as(u8, 0), state.match_count);
+}
+
+test "slash and question mark ask for the search input" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 5);
+    defer buffer.deinit();
+    const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
+    var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
+
+    const forward = applyKey(&state, .{ .code = .{ .char = .init("/") } }, &buffer, scroll);
+    try std.testing.expectEqual(Direction.forward, forward.search.?);
+    const backward = applyKey(&state, .{ .code = .{ .char = .init("?") } }, &buffer, scroll);
+    try std.testing.expectEqual(Direction.backward, backward.search.?);
+    try std.testing.expectEqual(Direction.backward, state.search_direction);
 }

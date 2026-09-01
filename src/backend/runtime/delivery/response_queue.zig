@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const history = @import("../../history/root.zig");
 const pane = @import("../../pane/root.zig");
+const search_commands = @import("../application/commands/search_pane.zig");
 
 const schema = core.schema;
 const capacity = pane.max_panes * 2;
@@ -92,6 +93,14 @@ pub const PendingPaneText = struct {
     source: schema.PaneTextSource,
 };
 
+/// Search matches are small and computed at request time, so the reply owns
+/// its copy.
+pub const PendingPaneMatches = struct {
+    request_id: schema.RequestId,
+    pane_id: schema.PaneId,
+    matches: search_commands.Matches,
+};
+
 pub const PendingResponse = union(enum) {
     pane_opened: schema.PaneOpened,
     request_failed: PendingFailure,
@@ -107,6 +116,7 @@ pub const PendingResponse = union(enum) {
     history_result: *history.model.QueryResult,
     request_completed: schema.RequestCompleted,
     pane_text: PendingPaneText,
+    pane_matches: PendingPaneMatches,
 };
 
 pub const ResponseQueue = struct {

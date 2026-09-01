@@ -17,6 +17,7 @@ const pane_frames = @import("../controllers/panes/pane_frames.zig");
 const pane_graphics = @import("../controllers/panes/pane_graphics.zig");
 const pane_metadata = @import("../controllers/panes/pane_metadata.zig");
 const pane_openings = @import("../controllers/panes/pane_openings.zig");
+const copy_modes = @import("../controllers/input/copy_modes.zig");
 const proxy_status = @import("../controllers/agents/proxy_status.zig");
 const request_failures = @import("../controllers/session/request_failures.zig");
 const resync_requirements = @import("../controllers/session/resync_requirements.zig");
@@ -46,6 +47,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
         .pane_title => |title| _ = try pane_metadata.applyTitle(client, title),
+        .pane_matches => |found| _ = try copy_modes.matches(client, found),
         .pane_clipboard => |clipboard| try pane_clipboards.apply(client, clipboard),
         .pane_exited => |exited| _ = try pane_closures.applyExit(client, exited),
         .request_failed => |failure| _ = try request_failures.apply(client, failure),

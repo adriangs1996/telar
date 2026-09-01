@@ -98,6 +98,12 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
             break :payload try encodeHistoryResult(buffer, result, &history_storage);
         },
         .request_completed => |completed| try schema.encodeRequestCompleted(buffer, completed),
+        .pane_matches => |*found| try schema.encodePaneMatches(buffer, .{
+            .request_id = found.request_id,
+            .pane_id = found.pane_id,
+            .truncated = found.matches.truncated,
+            .matches = found.matches.slice(),
+        }),
         .pane_text => |*read| payload: {
             const target = panes.resolveConst(read.pane) orelse
                 break :payload try schema.encodeRequestFailed(buffer, .{

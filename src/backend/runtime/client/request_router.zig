@@ -51,6 +51,7 @@ pub fn Handlers(comptime Context: type) type {
         send_pane_text: *const fn (*Context, schema.SendPaneText) anyerror!void,
         report_agent_session: *const fn (*Context, schema.ReportAgentSession) anyerror!void,
         report_agent: *const fn (*Context, schema.ReportAgent) anyerror!void,
+        search_pane: *const fn (*Context, schema.SearchPane) anyerror!void,
     };
 }
 
@@ -114,6 +115,7 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .send_pane_text => |request| handlers.send_pane_text(router.context, request),
                 .report_agent_session => |request| handlers.report_agent_session(router.context, request),
                 .report_agent => |request| handlers.report_agent(router.context, request),
+                .search_pane => |request| handlers.search_pane(router.context, request),
             };
         }
     };
@@ -210,6 +212,7 @@ const testing_handlers: Handlers(Capture) = .{
     .send_pane_text = captureHandler(.send_pane_text, schema.SendPaneText),
     .report_agent_session = captureHandler(.report_agent_session, schema.ReportAgentSession),
     .report_agent = captureHandler(.report_agent, schema.ReportAgent),
+    .search_pane = captureHandler(.search_pane, schema.SearchPane),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -272,6 +275,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         .{ .send_pane_text = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .mode = .prompt, .text = "ls" } },
         .{ .report_agent_session = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .session = "abc" } },
         .{ .report_agent = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .state = .working } },
+        .{ .search_pane = .{ .request_id = request_id, .pane_id = pane_id, .needle = "err" } },
     };
 }
 

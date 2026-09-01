@@ -734,6 +734,10 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
         .rename_tab => .rename_tab,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
+        .copy_search => |direction| switch (direction) {
+            .forward => .copy_search_forward,
+            .backward => .copy_search_backward,
+        },
     };
 }
 

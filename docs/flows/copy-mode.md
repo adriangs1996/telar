@@ -73,6 +73,18 @@ frame repairs the operational projection. Copy mode uses the same
 `PaneViewportChange` effect port as normal scrolling, so graphics and
 `set_pane_viewport` policy stay in `pane_viewports`.
 
+## Search
+
+`/` and `?` open a bounded search input rendered by the same prompt widget
+that renames tabs; while it is open, keys belong to the prompt and copy mode
+waits. Submit sends `search_pane` with the needle; the runtime scans the most
+recent 10,000 rows of retained history and screen (ASCII smart-case, at most
+64 matches) and replies with `pane_matches` in absolute coordinates. The
+client stores the matches in copy state, selects the first match relative to
+the cursor in the chosen direction, highlights it as the selection and
+follows it with the viewport. `n` and `N` cycle with wrap. A reply for
+another pane or after copy mode ended changes nothing.
+
 ## Clipboard delivery
 
 ```text
