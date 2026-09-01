@@ -38,7 +38,8 @@ pub fn apply(client: *Client, model: *multiplexer.Model, interaction: view_inter
         .effects = .{
             .context = &context,
             .apply_intent = applyIntent,
-            .sync_layout = syncLayout,
+            .invalidate_graphics_placements = invalidateGraphicsPlacements,
+            .offer_pane_geometry = offerPaneGeometry,
         },
     };
 
@@ -82,10 +83,14 @@ fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !void {
     }
 }
 
-fn syncLayout(raw_context: *anyopaque) !void {
+fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
-    const client = context.client;
 
-    client.graphics_store.invalidatePlacements();
-    try pane_geometry.offerAttached(client, context.model, client.view.workbench());
+    context.client.graphics_store.invalidatePlacements();
+}
+
+fn offerPaneGeometry(raw_context: *anyopaque) !void {
+    const context: *Context = @ptrCast(@alignCast(raw_context));
+
+    try pane_geometry.offerAttached(context.client, context.model, context.client.view.workbench());
 }

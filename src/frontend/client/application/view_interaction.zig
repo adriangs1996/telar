@@ -33,14 +33,15 @@ pub const Outcome = struct {
 pub const Effects = struct {
     context: *anyopaque,
     apply_intent: *const fn (*anyopaque, Intent) anyerror!void,
-    sync_layout: *const fn (*anyopaque) anyerror!void,
+    invalidate_graphics_placements: *const fn (*anyopaque) void,
+    offer_pane_geometry: *const fn (*anyopaque) anyerror!void,
 };
 
 pub const DispatchViewInteractionHandler = struct {
     effects: Effects,
 
-    /// Applies the single semantic intent before any layout synchronization,
-    /// then returns only the routing decision needed by host input.
+    /// Applies the single semantic intent before ordered layout delivery, then
+    /// returns only the routing decision needed by host input.
     ///
     /// ```zig
     /// const outcome = try handler.execute(command);
@@ -52,7 +53,8 @@ pub const DispatchViewInteractionHandler = struct {
         }
 
         if (command.layout_changed) {
-            try handler.effects.sync_layout(handler.effects.context);
+            handler.effects.invalidate_graphics_placements(handler.effects.context);
+            try handler.effects.offer_pane_geometry(handler.effects.context);
         }
 
         return .{
@@ -70,45 +72,61 @@ fn capturesPaneInput(intent: Intent) bool {
 
 const Event = union(enum) {
     intent: Intent,
-    sync_layout,
+    invalidate_graphics_placements,
+    offer_pane_geometry,
+};
+
+const Failure = enum {
+    none,
+    intent,
+    pane_geometry,
 };
 
 const Capture = struct {
-    events: [2]Event = undefined,
+    events: [3]Event = undefined,
     count: usize = 0,
-    fail_at: ?usize = null,
+    failure: Failure = .none,
 
     fn effects(capture: *Capture) Effects {
         return .{
             .context = capture,
             .apply_intent = applyIntent,
-            .sync_layout = syncLayout,
+            .invalidate_graphics_placements = invalidateGraphicsPlacements,
+            .offer_pane_geometry = offerPaneGeometry,
         };
     }
 
-    fn record(capture: *Capture, event: Event) !void {
+    fn record(capture: *Capture, event: Event) void {
         capture.events[capture.count] = event;
         capture.count += 1;
-
-        if (capture.fail_at == capture.count) {
-            return error.ViewInteractionEffectFailed;
-        }
     }
 
     fn applyIntent(context: *anyopaque, intent: Intent) !void {
         const capture: *Capture = @ptrCast(@alignCast(context));
+        capture.record(.{ .intent = intent });
 
-        try capture.record(.{ .intent = intent });
+        if (capture.failure == .intent) {
+            return error.ViewIntentFailed;
+        }
     }
 
-    fn syncLayout(context: *anyopaque) !void {
+    fn invalidateGraphicsPlacements(context: *anyopaque) void {
         const capture: *Capture = @ptrCast(@alignCast(context));
 
-        try capture.record(.sync_layout);
+        capture.record(.invalidate_graphics_placements);
+    }
+
+    fn offerPaneGeometry(context: *anyopaque) !void {
+        const capture: *Capture = @ptrCast(@alignCast(context));
+        capture.record(.offer_pane_geometry);
+
+        if (capture.failure == .pane_geometry) {
+            return error.PaneGeometryFailed;
+        }
     }
 };
 
-test "DispatchViewInteractionHandler applies intent before layout synchronization" {
+test "DispatchViewInteractionHandler orders intent invalidation and pane geometry" {
     const key: agents.AgentKey = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 7,
@@ -124,27 +142,41 @@ test "DispatchViewInteractionHandler applies intent before layout synchronizatio
     try std.testing.expectEqualDeep(Outcome{
         .consume_pane_input = true,
     }, outcome);
-    try std.testing.expectEqual(@as(usize, 2), capture.count);
+    try std.testing.expectEqual(@as(usize, 3), capture.count);
     try std.testing.expectEqualDeep(Intent{ .focus_agent = key }, capture.events[0].intent);
-    try std.testing.expect(capture.events[1] == .sync_layout);
+    try std.testing.expect(capture.events[1] == .invalidate_graphics_placements);
+    try std.testing.expect(capture.events[2] == .offer_pane_geometry);
 }
 
-test "DispatchViewInteractionHandler stops subsequent effects after failure" {
-    var capture: Capture = .{ .fail_at = 1 };
+test "DispatchViewInteractionHandler preserves completed stages across failures" {
+    var capture: Capture = .{ .failure = .intent };
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
     const command: Command = .{
         .intent = .{ .rename_tab = @enumFromInt(4) },
         .layout_changed = true,
     };
 
-    try std.testing.expectError(error.ViewInteractionEffectFailed, handler.execute(command));
+    try std.testing.expectError(error.ViewIntentFailed, handler.execute(command));
     try std.testing.expectEqual(@as(usize, 1), capture.count);
 
-    capture = .{ .fail_at = 2 };
+    capture = .{ .failure = .pane_geometry };
     handler = .{ .effects = capture.effects() };
-    try std.testing.expectError(error.ViewInteractionEffectFailed, handler.execute(command));
+    try std.testing.expectError(error.PaneGeometryFailed, handler.execute(command));
+    try std.testing.expectEqual(@as(usize, 3), capture.count);
+    try std.testing.expect(capture.events[1] == .invalidate_graphics_placements);
+    try std.testing.expect(capture.events[2] == .offer_pane_geometry);
+}
+
+test "DispatchViewInteractionHandler delivers layout without a semantic intent" {
+    var capture: Capture = .{};
+    var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
+
+    const outcome = try handler.execute(.{ .layout_changed = true, .consumed = true });
+
+    try std.testing.expect(outcome.consume_pane_input);
     try std.testing.expectEqual(@as(usize, 2), capture.count);
-    try std.testing.expect(capture.events[1] == .sync_layout);
+    try std.testing.expect(capture.events[0] == .invalidate_graphics_placements);
+    try std.testing.expect(capture.events[1] == .offer_pane_geometry);
 }
 
 test "DispatchViewInteractionHandler owns pane-input capture policy" {

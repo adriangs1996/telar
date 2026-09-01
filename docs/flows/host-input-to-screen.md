@@ -191,11 +191,13 @@ notifications.
 
 `view_interactions.apply` wires that command to
 `DispatchViewInteractionHandler`. The application handler applies the semantic
-intent before layout synchronization and returns `Outcome`. The adapter maps
-the intent to the existing sidebar, workspace-list, agent-navigation,
+intent before layout delivery and returns `Outcome`. The adapter maps the
+intent to the existing sidebar, workspace-list, agent-navigation,
 tab-selection, pane-focus, name-prompt, workspace-handoff or notification use
-case. A layout change invalidates physical graphics placements and offers the
-original active model's attached pane geometry only after the intent succeeds.
+case. For a layout change, the application handler invalidates physical
+graphics placements before offering the original active model's attached pane
+geometry through separate ports. The adapter implements each operation but
+does not choose their order.
 
 Tab selection and agent navigation consume the triggering pointer event.
 Explicitly consumed view chrome does the same. Pane focus remains routable so
@@ -209,10 +211,11 @@ or report effect, and the adapter applies it through the existing viewport and
 pane-input use cases. See [Pane mouse input](pane-mouse-input.md).
 
 The command and handler use fixed value types and allocate no memory. Unit
-tests in `application/view_interaction.zig` prove intent-before-layout order,
-failure short-circuiting and capture policy. View tests prove hit-to-intent
-translation. Client tests prove sidebar-agent handoff, notification activation
-and focus-before-press forwarding through the complete input entrypoint.
+tests in `application/view_interaction.zig` prove intent-before-invalidation-
+before-geometry order, layout-only delivery, partial failure boundaries and
+capture policy. View tests prove hit-to-intent translation. Client tests prove
+sidebar-agent handoff, notification activation and focus-before-press
+forwarding through the complete input entrypoint.
 
 ### Modified Enter
 
