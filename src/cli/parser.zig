@@ -188,6 +188,10 @@ pub const Cli = union(enum) {
     config_check: ConfigCheckOptions,
     plugin_worker: PluginWorkerOptions,
     plugin: PluginOptions,
+    agent: AgentOptions,
+    pane: PaneOptions,
+    api: ApiOptions,
+    skill,
     run: RunOptions,
 
     /// Parses one complete argv into a validated command without performing
@@ -211,6 +215,18 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "--version") or std.mem.eql(u8, first, "-V")) {
             return .version;
+        }
+        if (std.mem.eql(u8, first, "--skill")) {
+            return .skill;
+        }
+        if (std.mem.eql(u8, first, "agent")) {
+            return .{ .agent = try AgentOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "pane")) {
+            return .{ .pane = try PaneOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "api")) {
+            return .{ .api = try ApiOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "server")) {
             return .{ .server = try ServerOptions.parse(args[2..]) };
@@ -557,6 +573,311 @@ pub const HistoryOptions = struct {
     }
 };
 
+pub const AgentAction = enum { list, get, wait, prompt, read };
+
+pub const PaneAction = enum { read, send_keys };
+
+/// How a CLI argument names a pane or the agent inside it.
+pub const Target = union(enum) {
+    /// The pane this process runs in, from `TELAR_PANE_ID`.
+    current,
+    pane: u64,
+    name: [*:0]const u8,
+
+    fn parse(value: [*:0]const u8) Target {
+        const text = std.mem.span(value);
+        if (std.mem.eql(u8, text, "--current")) {
+            return .current;
+        }
+
+        if (std.fmt.parseUnsigned(u64, text, 10)) |raw| {
+            return .{ .pane = raw };
+        } else |_| {
+            return .{ .name = value };
+        }
+    }
+};
+
+pub const max_wait_timeout_seconds = 3600;
+pub const default_wait_timeout_seconds = 30;
+
+pub const AgentOptions = struct {
+    action: AgentAction,
+    target: ?Target = null,
+    until: core.schema.AgentStatus = .done,
+    timeout_seconds: u32 = default_wait_timeout_seconds,
+    text: ?[*:0]const u8 = null,
+    wait_after_prompt: bool = false,
+    lines: u16 = 40,
+    source: core.schema.PaneTextSource = .recent,
+    json: bool = false,
+    socket: ?[*:0]const u8 = null,
+
+    fn parse(args: []const [*:0]const u8) !AgentOptions {
+        if (args.len == 0) {
+            return error.MissingAgentAction;
+        }
+
+        const action_text = std.mem.span(args[0]);
+        const action: AgentAction = if (std.mem.eql(u8, action_text, "list"))
+            .list
+        else if (std.mem.eql(u8, action_text, "get"))
+            .get
+        else if (std.mem.eql(u8, action_text, "wait"))
+            .wait
+        else if (std.mem.eql(u8, action_text, "prompt"))
+            .prompt
+        else if (std.mem.eql(u8, action_text, "read"))
+            .read
+        else
+            return error.UnknownAgentAction;
+        var options: AgentOptions = .{ .action = action };
+        var index: usize = 1;
+
+        if (action != .list) {
+            if (args.len < 2) {
+                return error.MissingAgentTarget;
+            }
+
+            options.target = Target.parse(args[1]);
+            index = 2;
+        }
+
+        if (action == .prompt) {
+            if (args.len < 3) {
+                return error.MissingPromptText;
+            }
+
+            options.text = args[2];
+            if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.schema.max_pane_text_input_bytes) {
+                return error.InvalidPromptText;
+            }
+
+            index = 3;
+        }
+
+        while (index < args.len) {
+            const arg = std.mem.span(args[index]);
+            if (std.mem.eql(u8, arg, "--json")) {
+                options.json = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--wait")) {
+                if (action != .prompt) {
+                    return error.UnknownAgentOption;
+                }
+
+                options.wait_after_prompt = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--until")) {
+                if (action != .wait) {
+                    return error.UnknownAgentOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingWaitStatus;
+                }
+
+                options.until = try parseWaitStatus(std.mem.span(args[index + 1]));
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--timeout")) {
+                if (action != .wait and action != .prompt) {
+                    return error.UnknownAgentOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingTimeout;
+                }
+
+                options.timeout_seconds = try parseTimeoutSeconds(std.mem.span(args[index + 1]));
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--lines")) {
+                if (action != .read) {
+                    return error.UnknownAgentOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingLineCount;
+                }
+
+                options.lines = try parseLineCount(std.mem.span(args[index + 1]));
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--source")) {
+                if (action != .read) {
+                    return error.UnknownAgentOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingTextSource;
+                }
+
+                options.source = try parseTextSource(std.mem.span(args[index + 1]));
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--socket")) {
+                if (index + 1 >= args.len) {
+                    return error.MissingSocketPath;
+                }
+                if (options.socket != null) {
+                    return error.DuplicateSocketOption;
+                }
+
+                options.socket = args[index + 1];
+                index += 2;
+            } else {
+                return error.UnknownAgentOption;
+            }
+        }
+
+        return options;
+    }
+};
+
+pub const PaneOptions = struct {
+    action: PaneAction,
+    target: Target,
+    text: ?[*:0]const u8 = null,
+    enter: bool = false,
+    lines: u16 = 40,
+    source: core.schema.PaneTextSource = .recent,
+    json: bool = false,
+    socket: ?[*:0]const u8 = null,
+
+    fn parse(args: []const [*:0]const u8) !PaneOptions {
+        if (args.len == 0) {
+            return error.MissingPaneAction;
+        }
+
+        const action_text = std.mem.span(args[0]);
+        const action: PaneAction = if (std.mem.eql(u8, action_text, "read"))
+            .read
+        else if (std.mem.eql(u8, action_text, "send-keys"))
+            .send_keys
+        else
+            return error.UnknownPaneAction;
+        if (args.len < 2) {
+            return error.MissingPaneTarget;
+        }
+
+        var options: PaneOptions = .{ .action = action, .target = Target.parse(args[1]) };
+        if (options.target == .name) {
+            return error.InvalidPaneId;
+        }
+
+        var index: usize = 2;
+        if (action == .send_keys) {
+            if (args.len < 3) {
+                return error.MissingSendText;
+            }
+
+            options.text = args[2];
+            if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.schema.max_pane_text_input_bytes) {
+                return error.InvalidSendText;
+            }
+
+            index = 3;
+        }
+
+        while (index < args.len) {
+            const arg = std.mem.span(args[index]);
+            if (std.mem.eql(u8, arg, "--json")) {
+                options.json = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--enter")) {
+                if (action != .send_keys) {
+                    return error.UnknownPaneOption;
+                }
+
+                options.enter = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--lines")) {
+                if (action != .read) {
+                    return error.UnknownPaneOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingLineCount;
+                }
+
+                options.lines = try parseLineCount(std.mem.span(args[index + 1]));
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--source")) {
+                if (action != .read) {
+                    return error.UnknownPaneOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingTextSource;
+                }
+
+                options.source = try parseTextSource(std.mem.span(args[index + 1]));
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--socket")) {
+                if (index + 1 >= args.len) {
+                    return error.MissingSocketPath;
+                }
+                if (options.socket != null) {
+                    return error.DuplicateSocketOption;
+                }
+
+                options.socket = args[index + 1];
+                index += 2;
+            } else {
+                return error.UnknownPaneOption;
+            }
+        }
+
+        return options;
+    }
+};
+
+pub const ApiOptions = struct {
+    json: bool = false,
+
+    fn parse(args: []const [*:0]const u8) !ApiOptions {
+        if (args.len == 0 or !std.mem.eql(u8, std.mem.span(args[0]), "schema")) {
+            return error.UnknownApiAction;
+        }
+
+        var options: ApiOptions = .{};
+        for (args[1..]) |arg| {
+            if (std.mem.eql(u8, std.mem.span(arg), "--json")) {
+                options.json = true;
+            } else {
+                return error.UnknownApiOption;
+            }
+        }
+
+        return options;
+    }
+};
+
+fn parseWaitStatus(text: []const u8) !core.schema.AgentStatus {
+    if (std.mem.eql(u8, text, "done")) return .done;
+    if (std.mem.eql(u8, text, "ready") or std.mem.eql(u8, text, "idle")) return .ready;
+    if (std.mem.eql(u8, text, "blocked")) return .blocked;
+    if (std.mem.eql(u8, text, "working")) return .working;
+    if (std.mem.eql(u8, text, "failed")) return .failed;
+    return error.InvalidWaitStatus;
+}
+
+fn parseTimeoutSeconds(text: []const u8) !u32 {
+    const seconds = std.fmt.parseUnsigned(u32, std.mem.trimEnd(u8, text, "s"), 10) catch
+        return error.InvalidTimeout;
+    if (seconds == 0 or seconds > max_wait_timeout_seconds) {
+        return error.InvalidTimeout;
+    }
+
+    return seconds;
+}
+
+fn parseLineCount(text: []const u8) !u16 {
+    const lines = std.fmt.parseUnsigned(u16, text, 10) catch return error.InvalidLineCount;
+    if (lines == 0 or lines > core.schema.max_pane_text_rows) {
+        return error.InvalidLineCount;
+    }
+
+    return lines;
+}
+
+fn parseTextSource(text: []const u8) !core.schema.PaneTextSource {
+    if (std.mem.eql(u8, text, "screen")) return .screen;
+    if (std.mem.eql(u8, text, "recent")) return .recent;
+    return error.InvalidTextSource;
+}
+
 pub const ServerMode = enum {
     foreground,
     background_launcher,
@@ -794,7 +1115,7 @@ test "CLI parses the isolated plugin worker context" {
         "plugin-worker",
         "/plugin/main.lua",
         "refresh",
-        "true",
+        "1",
         "4",
         "2",
         "3",
@@ -942,4 +1263,78 @@ test "CLI rejects conflicting history scopes" {
         "1",
     };
     try std.testing.expectError(error.ConflictingHistoryScopes, Cli.parse(&args, .empty));
+}
+
+test "CLI parses agent commands with their targets and options" {
+    const list = [_][*:0]const u8{ "telar", "agent", "list", "--json" };
+    const list_cli = try Cli.parse(&list, .empty);
+    try std.testing.expectEqual(AgentAction.list, list_cli.agent.action);
+    try std.testing.expect(list_cli.agent.json);
+    try std.testing.expect(list_cli.agent.target == null);
+
+    const wait = [_][*:0]const u8{ "telar", "agent", "wait", "7", "--until", "blocked", "--timeout", "90s" };
+    const wait_cli = try Cli.parse(&wait, .empty);
+    try std.testing.expectEqual(AgentAction.wait, wait_cli.agent.action);
+    try std.testing.expectEqual(@as(u64, 7), wait_cli.agent.target.?.pane);
+    try std.testing.expectEqual(core.schema.AgentStatus.blocked, wait_cli.agent.until);
+    try std.testing.expectEqual(@as(u32, 90), wait_cli.agent.timeout_seconds);
+
+    const prompt = [_][*:0]const u8{ "telar", "agent", "prompt", "--current", "run the tests", "--wait" };
+    const prompt_cli = try Cli.parse(&prompt, .empty);
+    try std.testing.expect(prompt_cli.agent.target.? == .current);
+    try std.testing.expectEqualStrings("run the tests", std.mem.span(prompt_cli.agent.text.?));
+    try std.testing.expect(prompt_cli.agent.wait_after_prompt);
+
+    const read = [_][*:0]const u8{ "telar", "agent", "read", "Investigate proxy", "--lines", "25", "--source", "screen" };
+    const read_cli = try Cli.parse(&read, .empty);
+    try std.testing.expectEqualStrings("Investigate proxy", std.mem.span(read_cli.agent.target.?.name));
+    try std.testing.expectEqual(@as(u16, 25), read_cli.agent.lines);
+    try std.testing.expectEqual(core.schema.PaneTextSource.screen, read_cli.agent.source);
+}
+
+test "CLI rejects malformed agent commands" {
+    const no_target = [_][*:0]const u8{ "telar", "agent", "get" };
+    try std.testing.expectError(error.MissingAgentTarget, Cli.parse(&no_target, .empty));
+
+    const bad_status = [_][*:0]const u8{ "telar", "agent", "wait", "1", "--until", "sleeping" };
+    try std.testing.expectError(error.InvalidWaitStatus, Cli.parse(&bad_status, .empty));
+
+    const bad_timeout = [_][*:0]const u8{ "telar", "agent", "wait", "1", "--timeout", "0" };
+    try std.testing.expectError(error.InvalidTimeout, Cli.parse(&bad_timeout, .empty));
+
+    const wait_on_list = [_][*:0]const u8{ "telar", "agent", "list", "--wait" };
+    try std.testing.expectError(error.UnknownAgentOption, Cli.parse(&wait_on_list, .empty));
+
+    const empty_prompt = [_][*:0]const u8{ "telar", "agent", "prompt", "1", "" };
+    try std.testing.expectError(error.InvalidPromptText, Cli.parse(&empty_prompt, .empty));
+}
+
+test "CLI parses pane commands and refuses names as pane ids" {
+    const read = [_][*:0]const u8{ "telar", "pane", "read", "4", "--lines", "10" };
+    const read_cli = try Cli.parse(&read, .empty);
+    try std.testing.expectEqual(PaneAction.read, read_cli.pane.action);
+    try std.testing.expectEqual(@as(u64, 4), read_cli.pane.target.pane);
+    try std.testing.expectEqual(@as(u16, 10), read_cli.pane.lines);
+
+    const send = [_][*:0]const u8{ "telar", "pane", "send-keys", "--current", "y", "--enter" };
+    const send_cli = try Cli.parse(&send, .empty);
+    try std.testing.expectEqual(PaneAction.send_keys, send_cli.pane.action);
+    try std.testing.expect(send_cli.pane.target == .current);
+    try std.testing.expectEqualStrings("y", std.mem.span(send_cli.pane.text.?));
+    try std.testing.expect(send_cli.pane.enter);
+
+    const named = [_][*:0]const u8{ "telar", "pane", "read", "main" };
+    try std.testing.expectError(error.InvalidPaneId, Cli.parse(&named, .empty));
+}
+
+test "CLI parses the api schema command and the skill flag" {
+    const schema_args = [_][*:0]const u8{ "telar", "api", "schema", "--json" };
+    const schema_cli = try Cli.parse(&schema_args, .empty);
+    try std.testing.expect(schema_cli.api.json);
+
+    const skill_args = [_][*:0]const u8{ "telar", "--skill" };
+    try std.testing.expect(try Cli.parse(&skill_args, .empty) == .skill);
+
+    const unknown = [_][*:0]const u8{ "telar", "api", "events" };
+    try std.testing.expectError(error.UnknownApiAction, Cli.parse(&unknown, .empty));
 }

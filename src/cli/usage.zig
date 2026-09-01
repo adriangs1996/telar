@@ -13,6 +13,10 @@ pub const text =
     \\       telar history list [options]
     \\       telar history search <query> [options]
     \\       telar notification show <title> [options]
+    \\       telar agent list|get|wait|prompt|read [target] [options]
+    \\       telar pane read|send-keys <pane|--current> [options]
+    \\       telar api schema [--json]
+    \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
     \\With a command, run that command instead of $SHELL.
@@ -24,6 +28,15 @@ pub const text =
     \\  history list     Show recent command history
     \\  history search   Search command history
     \\  notification show  Show a toast in every connected UI client
+    \\  agent list       List the agents the runtime knows about
+    \\  agent get        Show one agent by pane id, title or --current
+    \\  agent wait       Block until an agent reaches a status (default: done)
+    \\  agent prompt     Send a prompt to an agent; refused while it is blocked
+    \\  agent read       Print recent text from an agent's pane
+    \\  pane read        Print recent text from any pane
+    \\  pane send-keys   Send raw text (and --enter) to any pane
+    \\  api schema       Print the wire contract of this binary
+    \\  --skill          Print the bundled agent skill
     \\  config check     Compile and validate config.lua, then exit
     \\  plugin inspect   Validate a package and print its immutable identity
     \\  plugin install   Copy a package into the content-addressed local store
@@ -36,6 +49,16 @@ pub const text =
     \\  --failed         Only show commands with a non-zero exit status
     \\  --limit N        Return at most N results (default 20, maximum 100)
     \\  --socket PATH    Query a specific local runtime
+    \\
+    \\Agent and pane options:
+    \\  --until STATUS   done, ready, blocked, working, failed (wait)
+    \\  --timeout SECS   Give up after SECS seconds (wait, prompt --wait)
+    \\  --wait           Wait for the agent to finish after prompting
+    \\  --lines N        Rows to read (default 40, maximum 200)
+    \\  --source KIND    recent (scrollback + screen) or screen
+    \\  --enter          Append Enter after the sent text
+    \\  --json           Print JSON instead of rows
+    \\  --socket PATH    Address a specific local runtime
     \\
     \\Notification options:
     \\  --body TEXT      Add detail text below the title

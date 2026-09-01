@@ -182,6 +182,14 @@ fn resolveEndpoint(environ: std.process.Environ, override: ?[*:0]const u8) !core
         }
     }
 
+    // Set by the runtime for every pane child, so agents and scripts running
+    // inside Telar address the runtime that owns their pane.
+    if (std.process.Environ.getPosix(environ, "TELAR_SOCKET_PATH")) |path| {
+        if (path.len != 0) {
+            return core.endpoint.Local.explicit(path);
+        }
+    }
+
     if (std.process.Environ.getPosix(environ, "XDG_RUNTIME_DIR")) |base| {
         if (base.len != 0) {
             return core.endpoint.Local.managed(base, "telar");
