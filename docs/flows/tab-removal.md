@@ -155,8 +155,10 @@ focus-out.
 If the last tab removed the workspace, the handler forgets its navigation
 bookmark. It starts a workspace handoff when the runtime supplied a canonical
 predecessor. The projection is already empty, so continuations retired by the
-removal cannot block this runtime-directed handoff. With no surviving
-predecessor the delivery handler returns an exit directive. The
+removal cannot block this runtime-directed handoff.
+`AdmitWorkspaceHandoffHandler` verifies that empty projection before bypassing
+the pending-request gate. With no surviving predecessor the delivery handler
+returns an exit directive. The
 `tab_closures` adapter supplies request-lifecycle, graphics, active-resource,
 snapshot, navigation and workspace-handoff ports. The slice translates the
 application directive into `applied` or `exit`; the dispatcher only maps
@@ -184,6 +186,9 @@ new client rebuilds its disposable model through workspace and tab snapshots.
   effect order, snapshot coalescence and partial failure semantics.
 - `src/frontend/client/application/tab_snapshot_recovery.zig` proves shared
   recovery coalescence and exact repair delivery.
+- `src/frontend/client/application/workspace_handoff_admission.zig` proves
+  that predecessor following requires an empty projection and bypasses the
+  pending gate only for stale continuations.
 - `src/frontend/client/model.zig` proves exact location and workspace-removal
   validation, captured pane identities and model version changes.
 - `src/frontend/client/client_test.zig` proves bounded request delivery,

@@ -17,6 +17,7 @@ const pane_open_delivery = client_application.pane_open_delivery;
 const schema = core.schema;
 const tab_snapshot_recovery = client_application.tab_snapshot_recovery;
 const workspace_handoff = client_application.workspace_handoff;
+const workspace_handoff_admission = client_application.workspace_handoff_admission;
 const workspace_handoff_targeting = client_application.workspace_handoff_targeting;
 
 /// Resolves one workspace selection from the committed list and requests its
@@ -38,7 +39,7 @@ pub fn selectWorkspace(client: *Client, target: workspace_handoff.SelectionTarge
 /// _ = try requestWorkspace(client, workspace_id);
 /// ```
 pub fn requestWorkspace(client: *Client, workspace: schema.WorkspaceId) !client_model.WorkspaceDeparture {
-    return request(client, .{ .workspace = workspace }, false);
+    return request(client, .{ .workspace = workspace }, .requested_departure);
 }
 
 /// Follows a runtime-selected workspace after canonical state removed the
@@ -48,11 +49,7 @@ pub fn requestWorkspace(client: *Client, workspace: schema.WorkspaceId) !client_
 /// _ = try followWorkspace(client, workspace_id);
 /// ```
 pub fn followWorkspace(client: *Client, workspace: schema.WorkspaceId) !client_model.WorkspaceDeparture {
-    if (client.model.workspaceLocation() != null) {
-        return error.WorkspaceStillActive;
-    }
-
-    return request(client, .{ .workspace = workspace }, true);
+    return request(client, .{ .workspace = workspace }, .canonical_follow);
 }
 
 /// Requests a specific runtime pane, retaining its workspace only as the
@@ -65,19 +62,19 @@ pub fn requestPane(client: *Client, pane_id: schema.PaneId, fallback_workspace: 
     return request(client, .{ .pane = .{
         .pane_id = pane_id,
         .fallback_workspace = fallback_workspace,
-    } }, false);
+    } }, .requested_departure);
 }
 
-fn request(client: *Client, target: workspace_handoff_targeting.Target, ignore_pending: bool) !client_model.WorkspaceDeparture {
+fn request(client: *Client, target: workspace_handoff_targeting.Target, authority: workspace_handoff_admission.Authority) !client_model.WorkspaceDeparture {
     const targeting = targetingHandler(client);
     const plan = targeting.execute(target);
-    var handler = requestHandler(client, ignore_pending);
+    var handler = requestHandler(client);
 
     return handler.execute(.{
         .target = plan.target,
         .fallback_workspace = plan.fallback_workspace,
         .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
-    });
+    }, authority);
 }
 
 fn targetingHandler(client: *Client) workspace_handoff_targeting.PlanWorkspaceHandoffHandler {
@@ -94,14 +91,17 @@ fn rememberedPane(context: *anyopaque, workspace: schema.WorkspaceLocation) ?sch
     return bookmark.pane_id;
 }
 
-fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.RequestWorkspaceHandoffHandler {
+fn requestHandler(client: *Client) workspace_handoff.RequestWorkspaceHandoffHandler {
     const attachment_effects = tab_attachments.effects(client);
 
     return .{
         .model = &client.model,
-        .gate = .{
-            .context = client,
-            .pending = if (ignore_pending) neverPending else requestPending,
+        .admission = .{
+            .model = &client.model,
+            .gate = .{
+                .context = client,
+                .pending = requestPending,
+            },
         },
         .preparation = .{
             .model = &client.model,
@@ -211,10 +211,6 @@ pub fn recoveryHandler(client: *Client) workspace_handoff.RecoverWorkspaceHandof
 fn requestPending(context: *anyopaque) bool {
     const client: *Client = @ptrCast(@alignCast(context));
     return request_lifecycle.busy(client);
-}
-
-fn neverPending(_: *anyopaque) bool {
-    return false;
 }
 
 fn requestSelectedWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {

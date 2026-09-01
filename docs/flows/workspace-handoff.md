@@ -14,6 +14,8 @@ sidebar agent, resync or workspace closure ----------------+
                                                            |
                                       PlanWorkspaceHandoffHandler
                                                            |
+                                     AdmitWorkspaceHandoffHandler
+                                                           |
                                       RequestWorkspaceHandoffHandler
                                                            |
                                       PrepareWorkspaceHandoffHandler
@@ -42,6 +44,14 @@ query navigation history; a sidebar agent supplies a fallback only when the
 pane belongs to an ordinary workspace. [Agent navigation](agent-navigation.md)
 owns that local-or-remote decision. The `workspace_handoffs` adapter exposes
 only a remembered-pane lookup and executes the resulting plan.
+
+`AdmitWorkspaceHandoffHandler` owns the two valid request authorities. A
+requested departure must observe an idle request lifecycle before any
+preflight or effect. A canonical follow ignores stale continuations only after
+the model has already committed an empty projection; attempting it from a live
+workspace is rejected before capacity checks or attachment retirement. The
+adapter supplies the real pending-request query and only translates its entry
+point to one of these authorities.
 
 `HandleResyncRequiredHandler` also requests a handoff when the runtime reports
 that the projected workspace disappeared. It forgets the closed workspace's
@@ -173,6 +183,8 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
   retry conditions.
 - `src/frontend/client/application/workspace_handoff_targeting.zig` checks
   bookmarked and direct workspace targets plus exact pane fallback handling.
+- `src/frontend/client/application/workspace_handoff_admission.zig` checks
+  pending-request admission and empty-projection canonical following.
 - `src/frontend/client/application/workspace_arrival_planning.zig` checks
   shared arrival construction and exact saved-layout identity.
 - `src/frontend/client/application/pane_open_delivery.zig` checks

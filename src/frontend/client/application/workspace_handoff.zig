@@ -6,6 +6,7 @@ const client_model = @import("../model.zig");
 const pane_focus_reporting = @import("pane_focus_reporting.zig");
 const pane_paste = @import("pane_paste.zig");
 const workspace_attachment_retirement = @import("workspace_attachment_retirement.zig");
+const workspace_handoff_admission = @import("workspace_handoff_admission.zig");
 const workspace_handoff_preparation = @import("workspace_handoff_preparation.zig");
 const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
 
@@ -70,11 +71,6 @@ pub const WorkspaceHandoff = struct {
     size: schema.TerminalSize,
 };
 
-pub const WorkspaceHandoffGate = struct {
-    context: *anyopaque,
-    pending: *const fn (*anyopaque) bool,
-};
-
 pub const HandoffRequestEffects = struct {
     context: *anyopaque,
     send: *const fn (*anyopaque, WorkspaceHandoff) anyerror!void,
@@ -83,23 +79,21 @@ pub const HandoffRequestEffects = struct {
 
 pub const RequestWorkspaceHandoffHandler = struct {
     model: *client_model.Model,
-    gate: WorkspaceHandoffGate,
+    admission: workspace_handoff_admission.AdmitWorkspaceHandoffHandler,
     preparation: workspace_handoff_preparation.PrepareWorkspaceHandoffHandler,
     retirement: workspace_attachment_retirement.RetireWorkspaceAttachmentsHandler,
     restoration: workspace_handoff_restoration.RestoreWorkspaceHandoffHandler,
     effects: HandoffRequestEffects,
 
-    /// Preflights without effects, retires every attachment before the open
-    /// request, then commits departure. Only post-preflight failure requests
-    /// canonical attachment restoration.
+    /// Admits one explicit authority, preflights without effects, retires
+    /// every attachment before the open request, then commits departure. Only
+    /// post-preflight failure requests canonical attachment restoration.
     ///
     /// ```zig
-    /// const departure = try handler.execute(command);
+    /// const departure = try handler.execute(command, .requested_departure);
     /// ```
-    pub fn execute(handler: *RequestWorkspaceHandoffHandler, command: WorkspaceHandoff) !client_model.WorkspaceDeparture {
-        if (handler.gate.pending(handler.gate.context)) {
-            return error.WorkspaceSwitchWhileRequestPending;
-        }
+    pub fn execute(handler: *RequestWorkspaceHandoffHandler, command: WorkspaceHandoff, authority: workspace_handoff_admission.Authority) !client_model.WorkspaceDeparture {
+        try handler.admission.execute(authority);
 
         try handler.preparation.execute();
 
@@ -342,8 +336,11 @@ const RequestCapture = struct {
     departure: ?client_model.WorkspaceDeparture = null,
     observed_commit: bool = false,
 
-    fn gate(capture: *RequestCapture) WorkspaceHandoffGate {
-        return .{ .context = capture, .pending = pending };
+    fn admission(capture: *RequestCapture) workspace_handoff_admission.AdmitWorkspaceHandoffHandler {
+        return .{
+            .model = capture.model,
+            .gate = .{ .context = capture, .pending = pending },
+        };
     }
 
     fn port(capture: *RequestCapture) HandoffRequestEffects {
@@ -497,7 +494,7 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
     var capture: RequestCapture = .{ .model = testing.model };
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
-        .gate = capture.gate(),
+        .admission = capture.admission(),
         .preparation = capture.preparation(),
         .retirement = capture.retirement(),
         .restoration = capture.restoration(),
@@ -505,7 +502,7 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
     };
     const command = testingHandoff();
 
-    const departure = try handler.execute(command);
+    const departure = try handler.execute(command, .requested_departure);
 
     try std.testing.expectEqualSlices(RequestEvent, &.{ .prepare, .detach, .send, .release }, capture.events[0..capture.event_count]);
     try std.testing.expectEqualDeep(command, capture.command.?);
@@ -514,20 +511,46 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
     try std.testing.expect(testing.model.workspaceLocation() == null);
 }
 
-test "RequestWorkspaceHandoffHandler gates without effects or model mutation" {
+test "RequestWorkspaceHandoffHandler rejects a blocked departure before preflight" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     var capture: RequestCapture = .{ .model = testing.model, .blocked = true };
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
-        .gate = capture.gate(),
+        .admission = capture.admission(),
         .preparation = capture.preparation(),
         .retirement = capture.retirement(),
         .restoration = capture.restoration(),
         .effects = capture.port(),
     };
 
-    try std.testing.expectError(error.WorkspaceSwitchWhileRequestPending, handler.execute(testingHandoff()));
+    try std.testing.expectError(
+        error.WorkspaceSwitchWhileRequestPending,
+        handler.execute(testingHandoff(), .requested_departure),
+    );
+
+    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
+    try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+}
+
+test "RequestWorkspaceHandoffHandler rejects a canonical follow from an active projection before preflight" {
+    var testing = try TestingModel.init(true);
+    defer testing.deinit();
+    var capture: RequestCapture = .{ .model = testing.model };
+    var handler: RequestWorkspaceHandoffHandler = .{
+        .model = testing.model,
+        .admission = capture.admission(),
+        .preparation = capture.preparation(),
+        .retirement = capture.retirement(),
+        .restoration = capture.restoration(),
+        .effects = capture.port(),
+    };
+
+    try std.testing.expectError(
+        error.WorkspaceStillActive,
+        handler.execute(testingHandoff(), .canonical_follow),
+    );
 
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
     try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
@@ -543,14 +566,17 @@ test "RequestWorkspaceHandoffHandler rejects preflight without recovery" {
     };
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
-        .gate = capture.gate(),
+        .admission = capture.admission(),
         .preparation = capture.preparation(),
         .retirement = capture.retirement(),
         .restoration = capture.restoration(),
         .effects = capture.port(),
     };
 
-    try std.testing.expectError(error.PreparationFailed, handler.execute(testingHandoff()));
+    try std.testing.expectError(
+        error.PreparationFailed,
+        handler.execute(testingHandoff(), .requested_departure),
+    );
 
     try std.testing.expectEqualSlices(RequestEvent, &.{.prepare}, capture.events[0..capture.event_count]);
     try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
@@ -592,14 +618,17 @@ test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
         };
         var handler: RequestWorkspaceHandoffHandler = .{
             .model = testing.model,
-            .gate = capture.gate(),
+            .admission = capture.admission(),
             .preparation = capture.preparation(),
             .retirement = capture.retirement(),
             .restoration = capture.restoration(),
             .effects = capture.port(),
         };
 
-        try std.testing.expectError(scenario.expected, handler.execute(testingHandoff()));
+        try std.testing.expectError(
+            scenario.expected,
+            handler.execute(testingHandoff(), .requested_departure),
+        );
 
         try std.testing.expectEqualSlices(RequestEvent, scenario.events, capture.events[0..capture.event_count]);
         try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
