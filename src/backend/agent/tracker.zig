@@ -35,6 +35,38 @@ pub const Tracker = struct {
     revision: u64 = 1,
     sequence: u64 = 0,
 
+    /// Records the session reference an agent reported for itself. The
+    /// aggregate is created if the report precedes every other evidence, so a
+    /// hook that fires before the process is inspected is not lost.
+    ///
+    /// ```zig
+    /// if (tracker.observeSessionReference(identity, reference)) noteSessionChange();
+    /// ```
+    pub fn observeSessionReference(tracker: *Tracker, identity: Identity, reference: types.SessionReference) bool {
+        const agent = tracker.ensure(identity) orelse return false;
+        return agent.applySessionReference(reference);
+    }
+
+    /// Returns the provider currently projected for one exact pane generation.
+    ///
+    /// ```zig
+    /// const provider = tracker.projectedProvider(key);
+    /// ```
+    pub fn projectedProvider(tracker: *const Tracker, key: PaneKey) schema.AgentProvider {
+        const agent = tracker.repository.findConst(key) orelse return .unknown;
+        return agent.snapshot().provider;
+    }
+
+    /// Returns the session reference reported for one exact pane generation.
+    ///
+    /// ```zig
+    /// const reference = tracker.sessionReference(key) orelse return;
+    /// ```
+    pub fn sessionReference(tracker: *const Tracker, key: PaneKey) ?types.SessionReference {
+        const agent = tracker.repository.findConst(key) orelse return null;
+        return agent.session_reference;
+    }
+
     /// Marks one exact agent generation as seen and republishes a `done`
     /// projection as `ready`. A stale or unknown generation changes nothing.
     ///
@@ -1239,4 +1271,24 @@ test "HTTP2 connection failure settles all of its active streams" {
         .exchange = connection,
         .observed_at_ms = 201,
     }));
+}
+
+test "session references attach to the exact generation and replace only on change" {
+    var tracker: Tracker = .{};
+    const identity: Identity = .{
+        .key = .{ .id = try schema.id.pane(3), .generation = 2 },
+        .process_id = 40,
+        .session_id = .{1} ** 16,
+    };
+    const first = try types.SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 10);
+
+    try std.testing.expect(tracker.observeSessionReference(identity, first));
+    try std.testing.expect(!tracker.observeSessionReference(identity, first));
+    try std.testing.expectEqualStrings(first.slice(), tracker.sessionReference(identity.key).?.slice());
+    try std.testing.expect(tracker.sessionReference(.{ .id = identity.key.id, .generation = 3 }) == null);
+
+    const second = try types.SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0001", 20);
+    try std.testing.expect(tracker.observeSessionReference(identity, second));
+    try std.testing.expectError(error.InvalidSessionReference, types.SessionReference.init("-rf", 0));
+    try std.testing.expectError(error.InvalidSessionReference, types.SessionReference.init("a b", 0));
 }

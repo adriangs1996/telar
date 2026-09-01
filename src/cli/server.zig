@@ -71,6 +71,7 @@ const Launch = struct {
     agent_description_options: ?backend.runtime.AgentDescriptionOptions = null,
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     session_persist: bool = true,
+    session_resume_agents: bool = true,
     configured_session_buffer: [std.fs.max_path_bytes]u8 = undefined,
     configured_session_path: ?[]const u8 = null,
     session_buffer: [std.fs.max_path_bytes]u8 = undefined,
@@ -111,6 +112,7 @@ const Launch = struct {
         const runtime_config = &generation.snapshot.runtime;
         launch.agent_manifests = runtime_config.agent_manifests;
         launch.session_persist = runtime_config.session_persist;
+        launch.session_resume_agents = runtime_config.session_resume_agents;
         if (runtime_config.sessionPath()) |session_path| {
             const resolved = try resolveConfigPath(launch.process.gpa, generation.configDir(), session_path);
             defer launch.process.gpa.free(resolved);
@@ -199,6 +201,7 @@ const Launch = struct {
                 .agent_descriptions = launch.agent_description_options,
                 .agent_manifests = launch.agent_manifests,
                 .session_path = launch.session_path,
+                .resume_agents = launch.session_resume_agents,
             },
         };
     }

@@ -267,6 +267,28 @@ pub const Session = struct {
         }
     }
 
+    /// Reports an agent's own session reference for later restore.
+    ///
+    /// ```zig
+    /// try session.reportSession(pane, "0192...");
+    /// ```
+    pub fn reportSession(session: *Session, pane: PaneRef, reference: []const u8) !void {
+        var send_buffer: [schema.max_agent_session_reference_bytes + 64]u8 = undefined;
+        try session.connection.send(session.io, try schema.encodeReportAgentSession(&send_buffer, .{
+            .request_id = session.requestId(),
+            .pane_id = try schema.id.pane(pane.pane_id),
+            .pane_generation = pane.pane_generation,
+            .session = reference,
+        }));
+
+        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+        switch (response) {
+            .request_completed => {},
+            .request_failed => |failure| return failureError(failure),
+            else => return error.UnexpectedRuntimeResponse,
+        }
+    }
+
     pub fn nowMs(session: *const Session) i64 {
         return Io.Timestamp.now(session.io, .real).toMilliseconds();
     }

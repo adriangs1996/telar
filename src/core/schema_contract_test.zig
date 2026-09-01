@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 67;
+const corpus_len = 68;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -336,6 +336,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
             .mode = .prompt,
             .text = "ls",
+        }),
+    ));
+    helper.add("report_agent_session", .client, false, golden.report_agent_session, helper.commit(
+        try schema.encodeReportAgentSession(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .session = "abc",
         }),
     ));
 
@@ -741,6 +749,7 @@ const golden = struct {
     pub const query_agents = "1c0500000000000000";
     pub const read_pane = "1d0500000000000000050000000000000003000000000000002800" ++ "01";
     pub const send_pane_text = "1e0500000000000000050000000000000003000000000000000102006c73";
+    pub const report_agent_session = "1f0500000000000000050000000000000003000000000000000300616263";
     pub const pane_text = "a00500000000000000050000000000000000020000006869";
     pub const request_completed = "a10500000000000000";
     pub const pane_title = "a20500000000000000030076696d";

@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const workspace_mod = @import("../workspace/root.zig");
+const agent_mod = @import("../agent/root.zig");
 const runtime_application = @import("application/root.zig");
 const runtime_config = @import("config.zig");
 const runtime_event = @import("event.zig");
@@ -108,6 +109,7 @@ pub const Runtime = struct {
             .socket_path = options.endpoint,
             .agent_manifests = &runtime.resources.agent_manifests,
             .session_path = options.session_path,
+            .resume_agents = options.resume_agents,
             .proxy_runtime = &runtime.resources.proxy,
             .agent_description_options = options.agent_descriptions,
             .launch_fault = options.launch_fault,
@@ -304,6 +306,16 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     });
     const pane_id = pane.id;
     const pane_generation = pane.generation;
+    try std.testing.expect(first.application.model.agents.observeSessionReference(
+        agent_mod.Identity.fromPane(pane),
+        try agent_mod.SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
+    ));
+    try std.testing.expect(first.application.model.agents.observeProcess(.{
+        .identity = agent_mod.Identity.fromPane(pane),
+        .provider = .claude,
+        .process_id = 99,
+        .observed_at_ms = 1_000,
+    }));
     try std.testing.expect(first.application.session.dirty);
     first.deinit();
     try std.testing.expectEqual(@as(u64, 1), first.application.session.writes);
@@ -322,5 +334,10 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     const restored = second.application.model.panes.find(pane_id).?;
     try std.testing.expect(restored.generation > pane_generation);
     try std.testing.expectEqualStrings("/bin/sleep\x00600\x00", restored.launch_record.slice());
+    try std.testing.expectEqual(@as(u16, 1), second.application.session.resumed_agents);
+    try std.testing.expectEqualStrings(
+        "claude --resume 0192aaaa-bbbb-cccc-dddd-eeeeffff0000\r",
+        restored.input_queue.nextChunk().?,
+    );
     try std.testing.expect(second.application.model.workspaces.next_tab_id > core.schema.id.raw(logs_tab));
 }

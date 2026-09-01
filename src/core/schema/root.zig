@@ -36,6 +36,7 @@ pub const max_agent_manifests = types.max_agent_manifests;
 pub const first_custom_agent_provider = types.first_custom_agent_provider;
 pub const max_agent_provider_index = types.max_agent_provider_index;
 pub const max_agent_provider_name_bytes = types.max_agent_provider_name_bytes;
+pub const max_agent_session_reference_bytes = types.max_agent_session_reference_bytes;
 pub const max_pane_text_rows = types.max_pane_text_rows;
 pub const max_pane_text_bytes = types.max_pane_text_bytes;
 pub const max_pane_text_input_bytes = types.max_pane_text_input_bytes;
@@ -149,6 +150,7 @@ pub const ClientTag = enum(u8) {
     query_agents = 0x1c,
     read_pane = 0x1d,
     send_pane_text = 0x1e,
+    report_agent_session = 0x1f,
 };
 
 pub const ServerTag = enum(u8) {
@@ -438,6 +440,16 @@ pub const SendPaneText = struct {
     text: []const u8,
 };
 
+/// An agent's own session identifier, reported by its lifecycle hooks so a
+/// restart can resume the conversation. Only the exact pane generation that
+/// hosts the agent accepts it.
+pub const ReportAgentSession = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    pane_generation: u64,
+    session: []const u8,
+};
+
 /// Reply to `read_pane`. `truncated` reports that older rows were omitted to
 /// respect `max_pane_text_bytes`.
 pub const PaneText = struct {
@@ -633,6 +645,7 @@ pub const ClientMessage = union(enum) {
     query_agents: QueryAgents,
     read_pane: ReadPane,
     send_pane_text: SendPaneText,
+    report_agent_session: ReportAgentSession,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -1277,6 +1290,48 @@ fn decodeSendPaneText(decoder: *wire.Decoder) !SendPaneText {
     };
 }
 
+pub fn encodeReportAgentSession(buffer: []u8, message: ReportAgentSession) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    try validateSessionReference(message.session);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.report_agent_session));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeSized16(message.session);
+    return encoder.finish();
+}
+
+fn decodeReportAgentSession(decoder: *wire.Decoder) !ReportAgentSession {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const pane_generation = try decoder.readInt(u64);
+    const session = try decoder.readSized16();
+    try validateSessionReference(session);
+    return .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .pane_generation = pane_generation,
+        .session = session,
+    };
+}
+
+/// A session reference is an opaque token: letters, digits, `.`, `_`, `-`
+/// and `:`, so it can never carry options or shell syntax into a relaunch.
+///
+/// ```zig
+/// try validateSessionReference("019a2b3c-...");
+/// ```
+pub fn validateSessionReference(session: []const u8) !void {
+    if (session.len == 0 or session.len > max_agent_session_reference_bytes) return error.InvalidSessionReference;
+    for (session) |byte| {
+        const ok = std.ascii.isAlphanumeric(byte) or byte == '.' or byte == '_' or byte == '-' or byte == ':';
+        if (!ok) return error.InvalidSessionReference;
+    }
+    if (session[0] == '-') return error.InvalidSessionReference;
+}
+
 pub fn encodePaneText(buffer: []u8, message: PaneText) ![]const u8 {
     try validateRequestId(message.request_id);
     try validatePaneId(message.pane_id);
@@ -1411,6 +1466,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .query_agents => .{ .query_agents = try Derived(QueryAgents).decode(&decoder) },
         .read_pane => .{ .read_pane = try Derived(ReadPane).decode(&decoder) },
         .send_pane_text => .{ .send_pane_text = try decodeSendPaneText(&decoder) },
+        .report_agent_session => .{ .report_agent_session = try decodeReportAgentSession(&decoder) },
     };
     try decoder.ensureEnd();
     return message;

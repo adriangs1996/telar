@@ -69,6 +69,7 @@ pub const Initialization = struct {
     clients: *ClientStore,
     graphics: runtime_config.GraphicsLimits,
     session_path: ?[]const u8 = null,
+    resume_agents: bool = true,
 };
 
 pub const ShutdownStep = enum {
@@ -123,7 +124,7 @@ pub const Application = struct {
             .inherited_environment = initialization.inherited_environment,
             .socket_path = initialization.socket_path,
             .agent_manifests = initialization.agent_manifests,
-            .session = .{ .path = initialization.session_path },
+            .session = .{ .path = initialization.session_path, .resume_agents = initialization.resume_agents },
             .proxy_runtime = initialization.proxy_runtime,
             .agent_description_options = initialization.agent_description_options,
             .launch_fault = initialization.launch_fault,
@@ -242,6 +243,17 @@ pub const Application = struct {
         application.model.agents.touch();
         application.noteSessionChange();
         return fresh;
+    }
+
+    /// Queues bytes for a restored pane's child and starts the input write.
+    /// The bytes are a runtime-built resume command, never client input.
+    ///
+    /// ```zig
+    /// try application.queueRestoredInput(pane, "claude --resume <id>\r");
+    /// ```
+    pub fn queueRestoredInput(application: *Application, pane: *Pane, bytes: []const u8) !void {
+        _ = pane.queuePtyInput(bytes);
+        try RuntimeEvents.schedulePaneInput(application, pane);
     }
 
     /// Marks the restorable session shape as changed so the next maintenance

@@ -79,6 +79,7 @@ title: Title = .{},
 /// False from a completed turn until a client acknowledges it; the projection
 /// reports `done` instead of `ready` while unseen.
 seen: bool = true,
+session_reference: ?types.SessionReference = null,
 projected: schema.AgentSnapshotEntry,
 
 /// Creates the candidate aggregate for one exact pane generation.
@@ -356,6 +357,23 @@ pub fn snapshot(agent: *const Agent) schema.AgentSnapshotEntry {
 /// ```
 pub fn projectedStatus(agent: *const Agent) schema.AgentStatus {
     return agent.projected.status;
+}
+
+/// Stores the agent's own session reference. A later report replaces an
+/// earlier one; an identical report changes nothing.
+///
+/// ```zig
+/// if (agent.applySessionReference(reference)) persist();
+/// ```
+pub fn applySessionReference(agent: *Agent, reference: types.SessionReference) bool {
+    if (agent.session_reference) |existing| {
+        if (std.mem.eql(u8, existing.slice(), reference.slice())) {
+            return false;
+        }
+    }
+
+    agent.session_reference = reference;
+    return true;
 }
 
 /// Marks an unseen completion as seen. The caller reprojects so `done`

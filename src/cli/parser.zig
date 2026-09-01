@@ -573,7 +573,7 @@ pub const HistoryOptions = struct {
     }
 };
 
-pub const AgentAction = enum { list, get, wait, prompt, read };
+pub const AgentAction = enum { list, get, wait, prompt, read, report_session };
 
 pub const PaneAction = enum { read, send_keys };
 
@@ -629,6 +629,8 @@ pub const AgentOptions = struct {
             .prompt
         else if (std.mem.eql(u8, action_text, "read"))
             .read
+        else if (std.mem.eql(u8, action_text, "report-session"))
+            .report_session
         else
             return error.UnknownAgentAction;
         var options: AgentOptions = .{ .action = action };
@@ -641,6 +643,19 @@ pub const AgentOptions = struct {
 
             options.target = Target.parse(args[1]);
             index = 2;
+        }
+
+        if (action == .report_session) {
+            if (args.len < 3) {
+                return error.MissingSessionReference;
+            }
+
+            options.text = args[2];
+            if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.schema.max_agent_session_reference_bytes) {
+                return error.InvalidSessionReference;
+            }
+
+            index = 3;
         }
 
         if (action == .prompt) {
@@ -1337,4 +1352,15 @@ test "CLI parses the api schema command and the skill flag" {
 
     const unknown = [_][*:0]const u8{ "telar", "api", "events" };
     try std.testing.expectError(error.UnknownApiAction, Cli.parse(&unknown, .empty));
+}
+
+test "CLI parses agent session reports" {
+    const args = [_][*:0]const u8{ "telar", "agent", "report-session", "--current", "0192aaaa-bbbb-cccc-dddd-eeeeffff0000" };
+    const cli = try Cli.parse(&args, .empty);
+    try std.testing.expectEqual(AgentAction.report_session, cli.agent.action);
+    try std.testing.expect(cli.agent.target.? == .current);
+    try std.testing.expectEqualStrings("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", std.mem.span(cli.agent.text.?));
+
+    const missing = [_][*:0]const u8{ "telar", "agent", "report-session", "7" };
+    try std.testing.expectError(error.MissingSessionReference, Cli.parse(&missing, .empty));
 }

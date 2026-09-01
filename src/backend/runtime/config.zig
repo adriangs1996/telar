@@ -35,6 +35,8 @@ pub const Options = struct {
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     /// Absolute session checkpoint path; null keeps the session volatile.
     session_path: ?[]const u8 = null,
+    /// Type each restored agent's resume command into its relaunched shell.
+    resume_agents: bool = true,
     /// Test seam: stops the otherwise long-lived runtime without signals.
     stop: ?*Io.Queue(u8) = null,
     /// Test seam: holds a pane's ingest actor open.

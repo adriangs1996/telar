@@ -262,7 +262,14 @@ interactive path; checkpoint latency reported as p50/p95/p99 in
 
 ---
 
-## P5b. Native agent session restore
+## P5b. Native agent session restore — done
+
+Deviation: the reference comes from an explicit `report_agent_session`
+request (`telar agent report-session`, which P6 hooks call with the
+`session_id` they receive) rather than from the proxy body; the Claude Code
+binary does not expose the `metadata.user_id` template, so that source stays
+unverified. Resume is typed into the relaunched shell instead of replacing
+the pane command, so the shell survives the agent exiting.
 
 Depends on P4 (manifest `resume` spec) and P5a (typed reference persisted).
 

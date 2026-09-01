@@ -70,6 +70,14 @@ slot frees. A pane that closed in between yields `request_failed
 pane_not_found` instead of tearing the client down. The dump keeps the prefix
 and sets `truncated` when older rows do not fit.
 
+## Session reports
+
+`telar agent report-session <pane|--current> <id>` sends
+`report_agent_session`. The runtime validates the token shape, attaches it to
+the agent aggregate of the exact pane generation and marks the session
+checkpoint dirty; see [Session checkpoint](session-checkpoint.md) for how it
+is used on restart.
+
 ## Pane identity
 
 Every pane child receives `TELAR_SOCKET_PATH`, `TELAR_PANE_ID`,

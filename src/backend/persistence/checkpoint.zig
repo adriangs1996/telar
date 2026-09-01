@@ -51,6 +51,10 @@ pub const PaneRecord = struct {
     /// NUL-separated launch arguments, `argument_count` of them.
     arguments: []const u8,
     argument_count: u16,
+    /// Provider index of the agent that ran here, `0` when none.
+    agent_provider: u8 = 0,
+    /// The agent's reported session reference, empty when unknown.
+    agent_session: []const u8 = "",
 };
 
 pub const LayoutRecord = struct {
@@ -128,6 +132,9 @@ pub const Encoder = struct {
         try encoder.inner.writeInt(u16, record.rows);
         try encoder.inner.writeInt(u16, record.argument_count);
         try encoder.inner.writeSized16(record.arguments);
+        if (record.agent_session.len > schema.max_agent_session_reference_bytes) return error.InvalidCheckpoint;
+        try encoder.inner.writeByte(record.agent_provider);
+        try encoder.inner.writeSized16(record.agent_session);
     }
 
     pub fn layout(encoder: *Encoder, record: LayoutRecord) !void {
@@ -217,6 +224,9 @@ pub const Reader = struct {
                 if (argument_count == 0 or argument_count > max_launch_arguments or arguments.len > max_launch_bytes)
                     return error.InvalidCheckpoint;
                 if (std.mem.count(u8, arguments, "\x00") != argument_count) return error.InvalidCheckpoint;
+                const agent_provider = try reader.inner.readByte();
+                const agent_session = try reader.inner.readSized16();
+                if (agent_session.len != 0) schema.validateSessionReference(agent_session) catch return error.InvalidCheckpoint;
                 return .{ .pane = .{
                     .pane_id = pane_id,
                     .workspace_id = workspace_id,
@@ -226,6 +236,8 @@ pub const Reader = struct {
                     .rows = rows,
                     .arguments = arguments,
                     .argument_count = argument_count,
+                    .agent_provider = agent_provider,
+                    .agent_session = agent_session,
                 } };
             },
             .layout => {
@@ -286,6 +298,8 @@ test "checkpoint records round trip through the file encoding" {
         .rows = 40,
         .arguments = "/bin/zsh\x00-l\x00",
         .argument_count = 2,
+        .agent_provider = 1,
+        .agent_session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000",
     });
     try encoder.layout(.{ .identity = 42, .last_used = 3, .payload = "\x1a\x01" });
     const bytes = try encoder.finish();
@@ -305,6 +319,8 @@ test "checkpoint records round trip through the file encoding" {
     try std.testing.expectEqualStrings("/bin/zsh", arguments.next().?);
     try std.testing.expectEqualStrings("-l", arguments.next().?);
     try std.testing.expect(arguments.next() == null);
+    try std.testing.expectEqual(@as(u8, 1), pane.agent_provider);
+    try std.testing.expectEqualStrings("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", pane.agent_session);
     const layout = (try reader.next()).?.layout;
     try std.testing.expectEqual(@as(u64, 42), layout.identity);
     try std.testing.expectEqualStrings("\x1a\x01", layout.payload);

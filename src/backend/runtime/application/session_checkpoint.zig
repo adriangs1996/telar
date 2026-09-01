@@ -22,6 +22,8 @@ pub const snapshot_bytes = 1024 * 1024;
 
 pub const State = struct {
     path: ?[]const u8 = null,
+    /// Type the agent's resume command into a restored pane's shell.
+    resume_agents: bool = true,
     dirty: bool = false,
     in_flight: bool = false,
     last_change_ns: u64 = 0,
@@ -29,6 +31,7 @@ pub const State = struct {
     failures: u64 = 0,
     restored_workspaces: u16 = 0,
     restored_panes: u16 = 0,
+    resumed_agents: u16 = 0,
     restore_failed: bool = false,
 
     pub fn enabled(state: *const State) bool {
@@ -289,7 +292,7 @@ pub fn Checkpointer(comptime Application: type) type {
             };
 
             try application.model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
-            _ = try application.launchPane(.{
+            const pane = try application.launchPane(.{
                 .location = location,
                 .size = size,
                 .launch = .{
@@ -304,6 +307,14 @@ pub fn Checkpointer(comptime Application: type) type {
                 .workspace_path = workspace_path,
             });
             application.session.restored_panes +|= 1;
+
+            if (application.session.resume_agents) {
+                var command_buffer: [max_resume_command_bytes]u8 = undefined;
+                if (resumeCommand(&command_buffer, @enumFromInt(record.agent_provider), record.agent_session)) |command| {
+                    try application.queueRestoredInput(pane, command);
+                    application.session.resumed_agents +|= 1;
+                }
+            }
         }
 
         fn restoreLayout(application: *Application, record: checkpoint.LayoutRecord) !void {
@@ -369,6 +380,8 @@ pub fn Checkpointer(comptime Application: type) type {
                 const pane = slot orelse continue;
                 if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null) continue;
                 if (!pane.launch_record.restorable()) continue;
+                const reference = application.model.agents.sessionReference(pane.key());
+                const projected = application.model.agents.projectedProvider(pane.key());
                 try encoder.pane(.{
                     .pane_id = schema.id.raw(pane.id),
                     .workspace_id = schema.id.raw(pane.location.workspace.workspace),
@@ -378,6 +391,8 @@ pub fn Checkpointer(comptime Application: type) type {
                     .rows = pane.size.rows,
                     .arguments = pane.launch_record.slice(),
                     .argument_count = pane.launch_record.count,
+                    .agent_provider = if (reference != null) @intFromEnum(projected) else 0,
+                    .agent_session = if (reference) |value| value.slice() else "",
                 });
             }
 
@@ -404,6 +419,53 @@ pub fn Checkpointer(comptime Application: type) type {
             return @intCast(Io.Timestamp.now(application.io, .awake).toNanoseconds());
         }
     };
+}
+
+pub const max_resume_command_bytes = 32 + schema.max_agent_session_reference_bytes;
+
+/// Builds the shell line that resumes a built-in agent's session, typed into
+/// the restored pane's shell. Only the official allowlist can produce a
+/// command, and only for a reference shaped like a UUID, so a stored
+/// reference can never smuggle options or shell syntax.
+///
+/// ```zig
+/// const line = resumeCommand(&buffer, .claude, session) orelse return;
+/// ```
+pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: schema.AgentProvider, session: []const u8) ?[]const u8 {
+    if (!isUuid(session)) return null;
+    const template: []const u8 = switch (provider) {
+        .claude => "claude --resume ",
+        .codex => "codex resume ",
+        else => return null,
+    };
+    const len = template.len + session.len + 1;
+    if (len > buffer.len) return null;
+    @memcpy(buffer[0..template.len], template);
+    @memcpy(buffer[template.len .. template.len + session.len], session);
+    buffer[len - 1] = '\r';
+    return buffer[0..len];
+}
+
+fn isUuid(value: []const u8) bool {
+    if (value.len != 36) return false;
+    for (value, 0..) |byte, index| {
+        const dash = index == 8 or index == 13 or index == 18 or index == 23;
+        if (dash) {
+            if (byte != '-') return false;
+        } else if (!std.ascii.isHex(byte)) return false;
+    }
+    return true;
+}
+
+test "resume commands exist only for built-in providers and UUID references" {
+    var buffer: [max_resume_command_bytes]u8 = undefined;
+    const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
+
+    try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session).?);
+    try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
+    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(3), session) == null);
+    try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid") == null);
+    try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g") == null);
 }
 
 test "checkpoint state debounces, coalesces and retries after failure" {

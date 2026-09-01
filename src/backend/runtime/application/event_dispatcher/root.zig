@@ -1,6 +1,8 @@
 //! Routes runtime event completions to their owning application capability.
 
 const std = @import("std");
+const pane_mod = @import("../../../pane/root.zig");
+const Pane = pane_mod.Pane;
 const runtime_config = @import("../../config.zig");
 const runtime_event = @import("../../event.zig");
 const agent_event_dispatcher = @import("agent.zig");
@@ -37,6 +39,16 @@ pub fn Dispatcher(comptime Application: type) type {
             telemetry: *TelemetryState,
             ingest_gate: ?*IngestTestGate,
         };
+
+        /// Starts the pane's next queued input write. Used by session restore,
+        /// which queues a resume command before any client is attached.
+        ///
+        /// ```zig
+        /// try RuntimeEvents.schedulePaneInput(&application, pane);
+        /// ```
+        pub fn schedulePaneInput(application: *Application, pane: *Pane) !void {
+            return PaneEvents.Io.scheduleInput(application, pane);
+        }
 
         /// Classifies one non-stop runtime event and delegates its completion to
         /// the capability that owns the affected state. The return value reports

@@ -63,6 +63,14 @@ fn execute(session: *control.Session, options: AgentOptions, output: Output) !u8
         },
         .wait => return waitFor(session, options, output),
         .prompt => return prompt(session, options, output),
+        .report_session => {
+            const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
+            try session.reportSession(.{
+                .pane_id = agent.pane_id,
+                .pane_generation = agent.pane_generation,
+            }, std.mem.span(options.text.?));
+            return exit_ok;
+        },
         .read => {
             const agent = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
             const text = try session.readPane(.{

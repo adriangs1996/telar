@@ -70,9 +70,22 @@ tab whose workspace is missing, a pane whose launch fails) are skipped, and
 the id counters still advance past every recorded identity so reconnecting
 clients never see an id reused for a different pane.
 
+## Agent resume
+
+An agent reports its own session identifier with `telar agent report-session`
+(`report_agent_session` on the wire). The tracker stores it on the exact pane
+generation as a typed, bounded token; the checkpoint records it next to the
+pane's provider. On restore, when `runtime.session.resume_agents` is true and
+the reference is shaped like a UUID, the runtime types the official resume
+line for a built-in provider (`claude --resume <id>`, `codex resume <id>`)
+into the relaunched shell through the normal pane input queue. Only the
+allowlist can produce a command; custom providers and malformed references
+restore as plain shells. Claude Code hooks receive `session_id` in their
+input and are the intended reporter.
+
 ## Configuration
 
-`config.runtime.session = { persist = true, path = "..." }`. The default
+`config.runtime.session = { persist = true, path = "...", resume_agents = true }`. The default
 path is `session.ckpt` next to the history database. `persist = false` keeps
 the session volatile.
 

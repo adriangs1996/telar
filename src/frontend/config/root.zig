@@ -1027,7 +1027,18 @@ pub const Generation = struct {
             diagnostic.set("config.runtime.session must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(state, absolute, &.{ "persist", "path" }, "config.runtime.session", diagnostic);
+        try ensureOnlyFields(state, absolute, &.{ "persist", "path", "resume_agents" }, "config.runtime.session", diagnostic);
+
+        _ = lua.lua_getfield(state, absolute, "resume_agents");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                pop(state, 1);
+                diagnostic.set("config.runtime.session.resume_agents must be a boolean", .{});
+                return error.InvalidConfig;
+            }
+            generation.snapshot.runtime.session_resume_agents = lua.lua_toboolean(state, -1) != 0;
+        }
+        pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "persist");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {

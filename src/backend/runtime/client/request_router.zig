@@ -49,6 +49,7 @@ pub fn Handlers(comptime Context: type) type {
         query_agents: *const fn (*Context, schema.QueryAgents) anyerror!void,
         read_pane: *const fn (*Context, schema.ReadPane) anyerror!void,
         send_pane_text: *const fn (*Context, schema.SendPaneText) anyerror!void,
+        report_agent_session: *const fn (*Context, schema.ReportAgentSession) anyerror!void,
     };
 }
 
@@ -110,6 +111,7 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .query_agents => |request| handlers.query_agents(router.context, request),
                 .read_pane => |request| handlers.read_pane(router.context, request),
                 .send_pane_text => |request| handlers.send_pane_text(router.context, request),
+                .report_agent_session => |request| handlers.report_agent_session(router.context, request),
             };
         }
     };
@@ -129,6 +131,7 @@ pub fn classify(tag: Tag) RequestClass {
         .query_agents,
         .read_pane,
         .send_pane_text,
+        .report_agent_session,
         => .control,
         else => .ui,
     };
@@ -202,6 +205,7 @@ const testing_handlers: Handlers(Capture) = .{
     .query_agents = captureHandler(.query_agents, schema.QueryAgents),
     .read_pane = captureHandler(.read_pane, schema.ReadPane),
     .send_pane_text = captureHandler(.send_pane_text, schema.SendPaneText),
+    .report_agent_session = captureHandler(.report_agent_session, schema.ReportAgentSession),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -262,6 +266,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         .{ .query_agents = .{ .request_id = request_id } },
         .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
         .{ .send_pane_text = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .mode = .prompt, .text = "ls" } },
+        .{ .report_agent_session = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .session = "abc" } },
     };
 }
 
@@ -288,6 +293,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .query_agents,
             .read_pane,
             .send_pane_text,
+            .report_agent_session,
             => .control,
             else => .ui,
         };

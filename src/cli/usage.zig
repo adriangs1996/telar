@@ -33,6 +33,7 @@ pub const text =
     \\  agent wait       Block until an agent reaches a status (default: done)
     \\  agent prompt     Send a prompt to an agent; refused while it is blocked
     \\  agent read       Print recent text from an agent's pane
+    \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
     \\  pane send-keys   Send raw text (and --enter) to any pane
     \\  api schema       Print the wire contract of this binary
