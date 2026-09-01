@@ -3,21 +3,21 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const platform = @import("../platform/root.zig");
+const platform = @import("../../platform/root.zig");
 
-const Client = @import("client.zig");
-const agent_sounds = @import("agent_sounds.zig");
-const client_telemetry = @import("telemetry.zig");
-const clipboard_images = @import("clipboard_images.zig");
-const config_reloads = @import("config_reloads.zig");
-const host_capabilities = @import("host_capabilities.zig");
-const host_inputs = @import("host_inputs.zig");
-const host_resizes = @import("host_resizes.zig");
-const notifications = @import("notifications.zig");
-const presentation_lifecycle = @import("presentation_lifecycle.zig");
-const plugin_actions = @import("plugin_actions.zig");
-const runtime_transport = @import("runtime_transport.zig");
-const sidebar_animations = @import("sidebar_animations.zig");
+const Client = @import("../client.zig");
+const agent_sounds = @import("../agent_sounds.zig");
+const client_telemetry = @import("../telemetry.zig");
+const clipboard_images = @import("../clipboard_images.zig");
+const config_reloads = @import("../config_reloads.zig");
+const host_capabilities = @import("../host_capabilities.zig");
+const host_inputs = @import("../host_inputs.zig");
+const host_resizes = @import("../host_resizes.zig");
+const notifications = @import("../notifications.zig");
+const presentation_lifecycle = @import("../presentation_lifecycle.zig");
+const plugin_actions = @import("../plugin_actions.zig");
+const runtime_transport = @import("../runtime_transport.zig");
+const sidebar_animations = @import("../sidebar_animations.zig");
 
 const diagnostics = core.diagnostics;
 const Event = Client.ClientEvent;

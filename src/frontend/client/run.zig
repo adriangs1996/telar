@@ -11,7 +11,7 @@ const Io = std.Io;
 const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
-const client_events = @import("client_events.zig");
+const client_events = @import("entrypoints/events.zig");
 const client_startup = @import("client_startup.zig");
 const host_resizes = @import("host_resizes.zig");
 const Options = Client.Options;

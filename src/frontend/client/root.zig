@@ -42,7 +42,7 @@ test {
     _ = @import("agent_snapshots.zig");
     _ = @import("agent_sounds.zig");
     _ = @import("client.zig");
-    _ = @import("client_events.zig");
+    _ = @import("entrypoints/events.zig");
     _ = @import("client_startup.zig");
     _ = @import("client_detachments.zig");
     _ = @import("client_test.zig");
@@ -88,7 +88,7 @@ test {
     _ = @import("proxy_status.zig");
     _ = @import("request_lifecycle.zig");
     _ = @import("runtime_transport.zig");
-    _ = @import("server_messages.zig");
+    _ = @import("entrypoints/runtime_messages.zig");
     _ = @import("sidebar_animations.zig");
     _ = @import("sidebar_projection.zig");
     _ = @import("sidebar_toggles.zig");

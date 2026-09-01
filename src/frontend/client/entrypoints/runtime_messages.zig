@@ -6,27 +6,27 @@ const core = @import("telar-core");
 
 const schema = core.schema;
 
-const Client = @import("client.zig");
-const agent_sounds = @import("agent_sounds.zig");
-const agent_snapshots = @import("agent_snapshots.zig");
-const notifications = @import("notifications.zig");
-const pane_clipboards = @import("pane_clipboards.zig");
-const pane_closures = @import("pane_closures.zig");
-const pane_frames = @import("pane_frames.zig");
-const pane_graphics = @import("pane_graphics.zig");
-const pane_metadata = @import("pane_metadata.zig");
-const pane_openings = @import("pane_openings.zig");
-const proxy_status = @import("proxy_status.zig");
-const request_failures = @import("request_failures.zig");
-const resync_requirements = @import("resync_requirements.zig");
-const system_metrics = @import("system_metrics.zig");
-const tab_closures = @import("tab_closures.zig");
-const tab_creations = @import("tab_creations.zig");
-const tab_moves = @import("tab_moves.zig");
-const tab_renames = @import("tab_renames.zig");
-const tab_snapshots = @import("tab_snapshots.zig");
-const workspace_lists = @import("workspace_lists.zig");
-const workspace_snapshots = @import("workspace_snapshots.zig");
+const Client = @import("../client.zig");
+const agent_sounds = @import("../agent_sounds.zig");
+const agent_snapshots = @import("../agent_snapshots.zig");
+const notifications = @import("../notifications.zig");
+const pane_clipboards = @import("../pane_clipboards.zig");
+const pane_closures = @import("../pane_closures.zig");
+const pane_frames = @import("../pane_frames.zig");
+const pane_graphics = @import("../pane_graphics.zig");
+const pane_metadata = @import("../pane_metadata.zig");
+const pane_openings = @import("../pane_openings.zig");
+const proxy_status = @import("../proxy_status.zig");
+const request_failures = @import("../request_failures.zig");
+const resync_requirements = @import("../resync_requirements.zig");
+const system_metrics = @import("../system_metrics.zig");
+const tab_closures = @import("../tab_closures.zig");
+const tab_creations = @import("../tab_creations.zig");
+const tab_moves = @import("../tab_moves.zig");
+const tab_renames = @import("../tab_renames.zig");
+const tab_snapshots = @import("../tab_snapshots.zig");
+const workspace_lists = @import("../workspace_lists.zig");
+const workspace_snapshots = @import("../workspace_snapshots.zig");
 
 /// Routes one decoded message from the runtime.
 pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
