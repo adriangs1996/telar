@@ -605,20 +605,42 @@ test "system metrics commit before presenter-owned projection" {
     try harness.settleModelPresentation();
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 
-    const status = client.view.regions.status;
-    var status_text_buffer: [512]u8 = undefined;
-    var status_text_len: usize = 0;
-    for (status.x..status.x + status.w) |x| {
-        const cell = client.presenter.screen.front.cells[@as(usize, status.y) * client.presenter.screen.front.w + x];
-        const text = cell.text();
-        @memcpy(status_text_buffer[status_text_len..][0..text.len], text);
-        status_text_len += text.len;
-    }
-    const status_text = status_text_buffer[0..status_text_len];
+    var bottom_text_buffer: [512]u8 = undefined;
+    const sidebar = client.view.regions.sidebar;
+    const contracted_bottom = client.view.regions.bottom;
+    const contracted_text = try screenText(&client.presenter.screen, contracted_bottom, &bottom_text_buffer);
 
-    try std.testing.expect(std.mem.indexOf(u8, status_text, " 50%") != null);
-    try std.testing.expect(std.mem.indexOf(u8, status_text, " 1.0G") != null);
-    try std.testing.expect(std.mem.indexOf(u8, status_text, "80%") != null);
+    try std.testing.expectEqual(sidebar.x + sidebar.w, contracted_bottom.x);
+    try std.testing.expect(std.mem.indexOf(u8, contracted_text, " 50%") != null);
+
+    _ = try client_actions.apply(client, .toggle_sidebar);
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+
+    const expanded_bottom = client.view.regions.bottom;
+    const expanded_text = try screenText(&client.presenter.screen, expanded_bottom, &bottom_text_buffer);
+
+    try std.testing.expectEqual(@as(u16, 0), expanded_bottom.x);
+    try std.testing.expectEqual(client.presenter.screen.front.w, expanded_bottom.w);
+    try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 50%") != null);
+    try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 1.0G") != null);
+    try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
+}
+
+fn screenText(screen: *const term.Screen, area: core.ui.Rect, storage: *[512]u8) ![]const u8 {
+    var len: usize = 0;
+    for (area.x..area.x + area.w) |x| {
+        const cell = screen.front.cells[@as(usize, area.y) * screen.front.w + x];
+        const text = cell.text();
+        if (len + text.len > storage.len) {
+            return error.TestScreenTextTooLong;
+        }
+
+        @memcpy(storage[len..][0..text.len], text);
+        len += text.len;
+    }
+
+    return storage[0..len];
 }
 
 test "workspace list snapshots commit before presenter-owned projection" {

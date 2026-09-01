@@ -146,6 +146,7 @@ const Launch = struct {
             .sidebar_visible = if (snapshot) |value| value.sidebar_visible else true,
             .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
             .sound = if (snapshot) |value| value.sound else .{},
+            .bars = if (snapshot) |value| value.bars.presentation() else .{},
             .host_shared_memory = supportsHostSharedMemory(launch.process.minimal.environ),
             .input_escape_timeout_ns = if (snapshot) |value|
                 value.input_escape_timeout_ns

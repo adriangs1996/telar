@@ -5,11 +5,14 @@
 
 const workspace = @import("../workspace/root.zig");
 const agents = @import("../agents/root.zig");
+const bars = @import("../bars/root.zig");
 const layout_mod = workspace.layout;
 const multiplexer = workspace.multiplexer;
 const tabs_mod = workspace.tabs;
 const workspace_list = workspace.workspace_list;
 const context_mod = @import("context.zig");
+const bar_content = @import("bar_content.zig");
+const bar_layout = @import("bar_layout.zig");
 const layout = @import("layout.zig");
 const sidebar = @import("sidebar.zig");
 const status_bar = @import("status_bar.zig");
@@ -36,6 +39,7 @@ pub const Input = struct {
     status_mode: status_bar.Mode,
     workspaces: *const workspace_list.Snapshot,
     workspace_list_collapsed: bool,
+    bar_state: *const bars.State,
 };
 
 pub const Output = struct {
@@ -52,6 +56,8 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .workspaces = input.workspaces,
         .collapsed = input.workspace_list_collapsed,
         .proxy_tls_active = input.proxy_tls_active,
+        .right = input.bar_state.layout.slot(.top_right),
+        .system_metrics = input.system_metrics,
     });
 
     const focused_agent = block: {
@@ -75,12 +81,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         tab_rename.render(context, input.regions.bottom, field, input.rename_kind)
     else switch (input.status_mode) {
         .normal => block: {
-            tab_bar.render(context, .{
-                .area = input.regions.tabs,
-                .tabs = input.tabs,
-                .model = input.model,
-            });
-            status_bar.render(context, input.regions.status, input.system_metrics);
+            renderBottom(context, input);
             break :block null;
         },
         .prefix, .copy => block: {
@@ -93,6 +94,58 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
     return .{
         .sidebar = sidebar_output,
         .cursor = if (cursor) |value| value else sidebar_output.cursor,
+    };
+}
+
+fn renderBottom(context: *context_mod.Context, input: Input) void {
+    const slots = &input.bar_state.layout.bottom;
+    const tab_index: u2 = for (slots, 0..) |slot, index| {
+        if (slot == .tabs) {
+            break @intCast(index);
+        }
+    } else 2;
+    var desired: [3]u16 = @splat(0);
+    for (slots, 0..) |*slot, index| {
+        desired[index] = bottomDesiredWidth(slot, input);
+    }
+    const regions = bar_layout.Regions.calculate(input.regions.bottom, .{
+        .desired = desired,
+        .tabs_index = tab_index,
+    });
+
+    for (slots, regions.items, 0..) |*slot, area, index| {
+        const alignment: bars.Alignment = switch (index) {
+            0 => .left,
+            1 => .center,
+            else => .right,
+        };
+        switch (slot.*) {
+            .empty => {},
+            .tabs => tab_bar.render(context, .{
+                .area = area,
+                .tabs = input.tabs,
+                .model = input.model,
+                .alignment = alignment,
+            }),
+            .metrics => status_bar.render(context, area, input.system_metrics),
+            .content => |*content| bar_content.render(context, area, .{
+                .content = content,
+                .alignment = alignment,
+            }),
+        }
+    }
+}
+
+fn bottomDesiredWidth(slot: *const bars.Slot, input: Input) u16 {
+    return switch (slot.*) {
+        .empty => 0,
+        .content => |*content| content.width(),
+        .metrics => status_bar.desiredWidth(input.system_metrics),
+        .tabs => tab_bar.desiredWidth(.{
+            .area = input.regions.bottom,
+            .tabs = input.tabs,
+            .model = input.model,
+        }),
     };
 }
 

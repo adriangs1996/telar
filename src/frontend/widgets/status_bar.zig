@@ -89,6 +89,29 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
     }
 }
 
+pub fn desiredWidth(metrics: ?Metrics) u16 {
+    const values = metrics orelse return 0;
+    var cpu_buffer: [10]u8 = undefined;
+    const cpu = std.fmt.bufPrint(&cpu_buffer, " {d}%", .{values.cpu_percent}) catch return 0;
+    var memory_buffer: [14]u8 = undefined;
+    const memory = std.fmt.bufPrint(&memory_buffer, " {d}.{d}G", .{
+        values.memory_used_decigib / 10,
+        values.memory_used_decigib % 10,
+    }) catch return 0;
+    var width: u16 = 1 + iconWidth(.cpu) + ui.measure(cpu) + 2 + iconWidth(.memory) + ui.measure(memory);
+    if (values.battery_percent) |battery| {
+        var battery_buffer: [10]u8 = undefined;
+        const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return width;
+        width +|= 2 + iconWidth(ui.icons.battery(battery)) + ui.measure(text);
+    }
+
+    return width;
+}
+
+fn iconWidth(icon: ui.icons.Icon) u16 {
+    return @max(@as(u16, 1), ui.measure(icon.unicodeGlyph()));
+}
+
 pub fn renderMode(context: *widget.Context, area: ui.Rect, mode: Mode) void {
     if (area.isEmpty() or mode == .normal) return;
     context.buffer.fill(area, " ", .{ .bg = context.palette.panel_bg });

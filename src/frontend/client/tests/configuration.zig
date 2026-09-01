@@ -36,6 +36,7 @@ const client_telemetry = @import("../resources/telemetry.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
 const client_clock = @import("../resources/clock.zig");
 const config_reload_worker = @import("../resources/config_reload.zig");
+const bar_updates = @import("../controllers/configuration/bar_updates.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
@@ -255,6 +256,102 @@ test "a configuration version alone schedules presenter observation" {
     try harness.settleModelPresentation();
 
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
+test "dynamic bar ticks commit current Lua content before paced presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const adoption = try testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\local ticks = 0
+        \\return { api_version = 2, client = { bars = {
+        \\  bottom = {
+        \\    left = telar.bar.dynamic({ every_ms = 100, render = function(ctx)
+        \\      ticks = ticks + 1
+        \\      return { { text = "tick " .. ticks, fg = "teal", bold = true } }
+        \\    end }),
+        \\    right = telar.bar.tabs(),
+        \\  },
+        \\} } }
+    );
+    const pending_before = client.presenter.pending_updates;
+    const version_before = client.model.version();
+
+    const commit = try config_reloads.apply(client, adoption);
+
+    try std.testing.expect(commit.bars_changed);
+    try std.testing.expect(client.bar_updates.scheduler.pending);
+    const event = try client.select.await();
+    switch (event) {
+        .bar_tick => |result| try bar_updates.handleTick(client, result),
+        else => return error.UnexpectedEvent,
+    }
+
+    const slot = client.model.barState().layout.slot(.bottom_left);
+    try std.testing.expect(slot.* == .content);
+    try std.testing.expectEqualStrings("tick 1", slot.content.text(slot.content.slice()[0]));
+    try std.testing.expect(slot.content.slice()[0].style.bold);
+    var expected_version = version_before;
+    expected_version.configuration += 1;
+    expected_version.bars += 2;
+    try std.testing.expectEqualDeep(expected_version, client.model.version());
+    try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
+
+    try presentation_lifecycle.observe(client);
+    try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(client.model.version().bars, client.presenter.presented_model_version.bars);
+}
+
+test "command completion from a replaced bar generation is discarded" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const running = try testingConfigAdoptionSource(1,
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { bars = { bottom = {
+        \\  left = telar.bar.command({
+        \\    command = { "/bin/sh", "-c", "sleep 0.2; printf old" },
+        \\    every_ms = 1000,
+        \\    timeout_ms = 1000,
+        \\  }),
+        \\  right = telar.bar.tabs(),
+        \\} } } }
+    );
+    _ = try config_reloads.apply(client, running);
+
+    const tick = try client.select.await();
+    switch (tick) {
+        .bar_tick => |result| try bar_updates.handleTick(client, result),
+        else => return error.UnexpectedEvent,
+    }
+    try std.testing.expect(client.bar_updates.command_execution != null);
+
+    const replacement = try testingConfigAdoptionSource(2,
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { bars = { bottom = {
+        \\  left = telar.bar.static("new"),
+        \\  right = telar.bar.tabs(),
+        \\} } } }
+    );
+    _ = try config_reloads.apply(client, replacement);
+    const version_after_reload = client.model.version();
+
+    const completed = try client.select.await();
+    switch (completed) {
+        .bar_command => |value| try bar_updates.completeCommand(client, value),
+        else => return error.UnexpectedEvent,
+    }
+
+    const slot = client.model.barState().layout.slot(.bottom_left);
+    try std.testing.expectEqualStrings("new", slot.content.text(slot.content.slice()[0]));
+    try std.testing.expect(client.bar_updates.command_execution == null);
+    try std.testing.expectEqualDeep(version_after_reload, client.model.version());
+    try std.testing.expect(client.model.diagnostic() == null);
 }
 
 test "plugin completion applies one authorized batch through model observation" {

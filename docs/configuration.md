@@ -103,6 +103,153 @@ only to `working -> blocked`. Initial snapshots, reconnects, repeated states,
 failures, and transitions from any other state remain silent. Set
 `enabled = false` to disable both sounds for that client or profile.
 
+## Bars
+
+`client.bars` controls all three blocks of the bottom bar and the right block
+of the top bar. The bottom bar must contain exactly one `telar.bar.tabs()`
+source. Tabs keep their built-in behavior; configuration can only choose their
+position. The top bar keeps workspace navigation and the sidebar control under
+Telar's ownership, so only `top.right` exists. The ProxyTLS badge remains
+reserved at the far right whenever interception is active. While the sidebar
+is visible, both bars start at its right edge. Hiding the sidebar expands them
+to the full client width.
+
+```lua
+bars = {
+  bottom = {
+    left = telar.bar.metrics(),
+    center = telar.bar.tabs(),
+    right = telar.bar.dynamic({
+      every_ms = 1000,
+      render = function(ctx)
+        return {
+          { icon = "battery-full", text = string.format(" %d%%  ", ctx.metrics.battery_percent or 0), fg = "green" },
+          { text = string.format("%02d:%02d:%02d ", ctx.time.hour, ctx.time.minute, ctx.time.second), fg = "text", bold = true },
+        }
+      end,
+    }),
+  },
+  top = {
+    right = telar.bar.static({
+      { icon = "provider-codex", text = " telar ", fg = "accent", bold = true },
+    }),
+  },
+}
+```
+
+When `client.bars` is absent, the bottom bar keeps metrics on the left and tabs
+on the right, and `top.right` is empty. If `bottom` is present, omitted
+positions are empty and one declared position still has to contain the tabs.
+Prefix mode, copy mode and a rename prompt temporarily replace the configured
+bottom row with their own controls.
+
+Each position accepts one source:
+
+- `telar.bar.tabs()` renders the built-in tabs and is valid only once in the
+  bottom bar.
+- `telar.bar.metrics()` renders the latest runtime CPU, used-memory and
+  optional battery values.
+- `telar.bar.static(content)` parses fixed content when the configuration is
+  loaded.
+- `telar.bar.dynamic({ every_ms, render })` calls `render` on a client-owned
+  tick.
+- `telar.bar.command({ command, every_ms, timeout_ms, render })` runs an argv
+  array outside the client loop. `render` is optional; without it, trimmed
+  stdout becomes plain content.
+
+Content may be `nil`, a string, one segment table, or an array of at most 16
+segments. A segment accepts these fields:
+
+```lua
+{
+  text = " 74%",
+  icon = "battery-three-quarters",
+  fg = "green",
+  bg = "panel-bg",
+  bold = true,
+  italic = false,
+  faint = false,
+  underline = false,
+  strikethrough = false,
+}
+```
+
+`fg` and `bg` accept a theme palette role, `"default"`, `"#RRGGBB"`, or an
+indexed terminal color from 0 through 255. Palette roles are `accent`,
+`panel-bg`, `surface0`, `surface1`, `surface-dim`, `overlay0`, `overlay1`,
+`text`, `subtext0`, `mauve`, `green`, `yellow`, `red`, `blue`, `teal`, and
+`peach`. Names are case-insensitive and hyphens may replace underscores.
+
+The icon names are `sidebar-collapse`, `sidebar-expand`, `workspace-menu`,
+`proxy-active`, `cpu`, `memory`, `battery-empty`, `battery-quarter`,
+`battery-half`, `battery-three-quarters`, `battery-full`, `provider-unknown`,
+`provider-claude`, `provider-codex`, `agent-unknown`, `agent-working-0` through
+`agent-working-3`, `agent-blocked`, `agent-ready`, `agent-failed`, and `close`.
+They follow the configured Unicode or graphical icon theme.
+
+### Dynamic context
+
+A dynamic or command render callback receives one immutable table. Tab indices
+are one-based in Lua.
+
+```lua
+{
+  sidebar_visible = true,
+  tab_count = 3,
+  active_tab_index = 2,
+  pane_count = 4,
+  focused_pane_id = 19,
+  time = {
+    unix_seconds = 1788278709,
+    year = 2026, month = 9, day = 1,
+    hour = 13, minute = 5, second = 9,
+    weekday = 2, -- Sunday is 0
+  },
+  metrics = {
+    available = true,
+    cpu_percent = 38,
+    memory_used_decigib = 123,
+    battery_percent = 61, -- absent on hosts without a battery
+  },
+  output = "74%", -- present only in a command render callback
+}
+```
+
+`every_ms` defaults to 1000 and must be between 100 and 3,600,000. Each source
+owns one deadline. If a client is delayed, expired ticks collapse into one
+evaluation instead of replaying every missed value. Lua evaluation keeps the
+same instruction, memory and 10 ms wall-time containment as other client
+callbacks. A failure leaves the last valid content in place and publishes a
+bounded client diagnostic.
+
+Commands contain 1 to 32 arguments and at most 4096 argument bytes. Telar
+executes the argv directly, without a shell, and inherits the client's process
+environment and working directory. `timeout_ms` defaults to 2000 and must be
+between 100 and 10000. Stdout is limited to one valid UTF-8 display line of at
+most 512 bytes; stderr is bounded to 4096 bytes. All bar commands share one
+worker, and another elapsed tick records only one pending rerun. Reloading the
+configuration discards a completion from the previous generation.
+
+For example, a subscription quota helper can be polled without giving Lua
+filesystem, process or network authority:
+
+```lua
+top = {
+  right = telar.bar.command({
+    command = { "telar-quota" },
+    every_ms = 60000,
+    timeout_ms = 2000,
+    render = function(ctx)
+      return { icon = "provider-codex", text = " " .. ctx.output .. " ", fg = "accent" }
+    end,
+  }),
+}
+```
+
+The helper owns any credentials and network access it needs. Telar receives
+only its bounded stdout. See [Configurable bars](flows/configurable-bars.md)
+for ownership, scheduling and stale-result behavior.
+
 ## Bindings
 
 `client.prefix` is one key chord and defaults to `"ctrl+b"`. `telar.bind` and

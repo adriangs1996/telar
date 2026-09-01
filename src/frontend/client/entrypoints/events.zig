@@ -9,6 +9,7 @@ const Client = @import("../client.zig");
 const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
+const bar_updates = @import("../controllers/configuration/bar_updates.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
@@ -85,6 +86,8 @@ fn route(client: *Client, event: Event, resources: Resources) !Outcome {
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
         .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
         .notification_tick => |result| _ = try notifications.handleTick(client, result),
+        .bar_tick => |result| try bar_updates.handleTick(client, result),
+        .bar_command => |completion| try bar_updates.completeCommand(client, completion),
         .sound_played => |result| try agent_sounds.handlePlayed(client, result),
         .telemetry_tick => |result| client_telemetry.handleTick(client, result, resources.heap.snapshot()),
         .telemetry_written => |result| client_telemetry.handleWritten(client, result),
@@ -114,6 +117,8 @@ fn pathFor(tag: EventTag) diagnostics.Path {
         => .interactive,
         .media_tick, .clipboard_image => .media,
         .notification_tick,
+        .bar_tick,
+        .bar_command,
         .sound_played,
         .telemetry_tick,
         .telemetry_written,
@@ -138,6 +143,8 @@ test "client event paths preserve interactive media and observation budgets" {
     const media = [_]EventTag{ .media_tick, .clipboard_image };
     const observation = [_]EventTag{
         .notification_tick,
+        .bar_tick,
+        .bar_command,
         .sound_played,
         .telemetry_tick,
         .telemetry_written,

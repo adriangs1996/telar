@@ -35,6 +35,7 @@ const client_model = @import("../model/root.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
 const client_clock = @import("../resources/clock.zig");
+const bar_updates = @import("../controllers/configuration/bar_updates.zig");
 const config_reload_worker = @import("../resources/config_reload.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
@@ -92,6 +93,7 @@ pub fn expectNonPromptVersionEqual(expected: client_model.Version, actual: clien
     try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.bars, actual.bars);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -116,6 +118,7 @@ pub fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.bars, actual.bars);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -140,6 +143,7 @@ pub fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actua
     try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.bars, actual.bars);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -163,6 +167,7 @@ pub fn expectNonViewportVersionEqual(expected: client_model.Version, actual: cli
     try std.testing.expectEqual(expected.sidebar_animation, actual.sidebar_animation);
     try std.testing.expectEqual(expected.proxy_status, actual.proxy_status);
     try std.testing.expectEqual(expected.system_metrics, actual.system_metrics);
+    try std.testing.expectEqual(expected.bars, actual.bars);
     try std.testing.expectEqual(expected.notifications, actual.notifications);
     try std.testing.expectEqual(expected.tabs, actual.tabs);
     try std.testing.expectEqual(expected.active_tab, actual.active_tab);
@@ -251,6 +256,14 @@ pub const TestHarness = struct {
                     _ = try notification_flow.handleTick(harness.client, result);
                     try presentation_lifecycle.observe(harness.client);
                 },
+                .bar_tick => |result| {
+                    try bar_updates.handleTick(harness.client, result);
+                    try presentation_lifecycle.observe(harness.client);
+                },
+                .bar_command => |completion| {
+                    try bar_updates.completeCommand(harness.client, completion);
+                    try presentation_lifecycle.observe(harness.client);
+                },
                 else => return error.UnexpectedEvent,
             }
         }
@@ -281,6 +294,16 @@ pub const TestHarness = struct {
                 },
                 .notification_tick => |result| {
                     _ = try notification_flow.handleTick(harness.client, result);
+                    try presentation_lifecycle.observe(harness.client);
+                    target = harness.client.model.version();
+                },
+                .bar_tick => |result| {
+                    try bar_updates.handleTick(harness.client, result);
+                    try presentation_lifecycle.observe(harness.client);
+                    target = harness.client.model.version();
+                },
+                .bar_command => |completion| {
+                    try bar_updates.completeCommand(harness.client, completion);
                     try presentation_lifecycle.observe(harness.client);
                     target = harness.client.model.version();
                 },

@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../../agents/root.zig");
 const attachments = @import("../../attachments/root.zig");
+const bars = @import("../../bars/root.zig");
 const lua_config = @import("../../config/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
@@ -31,6 +32,7 @@ pub const Version = struct {
     sidebar_animation: u64 = 0,
     proxy_status: u64 = 0,
     system_metrics: u64 = 0,
+    bars: u64 = 0,
     notifications: u64 = 0,
     tabs: u64 = 0,
     active_tab: u64 = 0,
@@ -243,6 +245,7 @@ pub const ConfigurationInput = struct {
     generation: u64,
     sidebar_visible: bool,
     pane_gaps: bool,
+    bars: bars.Layout = .{},
 };
 
 pub const ConfigurationCommit = struct {
@@ -251,6 +254,20 @@ pub const ConfigurationCommit = struct {
     sidebar: ?SidebarVisibility,
     pane_gaps_changed: bool,
     panes_revision: u64,
+    bars_changed: bool = false,
+    bars_revision: u64 = 0,
+};
+
+pub const BarUpdateCommit = struct {
+    generation: u64,
+    position: bars.Position,
+    bars_revision: u64,
+};
+
+pub const BarUpdateInput = struct {
+    generation: u64,
+    position: bars.Position,
+    content: bars.Content,
 };
 
 pub const PluginExecutionId = enum(u64) {
@@ -276,6 +293,7 @@ pub const ClipboardCapture = struct {
 pub const InitialClientState = struct {
     pane_gaps: bool,
     configuration_generation: u64 = 0,
+    bars: bars.Layout = .{},
     host_size: schema.TerminalSize = .{ .cols = 80, .rows = 24 },
     host_capabilities: HostCapabilities = .{},
 };

@@ -16,37 +16,27 @@ pub const Regions = struct {
     workbench: ui.Rect,
     attachments: ui.Rect,
     bottom: ui.Rect,
-    tabs: ui.Rect,
-    status: ui.Rect,
 
     pub fn calculate(width: u16, height: u16, sidebar_requested: bool) Regions {
         const full: ui.Rect = .{ .w = width, .h = height };
         const top_height: u16 = @intFromBool(height != 0);
         const bottom_height: u16 = @intFromBool(height >= 2);
-        const top, const below_top = full.splitTop(top_height);
+        const can_show_sidebar = sidebar_requested and
+            full.w >= minimum_workbench_width + minimum_sidebar_width;
+        const requested_width = @min(sidebar_width, full.w -| minimum_workbench_width);
+        const actual_width: u16 = if (can_show_sidebar) requested_width else 0;
+        const sidebar, const client = full.splitLeft(actual_width);
+        const top, const below_top = client.splitTop(top_height);
         const body, const bottom = below_top.splitBottom(bottom_height);
 
-        const can_show_sidebar = sidebar_requested and
-            body.w >= minimum_workbench_width + minimum_sidebar_width;
-        const requested_width = @min(sidebar_width, body.w -| minimum_workbench_width);
-        const actual_width: u16 = if (can_show_sidebar) requested_width else 0;
-        const sidebar, const workbench = body.splitLeft(actual_width);
-
-        // Status sits on the left and the tabs anchor to the right edge. The
-        // width fits the widest metrics line ("⚙ 100%  ▤ 99.9G  ⚡ 100%")
-        // instead of the old 24-column cap that truncated it.
-        const status_width = @min(@as(u16, 26), bottom.w / 2);
-        const status, const tabs = bottom.splitLeft(status_width);
         return .{
             .full = full,
             .top = top,
             .body = body,
             .sidebar = sidebar,
-            .workbench = workbench,
-            .attachments = .{ .x = workbench.x, .y = workbench.y + workbench.h },
+            .workbench = body,
+            .attachments = .{ .x = body.x, .y = body.y + body.h },
             .bottom = bottom,
-            .tabs = tabs,
-            .status = status,
         };
     }
 
@@ -65,9 +55,16 @@ pub const Regions = struct {
 
 test "regions expose the complete chrome layout" {
     const regions = Regions.calculate(120, 40, true);
-    try @import("std").testing.expectEqual(ui.Rect{ .w = 120, .h = 1 }, regions.top);
-    try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 1, .w = 62, .h = 38 }, regions.sidebar);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 62, .w = 58, .h = 1 }, regions.top);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 62, .h = 40 }, regions.sidebar);
     try @import("std").testing.expectEqual(ui.Rect{ .x = 62, .y = 1, .w = 58, .h = 38 }, regions.workbench);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 62, .y = 39, .w = 58, .h = 1 }, regions.bottom);
+}
+
+test "hiding the sidebar expands both bars to the full client width" {
+    const regions = Regions.calculate(120, 40, false);
+
+    try @import("std").testing.expectEqual(ui.Rect{ .w = 120, .h = 1 }, regions.top);
     try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 39, .w = 120, .h = 1 }, regions.bottom);
 }
 

@@ -111,7 +111,9 @@ raster is capped at 64 KiB. Media failure leaves the cell actions intact.
 The sidebar is visible only when the client can reserve 42 columns for it and
 20 for the workbench. It grows with the terminal up to 62 columns. Below that
 threshold the layout hides it while preserving `sidebar_requested`, so a later
-resize restores it without changing user intent.
+resize restores it without changing user intent. While visible, the sidebar
+owns the complete left column. The top bar, bottom bar and workbench use the
+remaining width. Hiding it expands all three regions to the full client width.
 
 ## Detector wiring
 

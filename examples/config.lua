@@ -39,6 +39,34 @@ return telar.config({
     sidebar = { visible = true, renderer = "automatic" },
     sound = { enabled = true, ready = true, needs_input = true },
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
+    bars = {
+      bottom = {
+        left = telar.bar.metrics(),
+        center = telar.bar.tabs(),
+        right = telar.bar.dynamic({
+          every_ms = 1000,
+          render = function(ctx)
+            return {
+              {
+                text = string.format(
+                  " %02d:%02d:%02d ",
+                  ctx.time.hour,
+                  ctx.time.minute,
+                  ctx.time.second
+                ),
+                fg = "text",
+                bold = true,
+              },
+            }
+          end,
+        }),
+      },
+      top = {
+        right = telar.bar.static({
+          { icon = "provider-codex", text = " telar ", fg = "accent", bold = true },
+        }),
+      },
+    },
     keybindings = {
       telar.bind({ "[" }, telar.action.copy_mode()),
       telar.bind({ "%" }, telar.action.split_pane({ direction = "horizontal" })),

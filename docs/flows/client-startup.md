@@ -25,7 +25,7 @@ request_runtime_state
         |
 open_pane
         |
-arm resize, runtime read, capability, telemetry and config sources
+arm resize, runtime read, capability, telemetry, bar and config sources
         |
 run -> select.await
 ```
@@ -54,9 +54,9 @@ cannot therefore race an unregistered continuation or an incomplete handshake.
 ## Event sources and lifetime
 
 After the handshake, startup arms the host resize watcher, one runtime read,
-the host-capability deadline, telemetry and configuration reload. Adapters with
-disabled configuration schedule no worker. Each active adapter owns its single
-pending token.
+the host-capability deadline, telemetry, configured bar deadlines and
+configuration reload. Adapters with disabled configuration schedule no worker.
+Each active adapter owns its bounded pending token.
 
 Any startup error aborts the disposable client. `Client.deinit` cancels tasks
 before freeing client buffers, and its defer runs before `run` destroys the

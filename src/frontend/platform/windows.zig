@@ -4,6 +4,7 @@ const File = Io.File;
 const windows = std.os.windows;
 
 const Size = @import("types.zig").Size;
+const LocalTime = @import("types.zig").LocalTime;
 
 // Windows: console modes for the state, the screen buffer info for the size,
 // and - the awkward one - polling for the change.
@@ -48,6 +49,16 @@ const CONSOLE_SCREEN_BUFFER_INFO = extern struct {
     srWindow: SMALL_RECT,
     dwMaximumWindowSize: COORD,
 };
+const SYSTEMTIME = extern struct {
+    year: WORD,
+    month: WORD,
+    day_of_week: WORD,
+    day: WORD,
+    hour: WORD,
+    minute: WORD,
+    second: WORD,
+    milliseconds: WORD,
+};
 
 extern "kernel32" fn GetConsoleMode(hConsoleHandle: HANDLE, lpMode: *DWORD) callconv(.winapi) BOOL;
 extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) callconv(.winapi) BOOL;
@@ -55,6 +66,22 @@ extern "kernel32" fn GetConsoleScreenBufferInfo(
     hConsoleOutput: HANDLE,
     lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO,
 ) callconv(.winapi) BOOL;
+extern "kernel32" fn GetLocalTime(system_time: *SYSTEMTIME) callconv(.winapi) void;
+
+pub fn localTime() LocalTime {
+    var value: SYSTEMTIME = undefined;
+    GetLocalTime(&value);
+
+    return .{
+        .year = value.year,
+        .month = @intCast(value.month),
+        .day = @intCast(value.day),
+        .hour = @intCast(value.hour),
+        .minute = @intCast(value.minute),
+        .second = @intCast(value.second),
+        .weekday = @intCast(value.day_of_week),
+    };
+}
 
 pub const Tty = struct {
     input: HANDLE,

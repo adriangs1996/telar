@@ -7,11 +7,15 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const bars = @import("../bars/root.zig");
+const bar_content = @import("bar_content.zig");
+const status_bar = @import("status_bar.zig");
 const widget = @import("context.zig");
 const workspace_list = @import("../workspace/root.zig").workspace_list;
 const ui = @import("../ui/root.zig");
 
 const schema = core.schema;
+const empty_right: bars.Slot = .empty;
 
 pub const Input = struct {
     area: ui.Rect,
@@ -21,6 +25,8 @@ pub const Input = struct {
     workspaces: *const workspace_list.Snapshot,
     collapsed: bool,
     proxy_tls_active: bool,
+    right: *const bars.Slot = &empty_right,
+    system_metrics: ?status_bar.Metrics = null,
 };
 
 pub fn render(context: *widget.Context, input: Input) void {
@@ -50,10 +56,11 @@ pub fn render(context: *widget.Context, input: Input) void {
 
     // The badge is reserved first so a long workspace list cannot push the
     // interception signal off screen.
-    const badge_width: u16 = if (input.proxy_tls_active) @min(area.w, 3) else 0;
-    const row_end = area.x + area.w - badge_width;
-
     const safe_start = toggle.x + toggle.w + 1;
+    const badge_width: u16 = if (input.proxy_tls_active) @min(area.w, 3) else 0;
+    const right_capacity = area.x + area.w -| badge_width -| safe_start -| 4;
+    const right_width = @min(rightDesiredWidth(input), right_capacity);
+    const row_end = area.x + area.w - badge_width - right_width;
     const safe_width = row_end -| safe_start;
     const marker_width = @min(@as(u16, 3), safe_width);
     const active_id = activeWorkspaceId(input.location);
@@ -90,6 +97,13 @@ pub fn render(context: *widget.Context, input: Input) void {
         renderList(context, input, active_id, list_x, row_end, area.y);
     }
 
+    renderRight(context, .{
+        .x = row_end,
+        .y = area.y,
+        .w = right_width,
+        .h = 1,
+    }, input);
+
     if (input.proxy_tls_active) {
         const badge: ui.Rect = .{
             .x = area.x + area.w - badge_width,
@@ -110,6 +124,25 @@ pub fn render(context: *widget.Context, input: Input) void {
             .proxy_active,
             badge_style,
         );
+    }
+}
+
+fn rightDesiredWidth(input: Input) u16 {
+    return switch (input.right.*) {
+        .content => |*content| content.width(),
+        .metrics => status_bar.desiredWidth(input.system_metrics),
+        .empty, .tabs => 0,
+    };
+}
+
+fn renderRight(context: *widget.Context, area: ui.Rect, input: Input) void {
+    switch (input.right.*) {
+        .content => |*content| bar_content.render(context, area, .{
+            .content = content,
+            .alignment = .right,
+        }),
+        .metrics => status_bar.render(context, area, input.system_metrics),
+        .empty, .tabs => {},
     }
 }
 
@@ -449,6 +482,44 @@ test "proxy badge reserves the right edge before workspace navigation" {
         buffer.cells[badge_x].text(),
     );
     try std.testing.expect(hits.at(@intCast(badge_x), 0) == null);
+}
+
+test "configured right content stops before the permanent proxy badge" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+    };
+    const workspaces: workspace_list.Snapshot = .{};
+    var content: bars.Content = .{};
+    try content.append("quota", null, .{ .foreground = .{ .palette = .accent } });
+    const right: bars.Slot = .{ .content = content };
+
+    render(&context, .{
+        .area = buffer.area(),
+        .sidebar_visible = true,
+        .location = null,
+        .workspace_name = "telar",
+        .workspaces = &workspaces,
+        .collapsed = false,
+        .proxy_tls_active = true,
+        .right = &right,
+    });
+
+    try std.testing.expectEqualStrings("q", buffer.at(32, 0).?.text());
+    try std.testing.expectEqualStrings("a", buffer.at(36, 0).?.text());
+    try std.testing.expectEqualStrings(
+        ui.icons.Icon.proxy_active.unicodeGlyph(),
+        buffer.at(38, 0).?.text(),
+    );
+    try std.testing.expectEqualDeep(
+        ui.theme.default_theme.palette.accent,
+        buffer.at(32, 0).?.style.fg,
+    );
 }
 
 test "workspace navigation is centered independently of the sidebar toggle" {

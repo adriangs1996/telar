@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const lua = @import("lua-api").c;
 const input = @import("../input/root.zig");
 const action_mod = input.action;
+const bars = @import("../bars/root.zig");
 const config_model = @import("model.zig");
 const default_bindings = @import("default_bindings.zig");
 const keybind = input.keybind;
@@ -39,6 +40,7 @@ pub const max_proxy_passthrough_host_bytes = config_model.max_proxy_passthrough_
 pub const max_proxy_passthrough_bytes = config_model.max_proxy_passthrough_bytes;
 pub const max_agent_description_command_args = config_model.max_agent_description_command_args;
 pub const max_agent_description_command_bytes = config_model.max_agent_description_command_bytes;
+pub const max_bar_callbacks = config_model.max_bar_callbacks;
 pub const min_agent_description_timeout_ms = config_model.min_agent_description_timeout_ms;
 pub const max_agent_description_timeout_ms = config_model.max_agent_description_timeout_ms;
 pub const default_binding_count = default_bindings.count;
@@ -55,12 +57,20 @@ pub const PluginSpec = config_model.PluginSpec;
 pub const RuntimeSnapshot = config_model.RuntimeSnapshot;
 pub const AgentDescriptionCommand = config_model.AgentDescriptionCommand;
 pub const SoundConfig = config_model.SoundConfig;
+pub const BarCallbackContext = config_model.BarCallbackContext;
+pub const BarTime = config_model.BarTime;
+pub const BarMetrics = config_model.BarMetrics;
+pub const BarInvocation = config_model.BarInvocation;
 
 const Callback = struct {
     registry_ref: c_int,
     expression: bool,
     trigger: [max_binding_keys]keybind.Key = @splat(.plain(.escape)),
     trigger_len: u8 = 0,
+};
+
+const BarCallback = struct {
+    registry_ref: c_int,
 };
 
 pub const CallbackContext = config_model.CallbackContext;
@@ -177,6 +187,8 @@ pub const Generation = struct {
     snapshot: Snapshot = .{},
     callbacks: [max_callbacks]Callback = undefined,
     callback_count: u16 = 0,
+    bar_callbacks: [max_bar_callbacks]BarCallback = undefined,
+    bar_callback_count: u8 = 0,
     config_dir: [std.fs.max_path_bytes]u8 = undefined,
     config_dir_len: u16 = 0,
     module_cache_ref: c_int = lua.LUA_NOREF,
@@ -400,6 +412,27 @@ pub const Generation = struct {
             return error.LuaCallbackFailed;
         }
         return parseInputDecision(state, -1, callback, diagnostic);
+    }
+
+    pub fn invokeBar(generation: *Generation, invocation: BarInvocation, diagnostic: *Diagnostic) !bars.Content {
+        const reference = invocation.reference;
+        if (reference.generation != generation.number or reference.id >= generation.bar_callback_count) {
+            diagnostic.set("bar callback belongs to an obsolete configuration generation", .{});
+            return error.StaleBarCallback;
+        }
+
+        const state = generation.vm.state;
+        lua.lua_settop(state, 0);
+        defer lua.lua_settop(state, 0);
+        generation.vm.resetBudget(default_callback_instruction_limit, default_callback_deadline_ns);
+        _ = lua.lua_rawgeti(state, lua.LUA_REGISTRYINDEX, generation.bar_callbacks[reference.id].registry_ref);
+        pushReadonlyBarContext(state, invocation.context);
+        if (lua.lua_pcallk(state, 1, 1, 0, 0, null) != lua.LUA_OK) {
+            diagnostic.set("Lua bar callback failed: {s}", .{generation.vm.errorMessage()});
+            return error.LuaBarCallbackFailed;
+        }
+
+        return parseBarContent(state, -1, diagnostic);
     }
 
     fn prepareCallback(
@@ -949,7 +982,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "sound", "input", "keybindings" },
+            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "sound", "input", "keybindings", "bars" },
             "config.client",
             diagnostic,
         );
@@ -1009,6 +1042,229 @@ pub const Generation = struct {
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseBindings(-1, diagnostic);
         pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "bars");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            try generation.parseBars(-1, diagnostic);
+        }
+        pop(state, 1);
+    }
+
+    fn parseBars(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.client.bars must be a table", .{});
+            return error.InvalidConfig;
+        }
+
+        try ensureOnlyFields(state, absolute, &.{ "bottom", "top" }, "config.client.bars", diagnostic);
+
+        _ = lua.lua_getfield(state, absolute, "bottom");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            try generation.parseBottomBar(-1, diagnostic);
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "top");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            try generation.parseTopBar(-1, diagnostic);
+        }
+        pop(state, 1);
+    }
+
+    fn parseBottomBar(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.client.bars.bottom must be a table", .{});
+            return error.InvalidConfig;
+        }
+
+        try ensureOnlyFields(state, absolute, &.{ "left", "center", "right" }, "config.client.bars.bottom", diagnostic);
+        var parsed: [3]bars.Source = .{ .empty, .empty, .empty };
+        inline for (.{ "left", "center", "right" }, 0..) |field, source_index| {
+            _ = lua.lua_getfield(state, absolute, field);
+            if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+                parsed[source_index] = try generation.parseBarSource(-1, diagnostic);
+            }
+            pop(state, 1);
+        }
+
+        var tab_count: u8 = 0;
+        for (parsed) |source| {
+            tab_count += @intFromBool(source == .tabs);
+        }
+        if (tab_count != 1) {
+            diagnostic.set("config.client.bars.bottom must contain exactly one telar.bar.tabs()", .{});
+            return error.InvalidConfig;
+        }
+
+        generation.snapshot.bars.bottom = parsed;
+    }
+
+    fn parseTopBar(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.client.bars.top must be a table", .{});
+            return error.InvalidConfig;
+        }
+
+        try ensureOnlyFields(state, absolute, &.{"right"}, "config.client.bars.top", diagnostic);
+        _ = lua.lua_getfield(state, absolute, "right");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+            generation.snapshot.bars.top_right = .empty;
+            return;
+        }
+
+        const source = try generation.parseBarSource(-1, diagnostic);
+        if (source == .tabs) {
+            diagnostic.set("config.client.bars.top.right cannot contain tabs", .{});
+            return error.InvalidConfig;
+        }
+
+        generation.snapshot.bars.top_right = source;
+    }
+
+    fn parseBarSource(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !bars.Source {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("bar position must contain a telar.bar value", .{});
+            return error.InvalidConfig;
+        }
+
+        _ = lua.lua_getfield(state, absolute, "bar_kind");
+        const kind = string(state, -1) orelse {
+            pop(state, 1);
+            diagnostic.set("bar position must contain a telar.bar value", .{});
+            return error.InvalidConfig;
+        };
+        pop(state, 1);
+
+        if (std.mem.eql(u8, kind, "tabs")) {
+            try ensureOnlyFields(state, absolute, &.{"bar_kind"}, "bar tabs", diagnostic);
+            return .tabs;
+        }
+        if (std.mem.eql(u8, kind, "metrics")) {
+            try ensureOnlyFields(state, absolute, &.{"bar_kind"}, "bar metrics", diagnostic);
+            return .metrics;
+        }
+        if (std.mem.eql(u8, kind, "static")) {
+            try ensureOnlyFields(state, absolute, &.{ "bar_kind", "value" }, "bar static block", diagnostic);
+            _ = lua.lua_getfield(state, absolute, "value");
+            defer pop(state, 1);
+            return .{ .static = try parseBarContent(state, -1, diagnostic) };
+        }
+        if (std.mem.eql(u8, kind, "dynamic")) {
+            try ensureOnlyFields(state, absolute, &.{ "bar_kind", "every_ms", "render" }, "bar dynamic block", diagnostic);
+            const interval_ns = try parseBarInterval(state, absolute, diagnostic);
+            _ = lua.lua_getfield(state, absolute, "render");
+            defer pop(state, 1);
+            const callback = try generation.registerBarCallback(-1, diagnostic);
+            return .{ .dynamic = .{ .callback = callback, .interval_ns = interval_ns } };
+        }
+        if (std.mem.eql(u8, kind, "command")) {
+            return generation.parseBarCommand(absolute, diagnostic);
+        }
+
+        diagnostic.set("unknown bar value '{s}'", .{kind});
+        return error.InvalidConfig;
+    }
+
+    fn parseBarCommand(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !bars.Source {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        try ensureOnlyFields(
+            state,
+            absolute,
+            &.{ "bar_kind", "command", "every_ms", "timeout_ms", "render" },
+            "bar command block",
+            diagnostic,
+        );
+
+        const interval_ns = try parseBarInterval(state, absolute, diagnostic);
+        _ = lua.lua_getfield(state, absolute, "timeout_ms");
+        const timeout_value = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
+            2_000
+        else
+            integer(state, -1) orelse {
+                pop(state, 1);
+                diagnostic.set("bar command timeout_ms must be an integer", .{});
+                return error.InvalidConfig;
+            };
+        pop(state, 1);
+        if (timeout_value < bars.min_command_timeout_ms or timeout_value > bars.max_command_timeout_ms) {
+            diagnostic.set(
+                "bar command timeout_ms must be in {d}..{d}",
+                .{ bars.min_command_timeout_ms, bars.max_command_timeout_ms },
+            );
+            return error.InvalidConfig;
+        }
+
+        var command: bars.Command = .{
+            .generation = generation.number,
+            .interval_ns = interval_ns,
+            .timeout_ms = @intCast(timeout_value),
+        };
+        _ = lua.lua_getfield(state, absolute, "command");
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            pop(state, 1);
+            diagnostic.set("bar command must be an array", .{});
+            return error.InvalidConfig;
+        }
+        const command_table = lua.lua_absindex(state, -1);
+        const count = lua.lua_rawlen(state, command_table);
+        if (count == 0 or count > bars.max_command_args) {
+            pop(state, 1);
+            diagnostic.set("bar command must contain 1..{d} arguments", .{bars.max_command_args});
+            return error.InvalidConfig;
+        }
+        try ensureArrayOnly(state, command_table, count, "bar command", diagnostic);
+        for (0..count) |argument_index| {
+            _ = lua.lua_geti(state, command_table, @intCast(argument_index + 1));
+            const argument_value = string(state, -1) orelse {
+                pop(state, 2);
+                diagnostic.set("bar command argument {d} must be a string", .{argument_index + 1});
+                return error.InvalidConfig;
+            };
+            command.appendArgument(argument_value) catch |err| {
+                pop(state, 2);
+                diagnostic.set("invalid bar command: {s}", .{@errorName(err)});
+                return error.InvalidConfig;
+            };
+            pop(state, 1);
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "render");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            command.render = try generation.registerBarCallback(-1, diagnostic);
+        }
+
+        return .{ .command = command };
+    }
+
+    fn registerBarCallback(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !bars.CallbackRef {
+        const state = generation.vm.state;
+        if (lua.lua_type(state, index) != lua.LUA_TFUNCTION) {
+            diagnostic.set("bar render must be a Lua function", .{});
+            return error.InvalidConfig;
+        }
+        if (generation.bar_callback_count == max_bar_callbacks) {
+            diagnostic.set("configuration exceeds {d} bar callbacks", .{max_bar_callbacks});
+            return error.InvalidConfig;
+        }
+
+        lua.lua_pushvalue(state, index);
+        const registry_ref = lua.luaL_ref(state, lua.LUA_REGISTRYINDEX);
+        const id = generation.bar_callback_count;
+        generation.bar_callbacks[id] = .{ .registry_ref = registry_ref };
+        generation.bar_callback_count += 1;
+        return .{ .generation = generation.number, .id = id };
     }
 
     fn parsePrefix(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -1563,10 +1819,32 @@ fn resolveDefaultPath(
 const bootstrap =
     \\local telar = {}
     \\telar.action = {}
+    \\telar.bar = {}
     \\telar.input = {}
     \\function telar.config(value) return value end
     \\function telar.theme(value) return value end
     \\function telar.plugin(value) return value end
+    \\function telar.bar.tabs() return { bar_kind = "tabs" } end
+    \\function telar.bar.metrics() return { bar_kind = "metrics" } end
+    \\function telar.bar.static(value)
+    \\  return { bar_kind = "static", value = value }
+    \\end
+    \\function telar.bar.dynamic(options)
+    \\  return {
+    \\    bar_kind = "dynamic",
+    \\    every_ms = options.every_ms,
+    \\    render = options.render,
+    \\  }
+    \\end
+    \\function telar.bar.command(options)
+    \\  return {
+    \\    bar_kind = "command",
+    \\    command = options.command,
+    \\    every_ms = options.every_ms,
+    \\    timeout_ms = options.timeout_ms,
+    \\    render = options.render,
+    \\  }
+    \\end
     \\function telar.bind(keys, action)
     \\  return { keys = keys, action = action, expression = false, prefixed = true }
     \\end
@@ -2010,6 +2288,222 @@ fn ensureArrayOnly(
     }
 }
 
+fn parseBarInterval(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !u64 {
+    const absolute = lua.lua_absindex(state, index);
+    _ = lua.lua_getfield(state, absolute, "every_ms");
+    defer pop(state, 1);
+    const value = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
+        1_000
+    else
+        integer(state, -1) orelse {
+            diagnostic.set("bar every_ms must be an integer", .{});
+            return error.InvalidConfig;
+        };
+    if (value < bars.min_interval_ms or value > bars.max_interval_ms) {
+        diagnostic.set(
+            "bar every_ms must be in {d}..{d}",
+            .{ bars.min_interval_ms, bars.max_interval_ms },
+        );
+        return error.InvalidConfig;
+    }
+
+    return @as(u64, @intCast(value)) * std.time.ns_per_ms;
+}
+
+fn parseBarContent(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !bars.Content {
+    const absolute = lua.lua_absindex(state, index);
+    var content: bars.Content = .{};
+    if (lua.lua_type(state, absolute) == lua.LUA_TNIL) {
+        return content;
+    }
+    if (string(state, absolute)) |value| {
+        content.append(value, null, .{}) catch |err| {
+            diagnostic.set("invalid bar text: {s}", .{@errorName(err)});
+            return error.InvalidBarContent;
+        };
+        return content;
+    }
+    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+        diagnostic.set("bar render must return nil, text, a segment, or an array of segments", .{});
+        return error.InvalidBarContent;
+    }
+
+    _ = lua.lua_getfield(state, absolute, "text");
+    const has_text = lua.lua_type(state, -1) != lua.LUA_TNIL;
+    pop(state, 1);
+    _ = lua.lua_getfield(state, absolute, "icon");
+    const has_icon = lua.lua_type(state, -1) != lua.LUA_TNIL;
+    pop(state, 1);
+    if (has_text or has_icon) {
+        const segment = try parseBarSegment(state, absolute, diagnostic);
+        content.append(segment.text, segment.icon, segment.style) catch |err| {
+            diagnostic.set("invalid bar segment: {s}", .{@errorName(err)});
+            return error.InvalidBarContent;
+        };
+        return content;
+    }
+
+    const count = lua.lua_rawlen(state, absolute);
+    if (count > bars.max_segments) {
+        diagnostic.set("bar content exceeds {d} segments", .{bars.max_segments});
+        return error.InvalidBarContent;
+    }
+    try ensureArrayOnly(state, absolute, count, "bar content", diagnostic);
+    for (0..count) |segment_index| {
+        _ = lua.lua_geti(state, absolute, @intCast(segment_index + 1));
+        const segment = parseBarSegment(state, -1, diagnostic) catch |err| {
+            pop(state, 1);
+            return err;
+        };
+        content.append(segment.text, segment.icon, segment.style) catch |err| {
+            pop(state, 1);
+            diagnostic.set("invalid bar segment {d}: {s}", .{ segment_index + 1, @errorName(err) });
+            return error.InvalidBarContent;
+        };
+        pop(state, 1);
+    }
+
+    return content;
+}
+
+const ParsedBarSegment = struct {
+    text: []const u8,
+    icon: ?icons.Icon,
+    style: bars.Style,
+};
+
+fn parseBarSegment(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !ParsedBarSegment {
+    const absolute = lua.lua_absindex(state, index);
+    if (string(state, absolute)) |value| {
+        return .{ .text = value, .icon = null, .style = .{} };
+    }
+    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+        diagnostic.set("bar segment must be text or a table", .{});
+        return error.InvalidBarContent;
+    }
+
+    try ensureOnlyFields(
+        state,
+        absolute,
+        &.{ "text", "icon", "fg", "bg", "bold", "italic", "faint", "underline", "strikethrough" },
+        "bar segment",
+        diagnostic,
+    );
+    _ = lua.lua_getfield(state, absolute, "text");
+    const text_value = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
+        ""
+    else
+        string(state, -1) orelse {
+            pop(state, 1);
+            diagnostic.set("bar segment text must be a string", .{});
+            return error.InvalidBarContent;
+        };
+    pop(state, 1);
+
+    _ = lua.lua_getfield(state, absolute, "icon");
+    const icon_value: ?icons.Icon = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
+        null
+    else icon: {
+        const name = string(state, -1) orelse {
+            pop(state, 1);
+            diagnostic.set("bar segment icon must be a string", .{});
+            return error.InvalidBarContent;
+        };
+        break :icon parseBarIcon(name) orelse {
+            diagnostic.set("unknown bar icon '{s}'", .{name});
+            pop(state, 1);
+            return error.InvalidBarContent;
+        };
+    };
+    pop(state, 1);
+
+    var style: bars.Style = .{};
+    inline for (.{ .{ "fg", "foreground" }, .{ "bg", "background" } }) |field| {
+        _ = lua.lua_getfield(state, absolute, field[0]);
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            @field(style, field[1]) = try parseBarColor(state, -1, diagnostic);
+        }
+        pop(state, 1);
+    }
+    inline for (.{ "bold", "italic", "faint", "underline", "strikethrough" }) |field| {
+        _ = lua.lua_getfield(state, absolute, field);
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                pop(state, 1);
+                diagnostic.set("bar segment {s} must be a boolean", .{field});
+                return error.InvalidBarContent;
+            }
+            @field(style, field) = lua.lua_toboolean(state, -1) != 0;
+        }
+        pop(state, 1);
+    }
+
+    return .{ .text = text_value, .icon = icon_value, .style = style };
+}
+
+fn parseBarColor(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !bars.Color {
+    if (integer(state, index)) |value| {
+        if (value < 0 or value > 255) {
+            diagnostic.set("bar color index must be in 0..255", .{});
+            return error.InvalidBarContent;
+        }
+
+        return .{ .value = .{ .indexed = @intCast(value) } };
+    }
+
+    const name = string(state, index) orelse {
+        diagnostic.set("bar color must be a palette name, #RRGGBB, default, or an index", .{});
+        return error.InvalidBarContent;
+    };
+    if (std.ascii.eqlIgnoreCase(name, "default")) {
+        return .{ .value = .default };
+    }
+    inline for (std.meta.fields(bars.PaletteColor)) |field| {
+        if (normalizedNameEql(name, field.name)) {
+            return .{ .palette = @enumFromInt(field.value) };
+        }
+    }
+    if (name.len == 7 and name[0] == '#') {
+        const value = std.fmt.parseInt(u24, name[1..], 16) catch {
+            diagnostic.set("bar color '{s}' is not #RRGGBB", .{name});
+            return error.InvalidBarContent;
+        };
+        return .{ .value = .{ .rgb = .{
+            @intCast((value >> 16) & 0xff),
+            @intCast((value >> 8) & 0xff),
+            @intCast(value & 0xff),
+        } } };
+    }
+
+    diagnostic.set("unknown bar color '{s}'", .{name});
+    return error.InvalidBarContent;
+}
+
+fn parseBarIcon(name: []const u8) ?icons.Icon {
+    inline for (std.meta.fields(icons.Icon)) |field| {
+        if (normalizedNameEql(name, field.name)) {
+            return @enumFromInt(field.value);
+        }
+    }
+
+    return null;
+}
+
+fn normalizedNameEql(left: []const u8, right: []const u8) bool {
+    if (left.len != right.len) {
+        return false;
+    }
+    for (left, right) |left_byte, right_byte| {
+        const normalized_left = if (left_byte == '-') '_' else std.ascii.toLower(left_byte);
+        const normalized_right = if (right_byte == '-') '_' else std.ascii.toLower(right_byte);
+        if (normalized_left != normalized_right) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 fn parseTheme(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !theme_mod.Theme {
     const absolute = lua.lua_absindex(state, index);
     if (string(state, absolute)) |name| return theme_mod.fromName(name) orelse {
@@ -2112,6 +2606,50 @@ fn pushReadonlyContext(state: *lua.lua_State, context: CallbackContext) void {
     setIntegerField(state, -1, "pane_count", context.pane_count);
     setIntegerField(state, -1, "focused_pane_id", context.focused_pane_id);
 
+    freezeTable(state);
+}
+
+fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext) void {
+    lua.lua_createtable(state, 0, 9);
+    setBooleanField(state, -1, "sidebar_visible", context.client.sidebar_visible);
+    setIntegerField(state, -1, "tab_count", context.client.tab_count);
+    setIntegerField(state, -1, "active_tab_index", @as(u32, context.client.active_tab_index) + 1);
+    setIntegerField(state, -1, "pane_count", context.client.pane_count);
+    setIntegerField(state, -1, "focused_pane_id", context.client.focused_pane_id);
+
+    lua.lua_createtable(state, 0, 8);
+    setIntegerField(state, -1, "unix_seconds", context.time.unix_seconds);
+    setIntegerField(state, -1, "year", context.time.year);
+    setIntegerField(state, -1, "month", context.time.month);
+    setIntegerField(state, -1, "day", context.time.day);
+    setIntegerField(state, -1, "hour", context.time.hour);
+    setIntegerField(state, -1, "minute", context.time.minute);
+    setIntegerField(state, -1, "second", context.time.second);
+    setIntegerField(state, -1, "weekday", context.time.weekday);
+    freezeTable(state);
+    lua.lua_setfield(state, -2, "time");
+
+    lua.lua_createtable(state, 0, 4);
+    setBooleanField(state, -1, "available", context.metrics != null);
+    if (context.metrics) |metrics| {
+        setIntegerField(state, -1, "cpu_percent", metrics.cpu_percent);
+        setIntegerField(state, -1, "memory_used_decigib", metrics.memory_used_decigib);
+        if (metrics.battery_percent) |battery| {
+            setIntegerField(state, -1, "battery_percent", battery);
+        }
+    }
+    freezeTable(state);
+    lua.lua_setfield(state, -2, "metrics");
+
+    if (context.command_output) |output| {
+        _ = lua.lua_pushlstring(state, output.ptr, output.len);
+        lua.lua_setfield(state, -2, "output");
+    }
+
+    freezeTable(state);
+}
+
+fn freezeTable(state: *lua.lua_State) void {
     lua.lua_createtable(state, 0, 0);
     lua.lua_createtable(state, 0, 3);
     lua.lua_pushvalue(state, -3);
@@ -2714,6 +3252,199 @@ test "configuration environment excludes ambient authority" {
     );
     defer generation.deinit();
     try std.testing.expect(generation.snapshot.sidebar_visible);
+}
+
+test "client bars compile styled static dynamic and command sources" {
+    const source =
+        \\local telar = require("telar")
+        \\return telar.config({
+        \\  api_version = 2,
+        \\  client = { bars = {
+        \\    bottom = {
+        \\      left = telar.bar.static({
+        \\        { icon = "cpu", text = " CPU", fg = "teal", bg = "#010203", bold = true },
+        \\        { text = " 42%", fg = 7, italic = true },
+        \\      }),
+        \\      center = telar.bar.tabs(),
+        \\      right = telar.bar.command({
+        \\        command = { "quota", "--json" },
+        \\        every_ms = 60000,
+        \\        timeout_ms = 450,
+        \\        render = function(ctx)
+        \\          return {
+        \\            { text = ctx.output, fg = "accent" },
+        \\            { text = " " .. ctx.active_tab_index, underline = ctx.metrics.available },
+        \\          }
+        \\        end,
+        \\      }),
+        \\    },
+        \\    top = {
+        \\      right = telar.bar.dynamic({
+        \\        every_ms = 1000,
+        \\        render = function(ctx)
+        \\          return {
+        \\            {
+        \\              icon = "battery-full",
+        \\              text = string.format(" %04d-%02d-%02d %02d:%02d:%02d %d%%", ctx.time.year, ctx.time.month, ctx.time.day, ctx.time.hour, ctx.time.minute, ctx.time.second, ctx.metrics.battery_percent),
+        \\              fg = "text",
+        \\              faint = not ctx.metrics.available,
+        \\            },
+        \\          }
+        \\        end,
+        \\      }),
+        \\    },
+        \\  } },
+        \\})
+    ;
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        source,
+        "@config.lua",
+        8,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    const left = &generation.snapshot.bars.bottom[0].static;
+    try std.testing.expectEqual(@as(u8, 2), left.segment_count);
+    try std.testing.expectEqual(icons.Icon.cpu, left.slice()[0].icon.?);
+    try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0]));
+    try std.testing.expectEqualDeep(bars.Color{ .palette = .teal }, left.slice()[0].style.foreground.?);
+    try std.testing.expectEqualDeep(bars.Color{ .value = .{ .rgb = .{ 1, 2, 3 } } }, left.slice()[0].style.background.?);
+    try std.testing.expect(left.slice()[0].style.bold);
+    try std.testing.expectEqualDeep(bars.Color{ .value = .{ .indexed = 7 } }, left.slice()[1].style.foreground.?);
+    try std.testing.expect(left.slice()[1].style.italic);
+    try std.testing.expect(generation.snapshot.bars.bottom[1] == .tabs);
+
+    const command = &generation.snapshot.bars.bottom[2].command;
+    try std.testing.expectEqual(@as(u64, 60 * std.time.ns_per_s), command.interval_ns);
+    try std.testing.expectEqual(@as(u32, 450), command.timeout_ms);
+    try std.testing.expectEqualStrings("quota", command.argument(0).?);
+    try std.testing.expectEqualStrings("--json", command.argument(1).?);
+    try std.testing.expectEqual(@as(u64, 8), command.render.?.generation);
+
+    const context: BarCallbackContext = .{
+        .client = .{
+            .sidebar_visible = true,
+            .tab_count = 4,
+            .active_tab_index = 2,
+            .pane_count = 3,
+            .focused_pane_id = 19,
+        },
+        .time = .{
+            .unix_seconds = 1_788_278_709,
+            .year = 2026,
+            .month = 9,
+            .day = 1,
+            .hour = 13,
+            .minute = 5,
+            .second = 9,
+            .weekday = 2,
+        },
+        .metrics = .{
+            .cpu_percent = 38,
+            .memory_used_decigib = 123,
+            .battery_percent = 61,
+        },
+    };
+    const top = generation.snapshot.bars.top_right.dynamic;
+    const clock = try generation.invokeBar(.{ .reference = top.callback, .context = context }, &diagnostic);
+    try std.testing.expectEqual(@as(u64, std.time.ns_per_s), top.interval_ns);
+    try std.testing.expectEqual(@as(u8, 1), clock.segment_count);
+    try std.testing.expectEqual(icons.Icon.battery_full, clock.slice()[0].icon.?);
+    try std.testing.expectEqualStrings(" 2026-09-01 13:05:09 61%", clock.text(clock.slice()[0]));
+    try std.testing.expect(!clock.slice()[0].style.faint);
+
+    var command_context = context;
+    command_context.command_output = "74%";
+    const quota = try generation.invokeBar(.{
+        .reference = command.render.?,
+        .context = command_context,
+    }, &diagnostic);
+    try std.testing.expectEqual(@as(u8, 2), quota.segment_count);
+    try std.testing.expectEqualStrings("74%", quota.text(quota.slice()[0]));
+    try std.testing.expectEqualStrings(" 3", quota.text(quota.slice()[1]));
+    try std.testing.expect(quota.slice()[1].style.underline);
+}
+
+test "bar callback context tables are immutable" {
+    const source =
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { bars = {
+        \\  bottom = {
+        \\    left = telar.bar.dynamic({ render = function(ctx)
+        \\      ctx.time.hour = 0
+        \\      return "unreachable"
+        \\    end }),
+        \\    right = telar.bar.tabs(),
+        \\  },
+        \\} } }
+    ;
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        source,
+        "@config.lua",
+        9,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    const callback = generation.snapshot.bars.bottom[0].dynamic.callback;
+
+    try std.testing.expectError(error.LuaBarCallbackFailed, generation.invokeBar(.{
+        .reference = callback,
+        .context = .{
+            .client = .{ .sidebar_visible = true, .tab_count = 1, .active_tab_index = 0, .pane_count = 1, .focused_pane_id = 1 },
+            .time = .{ .unix_seconds = 1, .year = 2026, .month = 9, .day = 1, .hour = 12, .minute = 0, .second = 0, .weekday = 2 },
+            .metrics = null,
+        },
+    }, &diagnostic));
+    try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "immutable") != null);
+}
+
+test "client bars reject invalid positions timing and tab ownership" {
+    const cases = [_]struct { source: []const u8, message: []const u8 }{
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { bottom = { left = t.bar.metrics() } } } }",
+            .message = "exactly one telar.bar.tabs()",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { bottom = { left = t.bar.tabs(), right = t.bar.tabs() } } } }",
+            .message = "exactly one telar.bar.tabs()",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { top = { left = t.bar.static('x') } } } }",
+            .message = "unknown field config.client.bars.top.left",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { top = { right = t.bar.tabs() } } } }",
+            .message = "top.right cannot contain tabs",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { bottom = { left = t.bar.dynamic({ every_ms = 99, render = function() end }), right = t.bar.tabs() } } } }",
+            .message = "every_ms must be in 100..3600000",
+        },
+        .{
+            .source = "local t = require('telar'); return { api_version = 2, client = { bars = { bottom = { left = t.bar.command({ command = {}, timeout_ms = 99 }), right = t.bar.tabs() } } } }",
+            .message = "timeout_ms must be in 100..10000",
+        },
+    };
+
+    for (cases) |case| {
+        var diagnostic: Diagnostic = .{};
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            case.source,
+            "@config.lua",
+            1,
+            &diagnostic,
+        ));
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), case.message) != null);
+    }
 }
 
 test "runtime config compiles bounded graphics, proxy, and description values" {

@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const bars = @import("../bars/root.zig");
 const input = @import("../input/root.zig");
 const sound = @import("../sound/root.zig");
 const action = input.action;
@@ -26,6 +27,7 @@ pub const max_proxy_passthrough_host_bytes = core.proxy.max_hostname_bytes;
 pub const max_proxy_passthrough_bytes = core.proxy.max_passthrough_bytes;
 pub const max_agent_description_command_args = 32;
 pub const max_agent_description_command_bytes = 4096;
+pub const max_bar_callbacks = 64;
 pub const default_agent_description_timeout_ms: u32 = 15_000;
 pub const min_agent_description_timeout_ms: u32 = 1_000;
 pub const max_agent_description_timeout_ms: u32 = 60_000;
@@ -230,6 +232,7 @@ pub const Snapshot = struct {
     sidebar_visible: bool = true,
     pane_gaps: bool = true,
     sound: SoundConfig = .{},
+    bars: bars.Configuration = .{},
     prefix: keybind.Key = keybind.default_prefix,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
     input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
@@ -251,6 +254,35 @@ pub const CallbackContext = struct {
     active_tab_index: u16,
     pane_count: u16,
     focused_pane_id: u64,
+};
+
+pub const BarTime = struct {
+    unix_seconds: i64,
+    year: u16,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    weekday: u8,
+};
+
+pub const BarMetrics = struct {
+    cpu_percent: u8,
+    memory_used_decigib: u16,
+    battery_percent: ?u8,
+};
+
+pub const BarCallbackContext = struct {
+    client: CallbackContext,
+    time: BarTime,
+    metrics: ?BarMetrics,
+    command_output: ?[]const u8 = null,
+};
+
+pub const BarInvocation = struct {
+    reference: bars.CallbackRef,
+    context: BarCallbackContext,
 };
 
 pub const EffectBatch = struct {

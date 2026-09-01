@@ -9,6 +9,7 @@ const client_clock = @import("../resources/clock.zig");
 const agents = @import("../../agents/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const attachments = @import("../../attachments/root.zig");
+const bars = @import("../../bars/root.zig");
 const notifications = @import("../../notifications/root.zig");
 const presentation = @import("../../presentation/root.zig");
 const workspace_capability = @import("../../workspace/root.zig");
@@ -60,6 +61,7 @@ pub const Projection = struct {
     prompt: ?name_prompt.Prompt,
     proxy_tls_active: bool,
     system_metrics: ?client_model.SystemMetrics,
+    bar_state: *const bars.State,
     status_mode: widgets.status_bar.Mode,
     diagnostic: ?[]const u8,
     copy: ?multiplexer.CopyProjection,
@@ -280,6 +282,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.proxy_status;
     const system_metrics_changed = presenter.presented_model_version.system_metrics !=
         projection.version.system_metrics;
+    const bars_changed = presenter.presented_model_version.bars != projection.version.bars;
     const notifications_changed = presenter.presented_model_version.notifications !=
         projection.version.notifications;
     const tabs_changed = presenter.presented_model_version.tabs !=
@@ -317,7 +320,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     }
     if (workspace_changed or configuration_changed or diagnostic_changed or host_changed or
         workspace_list_changed or agents_changed or sidebar_animation_changed or
-        proxy_status_changed or system_metrics_changed or notifications_changed or tabs_changed or
+        proxy_status_changed or system_metrics_changed or bars_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
         prompt_changed or copy_status_changed or view_interaction_changed or input_routing_changed)
     {
@@ -512,6 +515,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .prompt = if (prompt) |*value| value else null,
         .proxy_tls_active = input.projection.proxy_tls_active,
         .system_metrics = input.projection.system_metrics,
+        .bar_state = input.projection.bar_state,
         .status_mode = input.projection.status_mode,
         .force = composed.stats.full,
         .diagnostic = input.projection.diagnostic,

@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../../agents/root.zig");
 const attachments = @import("../../attachments/root.zig");
+const bars_capability = @import("../../bars/root.zig");
 const lua_config = @import("../../config/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
@@ -52,6 +53,8 @@ pub const SidebarVisibility = model_types.SidebarVisibility;
 pub const SidebarAnimationChange = model_types.SidebarAnimationChange;
 pub const ConfigurationInput = model_types.ConfigurationInput;
 pub const ConfigurationCommit = model_types.ConfigurationCommit;
+pub const BarUpdateCommit = model_types.BarUpdateCommit;
+pub const BarUpdateInput = model_types.BarUpdateInput;
 pub const PluginExecutionId = model_types.PluginExecutionId;
 pub const PluginExecution = model_types.PluginExecution;
 pub const ClipboardCaptureId = model_types.ClipboardCaptureId;
@@ -151,6 +154,8 @@ pub const Model = struct {
     proxy_status_revision: u64 = 0,
     system_metrics: ?SystemMetrics = null,
     system_metrics_revision: u64 = 0,
+    bars: bars_capability.State = .{},
+    bars_revision: u64 = 0,
     notification_center: notifications.Center = .{},
     notifications_revision: u64 = 0,
     tabs_revision: u64 = 0,
@@ -210,6 +215,7 @@ pub const Model = struct {
         return .{
             .workspace = workspace,
             .configuration_generation = initial.configuration_generation,
+            .bars = .init(initial.bars),
             .host_size = initial.host_size,
             .host_capabilities = initial.host_capabilities,
         };
@@ -241,6 +247,7 @@ pub const Model = struct {
             .sidebar_animation = model.sidebar_animation_revision,
             .proxy_status = model.proxy_status_revision,
             .system_metrics = model.system_metrics_revision,
+            .bars = model.bars_revision,
             .notifications = model.notifications_revision,
             .tabs = model.tabs_revision,
             .active_tab = model.active_tab_revision,
@@ -639,6 +646,11 @@ pub const Model = struct {
             model.panes_revision +%= 1;
         }
 
+        const bars_changed = model.bars.replace(input.bars) == .changed;
+        if (bars_changed) {
+            model.bars_revision +%= 1;
+        }
+
         model.configuration_generation = input.generation;
         model.configuration_revision +%= 1;
 
@@ -648,6 +660,42 @@ pub const Model = struct {
             .sidebar = sidebar,
             .pane_gaps_changed = pane_gaps_changed,
             .panes_revision = model.panes_revision,
+            .bars_changed = bars_changed,
+            .bars_revision = model.bars_revision,
+        };
+    }
+
+    /// Returns the immutable configured bar presentation owned by this client.
+    ///
+    /// ```zig
+    /// const current = model.barState();
+    /// ```
+    pub fn barState(model: *const Model) *const bars_capability.State {
+        return &model.bars;
+    }
+
+    /// Commits one current-generation dynamic block without retaining Lua values.
+    ///
+    /// ```zig
+    /// _ = try model.updateBar(input);
+    /// ```
+    pub fn updateBar(model: *Model, input: BarUpdateInput) !?BarUpdateCommit {
+        if (input.generation != model.configuration_generation) {
+            return error.StaleBarUpdate;
+        }
+        if (try model.bars.update(.{
+            .generation = input.generation,
+            .position = input.position,
+            .content = input.content,
+        }) == .unchanged) {
+            return null;
+        }
+
+        model.bars_revision +%= 1;
+        return .{
+            .generation = input.generation,
+            .position = input.position,
+            .bars_revision = model.bars_revision,
         };
     }
 

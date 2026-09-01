@@ -8,6 +8,7 @@ const workspace = @import("../../../workspace/root.zig");
 
 const Client = @import("../../client.zig");
 const client_telemetry = @import("../../resources/telemetry.zig");
+const bar_updates = @import("../configuration/bar_updates.zig");
 const config_reloads = @import("../configuration/config_reloads.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
 const host_resizes = @import("../host/host_resizes.zig");
@@ -45,5 +46,6 @@ pub fn start(client: *Client, request: Request) !void {
     try runtime_transport.scheduleRead(client);
     try host_capabilities.scheduleExpiry(client);
     try client_telemetry.start(client);
+    try bar_updates.synchronize(client);
     try config_reloads.schedule(client);
 }

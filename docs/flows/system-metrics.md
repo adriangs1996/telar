@@ -1,8 +1,8 @@
 # System metrics
 
 The runtime samples the host where agents execute. Each disposable client
-stores only the latest bounded replica and presents it in the status bar. The
-view owns no second semantic copy.
+stores only the latest bounded replica and presents it through configured bar
+sources. The view owns no second semantic copy.
 
 ## End-to-end path
 
@@ -25,9 +25,9 @@ SystemMetrics + Version.system_metrics
              |
 presentation_lifecycle.observe
              |
-Presenter -> View.render(system_metrics)
+Presenter -> View.render(system_metrics, bars)
              |
-widgets.status_bar
+configured metrics source or dynamic callback context
 ```
 
 The sampler runs on the runtime metrics tick, outside the interactive path. It
@@ -38,7 +38,7 @@ values change.
 `Delivery.prepare` compares that revision with a per-client delivery cursor.
 A connected client receives the newest values, not a replay of intermediate
 samples. A host without a supported battery source sends an absent battery,
-which the status bar omits.
+which the metrics source omits.
 
 ## Client transaction
 
@@ -58,7 +58,9 @@ The protocol dispatcher never requests a draw. After event dispatch,
 `presentation_lifecycle.observe` publishes the complete model version. `Presenter`
 compares `Version.system_metrics` with the version it last painted, invalidates
 the view when it changed and passes `ClientModel.systemMetrics()` into the next
-paced frame. Several samples observed within one frame interval fold into one
+paced frame. `telar.bar.metrics()` renders that value in any permitted slot;
+dynamic and command render callbacks receive the same snapshot under
+`ctx.metrics`. Several samples observed within one frame interval fold into one
 render of the latest values.
 
 `View` converts that immutable render input into the status-bar presentation

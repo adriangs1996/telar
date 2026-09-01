@@ -55,10 +55,10 @@ Neither the use case nor the adapter requests a frame. After the input event,
 chrome revision, idempotently synchronizes the view projection, invalidates it and
 folds composition into the paced frame loop.
 
-Hiding the sidebar expands the workbench and showing it contracts the
-workbench when the host is wide enough. Narrow hosts may preserve the same
-effective rectangle while still retaining the requested visibility for a
-later resize.
+Hiding the sidebar expands the workbench and both bars. Showing it gives the
+sidebar the complete left column, so the workbench, top bar and bottom bar
+share the remaining width. Narrow hosts may preserve the same effective
+rectangles while still retaining the requested visibility for a later resize.
 
 ## Failure and recovery
 

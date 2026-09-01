@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const bars = @import("../../bars/root.zig");
 const agents = @import("../../agents/root.zig");
 const attachments = @import("../../attachments/root.zig");
 const notifications = @import("../../notifications/root.zig");
@@ -27,6 +28,7 @@ const schema = core.schema;
 const empty_agent_snapshot: agents.Snapshot = .{};
 const empty_notifications: notifications.Center = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
+const default_bars_state: bars.State = .{};
 const view_interaction = input_application.view_interaction;
 
 pub const sidebar_width = widgets.layout.sidebar_width;
@@ -57,6 +59,7 @@ pub const RenderInput = struct {
     proxy_tls_active: bool = false,
     system_metrics: ?client_model.SystemMetrics = null,
     status_mode: widgets.status_bar.Mode = .normal,
+    bar_state: *const bars.State = &default_bars_state,
     force: bool = false,
     diagnostic: ?[]const u8 = null,
 };
@@ -474,21 +477,17 @@ pub const State = struct {
     /// the message survives until the next successful reload.
     fn renderDiagnosticBanner(state: *State, screen: *term.Screen, diagnostic: ?[]const u8) void {
         const message = diagnostic orelse return;
-        if (screen.back.h == 0) return;
+        const banner = state.regions.bottom;
+        if (banner.isEmpty()) return;
         const colors = state.palette();
-        const banner: ui.Rect = .{
-            .y = screen.back.h - 1,
-            .w = screen.back.w,
-            .h = 1,
-        };
         const style: ui.Style = .{
             .fg = colors.text,
             .bg = colors.red,
             .flags = .{ .bold = true },
         };
         screen.back.fill(banner, " ", style);
-        const prefix_width = screen.back.writeText(banner, 0, banner.y, "TELAR CONFIG  ", style);
-        _ = screen.back.writeText(banner, prefix_width, banner.y, message, style);
+        const prefix_width = screen.back.writeText(banner, banner.x, banner.y, "TELAR CONFIG  ", style);
+        _ = screen.back.writeText(banner, banner.x + prefix_width, banner.y, message, style);
     }
 
     pub fn render(state: *State, screen: *term.Screen, input: RenderInput) !RenderStats {
@@ -546,6 +545,7 @@ pub const State = struct {
             .status_mode = input.status_mode,
             .workspaces = input.workspaces,
             .workspace_list_collapsed = state.workspace_list_collapsed,
+            .bar_state = input.bar_state,
         });
         const attachment_snapshot = state.attachment_store.snapshot();
         var attachment_plan = widgets.attachment_preview.renderShelf(
@@ -709,10 +709,10 @@ fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingCompo
 
 test "visible regions reserve top bottom sidebar and workbench" {
     const regions = Regions.calculate(120, 40, true);
-    try std.testing.expectEqual(ui.Rect{ .w = 120, .h = 1 }, regions.top);
-    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 1, .w = 62, .h = 38 }, regions.sidebar);
+    try std.testing.expectEqual(ui.Rect{ .x = 62, .w = 58, .h = 1 }, regions.top);
+    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 62, .h = 40 }, regions.sidebar);
     try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 1, .w = 58, .h = 38 }, regions.workbench);
-    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 39, .w = 120, .h = 1 }, regions.bottom);
+    try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 39, .w = 58, .h = 1 }, regions.bottom);
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {
@@ -726,9 +726,15 @@ test "sidebar toggle changes only the disposable client layout" {
     var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     try std.testing.expectEqual(@as(u16, sidebar_width), state.regions.sidebar.w);
+    try std.testing.expectEqual(ui.Rect{ .x = 62, .w = 38, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 29, .w = 38, .h = 1 }, state.regions.bottom);
+
     state.toggleSidebar();
+
     try std.testing.expectEqual(@as(u16, 0), state.regions.sidebar.w);
     try std.testing.expectEqual(@as(u16, 100), state.regions.workbench.w);
+    try std.testing.expectEqual(ui.Rect{ .w = 100, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
 }
 
 test "empty production sidebar has no task controls" {
@@ -1205,10 +1211,44 @@ test "client chrome uses Vesper by default" {
         .force = true,
     });
 
-    try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[0].style.bg);
-    try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[0].style.fg);
-    try std.testing.expect(!screen.back.cells[0].style.flags.inverse);
+    const top_start = state.regions.top.x;
+    try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[top_start].style.bg);
+    try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[top_start].style.fg);
+    try std.testing.expect(!screen.back.cells[top_start].style.flags.inverse);
     try std.testing.expectEqual(theme_mod.Builtin.vesper, state.theme.base);
+}
+
+test "configuration diagnostics stay inside the bottom bar" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 80, 24);
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    var screen = try term.Screen.init(gpa, 80, 24);
+    defer screen.deinit();
+
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .force = true,
+        .diagnostic = "invalid config",
+    });
+
+    const contracted = state.regions.bottom;
+    try std.testing.expect(contracted.x > 0);
+    try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.at(0, contracted.y).?.style.bg);
+    try std.testing.expectEqualDeep(state.palette().red, screen.back.at(contracted.x, contracted.y).?.style.bg);
+    try std.testing.expectEqualStrings("T", screen.back.at(contracted.x, contracted.y).?.text());
+
+    state.toggleSidebar();
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .diagnostic = "invalid config",
+    });
+
+    const expanded = state.regions.bottom;
+    try std.testing.expectEqual(@as(u16, 0), expanded.x);
+    try std.testing.expectEqualDeep(state.palette().red, screen.back.at(0, expanded.y).?.style.bg);
+    try std.testing.expectEqualStrings("T", screen.back.at(0, expanded.y).?.text());
 }
 
 test "terminal theme leaves client chrome backgrounds to the host terminal" {
@@ -1239,8 +1279,7 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     });
 
     try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[0].style.bg);
-    // The bottom-left corner is the status region, which stays on the host
-    // terminal's background; the bottom-right corner now holds the active tab.
+    // The sidebar column stays on the host terminal's background.
     try std.testing.expectEqualDeep(
         ui.Color.default,
         screen.back.cells[@as(usize, 23) * 80].style.bg,
@@ -1415,7 +1454,11 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     });
 
     const sidebar_requested = state.sidebar_requested;
-    const sidebar_toggle = state.handleMouse(.{ .x = 0, .y = 0, .kind = .press });
+    const sidebar_toggle = state.handleMouse(.{
+        .x = state.regions.top.x,
+        .y = 0,
+        .kind = .press,
+    });
     try std.testing.expect(sidebar_toggle.intent == .toggle_sidebar);
     try std.testing.expectEqual(sidebar_requested, state.sidebar_requested);
 

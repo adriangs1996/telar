@@ -51,7 +51,8 @@ physical result into an application resolution without deciding its effects.
 ## Model transaction
 
 `ClientModel` stores the active configuration generation. It accepts only a
-newer generation and commits sidebar visibility and pane gaps in the same
+newer generation and commits sidebar visibility, pane gaps and the typed bar
+layout in the same
 infallible transition. Every accepted generation advances
 `Version.configuration`. A changed sidebar also advances `Version.chrome`; a
 changed pane-gap preference updates every current tab and advances
@@ -88,7 +89,10 @@ That callback replaces sound policy through `sound.Playback.configure`, marks
 the adoption consumed and destroys the previous owned objects. It is
 infallible, so any later failure cannot leave the new semantic generation
 without its concrete owners. The client event loop cannot interleave another
-event during this synchronous operation.
+event during this synchronous operation. When the bar layout changed, the next
+stage replaces its tick deadlines against the newly owned generation. A
+failure to arm that scheduler retains the committed generation and layout;
+stale command completions still fail their generation check.
 
 Theme, icon and sidebar resources are updated after the ownership swap. CLI
 theme and sidebar-renderer locks still override reloaded values. A sidebar or

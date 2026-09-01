@@ -9,6 +9,7 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const graphics = @import("../graphics/root.zig");
 const attachments = @import("../attachments/root.zig");
+const bars_capability = @import("../bars/root.zig");
 const client_telemetry = @import("resources/telemetry.zig");
 const client_view = @import("presentation/view.zig");
 const client_model = @import("model/root.zig");
@@ -48,6 +49,7 @@ pub const Options = struct {
     sidebar_visible: bool = true,
     pane_gaps: bool = true,
     sound: lua_config.SoundConfig = .{},
+    bars: bars_capability.Layout = .{},
     host_shared_memory: bool = false,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
     input_sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
@@ -63,6 +65,7 @@ pub const Options = struct {
 };
 
 const clipboard_images = @import("controllers/host/clipboard_images.zig");
+const bar_updates_controller = @import("controllers/configuration/bar_updates.zig");
 const config_reload = @import("resources/config_reload.zig");
 const host_inputs = @import("controllers/input/host_inputs.zig");
 const notification_timers = @import("resources/notification_timers.zig");
@@ -84,6 +87,8 @@ pub const ClientEvent = union(enum) {
     media_tick: anyerror!void,
     sidebar_animation_tick: anyerror!void,
     notification_tick: anyerror!void,
+    bar_tick: anyerror!void,
+    bar_command: bar_updates_controller.Completion,
     sound_played: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
@@ -136,6 +141,7 @@ clipboard_capture_resources: attachments.CaptureResources = .{},
 request_lifecycle: request_lifecycle_mod.State = .{},
 sidebar_animation_scheduler: sidebar_animations.Scheduler = .{},
 notification_scheduler: notification_timers.Scheduler = .{},
+bar_updates: bar_updates_controller.State = .{},
 
 const Client = @This();
 
@@ -179,6 +185,7 @@ pub fn init(params: Params) !*Client {
     var model = client_model.Model.initWithState(gpa, .{
         .pane_gaps = params.options.pane_gaps,
         .configuration_generation = configuration_generation,
+        .bars = params.options.bars,
         .host_size = host_size,
         .host_capabilities = capabilities,
     });

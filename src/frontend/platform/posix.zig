@@ -4,7 +4,37 @@ const Io = std.Io;
 const File = Io.File;
 
 const Size = @import("types.zig").Size;
+const LocalTime = @import("types.zig").LocalTime;
 const leave_sequence = @import("sequences.zig").leave;
+const time = @cImport({
+    @cInclude("time.h");
+});
+
+pub fn localTime() LocalTime {
+    var seconds: time.time_t = 0;
+    if (time.time(&seconds) == -1) {
+        return fallbackLocalTime();
+    }
+
+    var local: time.struct_tm = undefined;
+    if (time.localtime_r(&seconds, &local) == null) {
+        return fallbackLocalTime();
+    }
+
+    return .{
+        .year = @intCast(local.tm_year + 1900),
+        .month = @intCast(local.tm_mon + 1),
+        .day = @intCast(local.tm_mday),
+        .hour = @intCast(local.tm_hour),
+        .minute = @intCast(local.tm_min),
+        .second = @intCast(local.tm_sec),
+        .weekday = @intCast(local.tm_wday),
+    };
+}
+
+fn fallbackLocalTime() LocalTime {
+    return .{ .year = 1970, .month = 1, .day = 1, .hour = 0, .minute = 0, .second = 0, .weekday = 4 };
+}
 
 // Unix: termios for the mode, an ioctl for the size, SIGWINCH for the change.
 

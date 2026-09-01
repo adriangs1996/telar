@@ -4,6 +4,7 @@ const std = @import("std");
 const configuration_application = @import("../../application/configuration/root.zig");
 const client_model = @import("../../model/root.zig");
 const notifications = @import("../../../notifications/root.zig");
+const bar_updates = @import("bar_updates.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
@@ -96,6 +97,7 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
         .effects = .{
             .context = &context,
             .adopt_resources = adoptResources,
+            .synchronize_bars = synchronizeBars,
             .project_appearance = projectAppearance,
             .configure_sidebar = configureSidebar,
             .apply_sidebar = applySidebar,
@@ -109,6 +111,7 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
             .generation = adoption.generation.number,
             .sidebar_visible = snapshot.sidebar_visible,
             .pane_gaps = snapshot.pane_gaps,
+            .bars = snapshot.bars.presentation(),
         },
         .theme_locked = client.options.theme_locked,
     });
@@ -169,6 +172,12 @@ fn projectAppearance(raw_context: *anyopaque, apply_theme: bool) void {
         context.client.view.setTheme(snapshot.theme);
     }
     context.client.view.setIconTheme(snapshot.icon_theme);
+}
+
+fn synchronizeBars(raw_context: *anyopaque) !void {
+    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
+
+    try bar_updates.synchronize(context.client);
 }
 
 fn configureSidebar(raw_context: *anyopaque) !void {

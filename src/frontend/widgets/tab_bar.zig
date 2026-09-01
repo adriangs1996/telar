@@ -7,6 +7,7 @@ const multiplexer = workspace.multiplexer;
 const tabs_mod = workspace.tabs;
 const widget = @import("context.zig");
 const ui = @import("../ui/root.zig");
+const bars = @import("../bars/root.zig");
 
 const schema = core.schema;
 
@@ -14,6 +15,7 @@ pub const Input = struct {
     area: ui.Rect,
     tabs: ?*const tabs_mod.Model,
     model: *const multiplexer.Model,
+    alignment: bars.Alignment = .right,
 };
 
 pub fn render(context: *widget.Context, input: Input) void {
@@ -44,7 +46,11 @@ pub fn render(context: *widget.Context, input: Input) void {
             total += @min(width, input.area.w -| total);
             if (total == input.area.w) break;
         }
-        var x = input.area.x + input.area.w - total;
+        var x = switch (input.alignment) {
+            .left => input.area.x,
+            .center => input.area.x + (input.area.w - total) / 2,
+            .right => input.area.x + input.area.w - total,
+        };
         for (collection.items[first_visible..collection.count], first_visible..) |slot, index| {
             const tab = slot.?;
             var tab_buffer: [schema.max_tab_label_bytes + 16]u8 = undefined;
@@ -82,7 +88,11 @@ pub fn render(context: *widget.Context, input: Input) void {
             schema.id.raw(location.tab_id),
         }) catch " tab ";
         const width = @min(ui.measure(label), input.area.w);
-        const x = input.area.x + input.area.w - width;
+        const x = switch (input.alignment) {
+            .left => input.area.x,
+            .center => input.area.x + (input.area.w - width) / 2,
+            .right => input.area.x + input.area.w - width,
+        };
         const rect: ui.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
         _ = context.buffer.writeTruncated(rect, x, input.area.y, label, width, .{
             .fg = context.palette.surface_dim,
@@ -90,6 +100,22 @@ pub fn render(context: *widget.Context, input: Input) void {
             .flags = .{ .bold = true },
         });
     }
+}
+
+pub fn desiredWidth(input: Input) u16 {
+    if (input.tabs) |collection| {
+        var total: u16 = 0;
+        for (collection.items[0..collection.count], 0..) |slot, index| {
+            total +|= displayWidth(slot.?.labelSlice(), index, std.math.maxInt(u16));
+        }
+
+        return total;
+    }
+    if (input.model.location) |_| {
+        return 32;
+    }
+
+    return 0;
 }
 
 pub fn barStyle(context: *const widget.Context) ui.Style {
