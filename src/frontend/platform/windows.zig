@@ -67,6 +67,7 @@ extern "kernel32" fn GetConsoleScreenBufferInfo(
     lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO,
 ) callconv(.winapi) BOOL;
 extern "kernel32" fn GetLocalTime(system_time: *SYSTEMTIME) callconv(.winapi) void;
+extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?windows.HWND;
 
 pub fn localTime() LocalTime {
     var value: SYSTEMTIME = undefined;
@@ -159,6 +160,24 @@ pub const Tty = struct {
 
     pub fn readHandle(t: *const Tty) File {
         return .{ .handle = t.input, .flags = .{ .nonblocking = false } };
+    }
+
+    /// Returns a reconnect-stable console identity when no emulator session
+    /// identifier is available in the environment.
+    ///
+    /// ```zig
+    /// const identity = try tty.identity();
+    /// ```
+    pub fn identity(t: *const Tty) !u64 {
+        const raw = if (GetConsoleWindow()) |window|
+            @intFromPtr(window)
+        else
+            @intFromPtr(t.output);
+        if (raw == 0) {
+            return error.TerminalIdentityUnavailable;
+        }
+
+        return @intCast(raw);
     }
 };
 

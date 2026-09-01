@@ -34,6 +34,7 @@ return telar.config({
     input = { escape_timeout_ms = 25, sequence_timeout_ms = 1000 },
     keybindings = {
       telar.bind({ "s" }, telar.action.toggle_sidebar()),
+      telar.bind({ "alt+left" }, telar.action.resize_sidebar({ direction = "left" })),
       telar.bind({ "shift+left" }, telar.action.resize_pane({ direction = "left" })),
       telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
       telar.bind_global({ "ctrl+shift+s" }, telar.action.detach()),
@@ -273,7 +274,7 @@ global sequences; prefixed sequences do not expire.
 
 `telar.bind` and `telar.bind_global` accept a semantic built-in action, a
 constructor such as `split_pane`, `focus_pane`, `select_tab`,
-`resize_pane`, `select_tab_offset`, `move_tab`, or `plugin`, or a Lua callback. The
+`resize_pane`, `resize_sidebar`, `select_tab_offset`, `move_tab`, or `plugin`, or a Lua callback. The
 `telar.bind_expr` variants require a Lua callback. Built-in action names are
 stable configuration API; Lua never emits terminal bytes or calls internal Zig
 state.
@@ -283,6 +284,13 @@ state.
 5%. Telar refuses a resize that would leave any pane without a content cell.
 The default bindings are `prefix`, then `shift+left`, `shift+right`, `shift+up`,
 or `shift+down`.
+
+`telar.action.resize_sidebar({ direction = ... })` accepts `"left"` to narrow
+the sidebar and `"right"` to widen it, two columns per invocation. The default
+bindings are `prefix`, then `alt+left` or `alt+right`. Dragging the sidebar's
+rightmost column selects an exact width. Telar always reserves at least 42
+columns for the sidebar and 20 for the workbench; a narrower host temporarily
+hides or clamps the sidebar without discarding its preferred width.
 
 `telar.action.copy_mode()` enters the focused pane's scrollback. Its default
 binding is `prefix`, then `[`. In copy mode, the mouse wheel scrolls three rows
@@ -310,8 +318,9 @@ another pane while fullscreen is active. The default binding is `prefix`, then
 `telar.action.toggle_workspace_list()` collapses the top bar's list of open
 workspaces to the active one plus a `+N` counter, and expands it again.
 Clicking the `❖` marker or the counter does the same; clicking a workspace
-name switches to it. The collapse state is client-only and is lost when the
-client exits. The default binding is `prefix`, then `w`.
+name switches to it. The collapse state belongs to the client layout, and the
+runtime retains it for the same terminal while the server is alive. The default
+binding is `prefix`, then `w`.
 
 `telar.action.notification(options)` publishes a toast through the runtime.
 It accepts a required `title`, optional `body`, `level` (`info`, `success`,

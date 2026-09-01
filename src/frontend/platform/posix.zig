@@ -9,6 +9,9 @@ const leave_sequence = @import("sequences.zig").leave;
 const time = @cImport({
     @cInclude("time.h");
 });
+const unistd = @cImport({
+    @cInclude("unistd.h");
+});
 
 pub fn localTime() LocalTime {
     var seconds: time.time_t = 0;
@@ -111,7 +114,30 @@ pub const Tty = struct {
     pub fn readHandle(t: *const Tty) File {
         return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
     }
+
+    /// Hashes the controlling terminal device into a reconnect-stable key.
+    ///
+    /// ```zig
+    /// const identity = try tty.identity();
+    /// ```
+    pub fn identity(t: *const Tty) !u64 {
+        var path: [std.fs.max_path_bytes]u8 = undefined;
+        if (unistd.ttyname_r(t.fd, &path, path.len) != 0) {
+            return error.TerminalIdentityUnavailable;
+        }
+
+        const name = std.mem.sliceTo(&path, 0);
+        if (name.len == 0) {
+            return error.TerminalIdentityUnavailable;
+        }
+
+        return nonzeroHash(name);
+    }
 };
+
+fn nonzeroHash(bytes: []const u8) u64 {
+    return std.hash.Wyhash.hash(0x74656c61722d7474, bytes) | 1;
+}
 
 /// What the fatal-signal handler needs to put the terminal back, captured
 /// when the client installs it. A panic does not run `defer`s - it aborts -

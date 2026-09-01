@@ -13,6 +13,7 @@ const schema = core.schema;
 
 pub const Action = union(enum) {
     toggle_sidebar,
+    resize_sidebar,
     focus_pane: schema.PaneId,
     select_tab: schema.TabId,
     active_workspace,

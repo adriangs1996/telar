@@ -1633,6 +1633,19 @@ pub const Generation = struct {
             else
                 .{ .resize_pane = parsed_direction };
         }
+        if (std.mem.eql(u8, kind, "resize-sidebar")) {
+            try ensureOnlyFields(state, absolute, &.{ "kind", "direction" }, "action", diagnostic);
+            const direction = try requiredStringField(state, absolute, "direction", diagnostic);
+            if (std.mem.eql(u8, direction, "left")) {
+                return .{ .resize_sidebar = .left };
+            }
+            if (std.mem.eql(u8, direction, "right")) {
+                return .{ .resize_sidebar = .right };
+            }
+
+            diagnostic.set("resize-sidebar direction must be left or right", .{});
+            return error.InvalidConfig;
+        }
         if (std.mem.eql(u8, kind, "select-tab")) {
             try ensureOnlyFields(state, absolute, &.{ "kind", "index" }, "action", diagnostic);
             const one_based = try requiredIntegerField(state, absolute, "index", diagnostic);
@@ -1876,6 +1889,9 @@ const bootstrap =
     \\end
     \\function telar.action.resize_pane(options)
     \\  return { kind = "resize-pane", direction = options.direction }
+    \\end
+    \\function telar.action.resize_sidebar(options)
+    \\  return { kind = "resize-sidebar", direction = options.direction }
     \\end
     \\function telar.action.select_tab(options)
     \\  return { kind = "select-tab", index = options.index }
@@ -2844,6 +2860,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\    telar.bind_global({ "ctrl+g" }, telar.action.detach()),
         \\    telar.bind({ "R" }, telar.action.resize_pane({ direction = "right" })),
         \\    telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
+        \\    telar.bind({ "S" }, telar.action.resize_sidebar({ direction = "left" })),
         \\  },
         \\}
         \\return config
@@ -2858,7 +2875,7 @@ test "client config compiles theme, bindings, and callbacks" {
         &diagnostic,
     );
     defer generation.deinit();
-    try std.testing.expectEqual(@as(u16, 5), generation.snapshot.binding_count);
+    try std.testing.expectEqual(@as(u16, 6), generation.snapshot.binding_count);
     try std.testing.expectEqual(@as(u16, 1), generation.callback_count);
     try std.testing.expect(!generation.snapshot.sidebar_visible);
     try std.testing.expect(!generation.snapshot.pane_gaps);
@@ -2898,6 +2915,10 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expectEqual(
         action_mod.Action.toggle_pane_fullscreen,
         generation.snapshot.bindings[4].action,
+    );
+    try std.testing.expectEqualDeep(
+        action_mod.Action{ .resize_sidebar = .left },
+        generation.snapshot.bindings[5].action,
     );
 }
 

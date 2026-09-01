@@ -65,8 +65,9 @@ schedules the paced frame that changes the visible composition.
 
 The fullscreen flag commits before graphics and resize effects. A local effect
 failure reaches the client loop with that flag preserved. Client shutdown does
-not stop runtime panes or PTYs. Reconnect builds fresh disposable layout and
-graphics state from runtime snapshots.
+not stop runtime panes or PTYs. Reconnect restores the retained fullscreen and
+split layout when pane membership still matches runtime authority; otherwise it
+falls back to canonical pane order. Graphics state is always rebuilt.
 
 A runtime geometry rejection leaves PTY size unchanged and increments runtime
 telemetry. The client does not roll back an unacknowledged resize.

@@ -145,7 +145,7 @@ pub const RuntimeConnector = struct {
             .argv = argv[0..argc],
             .stdin = .ignore,
             .stdout = .ignore,
-            .stderr = .ignore,
+            .stderr = .inherit,
         });
         const result = try launcher.wait(connector.process.io);
         switch (result) {

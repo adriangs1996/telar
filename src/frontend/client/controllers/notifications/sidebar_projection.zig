@@ -7,7 +7,7 @@ const pane_geometry = @import("../panes/pane_geometry.zig");
 
 const Client = @import("../../client.zig");
 const multiplexer = workspace_capability.multiplexer;
-const sidebar_visibility_delivery = notifications_application.sidebar_visibility_delivery;
+const sidebar_layout_delivery = notifications_application.sidebar_layout_delivery;
 
 /// Applies one exact model commit to the view, physical graphics placements
 /// and attached runtime pane geometry.
@@ -15,8 +15,8 @@ const sidebar_visibility_delivery = notifications_application.sidebar_visibility
 /// ```zig
 /// try apply(client, change);
 /// ```
-pub fn apply(client: *Client, change: client_model.SidebarVisibility) !void {
-    const delivery_handler: sidebar_visibility_delivery.DeliverSidebarVisibilityHandler = .{
+pub fn apply(client: *Client, change: client_model.SidebarLayout) !void {
+    const delivery_handler: sidebar_layout_delivery.DeliverSidebarLayoutHandler = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -29,10 +29,10 @@ pub fn apply(client: *Client, change: client_model.SidebarVisibility) !void {
     try delivery_handler.execute(change);
 }
 
-fn projectView(context: *anyopaque, visible: bool) void {
+fn projectView(context: *anyopaque, visible: bool, width: u16) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    client.view.setSidebarVisible(visible);
+    client.view.setSidebarLayout(visible, width);
 }
 
 fn invalidateGraphicsPlacements(context: *anyopaque) void {

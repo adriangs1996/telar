@@ -73,6 +73,7 @@ pub const RootTab = struct {
 const PendingLayoutRestore = struct {
     location: schema.TabLocation,
     layout: layout_mod.Layout,
+    restore_saved_focus: bool = false,
 };
 
 pub const Tab = struct {
@@ -212,6 +213,24 @@ pub const Model = struct {
         return true;
     }
 
+    /// Stages a server-retained client tree including its saved pane focus.
+    ///
+    /// ```zig
+    /// _ = model.restoreClientLayoutOnNextSnapshot(location, saved);
+    /// ```
+    pub fn restoreClientLayoutOnNextSnapshot(model: *Model, location: schema.TabLocation, saved: layout_mod.Layout) bool {
+        if (model.find(location.tab_id) == null) {
+            return false;
+        }
+
+        model.pending_layout_restore = .{
+            .location = location,
+            .layout = saved,
+            .restore_saved_focus = true,
+        };
+        return true;
+    }
+
     /// Iterates the open tabs in order without exposing the slot array.
     pub const TabIterator = struct {
         items: []?Tab,
@@ -334,7 +353,11 @@ pub const Model = struct {
         if (focus_after) |pane_id| {
             const restored_layout = if (model.pending_layout_restore) |pending|
                 std.meta.eql(pending.location, snapshot.location) and
-                    tab.model.restoreSavedLayout(pending.layout, snapshot.panes, pane_id)
+                    tab.model.restoreSavedLayout(
+                        pending.layout,
+                        snapshot.panes,
+                        if (pending.restore_saved_focus) pending.layout.focused() orelse pane_id else pane_id,
+                    )
             else
                 false;
             if (model.pending_layout_restore) |pending| {
@@ -1125,6 +1148,32 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     for ([_]schema.PaneId{ left, top_right, bottom_right }) |pane_id|
         try std.testing.expectEqual(expected.find(pane_id).?.outer, actual.find(pane_id).?.outer);
     try std.testing.expectEqual(top_right, restored.model.layout.focused().?);
+}
+
+test "client layout reconciliation restores its saved pane focus" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(2),
+    };
+    const left: schema.PaneId = @enumFromInt(10);
+    const right: schema.PaneId = @enumFromInt(42);
+    var saved: layout_mod.Layout = .{};
+    try saved.addRoot(left);
+    try saved.split(left, right, .horizontal);
+    try std.testing.expect(saved.focusPane(left));
+
+    try model.bootstrap(right, location, .{ .cols = 30, .rows = 8 });
+    try std.testing.expect(model.restoreClientLayoutOnNextSnapshot(location, saved));
+    const snapshot: PaneSnapshot = .{
+        .location = location,
+        .panes = &.{ left, right },
+    };
+
+    const restored = try model.reconcileTab(snapshot, .{ .w = 60, .h = 20 });
+
+    try std.testing.expectEqual(left, restored.model.layout.focused().?);
 }
 
 test "tab reconciliation rejects a bookmarked tree for a changed pane set" {

@@ -10,6 +10,7 @@ const Client = @import("../client.zig");
 const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 const agent_snapshots = @import("../controllers/agents/agent_snapshots.zig");
 const notifications = @import("../controllers/notifications/notifications.zig");
+const client_layouts = @import("../controllers/session/client_layouts.zig");
 const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
 const pane_closures = @import("../controllers/panes/pane_closures.zig");
 const pane_frames = @import("../controllers/panes/pane_frames.zig");
@@ -50,6 +51,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .notification => |notification| _ = try notifications.applyRuntime(client, notification),
         .notification_shown => |shown| _ = try notifications.applyDeliveryReport(client, shown),
         .agent_sound => |sound| _ = try agent_sounds.apply(client, sound),
+        .client_layout_snapshot => |snapshot| try client_layouts.apply(client, snapshot),
         .resync_required => |required| {
             if (try resync_requirements.apply(client, required) == .exit) {
                 return 0;

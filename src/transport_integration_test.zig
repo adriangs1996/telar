@@ -369,7 +369,9 @@ test "invalid launch cwd fails before workspace commit" {
         else => {},
     };
 
-    try connection.send(io, try schema.encodeRequestRuntimeState(&send_buffer));
+    try connection.send(io, try schema.encodeRequestRuntimeState(&send_buffer, .{
+        .client_identity = @enumFromInt(1),
+    }));
     while (true) switch (try schema.decodeServer(try connection.receive(io, &receive_buffer))) {
         .workspace_list => |list| {
             var entries = list.entries();
@@ -1563,6 +1565,134 @@ test "runtime owns the complete tab lifecycle" {
             try std.testing.expect(closed.previous_workspace == null);
             break;
         },
+        .request_failed => return error.RuntimeRequestFailed,
+        else => {},
+    };
+}
+
+test "runtime retains a terminal layout across client reconnection" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const schema = core.schema;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    const directory = directory_buffer[0..directory_len];
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/client-layout.sock", .{directory});
+
+    var stop_storage: [1]u8 = undefined;
+    var stop: std.Io.Queue(u8) = .init(&stop_storage);
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
+        .environment = std.testing.environ,
+        .stop = &stop,
+    } });
+    defer {
+        stop.putOneUncancelable(io, 0) catch {};
+        _ = server.await(io) catch {};
+    }
+
+    var send_buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    var receive_buffer: [4096]u8 = undefined;
+    const arguments = [_][]const u8{ "/bin/sleep", "600" };
+    const identity: schema.ClientIdentity = @enumFromInt(77);
+    var opened: schema.PaneOpened = undefined;
+    {
+        var first = try connectRuntimeForTest(io, path);
+        defer first.deinit(io);
+        try first.send(io, try schema.encodeOpenPane(&send_buffer, .{
+            .request_id = @enumFromInt(1),
+            .size = .{ .cols = 40, .rows = 8 },
+            .launch = .{ .cwd = directory, .arguments = &arguments },
+        }));
+        opened = while (true) switch (try schema.decodeServer(try first.receive(io, &receive_buffer))) {
+            .pane_opened => |value| break value,
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        };
+
+        try first.send(io, try schema.encodeRequestRuntimeState(&send_buffer, .{
+            .client_identity = identity,
+        }));
+        while (true) switch (try schema.decodeServer(try first.receive(io, &receive_buffer))) {
+            .client_layout_snapshot => |snapshot| {
+                try std.testing.expect(!snapshot.restored);
+                break;
+            },
+            .pane_frame => |frame| try first.send(io, try schema.encodeFrameAck(&send_buffer, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            })),
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        };
+
+        const nodes = [_]schema.ClientLayoutNode{.{ .pane = opened.pane_id }};
+        const tabs = [_]schema.ClientTabLayout{.{
+            .location = opened.location,
+            .focused_pane = opened.pane_id,
+            .fullscreen = false,
+            .workspace_active = true,
+            .nodes = &nodes,
+        }};
+        try first.send(io, try schema.encodeClientLayoutUpdate(&send_buffer, .{
+            .sidebar_visible = true,
+            .sidebar_width = 73,
+            .workspace_list_collapsed = true,
+            .active_tab = opened.location,
+            .tabs = &tabs,
+        }));
+        try first.send(io, try schema.encodeRequestTabSnapshot(&send_buffer, .{
+            .request_id = @enumFromInt(2),
+            .location = opened.location,
+        }));
+        while (true) switch (try schema.decodeServer(try first.receive(io, &receive_buffer))) {
+            .tab_snapshot => |snapshot| {
+                try std.testing.expectEqual(@as(u16, 1), snapshot.pane_count);
+                break;
+            },
+            .pane_frame => |frame| try first.send(io, try schema.encodeFrameAck(&send_buffer, .{
+                .pane_id = frame.pane_id,
+                .frame_id = frame.frame_id,
+            })),
+            .request_failed => return error.RuntimeRequestFailed,
+            else => {},
+        };
+    }
+
+    var second = try connectRuntimeForTest(io, path);
+    defer second.deinit(io);
+    try second.send(io, try schema.encodeRequestRuntimeState(&send_buffer, .{
+        .client_identity = identity,
+    }));
+    while (true) switch (try schema.decodeServer(try second.receive(io, &receive_buffer))) {
+        .client_layout_snapshot => |snapshot| {
+            try std.testing.expect(snapshot.restored);
+            try std.testing.expect(snapshot.sidebar_visible);
+            try std.testing.expectEqual(@as(u16, 73), snapshot.sidebar_width);
+            try std.testing.expect(snapshot.workspace_list_collapsed);
+            try std.testing.expectEqualDeep(opened.location, snapshot.active_tab.?);
+            try std.testing.expectEqual(@as(u16, 1), snapshot.tab_count);
+            var tabs = snapshot.tabs();
+            const tab = (try tabs.next()).?;
+            try std.testing.expectEqualDeep(opened.location, tab.location);
+            try std.testing.expectEqual(opened.pane_id, tab.focused_pane);
+            try std.testing.expect(tab.workspace_active);
+            var nodes = tab.nodes();
+            const node = (try nodes.next()).?;
+            try std.testing.expect(node == .pane);
+            try std.testing.expectEqual(opened.pane_id, node.pane);
+            try std.testing.expect(try nodes.next() == null);
+            try std.testing.expect(try tabs.next() == null);
+            break;
+        },
+        .pane_frame => |frame| try second.send(io, try schema.encodeFrameAck(&send_buffer, .{
+            .pane_id = frame.pane_id,
+            .frame_id = frame.frame_id,
+        })),
         .request_failed => return error.RuntimeRequestFailed,
         else => {},
     };

@@ -21,6 +21,7 @@ pub const PluginAction = struct {
 
 pub const SplitDirection = enum(u8) { horizontal, vertical };
 pub const Direction = enum(u8) { left, right, up, down };
+pub const SidebarDirection = enum(u8) { left, right };
 pub const TabMove = enum(u8) { previous, next };
 
 pub const Notification = struct {
@@ -83,6 +84,7 @@ pub const Action = union(enum) {
     resize_pane: Direction,
     toggle_pane_fullscreen,
     toggle_sidebar,
+    resize_sidebar: SidebarDirection,
     toggle_workspace_list,
     new_workspace,
     rename_workspace,
@@ -126,6 +128,10 @@ pub const Action = union(enum) {
         if (std.mem.eql(u8, name, "toggle-pane-fullscreen"))
             return .toggle_pane_fullscreen;
         if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
+        if (std.mem.eql(u8, name, "resize-sidebar-left"))
+            return .{ .resize_sidebar = .left };
+        if (std.mem.eql(u8, name, "resize-sidebar-right"))
+            return .{ .resize_sidebar = .right };
         if (std.mem.eql(u8, name, "toggle-workspace-list")) return .toggle_workspace_list;
         if (std.mem.eql(u8, name, "new-workspace")) return .new_workspace;
         if (std.mem.eql(u8, name, "rename-workspace")) return .rename_workspace;
@@ -186,6 +192,10 @@ test "built-in names compile to parameterized actions" {
     try std.testing.expectEqualDeep(
         Action.toggle_pane_fullscreen,
         try Action.parse("toggle-pane-fullscreen"),
+    );
+    try std.testing.expectEqualDeep(
+        Action{ .resize_sidebar = .right },
+        try Action.parse("resize-sidebar-right"),
     );
     try std.testing.expectEqual(Action.new_workspace, try Action.parse("new-workspace"));
     try std.testing.expectEqual(Action.rename_workspace, try Action.parse("rename-workspace"));

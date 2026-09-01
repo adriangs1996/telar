@@ -56,6 +56,11 @@ fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !void {
 
             _ = try use_case.execute();
         },
+        .resize_sidebar => |width| {
+            var use_case = sidebar_toggles.resizeHandler(client);
+
+            _ = try use_case.execute(.{ .exact = width });
+        },
         .toggle_workspace_list => {
             _ = client.model.toggleWorkspaceList();
         },

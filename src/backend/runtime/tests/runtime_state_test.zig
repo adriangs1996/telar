@@ -85,8 +85,14 @@ test "runtime-state subscription emits current projections once and future revis
     try std.testing.expect((try fixture.next()) == null);
 
     var controller = RuntimeStateController.init(&fixture.delivery);
-    controller.requestRuntimeState();
-    controller.requestRuntimeState();
+    try controller.requestRuntimeState(@enumFromInt(7));
+    try controller.requestRuntimeState(@enumFromInt(7));
+
+    const layout = (try fixture.next()).?;
+    switch (layout) {
+        .client_layout_snapshot => |snapshot| try std.testing.expect(!snapshot.restored),
+        else => return error.ExpectedClientLayoutSnapshot,
+    }
 
     const proxy = (try fixture.next()).?;
     switch (proxy) {
@@ -126,7 +132,7 @@ test "runtime-state subscription emits current projections once and future revis
 
     try std.testing.expect((try fixture.next()) == null);
 
-    controller.requestRuntimeState();
+    try controller.requestRuntimeState(@enumFromInt(7));
     try std.testing.expect((try fixture.next()) == null);
 
     fixture.agents.touch();

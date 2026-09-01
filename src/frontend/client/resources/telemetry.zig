@@ -186,7 +186,8 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         "\"draw_pending\":{d},\"media_pending\":{d},\"outbox_depth\":{d}," ++
         "\"outbox_high_water\":{d},\"outbox_saturated\":{d}," ++
         "\"outbox_coalesced_input\":{d},\"outbox_coalesced_resize\":{d}," ++
-        "\"outbox_coalesced_ack\":{d},\"kitty_graphics\":\"{s}\"," ++
+        "\"outbox_coalesced_ack\":{d},\"outbox_coalesced_layout\":{d}," ++
+        "\"kitty_graphics\":\"{s}\"," ++
         "\"kitty_zlib\":\"{s}\"," ++
         "\"mouse_pixels\":\"{s}\",\"sidebar_renderer\":\"{s}\"," ++
         "\"cell_width_px\":{d},\"cell_height_px\":{d}," ++
@@ -209,6 +210,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         state.outbox.coalesced_input,
         state.outbox.coalesced_resize,
         state.outbox.coalesced_ack,
+        state.outbox.coalesced_client_layout,
         @tagName(state.capabilities.kitty_graphics),
         @tagName(state.capabilities.kitty_zlib),
         @tagName(state.capabilities.mouse_pixels),
@@ -468,7 +470,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
             .pending_updates = 0,
             .draw_pending = false,
             .media_pending = true,
-            .outbox = .{},
+            .outbox = .{ .coalesced_client_layout = 2 },
             .capabilities = capabilities,
             .sidebar_rendering = .cells,
             .lua_used = 123,
@@ -497,6 +499,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"attachment_cache_bytes\":20") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"icons\":\"nerd-font\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"media_pending\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"outbox_coalesced_layout\":2") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"heap_live_bytes\":48") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":3") != null);

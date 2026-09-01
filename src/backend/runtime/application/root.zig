@@ -101,9 +101,9 @@ pub const Application = struct {
     /// Composes application state from stable, runtime-owned capabilities.
     ///
     /// ```zig
-    /// const application = Application.init(initialization);
+    /// const application = try Application.init(initialization);
     /// ```
-    pub fn init(initialization: Initialization) Application {
+    pub fn init(initialization: Initialization) !Application {
         return .{
             .io = initialization.io,
             .gpa = initialization.gpa,
@@ -121,6 +121,7 @@ pub const Application = struct {
                     .graphics_limits = initialization.graphics,
                     .graphics_budget = .init(initialization.graphics.global_bytes),
                 },
+                .client_layouts = try .init(initialization.gpa),
             },
             .metrics = .{ .started_ns = diagnostics.now(initialization.io) },
         };
@@ -161,7 +162,10 @@ pub const Application = struct {
             },
             .destroy_client_sessions => application.clients.deinit(application.io, application.gpa),
             .destroy_panes => application.model.panes.deinit(),
-            .destroy_workspaces => deinitWorkspaces(application),
+            .destroy_workspaces => {
+                application.model.client_layouts.deinit();
+                deinitWorkspaces(application);
+            },
         }
     }
 
@@ -600,6 +604,7 @@ pub const Application = struct {
                 .system_metrics = &application.system_metrics,
                 .proxy_active = application.proxy_runtime.active(),
                 .home = application.inherited_environment.getPosix("HOME"),
+                .client_layouts = &application.model.client_layouts,
             },
             .metrics = &application.metrics,
         })) orelse return;

@@ -457,6 +457,30 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
+test "sidebar resize keybinding commits width before pane geometry" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const version = client.model.version();
+
+    _ = try client_actions.apply(client, .{ .resize_sidebar = .left });
+
+    try std.testing.expectEqual(@as(u16, 58), client.model.sidebarWidth());
+    try std.testing.expectEqual(@as(u16, 58), client.view.regions.sidebar.w);
+    try std.testing.expectEqual(version.chrome + 1, client.model.version().chrome);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const resized = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(resized == .pane_resize);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, resized.pane_resize.pane_id);
+    try std.testing.expectEqual(
+        schema.TerminalSize{ .cols = 22, .rows = 22 },
+        resized.pane_resize.size,
+    );
+}
+
 test "sidebar projection rejects changes that are not the current model commit" {
     var harness: TestHarness = undefined;
     try harness.init();
@@ -467,11 +491,11 @@ test "sidebar projection rejects changes that are not the current model commit" 
     const shown_area = client.view.workbench();
     const committed = client.model.toggleSidebar();
 
-    try std.testing.expectError(error.StaleSidebarVisibility, sidebar_projection.apply(client, .{
+    try std.testing.expectError(error.StaleSidebarLayout, sidebar_projection.apply(client, .{
         .visible = true,
         .chrome_revision = committed.chrome_revision - 1,
     }));
-    try std.testing.expectError(error.StaleSidebarVisibility, sidebar_projection.apply(client, .{
+    try std.testing.expectError(error.StaleSidebarLayout, sidebar_projection.apply(client, .{
         .visible = committed.visible,
         .chrome_revision = committed.chrome_revision - 1,
     }));
@@ -940,6 +964,31 @@ test "detach action releases every tab before stopping the client" {
     const second = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(second == .detach_pane);
     try std.testing.expectEqual(second_pane, second.detach_pane.pane_id);
+}
+
+test "detach action captures layout changes from the same input batch" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const active = client.model.workspace.active().?;
+    active.snapshot_loaded = true;
+    try client.client_layouts.markSnapshotReceived();
+
+    _ = try client_actions.apply(client, .{ .resize_sidebar = .left });
+    try std.testing.expectEqual(keybind.Control.stop, try client_actions.apply(client, .detach));
+    try harness.settle();
+
+    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const resized = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(resized == .pane_resize);
+    const retained = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(retained == .update_client_layout);
+    try std.testing.expectEqual(@as(u16, 58), retained.update_client_layout.sidebar_width);
+    const detached = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(detached == .detach_pane);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
 }
 
 test "a missing pane attachment keeps local membership until a canonical snapshot" {

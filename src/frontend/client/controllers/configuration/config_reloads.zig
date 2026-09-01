@@ -193,7 +193,7 @@ fn configureSidebar(raw_context: *anyopaque) !void {
     );
 }
 
-fn applySidebar(raw_context: *anyopaque, change: client_model.SidebarVisibility) !void {
+fn applySidebar(raw_context: *anyopaque, change: client_model.SidebarLayout) !void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
     try sidebar_projection.apply(context.client, change);
 }

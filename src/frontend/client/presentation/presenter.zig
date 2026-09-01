@@ -66,6 +66,7 @@ pub const Projection = struct {
     diagnostic: ?[]const u8,
     copy: ?multiplexer.CopyProjection,
     sidebar_visible: bool,
+    sidebar_width: u16,
     workspace_list_collapsed: bool,
     host_capabilities: client_model.HostCapabilities,
     host_size: schema.TerminalSize,
@@ -309,7 +310,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     const input_routing_changed = presenter.presented_presentation_ingress.input_routing !=
         projection.presentation_ingress.input_routing;
     if (chrome_changed) {
-        resources.view.setSidebarVisible(projection.sidebar_visible);
+        resources.view.setSidebarLayout(projection.sidebar_visible, projection.sidebar_width);
         resources.view.setWorkspaceListCollapsed(projection.workspace_list_collapsed);
     }
     if (agents_changed) {

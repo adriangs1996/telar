@@ -7,6 +7,7 @@ const input_application = @import("../../application/input/root.zig");
 
 const Client = @import("../../client.zig");
 const client_detachments = @import("../session/client_detachments.zig");
+const client_layouts = @import("../../resources/client_layouts.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("../notifications/notifications.zig");
@@ -80,6 +81,10 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
         }),
         .toggle_pane_fullscreen => try togglePaneFullscreen(client),
         .toggle_sidebar => try toggleSidebar(client),
+        .resize_sidebar => |direction| try resizeSidebar(client, switch (direction) {
+            .left => .narrower,
+            .right => .wider,
+        }),
         .toggle_workspace_list => toggleWorkspaceList(client),
         .new_workspace => _ = name_prompts.beginWorkspaceCreate(client),
         .rename_workspace => _ = name_prompts.beginWorkspaceRename(client),
@@ -95,6 +100,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
             .next => .next,
         }),
         .detach => {
+            try client_layouts.observe(client);
             try client_detachments.apply(client);
 
             return .stop;
@@ -149,6 +155,12 @@ fn toggleSidebar(client: *Client) !void {
     var use_case = sidebar_toggles.handler(client);
 
     _ = try use_case.execute();
+}
+
+fn resizeSidebar(client: *Client, direction: @import("../../../ui/root.zig").sidebar.Direction) !void {
+    var use_case = sidebar_toggles.resizeHandler(client);
+
+    _ = try use_case.execute(.{ .direction = direction });
 }
 
 fn toggleWorkspaceList(client: *Client) void {

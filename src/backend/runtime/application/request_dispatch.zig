@@ -153,6 +153,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .set_pane_viewport = routeSetPaneViewport,
             .copy_selection = routeCopySelection,
             .show_notification = routeShowNotification,
+            .update_client_layout = routeUpdateClientLayout,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -475,10 +476,26 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             try controller.configureGraphics(configure);
         }
 
-        fn routeRequestRuntimeState(request: *ClientRequestContext) !void {
+        fn routeRequestRuntimeState(request: *ClientRequestContext, runtime_state: schema.RequestRuntimeState) !void {
             var controller = RuntimeStateController.init(&request.session.delivery);
 
-            controller.requestRuntimeState();
+            try controller.requestRuntimeState(runtime_state.client_identity);
+        }
+
+        fn routeUpdateClientLayout(request: *ClientRequestContext, update: schema.ClientLayoutUpdateView) !void {
+            const identity = request.session.delivery.client_identity;
+            if (identity == .invalid) {
+                return error.ClientLayoutNotSubscribed;
+            }
+
+            try request.application.model.client_layouts.replace(.{
+                .identity = identity,
+                .layout = update,
+                .sources = .{
+                    .panes = &request.application.model.panes,
+                    .workspaces = request.workspaces.reader(),
+                },
+            });
         }
 
         fn routeCreateWorkspace(request: *ClientRequestContext, create: schema.CreateWorkspaceView) !void {

@@ -8,6 +8,7 @@ const platform = @import("../../platform/root.zig");
 const Client = @import("../client.zig");
 const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
+const client_layouts = @import("../resources/client_layouts.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
 const bar_updates = @import("../controllers/configuration/bar_updates.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
@@ -47,7 +48,10 @@ pub fn handle(client: *Client, event: Event, resources: Resources) !Outcome {
     defer path.restore();
 
     switch (try route(client, event, resources)) {
-        .keep_running => try presentation_lifecycle.observe(client),
+        .keep_running => {
+            try client_layouts.observe(client);
+            try presentation_lifecycle.observe(client);
+        },
         .exit => |status| return .{ .exit = status },
     }
 

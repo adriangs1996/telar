@@ -28,6 +28,13 @@ pub const max_foreground_name_bytes = 48;
 pub const max_workspace_list_entries = 64;
 pub const max_notification_title_bytes = 48;
 pub const max_notification_message_bytes = 192;
+pub const max_client_layout_clients = 8;
+pub const max_client_layout_tabs = max_panes_per_tab;
+pub const max_client_layout_nodes = max_panes_per_tab * 2 - 1;
+pub const max_client_layout_wire_bytes = 4096;
+pub const client_layout_ratio_scale: u16 = 10_000;
+pub const min_client_layout_ratio: u16 = client_layout_ratio_scale / 10;
+pub const max_client_layout_ratio: u16 = client_layout_ratio_scale - min_client_layout_ratio;
 pub const min_notification_duration_ms: u32 = 500;
 pub const max_notification_duration_ms: u32 = 60_000;
 pub const default_notification_duration_ms: u32 = 4_000;
@@ -89,6 +96,53 @@ pub const Launch = struct {
 pub const TabMoveDirection = enum(u8) {
     previous = 0,
     next = 1,
+};
+
+pub const ClientIdentity = enum(u64) {
+    invalid = 0,
+    _,
+};
+
+pub const ClientLayoutAxis = enum(u8) {
+    horizontal = 0,
+    vertical = 1,
+};
+
+pub const ClientLayoutSplit = struct {
+    axis: ClientLayoutAxis,
+    ratio: u16,
+};
+
+/// One node in a pre-order binary pane-layout tree. Split children immediately
+/// follow their parent, so the wire never carries disposable client indices.
+pub const ClientLayoutNode = union(enum) {
+    pane: id.PaneId,
+    split: ClientLayoutSplit,
+};
+
+pub const ClientTabLayout = struct {
+    location: TabLocation,
+    focused_pane: id.PaneId,
+    fullscreen: bool,
+    workspace_active: bool = false,
+    nodes: []const ClientLayoutNode,
+};
+
+pub const ClientLayoutUpdate = struct {
+    sidebar_visible: bool,
+    sidebar_width: u16,
+    workspace_list_collapsed: bool,
+    active_tab: TabLocation,
+    tabs: []const ClientTabLayout,
+};
+
+pub const ClientLayoutSnapshot = struct {
+    restored: bool,
+    sidebar_visible: bool = true,
+    sidebar_width: u16 = 0,
+    workspace_list_collapsed: bool = false,
+    active_tab: ?TabLocation = null,
+    tabs: []const ClientTabLayout = &.{},
 };
 
 pub const ExitKind = enum(u8) {

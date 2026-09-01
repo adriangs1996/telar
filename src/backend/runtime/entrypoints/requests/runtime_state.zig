@@ -2,6 +2,7 @@
 //! subscription. The normal delivery pump emits current and future revisions.
 
 const std = @import("std");
+const schema = @import("telar-core").schema;
 
 /// Builds a statically dispatched runtime-state subscription controller.
 ///
@@ -28,10 +29,10 @@ pub fn Controller(comptime Subscriber: type) type {
         /// to this client.
         ///
         /// ```zig
-        /// controller.requestRuntimeState();
+        /// try controller.requestRuntimeState(identity);
         /// ```
-        pub inline fn requestRuntimeState(controller: *Self) void {
-            controller.subscriber.requestRuntimeState();
+        pub inline fn requestRuntimeState(controller: *Self, identity: schema.ClientIdentity) !void {
+            try controller.subscriber.requestRuntimeState(identity);
         }
     };
 }
@@ -39,7 +40,7 @@ pub fn Controller(comptime Subscriber: type) type {
 const StubSubscriber = struct {
     call_count: usize = 0,
 
-    fn requestRuntimeState(stub: *StubSubscriber) void {
+    fn requestRuntimeState(stub: *StubSubscriber, _: schema.ClientIdentity) !void {
         stub.call_count += 1;
     }
 };
@@ -50,8 +51,8 @@ test "Controller routes every runtime-state request to the client subscription" 
     var stub: StubSubscriber = .{};
     var controller = TestController.init(&stub);
 
-    controller.requestRuntimeState();
-    controller.requestRuntimeState();
+    try controller.requestRuntimeState(@enumFromInt(7));
+    try controller.requestRuntimeState(@enumFromInt(7));
 
     try std.testing.expectEqual(@as(usize, 2), stub.call_count);
 }

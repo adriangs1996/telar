@@ -20,7 +20,7 @@ pub const Snapshot = client_outbox.Snapshot;
 
 pub const Bootstrap = struct {
     graphics_shared: bool,
-    open: schema.OpenPane,
+    client_identity: schema.ClientIdentity,
 };
 
 pub const State = struct {
@@ -72,11 +72,10 @@ pub const State = struct {
         });
         try state.connection.send(io, configure);
 
-        const runtime_state = try schema.encodeRequestRuntimeState(state.send_buffer);
+        const runtime_state = try schema.encodeRequestRuntimeState(state.send_buffer, .{
+            .client_identity = request.client_identity,
+        });
         try state.connection.send(io, runtime_state);
-
-        const open = try schema.encodeOpenPane(state.send_buffer, request.open);
-        try state.connection.send(io, open);
     }
 };
 
@@ -227,6 +226,16 @@ pub fn enqueueNotification(client: *Client, request: schema.ShowNotification) !v
     try pump(client);
 }
 
+/// Copies and coalesces one complete reconnectable client layout.
+///
+/// ```zig
+/// try runtime_transport.enqueueClientLayout(client, update);
+/// ```
+pub fn enqueueClientLayout(client: *Client, update: schema.ClientLayoutUpdate) !void {
+    try client.runtime_transport.outbox.pushClientLayout(update);
+    try pump(client);
+}
+
 /// Transfers every graphics credit that fits into the bounded outbox and
 /// leaves the rest owned by the graphics store.
 ///
@@ -331,7 +340,7 @@ test "runtime transport releases every partial frame allocation" {
     );
 }
 
-test "runtime bootstrap emits its three frames in causal order" {
+test "runtime bootstrap emits graphics and identity before asynchronous reads" {
     const io = std.testing.io;
     var channels = try testingSocketPair();
     defer channels[0].deinit(io);
@@ -341,11 +350,7 @@ test "runtime bootstrap emits its three frames in causal order" {
 
     try state.bootstrap(io, .{
         .graphics_shared = true,
-        .open = .{
-            .request_id = @enumFromInt(1),
-            .size = .{ .cols = 80, .rows = 24 },
-            .launch = .{ .cwd = "/work", .arguments = &.{"/bin/sh"} },
-        },
+        .client_identity = @enumFromInt(9),
     });
 
     var buffer: [256]u8 = undefined;
@@ -355,9 +360,5 @@ test "runtime bootstrap emits its three frames in causal order" {
 
     const runtime_state = try schema.decodeClient(try channels[1].receive(io, &buffer));
     try std.testing.expect(runtime_state == .request_runtime_state);
-
-    const open = try schema.decodeClient(try channels[1].receive(io, &buffer));
-    try std.testing.expect(open == .open_pane);
-    try std.testing.expectEqual(@as(schema.RequestId, @enumFromInt(1)), open.open_pane.request_id);
-    try std.testing.expectEqualStrings("/work", open.open_pane.launch.?.cwd);
+    try std.testing.expectEqual(@as(schema.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }

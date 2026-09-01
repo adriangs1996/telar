@@ -114,8 +114,9 @@ folds it into the paced frame loop.
 The semantic focus and reported target commit before their resource effects.
 If a resize or focus message cannot enter the outbox, the error reaches the
 client loop with committed client state. The client exits. Reconnect rebuilds
-the disposable layout and reporting state from canonical snapshots while the
-runtime panes and PTYs continue running.
+the reporting state from canonical snapshots and restores retained focus when
+the saved pane set is still authoritative. Runtime panes and PTYs continue
+running.
 
 ## Proof
 

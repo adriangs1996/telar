@@ -11,6 +11,7 @@ const graphics = @import("../graphics/root.zig");
 const attachments = @import("../attachments/root.zig");
 const bars_capability = @import("../bars/root.zig");
 const client_telemetry = @import("resources/telemetry.zig");
+const client_layout_resource = @import("resources/client_layouts.zig");
 const client_view = @import("presentation/view.zig");
 const client_model = @import("model/root.zig");
 const lua_config = @import("../config/root.zig");
@@ -113,6 +114,7 @@ const Params = struct {
     host_size: schema.TerminalSize,
     window_width_px: u32 = 0,
     window_height_px: u32 = 0,
+    client_identity: schema.ClientIdentity = @enumFromInt(1),
     options: Options,
 };
 
@@ -123,11 +125,14 @@ writer: *Io.Writer,
 select: Io.Select(ClientEvent),
 select_storage: [client_event_count]ClientEvent = undefined,
 options: Options,
+client_identity: schema.ClientIdentity,
 telemetry: client_telemetry.State,
+client_layouts: client_layout_resource.State = .{},
 presenter: presenter_mod,
 view: client_view.State,
 model: client_model.Model,
 navigation_history: navigation.History = .{},
+saved_layouts: navigation.Layouts = .{},
 graphics_store: kitty.Store,
 host_input: host_inputs.State,
 lua_generation: ?*lua_config.Generation,
@@ -171,7 +176,7 @@ pub fn init(params: Params) !*Client {
         params.options.icon_theme,
     );
     errdefer view.deinit();
-    view.setSidebarVisible(params.options.sidebar_visible);
+    view.setSidebarLayout(params.options.sidebar_visible, client_view.sidebar_width);
     try view.configureSidebar(
         params.options.sidebar_rendering,
         capabilities.kitty_graphics,
@@ -188,6 +193,7 @@ pub fn init(params: Params) !*Client {
         .bars = params.options.bars,
         .host_size = host_size,
         .host_capabilities = capabilities,
+        .sidebar_width = client_view.sidebar_width,
     });
     errdefer model.deinit();
     _ = model.setSidebarVisible(params.options.sidebar_visible);
@@ -211,6 +217,7 @@ pub fn init(params: Params) !*Client {
         .writer = params.writer,
         .select = undefined,
         .options = params.options,
+        .client_identity = params.client_identity,
         .telemetry = .init(params.io, params.options.endpoint),
         .presenter = undefined,
         .view = view,

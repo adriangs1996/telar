@@ -98,7 +98,7 @@ Theme, icon and sidebar resources are updated after the ownership swap. CLI
 theme and sidebar-renderer locks still override reloaded values. A sidebar or
 pane-gap change invalidates host graphics placements and re-offers the current
 pane geometry to the runtime. Sidebar changes pass through
-`sidebar_projection.apply` and `DeliverSidebarVisibilityHandler`, the same
+`sidebar_projection.apply` and `DeliverSidebarLayoutHandler`, the same
 exact-commit delivery used by explicit toggles. `config_reloads` implements
 each concrete port independently; it does not choose the outcome order,
 notification content, layout branch or placement-to-geometry order. The
@@ -141,9 +141,9 @@ trigger.
 - `src/frontend/client/config_reloads.zig` owns concrete resource transfer,
   physical effect adapters and watcher scheduling, without application
   branching.
-- `src/frontend/client/application/sidebar_visibility_delivery.zig` owns exact
+- `src/frontend/client/application/notifications/sidebar_layout_delivery.zig` owns exact
   sidebar commit validation and projection order.
-- `src/frontend/client/sidebar_projection.zig` wires the shared physical
+- `src/frontend/client/controllers/notifications/sidebar_projection.zig` wires the shared physical
   sidebar projection ports.
 - `src/frontend/client/client_test.zig` proves resolved delivery, ownership
   replacement, accepted diagnostic cleanup, stale cleanup, post-commit geometry

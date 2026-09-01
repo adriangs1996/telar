@@ -16,7 +16,7 @@ pub const Effects = struct {
     synchronize_bars: *const fn (*anyopaque) anyerror!void,
     project_appearance: *const fn (*anyopaque, bool) void,
     configure_sidebar: *const fn (*anyopaque) anyerror!void,
-    apply_sidebar: *const fn (*anyopaque, client_model.SidebarVisibility) anyerror!void,
+    apply_sidebar: *const fn (*anyopaque, client_model.SidebarLayout) anyerror!void,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
     offer_active_pane_geometry: *const fn (*anyopaque) anyerror!void,
 };
@@ -78,7 +78,7 @@ const EffectsCapture = struct {
     event_count: usize = 0,
     commit: ?client_model.ConfigurationCommit = null,
     apply_theme: ?bool = null,
-    sidebar: ?client_model.SidebarVisibility = null,
+    sidebar: ?client_model.SidebarLayout = null,
     observed_commit: bool = true,
     failure: Failure = .none,
 
@@ -129,7 +129,7 @@ const EffectsCapture = struct {
         }
     }
 
-    fn applySidebar(context: *anyopaque, sidebar: client_model.SidebarVisibility) !void {
+    fn applySidebar(context: *anyopaque, sidebar: client_model.SidebarLayout) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         capture.sidebar = sidebar;
         capture.record(.apply_sidebar);

@@ -9,6 +9,7 @@ const focus = @import("focus.zig");
 
 pub const theme = @import("theme.zig");
 pub const icons = @import("icons.zig");
+pub const sidebar = @import("sidebar.zig");
 
 pub const Rect = shared.Rect;
 

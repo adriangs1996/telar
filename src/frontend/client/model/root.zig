@@ -9,6 +9,7 @@ const lua_config = @import("../../config/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
 const notifications = @import("../../notifications/root.zig");
+const frontend_ui = @import("../../ui/root.zig");
 const name_prompt = @import("name_prompt.zig");
 const workspace_capability = @import("../../workspace/root.zig");
 
@@ -49,7 +50,7 @@ pub const PaneFocusReportTransition = model_types.PaneFocusReportTransition;
 pub const ResizePaneRequest = model_types.ResizePaneRequest;
 pub const PaneGeometryChange = model_types.PaneGeometryChange;
 pub const TogglePaneFullscreenRequest = model_types.TogglePaneFullscreenRequest;
-pub const SidebarVisibility = model_types.SidebarVisibility;
+pub const SidebarLayout = model_types.SidebarLayout;
 pub const SidebarAnimationChange = model_types.SidebarAnimationChange;
 pub const ConfigurationInput = model_types.ConfigurationInput;
 pub const ConfigurationCommit = model_types.ConfigurationCommit;
@@ -162,6 +163,7 @@ pub const Model = struct {
     active_tab_revision: u64 = 0,
     panes_revision: u64 = 0,
     sidebar_visible: bool = true,
+    sidebar_width: u16 = frontend_ui.sidebar.default_width,
     workspace_list_collapsed: bool = false,
     chrome_revision: u64 = 0,
     copy_state: ?copy_mode.State = null,
@@ -218,6 +220,7 @@ pub const Model = struct {
             .bars = .init(initial.bars),
             .host_size = initial.host_size,
             .host_capabilities = initial.host_capabilities,
+            .sidebar_width = @max(frontend_ui.sidebar.minimum_width, initial.sidebar_width),
         };
     }
 
@@ -708,24 +711,23 @@ pub const Model = struct {
         return model.sidebar_visible;
     }
 
+    /// Returns the preferred width retained independently of host clamping.
+    ///
+    /// ```zig
+    /// const width = model.sidebarWidth();
+    /// ```
+    pub fn sidebarWidth(model: *const Model) u16 {
+        return model.sidebar_width;
+    }
+
     /// Commits an explicit sidebar preference. Repeated values preserve the
     /// chrome revision and produce no projection work.
     ///
     /// ```zig
     /// const change = model.setSidebarVisible(false) orelse return;
     /// ```
-    pub fn setSidebarVisible(model: *Model, visible: bool) ?SidebarVisibility {
-        if (model.sidebar_visible == visible) {
-            return null;
-        }
-
-        model.sidebar_visible = visible;
-        model.chrome_revision +%= 1;
-
-        return .{
-            .visible = visible,
-            .chrome_revision = model.chrome_revision,
-        };
+    pub fn setSidebarVisible(model: *Model, visible: bool) ?SidebarLayout {
+        return model.commitSidebarLayout(visible, model.sidebar_width);
     }
 
     /// Toggles the sidebar preference and advances only the chrome revision.
@@ -733,8 +735,58 @@ pub const Model = struct {
     /// ```zig
     /// const change = model.toggleSidebar();
     /// ```
-    pub fn toggleSidebar(model: *Model) SidebarVisibility {
+    pub fn toggleSidebar(model: *Model) SidebarLayout {
         return model.setSidebarVisible(!model.sidebar_visible).?;
+    }
+
+    /// Commits an exact pointer-selected width within current host geometry.
+    ///
+    /// ```zig
+    /// const change = model.setSidebarWidth(70) orelse return;
+    /// ```
+    pub fn setSidebarWidth(model: *Model, requested_width: u16) ?SidebarLayout {
+        const width = frontend_ui.sidebar.clampInteractive(model.host_size.cols, requested_width);
+
+        return model.commitSidebarLayout(model.sidebar_visible, width);
+    }
+
+    /// Moves the preferred width by one keybinding step.
+    ///
+    /// ```zig
+    /// const change = model.stepSidebarWidth(.wider) orelse return;
+    /// ```
+    pub fn stepSidebarWidth(model: *Model, direction: frontend_ui.sidebar.Direction) ?SidebarLayout {
+        const width = frontend_ui.sidebar.step(model.host_size.cols, model.sidebar_width, direction);
+
+        return model.commitSidebarLayout(model.sidebar_visible, width);
+    }
+
+    /// Restores server-retained sidebar state without losing a preference
+    /// merely because the current terminal is temporarily narrow.
+    ///
+    /// ```zig
+    /// const change = model.restoreSidebarLayout(true, 73) orelse return;
+    /// ```
+    pub fn restoreSidebarLayout(model: *Model, visible: bool, preferred_width: u16) ?SidebarLayout {
+        const width = @max(frontend_ui.sidebar.minimum_width, preferred_width);
+
+        return model.commitSidebarLayout(visible, width);
+    }
+
+    fn commitSidebarLayout(model: *Model, visible: bool, width: u16) ?SidebarLayout {
+        if (model.sidebar_visible == visible and model.sidebar_width == width) {
+            return null;
+        }
+
+        model.sidebar_visible = visible;
+        model.sidebar_width = width;
+        model.chrome_revision +%= 1;
+
+        return .{
+            .visible = visible,
+            .width = width,
+            .chrome_revision = model.chrome_revision,
+        };
     }
 
     /// Returns whether the top-bar workspace list is collapsed.

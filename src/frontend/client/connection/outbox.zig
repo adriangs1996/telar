@@ -121,6 +121,17 @@ const OwnedLaunchCwd = struct {
     }
 };
 
+const OwnedClientLayout = struct {
+    bytes: [schema.max_client_layout_wire_bytes]u8 = undefined,
+    len: u16 = 0,
+    used: bool = false,
+
+    fn slice(layout: *const OwnedClientLayout) []const u8 {
+        std.debug.assert(layout.used and layout.len != 0);
+        return layout.bytes[0..layout.len];
+    }
+};
+
 pub const Message = union(enum) {
     open_pane: schema.OpenPane,
     pane_input: OwnedInput,
@@ -144,6 +155,7 @@ pub const Message = union(enum) {
     set_pane_viewport: schema.SetPaneViewport,
     copy_selection: schema.CopySelection,
     show_notification: OwnedNotification,
+    client_layout: u8,
 };
 
 fn messageLaunchCwd(message: Message) ?[]const u8 {
@@ -162,6 +174,7 @@ pub const Stats = struct {
     coalesced_input: u64 = 0,
     coalesced_resize: u64 = 0,
     coalesced_ack: u64 = 0,
+    coalesced_client_layout: u64 = 0,
 };
 
 pub const Snapshot = struct {
@@ -171,6 +184,7 @@ pub const Snapshot = struct {
     coalesced_input: u64 = 0,
     coalesced_resize: u64 = 0,
     coalesced_ack: u64 = 0,
+    coalesced_client_layout: u64 = 0,
 };
 
 pub const Outbox = struct {
@@ -178,6 +192,7 @@ pub const Outbox = struct {
     input_bytes: [capacity][max_input_bytes]u8 = undefined,
     launch_cwds: [max_pending_launches]OwnedLaunchCwd =
         [_]OwnedLaunchCwd{.{}} ** max_pending_launches,
+    client_layouts: [2]OwnedClientLayout = [_]OwnedClientLayout{.{}} ** 2,
     item_launch_cwd: [capacity]?u8 = @splat(null),
     head: u8 = 0,
     len: u8 = 0,
@@ -210,6 +225,7 @@ pub const Outbox = struct {
             .coalesced_input = outbox.stats.coalesced_input,
             .coalesced_resize = outbox.stats.coalesced_resize,
             .coalesced_ack = outbox.stats.coalesced_ack,
+            .coalesced_client_layout = outbox.stats.coalesced_client_layout,
         };
     }
 
@@ -217,7 +233,7 @@ pub const Outbox = struct {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
             .frame_ack => |ack| return outbox.pushAck(ack),
-            .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification => unreachable,
+            .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout => unreachable,
             else => {},
         }
         try outbox.append(message);
@@ -322,6 +338,36 @@ pub const Outbox = struct {
         try outbox.append(.{ .show_notification = owned });
     }
 
+    /// Encodes and coalesces the latest complete client layout without
+    /// retaining slices into the mutable model.
+    ///
+    /// ```zig
+    /// try outbox.pushClientLayout(update);
+    /// ```
+    pub fn pushClientLayout(outbox: *Outbox, update: schema.ClientLayoutUpdate) !void {
+        var offset: usize = 0;
+        const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
+        while (offset < mutable_len) : (offset += 1) {
+            const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % capacity;
+            switch (outbox.items[index]) {
+                .client_layout => |slot_index| {
+                    const slot = &outbox.client_layouts[slot_index];
+                    var scratch: [schema.max_client_layout_wire_bytes]u8 = undefined;
+                    const encoded = try schema.encodeClientLayoutUpdate(&scratch, update);
+                    @memcpy(slot.bytes[0..encoded.len], encoded);
+                    slot.len = @intCast(encoded.len);
+                    outbox.stats.coalesced_client_layout +|= 1;
+                    return;
+                },
+                else => break,
+            }
+        }
+
+        const slot_index = try outbox.claimClientLayout(update);
+        errdefer outbox.releaseClientLayoutSlot(slot_index);
+        try outbox.append(.{ .client_layout = slot_index });
+    }
+
     pub fn peek(outbox: *const Outbox) ?*const Message {
         if (outbox.len == 0) return null;
         return &outbox.items[outbox.head];
@@ -369,6 +415,7 @@ pub const Outbox = struct {
         std.debug.assert(outbox.send_pending);
         std.debug.assert(outbox.len != 0);
         outbox.releaseLaunchCwd(outbox.head);
+        outbox.releaseClientLayout(outbox.head);
         outbox.send_pending = false;
         outbox.head = @intCast((@as(usize, outbox.head) + 1) % capacity);
         outbox.len -= 1;
@@ -424,6 +471,7 @@ pub const Outbox = struct {
             .set_pane_viewport => |value| schema.encodeSetPaneViewport(buffer, value),
             .copy_selection => |value| schema.encodeCopySelection(buffer, value),
             .show_notification => |*value| schema.encodeShowNotification(buffer, value.view()),
+            .client_layout => |slot| outbox.client_layouts[slot].slice(),
         };
     }
 
@@ -464,6 +512,37 @@ pub const Outbox = struct {
 
     fn releaseLaunchSlot(outbox: *Outbox, slot_index: u8) void {
         const slot = &outbox.launch_cwds[slot_index];
+        std.debug.assert(slot.used);
+        slot.len = 0;
+        slot.used = false;
+    }
+
+    fn claimClientLayout(outbox: *Outbox, update: schema.ClientLayoutUpdate) !u8 {
+        for (&outbox.client_layouts, 0..) |*slot, index| {
+            if (slot.used) {
+                continue;
+            }
+
+            const encoded = try schema.encodeClientLayoutUpdate(&slot.bytes, update);
+            slot.len = @intCast(encoded.len);
+            slot.used = true;
+            return @intCast(index);
+        }
+
+        return error.TooManyPendingClientLayouts;
+    }
+
+    fn releaseClientLayout(outbox: *Outbox, item_index: usize) void {
+        const slot = switch (outbox.items[item_index]) {
+            .client_layout => |slot_index| slot_index,
+            else => return,
+        };
+
+        outbox.releaseClientLayoutSlot(slot);
+    }
+
+    fn releaseClientLayoutSlot(outbox: *Outbox, slot_index: u8) void {
+        const slot = &outbox.client_layouts[slot_index];
         std.debug.assert(slot.used);
         slot.len = 0;
         slot.used = false;
@@ -720,6 +799,92 @@ test "input never coalesces into a message already in flight" {
     outbox.popSent();
     decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("second", decoded.pane_input.bytes);
+}
+
+test "client layouts coalesce without mutating an in-flight snapshot" {
+    var outbox: Outbox = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .tab_id = @enumFromInt(4),
+    };
+    const nodes = [_]schema.ClientLayoutNode{.{ .pane = @enumFromInt(5) }};
+    const tabs = [_]schema.ClientTabLayout{.{
+        .location = location,
+        .focused_pane = @enumFromInt(5),
+        .fullscreen = false,
+        .workspace_active = true,
+        .nodes = &nodes,
+    }};
+    var update: schema.ClientLayoutUpdate = .{
+        .sidebar_visible = true,
+        .sidebar_width = 50,
+        .workspace_list_collapsed = false,
+        .active_tab = location,
+        .tabs = &tabs,
+    };
+
+    try outbox.pushClientLayout(update);
+    update.sidebar_width = 55;
+    try outbox.pushClientLayout(update);
+    try std.testing.expectEqual(@as(u8, 1), outbox.len);
+    try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_client_layout);
+
+    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const first_payload = (try outbox.beginSend(&buffer)).?;
+    const first = try schema.decodeClient(first_payload);
+    try std.testing.expect(first == .update_client_layout);
+    try std.testing.expectEqual(@as(u16, 55), first.update_client_layout.sidebar_width);
+
+    update.sidebar_width = 60;
+    try outbox.pushClientLayout(update);
+    update.sidebar_width = 65;
+    try outbox.pushClientLayout(update);
+    try std.testing.expectEqual(@as(u8, 2), outbox.len);
+    try std.testing.expectEqual(@as(u64, 2), outbox.stats.coalesced_client_layout);
+    try std.testing.expectEqual(@as(u16, 55), first.update_client_layout.sidebar_width);
+
+    outbox.popSent();
+    const second = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expect(second == .update_client_layout);
+    try std.testing.expectEqual(@as(u16, 65), second.update_client_layout.sidebar_width);
+    outbox.popSent();
+    try std.testing.expectEqual(@as(u8, 0), outbox.len);
+    try std.testing.expect(!outbox.client_layouts[0].used);
+    try std.testing.expect(!outbox.client_layouts[1].used);
+}
+
+test "client layout folding never crosses an ordered request" {
+    var outbox: Outbox = .{};
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .tab_id = @enumFromInt(4),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(5);
+    const nodes = [_]schema.ClientLayoutNode{.{ .pane = pane_id }};
+    const tabs = [_]schema.ClientTabLayout{.{
+        .location = location,
+        .focused_pane = pane_id,
+        .fullscreen = false,
+        .workspace_active = true,
+        .nodes = &nodes,
+    }};
+    const update: schema.ClientLayoutUpdate = .{
+        .sidebar_visible = true,
+        .sidebar_width = 50,
+        .workspace_list_collapsed = false,
+        .active_tab = location,
+        .tabs = &tabs,
+    };
+
+    try outbox.pushClientLayout(update);
+    try outbox.push(.{ .close_pane = .{
+        .request_id = @enumFromInt(6),
+        .pane_id = pane_id,
+    } });
+    try outbox.pushClientLayout(update);
+
+    try std.testing.expectEqual(@as(u8, 3), outbox.len);
+    try std.testing.expectEqual(@as(u64, 0), outbox.stats.coalesced_client_layout);
 }
 
 test "resize folding never crosses an ordered input message" {

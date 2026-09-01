@@ -12,6 +12,70 @@ pub const Bookmark = struct {
     tab_layout: ?layout_mod.Layout = null,
 };
 
+pub const SavedLayout = struct {
+    location: schema.TabLocation,
+    pane_id: schema.PaneId,
+    workspace_active: bool,
+    layout: layout_mod.Layout,
+};
+
+pub const Layouts = struct {
+    entries: [schema.max_client_layout_tabs]?SavedLayout = @splat(null),
+
+    /// Retains the latest split tree for one stable tab identity.
+    ///
+    /// ```zig
+    /// try layouts.remember(saved);
+    /// ```
+    pub fn remember(layouts: *Layouts, saved: SavedLayout) !void {
+        var free: ?*?SavedLayout = null;
+        for (&layouts.entries) |*slot| {
+            if (slot.*) |entry| {
+                if (std.meta.eql(entry.location, saved.location)) {
+                    slot.* = saved;
+                    return;
+                }
+            } else if (free == null) {
+                free = slot;
+            }
+        }
+
+        const slot = free orelse return error.TooManySavedLayouts;
+        slot.* = saved;
+    }
+
+    /// Finds a retained tab layout without changing its lifetime.
+    ///
+    /// ```zig
+    /// const saved = layouts.find(location) orelse return;
+    /// ```
+    pub fn find(layouts: *const Layouts, location: schema.TabLocation) ?SavedLayout {
+        for (layouts.entries) |slot| {
+            const entry = slot orelse continue;
+            if (std.meta.eql(entry.location, location)) {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    /// Removes one layout after canonical pane reconciliation consumes it.
+    ///
+    /// ```zig
+    /// layouts.forget(location);
+    /// ```
+    pub fn forget(layouts: *Layouts, location: schema.TabLocation) void {
+        for (&layouts.entries) |*slot| {
+            const entry = slot.* orelse continue;
+            if (std.meta.eql(entry.location, location)) {
+                slot.* = null;
+                return;
+            }
+        }
+    }
+};
+
 pub const History = struct {
     entries: [schema.max_workspace_list_entries]?Bookmark = @splat(null),
 
@@ -69,4 +133,24 @@ test "workspace bookmarks replace the last focused tab and pane" {
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(9)), restored.pane_id);
     history.forget(workspace);
     try std.testing.expect(history.find(workspace) == null);
+}
+
+test "saved layouts are keyed by complete tab identity" {
+    var layouts: Layouts = .{};
+    var first: layout_mod.Layout = .{};
+    try first.addRoot(@enumFromInt(5));
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .tab_id = @enumFromInt(4),
+    };
+    try layouts.remember(.{
+        .location = location,
+        .pane_id = @enumFromInt(5),
+        .workspace_active = true,
+        .layout = first,
+    });
+
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(5)), layouts.find(location).?.pane_id);
+    layouts.forget(location);
+    try std.testing.expect(layouts.find(location) == null);
 }

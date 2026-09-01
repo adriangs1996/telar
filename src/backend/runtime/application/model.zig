@@ -9,11 +9,13 @@ const core = @import("telar-core");
 const agent = @import("../../agent/root.zig");
 const pane = @import("../../pane/root.zig");
 const workspace = @import("../../workspace/root.zig");
+const client_layout_store = @import("client_layout_store.zig");
 
 pub const RuntimeModel = struct {
     workspaces: workspace.State = .{},
     panes: pane.PaneStore,
     agents: agent.Tracker = .{},
+    client_layouts: client_layout_store.Store = .{},
 };
 
 test "runtime model starts with empty configured capability roots" {

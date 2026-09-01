@@ -11,10 +11,10 @@ const max_nodes = max_panes * 2 - 1;
 const NodeIndex = u8;
 const index_capacity = max_panes * 2;
 const ViewIndex = core.fixed_index.SlotIndex(index_capacity);
-const ratio_scale: u16 = 10_000;
+const ratio_scale: u16 = schema.client_layout_ratio_scale;
 const default_split_ratio: u16 = ratio_scale / 2;
-const minimum_split_ratio: u16 = ratio_scale / 10;
-const maximum_split_ratio: u16 = ratio_scale - minimum_split_ratio;
+const minimum_split_ratio: u16 = schema.min_client_layout_ratio;
+const maximum_split_ratio: u16 = schema.max_client_layout_ratio;
 pub const resize_step: u16 = ratio_scale / 20;
 
 pub const Axis = enum {
@@ -200,6 +200,68 @@ pub const Layout = struct {
 
     pub fn isFullscreen(layout: *const Layout) bool {
         return layout.fullscreen;
+    }
+
+    /// Writes this split tree in the protocol's pre-order representation.
+    ///
+    /// ```zig
+    /// var nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    /// const encoded = layout.clientLayoutNodes(&nodes);
+    /// ```
+    pub fn clientLayoutNodes(layout: *const Layout, output: *[schema.max_client_layout_nodes]schema.ClientLayoutNode) []const schema.ClientLayoutNode {
+        const root = layout.root orelse return output[0..0];
+        var stack: [max_nodes]NodeIndex = undefined;
+        var stack_len: usize = 1;
+        var output_len: usize = 0;
+        stack[0] = root;
+        while (stack_len != 0) {
+            stack_len -= 1;
+            const node = layout.nodes[stack[stack_len]].node;
+            output[output_len] = switch (node) {
+                .empty => unreachable,
+                .leaf => |pane_id| .{ .pane = pane_id },
+                .split => |branch| encoded: {
+                    stack[stack_len] = branch.second;
+                    stack_len += 1;
+                    stack[stack_len] = branch.first;
+                    stack_len += 1;
+                    break :encoded .{ .split = .{
+                        .axis = switch (branch.axis) {
+                            .horizontal => .horizontal,
+                            .vertical => .vertical,
+                        },
+                        .ratio = branch.ratio,
+                    } };
+                },
+            };
+            output_len += 1;
+        }
+
+        return output[0..output_len];
+    }
+
+    /// Reconstructs one validated protocol split tree as disposable client
+    /// state. Pane-gap and revision preferences are applied by `restoreSaved`.
+    ///
+    /// ```zig
+    /// const saved = try Layout.fromClientLayout(tab_layout);
+    /// ```
+    pub fn fromClientLayout(encoded: schema.ClientTabLayoutView) !Layout {
+        var iterator = encoded.nodes();
+        var builder: ClientLayoutBuilder = .{ .iterator = &iterator };
+        const root = try builder.build(null);
+        if (try iterator.next() != null) {
+            return error.InvalidClientLayoutTree;
+        }
+
+        builder.layout.root = root;
+        builder.layout.focused_pane = encoded.focused_pane;
+        builder.layout.fullscreen = encoded.fullscreen;
+        if (!builder.layout.contains(encoded.focused_pane)) {
+            return error.InvalidClientLayoutFocus;
+        }
+
+        return builder.layout;
     }
 
     pub fn setPaneGaps(layout: *Layout, enabled: bool) bool {
@@ -621,6 +683,44 @@ pub const Layout = struct {
     }
 };
 
+const ClientLayoutBuilder = struct {
+    layout: Layout = .{},
+    iterator: *schema.ClientLayoutNodeIterator,
+    next_index: usize = 0,
+
+    fn build(builder: *ClientLayoutBuilder, parent: ?NodeIndex) !NodeIndex {
+        const encoded = try builder.iterator.next() orelse return error.InvalidClientLayoutTree;
+        if (builder.next_index == max_nodes) {
+            return error.NodeLimitReached;
+        }
+
+        const index: NodeIndex = @intCast(builder.next_index);
+        builder.next_index += 1;
+        switch (encoded) {
+            .pane => |pane_id| {
+                builder.layout.nodes[index] = .{ .parent = parent, .node = .{ .leaf = pane_id } };
+                builder.layout.pane_count += 1;
+            },
+            .split => |split| {
+                builder.layout.nodes[index] = .{ .parent = parent };
+                const first = try builder.build(index);
+                const second = try builder.build(index);
+                builder.layout.nodes[index].node = .{ .split = .{
+                    .axis = switch (split.axis) {
+                        .horizontal => .horizontal,
+                        .vertical => .vertical,
+                    },
+                    .ratio = split.ratio,
+                    .first = first,
+                    .second = second,
+                } };
+            },
+        }
+
+        return index;
+    }
+};
+
 fn splitArea(area: ui.Rect, axis: Axis, ratio: u16, pane_gaps: bool) [2]ui.Rect {
     std.debug.assert(ratio <= ratio_scale);
     return switch (axis) {
@@ -879,4 +979,46 @@ test "focus changes advance the layout revision" {
     const focused_revision = layout.currentRevision();
     try std.testing.expect(layout.focusPane(@enumFromInt(1)));
     try std.testing.expectEqual(focused_revision, layout.currentRevision());
+}
+
+test "client layout encoding restores splits ratios focus and fullscreen" {
+    var original: Layout = .{};
+    try original.addRoot(@enumFromInt(1));
+    try original.splitFocused(@enumFromInt(2), .horizontal);
+    try original.splitFocused(@enumFromInt(3), .vertical);
+    try std.testing.expect(original.focusPane(@enumFromInt(1)));
+    try std.testing.expect(original.resizeFocused(.right, .{ .w = 100, .h = 40 }));
+    try std.testing.expect(original.toggleFullscreen());
+
+    var node_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    const nodes = original.clientLayoutNodes(&node_storage);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(4) },
+        .tab_id = @enumFromInt(5),
+    };
+    var wire: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const payload = try schema.encodeClientLayoutSnapshot(&wire, .{
+        .restored = true,
+        .sidebar_width = 62,
+        .active_tab = location,
+        .tabs = &.{.{
+            .location = location,
+            .focused_pane = original.focused().?,
+            .fullscreen = original.isFullscreen(),
+            .workspace_active = true,
+            .nodes = nodes,
+        }},
+    });
+    var tabs = (try schema.decodeServer(payload)).client_layout_snapshot.tabs();
+    const restored = try Layout.fromClientLayout((try tabs.next()).?);
+
+    try std.testing.expectEqual(original.count(), restored.count());
+    try std.testing.expectEqual(original.focused().?, restored.focused().?);
+    try std.testing.expect(restored.isFullscreen());
+    var restored_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    const restored_nodes = restored.clientLayoutNodes(&restored_storage);
+    try std.testing.expectEqual(nodes.len, restored_nodes.len);
+    for (nodes, restored_nodes) |expected, actual| {
+        try std.testing.expectEqualDeep(expected, actual);
+    }
 }

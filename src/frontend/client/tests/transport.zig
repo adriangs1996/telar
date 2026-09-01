@@ -35,6 +35,7 @@ const client_model = @import("../model/root.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
 const client_clock = @import("../resources/clock.zig");
+const client_layout_resource = @import("../resources/client_layouts.zig");
 const config_reload_worker = @import("../resources/config_reload.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
@@ -266,14 +267,13 @@ test "client startup validates geometry before request registration" {
 
     try std.testing.expectError(error.TerminalTooSmall, client_startup.start(client, .{
         .resize_watcher = undefined,
-        .launch = .{ .cwd = "/work", .arguments = &.{} },
     }));
 
     try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
     try std.testing.expect(!client.runtime_transport.receive_pending);
 }
 
-test "client startup registers its handshake before arming event sources" {
+test "client startup waits for runtime layout before its initial open" {
     var tty: platform.Tty = undefined;
     var watcher = try platform.ResizeWatcher.init(&tty);
     defer watcher.deinit();
@@ -281,14 +281,14 @@ test "client startup registers its handshake before arming event sources" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    client.options.arguments = &.{"/bin/sh"};
     const expected_size = workspace_capability.multiplexer.rectSize(client.view.workbench()).?;
 
     try client_startup.start(client, .{
         .resize_watcher = &watcher,
-        .launch = .{ .cwd = "/work", .arguments = &.{ "/bin/sh", "-l" } },
     });
 
-    try std.testing.expect(request_lifecycle.has(client, .initial_open));
+    try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
     try std.testing.expect(client.runtime_transport.receive_pending);
     var buffer: [256]u8 = undefined;
     const configure = try harness.nextClientMessage(&buffer);
@@ -297,16 +297,105 @@ test "client startup registers its handshake before arming event sources" {
         kitty.clientSupportsSharedMemory(),
         configure.configure_graphics.shared,
     );
-    try std.testing.expect((try harness.nextClientMessage(&buffer)) == .request_runtime_state);
+    const runtime_state = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(runtime_state == .request_runtime_state);
+    try std.testing.expectEqual(client.client_identity, runtime_state.request_runtime_state.client_identity);
+
+    const empty_layout = try schema.encodeClientLayoutSnapshot(&buffer, .{ .restored = false });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(empty_layout));
+    try harness.settle();
+
+    try std.testing.expect(request_lifecycle.has(client, .initial_open));
     const open = try harness.nextClientMessage(&buffer);
     try std.testing.expect(open == .open_pane);
     try std.testing.expectEqual(initial_request_id, open.open_pane.request_id);
     try std.testing.expectEqualDeep(expected_size, open.open_pane.size);
-    try std.testing.expectEqualStrings("/work", open.open_pane.launch.?.cwd);
+    try std.testing.expectEqualStrings("/", open.open_pane.launch.?.cwd);
     var arguments = open.open_pane.launch.?.arguments();
     try std.testing.expectEqualStrings("/bin/sh", (try arguments.next()).?);
-    try std.testing.expectEqualStrings("-l", (try arguments.next()).?);
     try std.testing.expect((try arguments.next()) == null);
+}
+
+test "restored client layout controls the initial attach geometry" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .tab_id = @enumFromInt(9),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(44);
+    const nodes = [_]schema.ClientLayoutNode{.{ .pane = pane_id }};
+    const tabs = [_]schema.ClientTabLayout{.{
+        .location = location,
+        .focused_pane = pane_id,
+        .fullscreen = false,
+        .workspace_active = true,
+        .nodes = &nodes,
+    }};
+    const restored: schema.ClientLayoutSnapshot = .{
+        .restored = true,
+        .sidebar_visible = true,
+        .sidebar_width = 50,
+        .workspace_list_collapsed = true,
+        .active_tab = location,
+        .tabs = &tabs,
+    };
+    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const payload = try schema.encodeClientLayoutSnapshot(&buffer, restored);
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(payload));
+    try harness.settle();
+
+    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expectEqual(@as(u16, 50), client.model.sidebarWidth());
+    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expectEqual(@as(u16, 50), client.view.regions.sidebar.w);
+    try std.testing.expectEqual(@as(u16, 50), client.view.regions.top.x);
+    try std.testing.expectEqual(pane_id, client.saved_layouts.find(location).?.pane_id);
+    try std.testing.expectEqual(pane_id, client.navigation_history.find(location.workspace).?.pane_id);
+
+    const open = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(open == .open_pane);
+    try std.testing.expect(open.open_pane.target == .pane);
+    try std.testing.expectEqual(pane_id, open.open_pane.target.pane);
+    try std.testing.expect(open.open_pane.launch == null);
+    try std.testing.expectEqualDeep(
+        workspace_capability.multiplexer.rectSize(client.view.workbench()).?,
+        open.open_pane.size,
+    );
+
+    const duplicate_payload = try schema.encodeClientLayoutSnapshot(&buffer, restored);
+    try std.testing.expectError(
+        error.DuplicateClientLayoutSnapshot,
+        server_messages.handleServerMessage(client, try schema.decodeServer(duplicate_payload)),
+    );
+}
+
+test "sidebar preferences survive when retained pane layouts become stale" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.options.arguments = &.{"/bin/sh"};
+    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const payload = try schema.encodeClientLayoutSnapshot(&buffer, .{
+        .restored = true,
+        .sidebar_visible = true,
+        .sidebar_width = 51,
+        .workspace_list_collapsed = true,
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(payload));
+    try harness.settle();
+
+    try std.testing.expectEqual(@as(u16, 51), client.model.sidebarWidth());
+    try std.testing.expect(client.model.workspaceListCollapsed());
+    const open = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(open == .open_pane);
+    try std.testing.expect(open.open_pane.target == .default);
+    try std.testing.expect(open.open_pane.launch != null);
 }
 
 test "bootstrap answers the initial open with both snapshot requests" {
@@ -327,4 +416,42 @@ test "bootstrap answers the initial open with both snapshot requests" {
         harness.client.model.version(),
         harness.client.presenter.presented_model_version,
     );
+}
+
+test "client layout observation sends one canonical workspace update" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.model.workspace.active().?.snapshot_loaded = true;
+    try client.client_layouts.markSnapshotReceived();
+    try std.testing.expect(client.model.restoreSidebarLayout(true, 53) != null);
+    try std.testing.expect(client.model.setWorkspaceListCollapsed(true) != null);
+
+    try client_layout_resource.observe(client);
+    try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
+    try client_layout_resource.observe(client);
+    try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
+    try harness.settle();
+
+    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .update_client_layout);
+    const update = message.update_client_layout;
+    try std.testing.expect(update.sidebar_visible);
+    try std.testing.expectEqual(@as(u16, 53), update.sidebar_width);
+    try std.testing.expect(update.workspace_list_collapsed);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, update.active_tab);
+    try std.testing.expectEqual(@as(u16, 1), update.tab_count);
+    var tabs = update.tabs();
+    const tab = (try tabs.next()).?;
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, tab.location);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, tab.focused_pane);
+    try std.testing.expect(tab.workspace_active);
+    var nodes = tab.nodes();
+    const node = (try nodes.next()).?;
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, node.pane);
+    try std.testing.expect(try nodes.next() == null);
+    try std.testing.expect(try tabs.next() == null);
 }

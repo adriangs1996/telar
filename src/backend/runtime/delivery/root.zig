@@ -7,6 +7,7 @@ const history = @import("../../history/root.zig");
 const pane_mod = @import("../../pane/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
 const attachment_mod = @import("../attachment/root.zig");
+const client_layout_store = @import("../application/client_layout_store.zig");
 const response_queue = @import("response_queue.zig");
 const runtime_encoder = @import("encoder.zig");
 const system_metrics_mod = @import("../observability/root.zig").system_metrics;
@@ -36,6 +37,7 @@ pub const Sources = struct {
     system_metrics: *const system_metrics_mod.Sampler,
     proxy_active: bool,
     home: ?[]const u8,
+    client_layouts: ?*client_layout_store.Store = null,
 };
 
 pub const Prepared = struct {
@@ -75,6 +77,7 @@ const Effect = union(enum) {
     },
     resync,
     clipboard,
+    client_layout,
     proxy_status,
     agent_revision: u64,
     system_metrics_revision: u64,
@@ -103,6 +106,8 @@ pub const Delivery = struct {
     close_after_reply: bool = false,
     stopping_pending: bool = false,
     runtime_state_requested: bool = false,
+    client_identity: schema.ClientIdentity = .invalid,
+    client_layout_sent: bool = false,
     proxy_status_sent: bool = false,
     agent_revision_sent: u64 = 0,
     system_metrics_revision_sent: u64 = 0,
@@ -143,9 +148,17 @@ pub const Delivery = struct {
     /// requests retain delivered revision baselines instead of replaying them.
     ///
     /// ```zig
-    /// delivery.requestRuntimeState();
+    /// try delivery.requestRuntimeState(identity);
     /// ```
-    pub fn requestRuntimeState(delivery: *Delivery) void {
+    pub fn requestRuntimeState(delivery: *Delivery, identity: schema.ClientIdentity) !void {
+        if (identity == .invalid) {
+            return error.InvalidClientIdentity;
+        }
+        if (delivery.client_identity != .invalid and delivery.client_identity != identity) {
+            return error.ClientIdentityChanged;
+        }
+
+        delivery.client_identity = identity;
         delivery.runtime_state_requested = true;
     }
 
@@ -249,6 +262,21 @@ pub const Delivery = struct {
             }),
             .clipboard,
         );
+
+        if (delivery.runtime_state_requested and !delivery.client_layout_sent) {
+            var storage: client_layout_store.SnapshotStorage = .{};
+            const snapshot: schema.ClientLayoutSnapshot = if (sources.client_layouts) |store|
+                store.snapshot(.{
+                    .identity = delivery.client_identity,
+                    .sources = .{ .panes = sources.panes, .workspaces = workspaces },
+                }, &storage)
+            else
+                .{ .restored = false };
+            return delivery.stage(
+                try schema.encodeClientLayoutSnapshot(buffer, snapshot),
+                .client_layout,
+            );
+        }
 
         if (delivery.runtime_state_requested and !delivery.proxy_status_sent)
             return delivery.stage(
@@ -394,6 +422,7 @@ pub const Delivery = struct {
                 if (comptime diagnostics.enabled) metrics.client_resyncs += 1;
             },
             .clipboard => delivery.clipboard_pending = false,
+            .client_layout => delivery.client_layout_sent = true,
             .proxy_status => delivery.proxy_status_sent = true,
             .agent_revision => |revision| delivery.agent_revision_sent = revision,
             .system_metrics_revision => |revision| delivery.system_metrics_revision_sent = revision,

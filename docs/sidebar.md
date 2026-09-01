@@ -10,8 +10,10 @@ scrolling, hit targets, or physical KGP placements.
 The runtime owns agent truth and publishes stable `(pane_id, generation)` task
 identity. `ClientModel` keeps one disposable `agents.Snapshot` replica.
 `widgets.sidebar.State` keeps only visible interaction state such as scroll
-position. Killing the client loses the selected tab, pane focus and scroll
-offset. It does not alter any runtime task or agent.
+position. The runtime retains the selected tab, pane focus, split trees,
+sidebar geometry and workspace-list collapse for reconnecting clients; hover
+and sidebar scroll still die with the client. None of this alters a runtime
+task or agent.
 
 Each entry carries workspace and tab labels, one-based pane position, a reduced
 cwd label, and a session title in addition to provider and status. The runtime
@@ -109,11 +111,13 @@ raster is capped at 64 KiB. Media failure leaves the cell actions intact.
 ## Geometry
 
 The sidebar is visible only when the client can reserve 42 columns for it and
-20 for the workbench. It grows with the terminal up to 62 columns. Below that
-threshold the layout hides it while preserving `sidebar_requested`, so a later
-resize restores it without changing user intent. While visible, the sidebar
-owns the complete left column. The top bar, bottom bar and workbench use the
-remaining width. Hiding it expands all three regions to the full client width.
+20 for the workbench. Its default preferred width is 62 columns. Keybindings
+move that preference by two columns, and dragging the rightmost sidebar column
+selects an exact width. Host geometry clamps only the visible width: shrinking
+the terminal does not overwrite the preference, so expanding it restores the
+chosen size. While visible, the sidebar owns the complete left column. The top
+bar, bottom bar and workbench use the remaining width. Hiding it expands all
+three regions to the full client width.
 
 ## Detector wiring
 

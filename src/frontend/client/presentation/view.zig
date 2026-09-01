@@ -82,6 +82,8 @@ pub const State = struct {
     icon_theme: ui.icons.Theme,
     hits: Hits = .{},
     sidebar_requested: bool = true,
+    sidebar_preferred_width: u16 = sidebar_width,
+    sidebar_resize_active: bool = false,
     hovered: ?Action = null,
     sidebar: widgets.sidebar.State = .{},
     workspace_list_collapsed: bool = false,
@@ -122,7 +124,10 @@ pub const State = struct {
     ) !State {
         return .{
             .scratch = try .init(gpa, width, height),
-            .regions = .calculate(width, height, true),
+            .regions = .calculate(width, height, .{
+                .visible = true,
+                .preferred_width = sidebar_width,
+            }),
             .theme = selected_theme,
             .icon_theme = selected_icons,
             .kitty_sidebar = .init(gpa),
@@ -165,7 +170,10 @@ pub const State = struct {
     }
 
     fn recalculateRegions(state: *State, width: u16, height: u16) void {
-        state.regions = .calculate(width, height, state.sidebar_requested);
+        state.regions = .calculate(width, height, .{
+            .visible = state.sidebar_requested,
+            .preferred_width = state.sidebar_preferred_width,
+        });
         state.regions.reserveAttachments(state.attachment_store.hasVisibleItems());
     }
 
@@ -195,6 +203,24 @@ pub const State = struct {
     pub fn setSidebarVisible(state: *State, visible: bool) void {
         if (state.sidebar_requested == visible) return;
         state.toggleSidebar();
+    }
+
+    /// Projects the complete committed sidebar geometry into disposable view
+    /// state while preserving host-dependent clamping in `Regions`.
+    ///
+    /// ```zig
+    /// view.setSidebarLayout(true, 73);
+    /// ```
+    pub fn setSidebarLayout(state: *State, visible: bool, preferred_width: u16) void {
+        if (state.sidebar_requested == visible and state.sidebar_preferred_width == preferred_width) {
+            return;
+        }
+
+        state.sidebar_requested = visible;
+        state.sidebar_preferred_width = preferred_width;
+        state.recalculateRegions(state.scratch.w, state.scratch.h);
+        state.hovered = null;
+        state.dirty = true;
     }
 
     pub fn invalidate(state: *State) void {
@@ -399,6 +425,29 @@ pub const State = struct {
             state.hovered = hovered;
             state.recordInteraction();
         }
+        if (state.sidebar_resize_active) {
+            result.consumed = true;
+            switch (mouse.kind) {
+                .drag => {
+                    result.intent = .{ .resize_sidebar = mouse.x +| 1 };
+                },
+                .release => {
+                    state.sidebar_resize_active = false;
+                    state.recordInteraction();
+                    result.intent = .{ .resize_sidebar = mouse.x +| 1 };
+                },
+                else => {},
+            }
+
+            return result;
+        }
+        if (mouse.kind == .press and hovered != null and hovered.? == .resize_sidebar and mouse.button & 0b11 == 0) {
+            state.sidebar_resize_active = true;
+            state.recordInteraction();
+            result.consumed = true;
+
+            return result;
+        }
         if (state.regions.sidebar.contains(mouse.x, mouse.y)) switch (mouse.kind) {
             .scroll_up => if (state.sidebar.scrollBy(-3, state.sidebarListHeight())) {
                 state.recordInteraction();
@@ -412,6 +461,7 @@ pub const State = struct {
         const action = hovered orelse return result;
         switch (action) {
             .toggle_sidebar => result.intent = .toggle_sidebar,
+            .resize_sidebar => {},
             .focus_pane => |pane_id| result.intent = .{ .focus_pane = pane_id },
             .select_tab => |tab_id| {
                 switch (mouse.button & 0b11) {
@@ -708,7 +758,7 @@ fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingCompo
 }
 
 test "visible regions reserve top bottom sidebar and workbench" {
-    const regions = Regions.calculate(120, 40, true);
+    const regions = Regions.calculate(120, 40, .{ .visible = true, .preferred_width = sidebar_width });
     try std.testing.expectEqual(ui.Rect{ .x = 62, .w = 58, .h = 1 }, regions.top);
     try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 62, .h = 40 }, regions.sidebar);
     try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 1, .w = 58, .h = 38 }, regions.workbench);
@@ -716,7 +766,7 @@ test "visible regions reserve top bottom sidebar and workbench" {
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {
-    const regions = Regions.calculate(61, 20, true);
+    const regions = Regions.calculate(61, 20, .{ .visible = true, .preferred_width = sidebar_width });
     try std.testing.expect(regions.sidebar.isEmpty());
     try std.testing.expectEqual(@as(u16, 61), regions.workbench.w);
 }
@@ -735,6 +785,43 @@ test "sidebar toggle changes only the disposable client layout" {
     try std.testing.expectEqual(@as(u16, 100), state.regions.workbench.w);
     try std.testing.expectEqual(ui.Rect{ .w = 100, .h = 1 }, state.regions.top);
     try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
+}
+
+test "sidebar separator drag reports exact preferred widths" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 120, 30);
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 27 });
+    var screen = try term.Screen.init(gpa, 120, 30);
+    defer screen.deinit();
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
+
+    const pressed = state.handleMouse(.{
+        .x = state.regions.sidebar.w - 1,
+        .y = 5,
+        .kind = .press,
+    });
+    try std.testing.expect(pressed.consumed);
+    try std.testing.expect(pressed.intent == .none);
+    try std.testing.expect(state.sidebar_resize_active);
+
+    const dragged = state.handleMouse(.{ .x = 72, .y = 5, .kind = .drag });
+    try std.testing.expect(dragged.consumed);
+    try std.testing.expectEqualDeep(InteractionIntent{ .resize_sidebar = 73 }, dragged.intent);
+    try std.testing.expect(!dragged.layout_changed);
+    try std.testing.expect(state.sidebar_resize_active);
+
+    const released = state.handleMouse(.{ .x = 70, .y = 5, .kind = .release });
+    try std.testing.expect(released.consumed);
+    try std.testing.expectEqualDeep(InteractionIntent{ .resize_sidebar = 71 }, released.intent);
+    try std.testing.expect(!released.layout_changed);
+    try std.testing.expect(!state.sidebar_resize_active);
 }
 
 test "empty production sidebar has no task controls" {

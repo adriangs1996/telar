@@ -38,12 +38,13 @@ pub fn Handlers(comptime Context: type) type {
         request_graphics_snapshot: *const fn (*Context, schema.RequestGraphicsSnapshot) anyerror!void,
         graphics_credit: *const fn (*Context, schema.GraphicsCredit) anyerror!void,
         configure_graphics: *const fn (*Context, schema.ConfigureGraphics) anyerror!void,
-        request_runtime_state: *const fn (*Context) anyerror!void,
+        request_runtime_state: *const fn (*Context, schema.RequestRuntimeState) anyerror!void,
         create_workspace: *const fn (*Context, schema.CreateWorkspaceView) anyerror!void,
         rename_workspace: *const fn (*Context, schema.RenameWorkspace) anyerror!void,
         set_pane_viewport: *const fn (*Context, schema.SetPaneViewport) anyerror!void,
         copy_selection: *const fn (*Context, schema.CopySelection) anyerror!void,
         show_notification: *const fn (*Context, schema.ShowNotification) anyerror!void,
+        update_client_layout: *const fn (*Context, schema.ClientLayoutUpdateView) anyerror!void,
     };
 }
 
@@ -94,12 +95,13 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .request_graphics_snapshot => |request| handlers.request_graphics_snapshot(router.context, request),
                 .graphics_credit => |request| handlers.graphics_credit(router.context, request),
                 .configure_graphics => |request| handlers.configure_graphics(router.context, request),
-                .request_runtime_state => handlers.request_runtime_state(router.context),
+                .request_runtime_state => |request| handlers.request_runtime_state(router.context, request),
                 .create_workspace => |request| handlers.create_workspace(router.context, request),
                 .rename_workspace => |request| handlers.rename_workspace(router.context, request),
                 .set_pane_viewport => |request| handlers.set_pane_viewport(router.context, request),
                 .copy_selection => |request| handlers.copy_selection(router.context, request),
                 .show_notification => |request| handlers.show_notification(router.context, request),
+                .update_client_layout => |request| handlers.update_client_layout(router.context, request),
             };
         }
     };
@@ -175,12 +177,13 @@ const testing_handlers: Handlers(Capture) = .{
     .request_graphics_snapshot = captureHandler(.request_graphics_snapshot, schema.RequestGraphicsSnapshot),
     .graphics_credit = captureHandler(.graphics_credit, schema.GraphicsCredit),
     .configure_graphics = captureHandler(.configure_graphics, schema.ConfigureGraphics),
-    .request_runtime_state = captureVoidHandler(.request_runtime_state),
+    .request_runtime_state = captureHandler(.request_runtime_state, schema.RequestRuntimeState),
     .create_workspace = captureHandler(.create_workspace, schema.CreateWorkspaceView),
     .rename_workspace = captureHandler(.rename_workspace, schema.RenameWorkspace),
     .set_pane_viewport = captureHandler(.set_pane_viewport, schema.SetPaneViewport),
     .copy_selection = captureHandler(.copy_selection, schema.CopySelection),
     .show_notification = captureHandler(.show_notification, schema.ShowNotification),
+    .update_client_layout = captureHandler(.update_client_layout, schema.ClientLayoutUpdateView),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -223,12 +226,20 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         .{ .request_graphics_snapshot = .{ .pane_id = pane_id } },
         .{ .graphics_credit = .{ .pane_id = pane_id, .bytes = 1 } },
         .{ .configure_graphics = .{ .shared = true } },
-        .{ .request_runtime_state = {} },
+        .{ .request_runtime_state = .{ .client_identity = @enumFromInt(5) } },
         .{ .create_workspace = .{ .request_id = request_id, .size = size, .name = "work", .launch = launch } },
         .{ .rename_workspace = .{ .request_id = request_id, .workspace = workspace, .name = "renamed" } },
         .{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 3 } },
         .{ .copy_selection = .{ .pane_id = pane_id, .start_x = 0, .start_y = 0, .end_x = 1, .end_y = 1 } },
         .{ .show_notification = .{ .request_id = request_id, .notification = .{ .title = "notice" } } },
+        .{ .update_client_layout = .{
+            .sidebar_visible = true,
+            .sidebar_width = 62,
+            .workspace_list_collapsed = false,
+            .active_tab = location,
+            .tab_count = 0,
+            .encoded_tabs = "",
+        } },
     };
 }
 

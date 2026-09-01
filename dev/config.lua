@@ -13,11 +13,6 @@ return telar.config({
 	api_version = 2,
 
 	runtime = {
-		graphics = {
-			pane_mib = 64,
-			global_mib = 256,
-		},
-
 		proxy = {
 			enabled = true,
 			ca_dir = "state/proxy",
@@ -56,6 +51,30 @@ return telar.config({
 		sidebar = {
 			visible = true,
 			renderer = "automatic",
+		},
+
+		bars = {
+			bottom = {
+				left = telar.bar.metrics(),
+				right = telar.bar.tabs(),
+				center = telar.bar.dynamic({
+					every_ms = 1000,
+					render = function(ctx)
+						return {
+							{
+								text = string.format(
+									" %02d:%02d:%02d ",
+									ctx.time.hour,
+									ctx.time.minute,
+									ctx.time.second
+								),
+								fg = "text",
+								bold = true,
+							},
+						}
+					end,
+				}),
+			},
 		},
 
 		keybindings = {
@@ -111,6 +130,10 @@ return telar.config({
 			telar.bind({ "b" }, action.toggle_sidebar()),
 			telar.bind({ "w" }, action.toggle_workspace_list()),
 			telar.bind({ "d" }, action.detach()),
+
+			-- Sidebar
+			telar.bind_global({ "alt+n" }, action.resize_sidebar({ direction = "left" })),
+			telar.bind_global({ "alt+m" }, action.resize_sidebar({ direction = "right" })),
 		},
 	},
 })

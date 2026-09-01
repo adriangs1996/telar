@@ -28,6 +28,10 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
         },
         .toggle_pane_fullscreen => try writer.writeByte(13),
         .toggle_sidebar => try writer.writeByte(3),
+        .resize_sidebar => |value| {
+            try writer.writeByte(19);
+            try writer.writeByte(@intFromEnum(value));
+        },
         .close_pane => try writer.writeByte(4),
         .new_tab => try writer.writeByte(5),
         .select_tab_offset => |value| {
@@ -146,6 +150,10 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
                     message,
                 ) catch return error.InvalidWorkerEffect };
             },
+            19 => .{ .resize_sidebar = std.enums.fromInt(
+                action_mod.SidebarDirection,
+                try byte(bytes, &offset),
+            ) orelse return error.InvalidWorkerEffect },
             else => return error.UnknownWorkerEffect,
         };
     }
@@ -204,16 +212,17 @@ test "plugin result protocol round trips semantic effects" {
     batch.items[2] = .{ .resize_pane = .down };
     batch.items[3] = .toggle_pane_fullscreen;
     batch.items[4] = .toggle_sidebar;
-    batch.items[5] = .new_workspace;
-    batch.items[6] = .{ .select_workspace = 3 };
-    batch.items[7] = .{ .notification = try action_mod.Notification.init(
+    batch.items[5] = .{ .resize_sidebar = .right };
+    batch.items[6] = .new_workspace;
+    batch.items[7] = .{ .select_workspace = 3 };
+    batch.items[8] = .{ .notification = try action_mod.Notification.init(
         .warning,
         3000,
         .{ .workspace = @enumFromInt(9) },
         "Agent waiting",
         "Review its question",
     ) };
-    batch.len = 8;
+    batch.len = 9;
     var buffer: [max_bytes]u8 = undefined;
     try std.testing.expectEqualDeep(batch, try decode(try encode(&buffer, &batch)));
 }

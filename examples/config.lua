@@ -80,6 +80,8 @@ return telar.config({
       telar.bind({ "shift+right" }, telar.action.resize_pane({ direction = "right" })),
       telar.bind({ "shift+up" }, telar.action.resize_pane({ direction = "up" })),
       telar.bind({ "shift+down" }, telar.action.resize_pane({ direction = "down" })),
+      telar.bind({ "alt+left" }, telar.action.resize_sidebar({ direction = "left" })),
+      telar.bind({ "alt+right" }, telar.action.resize_sidebar({ direction = "right" })),
       telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
       telar.bind({ "w" }, telar.action.toggle_workspace_list()),
       telar.bind(

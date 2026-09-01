@@ -72,7 +72,8 @@ pub const Runtime = struct {
         runtime.loop.init(runtime.resources.io(), initialization.options.stop);
         errdefer runtime.loop.cancel();
 
-        runtime.application = runtime.composeApplication(initialization.options);
+        runtime.application = try runtime.composeApplication(initialization.options);
+        errdefer runtime.application.model.client_layouts.deinit();
         try runtime.scheduleInitialEvents();
 
         if (comptime fail_after_actors) {
@@ -93,7 +94,7 @@ pub const Runtime = struct {
         try initial_sources.schedule();
     }
 
-    fn composeApplication(runtime: *Runtime, options: Options) Application {
+    fn composeApplication(runtime: *Runtime, options: Options) !Application {
         return Application.init(.{
             .io = runtime.resources.io(),
             .gpa = runtime.resources.gpa,

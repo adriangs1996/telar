@@ -10,6 +10,7 @@ const schema = core.schema;
 pub const Intent = union(enum) {
     none,
     toggle_sidebar,
+    resize_sidebar: u16,
     toggle_workspace_list,
     focus_agent: agents.AgentKey,
     select_tab: schema.TabId,

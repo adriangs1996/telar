@@ -67,6 +67,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
         .host_size = host_resizes.initialSize(host_platform_size),
         .window_width_px = host_platform_size.width_px,
         .window_height_px = host_platform_size.height_px,
+        .client_identity = try terminalIdentity(init.minimal.environ, &tty),
         .options = options,
     });
     options_owned = false;
@@ -75,13 +76,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     // itself is torn down.
     defer client.deinit();
 
-    try client_startup.start(client, .{
-        .resize_watcher = &watcher,
-        .launch = .{
-            .cwd = options.cwd,
-            .arguments = options.arguments,
-        },
-    });
+    try client_startup.start(client, .{ .resize_watcher = &watcher });
 
     while (true) {
         const event = try client.select.await();
@@ -94,4 +89,33 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
             .exit => |status| return status,
         }
     }
+}
+
+fn terminalIdentity(environ: std.process.Environ, tty: *const platform.Tty) !core.schema.ClientIdentity {
+    const keys = [_][]const u8{
+        "TERM_SESSION_ID",
+        "WT_SESSION",
+        "KITTY_WINDOW_ID",
+        "WEZTERM_PANE",
+        "TMUX_PANE",
+    };
+    var hasher = std.hash.Wyhash.init(0x74656c61722d636c);
+    var found = false;
+    for (keys) |key| {
+        const value = environ.getPosix(key) orelse continue;
+        if (value.len == 0) {
+            continue;
+        }
+
+        hasher.update(key);
+        hasher.update(&.{0});
+        hasher.update(value);
+        hasher.update(&.{0});
+        found = true;
+    }
+    if (found) {
+        return @enumFromInt(hasher.final() | 1);
+    }
+
+    return @enumFromInt((try tty.identity()) | 1);
 }

@@ -9,6 +9,7 @@ const lua_config = @import("../../config/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
 const notifications = @import("../../notifications/root.zig");
+const frontend_ui = @import("../../ui/root.zig");
 const workspace_capability = @import("../../workspace/root.zig");
 
 const copy_mode = input_capability.copy_mode;
@@ -231,8 +232,9 @@ pub const TogglePaneFullscreenRequest = struct {
     area: ui.Rect,
 };
 
-pub const SidebarVisibility = struct {
+pub const SidebarLayout = struct {
     visible: bool,
+    width: u16 = frontend_ui.sidebar.default_width,
     chrome_revision: u64,
 };
 
@@ -251,7 +253,7 @@ pub const ConfigurationInput = struct {
 pub const ConfigurationCommit = struct {
     generation: u64,
     configuration_revision: u64,
-    sidebar: ?SidebarVisibility,
+    sidebar: ?SidebarLayout,
     pane_gaps_changed: bool,
     panes_revision: u64,
     bars_changed: bool = false,
@@ -292,6 +294,7 @@ pub const ClipboardCapture = struct {
 
 pub const InitialClientState = struct {
     pane_gaps: bool,
+    sidebar_width: u16 = frontend_ui.sidebar.default_width,
     configuration_generation: u64 = 0,
     bars: bars.Layout = .{},
     host_size: schema.TerminalSize = .{ .cols = 80, .rows = 24 },

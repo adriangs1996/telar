@@ -51,6 +51,7 @@ pub fn projection(client: *const Client) presenter.Projection {
         .diagnostic = client.model.diagnostic(),
         .copy = copy,
         .sidebar_visible = client.model.sidebarVisible(),
+        .sidebar_width = client.model.sidebarWidth(),
         .workspace_list_collapsed = client.model.workspaceListCollapsed(),
         .host_capabilities = client.model.hostCapabilities(),
         .host_size = client.model.hostSize(),

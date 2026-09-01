@@ -54,6 +54,8 @@ A design is incomplete while any item is unknown.
   emitted by children, and durable history.
 - The client owns layout, focus, hover, selection, scroll position, host
   capabilities, physical graphics placements, and other disposable UI state.
+  The runtime may retain a bounded, validated layout replica for reconnect; it
+  never becomes the authority that mutates client layout.
 - `telar-core` shares types and pure operations. It owns no live runtime or
   client state.
 - The VT emulator alone defines child screen semantics. Observers may tap bytes

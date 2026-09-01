@@ -23,7 +23,23 @@ pub fn handler(client: *Client) toggle_sidebar.ToggleSidebarHandler {
     };
 }
 
-fn applyVisibility(context: *anyopaque, change: client_model.SidebarVisibility) !void {
+/// Wires sidebar resizing to the same ordered projection as visibility.
+///
+/// ```zig
+/// var use_case = resizeHandler(client);
+/// _ = try use_case.execute(.{ .direction = .wider });
+/// ```
+pub fn resizeHandler(client: *Client) toggle_sidebar.ResizeSidebarHandler {
+    return .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .apply = applyVisibility,
+        },
+    };
+}
+
+fn applyVisibility(context: *anyopaque, change: client_model.SidebarLayout) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try sidebar_projection.apply(client, change);

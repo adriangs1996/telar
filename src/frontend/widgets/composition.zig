@@ -75,6 +75,14 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .rounded_focus = input.sidebar_rounded_focus,
         .animation_frame = input.sidebar_animation_frame,
     });
+    if (!input.regions.sidebar.isEmpty()) {
+        context.hits.add(.{
+            .x = input.regions.sidebar.x + input.regions.sidebar.w - 1,
+            .y = input.regions.sidebar.y,
+            .w = 1,
+            .h = input.regions.sidebar.h,
+        }, .resize_sidebar);
+    }
 
     context.buffer.fill(input.regions.bottom, " ", bottomStyle(context));
     const cursor: ?context_mod.Cursor = if (input.rename_field) |field|

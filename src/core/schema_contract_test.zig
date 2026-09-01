@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 58;
+const corpus_len = 60;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -46,6 +46,18 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .{ .name = "TERM", .value = "xterm-256color" },
         .{ .name = "EMPTY", .value = "" },
     };
+    const client_layout_nodes = [_]schema.ClientLayoutNode{
+        .{ .split = .{ .axis = .horizontal, .ratio = 6000 } },
+        .{ .pane = @enumFromInt(5) },
+        .{ .pane = @enumFromInt(6) },
+    };
+    const client_layout_tabs = [_]schema.ClientTabLayout{.{
+        .location = location,
+        .focused_pane = @enumFromInt(5),
+        .fullscreen = false,
+        .workspace_active = true,
+        .nodes = &client_layout_nodes,
+    }};
 
     const helper = struct {
         entries: *[corpus_len]Entry,
@@ -258,7 +270,9 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         }),
     ));
     helper.add("request_runtime_state", .client, false, golden.request_runtime_state, helper.commit(
-        try schema.encodeRequestRuntimeState(helper.space()),
+        try schema.encodeRequestRuntimeState(helper.space(), .{
+            .client_identity = @enumFromInt(9),
+        }),
     ));
     helper.add("set_pane_viewport", .client, false, golden.set_pane_viewport, helper.commit(
         try schema.encodeSetPaneViewport(helper.space(), .{
@@ -286,6 +300,15 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
                 .title = "Build complete",
                 .message = "Open the pane",
             },
+        }),
+    ));
+    helper.add("update_client_layout", .client, false, golden.update_client_layout, helper.commit(
+        try schema.encodeClientLayoutUpdate(helper.space(), .{
+            .sidebar_visible = true,
+            .sidebar_width = 73,
+            .workspace_list_collapsed = true,
+            .active_tab = location,
+            .tabs = &client_layout_tabs,
         }),
     ));
 
@@ -622,6 +645,16 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .sound = .needs_input,
         }),
     ));
+    helper.add("client_layout_snapshot", .server, false, golden.client_layout_snapshot, helper.commit(
+        try schema.encodeClientLayoutSnapshot(helper.space(), .{
+            .restored = true,
+            .sidebar_visible = true,
+            .sidebar_width = 73,
+            .workspace_list_collapsed = true,
+            .active_tab = location,
+            .tabs = &client_layout_tabs,
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -655,10 +688,11 @@ const golden = struct {
     pub const request_graphics_snapshot = "110500000000000000";
     pub const graphics_credit = "1205000000000000000010000000000000";
     pub const configure_graphics = "1301";
-    pub const request_runtime_state = "14";
+    pub const request_runtime_state = "140900000000000000";
     pub const set_pane_viewport = "1705000000000000002a000000";
     pub const copy_selection = "18050000000000000001000200000003000400000001";
     pub const show_notification = "192d0000000000000001c40900000105000000000000000e004275696c6420636f6d706c6574650d004f70656e207468652070616e65";
+    pub const update_client_layout = "1a0149000100070000000000000003000000000000000100000700000000000000030000000000000005000000000000000001030001007017000500000000000000000600000000000000";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
     pub const pane_frame = "82040000000000000001000000000000000000000000000000020001000101000000000000000000010000050101000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
@@ -689,6 +723,7 @@ const golden = struct {
     pub const notification = "9b02b80b00000203000000000000000d004167656e742077616974696e67130052657669657720697473207175657374696f6e";
     pub const notification_shown = "9c2e0000000000000002";
     pub const agent_sound = "9e0500000000000000070000000000000001";
+    pub const client_layout_snapshot = "9f01014900010100070000000000000003000000000000000100000700000000000000030000000000000005000000000000000001030001007017000500000000000000000600000000000000";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {
@@ -1606,6 +1641,79 @@ test "truncated client and server messages are rejected" {
     for (0..server_payload.len) |length| {
         try std.testing.expectError(error.Truncated, schema.decodeServer(server_payload[0..length]));
     }
+}
+
+test "client layout schema validates trees focus and chrome-only recovery" {
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(7) },
+        .tab_id = @enumFromInt(3),
+    };
+    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const incomplete = [_]schema.ClientLayoutNode{
+        .{ .split = .{ .axis = .horizontal, .ratio = 5000 } },
+        .{ .pane = @enumFromInt(5) },
+    };
+    try std.testing.expectError(error.InvalidClientLayoutTree, schema.encodeClientLayoutUpdate(&buffer, .{
+        .sidebar_visible = true,
+        .sidebar_width = 62,
+        .workspace_list_collapsed = false,
+        .active_tab = location,
+        .tabs = &.{.{
+            .location = location,
+            .focused_pane = @enumFromInt(5),
+            .fullscreen = false,
+            .workspace_active = true,
+            .nodes = &incomplete,
+        }},
+    }));
+
+    const duplicate = [_]schema.ClientLayoutNode{
+        .{ .split = .{ .axis = .vertical, .ratio = 5000 } },
+        .{ .pane = @enumFromInt(5) },
+        .{ .pane = @enumFromInt(5) },
+    };
+    try std.testing.expectError(error.DuplicatePane, schema.encodeClientLayoutUpdate(&buffer, .{
+        .sidebar_visible = true,
+        .sidebar_width = 62,
+        .workspace_list_collapsed = false,
+        .active_tab = location,
+        .tabs = &.{.{
+            .location = location,
+            .focused_pane = @enumFromInt(5),
+            .fullscreen = false,
+            .workspace_active = true,
+            .nodes = &duplicate,
+        }},
+    }));
+
+    const pane = [_]schema.ClientLayoutNode{.{ .pane = @enumFromInt(5) }};
+    try std.testing.expectError(error.InvalidClientLayoutFullscreen, schema.encodeClientLayoutUpdate(&buffer, .{
+        .sidebar_visible = true,
+        .sidebar_width = 62,
+        .workspace_list_collapsed = false,
+        .active_tab = location,
+        .tabs = &.{.{
+            .location = location,
+            .focused_pane = @enumFromInt(5),
+            .fullscreen = true,
+            .workspace_active = true,
+            .nodes = &pane,
+        }},
+    }));
+
+    const chrome_only = try schema.encodeClientLayoutSnapshot(&buffer, .{
+        .restored = true,
+        .sidebar_visible = false,
+        .sidebar_width = 73,
+        .workspace_list_collapsed = true,
+    });
+    const restored = (try schema.decodeServer(chrome_only)).client_layout_snapshot;
+    try std.testing.expect(restored.restored);
+    try std.testing.expect(!restored.sidebar_visible);
+    try std.testing.expectEqual(@as(u16, 73), restored.sidebar_width);
+    try std.testing.expect(restored.workspace_list_collapsed);
+    try std.testing.expect(restored.active_tab == null);
+    try std.testing.expectEqual(@as(u16, 0), restored.tab_count);
 }
 
 test "workspace closure handoffs are present only for a different surviving workspace" {

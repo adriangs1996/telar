@@ -47,11 +47,18 @@ pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
         pane_count += 1;
     }
 
+    if (client.saved_layouts.find(snapshot.location)) |saved| {
+        if (!client.model.workspace.restoreClientLayoutOnNextSnapshot(snapshot.location, saved.layout)) {
+            return error.UnexpectedTabSnapshot;
+        }
+    }
+
     var use_case = reconciliationHandler(client);
     try use_case.execute(.{
         .location = snapshot.location,
         .panes = pane_ids[0..pane_count],
     });
+    client.saved_layouts.forget(snapshot.location);
 
     return .applied;
 }

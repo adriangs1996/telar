@@ -1,4 +1,4 @@
-//! Application policy for delivering one committed sidebar visibility.
+//! Application policy for delivering one committed sidebar layout.
 
 const std = @import("std");
 const workspace_capability = @import("../../../workspace/root.zig");
@@ -8,12 +8,12 @@ const multiplexer = workspace_capability.multiplexer;
 
 pub const Effects = struct {
     context: *anyopaque,
-    project_view: *const fn (*anyopaque, bool) void,
+    project_view: *const fn (*anyopaque, bool, u16) void,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
     offer_pane_geometry: *const fn (*anyopaque, *multiplexer.Model) anyerror!void,
 };
 
-pub const DeliverSidebarVisibilityHandler = struct {
+pub const DeliverSidebarLayoutHandler = struct {
     model: *client_model.Model,
     effects: Effects,
 
@@ -23,14 +23,14 @@ pub const DeliverSidebarVisibilityHandler = struct {
     /// ```zig
     /// try handler.execute(change);
     /// ```
-    pub fn execute(handler: *const DeliverSidebarVisibilityHandler, change: client_model.SidebarVisibility) !void {
-        if (handler.model.sidebarVisible() != change.visible or
+    pub fn execute(handler: *const DeliverSidebarLayoutHandler, change: client_model.SidebarLayout) !void {
+        if (handler.model.sidebarVisible() != change.visible or handler.model.sidebarWidth() != change.width or
             handler.model.version().chrome != change.chrome_revision)
         {
-            return error.StaleSidebarVisibility;
+            return error.StaleSidebarLayout;
         }
 
-        handler.effects.project_view(handler.effects.context, change.visible);
+        handler.effects.project_view(handler.effects.context, change.visible, change.width);
         handler.effects.invalidate_graphics_placements(handler.effects.context);
         const active = handler.model.workspace.active() orelse return;
 
@@ -70,10 +70,11 @@ const TestingModel = struct {
 
 const EffectsCapture = struct {
     model: *const client_model.Model,
-    expected: client_model.SidebarVisibility,
+    expected: client_model.SidebarLayout,
     events: [3]Event = undefined,
     event_count: usize = 0,
     projected_visible: ?bool = null,
+    projected_width: ?u16 = null,
     offered_model: ?*multiplexer.Model = null,
     observed_commit: bool = true,
     fail_geometry: bool = false,
@@ -87,10 +88,11 @@ const EffectsCapture = struct {
         };
     }
 
-    fn projectView(context: *anyopaque, visible: bool) void {
+    fn projectView(context: *anyopaque, visible: bool, width: u16) void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         capture.record(.project_view);
         capture.projected_visible = visible;
+        capture.projected_width = width;
     }
 
     fn invalidateGraphicsPlacements(context: *anyopaque) void {
@@ -111,18 +113,19 @@ const EffectsCapture = struct {
     fn record(capture: *EffectsCapture, event: Event) void {
         capture.observed_commit = capture.observed_commit and
             capture.model.sidebarVisible() == capture.expected.visible and
+            capture.model.sidebarWidth() == capture.expected.width and
             capture.model.version().chrome == capture.expected.chrome_revision;
         capture.events[capture.event_count] = event;
         capture.event_count += 1;
     }
 };
 
-fn expectStale(handler: *const DeliverSidebarVisibilityHandler, capture: *const EffectsCapture, change: client_model.SidebarVisibility) !void {
-    try std.testing.expectError(error.StaleSidebarVisibility, handler.execute(change));
+fn expectStale(handler: *const DeliverSidebarLayoutHandler, capture: *const EffectsCapture, change: client_model.SidebarLayout) !void {
+    try std.testing.expectError(error.StaleSidebarLayout, handler.execute(change));
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
 }
 
-test "DeliverSidebarVisibilityHandler orders the complete active projection" {
+test "DeliverSidebarLayoutHandler orders the complete active projection" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
@@ -130,7 +133,7 @@ test "DeliverSidebarVisibilityHandler orders the complete active projection" {
         .model = testing.model,
         .expected = change,
     };
-    const handler: DeliverSidebarVisibilityHandler = .{
+    const handler: DeliverSidebarLayoutHandler = .{
         .model = testing.model,
         .effects = capture.effects(),
     };
@@ -143,11 +146,12 @@ test "DeliverSidebarVisibilityHandler orders the complete active projection" {
         capture.events[0..capture.event_count],
     );
     try std.testing.expectEqual(change.visible, capture.projected_visible.?);
+    try std.testing.expectEqual(change.width, capture.projected_width.?);
     try std.testing.expect(capture.offered_model == &testing.model.workspace.active().?.model);
     try std.testing.expect(capture.observed_commit);
 }
 
-test "DeliverSidebarVisibilityHandler projects an empty workspace without geometry" {
+test "DeliverSidebarLayoutHandler projects an empty workspace without geometry" {
     var testing = try TestingModel.init(false);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
@@ -155,7 +159,7 @@ test "DeliverSidebarVisibilityHandler projects an empty workspace without geomet
         .model = testing.model,
         .expected = change,
     };
-    const handler: DeliverSidebarVisibilityHandler = .{
+    const handler: DeliverSidebarLayoutHandler = .{
         .model = testing.model,
         .effects = capture.effects(),
     };
@@ -171,7 +175,7 @@ test "DeliverSidebarVisibilityHandler projects an empty workspace without geomet
     try std.testing.expect(capture.observed_commit);
 }
 
-test "DeliverSidebarVisibilityHandler rejects stale commits before effects" {
+test "DeliverSidebarLayoutHandler rejects stale commits before effects" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
@@ -179,7 +183,7 @@ test "DeliverSidebarVisibilityHandler rejects stale commits before effects" {
         .model = testing.model,
         .expected = change,
     };
-    const handler: DeliverSidebarVisibilityHandler = .{
+    const handler: DeliverSidebarLayoutHandler = .{
         .model = testing.model,
         .effects = capture.effects(),
     };
@@ -194,7 +198,7 @@ test "DeliverSidebarVisibilityHandler rejects stale commits before effects" {
     });
 }
 
-test "DeliverSidebarVisibilityHandler retains completed projection after geometry failure" {
+test "DeliverSidebarLayoutHandler retains completed projection after geometry failure" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
@@ -203,7 +207,7 @@ test "DeliverSidebarVisibilityHandler retains completed projection after geometr
         .expected = change,
         .fail_geometry = true,
     };
-    const handler: DeliverSidebarVisibilityHandler = .{
+    const handler: DeliverSidebarLayoutHandler = .{
         .model = testing.model,
         .effects = capture.effects(),
     };
