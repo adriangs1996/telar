@@ -119,6 +119,27 @@ const OwnedCreateTab = struct {
     }
 };
 
+pub const OwnedHistoryQuery = struct {
+    pub const max_query_bytes = 256;
+
+    request_id: schema.RequestId,
+    query: [max_query_bytes]u8 = undefined,
+    query_len: u8 = 0,
+    limit: u16,
+
+    fn view(value: *const OwnedHistoryQuery) schema.QueryHistory {
+        return .{
+            .request_id = value.request_id,
+            .query = value.query[0..value.query_len],
+            .scope = .global,
+            .scope_value = "",
+            .pane_id = .invalid,
+            .failed_only = false,
+            .limit = value.limit,
+        };
+    }
+};
+
 pub const OwnedSearch = struct {
     request_id: schema.RequestId,
     pane_id: schema.PaneId,
@@ -206,6 +227,7 @@ pub const Message = union(enum) {
     client_layout: u8,
     acknowledge_agent: schema.AcknowledgeAgent,
     search_pane: OwnedSearch,
+    query_history: OwnedHistoryQuery,
 };
 
 fn messageLaunchCwd(message: Message) ?[]const u8 {
@@ -528,6 +550,7 @@ pub const Outbox = struct {
             .client_layout => |slot| outbox.client_layouts[slot].slice(),
             .acknowledge_agent => |value| schema.encodeAcknowledgeAgent(buffer, value),
             .search_pane => |*value| schema.encodeSearchPane(buffer, value.view()),
+            .query_history => |*value| schema.encodeQueryHistory(buffer, value.view()),
         };
     }
 

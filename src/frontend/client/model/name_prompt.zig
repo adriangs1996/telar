@@ -20,6 +20,8 @@ pub const Target = union(enum) {
     copy_search: copy_mode.Direction,
     /// Fuzzy goto picker over workspaces, tabs and agents.
     goto,
+    /// History palette; results live in the history-palette model state.
+    history,
 };
 
 pub const Begin = union(enum) {
@@ -34,6 +36,7 @@ pub const Begin = union(enum) {
         name: []const u8,
     },
     goto_picker,
+    history_palette,
 };
 
 pub const Command = union(enum) {
@@ -107,6 +110,10 @@ pub const State = struct {
                 .target = .goto,
                 .field = .init(""),
             },
+            .history_palette => .{
+                .target = .history,
+                .field = .init(""),
+            },
         };
         state.revision +%= 1;
     }
@@ -176,7 +183,7 @@ pub const State = struct {
                 if (prompt.pasting) {
                     return state.editField(.{ .insert = " " });
                 }
-                if (prompt.field.text().len == 0 and prompt.target != .goto) {
+                if (prompt.field.text().len == 0 and !selects(prompt.target)) {
                     return .unchanged;
                 }
 
@@ -191,7 +198,7 @@ pub const State = struct {
                 return .cancelled;
             },
             .move_up => {
-                if (prompt.target != .goto or prompt.selection == 0) {
+                if (!selects(prompt.target) or prompt.selection == 0) {
                     return .unchanged;
                 }
 
@@ -200,7 +207,7 @@ pub const State = struct {
                 return .changed;
             },
             .move_down => {
-                if (prompt.target != .goto) {
+                if (!selects(prompt.target)) {
                     return .unchanged;
                 }
 
@@ -252,13 +259,18 @@ pub const State = struct {
             return .unchanged;
         }
 
-        if (prompt.target == .goto and before.len != prompt.field.len) {
+        if (selects(prompt.target) and before.len != prompt.field.len) {
             prompt.selection = 0;
         }
         state.revision +%= 1;
         return .changed;
     }
 };
+
+/// Targets whose prompt drives a list selection instead of a plain name.
+fn selects(target: Target) bool {
+    return target == .goto or target == .history;
+}
 
 const FieldPosition = struct {
     len: usize,

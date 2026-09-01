@@ -18,6 +18,7 @@ const pane_graphics = @import("../controllers/panes/pane_graphics.zig");
 const pane_metadata = @import("../controllers/panes/pane_metadata.zig");
 const pane_openings = @import("../controllers/panes/pane_openings.zig");
 const copy_modes = @import("../controllers/input/copy_modes.zig");
+const history_palettes = @import("../controllers/input/history_palettes.zig");
 const proxy_status = @import("../controllers/agents/proxy_status.zig");
 const request_failures = @import("../controllers/session/request_failures.zig");
 const resync_requirements = @import("../controllers/session/resync_requirements.zig");
@@ -61,7 +62,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
             }
         },
         .runtime_stopping => return 0,
-        .history_results => return error.UnexpectedHistoryResults,
+        .history_results => |results| _ = try history_palettes.apply(client, results),
         .pane_text, .request_completed => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.apply(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),

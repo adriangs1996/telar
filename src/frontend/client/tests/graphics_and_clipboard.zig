@@ -254,10 +254,11 @@ test "runtime stopping and stray history results" {
         .request_id = @enumFromInt(2),
         .entries = &.{},
     });
-    try std.testing.expectError(
-        error.UnexpectedHistoryResults,
-        server_messages.handleServerMessage(harness.client, try schema.decodeServer(history)),
+    try std.testing.expectEqual(
+        @as(?u8, null),
+        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(history)),
     );
+    try std.testing.expectEqual(@as(u8, 0), harness.client.model.history_palette.len);
 }
 
 test "a pane clipboard write reaches the host terminal" {

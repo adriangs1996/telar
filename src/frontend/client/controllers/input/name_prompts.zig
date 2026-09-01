@@ -11,6 +11,7 @@ const connection_outbox = @import("../../connection/outbox.zig");
 const runtime_transport = @import("../../connection/runtime_transport.zig");
 const input_capability = @import("../../../input/root.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
+const history_palettes = @import("history_palettes.zig");
 const goto_picker = @import("../../model/goto_picker.zig");
 const tab_renames = @import("../tabs/tab_renames.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
@@ -98,25 +99,81 @@ pub fn beginGotoPicker(client: *Client) bool {
     return use_case.execute(.goto_picker);
 }
 
+/// Opens the history palette prompt; `history_palettes.begin` also clears
+/// the result model and sends the first query.
+///
+/// ```zig
+/// _ = beginHistoryPalette(client);
+/// ```
+pub fn beginHistoryPalette(client: *Client) bool {
+    var use_case = openingHandler(client);
+
+    return use_case.execute(.history_palette);
+}
+
 pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     var use_case = handler(client);
 
+    const query_before = historyQuerySnapshot(client);
     const outcome = try dispatchInput(&use_case, bytes);
     clampPickerSelection(client);
+    try refreshHistoryQuery(client, query_before);
     return outcome;
+}
+
+const HistoryQuerySnapshot = struct {
+    active: bool = false,
+    text: [schema.max_tab_label_bytes]u8 = undefined,
+    len: u8 = 0,
+};
+
+fn historyQuerySnapshot(client: *Client) HistoryQuerySnapshot {
+    const prompt = client.model.name_prompt.currentConst() orelse return .{};
+    if (prompt.target != .history) {
+        return .{};
+    }
+
+    var snapshot: HistoryQuerySnapshot = .{ .active = true };
+    const text = prompt.field.text();
+    snapshot.len = @intCast(text.len);
+    @memcpy(snapshot.text[0..text.len], text);
+    return snapshot;
+}
+
+/// Requeries the runtime only when the palette's query text actually
+/// changed, so selection moves and pastes stay local.
+fn refreshHistoryQuery(client: *Client, before: HistoryQuerySnapshot) !void {
+    const prompt = client.model.name_prompt.currentConst() orelse return;
+    if (prompt.target != .history) {
+        return;
+    }
+
+    const text = prompt.field.text();
+    if (before.active and std.mem.eql(u8, before.text[0..before.len], text)) {
+        return;
+    }
+
+    try history_palettes.sendQuery(client, text);
 }
 
 /// Keeps the picker selection inside the deterministic result set the
 /// renderer and the submit path both derive from the current query.
 fn clampPickerSelection(client: *Client) void {
     const prompt = client.model.name_prompt.current() orelse return;
-    if (prompt.target != .goto or prompt.selection == 0) {
+    if (prompt.selection == 0) {
         return;
     }
 
-    var results: goto_picker.Results = .{};
-    goto_picker.collect(pickerSources(client), prompt.field.text(), &results);
-    const limit: u16 = if (results.len == 0) 0 else @as(u16, results.len) - 1;
+    const count: u16 = switch (prompt.target) {
+        .goto => blk: {
+            var results: goto_picker.Results = .{};
+            goto_picker.collect(pickerSources(client), prompt.field.text(), &results);
+            break :blk results.len;
+        },
+        .history => client.model.history_palette.len,
+        else => return,
+    };
+    const limit: u16 = if (count == 0) 0 else count - 1;
     if (prompt.selection > limit) {
         prompt.selection = limit;
     }
@@ -201,6 +258,7 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
             try navigatePickerItem(client, results.slice()[index].item);
             break :blk true;
         },
+        .history => try history_palettes.submitSelection(client),
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;
             const request_id = try request_lifecycle.nextId(client);

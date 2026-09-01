@@ -6,7 +6,7 @@ const config_model = @import("model.zig");
 const keybind = input.keybind;
 
 pub const max_keys = config_model.max_binding_keys;
-pub const count = 37;
+pub const count = 38;
 pub const Binding = keybind.Binding(action.Action, max_keys);
 
 pub const Resolved = struct {
@@ -41,6 +41,7 @@ pub fn load(prefix: keybind.Key) ![count]Binding {
         try prefixed(prefix, "d", .detach),
         try prefixed(prefix, "[", .enter_copy_mode),
         try prefixed(prefix, "g", .goto_picker),
+        try prefixed(prefix, "/", .history_palette),
         try prefixed(prefix, "c", .new_tab),
         try prefixed(prefix, "n", .{ .select_tab_offset = 1 }),
         try prefixed(prefix, "p", .{ .select_tab_offset = -1 }),

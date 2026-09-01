@@ -44,6 +44,7 @@ pub const Version = struct {
     pane_graphics: u64 = 0,
     chrome: u64 = 0,
     prompt: u64 = 0,
+    history: u64 = 0,
     copy: u64 = 0,
     viewport: u64 = 0,
 };

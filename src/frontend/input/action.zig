@@ -160,6 +160,7 @@ pub const Action = union(enum) {
     move_tab: TabMove,
     detach,
     goto_picker,
+    history_palette,
     enter_copy_mode,
     command_tab: CommandTab,
     notification: Notification,
@@ -214,6 +215,7 @@ pub const Action = union(enum) {
         if (std.mem.eql(u8, name, "detach")) return .detach;
         if (std.mem.eql(u8, name, "copy-mode")) return .enter_copy_mode;
         if (std.mem.eql(u8, name, "goto-picker")) return .goto_picker;
+        if (std.mem.eql(u8, name, "history-palette")) return .history_palette;
 
         const prefix = "select-tab-";
         if (std.mem.startsWith(u8, name, prefix)) {

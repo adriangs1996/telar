@@ -12,6 +12,7 @@ const input_application = @import("../application/input/root.zig");
 const client_model = @import("../model/root.zig");
 const name_prompt = @import("../model/name_prompt.zig");
 const goto_picker_model = @import("../model/goto_picker.zig");
+const history_palette_state = @import("../model/history_palette.zig");
 const diff = presentation.diff;
 const pointer = presentation.pointer;
 const icon_graphics = @import("../../graphics/root.zig").icons;
@@ -28,6 +29,7 @@ const widgets = @import("../../widgets/root.zig");
 
 const schema = core.schema;
 const empty_agent_snapshot: agents.Snapshot = .{};
+const empty_history_palette: history_palette_state.State = .{};
 const empty_notifications: notifications.Center = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
 const default_bars_state: bars.State = .{};
@@ -58,6 +60,7 @@ pub const RenderInput = struct {
     notifications: *const notifications.Center = &empty_notifications,
     workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
+    history: *const history_palette_state.State = &empty_history_palette,
     proxy_tls_active: bool = false,
     system_metrics: ?client_model.SystemMetrics = null,
     status_mode: widgets.status_bar.Mode = .normal,
@@ -654,6 +657,7 @@ pub const State = struct {
                     .agents = input.agents,
                     .workspaces = input.workspaces,
                     .tabs = input.tabs,
+                    .history = input.history,
                 });
                 drawn_modal_area = picker_output.area;
                 picker_cursor = picker_output.cursor;
@@ -754,7 +758,7 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
     const current = prompt orelse return .rename_tab;
 
     return switch (current.target) {
-        .rename_tab, .goto => .rename_tab,
+        .rename_tab, .goto, .history => .rename_tab,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
         .copy_search => |direction| switch (direction) {
@@ -766,20 +770,18 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
 
 fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
     const current = prompt orelse return null;
-    if (current.target != .goto) {
-        return null;
-    }
-
-    return current;
+    return switch (current.target) {
+        .goto, .history => current,
+        else => null,
+    };
 }
 
 fn promptField(prompt: ?*name_prompt.Prompt) ?*widgets.tab_rename.Field {
     const current = prompt orelse return null;
-    if (current.target == .goto) {
-        return null;
-    }
-
-    return &current.field;
+    return switch (current.target) {
+        .goto, .history => null,
+        else => &current.field,
+    };
 }
 
 const PickerSources = struct {
@@ -787,6 +789,7 @@ const PickerSources = struct {
     agents: *const agents.Snapshot,
     workspaces: *const workspace_list.Snapshot,
     tabs: ?*const tabs_mod.Model,
+    history: *const history_palette_state.State,
 };
 
 /// Computes the deterministic result set and renders the visible window with
@@ -798,6 +801,10 @@ fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: Pick
         .workspaces = sources.workspaces,
         .tabs = sources.tabs,
     };
+    if (sources.prompt.target != .goto) {
+        return renderHistoryPalette(context, workbench, sources);
+    }
+
     goto_picker_model.collect(match_sources, sources.prompt.field.text(), &results);
 
     const total: u16 = results.len;
@@ -813,6 +820,33 @@ fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: Pick
         var row: widgets.goto_picker.Row = .{ .selected = index == selected };
         const len = @min(text.len, widgets.goto_picker.max_row_bytes);
         @memcpy(row.text[0..len], text[0..len]);
+        row.len = @intCast(len);
+        rows[offset] = row;
+    }
+
+    return widgets.goto_picker.render(context, workbench, .{
+        .field = &sources.prompt.field,
+        .rows = rows[0..window],
+        .total = total,
+    });
+}
+
+/// Renders the history palette through the same list modal, with rows taken
+/// from the palette model instead of the fuzzy matcher.
+fn renderHistoryPalette(context: *widgets.Context, workbench: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
+    const entries = sources.history.slice();
+    const total: u16 = @intCast(entries.len);
+    const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection, total - 1);
+    const window: u16 = @min(@as(u16, widgets.goto_picker.max_rows), total);
+    const start: u16 = if (selected + 1 > window) selected + 1 - window else 0;
+
+    var rows: [widgets.goto_picker.max_rows]widgets.goto_picker.Row = undefined;
+    for (0..window) |offset| {
+        const index = start + offset;
+        const entry = &entries[index];
+        var row: widgets.goto_picker.Row = .{ .selected = index == selected };
+        const len = @min(entry.command_len, widgets.goto_picker.max_row_bytes);
+        @memcpy(row.text[0..len], entry.commandSlice()[0..len]);
         row.len = @intCast(len);
         rows[offset] = row;
     }
