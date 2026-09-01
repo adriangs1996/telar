@@ -59,6 +59,7 @@ pub const resize_pane = @import("resize_pane.zig");
 pub const select_tab = @import("select_tab.zig");
 pub const set_pane_viewport = @import("set_pane_viewport.zig");
 pub const sidebar_animation = @import("sidebar_animation.zig");
+pub const sidebar_visibility_delivery = @import("sidebar_visibility_delivery.zig");
 pub const split_pane = @import("split_pane.zig");
 pub const system_metrics = @import("system_metrics.zig");
 pub const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
@@ -146,6 +147,7 @@ test {
     _ = select_tab;
     _ = set_pane_viewport;
     _ = sidebar_animation;
+    _ = sidebar_visibility_delivery;
     _ = split_pane;
     _ = system_metrics;
     _ = tab_attachment_retirement;

@@ -2784,11 +2784,11 @@ test "sidebar projection rejects changes that are not the current model commit" 
     const shown_area = client.view.workbench();
     const committed = client.model.toggleSidebar();
 
-    try std.testing.expectError(error.UnexpectedSidebarVisibility, sidebar_projection.apply(client, .{
+    try std.testing.expectError(error.StaleSidebarVisibility, sidebar_projection.apply(client, .{
         .visible = true,
         .chrome_revision = committed.chrome_revision - 1,
     }));
-    try std.testing.expectError(error.UnexpectedSidebarVisibility, sidebar_projection.apply(client, .{
+    try std.testing.expectError(error.StaleSidebarVisibility, sidebar_projection.apply(client, .{
         .visible = committed.visible,
         .chrome_revision = committed.chrome_revision - 1,
     }));
