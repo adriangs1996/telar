@@ -53,6 +53,24 @@ pub const OfferPaneGeometryHandler = struct {
     }
 };
 
+pub const OfferActivePaneGeometryHandler = struct {
+    model: *client_model.Model,
+    effects: OfferEffects,
+
+    /// Selects the active tab once and offers its attached visible panes.
+    /// An empty client has no geometry to deliver.
+    ///
+    /// ```zig
+    /// const count = try handler.execute(area);
+    /// ```
+    pub fn execute(handler: *OfferActivePaneGeometryHandler, area: ui.Rect) !usize {
+        const active = handler.model.workspace.active() orelse return 0;
+        var offer: OfferPaneGeometryHandler = .{ .effects = handler.effects };
+
+        return offer.execute(&active.model, area);
+    }
+};
+
 pub const DeliverPaneGeometryHandler = struct {
     model: *client_model.Model,
     effects: Effects,
@@ -209,6 +227,40 @@ test "OfferPaneGeometryHandler selects only attached visible panes" {
 
     try std.testing.expectEqual(@as(usize, 1), try handler.execute(active, testing.area));
     try std.testing.expectEqual(testing.second, capture.resizes[0].pane_id);
+}
+
+test "OfferActivePaneGeometryHandler selects the active tab and propagates delivery failure" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const testing = try prepareModel(&model);
+    var capture: EffectCapture = .{};
+    var handler: OfferActivePaneGeometryHandler = .{
+        .model = &model,
+        .effects = capture.offerEffects(),
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), try handler.execute(testing.area));
+    try std.testing.expectEqual(testing.first, capture.resizes[0].pane_id);
+    try std.testing.expectEqual(testing.second, capture.resizes[1].pane_id);
+
+    capture.reset();
+    capture.fail_resize = 1;
+
+    try std.testing.expectError(error.PaneResizeDeliveryFailed, handler.execute(testing.area));
+    try std.testing.expectEqual(@as(usize, 1), capture.resize_count);
+}
+
+test "OfferActivePaneGeometryHandler suppresses geometry for an empty client" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    var capture: EffectCapture = .{};
+    var handler: OfferActivePaneGeometryHandler = .{
+        .model = &model,
+        .effects = capture.offerEffects(),
+    };
+
+    try std.testing.expectEqual(@as(usize, 0), try handler.execute(.{ .w = 100, .h = 30 }));
+    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
 }
 
 test "DeliverPaneGeometryHandler validates then invalidates before resize delivery" {

@@ -81,7 +81,6 @@ fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
 
 fn offerPaneGeometry(raw_context: *anyopaque, area: ui.Rect) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    const active = client.model.workspace.active() orelse return;
 
-    try pane_geometry.offerAttached(client, &active.model, area);
+    try pane_geometry.offerActive(client, area);
 }

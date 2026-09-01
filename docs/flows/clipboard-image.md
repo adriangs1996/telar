@@ -83,10 +83,10 @@ adapter securely frees its PNG without changing the shelf.
 
 For a current result, the application handler orders resource adoption before
 geometry effects. `attachments.Store` validates the image again, owns the PNG
-and reports whether the shelf changed pane geometry. The adapter offers new
-pane sizes to the runtime only for that layout transition. The completion
-handler then delegates its classified outcome through an explicit delivery
-boundary.
+and reports whether the shelf changed pane geometry. The adapter delegates
+active-tab selection to `OfferActivePaneGeometryHandler` and offers new pane
+sizes to the runtime only for that layout transition. The completion handler
+then delegates its classified outcome through an explicit delivery boundary.
 
 `DeliverClipboardImageCompletionHandler` keeps applied, stale, ignored and
 clipboard-empty results quiet. It maps oversized, worker and adoption failures

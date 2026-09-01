@@ -60,7 +60,9 @@ owns their exact order. A grid change resizes the presenter's front and back
 buffers and then the client view. A changed cell size configures pixel-aware
 sidebar resources. Every accepted geometry invalidates physical graphics
 placements before pane geometry is offered. `host_resources` implements these
-ports for one concrete client; the resize adapter contains no resource policy.
+ports for one concrete client and delegates active-tab selection to
+`OfferActivePaneGeometryHandler`; the resize adapter contains no resource
+policy.
 
 The model commit remains active if buffer allocation, sidebar configuration or
 the bounded client outbox fails. The error terminates that client session;

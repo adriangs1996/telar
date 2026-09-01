@@ -192,9 +192,7 @@ fn syncPaneLayout(raw_context: *anyopaque) !void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
     const client = context.client;
     client.graphics_store.invalidatePlacements();
-    if (client.model.workspace.active()) |active| {
-        try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
-    }
+    try pane_geometry.offerActive(client, client.view.workbench());
 }
 
 fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {

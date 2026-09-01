@@ -112,9 +112,8 @@ fn adopt(raw_context: *anyopaque) !bool {
 
 fn resize(raw_context: *anyopaque) !void {
     const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
-    const active = context.client.model.workspace.active() orelse return;
 
-    try pane_geometry.offerAttached(context.client, &active.model, context.client.view.workbench());
+    try pane_geometry.offerActive(context.client, context.client.view.workbench());
 }
 
 fn deliverOutcome(raw_context: *anyopaque, outcome: clipboard_image.CompletionOutcome) !void {

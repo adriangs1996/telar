@@ -55,6 +55,10 @@ The commit also carries the exact `Version.panes` revision, so resource
 delivery rejects a superseded focus even if later navigation returned to the
 same pane.
 
+Attachment-driven geometry uses `OfferActivePaneGeometryHandler`; the active
+resource adapter supplies the changed workbench area but does not resolve the
+workspace projection itself.
+
 ## Reported focus
 
 Semantic focus and reported focus are different states. Semantic focus affects

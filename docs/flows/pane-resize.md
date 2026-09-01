@@ -55,6 +55,12 @@ content. A tiled layout normally selects every attached pane; a fullscreen
 layout selects only the focused pane. The concrete adapter only enqueues those
 commands.
 
+Flows that need the current projection use `OfferActivePaneGeometryHandler`.
+It selects the active tab once and delegates to the same bounded offer handler;
+an empty client returns zero without effects. `pane_geometry.offerActive`
+supplies only the concrete resize port and is shared by attachment changes,
+host resources, clipboard-image adoption and configuration reload.
+
 The outbox keeps a fixed bound and replaces an obsolete unsent resize for the
 same pane. The runtime dispatches each message through
 `pane_resize.Controller` and `PaneResizeHandler`. The controller counts stale
@@ -86,8 +92,8 @@ rollback because the `pane_resize` protocol has no acknowledgement.
 - `src/frontend/client/application/resize_pane.zig` proves
   commit-before-delivery ordering and the post-commit failure contract.
 - `src/frontend/client/application/pane_geometry_delivery.zig` proves exact
-  commit validation, attached-visible filtering, effect order and partial
-  delivery failure.
+  commit validation, active-tab selection, empty-client behavior,
+  attached-visible filtering, effect order and partial delivery failure.
 - `src/frontend/client/pane_geometry.zig` implements placement invalidation and
   runtime `pane_resize` delivery ports.
 - `src/frontend/client/client_test.zig` proves exact resize messages, detached

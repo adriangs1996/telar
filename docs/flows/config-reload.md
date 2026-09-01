@@ -96,7 +96,9 @@ pane geometry to the runtime. Sidebar changes pass through
 `sidebar_projection.apply` and `DeliverSidebarVisibilityHandler`, the same
 exact-commit delivery used by explicit toggles. `config_reloads` implements
 each concrete port independently; it does not choose the outcome order,
-notification content or layout branch.
+notification content or layout branch. The pane-gap branch uses
+`OfferActivePaneGeometryHandler`, so an empty projection and active-tab
+selection remain application policy.
 
 Fallible sidebar configuration, projection, geometry, notification or watcher
 work does not roll back any earlier stage. If pane geometry cannot enter the

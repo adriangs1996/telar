@@ -26,6 +26,20 @@ pub fn offerAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) 
     _ = try use_case.execute(model, area);
 }
 
+/// Selects the active tab and offers its attached visible pane geometry.
+///
+/// ```zig
+/// try offerActive(client, client.view.workbench());
+/// ```
+pub fn offerActive(client: *Client, area: ui.Rect) !void {
+    var use_case: pane_geometry_delivery.OfferActivePaneGeometryHandler = .{
+        .model = &client.model,
+        .effects = offerEffects(client),
+    };
+
+    _ = try use_case.execute(area);
+}
+
 /// Returns the runtime resize port reused by compound geometry deliveries.
 ///
 /// ```zig

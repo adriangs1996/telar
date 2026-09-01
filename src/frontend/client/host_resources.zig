@@ -73,7 +73,6 @@ fn resizeView(raw_context: *anyopaque, size: schema.TerminalSize) !void {
 
 fn syncPaneGeometry(raw_context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    const active = client.model.workspace.active() orelse return;
 
-    try pane_geometry.offerAttached(client, &active.model, client.view.workbench());
+    try pane_geometry.offerActive(client, client.view.workbench());
 }
