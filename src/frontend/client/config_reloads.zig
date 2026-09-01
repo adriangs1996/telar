@@ -99,7 +99,8 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
             .project_appearance = projectAppearance,
             .configure_sidebar = configureSidebar,
             .apply_sidebar = applySidebar,
-            .sync_pane_layout = syncPaneLayout,
+            .invalidate_graphics_placements = invalidateGraphicsPlacements,
+            .offer_active_pane_geometry = offerActivePaneGeometry,
         },
     };
     const snapshot = &adoption.generation.snapshot;
@@ -188,11 +189,16 @@ fn applySidebar(raw_context: *anyopaque, change: client_model.SidebarVisibility)
     try sidebar_projection.apply(context.client, change);
 }
 
-fn syncPaneLayout(raw_context: *anyopaque) !void {
+fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
-    const client = context.client;
-    client.graphics_store.invalidatePlacements();
-    try pane_geometry.offerActive(client, client.view.workbench());
+
+    context.client.graphics_store.invalidatePlacements();
+}
+
+fn offerActivePaneGeometry(raw_context: *anyopaque) !void {
+    const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
+
+    try pane_geometry.offerActive(context.client, context.client.view.workbench());
 }
 
 fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {

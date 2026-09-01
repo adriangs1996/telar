@@ -73,11 +73,12 @@ rearming. An adoption calls `ApplyConfigHandler`, publishes success and then
 rearms. `ApplyConfigHandler` owns the synchronous adoption order: after the
 model commit and diagnostic clear, it adopts concrete resources, projects
 appearance, configures sidebar resources and chooses exactly one sidebar or
-pane-gap geometry branch. A sidebar change takes precedence when the same
-generation also changes pane gaps because its shared projection already
-invalidates placements and re-offers geometry. A stale generation clears no
-diagnostic, invokes no effect, and `config_reloads.apply` releases the
-unaccepted adoption instead of leaking its VM or plugin objects.
+pane-gap geometry branch. The pane-gap branch explicitly invalidates graphics
+placements before offering active pane geometry through separate effect ports.
+A sidebar change takes precedence when the same generation also changes pane
+gaps because its shared projection already performs both operations. A stale
+generation clears no diagnostic, invokes no effect, and `config_reloads.apply`
+releases the unaccepted adoption instead of leaking its VM or plugin objects.
 
 ## Ownership and effects
 
@@ -96,9 +97,9 @@ pane geometry to the runtime. Sidebar changes pass through
 `sidebar_projection.apply` and `DeliverSidebarVisibilityHandler`, the same
 exact-commit delivery used by explicit toggles. `config_reloads` implements
 each concrete port independently; it does not choose the outcome order,
-notification content or layout branch. The pane-gap branch uses
-`OfferActivePaneGeometryHandler`, so an empty projection and active-tab
-selection remain application policy.
+notification content, layout branch or placement-to-geometry order. The
+pane-gap geometry port uses `OfferActivePaneGeometryHandler`, so an empty
+projection and active-tab selection remain application policy.
 
 Fallible sidebar configuration, projection, geometry, notification or watcher
 work does not roll back any earlier stage. If pane geometry cannot enter the
@@ -126,7 +127,8 @@ trigger.
   settings and isolated versions.
 - `src/frontend/client/application/config_reload.zig` proves commit-before-
   resource ordering, diagnostic clearing, theme lock, mutually exclusive
-  layout branches and every partial adoption failure boundary.
+  layout branches, placement-to-geometry order and every partial adoption
+  failure boundary.
 - `src/frontend/client/application/config_reload_delivery.zig` proves outcome
   branching, rejection fallback, notification policy, rearm ordering and every
   top-level partial failure boundary.

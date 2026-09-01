@@ -15,7 +15,8 @@ pub const Effects = struct {
     project_appearance: *const fn (*anyopaque, bool) void,
     configure_sidebar: *const fn (*anyopaque) anyerror!void,
     apply_sidebar: *const fn (*anyopaque, client_model.SidebarVisibility) anyerror!void,
-    sync_pane_layout: *const fn (*anyopaque) anyerror!void,
+    invalidate_graphics_placements: *const fn (*anyopaque) void,
+    offer_active_pane_geometry: *const fn (*anyopaque) anyerror!void,
 };
 
 pub const ApplyConfigHandler = struct {
@@ -40,7 +41,8 @@ pub const ApplyConfigHandler = struct {
         if (commit.sidebar) |sidebar| {
             try handler.effects.apply_sidebar(handler.effects.context, sidebar);
         } else if (commit.pane_gaps_changed) {
-            try handler.effects.sync_pane_layout(handler.effects.context);
+            handler.effects.invalidate_graphics_placements(handler.effects.context);
+            try handler.effects.offer_active_pane_geometry(handler.effects.context);
         }
 
         return commit;
@@ -52,14 +54,15 @@ const Event = enum {
     project_appearance,
     configure_sidebar,
     apply_sidebar,
-    sync_pane_layout,
+    invalidate_graphics_placements,
+    offer_active_pane_geometry,
 };
 
 const Failure = enum {
     none,
     configure_sidebar,
     apply_sidebar,
-    sync_pane_layout,
+    pane_geometry,
 };
 
 const EffectsCapture = struct {
@@ -79,7 +82,8 @@ const EffectsCapture = struct {
             .project_appearance = projectAppearance,
             .configure_sidebar = configureSidebar,
             .apply_sidebar = applySidebar,
-            .sync_pane_layout = syncPaneLayout,
+            .invalidate_graphics_placements = invalidateGraphicsPlacements,
+            .offer_active_pane_geometry = offerActivePaneGeometry,
         };
     }
 
@@ -118,13 +122,19 @@ const EffectsCapture = struct {
         }
     }
 
-    fn syncPaneLayout(context: *anyopaque) !void {
+    fn invalidateGraphicsPlacements(context: *anyopaque) void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
-        capture.record(.sync_pane_layout);
+        capture.record(.invalidate_graphics_placements);
+        capture.observeCommit();
+    }
+
+    fn offerActivePaneGeometry(context: *anyopaque) !void {
+        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
+        capture.record(.offer_active_pane_geometry);
         capture.observeCommit();
 
-        if (capture.failure == .sync_pane_layout) {
-            return error.PaneLayoutSyncFailed;
+        if (capture.failure == .pane_geometry) {
+            return error.PaneGeometryFailed;
         }
     }
 
@@ -194,7 +204,7 @@ test "ApplyConfigHandler owns ordered sidebar adoption after the model commit" {
     }, model.version());
 }
 
-test "ApplyConfigHandler selects pane layout and honors a locked theme" {
+test "ApplyConfigHandler orders pane layout delivery and honors a locked theme" {
     var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 1);
     defer model.deinit();
     var capture: EffectsCapture = .{ .model = &model };
@@ -216,7 +226,8 @@ test "ApplyConfigHandler selects pane layout and honors a locked theme" {
         .adopt_resources,
         .project_appearance,
         .configure_sidebar,
-        .sync_pane_layout,
+        .invalidate_graphics_placements,
+        .offer_active_pane_geometry,
     }, capture.eventSlice());
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(!capture.apply_theme.?);
@@ -268,10 +279,16 @@ test "ApplyConfigHandler preserves every applied stage after delivery failures" 
             .expected_events = &.{ .adopt_resources, .project_appearance, .configure_sidebar, .apply_sidebar },
         },
         .{
-            .failure = .sync_pane_layout,
+            .failure = .pane_geometry,
             .sidebar_changed = false,
-            .expected_error = error.PaneLayoutSyncFailed,
-            .expected_events = &.{ .adopt_resources, .project_appearance, .configure_sidebar, .sync_pane_layout },
+            .expected_error = error.PaneGeometryFailed,
+            .expected_events = &.{
+                .adopt_resources,
+                .project_appearance,
+                .configure_sidebar,
+                .invalidate_graphics_placements,
+                .offer_active_pane_geometry,
+            },
         },
     };
 
