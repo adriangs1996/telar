@@ -4,6 +4,7 @@ const std = @import("std");
 const input_capability = @import("../../../input/root.zig");
 const lua_config = @import("../../../config/root.zig");
 const widgets = @import("../../../widgets/root.zig");
+const input_application = @import("../../application/input/root.zig");
 const client_clock = @import("../../resources/clock.zig");
 const deadline_timer = @import("../../resources/deadline_timer.zig");
 const runtime_transport = @import("../../connection/runtime_transport.zig");
@@ -14,6 +15,7 @@ const Io = std.Io;
 const File = Io.File;
 const Action = input_capability.action.Action;
 const keybind = input_capability.keybind;
+const key_routing = input_application.key_routing;
 
 const chunk_size = 4096;
 const held_binding_bytes = 128;
@@ -67,6 +69,7 @@ pub const State = struct {
     presentation_revision: u64 = 0,
     input_timeout: deadline_timer.Scheduler = .{},
     binding_timeout: deadline_timer.Scheduler = .{},
+    application_leases: key_routing.Leases = .{},
 
     /// Creates the host input state around the client-owned TTY handle.
     ///
@@ -85,7 +88,9 @@ pub const State = struct {
     /// ```
     pub fn replaceRouter(state: *State, io: Io, replacement: Router) void {
         const prefix_was_pending = state.router.prefixPending();
-        state.router = replacement;
+        var inherited = replacement;
+        inherited.inheritPhysicalLeases(&state.router);
+        state.router = inherited;
         if (prefix_was_pending != state.router.prefixPending()) {
             state.presentation_revision +%= 1;
         }
@@ -178,7 +183,10 @@ pub fn handleRead(client: *Client, result: anyerror!Chunk) !bool {
     client.presenter.noteInput(client_clock.monotonic(client.io));
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
-    if (try state.router.feed(chunk.slice(), client_clock.monotonic(client.io), &handler) == .stop) {
+    const lease_overflows_before = state.router.leaseOverflowCount();
+    const control = try state.router.feed(chunk.slice(), client_clock.monotonic(client.io), &handler);
+    client.telemetry.metrics.key_lease_overflows +%= state.router.leaseOverflowCount() -% lease_overflows_before;
+    if (control == .stop) {
         return true;
     }
 

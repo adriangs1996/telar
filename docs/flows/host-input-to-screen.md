@@ -14,7 +14,7 @@ host TTY bytes
 host_inputs.handleRead
       |
       v
-keybind.Router.feed -> term.parse -> Router.routeKey
+keybind.Router.feed -> term.parse -> binding lease -> Router.routeKey
       |
       +---------------- configured sequence ----------------+
       |                                                      |
@@ -23,7 +23,7 @@ InputHandler.key / forward / mouse                 InputHandler.action
       |                                                      |
 key_routing / pointer_routing                   action_routing adapter
       |                                                      |
-application owner handler                     ActionRoutingHandler
+application lease / owner handler             ActionRoutingHandler
       |                                                      |
 pane_inputs when child-owned                  native / Lua / plugin action
       |                                                      |
@@ -88,7 +88,9 @@ any observed value changed.
 
 The router is in `src/frontend/input/keybind.zig`. `Router.feed` buffers split
 terminal sequences, `term.parse` produces semantic events, and `routeKey`
-classifies a key against the compiled keymap. The configured prefix enters a
+classifies a key press against the compiled keymap. A fixed physical-key lease
+keeps repeat and release with the press's binding or application owner. The
+configured prefix enters a
 persistent router state and therefore schedules no binding deadline. Escape
 cancels that state; an unmatched suffix clears it without forwarding either
 key. Partial global sequences retain the configured binding timeout.
@@ -101,7 +103,8 @@ Each deadline uses `deadline_timer.Scheduler`. It stores one atomic absolute
 deadline, one wake event and one pending worker. Replacing or removing a
 deadline wakes that worker instead of queueing another. A configuration reload
 compiles a complete replacement router, swaps it through
-`State.replaceRouter`, and clears both old deadlines. A new partial sequence
+`State.replaceRouter`, inherits active physical leases and clears both old
+deadlines. A new partial sequence
 can then wake the retained workers with the replacement timeout; it never
 waits for the old configuration's deadline.
 
@@ -153,7 +156,9 @@ that the matched branch is consumed.
 
 An unmatched semantic key or replayed byte slice reaches `InputHandler`, which
 delegates it to `key_routing`. `KeyRoutingHandler` selects one attachment
-modal, name prompt, copy-mode or pane owner. Only a pane-owned value enters
+modal, name prompt, copy-mode or pane owner. A second fixed lease retains that
+application owner for the physical lifecycle; pane ownership stores the exact
+`PaneId`, not current focus. Only a pane-owned value enters
 `PaneInputHandler`. See [Key routing](key-routing.md) for capture, priority,
 failure and `Ctrl+V` follow-up policy.
 
@@ -223,11 +228,19 @@ forwarding through the complete input entrypoint.
 
 The host session pushes Kitty flags 7: key disambiguation, event types and
 alternate key codes. The parser accepts alternate codepoint fields and explicit
-press, repeat and release suffixes at every stream boundary. Press and repeat
-become semantic key input; release is consumed because Telar does not yet model
-physical-key leases for shortcuts. The parser also recognizes xterm
+press, repeat and release suffixes across arbitrary TTY chunks. Every report
+retains its logical key, phase and stable physical identity. The parser also
+recognizes xterm
 modifyOtherKeys reports. A bare LF stays Ctrl+J, so a host mapping that sends LF
 for multiline input is not rewritten to Enter.
+
+Two bounded, allocation-free lease tables route that lifecycle. The native
+router assigns the press to a Telar binding or the application. The application
+then assigns it to a modal, prompt, copy mode or exact pane. Repeat and release
+never repeat either decision. A binding-owned release cannot cancel a pending
+prefix, and a pane-owned release cannot move when focus or modal authority
+changes. A duplicate press replaces stale ownership after a lost release.
+Saturation drops the new lifecycle and increments `key_lease_overflows`.
 
 Pane children receive a stable compatibility profile:
 
@@ -246,7 +259,9 @@ The runtime reads keyboard flags from the pane's VT and publishes them in
 `pane_frame.input_modes`. The client uses them when encoding Enter:
 
 - Kitty flags preserve modifiers as CSI-u. Plain Enter remains CR unless the
-  child requests all keys as escape codes.
+  child requests all keys as escape codes. Event-aware children use the
+  default press encoding and receive explicit repeat and release suffixes;
+  legacy children receive repeats as presses and no release bytes.
 - xterm modifyOtherKeys mode 2 preserves modifiers in its numeric encoding.
 - A child with neither mode active receives the legacy Enter encoding.
 
@@ -265,7 +280,7 @@ The encodings follow the
 
 ### Enqueueing input
 
-For keyboard and paste sources, `PaneInputHandler` first executes
+For keyboard presses, repeats and paste sources, `PaneInputHandler` first executes
 `SetPaneViewportHandler` with a `.bottom` intent. If the pane is scrolled back,
 that use case commits the client viewport, updates graphics visibility and
 queues `set_pane_viewport`. The handler then invokes the adapter's send effect,
@@ -282,6 +297,10 @@ which calls, in order:
 The outbox is bounded, owns copied input bytes and coalesces adjacent input for
 the same pane. Only one socket send is in flight. When the viewport changes,
 wire order is `set_pane_viewport` followed by `pane_input`.
+
+A release never changes the viewport. It is encoded only when the exact pane's
+acknowledged Kitty flags request event types; otherwise it is a zero-byte no-op
+and never enters the outbox.
 
 ## 3. Runtime input entry
 
@@ -380,36 +399,42 @@ captures an immutable `presentation_projection` and calls
 
 ## Proof
 
-- `src/frontend/client/deadline_timer.zig` proves replacement, removal,
+- `src/frontend/client/resources/deadline_timer.zig` proves replacement, removal,
   parking, wakeup and token release for successful and failed workers.
-- `src/frontend/client/host_inputs.zig` proves owned timeout configuration,
+- `src/frontend/client/controllers/input/host_inputs.zig` proves owned timeout configuration,
   router replacement without duplicate workers and prefix-status projection.
 - `host input reads pause at outbox capacity and resume with one token` in
-  `src/frontend/client/client_test.zig` proves bounded backpressure, one real
+  `src/frontend/client/tests/transport.zig` proves bounded backpressure, one real
   socket completion and one resumed TTY read token.
 - `a configured sequence runs once and does not reach the pane` in
   `src/frontend/input/keybind.zig` proves the Telar-action split.
-- `src/frontend/client/application/action_routing.zig` proves prompt
+- `src/frontend/client/application/input/action_routing.zig` proves prompt
   suppression, source selection, Lua router control, input reinjection and
   selected-effect failure ordering.
-- `src/frontend/client/application/pointer_routing.zig` proves copy, view and
+- `src/frontend/client/application/input/pointer_routing.zig` proves copy, view and
   pane owner ordering before any pointer effect reaches a child.
 - The configured-action, Lua key and Lua paste tests in
-  `src/frontend/client/client_test.zig` prove the adapter against prompt,
+  `src/frontend/client/tests/configuration.zig` prove the adapter against prompt,
   copy-mode and acknowledged pane-mode authority.
 - The persistent-prefix, invalid-suffix, Escape-cancellation, and global-timeout
   tests in the same file prove that prefix mode has no timing window without
   changing global multi-key sequence recovery.
 - `unbound input is byte-for-byte transparent` and the terminal-sequence split
   tests in the same file prove parser and routing boundaries.
+- The physical lifecycle tests in `src/frontend/input/keybind.zig` prove
+  binding/application ownership, prefix release, configuration replacement and
+  fail-closed saturation.
 - `cursor keys follow the focused child's mode` in
   `src/frontend/input/host.zig` proves semantic child encoding.
 - The modified-Enter parser and router tests cover both host encodings,
   malformed reports and every byte boundary. The encoder tests cover modifier
-  combinations, protocol precedence, plain Enter, LF and bounded output.
+  combinations, physical lifecycles, alternate key codes, legacy release
+  suppression, protocol precedence, plain Enter, LF and bounded output.
 - `host Enter variants use the keyboard modes received in a pane frame` in
-  `src/frontend/client/client_test.zig` proves frame decoding, normal key
+  `src/frontend/client/tests/input.zig` proves frame decoding, normal key
   routing and the outgoing `pane_input` bytes.
+- `releasing the physical prefix preserves its logical sequence through client routing`
+  in the same file proves the complete host-parser-to-action lease path.
 - `modified Enter follows the compatibility profile and child keyboard negotiation through the PTY` in
   `src/transport_integration_test.zig` proves that a real child can enable
   Kitty flags 7, switch to modifyOtherKeys and return to legacy mode while

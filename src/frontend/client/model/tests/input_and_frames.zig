@@ -84,7 +84,9 @@ test "pane input planning resolves one attached active target without mutation" 
     try std.testing.expectEqualDeep(expected, model.planPaneInput(.focused).?);
     try std.testing.expectEqualDeep(expected, model.planPaneInput(.{ .pane = pane_id }).?);
     try std.testing.expect(model.planPaneInput(.{ .pane = inactive_pane }) == null);
+    try std.testing.expectEqual(inactive_pane, model.planPaneInput(.{ .key_lease = inactive_pane }).?.pane_id);
     try std.testing.expect(model.planPaneInput(.{ .pane = @enumFromInt(9) }) == null);
+    try std.testing.expect(model.planPaneInput(.{ .key_lease = @enumFromInt(9) }) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
     pane.attached = false;
@@ -105,12 +107,14 @@ test "pane input planning yields ownership to prompts and copy mode" {
     model.name_prompt.begin(.create_workspace);
     const prompt_version = model.version();
     try std.testing.expect(model.planPaneInput(.focused) == null);
+    try std.testing.expectEqual(pane_id, model.planPaneInput(.{ .key_lease = pane_id }).?.pane_id);
     try std.testing.expectEqualDeep(prompt_version, model.version());
 
     try std.testing.expect(model.name_prompt.apply(.cancel) == .cancelled);
     try std.testing.expect(model.enterCopyMode());
     const copy_version = model.version();
     try std.testing.expect(model.planPaneInput(.{ .pane = pane_id }) == null);
+    try std.testing.expectEqual(pane_id, model.planPaneInput(.{ .key_lease = pane_id }).?.pane_id);
     try std.testing.expectEqualDeep(copy_version, model.version());
 }
 

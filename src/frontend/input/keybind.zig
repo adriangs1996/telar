@@ -6,6 +6,7 @@
 //! and never has to retain slices owned by the configuration parser.
 
 const std = @import("std");
+const key_lease = @import("key_lease.zig");
 const term = @import("../presentation/root.zig").screen;
 
 pub const Key = term.Event.Key;
@@ -18,6 +19,7 @@ pub const Control = enum {
 pub const default_escape_timeout_ns: u64 = 25 * std.time.ns_per_ms;
 pub const default_sequence_timeout_ns: u64 = 1000 * std.time.ns_per_ms;
 pub const default_prefix = parseKey("ctrl+b") catch unreachable;
+pub const max_physical_leases = 64;
 
 /// Parses one key chord from configuration syntax.
 ///
@@ -303,6 +305,8 @@ pub fn Router(
 
     const Map = Keymap(Action, max_bindings, max_keys);
     const BindingType = Binding(Action, max_keys);
+    const LeaseOwner = enum { binding, application };
+    const Leases = key_lease.Table(LeaseOwner, max_physical_leases);
     return struct {
         map: Map,
         prefix: ?Key = null,
@@ -323,6 +327,7 @@ pub fn Router(
         pasting: bool = false,
         escape_timeout_ns: u64 = default_escape_timeout_ns,
         sequence_timeout_ns: u64 = default_sequence_timeout_ns,
+        leases: Leases = .{},
 
         const Self = @This();
 
@@ -341,6 +346,30 @@ pub fn Router(
 
         pub fn prefixPending(router: *const Self) bool {
             return router.prefix_pending;
+        }
+
+        /// Copies physical ownership into a replacement router.
+        ///
+        /// Configuration reloads replace the compiled keymap while keys may
+        /// still be held. Keeping their leases prevents a repeat or release
+        /// from being reclassified by the new bindings.
+        ///
+        /// ```zig
+        /// var replacement = try Router.init(bindings);
+        /// replacement.inheritPhysicalLeases(&current);
+        /// ```
+        pub fn inheritPhysicalLeases(router: *Self, previous: *const Self) void {
+            router.leases = previous.leases;
+        }
+
+        /// Returns how many physical presses were dropped because the bounded
+        /// lease table was saturated.
+        ///
+        /// ```zig
+        /// const dropped = router.leaseOverflowCount();
+        /// ```
+        pub fn leaseOverflowCount(router: *const Self) u64 {
+            return router.leases.overflowCount();
         }
 
         /// Returns the configured one-key suffix for a prefixed action. The
@@ -444,55 +473,19 @@ pub fn Router(
                 }
                 switch (parsed.event) {
                     .key => |key| {
-                        if (comptime @hasDecl(@TypeOf(handler.*), "capturesKeys")) {
-                            if (handler.capturesKeys()) {
-                                try router.replayBinding(handler);
-                                try router.flushOutput(handler);
-                                try handler.key(key);
-                                router.input_start += parsed.len;
-                                continue;
-                            }
+                        const control = try router.handleKey(.{
+                            .key = key,
+                            .raw = raw,
+                            .now_ns = now_ns,
+                        }, handler);
+                        router.input_start += parsed.len;
+                        if (control == .stop) {
+                            router.clear();
+
+                            return .stop;
                         }
-                        const was_pending = router.depth != 0;
-                        switch (router.routeKey(key, raw)) {
-                            .forward => |forwarded| {
-                                if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
-                                    try router.flushOutput(handler);
-                                    try handler.key(forwarded.key);
-                                } else {
-                                    try router.appendOutput(forwarded.raw, handler);
-                                }
-                            },
-                            .replay => |replay| {
-                                if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
-                                    try router.flushOutput(handler);
-                                    for (replay.held_keys[0..replay.held_key_len]) |held_key|
-                                        try handler.key(held_key);
-                                    try handler.key(replay.current_key);
-                                } else {
-                                    try router.appendOutput(replay.held_raw[0..replay.held_raw_len], handler);
-                                    try router.appendOutput(replay.current_raw, handler);
-                                }
-                            },
-                            .pending => {
-                                if (!was_pending and !router.prefix_pending)
-                                    router.binding_since_ns = now_ns;
-                            },
-                            .discard => {
-                                router.binding_since_ns = null;
-                            },
-                            .action => |action| {
-                                router.binding_since_ns = null;
-                                try router.flushOutput(handler);
-                                router.input_start += parsed.len;
-                                if (try handler.action(action) == .stop) {
-                                    router.clear();
-                                    return .stop;
-                                }
-                                continue;
-                            },
-                        }
-                        if (router.depth == 0) router.binding_since_ns = null;
+
+                        continue;
                     },
                     .mouse => |mouse| {
                         if (comptime @hasDecl(@TypeOf(handler.*), "mouse")) {
@@ -552,6 +545,127 @@ pub fn Router(
                 router.input_end = 0;
             }
             return .continue_routing;
+        }
+
+        const KeyInput = struct {
+            key: Key,
+            raw: []const u8,
+            now_ns: u64,
+        };
+
+        fn handleKey(router: *Self, input: KeyInput, handler: anytype) !Control {
+            const identity = input.key.physical orelse return router.handleKeyPress(input, handler);
+
+            switch (input.key.phase) {
+                .press => {
+                    if (!router.leases.acquire(identity, .binding)) {
+                        return .continue_routing;
+                    }
+                    errdefer _ = router.leases.release(identity);
+
+                    return router.handleKeyPress(input, handler);
+                },
+                .repeat => {
+                    if (router.leases.owner(identity) != .application) {
+                        return .continue_routing;
+                    }
+
+                    try router.deliverApplicationKey(input, handler);
+
+                    return .continue_routing;
+                },
+                .release => {
+                    if (router.leases.release(identity) != .application) {
+                        return .continue_routing;
+                    }
+
+                    try router.deliverApplicationKey(input, handler);
+
+                    return .continue_routing;
+                },
+            }
+        }
+
+        fn handleKeyPress(router: *Self, input: KeyInput, handler: anytype) !Control {
+            if (comptime @hasDecl(@TypeOf(handler.*), "capturesKeys")) {
+                if (handler.capturesKeys()) {
+                    try router.replayBinding(handler);
+                    router.transferKeyToApplication(input.key);
+                    try router.deliverApplicationKey(input, handler);
+
+                    return .continue_routing;
+                }
+            }
+
+            const was_pending = router.depth != 0;
+            switch (router.routeKey(input.key, input.raw)) {
+                .forward => |forwarded| {
+                    router.transferKeyToApplication(forwarded.key);
+                    try router.deliverApplicationKey(.{
+                        .key = forwarded.key,
+                        .raw = forwarded.raw,
+                        .now_ns = input.now_ns,
+                    }, handler);
+                },
+                .replay => |replay| {
+                    router.transferKeysToApplication(replay.held_keys[0..replay.held_key_len]);
+                    router.transferKeyToApplication(replay.current_key);
+                    if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+                        try router.flushOutput(handler);
+                        for (replay.held_keys[0..replay.held_key_len]) |held_key| {
+                            try handler.key(held_key);
+                        }
+                        try handler.key(replay.current_key);
+                    } else {
+                        try router.appendOutput(replay.held_raw[0..replay.held_raw_len], handler);
+                        try router.appendOutput(replay.current_raw, handler);
+                    }
+                },
+                .pending => {
+                    if (!was_pending and !router.prefix_pending) {
+                        router.binding_since_ns = input.now_ns;
+                    }
+                },
+                .discard => {
+                    router.binding_since_ns = null;
+                },
+                .action => |action| {
+                    router.binding_since_ns = null;
+                    try router.flushOutput(handler);
+
+                    return handler.action(action);
+                },
+            }
+            if (router.depth == 0) {
+                router.binding_since_ns = null;
+            }
+
+            return .continue_routing;
+        }
+
+        fn deliverApplicationKey(router: *Self, input: KeyInput, handler: anytype) !void {
+            if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
+                try router.flushOutput(handler);
+                try handler.key(input.key);
+            } else {
+                try router.appendOutput(input.raw, handler);
+            }
+        }
+
+        fn transferKeyToApplication(router: *Self, key_value: Key) void {
+            const identity = key_value.physical orelse return;
+            if (router.leases.owner(identity) == null) {
+                return;
+            }
+
+            const transferred = router.leases.acquire(identity, .application);
+            std.debug.assert(transferred);
+        }
+
+        fn transferKeysToApplication(router: *Self, keys: []const Key) void {
+            for (keys) |key_value| {
+                router.transferKeyToApplication(key_value);
+            }
         }
 
         const Routed = union(enum) {
@@ -646,10 +760,12 @@ pub fn Router(
                 router.binding_since_ns = null;
                 return;
             }
+            router.transferKeysToApplication(router.held_keys[0..router.held_key_len]);
             if (comptime @hasDecl(@TypeOf(handler.*), "key")) {
                 try router.flushOutput(handler);
-                for (router.held_keys[0..router.held_key_len]) |held_key|
+                for (router.held_keys[0..router.held_key_len]) |held_key| {
                     try handler.key(held_key);
+                }
             } else {
                 try router.appendOutput(router.held[0..router.held_len], handler);
             }
@@ -673,6 +789,7 @@ pub fn Router(
             router.binding_since_ns = null;
             router.output_len = 0;
             router.pasting = false;
+            router.leases.clear();
         }
 
         fn appendOutput(router: *Self, bytes: []const u8, handler: anytype) !void {
@@ -765,6 +882,30 @@ const GreedyCapture = struct {
 
     fn action(capture: *GreedyCapture, _: TestAction) !Control {
         capture.action_count += 1;
+        return .continue_routing;
+    }
+};
+
+const SemanticCapture = struct {
+    keys: [128]Key = undefined,
+    key_count: usize = 0,
+    action_count: usize = 0,
+    fail_key: bool = false,
+
+    fn key(capture: *SemanticCapture, value: Key) !void {
+        if (capture.fail_key) {
+            return error.KeyDeliveryFailed;
+        }
+
+        capture.keys[capture.key_count] = value;
+        capture.key_count += 1;
+    }
+
+    fn forward(_: *SemanticCapture, _: []const u8) !void {}
+
+    fn action(capture: *SemanticCapture, _: TestAction) !Control {
+        capture.action_count += 1;
+
         return .continue_routing;
     }
 };
@@ -947,7 +1088,6 @@ test "modified Enter reaches the semantic handler at every chunk boundary" {
     for ([_][]const u8{
         "\x1b[13;2u",
         "\x1b[13;2:1u",
-        "\x1b[13;2:2u",
         "\x1b[13::13;2:1u",
         "\x1b[27;2;13~",
     }) |sequence| {
@@ -958,13 +1098,15 @@ test "modified Enter reaches the semantic handler at every chunk boundary" {
             try testing.expectEqual(@as(usize, 0), capture.key_count);
             _ = try router.feed(sequence[split..], 1, &capture);
             try testing.expectEqual(@as(usize, 1), capture.key_count);
-            try testing.expectEqualDeep(try parseKey("shift+enter"), capture.keys[0]);
+            try testing.expectEqual(Key.Code.enter, capture.keys[0].code);
+            try testing.expect(capture.keys[0].mods.shift);
+            try testing.expectEqual(Key.Phase.press, capture.keys[0].phase);
             try testing.expectEqual(@as(usize, 0), capture.action_count);
         }
     }
 }
 
-test "Kitty key releases are consumed at every chunk boundary" {
+test "an orphan Kitty release fails closed at every chunk boundary" {
     const sequence = "\x1b[13::13;2:3u";
     for (1..sequence.len) |split| {
         var router = try TestRouter.init(&.{});
@@ -975,6 +1117,111 @@ test "Kitty key releases are consumed at every chunk boundary" {
         try testing.expectEqual(@as(usize, 0), capture.key_count);
         try testing.expectEqual(@as(usize, 0), capture.action_count);
     }
+}
+
+test "an application-owned key keeps repeats and release" {
+    const lifecycle =
+        "\x1b[13::13;2:1u" ++
+        "\x1b[13::13;2:2u" ++
+        "\x1b[13::13;1:3u";
+    var router = try TestRouter.init(&.{});
+    var capture: SemanticCapture = .{};
+
+    _ = try router.feed(lifecycle, 0, &capture);
+
+    try testing.expectEqual(@as(usize, 3), capture.key_count);
+    try testing.expectEqual(Key.Phase.press, capture.keys[0].phase);
+    try testing.expectEqual(Key.Phase.repeat, capture.keys[1].phase);
+    try testing.expectEqual(Key.Phase.release, capture.keys[2].phase);
+    try testing.expectEqual(@as(u32, 13), capture.keys[2].physical.?.value);
+}
+
+test "a binding-owned key consumes repeats and release" {
+    const bindings = [_]TestBinding{try .parse(&.{"ctrl+s"}, .palette)};
+    const lifecycle =
+        "\x1b[115::115;5:1u" ++
+        "\x1b[115::115;5:2u" ++
+        "\x1b[115::115;1:3u";
+    var router = try TestRouter.init(&bindings);
+    var capture: SemanticCapture = .{};
+
+    _ = try router.feed(lifecycle, 0, &capture);
+
+    try testing.expectEqual(@as(usize, 1), capture.action_count);
+    try testing.expectEqual(@as(usize, 0), capture.key_count);
+}
+
+test "releasing a physical prefix does not cancel its logical state" {
+    const prefix = try parseKey("ctrl+s");
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+s", "d" }, .detach)};
+    var router = try TestRouter.initWithPrefix(&bindings, prefix);
+    var capture: Capture = .{};
+
+    _ = try router.feed(
+        "\x1b[115::115;5:1u" ++
+            "\x1b[115::115;1:3u",
+        0,
+        &capture,
+    );
+
+    try testing.expect(router.prefixPending());
+    try testing.expectEqual(@as(usize, 0), capture.action_len);
+    _ = try router.feed("d", 1, &capture);
+    try testing.expect(!router.prefixPending());
+    try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
+    try testing.expectEqualStrings("", capture.slice());
+}
+
+test "router replacement preserves a held application's owner" {
+    const press = "\x1b[120::120;1:1u";
+    const release = "\x1b[120::120;1:3u";
+    var current = try TestRouter.init(&.{});
+    var capture: SemanticCapture = .{};
+
+    _ = try current.feed(press, 0, &capture);
+    var replacement = try TestRouter.init(&.{});
+    replacement.inheritPhysicalLeases(&current);
+    _ = try replacement.feed(release, 1, &capture);
+
+    try testing.expectEqual(@as(usize, 2), capture.key_count);
+    try testing.expectEqual(Key.Phase.release, capture.keys[1].phase);
+}
+
+test "lease saturation drops a new physical lifecycle" {
+    var router = try TestRouter.init(&.{});
+    var capture: SemanticCapture = .{};
+
+    for (0..max_physical_leases + 1) |index| {
+        const value: u32 = @intCast(index + 1);
+        const key_value: Key = .{
+            .code = .{ .char = .init("x") },
+            .physical = .{ .value = value },
+        };
+        _ = try router.handleKey(.{ .key = key_value, .raw = "", .now_ns = 0 }, &capture);
+    }
+
+    try testing.expectEqual(@as(usize, max_physical_leases), capture.key_count);
+    try testing.expectEqual(@as(u64, 1), router.leaseOverflowCount());
+}
+
+test "failed application delivery does not leave native ownership" {
+    const identity: Key.Physical = .{ .value = 120 };
+    var router = try TestRouter.init(&.{});
+    var capture: SemanticCapture = .{ .fail_key = true };
+
+    try testing.expectError(error.KeyDeliveryFailed, router.handleKey(.{ .key = .{
+        .code = .{ .char = .init("x") },
+        .physical = identity,
+    }, .raw = "", .now_ns = 0 }, &capture));
+
+    capture.fail_key = false;
+    _ = try router.handleKey(.{ .key = .{
+        .code = .{ .char = .init("x") },
+        .phase = .release,
+        .physical = identity,
+    }, .raw = "", .now_ns = 1 }, &capture);
+
+    try testing.expectEqual(@as(usize, 0), capture.key_count);
 }
 
 test "a semantic mouse handler consumes reports before they reach the pane" {

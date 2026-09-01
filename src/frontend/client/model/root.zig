@@ -1365,8 +1365,8 @@ pub const Model = struct {
     }
 
     /// Resolves one user-input target without exposing pane storage. Prompts
-    /// and copy mode own normal pane input exclusively, while a captured paste
-    /// keeps its exact owner until the terminal sends its closing boundary.
+    /// and copy mode own normal pane input exclusively. Physical key and paste
+    /// leases retain their exact pane across focus and authority changes.
     ///
     /// ```zig
     /// const plan = model.planPaneInput(.focused) orelse return;
@@ -1378,6 +1378,7 @@ pub const Model = struct {
                     return null;
                 }
             },
+            .key_lease => {},
             .paste_session => |expected| {
                 const active = model.pane_paste orelse return null;
                 if (!std.meta.eql(active, expected)) {
@@ -1394,6 +1395,10 @@ pub const Model = struct {
             .pane => |pane_id| explicit: {
                 const active = model.workspace.activeConst() orelse return null;
                 break :explicit active.model.findConst(pane_id) orelse return null;
+            },
+            .key_lease => |pane_id| leased: {
+                const tab = model.workspace.tabForPaneConst(pane_id) orelse return null;
+                break :leased tab.model.findConst(pane_id) orelse return null;
             },
             .paste_session => |session| captured: {
                 const tab = model.workspace.tabForPaneConst(session.pane_id) orelse return null;

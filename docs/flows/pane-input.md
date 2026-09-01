@@ -58,8 +58,9 @@ Only the latter two enter `PaneInputHandler`. See
 [Pane mouse input](pane-mouse-input.md) for target and coordinate rules.
 
 `ClientModel.planPaneInput` is a read-only query. Normal input resolves the
-focused or explicit pane in the active tab. A captured paste may resolve its
-exact pane in the tab being detached after a selection commit. Every target
+focused or explicit pane in the active tab. A physical key lease and a captured
+paste may resolve their exact pane outside the active tab after a focus or
+selection commit. Every target
 must remain attached; missing and detached targets are dropped. An active name
 prompt or copy mode rejects normal input because each owns it exclusively.
 Planning returns a value copy of `input_modes` and never advances
@@ -67,10 +68,11 @@ Planning returns a value copy of `input_modes` and never advances
 
 `PaneInputHandler` accepts either already-routed bytes or a semantic key. It
 encodes keys against the planned child modes before committing anything, then
-rejects empty or oversized payloads. Keyboard and paste sources compose
-`SetPaneViewportHandler` with a `.bottom` intent before delivery. Mouse reports
-preserve the current viewport. The final effect carries only `pane_id` and a
-slice borrowed for the synchronous call.
+rejects empty or oversized external payloads. A release that the child's
+protocol cannot represent becomes a zero-byte no-op. Press, repeat and paste
+compose `SetPaneViewportHandler` with a `.bottom` intent before delivery.
+Release and mouse reports preserve the current viewport. The final effect
+carries only `pane_id` and a slice borrowed for the synchronous call.
 
 ## Paste ownership
 
@@ -172,8 +174,8 @@ different pane or the runtime event loop.
 - `src/frontend/client/application/paste_routing.zig` proves start authority,
   established-owner priority, ignored phases and failure isolation.
 - `src/frontend/client/application/pane_input.zig` proves child-mode encoding,
-  explicit marker delivery, bounds, source-specific viewport policy, effect
-  order and failure behavior.
+  exact key-lease targets, legacy and Kitty releases, explicit marker delivery,
+  bounds, source-specific viewport policy, effect order and failure behavior.
 - `src/frontend/client/application/pane_mouse.zig` proves exclusive pointer
   policy before any report reaches pane input.
 - `src/frontend/client/client_test.zig` proves captured target and framing,

@@ -529,6 +529,7 @@ pub const PanePasteSession = struct {
 pub const PaneInputTarget = union(enum) {
     focused,
     pane: schema.PaneId,
+    key_lease: schema.PaneId,
     paste_session: PanePasteSession,
 };
 

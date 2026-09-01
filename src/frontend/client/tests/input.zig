@@ -91,7 +91,7 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
     const cases = [_]struct { modes: schema.frame.InputModes, expected: []const u8 }{
         .{
             .modes = .{ .kitty_keyboard_flags = 7 },
-            .expected = "\x1b[13;2u\x1b[13;2u\r\n",
+            .expected = "\x1b[13;2u\x1b[13;2u\r\x1b[106;5u",
         },
         .{
             .modes = .{ .modify_other_keys_2 = true },
@@ -144,6 +144,30 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
         }
         try std.testing.expectEqualStrings(case.expected, received[0..received_len]);
     }
+}
+
+test "releasing the physical prefix preserves its logical sequence through client routing" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const adoption = try testingConfigAdoption(1, true);
+    _ = try config_reloads.apply(client, adoption);
+    try std.testing.expect(!client.model.sidebarVisible());
+
+    const lifecycle =
+        "\x1b[115::115;5u" ++
+        "\x1b[115::115;1:3u" ++
+        "s";
+    var chunk: InputChunk = .{};
+    @memcpy(chunk.bytes[0..lifecycle.len], lifecycle);
+    chunk.len = lifecycle.len;
+
+    try std.testing.expect(!try host_inputs.handleRead(client, chunk));
+
+    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(!client.host_input.router.prefixPending());
 }
 
 test "streamed paste captures target and framing while restoring its live viewport" {

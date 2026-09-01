@@ -5,6 +5,7 @@ pub const copy_mode = @import("copy_mode.zig");
 pub const edit = @import("edit.zig");
 pub const host = @import("host.zig");
 pub const keybind = @import("keybind.zig");
+pub const key_lease = @import("key_lease.zig");
 pub const mouse_protocol = @import("mouse_protocol.zig");
 
 // Preserve the former `frontend.input` surface while making input a namespace.

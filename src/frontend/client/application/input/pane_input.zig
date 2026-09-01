@@ -61,9 +61,9 @@ pub const PaneInputHandler = struct {
     model: *client_model.Model,
     effects: PaneInputEffects,
 
-    /// Encodes semantic keys before any commit, restores live output for
-    /// keyboard and paste input, then delivers bytes to the resolved pane.
-    /// Mouse reports preserve the user's current viewport.
+    /// Encodes semantic keys before any commit, restores live output for key
+    /// presses, repeats and paste, then delivers bytes to the resolved pane.
+    /// Releases and mouse reports preserve the user's current viewport.
     ///
     /// ```zig
     /// const delivery = try handler.execute(command) orelse return;
@@ -71,15 +71,20 @@ pub const PaneInputHandler = struct {
     pub fn execute(handler: *PaneInputHandler, command: Command) !?Delivery {
         const plan = handler.model.planPaneInput(command.target) orelse return null;
         var encoded: [32]u8 = undefined;
-        const bytes = switch (command.payload) {
-            .bytes => |value| value,
-            .key => |value| try host_input.encodeKey(&encoded, value, plan.input_modes),
+        const prepared: Prepared = switch (command.payload) {
+            .bytes => |value| .{ .source = command.source, .bytes = value },
+            .key => |value| .{
+                .source = command.source,
+                .bytes = try host_input.encodeKey(&encoded, value, plan.input_modes),
+                .restore_viewport = value.phase != .release,
+                .empty_is_noop = true,
+            },
         };
+        if (prepared.bytes.len == 0 and prepared.empty_is_noop) {
+            return null;
+        }
 
-        return try handler.deliver(plan, .{
-            .source = command.source,
-            .bytes = bytes,
-        });
+        return try handler.deliver(plan, prepared);
     }
 
     /// Frames one bounded paste against the target child's current mode and
@@ -127,6 +132,8 @@ pub const PaneInputHandler = struct {
     const Prepared = struct {
         source: Source,
         bytes: []const u8,
+        restore_viewport: bool = true,
+        empty_is_noop: bool = false,
     };
 
     fn deliver(handler: *PaneInputHandler, plan: client_model.PaneInputPlan, prepared: Prepared) !Delivery {
@@ -134,7 +141,7 @@ pub const PaneInputHandler = struct {
             return error.InvalidInputLength;
         }
 
-        if (prepared.source != .mouse) {
+        if (prepared.source != .mouse and prepared.restore_viewport) {
             var viewport: set_pane_viewport.SetPaneViewportHandler = .{
                 .model = handler.model,
                 .effects = handler.effects.viewport,
@@ -274,6 +281,56 @@ test "PaneInputHandler encodes keys after resolution and restores live output" {
     try std.testing.expectEqual(@as(usize, 3), delivery.byte_count);
     try std.testing.expectEqual(Source.host, delivery.source);
     try std.testing.expectEqual(client_model.Version{ .viewport = 1 }, testing.model.version());
+}
+
+test "PaneInputHandler drops legacy releases without changing the viewport" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var capture: EffectsCapture = .{ .model = testing.model };
+    var handler: PaneInputHandler = .{
+        .model = testing.model,
+        .effects = capture.port(),
+    };
+
+    const delivery = try handler.execute(.{
+        .target = .{ .key_lease = testing.pane_id },
+        .source = .host,
+        .payload = .{ .key = .{
+            .code = .left,
+            .phase = .release,
+            .physical = .{ .value = 1 },
+        } },
+    });
+
+    try std.testing.expect(delivery == null);
+    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
+    try std.testing.expectEqual(@as(u64, 0), testing.model.version().viewport);
+}
+
+test "PaneInputHandler sends Kitty releases without restoring the viewport" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    testing.model.workspace.findPane(testing.pane_id).?.input_modes.kitty_keyboard_flags = 2;
+    var capture: EffectsCapture = .{ .model = testing.model };
+    var handler: PaneInputHandler = .{
+        .model = testing.model,
+        .effects = capture.port(),
+    };
+
+    const delivery = (try handler.execute(.{
+        .target = .{ .key_lease = testing.pane_id },
+        .source = .host,
+        .payload = .{ .key = .{
+            .code = .left,
+            .phase = .release,
+            .physical = .{ .value = 1 },
+        } },
+    })).?;
+
+    try std.testing.expectEqualSlices(EffectEvent, &.{.input}, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualStrings("\x1b[1;1:3D", capture.input[0..capture.input_len]);
+    try std.testing.expectEqual(@as(u64, 0), testing.model.version().viewport);
+    try std.testing.expectEqual(testing.pane_id, delivery.pane_id);
 }
 
 test "PaneInputHandler restores paste input but preserves viewport for mouse reports" {

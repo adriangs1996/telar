@@ -18,6 +18,7 @@ pub const Metrics = struct {
     started_ns: u64,
     input_events: u64 = 0,
     input_bytes: u64 = 0,
+    key_lease_overflows: u64 = 0,
     server_messages: u64 = 0,
     server_bytes: u64 = 0,
     graphics_messages: u64 = 0,
@@ -191,7 +192,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         "\"kitty_zlib\":\"{s}\"," ++
         "\"mouse_pixels\":\"{s}\",\"sidebar_renderer\":\"{s}\"," ++
         "\"cell_width_px\":{d},\"cell_height_px\":{d}," ++
-        "\"input_events\":{d},\"input_bytes\":{d}," ++
+        "\"input_events\":{d},\"input_bytes\":{d},\"key_lease_overflows\":{d}," ++
         "\"server_messages\":{d},\"server_bytes\":{d},", .{
         now_ns / std.time.ns_per_ms,
         diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
@@ -219,6 +220,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         state.capabilities.cell_height_px,
         metrics.input_events,
         metrics.input_bytes,
+        metrics.key_lease_overflows,
         metrics.server_messages,
         metrics.server_bytes,
     });
@@ -454,7 +456,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
     const io = std.testing.io;
     const capabilities: client_model.HostCapabilities = .{};
     const pacer: pace.Pacer = .{};
-    const metrics: Metrics = .{ .started_ns = 0 };
+    const metrics: Metrics = .{ .started_ns = 0, .key_lease_overflows = 3 };
     var buffer: [8192]u8 = undefined;
     const line = try format(&buffer, .{
         .io = io,
@@ -500,6 +502,7 @@ test "client telemetry reports lua kitty and heap retained bytes" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"icons\":\"nerd-font\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"media_pending\":1") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"outbox_coalesced_layout\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"key_lease_overflows\":3") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"heap_live_bytes\":48") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"interactive_allocs\":0") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"observation_allocs\":3") != null);

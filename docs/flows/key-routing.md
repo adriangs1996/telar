@@ -1,8 +1,9 @@
 # Key routing
 
 The native host router produces either a semantic key or a borrowed byte
-slice. The client assigns that value to one current owner: an attachment
-modal, the name prompt, copy mode or the focused pane. The decision happens
+slice. A key press is assigned to one owner: an attachment modal, the name
+prompt, copy mode or the focused pane. Repeat and release retain that owner.
+The decision happens
 before editor parsing, copy movement, child encoding or media scheduling.
 
 This is client-owned interactive-path policy. `KeyRoutingHandler` uses fixed
@@ -23,11 +24,11 @@ InputHandler.key / forward
       |
 key_routing adapter
       |
-KeyRoutingHandler + authority snapshot
+KeyRoutingHandler + authority snapshot + physical lease
       |
       +----------------+----------------+----------------+
       |                |                |                |
-attachment modal   name prompt       copy mode       focused pane
+attachment modal   name prompt       copy mode        exact pane
       |                |                |                |
 optional close    neutral encoding   CopyModeHandler  PaneInputHandler
                                                         |
@@ -60,6 +61,18 @@ Semantic keys use this order:
 4. The focused pane receives the key and encodes it against its acknowledged
    child modes.
 
+When the host reports a physical identity, the press records the selected
+owner in a fixed 64-entry table. Pane ownership includes the delivered
+`PaneId`. Repeat consults the table instead of current authority. Release takes
+and removes the entry; prompts and copy mode consume it without a second edit,
+while a pane receives it only when its keyboard protocol can encode it. An
+orphan repeat or release is dropped.
+
+A repeated press for the same identity replaces stale ownership. This recovers
+from a release lost during a terminal transition. If the table is full, the new
+press is dropped before any owner effect, the lifecycle remains unowned, and
+telemetry increments `key_lease_overflows`.
+
 Replayed bytes have already crossed semantic binding resolution. An empty
 slice is ignored. The name prompt receives non-empty bytes first, copy mode
 consumes them without an effect, and every remaining value reaches the pane.
@@ -85,7 +98,9 @@ path. See [Clipboard image preview](clipboard-image.md).
 
 ## State, presentation and failure
 
-The authority snapshot is valid only for the synchronous handler call. Modal,
+The authority snapshot is valid only for a new press's synchronous handler
+call. Active leases are client input state and survive configuration-router
+replacement. Modal,
 prompt and copy effects resolve their current owner again through their
 capability adapter. No asynchronous task retains the snapshot or input slice.
 
@@ -102,12 +117,14 @@ delivery.
 
 ## Proof
 
-- `src/frontend/client/application/key_routing.zig` proves capture authority,
-  semantic and byte priority, empty input, exclusive failures, confirmed
-  delivery and `Ctrl+V` ordering.
+- `src/frontend/client/application/input/key_routing.zig` proves capture authority,
+  semantic and byte priority, exact-pane leases, prompt repeat ownership,
+  orphan and saturation policy, exclusive failures, confirmed delivery and
+  `Ctrl+V` ordering.
 - `src/frontend/input/keybind.zig` proves active editor capture before bindings,
-  semantic replay and bounded forwarding.
-- `src/frontend/client/client_test.zig` proves attachment-modal capture, prompt
+  semantic replay, binding/application physical ownership, persistent prefix
+  release, reload inheritance and bounded forwarding.
+- `src/frontend/client/tests/input.zig` proves attachment-modal capture, prompt
   input, copy-mode keys, child-mode encoding, pane backpressure and `Ctrl+V`
   delivery through the complete input entrypoint.
 - `name-prompt.md`, `copy-mode.md`, `pane-input.md` and `clipboard-image.md`

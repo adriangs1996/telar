@@ -1,5 +1,6 @@
 //! Wires host-key ownership policy to existing client input use cases.
 
+const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const clipboard_images = @import("../host/clipboard_images.zig");
@@ -10,6 +11,7 @@ const pane_inputs = @import("pane_inputs.zig");
 const Client = @import("../../client.zig");
 const host_input = input_capability.host;
 const key_routing = input_application.key_routing;
+const schema = core.schema;
 
 pub const Command = key_routing.Command;
 pub const Outcome = key_routing.Outcome;
@@ -31,6 +33,7 @@ pub fn captures(client: *const Client) bool {
 /// ```
 pub fn apply(client: *Client, command: Command) !Outcome {
     var use_case: key_routing.KeyRoutingHandler = .{
+        .leases = &client.host_input.application_leases,
         .effects = .{
             .context = client,
             .close_modal = closeModal,
@@ -41,7 +44,10 @@ pub fn apply(client: *Client, command: Command) !Outcome {
         },
     };
 
-    return use_case.execute(command, authority(client));
+    const outcome = try use_case.execute(command, authority(client));
+    client.telemetry.metrics.key_lease_overflows +%= @intFromBool(outcome.lease_overflow);
+
+    return outcome;
 }
 
 fn authority(client: *const Client) key_routing.Authority {
@@ -75,18 +81,21 @@ fn routeCopyKey(raw_context: *anyopaque, key: input_capability.keybind.Key) !voi
     _ = try copy_modes.key(client, key);
 }
 
-fn routePane(raw_context: *anyopaque, command: Command) !bool {
+fn routePane(raw_context: *anyopaque, command: key_routing.PaneCommand) !?schema.PaneId {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const delivery = try pane_inputs.send(client, .{
-        .target = .focused,
+        .target = switch (command.target) {
+            .current => .focused,
+            .lease => |pane_id| .{ .key_lease = pane_id },
+        },
         .source = .host,
-        .payload = switch (command) {
+        .payload = switch (command.input) {
             .bytes => |bytes| .{ .bytes = bytes },
             .key => |key| .{ .key = key },
         },
     });
 
-    return delivery != null;
+    return if (delivery) |completed| completed.pane_id else null;
 }
 
 fn startPreview(raw_context: *anyopaque) !void {
