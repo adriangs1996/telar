@@ -352,6 +352,7 @@ test "PTY child receives the explicit terminal environment" {
     defer inherited_map.deinit();
     try inherited_map.put("PATH", "/bin:/usr/bin");
     try inherited_map.put("GHOSTTY_RESOURCES_DIR", "/Applications/Ghostty.app/Contents/Resources");
+    try inherited_map.put("TERM_PROGRAM_VERSION", "outer-version");
     const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
     defer inherited_block.deinit(std.testing.allocator);
 
@@ -361,7 +362,7 @@ test "PTY child receives the explicit terminal environment" {
     const args = [_][*:0]const u8{
         "sh",
         "-c",
-        "printf '%s|%s|%s' \"$TERM\" \"$TERM_PROGRAM\" \"${GHOSTTY_RESOURCES_DIR-unset}\"",
+        "printf '%s|%s|%s|%s|%s|%s' \"$TERM\" \"$COLORTERM\" \"$TERM_PROGRAM\" \"$TELAR_TERM_PROGRAM\" \"${TERM_PROGRAM_VERSION-unset}\" \"${GHOSTTY_RESOURCES_DIR-unset}\"",
     };
     var command = try Command.fromArgv(&args);
     command.environment = &environment;
@@ -371,7 +372,7 @@ test "PTY child receives the explicit terminal environment" {
     var output: [128]u8 = undefined;
     const len = try session.read(std.testing.io, &output);
     try std.testing.expectEqual(Exit{ .exited = 0 }, try session.wait());
-    try std.testing.expectEqualStrings("xterm-256color|telar|unset", output[0..len]);
+    try std.testing.expectEqualStrings("xterm-256color|truecolor|ghostty|telar|unset|unset", output[0..len]);
 }
 
 test "executable lookup uses PATH from the explicit child environment" {

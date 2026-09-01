@@ -9,7 +9,7 @@ pub const enter =
     "\x1b[?1006h" ++
     "\x1b[?1016h" ++
     "\x1b[?2004h" ++
-    "\x1b[>1u" ++
+    "\x1b[>7u" ++
     "\x1b[2J";
 
 pub const leave =

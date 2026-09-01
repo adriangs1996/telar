@@ -64,14 +64,7 @@ pub fn render(context: *widget.Context, input: Input) void {
     const safe_width = row_end -| safe_start;
     const marker_width = @min(@as(u16, 3), safe_width);
     const active_id = activeWorkspaceId(input.location);
-    const list_width = renderedListWidth(
-        input,
-        active_id,
-        safe_width -| marker_width,
-    );
-    const group_width = marker_width + list_width;
-    const centered_x = area.x + (area.w - group_width) / 2;
-    const group_x = @min(@max(centered_x, safe_start), row_end -| group_width);
+    const group_x = @min(safe_start, row_end);
     const marker_rect: ui.Rect = .{ .x = group_x, .y = area.y, .w = marker_width, .h = 1 };
     context.hits.add(marker_rect, .toggle_workspace_list);
     const marker_style: ui.Style = .{
@@ -144,35 +137,6 @@ fn renderRight(context: *widget.Context, area: ui.Rect, input: Input) void {
         .metrics => status_bar.render(context, area, input.system_metrics),
         .empty, .tabs => {},
     }
-}
-
-fn renderedListWidth(input: Input, active_id: ?schema.WorkspaceId, available: u16) u16 {
-    if (input.workspaces.count == 0) {
-        var workspace_buffer: [schema.max_workspace_name_bytes + 16]u8 = undefined;
-        const workspace = workspaceLabel(input.location, input.workspace_name, &workspace_buffer);
-        return @min(ui.measure(workspace) + 1, available);
-    }
-
-    const snapshot = input.workspaces;
-    const active_index = if (active_id) |id| snapshot.indexOf(id) else null;
-    const expanded_width = listWidth(snapshot, active_index, input.workspace_name);
-    if (!input.collapsed and expanded_width <= available) return expanded_width;
-
-    const shown = active_index orelse 0;
-    var width = ui.measure(workspaceNameAt(
-        snapshot,
-        shown,
-        active_index,
-        input.workspace_name,
-    )) + 2;
-    if (snapshot.count > 1) {
-        var counter_buffer: [8]u8 = undefined;
-        const counter = std.fmt.bufPrint(&counter_buffer, " +{d} ", .{
-            snapshot.count - 1,
-        }) catch " + ";
-        width +|= ui.measure(counter);
-    }
-    return @min(width, available);
 }
 
 fn renderList(
@@ -522,7 +486,7 @@ test "configured right content stops before the permanent proxy badge" {
     );
 }
 
-test "workspace navigation is centered independently of the sidebar toggle" {
+test "workspace navigation starts after the sidebar toggle" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -551,8 +515,8 @@ test "workspace navigation is centered independently of the sidebar toggle" {
         .proxy_tls_active = false,
     });
 
-    // The complete 10-column group is centered: marker [15, 18), label [18, 25).
-    try std.testing.expectEqual(widget.Action.toggle_workspace_list, hits.at(16, 0).?);
-    try std.testing.expectEqual(widget.Action.active_workspace, hits.at(18, 0).?);
-    try std.testing.expect(hits.at(5, 0) == null);
+    // The marker starts after the four-column toggle and its one-column gap.
+    try std.testing.expectEqual(widget.Action.toggle_workspace_list, hits.at(6, 0).?);
+    try std.testing.expectEqual(widget.Action.active_workspace, hits.at(8, 0).?);
+    try std.testing.expect(hits.at(15, 0) == null);
 }

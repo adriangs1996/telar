@@ -135,7 +135,7 @@ pub const Proxy = struct {
             client.bundle_path,
         );
         return .{ .value = try pty.ChildEnvironment.initWithOverrides(proxy.gpa, inherited, .{
-            .term_program = "telar",
+            .telar_term_program = "telar",
             .overrides = &overrides,
         }) };
     }

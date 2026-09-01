@@ -1967,7 +1967,7 @@ test "pane keyboard modes follow VT negotiation and screen-local stacks" {
 
     const steps = [_]struct { sequence: []const u8, flags: u5, modify_other_keys: bool = false }{
         .{ .sequence = "\x1b[>1u", .flags = 1 },
-        .{ .sequence = "\x1b[>5u", .flags = 5 },
+        .{ .sequence = "\x1b[>7u", .flags = 7 },
         .{ .sequence = "\x1b[<u", .flags = 1 },
         .{ .sequence = "\x1b[?1049h", .flags = 0 },
         .{ .sequence = "\x1b[>8u", .flags = 8 },

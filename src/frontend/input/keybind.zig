@@ -944,7 +944,13 @@ test "CSI-u Ctrl bindings route without colliding with Backspace or Enter" {
 }
 
 test "modified Enter reaches the semantic handler at every chunk boundary" {
-    for ([_][]const u8{ "\x1b[13;2u", "\x1b[27;2;13~" }) |sequence| {
+    for ([_][]const u8{
+        "\x1b[13;2u",
+        "\x1b[13;2:1u",
+        "\x1b[13;2:2u",
+        "\x1b[13::13;2:1u",
+        "\x1b[27;2;13~",
+    }) |sequence| {
         for (1..sequence.len) |split| {
             var router = try TestRouter.init(&.{});
             var capture: GreedyCapture = .{};
@@ -955,6 +961,19 @@ test "modified Enter reaches the semantic handler at every chunk boundary" {
             try testing.expectEqualDeep(try parseKey("shift+enter"), capture.keys[0]);
             try testing.expectEqual(@as(usize, 0), capture.action_count);
         }
+    }
+}
+
+test "Kitty key releases are consumed at every chunk boundary" {
+    const sequence = "\x1b[13::13;2:3u";
+    for (1..sequence.len) |split| {
+        var router = try TestRouter.init(&.{});
+        var capture: GreedyCapture = .{};
+        _ = try router.feed(sequence[0..split], 0, &capture);
+        try testing.expectEqual(@as(usize, 0), capture.key_count);
+        _ = try router.feed(sequence[split..], 1, &capture);
+        try testing.expectEqual(@as(usize, 0), capture.key_count);
+        try testing.expectEqual(@as(usize, 0), capture.action_count);
     }
 }
 

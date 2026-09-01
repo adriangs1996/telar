@@ -15,26 +15,26 @@ pub const ChildEnvironment = struct {
     };
 
     pub const Configuration = struct {
-        term_program: []const u8,
+        telar_term_program: []const u8,
         overrides: []const Override,
     };
 
-    /// Creates a child environment from the runtime environment and Telar's
-    /// terminal identity.
+    /// Creates a child environment with Telar's terminal compatibility
+    /// profile and explicit identity.
     ///
     /// ```zig
     /// var environment = try ChildEnvironment.init(gpa, inherited, "telar");
     /// defer environment.deinit();
     /// ```
-    pub fn init(gpa: std.mem.Allocator, inherited: std.process.Environ, term_program: []const u8) !ChildEnvironment {
-        return initWithOverrides(gpa, inherited, .{ .term_program = term_program, .overrides = &.{} });
+    pub fn init(gpa: std.mem.Allocator, inherited: std.process.Environ, telar_term_program: []const u8) !ChildEnvironment {
+        return initWithOverrides(gpa, inherited, .{ .telar_term_program = telar_term_program, .overrides = &.{} });
     }
 
     /// Creates the immutable child environment after removing runtime-only
     /// authority and applying bounded pane-specific overrides.
     ///
     /// ```zig
-    /// var environment = try ChildEnvironment.initWithOverrides(gpa, inherited, .{ .term_program = "telar", .overrides = overrides });
+    /// var environment = try ChildEnvironment.initWithOverrides(gpa, inherited, .{ .telar_term_program = "telar", .overrides = overrides });
     /// ```
     pub fn initWithOverrides(gpa: std.mem.Allocator, inherited: std.process.Environ, configuration: Configuration) !ChildEnvironment {
         var map = try inherited.createMap(gpa);
@@ -45,8 +45,15 @@ pub const ChildEnvironment = struct {
         _ = map.swapRemove("GHOSTTY_RESOURCES_DIR");
         // Runtime authority is never ambient pane state.
         _ = map.swapRemove("TELAR_SOCKET");
+        // Applications such as Claude Code only negotiate the extended Kitty
+        // keyboard protocol with terminals they know implement it. Telar
+        // implements Ghostty's contract while retaining its own identity in a
+        // separate variable for integrations that need to detect Telar.
+        _ = map.swapRemove("TERM_PROGRAM_VERSION");
         try map.put("TERM", "xterm-256color");
-        try map.put("TERM_PROGRAM", configuration.term_program);
+        try map.put("COLORTERM", "truecolor");
+        try map.put("TERM_PROGRAM", "ghostty");
+        try map.put("TELAR_TERM_PROGRAM", configuration.telar_term_program);
         for (configuration.overrides) |entry| {
             try map.put(entry.name, entry.value);
         }
@@ -75,14 +82,17 @@ pub const ChildEnvironment = struct {
     }
 };
 
-test "terminal child environment removes inherited Ghostty identity" {
+test "terminal child environment provides Telar's Ghostty compatibility profile" {
     var inherited_map = std.process.Environ.Map.init(std.testing.allocator);
     defer inherited_map.deinit();
 
     try inherited_map.put("HOME", "/tmp/telar-home");
     try inherited_map.put("PATH", "/bin:/usr/bin");
     try inherited_map.put("TERM", "xterm-ghostty");
-    try inherited_map.put("TERM_PROGRAM", "ghostty");
+    try inherited_map.put("COLORTERM", "false");
+    try inherited_map.put("TERM_PROGRAM", "outer-terminal");
+    try inherited_map.put("TERM_PROGRAM_VERSION", "1.2.3");
+    try inherited_map.put("TELAR_TERM_PROGRAM", "outer-telar");
     try inherited_map.put("TELAR_SOCKET", "/tmp/outer-telar.sock");
     try inherited_map.put("GHOSTTY_RESOURCES_DIR", "outer");
     const inherited_block = try inherited_map.createPosixBlock(std.testing.allocator, .{});
@@ -94,8 +104,11 @@ test "terminal child environment removes inherited Ghostty identity" {
     const child: std.process.Environ = .{ .block = environment.block };
 
     try std.testing.expectEqualStrings("xterm-256color", std.process.Environ.getPosix(child, "TERM").?);
-    try std.testing.expectEqualStrings("telar", std.process.Environ.getPosix(child, "TERM_PROGRAM").?);
+    try std.testing.expectEqualStrings("truecolor", std.process.Environ.getPosix(child, "COLORTERM").?);
+    try std.testing.expectEqualStrings("ghostty", std.process.Environ.getPosix(child, "TERM_PROGRAM").?);
+    try std.testing.expectEqualStrings("telar", std.process.Environ.getPosix(child, "TELAR_TERM_PROGRAM").?);
     try std.testing.expectEqualStrings("/tmp/telar-home", std.process.Environ.getPosix(child, "HOME").?);
+    try std.testing.expect(std.process.Environ.getPosix(child, "TERM_PROGRAM_VERSION") == null);
     try std.testing.expect(std.process.Environ.getPosix(child, "TELAR_SOCKET") == null);
     try std.testing.expect(std.process.Environ.getPosix(child, "GHOSTTY_RESOURCES_DIR") == null);
 }
@@ -109,7 +122,7 @@ test "terminal child environment applies bounded proxy overrides" {
     defer inherited_block.deinit(std.testing.allocator);
 
     var environment = try ChildEnvironment.initWithOverrides(std.testing.allocator, .{ .block = inherited_block }, .{
-        .term_program = "telar",
+        .telar_term_program = "telar",
         .overrides = &.{
             .{ .name = "HTTPS_PROXY", .value = "http://127.0.0.1:45100" },
             .{ .name = "TELAR_PROXY_TLS", .value = "1" },

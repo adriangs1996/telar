@@ -104,9 +104,9 @@ comptime {
     assertFn(impl, "localTime", fn () LocalTime);
 }
 
-test "host keyboard disambiguation stays inside the alternate screen" {
+test "host keyboard enhancements stay inside the alternate screen" {
     const enter_alternate = std.mem.indexOf(u8, enter_sequence, "\x1b[?1049h").?;
-    const push_keyboard = std.mem.indexOf(u8, enter_sequence, "\x1b[>1u").?;
+    const push_keyboard = std.mem.indexOf(u8, enter_sequence, "\x1b[>7u").?;
     try std.testing.expect(enter_alternate < push_keyboard);
 
     const pop_keyboard = std.mem.indexOf(u8, leave_sequence, "\x1b[<u").?;

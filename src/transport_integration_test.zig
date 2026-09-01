@@ -2056,7 +2056,7 @@ test "runtime persists terminal-edited commands without shell integration" {
     }
 }
 
-test "modified Enter follows child keyboard negotiation through the PTY" {
+test "modified Enter follows the compatibility profile and child keyboard negotiation through the PTY" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.schema;
@@ -2086,7 +2086,8 @@ test "modified Enter follows child keyboard negotiation through the PTY" {
     // its own modes; no test mutates the runtime's VT or the client's modes.
     const script =
         "stty raw -echo; " ++
-        "printf '\\033[>5uKITTY_READY'; " ++
+        "[ \"$TERM|$COLORTERM|$TERM_PROGRAM|$TELAR_TERM_PROGRAM|${TERM_PROGRAM_VERSION-unset}\" = \"xterm-256color|truecolor|ghostty|telar|unset\" ] || exit 4; " ++
+        "printf '\\033[>7uKITTY_READY'; " ++
         "reply=$(dd bs=1 count=8 2>/dev/null); " ++
         "[ \"$reply\" = \"$(printf '\\033[13;2u\\r')\" ] || exit 1; " ++
         "printf '\\033[<u\\033[>4;2m\\033[2J\\033[HXTERM_READY'; " ++
@@ -2133,7 +2134,7 @@ test "modified Enter follows child keyboard negotiation through the PTY" {
             var input_buffer: [64]u8 = undefined;
             const shifted = try frontend.input.encodeKey(
                 &input_buffer,
-                frontend.term.parse("\x1b[13;2u").?.event.key,
+                frontend.term.parse("\x1b[13;2:1u").?.event.key,
                 frame.input_modes,
             );
             const plain = try frontend.input.encodeKey(

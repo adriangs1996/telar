@@ -221,10 +221,26 @@ forwarding through the complete input entrypoint.
 
 ### Modified Enter
 
-The host session requests Kitty keyboard disambiguation. The parser recognizes
-modified Enter in both CSI-u and xterm modifyOtherKeys reports. A bare LF stays
-Ctrl+J, so a host mapping that sends LF for multiline input is not rewritten to
-Enter.
+The host session pushes Kitty flags 7: key disambiguation, event types and
+alternate key codes. The parser accepts alternate codepoint fields and explicit
+press, repeat and release suffixes at every stream boundary. Press and repeat
+become semantic key input; release is consumed because Telar does not yet model
+physical-key leases for shortcuts. The parser also recognizes xterm
+modifyOtherKeys reports. A bare LF stays Ctrl+J, so a host mapping that sends LF
+for multiline input is not rewritten to Enter.
+
+Pane children receive a stable compatibility profile:
+
+- `TERM=xterm-256color`
+- `COLORTERM=truecolor`
+- `TERM_PROGRAM=ghostty`
+- `TELAR_TERM_PROGRAM=telar`
+
+Some applications gate extended keyboard negotiation on a known
+`TERM_PROGRAM`. Telar implements the Ghostty keyboard contract, so it advertises
+that compatibility identity while retaining its own identity separately.
+Inherited `TERM_PROGRAM_VERSION`, `GHOSTTY_RESOURCES_DIR` and `TELAR_SOCKET`
+are removed before pane-specific overrides are applied.
 
 The runtime reads keyboard flags from the pane's VT and publishes them in
 `pane_frame.input_modes`. The client uses them when encoding Enter:
@@ -394,10 +410,10 @@ captures an immutable `presentation_projection` and calls
 - `host Enter variants use the keyboard modes received in a pane frame` in
   `src/frontend/client/client_test.zig` proves frame decoding, normal key
   routing and the outgoing `pane_input` bytes.
-- `modified Enter follows child keyboard negotiation through the PTY` in
+- `modified Enter follows the compatibility profile and child keyboard negotiation through the PTY` in
   `src/transport_integration_test.zig` proves that a real child can enable
-  Kitty, switch to modifyOtherKeys and return to legacy mode while receiving
-  the corresponding bytes.
+  Kitty flags 7, switch to modifyOtherKeys and return to legacy mode while
+  receiving the corresponding bytes.
 - `PTY input remains live while the bounded ingest actor is occupied` in
   `src/transport_integration_test.zig` proves that input does not wait for VT
   ingestion.

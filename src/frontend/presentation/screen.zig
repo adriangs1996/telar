@@ -583,19 +583,89 @@ pub fn parse(input: []const u8) ?Parsed {
 fn parseKittyKey(body: []const u8, length: usize) ?Parsed {
     var fields = std.mem.splitScalar(u8, body, ';');
     const codepoint_text = fields.next() orelse return null;
-    if (codepoint_text.len == 0) return null;
     const modifier_text = fields.next();
-    if (fields.next() != null) return null;
+    if (fields.next() != null) {
+        return null;
+    }
 
-    const codepoint = std.fmt.parseUnsigned(u32, codepoint_text, 10) catch return null;
-    const modifier = if (modifier_text) |value|
-        if (value.len == 0)
-            return null
-        else
-            std.fmt.parseUnsigned(u32, value, 10) catch return null
-    else
-        1;
-    return codepointKey(codepoint, modifier, length);
+    const codepoint = parseKittyCodepoint(codepoint_text) orelse return null;
+    const modifier_event = parseKittyModifierEvent(modifier_text) orelse return null;
+    const parsed = codepointKey(codepoint, modifier_event.modifier, length) orelse return null;
+    if (modifier_event.event == .release) {
+        // Forwarding key-up requires tracking whether Telar consumed the
+        // matching press as a shortcut. Until that lease exists, consuming the
+        // pair's release avoids producing an orphan event in a pane.
+        return .{ .event = .incomplete, .len = length };
+    }
+
+    return parsed;
+}
+
+const KittyEventType = enum(u2) {
+    press = 1,
+    repeat = 2,
+    release = 3,
+};
+
+const KittyModifierEvent = struct {
+    modifier: u32,
+    event: KittyEventType,
+};
+
+fn parseKittyCodepoint(field: []const u8) ?u32 {
+    // Semantic routing uses the primary codepoint. Validate every advertised
+    // alternate so malformed protocol input is still rejected as one unit.
+    var values = std.mem.splitScalar(u8, field, ':');
+    const primary = values.next() orelse return null;
+    if (primary.len == 0) {
+        return null;
+    }
+
+    const codepoint = std.fmt.parseUnsigned(u32, primary, 10) catch return null;
+    const shifted = values.next() orelse return codepoint;
+    const base = values.next();
+    if (values.next() != null) {
+        return null;
+    }
+    if (shifted.len == 0 and base == null) {
+        return null;
+    }
+    if (shifted.len != 0) {
+        _ = std.fmt.parseUnsigned(u32, shifted, 10) catch return null;
+    }
+    if (base) |value| {
+        if (value.len == 0) {
+            return null;
+        }
+
+        _ = std.fmt.parseUnsigned(u32, value, 10) catch return null;
+    }
+
+    return codepoint;
+}
+
+fn parseKittyModifierEvent(field: ?[]const u8) ?KittyModifierEvent {
+    const value = field orelse return .{ .modifier = 1, .event = .press };
+    var parts = std.mem.splitScalar(u8, value, ':');
+    const modifier_text = parts.next() orelse return null;
+    if (modifier_text.len == 0) {
+        return null;
+    }
+
+    const modifier = std.fmt.parseUnsigned(u32, modifier_text, 10) catch return null;
+    const event_text = parts.next() orelse return .{ .modifier = modifier, .event = .press };
+    if (event_text.len == 0 or parts.next() != null) {
+        return null;
+    }
+
+    const event_value = std.fmt.parseUnsigned(u2, event_text, 10) catch return null;
+    const event: KittyEventType = switch (event_value) {
+        1 => .press,
+        2 => .repeat,
+        3 => .release,
+        else => return null,
+    };
+    return .{ .modifier = modifier, .event = event };
 }
 
 fn parseModifyOtherKeys(body: []const u8, length: usize) ?Parsed {
@@ -1190,6 +1260,9 @@ test "Kitty keyboard mode disambiguates Ctrl keys from legacy controls" {
 test "modified Enter is decoded from CSI-u and modifyOtherKeys" {
     const cases = [_]struct { sequence: []const u8, mods: Event.Key.Mods }{
         .{ .sequence = "\x1b[13;2u", .mods = .{ .shift = true } },
+        .{ .sequence = "\x1b[13;2:1u", .mods = .{ .shift = true } },
+        .{ .sequence = "\x1b[13;2:2u", .mods = .{ .shift = true } },
+        .{ .sequence = "\x1b[13::13;2:1u", .mods = .{ .shift = true } },
         .{ .sequence = "\x1b[27;2;13~", .mods = .{ .shift = true } },
         .{ .sequence = "\x1b[13;6u", .mods = .{ .shift = true, .ctrl = true } },
         .{ .sequence = "\x1b[27;6;13~", .mods = .{ .shift = true, .ctrl = true } },
@@ -1198,6 +1271,58 @@ test "modified Enter is decoded from CSI-u and modifyOtherKeys" {
         const parsed = parse(case.sequence).?;
         try testing.expectEqual(case.sequence.len, parsed.len);
         try testing.expectEqualDeep(Event{ .key = .{ .code = .enter, .mods = case.mods } }, parsed.event);
+    }
+}
+
+test "Kitty alternate key codes preserve the primary key" {
+    const cases = [_]struct { sequence: []const u8, expected: Event.Key }{
+        .{
+            .sequence = "\x1b[47:63:47;6:1u",
+            .expected = .{ .code = .{ .char = .init("/") }, .mods = .{ .shift = true, .ctrl = true } },
+        },
+        .{
+            .sequence = "\x1b[108::108;5:2u",
+            .expected = .{ .code = .{ .char = .init("l") }, .mods = .{ .ctrl = true } },
+        },
+    };
+    for (cases) |case| {
+        const parsed = parse(case.sequence).?;
+        try testing.expectEqual(case.sequence.len, parsed.len);
+        try testing.expectEqualDeep(Event{ .key = case.expected }, parsed.event);
+    }
+}
+
+test "Kitty key releases are consumed without desynchronizing the stream" {
+    const release = "\x1b[13::13;2:3u";
+    const parsed = parse(release).?;
+    try testing.expectEqual(release.len, parsed.len);
+    try testing.expectEqual(Event.incomplete, parsed.event);
+
+    var input: Input(32) = .{};
+    try testing.expectEqual(release.len + 1, input.push(release ++ "x"));
+    const event = input.next().?;
+    try testing.expect(event.key.code.char.eql("x"));
+    try testing.expect(input.next() == null);
+}
+
+test "malformed Kitty reports are consumed without producing keys" {
+    for ([_][]const u8{
+        "\x1b[;2u",
+        "\x1b[13:;2u",
+        "\x1b[13::;2u",
+        "\x1b[13:14:15:16;2u",
+        "\x1b[13;0:3u",
+        "\x1b[13;2:u",
+        "\x1b[13;2:0u",
+        "\x1b[13;2:4u",
+        "\x1b[13;2:1:1u",
+        "\x1b[13:4294967296;2u",
+        "\x1b[4294967296;2u",
+        "\x1b[55296;2u",
+    }) |sequence| {
+        const parsed = parse(sequence).?;
+        try testing.expectEqual(sequence.len, parsed.len);
+        try testing.expectEqual(Event.incomplete, parsed.event);
     }
 }
 

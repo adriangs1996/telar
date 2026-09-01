@@ -90,7 +90,7 @@ const testingClipboardCapture = support.testingClipboardCapture;
 test "host Enter variants use the keyboard modes received in a pane frame" {
     const cases = [_]struct { modes: schema.frame.InputModes, expected: []const u8 }{
         .{
-            .modes = .{ .kitty_keyboard_flags = 5 },
+            .modes = .{ .kitty_keyboard_flags = 7 },
             .expected = "\x1b[13;2u\x1b[13;2u\r\n",
         },
         .{
