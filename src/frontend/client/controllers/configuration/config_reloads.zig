@@ -145,6 +145,7 @@ const AdoptionContext = struct {
         client.host_input.replaceRouter(client.io, context.adoption.router);
         client.sidebar_rendering = context.adoption.sidebar_rendering;
         client.sound_playback.configure(snapshot.sound);
+        client.notification_delivery = snapshot.notification_delivery;
         context.consumed = true;
 
         if (previous_generation) |generation| {

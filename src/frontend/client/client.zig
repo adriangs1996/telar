@@ -16,6 +16,7 @@ const client_view = @import("presentation/view.zig");
 const client_model = @import("model/root.zig");
 const lua_config = @import("../config/root.zig");
 const sound_capability = @import("../sound/root.zig");
+const notification_capability = @import("../notifications/root.zig");
 const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
@@ -91,6 +92,7 @@ pub const ClientEvent = union(enum) {
     bar_tick: anyerror!void,
     bar_command: bar_updates_controller.Completion,
     sound_played: anyerror!void,
+    notified: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!config_reload.ConfigReload,
@@ -141,6 +143,7 @@ trust_store: ?*core.plugin.TrustStore,
 reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
 sound_playback: sound_capability.Playback,
+notification_delivery: notification_capability.Delivery = .telar,
 clipboard_capture_resources: attachments.CaptureResources = .{},
 
 request_lifecycle: request_lifecycle_mod.State = .{},

@@ -10,6 +10,22 @@ const core = @import("telar-core");
 
 const schema = core.schema;
 
+/// Where a published notice is surfaced besides the in-app center.
+pub const Delivery = enum {
+    telar,
+    terminal,
+    system,
+
+    pub fn parse(text: []const u8) ?Delivery {
+        inline for (@typeInfo(Delivery).@"enum".fields) |field| {
+            if (std.mem.eql(u8, text, field.name)) return @field(Delivery, field.name);
+        }
+        return null;
+    }
+};
+
+pub const host = @import("host.zig");
+
 pub const max_items = 4;
 pub const max_title_bytes = schema.max_notification_title_bytes;
 pub const max_message_bytes = schema.max_notification_message_bytes;

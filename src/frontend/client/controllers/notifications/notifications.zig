@@ -12,6 +12,8 @@ const pane_focus = @import("../panes/pane_focus.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
+const presentation = @import("../../../presentation/root.zig");
+const term = presentation.screen;
 const Client = @import("../../client.zig");
 const action = input_capability.action;
 const notification_use_cases = notifications_application.notifications;
@@ -100,7 +102,27 @@ pub fn publish(client: *Client, now_ns: u64, input: notification_capability.Inpu
         .effects = timerEffects(client),
     };
 
-    return use_case.execute(.{ .now_ns = now_ns, .input = input });
+    const publication = try use_case.execute(.{ .now_ns = now_ns, .input = input });
+    try deliverExternal(client, input);
+    return publication;
+}
+
+/// Surfaces one published notice through the configured host channel. The
+/// in-app center always shows it; `terminal` adds OSC 9 for the outer
+/// terminal and `system` posts through the operating system on a worker.
+fn deliverExternal(client: *Client, input: notification_capability.Input) !void {
+    switch (client.notification_delivery) {
+        .telar => {},
+        .terminal => {
+            const payload = notification_capability.host.Payload.init(input.title, input.message);
+            try term.writeHostNotification(client.writer, payload.titleSlice(), payload.messageSlice());
+            try client.writer.flush();
+        },
+        .system => {
+            const payload = notification_capability.host.Payload.init(input.title, input.message);
+            client.select.concurrent(.notified, notification_capability.host.notify, .{ client.io, payload }) catch {};
+        },
+    }
 }
 
 /// Publishes one local notice at the current client monotonic timestamp.

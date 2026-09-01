@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const bars = @import("../bars/root.zig");
 const input = @import("../input/root.zig");
 const sound = @import("../sound/root.zig");
+const notifications = @import("../notifications/root.zig");
 const action = input.action;
 const keybind = input.keybind;
 const kitty = @import("../graphics/root.zig").kitty;
@@ -87,6 +88,7 @@ pub const AgentDescriptionCommand = struct {
 };
 
 pub const SoundConfig = sound.Config;
+pub const NotificationDelivery = notifications.Delivery;
 
 pub const ProxyPassthroughHosts = struct {
     const Reference = struct {
@@ -251,6 +253,7 @@ pub const Snapshot = struct {
     window_title_bytes: [max_window_title_bytes]u8 = undefined,
     window_title_len: u8 = 0,
     sound: SoundConfig = .{},
+    notification_delivery: NotificationDelivery = .telar,
     bars: bars.Configuration = .{},
     prefix: keybind.Key = keybind.default_prefix,
     input_escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,

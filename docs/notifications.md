@@ -23,6 +23,17 @@ the pane identity and applies its own profile, so a remote profile can mute
 sounds without changing the runtime or another attached client. The complete
 worker lifecycle is documented in [Agent sound](flows/agent-sound.md).
 
+## Delivery channels
+
+`config.client.notifications = { delivery = "telar" | "terminal" | "system" }`
+chooses where a published notice is surfaced besides the in-app center, which
+always shows it. `terminal` writes OSC 9 to the outer terminal, so its own
+notification handling reacts even when the telar window is unfocused.
+`system` posts through the operating system (`osascript` on macOS,
+`notify-send` on Linux) from a bounded worker with a three-second timeout;
+titles and messages are sanitized before they reach either channel. Each
+client applies its own policy, like sounds.
+
 ## CLI
 
 ```sh

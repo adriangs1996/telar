@@ -341,7 +341,11 @@ Nothing in the client searches today; `copy_mode.zig` has no find.
 
 ---
 
-## P8. Notification delivery beyond the toast
+## P8. Notification delivery beyond the toast — done
+
+Deviation: the runtime's `agent_sound` event kept its shape; the delivery
+policy hooks the client's notification publication instead, so actionable
+agent alerts, runtime notices and local diagnostics all follow one setting.
 
 - Generalize the `agent_sound` server event (`schema.types.zig:240`) into
   `agent_transition { pane, generation, from, to }`; keep the tag, extend the

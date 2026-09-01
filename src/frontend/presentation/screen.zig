@@ -311,6 +311,22 @@ pub const ClipboardError = error{TooLarge};
 /// command there - so a copy can legitimately do nothing and there is no reply
 /// to check. And that is why the terminal's own Shift-drag selection has to
 /// keep working: it is the fallback for exactly this case.
+/// Writes one OSC 9 host notification. Callers pass pre-sanitized text with
+/// no control bytes.
+///
+/// ```zig
+/// try writeHostNotification(writer, "Agent done", "Claude in pane 2");
+/// ```
+pub fn writeHostNotification(w: *Io.Writer, title: []const u8, message: []const u8) Io.Writer.Error!void {
+    try w.writeAll("\x1b]9;");
+    try w.writeAll(title);
+    if (message.len != 0) {
+        try w.writeAll(": ");
+        try w.writeAll(message);
+    }
+    try w.writeAll("\x07");
+}
+
 pub fn writeClipboard(w: *Io.Writer, payload: []const u8) (ClipboardError || Io.Writer.Error)!void {
     if (payload.len > max_clipboard_bytes) return error.TooLarge;
 

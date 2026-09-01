@@ -1067,6 +1067,28 @@ pub const Generation = struct {
         generation.snapshot.runtime.session_path_len = @intCast(path.len);
     }
 
+    fn parseNotifications(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.client.notifications must be a table", .{});
+            return error.InvalidConfig;
+        }
+        try ensureOnlyFields(state, absolute, &.{"delivery"}, "config.client.notifications", diagnostic);
+
+        _ = lua.lua_getfield(state, absolute, "delivery");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) == lua.LUA_TNIL) return;
+        const value = string(state, -1) orelse {
+            diagnostic.set("config.client.notifications.delivery must be a string", .{});
+            return error.InvalidConfig;
+        };
+        generation.snapshot.notification_delivery = config_model.NotificationDelivery.parse(value) orelse {
+            diagnostic.set("config.client.notifications.delivery must be telar, terminal or system", .{});
+            return error.InvalidConfig;
+        };
+    }
+
     fn parseHistory(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
         const state = generation.vm.state;
         const absolute = lua.lua_absindex(state, index);
@@ -1094,7 +1116,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "input", "keybindings", "bars" },
+            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "input", "keybindings", "bars" },
             "config.client",
             diagnostic,
         );
@@ -1164,6 +1186,11 @@ pub const Generation = struct {
         _ = lua.lua_getfield(state, absolute, "sound");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseSound(-1, diagnostic);
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "notifications");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseNotifications(-1, diagnostic);
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "input");
@@ -4063,4 +4090,29 @@ test "runtime agents reject bad names and oversized phrases" {
         &long_phrase,
     ));
     try std.testing.expectEqualStrings("config.runtime.agents[1].working[1] is too long", long_phrase.message());
+}
+
+test "notification delivery parses and rejects unknown channels" {
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { notifications = { delivery = \"system\" } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    try std.testing.expectEqual(config_model.NotificationDelivery.system, generation.snapshot.notification_delivery);
+
+    var invalid: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { notifications = { delivery = \"popup\" } } }",
+        "@config.lua",
+        1,
+        &invalid,
+    ));
+    try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar, terminal or system", invalid.message());
 }
