@@ -288,6 +288,16 @@ pub const AgentSource = enum(u8) {
     proxy_tls = 0,
     screen = 1,
     foreground_process = 2,
+    /// An official lifecycle report from the agent's own hooks.
+    lifecycle_report = 3,
+};
+
+/// State an agent reports about itself through its lifecycle hooks.
+pub const AgentReportState = enum(u8) {
+    working = 0,
+    blocked = 1,
+    ready = 2,
+    exited = 3,
 };
 
 pub const AgentAuthority = enum(u8) {

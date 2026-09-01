@@ -17,6 +17,9 @@ const send_pane_text_commands = @import("commands/send_pane_text.zig");
 const send_pane_text_controller = @import("../entrypoints/requests/send_pane_text.zig");
 const report_agent_session_commands = @import("commands/report_agent_session.zig");
 const report_agent_session_controller = @import("../entrypoints/requests/report_agent_session.zig");
+const report_agent_commands = @import("commands/report_agent.zig");
+const report_agent_controller = @import("../entrypoints/requests/report_agent.zig");
+const pane_observation_events = @import("../entrypoints/events/pane/observation.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
 const close_pane_commands = @import("commands/close_pane.zig");
@@ -86,6 +89,7 @@ const AcknowledgeAgentController = acknowledge_agent_controller.Controller(*ackn
 const QueryAgentsController = query_agents_controller.Controller(*Delivery);
 const SendPaneTextController = send_pane_text_controller.Controller(*send_pane_text_commands.SendPaneTextHandler);
 const ReportAgentSessionController = report_agent_session_controller.Controller(*report_agent_session_commands.ReportAgentSessionHandler);
+const ReportAgentController = report_agent_controller.Controller(*report_agent_commands.ReportAgentHandler);
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
@@ -171,6 +175,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .read_pane = routeReadPane,
             .send_pane_text = routeSendPaneText,
             .report_agent_session = routeReportAgentSession,
+            .report_agent = routeReportAgent,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -634,6 +639,31 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             if (try controller.reportAgentSession(report, now_ms) == .recorded) {
                 application.noteSessionChange();
             }
+        }
+
+        fn routeReportAgent(request: *ClientRequestContext, report: schema.ReportAgent) !void {
+            const application = request.application;
+            var handler: report_agent_commands.ReportAgentHandler = .{
+                .panes = &application.model.panes,
+                .agents = &application.model.agents,
+            };
+            var controller = ReportAgentController.init(&request.session.delivery.responses, &handler);
+            const now_ms = Io.Timestamp.now(application.io, .real).toMilliseconds();
+
+            const result = try controller.reportAgent(report, now_ms);
+            if (result.session_recorded) {
+                application.noteSessionChange();
+            }
+            if (result.outcome != .applied) {
+                return;
+            }
+
+            const sound = pane_observation_events.soundForTransition(result.previous, result.current) orelse return;
+            application.publishAgentSound(.{
+                .pane_id = report.pane_id,
+                .pane_generation = report.pane_generation,
+                .sound = sound,
+            });
         }
 
         fn routeCopySelection(request: *ClientRequestContext, selection: schema.CopySelection) !void {

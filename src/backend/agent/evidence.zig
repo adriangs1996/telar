@@ -81,6 +81,35 @@ pub const Evidence = struct {
         };
     }
 
+    /// Converts one official lifecycle report into the highest-ranked
+    /// evidence. Reports expire so a silent hook hands control back to the
+    /// proxy and screen.
+    ///
+    /// ```zig
+    /// const evidence = Evidence.fromReport(.claude, &observation);
+    /// ```
+    pub fn fromReport(provider: schema.AgentProvider, observation: *const types.ReportObservation) Evidence {
+        std.debug.assert(observation.state != .exited);
+        const status: schema.AgentStatus = switch (observation.state) {
+            .working => .working,
+            .blocked => .blocked,
+            .ready => .ready,
+            .exited => unreachable,
+        };
+
+        return .{
+            .provider = provider,
+            .status = status,
+            .source = .lifecycle_report,
+            .confidence = 100,
+            .observed_at_ms = observation.observed_at_ms,
+            .expires_at_ms = observation.observed_at_ms + if (status == .working)
+                types.working_expiry_ms
+            else
+                types.settled_expiry_ms,
+        };
+    }
+
     /// Reports whether this evidence represents current model or tool work.
     ///
     /// ```zig

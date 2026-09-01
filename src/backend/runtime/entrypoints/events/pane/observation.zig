@@ -233,7 +233,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
     };
 }
 
-fn soundForTransition(previous: ?schema.AgentStatus, current: ?schema.AgentStatus) ?schema.AgentSound {
+pub fn soundForTransition(previous: ?schema.AgentStatus, current: ?schema.AgentStatus) ?schema.AgentSound {
     if (previous != .working) {
         return null;
     }

@@ -191,6 +191,8 @@ pub const Cli = union(enum) {
     agent: AgentOptions,
     pane: PaneOptions,
     api: ApiOptions,
+    hook: HookOptions,
+    integration: IntegrationOptions,
     skill,
     run: RunOptions,
 
@@ -227,6 +229,12 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "api")) {
             return .{ .api = try ApiOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "hook")) {
+            return .{ .hook = try HookOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "integration")) {
+            return .{ .integration = try IntegrationOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "server")) {
             return .{ .server = try ServerOptions.parse(args[2..]) };
@@ -838,6 +846,69 @@ pub const PaneOptions = struct {
     }
 };
 
+pub const HookAgent = enum { claude };
+
+pub const HookOptions = struct {
+    agent: HookAgent,
+    socket: ?[*:0]const u8 = null,
+
+    fn parse(args: []const [*:0]const u8) !HookOptions {
+        if (args.len == 0) {
+            return error.MissingHookAgent;
+        }
+        if (!std.mem.eql(u8, std.mem.span(args[0]), "claude")) {
+            return error.UnknownHookAgent;
+        }
+
+        var options: HookOptions = .{ .agent = .claude };
+        var index: usize = 1;
+        while (index < args.len) : (index += 2) {
+            if (!std.mem.eql(u8, std.mem.span(args[index]), "--socket") or index + 1 >= args.len) {
+                return error.UnknownHookOption;
+            }
+            options.socket = args[index + 1];
+        }
+        return options;
+    }
+};
+
+pub const IntegrationAction = enum { install, uninstall, status };
+
+pub const IntegrationOptions = struct {
+    action: IntegrationAction,
+    agent: HookAgent,
+    settings: ?[*:0]const u8 = null,
+
+    fn parse(args: []const [*:0]const u8) !IntegrationOptions {
+        if (args.len < 2) {
+            return error.MissingIntegrationArguments;
+        }
+
+        const action_text = std.mem.span(args[0]);
+        const action: IntegrationAction = if (std.mem.eql(u8, action_text, "install"))
+            .install
+        else if (std.mem.eql(u8, action_text, "uninstall"))
+            .uninstall
+        else if (std.mem.eql(u8, action_text, "status"))
+            .status
+        else
+            return error.UnknownIntegrationAction;
+        if (!std.mem.eql(u8, std.mem.span(args[1]), "claude")) {
+            return error.UnknownHookAgent;
+        }
+
+        var options: IntegrationOptions = .{ .action = action, .agent = .claude };
+        var index: usize = 2;
+        while (index < args.len) : (index += 2) {
+            if (!std.mem.eql(u8, std.mem.span(args[index]), "--settings") or index + 1 >= args.len) {
+                return error.UnknownIntegrationOption;
+            }
+            options.settings = args[index + 1];
+        }
+        return options;
+    }
+};
+
 pub const ApiOptions = struct {
     json: bool = false,
 
@@ -1363,4 +1434,17 @@ test "CLI parses agent session reports" {
 
     const missing = [_][*:0]const u8{ "telar", "agent", "report-session", "7" };
     try std.testing.expectError(error.MissingSessionReference, Cli.parse(&missing, .empty));
+}
+
+test "CLI parses hook and integration commands" {
+    const hook = [_][*:0]const u8{ "telar", "hook", "claude" };
+    try std.testing.expectEqual(HookAgent.claude, (try Cli.parse(&hook, .empty)).hook.agent);
+
+    const install = [_][*:0]const u8{ "telar", "integration", "install", "claude", "--settings", "/tmp/s.json" };
+    const cli = try Cli.parse(&install, .empty);
+    try std.testing.expectEqual(IntegrationAction.install, cli.integration.action);
+    try std.testing.expectEqualStrings("/tmp/s.json", std.mem.span(cli.integration.settings.?));
+
+    const unknown = [_][*:0]const u8{ "telar", "integration", "install", "gemini" };
+    try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));
 }

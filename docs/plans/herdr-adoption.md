@@ -292,7 +292,12 @@ provider; argv never contains user bytes beyond the validated UUID.
 
 ---
 
-## P6. Lifecycle hooks as official reports (optional)
+## P6. Lifecycle hooks as official reports (optional) — done
+
+`telar integration install claude` registers `telar hook claude` on five
+events; reports carry `AgentSource.lifecycle_report` and outrank inferred
+evidence until they expire. `TELAR_PANE_GENERATION` joins the pane
+environment so a hook addresses its exact pane generation without a lookup.
 
 `docs/proxy-tls.md` says telar does not depend on harness hooks. The
 invariants, however, rank "full official lifecycle reports" above every other

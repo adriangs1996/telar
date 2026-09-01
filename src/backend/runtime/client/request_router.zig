@@ -50,6 +50,7 @@ pub fn Handlers(comptime Context: type) type {
         read_pane: *const fn (*Context, schema.ReadPane) anyerror!void,
         send_pane_text: *const fn (*Context, schema.SendPaneText) anyerror!void,
         report_agent_session: *const fn (*Context, schema.ReportAgentSession) anyerror!void,
+        report_agent: *const fn (*Context, schema.ReportAgent) anyerror!void,
     };
 }
 
@@ -112,6 +113,7 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .read_pane => |request| handlers.read_pane(router.context, request),
                 .send_pane_text => |request| handlers.send_pane_text(router.context, request),
                 .report_agent_session => |request| handlers.report_agent_session(router.context, request),
+                .report_agent => |request| handlers.report_agent(router.context, request),
             };
         }
     };
@@ -132,6 +134,7 @@ pub fn classify(tag: Tag) RequestClass {
         .read_pane,
         .send_pane_text,
         .report_agent_session,
+        .report_agent,
         => .control,
         else => .ui,
     };
@@ -206,6 +209,7 @@ const testing_handlers: Handlers(Capture) = .{
     .read_pane = captureHandler(.read_pane, schema.ReadPane),
     .send_pane_text = captureHandler(.send_pane_text, schema.SendPaneText),
     .report_agent_session = captureHandler(.report_agent_session, schema.ReportAgentSession),
+    .report_agent = captureHandler(.report_agent, schema.ReportAgent),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -267,6 +271,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
         .{ .send_pane_text = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .mode = .prompt, .text = "ls" } },
         .{ .report_agent_session = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .session = "abc" } },
+        .{ .report_agent = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .state = .working } },
     };
 }
 
@@ -294,6 +299,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .read_pane,
             .send_pane_text,
             .report_agent_session,
+            .report_agent,
             => .control,
             else => .ui,
         };

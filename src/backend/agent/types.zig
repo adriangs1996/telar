@@ -75,6 +75,14 @@ pub const SessionReference = struct {
     }
 };
 
+/// One official lifecycle report from the agent's own hooks.
+pub const ReportObservation = struct {
+    identity: Identity,
+    state: schema.AgentReportState,
+    observed_at_ms: i64,
+    session: ?SessionReference = null,
+};
+
 pub const ProxyPhase = enum {
     request_started,
     response_activity,

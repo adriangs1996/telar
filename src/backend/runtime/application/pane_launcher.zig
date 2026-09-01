@@ -44,9 +44,10 @@ pub const PaneIdentity = struct {
 /// runtime and name its own pane. `TELAR_SOCKET` stays absent on purpose: a
 /// nested runtime must not inherit the outer listener as its own.
 pub const PaneOverrides = struct {
-    pub const count = 4;
+    pub const count = 5;
 
     pane_id: [20]u8 = undefined,
+    pane_generation: [20]u8 = undefined,
     workspace_id: [20]u8 = undefined,
     tab_id: [20]u8 = undefined,
     entries: [count]pty.ChildEnvironment.Override = undefined,
@@ -60,11 +61,13 @@ pub const PaneOverrides = struct {
     /// ```
     pub fn build(overrides: *PaneOverrides, identity: PaneIdentity) []const pty.ChildEnvironment.Override {
         const pane_id = std.fmt.bufPrint(&overrides.pane_id, "{d}", .{schema.id.raw(identity.key.id)}) catch unreachable;
+        const pane_generation = std.fmt.bufPrint(&overrides.pane_generation, "{d}", .{identity.key.generation}) catch unreachable;
         const workspace_id = std.fmt.bufPrint(&overrides.workspace_id, "{d}", .{schema.id.raw(identity.location.workspace.workspace)}) catch unreachable;
         const tab_id = std.fmt.bufPrint(&overrides.tab_id, "{d}", .{schema.id.raw(identity.location.tab_id)}) catch unreachable;
         overrides.entries = .{
             .{ .name = "TELAR_SOCKET_PATH", .value = identity.socket_path },
             .{ .name = "TELAR_PANE_ID", .value = pane_id },
+            .{ .name = "TELAR_PANE_GENERATION", .value = pane_generation },
             .{ .name = "TELAR_WORKSPACE_ID", .value = workspace_id },
             .{ .name = "TELAR_TAB_ID", .value = tab_id },
         };
@@ -317,13 +320,15 @@ test "pane overrides name the runtime socket and the pane's own identity" {
         .socket_path = "/tmp/telar.sock",
     });
 
-    try std.testing.expectEqual(@as(usize, 4), entries.len);
+    try std.testing.expectEqual(@as(usize, 5), entries.len);
     try std.testing.expectEqualStrings("TELAR_SOCKET_PATH", entries[0].name);
     try std.testing.expectEqualStrings("/tmp/telar.sock", entries[0].value);
     try std.testing.expectEqualStrings("TELAR_PANE_ID", entries[1].name);
     try std.testing.expectEqualStrings("12", entries[1].value);
-    try std.testing.expectEqualStrings("TELAR_WORKSPACE_ID", entries[2].name);
-    try std.testing.expectEqualStrings("4", entries[2].value);
-    try std.testing.expectEqualStrings("TELAR_TAB_ID", entries[3].name);
-    try std.testing.expectEqualStrings("9", entries[3].value);
+    try std.testing.expectEqualStrings("TELAR_PANE_GENERATION", entries[2].name);
+    try std.testing.expectEqualStrings("3", entries[2].value);
+    try std.testing.expectEqualStrings("TELAR_WORKSPACE_ID", entries[3].name);
+    try std.testing.expectEqualStrings("4", entries[3].value);
+    try std.testing.expectEqualStrings("TELAR_TAB_ID", entries[4].name);
+    try std.testing.expectEqualStrings("9", entries[4].value);
 }

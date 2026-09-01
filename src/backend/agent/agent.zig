@@ -20,6 +20,7 @@ const ProxyExchange = types.ProxyExchange;
 const ProxyObservation = types.ProxyObservation;
 const DescriptionFinished = types.DescriptionFinished;
 const ProxyState = proxy_state_mod.ProxyState;
+const ReportObservation = types.ReportObservation;
 const ScreenObservation = types.ScreenObservation;
 const schema = core.schema;
 
@@ -75,6 +76,8 @@ authority: schema.AgentAuthority = .candidate,
 process: ?Evidence = null,
 proxy: ProxyState = .{},
 screen: ?Evidence = null,
+/// Official lifecycle report; outranks every other evidence while valid.
+report: ?Evidence = null,
 title: Title = .{},
 /// False from a completed turn until a client acknowledges it; the projection
 /// reports `done` instead of `ready` while unseen.
@@ -150,6 +153,7 @@ pub fn applyProcess(agent: *Agent, observation: ProcessObservation) bool {
         }
 
         agent.screen = null;
+        agent.report = null;
         agent.proxy.clear();
     }
 
@@ -201,6 +205,34 @@ pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
         .exited => return false,
     };
 
+    return true;
+}
+
+/// Applies one official lifecycle report. `exited` withdraws the report so
+/// weaker evidence decides again; every other state becomes the ranking
+/// evidence until it expires.
+///
+/// ```zig
+/// if (agent.applyReport(observation)) {
+///     publishProjection();
+/// }
+/// ```
+pub fn applyReport(agent: *Agent, observation: ReportObservation) bool {
+    if (observation.state == .exited) {
+        if (agent.report == null) {
+            return false;
+        }
+
+        agent.report = null;
+        return true;
+    }
+
+    agent.report = Evidence.fromReport(agent.provider(), &observation);
+    agent.authority = switch (agent.authority) {
+        .candidate, .stale, .obscured => .active,
+        .active, .resumed => agent.authority,
+        .exited => .active,
+    };
     return true;
 }
 
@@ -265,7 +297,13 @@ pub fn expire(agent: *Agent, now_ms: i64) bool {
         }
     }
 
-    if (agent.process != null or agent.proxy.currentEvidence() != null or agent.screen != null) {
+    if (agent.report) |evidence| {
+        if (evidence.isExpired(now_ms)) {
+            agent.report = null;
+        }
+    }
+
+    if (agent.process != null or agent.proxy.currentEvidence() != null or agent.screen != null or agent.report != null) {
         return false;
     }
 
@@ -561,6 +599,13 @@ fn chooseEvidence(agent: *const Agent, now_ms: i64) ?Evidence {
         if (!value.isExpired(now_ms)) value else null
     else
         null;
+
+    // An official lifecycle report outranks everything the runtime infers.
+    if (agent.report) |value| {
+        if (!value.isExpired(now_ms)) {
+            return value;
+        }
+    }
 
     // Visible permission and work states outrank network activity. A proxy
     // working state still outranks an older ready prompt.

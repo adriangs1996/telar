@@ -23,6 +23,7 @@ pub const ProxyExchange = types.ProxyExchange;
 pub const ProxyObservation = types.ProxyObservation;
 pub const DescriptionFinished = types.DescriptionFinished;
 pub const SessionReference = types.SessionReference;
+pub const ReportObservation = types.ReportObservation;
 
 test {
     _ = @import("agent.zig");

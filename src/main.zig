@@ -46,6 +46,8 @@ pub fn main(init: std.process.Init) !void {
         .agent => |options| std.process.exit(try cli_mod.agent.run(init, options)),
         .pane => |options| std.process.exit(try cli_mod.pane.run(init, options)),
         .api => |options| try cli_mod.api.run(init, options),
+        .hook => |options| try cli_mod.hook.run(init, options),
+        .integration => |options| std.process.exit(try cli_mod.integration.run(init, options)),
         .skill => try cli_mod.skill.run(init),
         .run => |options| {
             std.process.exit(try cli_mod.client.run(init, options));

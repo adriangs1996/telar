@@ -199,7 +199,7 @@ const environment_override_count = 11;
 
 /// Upper bound on identity variables a pane launch may add before the proxy's
 /// own overrides.
-pub const max_pane_overrides = 4;
+pub const max_pane_overrides = 5;
 
 fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]pty.ChildEnvironment.Override {
     return .{

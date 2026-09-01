@@ -81,6 +81,7 @@ pub const HistoryStatus = types.HistoryStatus;
 pub const HistoryEntry = types.HistoryEntry;
 pub const AgentProvider = types.AgentProvider;
 pub const AgentStatus = types.AgentStatus;
+pub const AgentReportState = types.AgentReportState;
 pub const AgentSound = types.AgentSound;
 pub const AgentSoundNotification = types.AgentSoundNotification;
 pub const AgentSource = types.AgentSource;
@@ -151,6 +152,7 @@ pub const ClientTag = enum(u8) {
     read_pane = 0x1d,
     send_pane_text = 0x1e,
     report_agent_session = 0x1f,
+    report_agent = 0x20,
 };
 
 pub const ServerTag = enum(u8) {
@@ -450,6 +452,17 @@ pub const ReportAgentSession = struct {
     session: []const u8,
 };
 
+/// An official lifecycle report from an agent's hooks: its state and,
+/// optionally, its own session reference. Only the exact pane generation
+/// that hosts the agent accepts it.
+pub const ReportAgent = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    pane_generation: u64,
+    state: AgentReportState,
+    session: []const u8 = "",
+};
+
 /// Reply to `read_pane`. `truncated` reports that older rows were omitted to
 /// respect `max_pane_text_bytes`.
 pub const PaneText = struct {
@@ -646,6 +659,7 @@ pub const ClientMessage = union(enum) {
     read_pane: ReadPane,
     send_pane_text: SendPaneText,
     report_agent_session: ReportAgentSession,
+    report_agent: ReportAgent,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -1317,6 +1331,37 @@ fn decodeReportAgentSession(decoder: *wire.Decoder) !ReportAgentSession {
     };
 }
 
+pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    if (message.session.len != 0) try validateSessionReference(message.session);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.report_agent));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(@intFromEnum(message.state));
+    try encoder.writeSized16(message.session);
+    return encoder.finish();
+}
+
+fn decodeReportAgent(decoder: *wire.Decoder) !ReportAgent {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const pane_generation = try decoder.readInt(u64);
+    const state = std.enums.fromInt(AgentReportState, try decoder.readByte()) orelse
+        return error.InvalidAgentReportState;
+    const session = try decoder.readSized16();
+    if (session.len != 0) try validateSessionReference(session);
+    return .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .pane_generation = pane_generation,
+        .state = state,
+        .session = session,
+    };
+}
+
 /// A session reference is an opaque token: letters, digits, `.`, `_`, `-`
 /// and `:`, so it can never carry options or shell syntax into a relaunch.
 ///
@@ -1467,6 +1512,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .read_pane => .{ .read_pane = try Derived(ReadPane).decode(&decoder) },
         .send_pane_text => .{ .send_pane_text = try decodeSendPaneText(&decoder) },
         .report_agent_session => .{ .report_agent_session = try decodeReportAgentSession(&decoder) },
+        .report_agent => .{ .report_agent = try decodeReportAgent(&decoder) },
     };
     try decoder.ensureEnd();
     return message;

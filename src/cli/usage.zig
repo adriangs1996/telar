@@ -16,6 +16,8 @@ pub const text =
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar pane read|send-keys <pane|--current> [options]
     \\       telar api schema [--json]
+    \\       telar integration install|uninstall|status claude [--settings PATH]
+    \\       telar hook claude
     \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
@@ -37,6 +39,8 @@ pub const text =
     \\  pane read        Print recent text from any pane
     \\  pane send-keys   Send raw text (and --enter) to any pane
     \\  api schema       Print the wire contract of this binary
+    \\  integration      Register telar's lifecycle hooks in an agent's settings
+    \\  hook             Entry point that agent hooks run (reads JSON on stdin)
     \\  --skill          Print the bundled agent skill
     \\  config check     Compile and validate config.lua, then exit
     \\  plugin inspect   Validate a package and print its immutable identity

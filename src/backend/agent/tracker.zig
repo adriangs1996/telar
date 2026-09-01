@@ -35,6 +35,26 @@ pub const Tracker = struct {
     revision: u64 = 1,
     sequence: u64 = 0,
 
+    /// Applies one official lifecycle report and its optional session
+    /// reference, then republishes the projection.
+    ///
+    /// ```zig
+    /// _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = now_ms });
+    /// ```
+    pub fn observeReport(tracker: *Tracker, observation: types.ReportObservation) bool {
+        const agent = tracker.ensure(observation.identity) orelse return false;
+        var changed = false;
+        if (observation.session) |session| {
+            changed = agent.applySessionReference(session);
+        }
+
+        if (!agent.applyReport(observation)) {
+            return changed;
+        }
+
+        return tracker.reproject(agent, observation.observed_at_ms) or changed;
+    }
+
     /// Records the session reference an agent reported for itself. The
     /// aggregate is created if the report precedes every other evidence, so a
     /// hook that fires before the process is inspected is not lost.
@@ -1291,4 +1311,40 @@ test "session references attach to the exact generation and replace only on chan
     try std.testing.expect(tracker.observeSessionReference(identity, second));
     try std.testing.expectError(error.InvalidSessionReference, types.SessionReference.init("-rf", 0));
     try std.testing.expectError(error.InvalidSessionReference, types.SessionReference.init("a b", 0));
+}
+
+test "lifecycle reports outrank screen and proxy evidence until they expire" {
+    var tracker: Tracker = .{};
+    const identity: Identity = .{
+        .key = .{ .id = try schema.id.pane(5), .generation = 1 },
+        .process_id = 40,
+        .session_id = .{2} ** 16,
+    };
+    try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 41, .observed_at_ms = 100 }));
+    try std.testing.expect(tracker.observeScreen(.{
+        .identity = identity,
+        .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88, .identity_confirmed = true },
+        .observed_at_ms = 200,
+    }));
+    try std.testing.expectEqual(schema.AgentStatus.blocked, tracker.projectedStatus(identity.key).?);
+
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 300 }));
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    var snapshot = tracker.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.lifecycle_report, snapshot[0].source);
+    try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
+
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 400 }));
+    try std.testing.expectEqual(schema.AgentStatus.done, tracker.projectedStatus(identity.key).?);
+
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .exited, .observed_at_ms = 500 }));
+    snapshot = tracker.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.blocked, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 600 }));
+    _ = tracker.expire(600 + types.working_expiry_ms + 1);
+    snapshot = tracker.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }

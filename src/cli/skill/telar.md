@@ -18,6 +18,7 @@ telar pane read <pane|--current> [--lines 40] [--source recent|screen] [--json]
 telar pane send-keys <pane|--current> "text" [--enter]
 telar api schema [--json]
 telar --skill
+telar integration install|uninstall|status claude
 ```
 
 A pane is named by its numeric id, its agent's session title (case-insensitive,
