@@ -39,7 +39,7 @@ test {
     _ = @import("connection/root.zig");
     _ = @import("controllers/root.zig");
     _ = @import("entrypoints/events.zig");
-    _ = @import("client_test.zig");
+    _ = @import("tests/root.zig");
     _ = @import("entrypoints/runtime_messages.zig");
     _ = @import("model/root.zig");
     _ = @import("model/name_prompt.zig");
