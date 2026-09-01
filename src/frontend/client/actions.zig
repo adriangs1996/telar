@@ -20,7 +20,6 @@ const tab_creations = @import("tab_creations.zig");
 const tab_moves = @import("tab_moves.zig");
 const tab_selections = @import("tab_selections.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
-const workspace_list_toggles = @import("workspace_list_toggles.zig");
 
 const Action = input.action.Action;
 const keybind = input.keybind;
@@ -153,9 +152,7 @@ fn toggleSidebar(client: *Client) !void {
 }
 
 fn toggleWorkspaceList(client: *Client) void {
-    var use_case = workspace_list_toggles.handler(client);
-
-    _ = use_case.execute();
+    _ = client.model.toggleWorkspaceList();
 }
 
 fn closeFocused(client: *Client) !void {

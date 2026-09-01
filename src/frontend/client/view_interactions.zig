@@ -10,7 +10,6 @@ const pane_geometry = @import("pane_geometry.zig");
 const sidebar_toggles = @import("sidebar_toggles.zig");
 const tab_selections = @import("tab_selections.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
-const workspace_list_toggles = @import("workspace_list_toggles.zig");
 
 const Client = @import("client.zig");
 const multiplexer = workspace_capability.multiplexer;
@@ -58,9 +57,7 @@ fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !void {
             _ = try use_case.execute();
         },
         .toggle_workspace_list => {
-            var use_case = workspace_list_toggles.handler(client);
-
-            _ = use_case.execute();
+            _ = client.model.toggleWorkspaceList();
         },
         .focus_agent => |key| _ = try agent_navigation.apply(client, key),
         .select_tab => |tab_id| {
