@@ -67,6 +67,7 @@ pub const tab_removal_delivery = @import("tab_removal_delivery.zig");
 pub const tab_selection_delivery = @import("tab_selection_delivery.zig");
 pub const tab_snapshot = @import("tab_snapshot.zig");
 pub const tab_snapshot_delivery = @import("tab_snapshot_delivery.zig");
+pub const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
 pub const toggle_pane_fullscreen = @import("toggle_pane_fullscreen.zig");
 pub const toggle_sidebar = @import("toggle_sidebar.zig");
 pub const toggle_workspace_list = @import("toggle_workspace_list.zig");
@@ -148,6 +149,7 @@ test {
     _ = tab_selection_delivery;
     _ = tab_snapshot;
     _ = tab_snapshot_delivery;
+    _ = tab_snapshot_recovery;
     _ = toggle_pane_fullscreen;
     _ = toggle_sidebar;
     _ = toggle_workspace_list;

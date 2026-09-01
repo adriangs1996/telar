@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../model.zig");
 const tab_close_preparation = @import("tab_close_preparation.zig");
+const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
 
 const schema = core.schema;
 
@@ -20,13 +21,13 @@ pub const CloseRequestEffects = struct {
     context: *anyopaque,
     detach: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
     send: *const fn (*anyopaque, TabCloseIntent) anyerror!void,
-    restore: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
 };
 
 pub const RequestCloseTabHandler = struct {
     model: *const client_model.Model,
     gate: TabOperationGate,
     preparation: tab_close_preparation.PrepareTabCloseHandler,
+    snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
     effects: CloseRequestEffects,
 
     /// Verifies delivery capacity, detaches the active tab and sends one close
@@ -46,14 +47,14 @@ pub const RequestCloseTabHandler = struct {
 
         try handler.preparation.execute(handler.model, location);
         handler.effects.detach(handler.effects.context, location) catch |err| {
-            handler.effects.restore(handler.effects.context, location) catch |restore_err| {
+            _ = handler.snapshots.execute(location) catch |restore_err| {
                 return restore_err;
             };
             return err;
         };
 
         handler.effects.send(handler.effects.context, .{ .location = location }) catch |err| {
-            handler.effects.restore(handler.effects.context, location) catch |restore_err| {
+            _ = handler.snapshots.execute(location) catch |restore_err| {
                 return restore_err;
             };
             return err;
@@ -63,14 +64,9 @@ pub const RequestCloseTabHandler = struct {
     }
 };
 
-pub const CloseRecoveryEffects = struct {
-    context: *anyopaque,
-    restore: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
-};
-
 pub const RecoverCloseTabHandler = struct {
     model: *const client_model.Model,
-    effects: CloseRecoveryEffects,
+    snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
 
     /// Restores a rejected close only while its tab remains active.
     ///
@@ -83,7 +79,7 @@ pub const RecoverCloseTabHandler = struct {
             return false;
         }
 
-        try handler.effects.restore(handler.effects.context, location);
+        _ = try handler.snapshots.execute(location);
         return true;
     }
 };
@@ -186,7 +182,6 @@ const RequestCapture = struct {
             .context = capture,
             .detach = detach,
             .send = send,
-            .restore = restore,
         };
     }
 
@@ -207,8 +202,12 @@ const RequestCapture = struct {
         };
     }
 
-    fn recoveryEffects(capture: *RequestCapture) CloseRecoveryEffects {
-        return .{ .context = capture, .restore = restore };
+    fn snapshots(capture: *RequestCapture) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+        return .{ .effects = .{
+            .context = capture,
+            .pending = snapshotPending,
+            .request = restore,
+        } };
     }
 
     fn pending(context: *anyopaque) bool {
@@ -229,6 +228,10 @@ const RequestCapture = struct {
     }
 
     fn attachmentPending(_: *anyopaque, _: schema.PaneId) bool {
+        return false;
+    }
+
+    fn snapshotPending(_: *anyopaque) bool {
         return false;
     }
 
@@ -363,6 +366,7 @@ test "tab close request prepares and detaches before delivery" {
         .model = testing.model,
         .gate = capture.gate(),
         .preparation = capture.preparation(),
+        .snapshots = capture.snapshots(),
         .effects = capture.requestEffects(),
     };
 
@@ -385,6 +389,7 @@ test "tab close request suppresses an absent active tab" {
         .model = testing.model,
         .gate = capture.gate(),
         .preparation = capture.preparation(),
+        .snapshots = capture.snapshots(),
         .effects = capture.requestEffects(),
     };
 
@@ -400,6 +405,7 @@ test "tab close request rejects preparation without provisional effects" {
         .model = testing.model,
         .gate = capture.gate(),
         .preparation = capture.preparation(),
+        .snapshots = capture.snapshots(),
         .effects = capture.requestEffects(),
     };
 
@@ -417,6 +423,7 @@ test "tab close request restores every failure after preparation" {
         .model = testing.model,
         .gate = detach_failure.gate(),
         .preparation = detach_failure.preparation(),
+        .snapshots = detach_failure.snapshots(),
         .effects = detach_failure.requestEffects(),
     };
     try std.testing.expectError(error.DetachFailed, detach_handler.execute());
@@ -427,10 +434,30 @@ test "tab close request restores every failure after preparation" {
         .model = testing.model,
         .gate = send_failure.gate(),
         .preparation = send_failure.preparation(),
+        .snapshots = send_failure.snapshots(),
         .effects = send_failure.requestEffects(),
     };
     try std.testing.expectError(error.SendFailed, send_handler.execute());
     try std.testing.expectEqualSlices(RequestStep, &.{ .prepare, .detach, .send, .restore }, send_failure.recorded());
+}
+
+test "tab close request reports a failed repair after provisional failure" {
+    var testing = try TestingModel.init(true);
+    defer testing.deinit();
+    var capture: RequestCapture = .{
+        .send_failure = error.SendFailed,
+        .restore_failure = error.RestoreFailed,
+    };
+    var handler: RequestCloseTabHandler = .{
+        .model = testing.model,
+        .gate = capture.gate(),
+        .preparation = capture.preparation(),
+        .snapshots = capture.snapshots(),
+        .effects = capture.requestEffects(),
+    };
+
+    try std.testing.expectError(error.RestoreFailed, handler.execute());
+    try std.testing.expectEqualSlices(RequestStep, &.{ .prepare, .detach, .send, .restore }, capture.recorded());
 }
 
 test "close rejection restores only the still-active tab" {
@@ -439,7 +466,7 @@ test "close rejection restores only the still-active tab" {
     var capture: RequestCapture = .{};
     var handler: RecoverCloseTabHandler = .{
         .model = testing.model,
-        .effects = capture.recoveryEffects(),
+        .snapshots = capture.snapshots(),
     };
 
     try std.testing.expect(!try handler.execute(testing.second));

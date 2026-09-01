@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../model.zig");
+const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
 
 const schema = core.schema;
 
@@ -32,14 +33,9 @@ pub const ConfirmPaneAttachmentHandler = struct {
     }
 };
 
-pub const RecoveryEffects = struct {
-    context: *anyopaque,
-    refresh: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
-};
-
 pub const RecoverPaneAttachmentHandler = struct {
     model: *const client_model.Model,
-    effects: RecoveryEffects,
+    snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
 
     /// Requests canonical membership only while the failed attachment still
     /// belongs to the active tab and remains detached.
@@ -52,7 +48,7 @@ pub const RecoverPaneAttachmentHandler = struct {
             return false;
         }
 
-        try handler.effects.refresh(handler.effects.context, attachment.location);
+        _ = try handler.snapshots.execute(attachment.location);
         return true;
     }
 };
@@ -94,8 +90,16 @@ const RecoveryCapture = struct {
     location: ?schema.TabLocation = null,
     fail: bool = false,
 
-    fn port(capture: *RecoveryCapture) RecoveryEffects {
-        return .{ .context = capture, .refresh = refresh };
+    fn handler(capture: *RecoveryCapture) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+        return .{ .effects = .{
+            .context = capture,
+            .pending = pending,
+            .request = refresh,
+        } };
+    }
+
+    fn pending(_: *anyopaque) bool {
+        return false;
     }
 
     fn refresh(context: *anyopaque, location: schema.TabLocation) !void {
@@ -159,7 +163,7 @@ test "RecoverPaneAttachmentHandler refreshes only an attachment still needed" {
     var capture: RecoveryCapture = .{};
     var handler: RecoverPaneAttachmentHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .snapshots = capture.handler(),
     };
     const attachment = testing.attachment();
 
@@ -178,7 +182,7 @@ test "RecoverPaneAttachmentHandler propagates refresh failure without model muta
     var capture: RecoveryCapture = .{ .fail = true };
     var handler: RecoverPaneAttachmentHandler = .{
         .model = testing.model,
-        .effects = capture.port(),
+        .snapshots = capture.handler(),
     };
 
     try std.testing.expectError(error.RefreshFailed, handler.execute(testing.attachment()));

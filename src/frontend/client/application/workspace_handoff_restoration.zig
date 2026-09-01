@@ -4,14 +4,13 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../model.zig");
+const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
 
 const schema = core.schema;
 
 pub const Effects = struct {
     context: *anyopaque,
     show_pane_graphics: *const fn (*anyopaque, schema.PaneId) anyerror!void,
-    tab_snapshot_pending: *const fn (*anyopaque) bool,
-    request_tab_snapshot: *const fn (*anyopaque, schema.TabLocation) anyerror!void,
 };
 
 pub const Outcome = enum {
@@ -22,6 +21,7 @@ pub const Outcome = enum {
 
 pub const RestoreWorkspaceHandoffHandler = struct {
     effects: Effects,
+    snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
 
     /// Restores active-pane graphics in captured order and requests one
     /// canonical tab snapshot unless recovery is already pending.
@@ -37,12 +37,10 @@ pub const RestoreWorkspaceHandoffHandler = struct {
             try handler.effects.show_pane_graphics(handler.effects.context, pane.pane_id);
         }
 
-        if (handler.effects.tab_snapshot_pending(handler.effects.context)) {
-            return .snapshot_coalesced;
-        }
-
-        try handler.effects.request_tab_snapshot(handler.effects.context, location);
-        return .snapshot_requested;
+        return switch (try handler.snapshots.execute(location)) {
+            .coalesced => .snapshot_coalesced,
+            .requested => .snapshot_requested,
+        };
     }
 };
 
@@ -118,12 +116,17 @@ const Capture = struct {
     event_count: usize = 0,
 
     fn handler(capture: *Capture) RestoreWorkspaceHandoffHandler {
-        return .{ .effects = .{
-            .context = capture,
-            .show_pane_graphics = showPaneGraphics,
-            .tab_snapshot_pending = tabSnapshotPending,
-            .request_tab_snapshot = requestTabSnapshot,
-        } };
+        return .{
+            .effects = .{
+                .context = capture,
+                .show_pane_graphics = showPaneGraphics,
+            },
+            .snapshots = .{ .effects = .{
+                .context = capture,
+                .pending = tabSnapshotPending,
+                .request = requestTabSnapshot,
+            } },
+        };
     }
 
     fn showPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {

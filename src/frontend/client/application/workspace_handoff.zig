@@ -345,12 +345,17 @@ const RequestCapture = struct {
     }
 
     fn restoration(capture: *RequestCapture) workspace_handoff_restoration.RestoreWorkspaceHandoffHandler {
-        return .{ .effects = .{
-            .context = capture,
-            .show_pane_graphics = showPaneGraphics,
-            .tab_snapshot_pending = tabSnapshotPending,
-            .request_tab_snapshot = requestTabSnapshot,
-        } };
+        return .{
+            .effects = .{
+                .context = capture,
+                .show_pane_graphics = showPaneGraphics,
+            },
+            .snapshots = .{ .effects = .{
+                .context = capture,
+                .pending = tabSnapshotPending,
+                .request = requestTabSnapshot,
+            } },
+        };
     }
 
     fn pending(context: *anyopaque) bool {

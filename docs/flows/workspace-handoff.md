@@ -61,7 +61,8 @@ canonical tab snapshot to repair any provisional attachment effects.
 
 `RestoreWorkspaceHandoffHandler` owns that local recovery. It captures the
 still-active tab, restores graphics for its panes in stable order and then
-coalesces an existing tab snapshot or requests one canonical repair. A
+delegates canonical repair to `RequestTabSnapshotRecoveryHandler`, which
+coalesces an existing tab snapshot or requests the exact location once. A
 restoration failure preserves completed physical effects but never replaces
 the original detach or open error returned by the handoff request.
 

@@ -14,6 +14,7 @@ const close_tab = client_application.close_tab;
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 const tab_removal_delivery = client_application.tab_removal_delivery;
+const tab_snapshot_recovery = client_application.tab_snapshot_recovery;
 
 pub const Outcome = enum {
     applied,
@@ -51,11 +52,11 @@ pub fn requestHandler(client: *Client) close_tab.RequestCloseTabHandler {
                 .pending = attachmentPending,
             },
         },
+        .snapshots = snapshotRecovery(client),
         .effects = .{
             .context = client,
             .detach = detachForClose,
             .send = sendClose,
-            .restore = restoreClose,
         },
     };
 }
@@ -69,11 +70,16 @@ pub fn requestHandler(client: *Client) close_tab.RequestCloseTabHandler {
 pub fn recoveryHandler(client: *Client) close_tab.RecoverCloseTabHandler {
     return .{
         .model = &client.model,
-        .effects = .{
-            .context = client,
-            .restore = restoreClose,
-        },
+        .snapshots = snapshotRecovery(client),
     };
+}
+
+fn snapshotRecovery(client: *Client) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+    return .{ .effects = .{
+        .context = client,
+        .pending = tabSnapshotPending,
+        .request = requestTabSnapshot,
+    } };
 }
 
 /// Consumes one explicit response or applies one autonomous lifecycle removal.
@@ -185,15 +191,6 @@ fn sendClose(context: *anyopaque, intent: close_tab.TabCloseIntent) !void {
             .location = intent.location,
         } },
     });
-}
-
-fn restoreClose(context: *anyopaque, location: schema.TabLocation) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    if (request_lifecycle.has(client, .tab_snapshot)) {
-        return;
-    }
-
-    try request_lifecycle.requestTabSnapshot(client, location);
 }
 
 fn retireTabRequests(context: *anyopaque, location: schema.TabLocation) void {

@@ -97,6 +97,14 @@ Model validation runs before client resource effects. If a resource effect
 fails after commit, the canonical pane membership remains in `ClientModel`; a
 later tab snapshot can retry disposable attachments and geometry.
 
+Local tab closure, pane-attachment rejection and pre-commit workspace handoff
+each decide whether their own failed operation still needs repair. Once it
+does, they delegate snapshot coalescence to
+`RequestTabSnapshotRecoveryHandler`. That coordinator checks the singleton
+snapshot group and either reuses the pending repair or requests the exact
+`TabLocation` once. Adapters expose only the pending query and physical
+request; they do not repeat recovery policy.
+
 The runtime bounds each snapshot to `schema.max_panes_per_tab`. Client cleanup
 uses the same fixed bound and allocates no unbounded retirement list.
 
@@ -107,6 +115,8 @@ uses the same fixed bound and allocates no unbounded retirement list.
 - `frontend/client/application/tab_snapshot_delivery.zig` checks exact active
   and inactive validation, retirement, geometry and attachment ordering,
   coalescence and partial failure semantics.
+- `frontend/client/application/tab_snapshot_recovery.zig` checks singleton
+  coalescence, exact location delivery and request failure propagation.
 - `frontend/client/model.zig` checks active and inactive revision semantics,
   removed pane capture, membership bounds and cross-tab pane identity
   rejection.

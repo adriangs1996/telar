@@ -17,6 +17,7 @@ const pane_open_delivery = client_application.pane_open_delivery;
 const schema = core.schema;
 const workspace_handoff = client_application.workspace_handoff;
 const workspace_handoff_preparation = client_application.workspace_handoff_preparation;
+const tab_snapshot_recovery = client_application.tab_snapshot_recovery;
 
 /// Resolves one workspace selection from the committed list and requests its
 /// handoff only when the target is known and actionable.
@@ -104,12 +105,13 @@ fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.Reque
             .context = client,
             .pending = if (ignore_pending) neverPending else requestPending,
         },
-        .restoration = .{ .effects = .{
-            .context = client,
-            .show_pane_graphics = showPaneGraphics,
-            .tab_snapshot_pending = tabSnapshotPending,
-            .request_tab_snapshot = requestTabSnapshot,
-        } },
+        .restoration = .{
+            .effects = .{
+                .context = client,
+                .show_pane_graphics = showPaneGraphics,
+            },
+            .snapshots = snapshotRecovery(client),
+        },
         .effects = .{
             .context = client,
             .detach = detachCurrent,
@@ -117,6 +119,14 @@ fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.Reque
             .release = releaseDeparture,
         },
     };
+}
+
+fn snapshotRecovery(client: *Client) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+    return .{ .effects = .{
+        .context = client,
+        .pending = tabSnapshotPending,
+        .request = requestTabSnapshot,
+    } };
 }
 
 fn selectionHandler(client: *Client) workspace_handoff.SelectWorkspaceHandler {

@@ -96,7 +96,10 @@ changed after the snapshot. `request_failures.apply` correlates the response,
 then `HandleRequestFailureHandler` delegates that case to
 `RecoverPaneAttachmentHandler`. Recovery requests one coalesced tab snapshot
 only if the same pane is still detached in the active tab. The snapshot, rather
-than the failed client request, decides whether to remove the pane.
+than the failed client request, decides whether to remove the pane. After that
+applicability check, `RequestTabSnapshotRecoveryHandler` owns the shared
+singleton coalescence rule; the pane-attachment adapter only supplies the
+pending query and physical request.
 
 An internal attachment failure does not request an immediate snapshot. An
 identical snapshot would issue the same attachment again and could create an
@@ -116,6 +119,8 @@ nothing.
 
 - `frontend/client/application/attach_pane.zig` checks exact confirmation,
   stale success, recovery gating and effect failure.
+- `frontend/client/application/tab_snapshot_recovery.zig` checks the shared
+  canonical-repair coalescence boundary.
 - `frontend/client/application/pane_open_delivery.zig` checks successful-open
   routing, retired work and delivery failure propagation.
 - `frontend/client/application/tab_attachment_retirement.zig` proves paste,

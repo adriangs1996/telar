@@ -47,7 +47,9 @@ passes through `HandleRequestFailureHandler`, which delegates to
 `RecoverTabClosureHandler` before publishing the failure notice. Recovery asks
 for a snapshot when the same tab remains active. If navigation has already
 selected another tab, selecting the rejected tab later requests its snapshot
-through the normal attachment flow.
+through the normal attachment flow. Both local and runtime-rejection paths
+delegate singleton coalescence to `RequestTabSnapshotRecoveryHandler`; the
+close adapter supplies only request-lifecycle ports.
 
 ## Runtime transaction
 
@@ -180,6 +182,8 @@ new client rebuilds its disposable model through workspace and tab snapshots.
 - `src/frontend/client/application/tab_removal_delivery.zig` proves all four
   dispositions, exact revisions and successor layout, stale-state validation,
   effect order, snapshot coalescence and partial failure semantics.
+- `src/frontend/client/application/tab_snapshot_recovery.zig` proves shared
+  recovery coalescence and exact repair delivery.
 - `src/frontend/client/model.zig` proves exact location and workspace-removal
   validation, captured pane identities and model version changes.
 - `src/frontend/client/client_test.zig` proves bounded request delivery,
