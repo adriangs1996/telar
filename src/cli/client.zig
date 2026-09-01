@@ -7,6 +7,7 @@ const frontend = @import("telar-frontend");
 const config = @import("config.zig");
 const parser = @import("parser.zig");
 const plugin = @import("plugin.zig");
+const remote = @import("remote.zig");
 const runtime_connection = @import("runtime_connection.zig");
 
 const Io = std.Io;
@@ -21,12 +22,21 @@ const max_args = backend.pty.max_args;
 /// const exit_code = try client.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: RunOptions) !u8 {
-    const connector = try RuntimeConnector.init(init, null);
-    var connection = try connector.connectOrStart(.{
-        .path = options.config,
-        .disabled = options.no_config,
-        .profile = options.profile,
-    });
+    var forward: ?remote.Forward = null;
+    defer if (forward) |*owned| owned.stop(init.io);
+    if (options.remote) |destination| {
+        forward = try remote.establish(init, std.mem.span(destination));
+    }
+
+    const connector = try RuntimeConnector.init(init, if (forward) |*owned| owned.localPathZ() else null);
+    var connection = if (forward != null)
+        try remote.connectForwarded(init, &connector)
+    else
+        try connector.connectOrStart(.{
+            .path = options.config,
+            .disabled = options.no_config,
+            .profile = options.profile,
+        });
     defer connection.deinit(init.io);
 
     var launch: Launch = undefined;
@@ -147,7 +157,8 @@ const Launch = struct {
             .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
             .sound = if (snapshot) |value| value.sound else .{},
             .bars = if (snapshot) |value| value.bars.presentation() else .{},
-            .host_shared_memory = supportsHostSharedMemory(launch.process.minimal.environ),
+            .host_shared_memory = launch.options.remote == null and
+                supportsHostSharedMemory(launch.process.minimal.environ),
             .input_escape_timeout_ns = if (snapshot) |value|
                 value.input_escape_timeout_ns
             else

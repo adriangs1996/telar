@@ -18,6 +18,8 @@ pub const RunOptions = struct {
     config: ?[*:0]const u8 = null,
     no_config: bool = false,
     profile: ?[*:0]const u8 = null,
+    /// SSH destination whose runtime this client attaches to.
+    remote: ?[*:0]const u8 = null,
 };
 
 pub const ConfigCheckOptions = struct {
@@ -395,6 +397,30 @@ pub const Cli = union(enum) {
                 );
                 sidebar_renderer_set = true;
                 options.sidebar_renderer_set = true;
+                command_start += 1;
+                continue;
+            }
+            if (std.mem.eql(u8, arg, "--remote")) {
+                if (options.remote != null) {
+                    return error.DuplicateRemoteOption;
+                }
+                if (command_start + 1 >= args.len) {
+                    return error.MissingRemoteDestination;
+                }
+
+                options.remote = args[command_start + 1];
+                command_start += 2;
+                continue;
+            }
+            if (std.mem.startsWith(u8, arg, "--remote=")) {
+                if (options.remote != null) {
+                    return error.DuplicateRemoteOption;
+                }
+                if (arg["--remote=".len..].len == 0) {
+                    return error.MissingRemoteDestination;
+                }
+
+                options.remote = args[command_start] + "--remote=".len;
                 command_start += 1;
                 continue;
             }
@@ -973,6 +999,9 @@ pub const ServerMode = enum {
 pub const ServerAction = enum {
     run,
     stop,
+    /// Ensure the runtime is running and print its socket path. Used by
+    /// `telar --remote` over SSH to discover the remote endpoint.
+    endpoint,
 };
 
 pub const ServerOptions = struct {
@@ -998,6 +1027,14 @@ pub const ServerOptions = struct {
                 }
 
                 options.action = .stop;
+                action_explicit = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "endpoint")) {
+                if (action_explicit) {
+                    return error.DuplicateServerAction;
+                }
+
+                options.action = .endpoint;
                 action_explicit = true;
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--background")) {
@@ -1447,4 +1484,14 @@ test "CLI parses hook and integration commands" {
 
     const unknown = [_][*:0]const u8{ "telar", "integration", "install", "gemini" };
     try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));
+}
+
+test "CLI parses the remote destination and the server endpoint action" {
+    const remote = [_][*:0]const u8{ "telar", "--remote", "dev@build-box", "/bin/zsh" };
+    const cli = try Cli.parse(&remote, .empty);
+    try std.testing.expectEqualStrings("dev@build-box", std.mem.span(cli.run.remote.?));
+    try std.testing.expectEqualStrings("/bin/zsh", std.mem.span(cli.run.command.file));
+
+    const endpoint = [_][*:0]const u8{ "telar", "server", "endpoint" };
+    try std.testing.expectEqual(ServerAction.endpoint, (try Cli.parse(&endpoint, .empty)).server.action);
 }

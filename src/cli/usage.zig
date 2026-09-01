@@ -6,6 +6,7 @@ pub const text =
     \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
     \\       telar server
     \\       telar server stop
+    \\       telar server endpoint
     \\       telar config check [PATH] [--profile NAME]
     \\       telar plugin inspect PATH
     \\       telar plugin install PATH
@@ -73,6 +74,10 @@ pub const text =
     \\  --tab ID         Make it select a tab when clicked
     \\  --workspace ID   Make it select a workspace when clicked
     \\  --socket PATH    Notify clients of a specific local runtime
+    \\
+    \\Remote:
+    \\  --remote DEST    Attach to the runtime on an SSH host (forwards its
+    \\                   socket; needs telar on the remote PATH)
     \\
     \\Options:
     \\  --config PATH     Load a specific Lua configuration

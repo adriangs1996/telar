@@ -9,6 +9,7 @@ pub const client = @import("client.zig");
 pub const config = @import("config.zig");
 pub const control = @import("control.zig");
 pub const pane = @import("pane.zig");
+pub const remote = @import("remote.zig");
 pub const skill = @import("skill.zig");
 pub const history = @import("history.zig");
 pub const hook = @import("hook.zig");
@@ -54,6 +55,7 @@ test {
     _ = notification;
     _ = pane;
     _ = parser;
+    _ = remote;
     _ = plugin;
     _ = runtime_connection;
     _ = server;

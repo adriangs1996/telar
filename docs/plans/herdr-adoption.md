@@ -404,7 +404,12 @@ and Mode 2031 forwarding to children stays with ghostty-vt.
 
 ---
 
-## P12. Remote thin client over SSH
+## P12. Remote thin client over SSH — done
+
+Deviation: instead of a stdio bridge, `--remote` forwards the remote Unix
+socket over OpenSSH (`-L local.sock:remote.sock`), which preserves the local
+transport byte for byte. `telar server endpoint` is the discovery command,
+and shared-memory graphics are disabled for forwarded clients.
 
 The invariant already states remote transport keeps local framing, bounds,
 negotiation and backpressure.

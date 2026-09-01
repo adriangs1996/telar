@@ -25,6 +25,9 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
     if (options.action == .stop) {
         return stop(init, &connector);
     }
+    if (options.action == .endpoint) {
+        return printEndpoint(init, &connector);
+    }
 
     var launch: Launch = undefined;
     try launch.prepare(.{
@@ -55,6 +58,17 @@ const HistoryPath = struct {
     path: [:0]const u8,
     managed_directory: ?[]const u8,
 };
+
+/// Ensures the runtime is running and prints its socket path on one line.
+/// `telar --remote` runs this over SSH to discover the remote endpoint.
+fn printEndpoint(init: std.process.Init, connector: *const RuntimeConnector) !void {
+    var connection = try connector.connectOrStart(.{});
+    connection.deinit(init.io);
+
+    var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    const line = try std.fmt.bufPrint(&buffer, "{s}\n", .{connector.endpointPath()});
+    try std.Io.File.stdout().writeStreamingAll(init.io, line);
+}
 
 const Launch = struct {
     process: std.process.Init,
