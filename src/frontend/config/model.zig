@@ -207,10 +207,23 @@ pub const RuntimeSnapshot = struct {
     proxy_passthrough_hosts: ProxyPassthroughHosts = .{},
     agent_descriptions: AgentDescriptionCommand = .{},
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
+    session_persist: bool = true,
+    session_path_bytes: [max_history_path_bytes]u8 = undefined,
+    session_path_len: u16 = 0,
 
     pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
         if (snapshot.history_path_len == 0) return null;
         return snapshot.history_path_bytes[0..snapshot.history_path_len];
+    }
+
+    /// Configured checkpoint path, or null for the default next to history.
+    ///
+    /// ```zig
+    /// const path = snapshot.sessionPath();
+    /// ```
+    pub fn sessionPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
+        if (snapshot.session_path_len == 0) return null;
+        return snapshot.session_path_bytes[0..snapshot.session_path_len];
     }
 
     pub fn proxyCaDir(snapshot: *const RuntimeSnapshot) ?[]const u8 {

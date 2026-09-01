@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const workspace_mod = @import("../workspace/root.zig");
 const runtime_application = @import("application/root.zig");
 const runtime_config = @import("config.zig");
 const runtime_event = @import("event.zig");
@@ -74,6 +75,7 @@ pub const Runtime = struct {
 
         runtime.application = try runtime.composeApplication(initialization.options);
         errdefer runtime.application.model.client_layouts.deinit();
+        runtime.application.restoreSession();
         try runtime.scheduleInitialEvents();
 
         if (comptime fail_after_actors) {
@@ -105,6 +107,7 @@ pub const Runtime = struct {
             .inherited_environment = options.environment,
             .socket_path = options.endpoint,
             .agent_manifests = &runtime.resources.agent_manifests,
+            .session_path = options.session_path,
             .proxy_runtime = &runtime.resources.proxy,
             .agent_description_options = options.agent_descriptions,
             .launch_fault = options.launch_fault,
@@ -252,4 +255,72 @@ test "runtime composition keeps every borrowed capability at a stable address" {
     runtime.deinit();
     runtime.deinit();
     try expectRuntimeEndpointRemoved(io, endpoint);
+}
+
+fn sleepLaunch(buffer: []u8) !core.schema.LaunchView {
+    var encoder = core.schema.wire.Encoder.init(buffer);
+    try encoder.writeSized16("/bin/sleep");
+    try encoder.writeSized16("600");
+    return .{
+        .cwd = "/",
+        .argument_count = 2,
+        .encoded_arguments = encoder.finish(),
+        .environment_mode = .inherit_runtime,
+        .environment_count = 0,
+        .encoded_environment = "",
+    };
+}
+
+test "a restart restores workspaces, tabs and panes from the session checkpoint" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/restart.sock", .{directory});
+    var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const session_path = try std.fmt.bufPrint(&session_buffer, "{s}/session.ckpt", .{directory});
+    const initialization: Initialization = .{
+        .dependencies = .{ .io = io, .allocator = std.testing.allocator },
+        .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
+    };
+
+    var first: Runtime = undefined;
+    try first.init(initialization);
+    var repository = first.application.workspaceRepository();
+    const ensured = try repository.ensure(directory);
+    _ = try workspace_mod.renameWorkspace(&repository, ensured.location.workspace, "core");
+    const logs_tab = try repository.nextTabId();
+    _ = try repository.find(ensured.location.workspace).?.createTab(logs_tab, "logs");
+    repository.recordTabCreated(logs_tab);
+    var launch_buffer: [64]u8 = undefined;
+    const pane = try first.application.launchPane(.{
+        .location = .{ .workspace = ensured.location.workspace, .tab_id = logs_tab },
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunch(&launch_buffer),
+        .launch_cwd = directory,
+        .workspace_path = directory,
+    });
+    const pane_id = pane.id;
+    const pane_generation = pane.generation;
+    try std.testing.expect(first.application.session.dirty);
+    first.deinit();
+    try std.testing.expectEqual(@as(u64, 1), first.application.session.writes);
+
+    var second: Runtime = undefined;
+    try second.init(initialization);
+    defer second.deinit();
+    const reader = second.application.workspaceReader();
+
+    try std.testing.expect(!second.application.session.restore_failed);
+    try std.testing.expectEqual(@as(u16, 1), second.application.session.restored_workspaces);
+    try std.testing.expectEqual(@as(u16, 1), second.application.session.restored_panes);
+    try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.location.workspace).?);
+    try std.testing.expectEqualStrings("main", reader.tabLabel(ensured.location).?);
+    try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.location.workspace, .tab_id = logs_tab }).?);
+    const restored = second.application.model.panes.find(pane_id).?;
+    try std.testing.expect(restored.generation > pane_generation);
+    try std.testing.expectEqualStrings("/bin/sleep\x00600\x00", restored.launch_record.slice());
+    try std.testing.expect(second.application.model.workspaces.next_tab_id > core.schema.id.raw(logs_tab));
 }

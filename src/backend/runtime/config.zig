@@ -33,6 +33,8 @@ pub const Options = struct {
     agent_descriptions: ?AgentDescriptionOptions = null,
     /// Agent identification rules; the built-in table unless configured.
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
+    /// Absolute session checkpoint path; null keeps the session volatile.
+    session_path: ?[]const u8 = null,
     /// Test seam: stops the otherwise long-lived runtime without signals.
     stop: ?*Io.Queue(u8) = null,
     /// Test seam: holds a pane's ingest actor open.

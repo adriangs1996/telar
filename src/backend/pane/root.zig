@@ -464,6 +464,57 @@ fn sanitizeTitle(storage: *[schema.max_pane_title_bytes]u8, raw: []const u8) usi
     return len;
 }
 
+/// Bounded copy of the command a pane was launched with, kept so a session
+/// checkpoint can relaunch it. Panes whose command does not fit, or which
+/// replaced their environment, are not restorable and record nothing.
+pub const LaunchRecord = struct {
+    pub const max_bytes = 1024;
+    pub const max_arguments = 32;
+
+    bytes: [max_bytes]u8 = undefined,
+    len: u16 = 0,
+    count: u16 = 0,
+
+    /// Copies the arguments of one launch as NUL-terminated entries.
+    ///
+    /// ```zig
+    /// var record: LaunchRecord = .{};
+    /// record.capture(launch);
+    /// ```
+    pub fn capture(record: *LaunchRecord, launch: schema.LaunchView) void {
+        record.* = .{};
+        if (launch.environment_mode != .inherit_runtime or launch.argument_count == 0 or launch.argument_count > max_arguments) {
+            return;
+        }
+
+        var arguments = launch.arguments();
+        var len: usize = 0;
+        var count: u16 = 0;
+        while (arguments.next() catch null) |argument| {
+            if (len + argument.len + 1 > max_bytes or std.mem.indexOfScalar(u8, argument, 0) != null) {
+                return;
+            }
+
+            @memcpy(record.bytes[len .. len + argument.len], argument);
+            len += argument.len;
+            record.bytes[len] = 0;
+            len += 1;
+            count += 1;
+        }
+
+        record.len = @intCast(len);
+        record.count = count;
+    }
+
+    pub fn restorable(record: *const LaunchRecord) bool {
+        return record.count != 0;
+    }
+
+    pub fn slice(record: *const LaunchRecord) []const u8 {
+        return record.bytes[0..record.len];
+    }
+};
+
 pub const TextRequest = struct {
     rows: u16,
     source: schema.PaneTextSource,
@@ -556,6 +607,7 @@ pub const Pane = struct {
     workspace_path: []u8,
     cwd: CwdState,
     title: TitleState = .{},
+    launch_record: LaunchRecord = .{},
     manifests: *const core.agent_manifest.Table,
     pending_size: ?schema.TerminalSize = null,
     /// When the child's synchronized-output block started holding frames
@@ -1706,6 +1758,29 @@ pub const PaneStore = struct {
         }
     }
 
+    /// Prepares the next allocation for a restored pane so it keeps the
+    /// identity a checkpoint recorded. Valid only while no live pane has an
+    /// id at or above `pane_id`.
+    ///
+    /// ```zig
+    /// try store.reserveRestoredKey(pane_id, generation);
+    /// ```
+    pub fn reserveRestoredKey(store: *PaneStore, pane_id: u64, generation: u64) !void {
+        if (pane_id == 0 or generation == 0 or pane_id < store.next_id) return error.InvalidCheckpointIdentity;
+        store.next_id = pane_id;
+        store.next_generation = @max(store.next_generation, generation);
+    }
+
+    /// Advances the id counters past everything a checkpoint recorded.
+    ///
+    /// ```zig
+    /// store.advanceCounters(next_pane_id, next_generation);
+    /// ```
+    pub fn advanceCounters(store: *PaneStore, next_pane_id: u64, next_generation: u64) void {
+        store.next_id = @max(store.next_id, next_pane_id);
+        store.next_generation = @max(store.next_generation, next_generation);
+    }
+
     pub fn allocateKey(store: *PaneStore) !PaneKey {
         if (store.count == max_panes) return error.PaneLimitReached;
         const pane_id = try schema.id.pane(store.next_id);
@@ -2165,4 +2240,48 @@ test "the pane input queue reports whole-message loss" {
     queue.consume(schema.max_input_bytes);
     try std.testing.expect(queue.push("kept"));
     try std.testing.expectEqualStrings(second[0..], queue.nextChunk().?);
+}
+
+test "launch records keep restorable commands and reject the rest" {
+    var arguments_buffer: [128]u8 = undefined;
+    var encoder = core.schema.wire.Encoder.init(&arguments_buffer);
+    try encoder.writeSized16("/bin/zsh");
+    try encoder.writeSized16("-l");
+    const encoded = encoder.finish();
+    var record: LaunchRecord = .{};
+
+    record.capture(.{
+        .cwd = "/work",
+        .argument_count = 2,
+        .encoded_arguments = encoded,
+        .environment_mode = .inherit_runtime,
+        .environment_count = 0,
+        .encoded_environment = "",
+    });
+    try std.testing.expect(record.restorable());
+    try std.testing.expectEqualStrings("/bin/zsh\x00-l\x00", record.slice());
+
+    record.capture(.{
+        .cwd = "/work",
+        .argument_count = 2,
+        .encoded_arguments = encoded,
+        .environment_mode = .replace,
+        .environment_count = 0,
+        .encoded_environment = "",
+    });
+    try std.testing.expect(!record.restorable());
+}
+
+test "restored pane keys are reserved in order and counters only advance" {
+    var store: PaneStore = .{};
+
+    try store.reserveRestoredKey(4, 9);
+    try std.testing.expectEqual(@as(u64, 4), store.next_id);
+    try std.testing.expectEqual(@as(u64, 9), store.next_generation);
+    try std.testing.expectError(error.InvalidCheckpointIdentity, store.reserveRestoredKey(3, 1));
+    store.advanceCounters(2, 3);
+    try std.testing.expectEqual(@as(u64, 4), store.next_id);
+    store.advanceCounters(10, 12);
+    try std.testing.expectEqual(@as(u64, 10), store.next_id);
+    try std.testing.expectEqual(@as(u64, 12), store.next_generation);
 }

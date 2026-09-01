@@ -221,7 +221,13 @@ tests re-run against the built-in manifest; config round trip.
 
 ---
 
-## P5a. Session checkpoint on disk
+## P5a. Session checkpoint on disk — done
+
+Deviation: the store is a private binary checkpoint file with atomic replace
+rather than SQLite; the records are written with the wire codec but stay
+separate types. Panes restore as a relaunch of their original command in
+their last cwd, which is what `PaneLifecycle.restored` would have flagged; the
+sidebar shows them as fresh panes.
 
 ADR 0005 specifies this and nothing implements it. Today runtime death loses
 workspaces, tabs, layout and history session identity;

@@ -39,6 +39,7 @@ pub fn Dispatcher(comptime Application: type) type {
         pub fn handleMaintenance(application: *Application, result: anyerror!void) !void {
             var coordinator = agentMaintenanceCoordinator(application);
             try coordinator.handle(result);
+            try application.flushSessionCheckpoint();
         }
 
         /// Applies one generated description and persists the resulting title.

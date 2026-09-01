@@ -83,6 +83,16 @@ pub const Workspace = struct {
         return workspace.path;
     }
 
+    /// The user-chosen name, or null when the name derives from the path.
+    ///
+    /// ```zig
+    /// const explicit = workspace.explicitName() orelse "";
+    /// ```
+    pub fn explicitName(workspace: *const Workspace) ?[]const u8 {
+        if (workspace.explicit_name_len == 0) return null;
+        return workspace.explicit_name[0..workspace.explicit_name_len];
+    }
+
     /// Renames the aggregate and returns an event that owns its canonical
     /// name. Repository revision and publication remain outside the aggregate.
     ///

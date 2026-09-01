@@ -179,6 +179,17 @@ pub const Reader = struct {
         return workspace.name();
     }
 
+    /// The user-chosen workspace name, or null when the name derives from
+    /// the path.
+    ///
+    /// ```zig
+    /// const explicit = reader.explicitName(location) orelse "";
+    /// ```
+    pub fn explicitName(reader: Reader, location: schema.WorkspaceLocation) ?[]const u8 {
+        const workspace = reader.find(location) orelse return null;
+        return workspace.explicitName();
+    }
+
     pub fn tabLabel(reader: Reader, location: schema.TabLocation) ?[]const u8 {
         const workspace = reader.find(location.workspace) orelse return null;
         return workspace.tabLabel(location.tab_id);
@@ -360,6 +371,68 @@ pub const Repository = struct {
                 .tab_id = tab_id,
             },
         };
+    }
+
+    pub const Restore = struct {
+        id: schema.WorkspaceId,
+        path: []const u8,
+        explicit_name: ?[]const u8,
+        first_tab_id: schema.TabId,
+        first_tab_label: []const u8,
+    };
+
+    /// Rebuilds one aggregate from a checkpoint with its original identities
+    /// and advances the id counters past them. Only valid before clients
+    /// connect; a duplicate identity is a corrupt checkpoint.
+    ///
+    /// ```zig
+    /// const location = try repository.restoreWorkspace(.{ .id = id, .path = "/work", .explicit_name = null, .first_tab_id = tab, .first_tab_label = "main" });
+    /// ```
+    pub fn restoreWorkspace(repository: *Repository, request: Restore) !schema.TabLocation {
+        if (repository.state.count == repository.state.items.len) {
+            return error.WorkspaceLimitReached;
+        }
+        if (request.id == .invalid or request.first_tab_id == .invalid) {
+            return error.InvalidCheckpointIdentity;
+        }
+        if (repository.find(.{ .workspace = request.id }) != null) {
+            return error.DuplicateWorkspaceIdentity;
+        }
+
+        const path = try repository.gpa.dupe(u8, request.path);
+        errdefer repository.gpa.free(path);
+        var workspace = try Workspace.init(.{
+            .id = request.id,
+            .path = path,
+            .default_tab_id = request.first_tab_id,
+            .explicit_name = request.explicit_name,
+        });
+        _ = try workspace.renameTab(request.first_tab_id, request.first_tab_label);
+
+        for (&repository.state.items) |*slot| {
+            if (slot.* != null) continue;
+            slot.* = workspace;
+            repository.state.count += 1;
+            break;
+        } else unreachable;
+
+        repository.state.next_workspace_id = @max(repository.state.next_workspace_id, schema.id.raw(request.id) + 1);
+        repository.state.next_tab_id = @max(repository.state.next_tab_id, schema.id.raw(request.first_tab_id) + 1);
+        state_mod.advanceRevision(repository.state);
+        return .{ .workspace = .{ .workspace = request.id }, .tab_id = request.first_tab_id };
+    }
+
+    /// Rebuilds one additional tab of a restored workspace.
+    ///
+    /// ```zig
+    /// try repository.restoreTab(location.workspace, tab_id, "logs");
+    /// ```
+    pub fn restoreTab(repository: *Repository, workspace_location: schema.WorkspaceLocation, tab_id: schema.TabId, label: []const u8) !void {
+        const workspace = repository.find(workspace_location) orelse return error.WorkspaceNotFound;
+        if (workspace.containsTab(tab_id)) return error.DuplicateTabIdentity;
+        _ = try workspace.createTab(tab_id, label);
+        repository.state.next_tab_id = @max(repository.state.next_tab_id, schema.id.raw(tab_id) + 1);
+        state_mod.advanceRevision(repository.state);
     }
 
     /// Removes one aggregate and releases its repository-owned path.
@@ -594,4 +667,37 @@ test "repository rejects aggregates beyond its fixed capacity" {
     );
     try std.testing.expectEqual(state_mod.max_workspaces, repository.reader().count());
     try std.testing.expectEqual(full_revision, repository.reader().revision());
+}
+
+test "restored workspaces keep their identities and push the counters past them" {
+    var state: State = .{};
+    var repository = Repository.init(&state, std.testing.allocator);
+    defer repository.deinit();
+
+    const location = try repository.restoreWorkspace(.{
+        .id = @enumFromInt(4),
+        .path = "/work/telar",
+        .explicit_name = "core",
+        .first_tab_id = @enumFromInt(9),
+        .first_tab_label = "editor",
+    });
+    try repository.restoreTab(location.workspace, @enumFromInt(11), "logs");
+
+    try std.testing.expectEqual(@as(u64, 4), schema.id.raw(location.workspace.workspace));
+    try std.testing.expectEqualStrings("core", repository.reader().workspaceName(location.workspace).?);
+    try std.testing.expectEqualStrings("editor", repository.reader().tabLabel(location).?);
+    try std.testing.expectEqualStrings("logs", repository.reader().tabLabel(.{ .workspace = location.workspace, .tab_id = @enumFromInt(11) }).?);
+    try std.testing.expectEqual(@as(u64, 5), state.next_workspace_id);
+    try std.testing.expectEqual(@as(u64, 12), state.next_tab_id);
+    try std.testing.expectError(error.DuplicateWorkspaceIdentity, repository.restoreWorkspace(.{
+        .id = @enumFromInt(4),
+        .path = "/elsewhere",
+        .explicit_name = null,
+        .first_tab_id = @enumFromInt(20),
+        .first_tab_label = "main",
+    }));
+
+    const fresh = try repository.ensure("/work/other");
+    try std.testing.expectEqual(@as(u64, 5), schema.id.raw(fresh.location.workspace.workspace));
+    try std.testing.expectEqual(@as(u64, 12), schema.id.raw(fresh.location.tab_id));
 }

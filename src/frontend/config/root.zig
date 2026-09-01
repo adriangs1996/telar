@@ -712,10 +712,14 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "graphics", "history", "proxy", "agent_descriptions", "agents" },
+            &.{ "graphics", "history", "proxy", "agent_descriptions", "agents", "session" },
             "config.runtime",
             diagnostic,
         );
+        _ = lua.lua_getfield(state, absolute, "session");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseSession(-1, diagnostic);
+        pop(state, 1);
         _ = lua.lua_getfield(state, absolute, "agents");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseAgentManifests(-1, diagnostic);
@@ -1014,6 +1018,42 @@ pub const Generation = struct {
             };
         }
         generation.snapshot.runtime.proxy_passthrough_hosts.sortAndDeduplicate();
+    }
+
+    fn parseSession(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.session must be a table", .{});
+            return error.InvalidConfig;
+        }
+        try ensureOnlyFields(state, absolute, &.{ "persist", "path" }, "config.runtime.session", diagnostic);
+
+        _ = lua.lua_getfield(state, absolute, "persist");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                pop(state, 1);
+                diagnostic.set("config.runtime.session.persist must be a boolean", .{});
+                return error.InvalidConfig;
+            }
+            generation.snapshot.runtime.session_persist = lua.lua_toboolean(state, -1) != 0;
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "path");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) == lua.LUA_TNIL) return;
+        var len: usize = 0;
+        var path: []const u8 = "";
+        if (lua.lua_type(state, -1) == lua.LUA_TSTRING) {
+            if (lua.lua_tolstring(state, -1, &len)) |raw| path = raw[0..len];
+        }
+        if (path.len == 0 or path.len > max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
+            diagnostic.set("config.runtime.session.path is invalid", .{});
+            return error.InvalidConfig;
+        }
+        @memcpy(generation.snapshot.runtime.session_path_bytes[0..path.len], path);
+        generation.snapshot.runtime.session_path_len = @intCast(path.len);
     }
 
     fn parseHistory(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {

@@ -339,6 +339,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeClosePane(request: *ClientRequestContext, close: schema.ClosePane) !void {
+            request.application.noteSessionChange();
             var handler: close_pane_commands.ClosePaneHandler = .{
                 .panes = .{
                     .context = &request.session.attachments,
@@ -385,6 +386,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeCreateTab(request: *ClientRequestContext, create: schema.CreateTabView) !void {
+            request.application.noteSessionChange();
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
@@ -414,6 +416,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeRenameTab(request: *ClientRequestContext, rename: schema.RenameTab) !void {
+            request.application.noteSessionChange();
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
             var handler: rename_tab_commands.RenameTabHandler = .{
@@ -429,6 +432,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeCloseTab(request: *ClientRequestContext, close: schema.CloseTab) !void {
+            request.application.noteSessionChange();
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
             var handler: close_tab_commands.CloseTabHandler = .{
@@ -448,6 +452,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeMoveTab(request: *ClientRequestContext, move: schema.MoveTab) !void {
+            request.application.noteSessionChange();
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
             var handler: move_tab_commands.MoveTabHandler = .{
@@ -496,6 +501,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeUpdateClientLayout(request: *ClientRequestContext, update: schema.ClientLayoutUpdateView) !void {
+            request.application.noteSessionChange();
             const identity = request.session.delivery.client_identity;
             if (identity == .invalid) {
                 return error.ClientLayoutNotSubscribed;
@@ -512,6 +518,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeCreateWorkspace(request: *ClientRequestContext, create: schema.CreateWorkspaceView) !void {
+            request.application.noteSessionChange();
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
@@ -546,6 +553,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeRenameWorkspace(request: *ClientRequestContext, rename: schema.RenameWorkspace) !void {
+            request.application.noteSessionChange();
             var event_context: WorkspaceEventContext = .{
                 .application = request.application,
                 .origin = request.session.key,

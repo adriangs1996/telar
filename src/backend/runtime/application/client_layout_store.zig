@@ -106,6 +106,48 @@ pub const Store = struct {
         store.* = .{};
     }
 
+    pub const Exported = struct {
+        identity: schema.ClientIdentity,
+        last_used: u64,
+        payload: []const u8,
+    };
+
+    /// Encodes the record at `index` as one `update_client_layout` request so
+    /// a checkpoint can replay it through `replace` on restore. Empty slots
+    /// yield null.
+    ///
+    /// ```zig
+    /// var index: usize = 0;
+    /// while (index < store.capacity()) : (index += 1) {
+    ///     const exported = try store.exportRecord(index, &buffer) orelse continue;
+    /// }
+    /// ```
+    pub fn exportRecord(store: *const Store, index: usize, buffer: []u8) !?Exported {
+        const record = &store.records[index];
+        if (record.identity == .invalid) return null;
+
+        var tabs: [schema.max_client_layout_tabs]schema.ClientTabLayout = undefined;
+        for (record.tabs[0..record.tab_count], 0..) |*tab, position| {
+            tabs[position] = tab.schemaLayout();
+        }
+
+        return .{
+            .identity = record.identity,
+            .last_used = record.last_used,
+            .payload = try schema.encodeClientLayoutUpdate(buffer, .{
+                .sidebar_visible = record.sidebar_visible,
+                .sidebar_width = record.sidebar_width,
+                .workspace_list_collapsed = record.workspace_list_collapsed,
+                .active_tab = record.active_tab,
+                .tabs = tabs[0..record.tab_count],
+            }),
+        };
+    }
+
+    pub fn capacity(store: *const Store) usize {
+        return store.records.len;
+    }
+
     /// Merges one terminal's current workspace into its retained snapshot
     /// after checking every pane against authoritative runtime state.
     ///

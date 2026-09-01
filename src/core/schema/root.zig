@@ -4,7 +4,7 @@
 //! Every function borrows input and caller-owned output memory; none allocates.
 
 const std = @import("std");
-const wire = @import("wire.zig");
+pub const wire = @import("wire.zig");
 pub const graphics = @import("graphics.zig");
 
 pub const frame = @import("frame.zig");

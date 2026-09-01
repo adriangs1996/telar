@@ -70,6 +70,11 @@ const Launch = struct {
     description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
     agent_description_options: ?backend.runtime.AgentDescriptionOptions = null,
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
+    session_persist: bool = true,
+    configured_session_buffer: [std.fs.max_path_bytes]u8 = undefined,
+    configured_session_path: ?[]const u8 = null,
+    session_buffer: [std.fs.max_path_bytes]u8 = undefined,
+    session_path: ?[]const u8 = null,
     history_buffer: [std.fs.max_path_bytes]u8 = undefined,
     history_path: HistoryPath = undefined,
     default_proxy_buffer: [std.fs.max_path_bytes]u8 = undefined,
@@ -105,6 +110,12 @@ const Launch = struct {
     fn applyConfig(launch: *Launch, generation: *frontend.config.Generation) !void {
         const runtime_config = &generation.snapshot.runtime;
         launch.agent_manifests = runtime_config.agent_manifests;
+        launch.session_persist = runtime_config.session_persist;
+        if (runtime_config.sessionPath()) |session_path| {
+            const resolved = try resolveConfigPath(launch.process.gpa, generation.configDir(), session_path);
+            defer launch.process.gpa.free(resolved);
+            launch.configured_session_path = try std.fmt.bufPrint(&launch.configured_session_buffer, "{s}", .{resolved});
+        }
         if (!launch.options.graphics_pane_set) {
             launch.options.graphics.pane_bytes = runtime_config.graphics_pane_bytes;
         }
@@ -142,6 +153,13 @@ const Launch = struct {
         else
             try resolveHistoryPath(launch.process.minimal.environ, &launch.history_buffer);
         try prepareHistoryDatabase(launch.process.io, launch.history_path);
+        if (launch.session_persist) {
+            launch.session_path = launch.configured_session_path orelse try std.fmt.bufPrint(
+                &launch.session_buffer,
+                "{s}/session.ckpt",
+                .{std.fs.path.dirname(launch.history_path.path) orelse "."},
+            );
+        }
 
         const proxy_enabled = if (launch.config_generation) |generation|
             generation.snapshot.runtime.proxy_enabled
@@ -180,6 +198,7 @@ const Launch = struct {
                 .proxy = launch.proxy_options,
                 .agent_descriptions = launch.agent_description_options,
                 .agent_manifests = launch.agent_manifests,
+                .session_path = launch.session_path,
             },
         };
     }

@@ -40,6 +40,7 @@ pub const Event = union(enum) {
     agent_tick: anyerror!void,
     agent_description: agent.description.Result,
     metrics_tick: anyerror!void,
+    checkpoint_written: anyerror!void,
     stopped: anyerror!void,
 };
 
@@ -71,6 +72,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) diagnostics.Path {
         .metrics_tick,
         .telemetry_tick,
         .telemetry_written,
+        .checkpoint_written,
         => .observation,
         .accepted,
         .handshaken,

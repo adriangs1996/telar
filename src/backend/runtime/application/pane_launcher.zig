@@ -178,6 +178,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 .graphics_limits = launcher.panes.graphics_limits,
             });
 
+            fresh.launch_record.capture(request.launch);
             launcher.panes.insert(fresh) catch |err| {
                 launcher.recordFailure(fresh, .{ .shell = shell, .phase = .pane_registration, .cause = err });
                 fresh.abortLaunch();

@@ -98,6 +98,9 @@ pub fn Dispatcher(comptime Application: type) type {
                 .telemetry_written => |result| {
                     ObservabilityEvents.handleTelemetryWritten(application, resources.telemetry, result);
                 },
+                .checkpoint_written => |result| {
+                    application.sessionCheckpointWritten(result);
+                },
             }
 
             return false;

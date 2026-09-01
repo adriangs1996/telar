@@ -11,6 +11,7 @@ const runtime_config = @import("../config.zig");
 const delivery = @import("../delivery/root.zig");
 const runtime_event = @import("../event.zig");
 const pane_launcher = @import("pane_launcher.zig");
+const session_checkpoint = @import("session_checkpoint.zig");
 const pane_mod = @import("../../pane/root.zig");
 const model = @import("model.zig");
 const pty = @import("../../pty/root.zig");
@@ -27,6 +28,7 @@ const schema = core.schema;
 const diagnostics = core.diagnostics;
 const Pane = pane_mod.Pane;
 const PaneLauncher = pane_launcher.PaneLauncher;
+const SessionCheckpoint = session_checkpoint.Checkpointer(Application);
 const WorkspaceRepository = workspace_mod.Repository;
 const RuntimeModel = model.RuntimeModel;
 const ClientAdmissionState = client_mod.admission.State(core.transport.SocketChannel);
@@ -66,6 +68,7 @@ pub const Initialization = struct {
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     graphics: runtime_config.GraphicsLimits,
+    session_path: ?[]const u8 = null,
 };
 
 pub const ShutdownStep = enum {
@@ -101,6 +104,8 @@ pub const Application = struct {
     model: RuntimeModel,
     system_metrics: observability.system_metrics.Sampler = .{},
     metrics: RuntimeMetrics,
+    session: session_checkpoint.State = .{},
+    session_write_buffer: ?[]u8 = null,
 
     /// Composes application state from stable, runtime-owned capabilities.
     ///
@@ -118,6 +123,7 @@ pub const Application = struct {
             .inherited_environment = initialization.inherited_environment,
             .socket_path = initialization.socket_path,
             .agent_manifests = initialization.agent_manifests,
+            .session = .{ .path = initialization.session_path },
             .proxy_runtime = initialization.proxy_runtime,
             .agent_description_options = initialization.agent_description_options,
             .launch_fault = initialization.launch_fault,
@@ -141,6 +147,7 @@ pub const Application = struct {
     pub fn shutdownStep(application: *Application, step: ShutdownStep) void {
         switch (step) {
             .stop_client_connections => {
+                SessionCheckpoint.writeNow(application);
                 for (&application.clients.items) |*slot| {
                     if (slot.*) |session| {
                         session.connection.shutdown(application.io);
@@ -233,7 +240,46 @@ pub const Application = struct {
         };
         const fresh = try launcher.launch(request);
         application.model.agents.touch();
+        application.noteSessionChange();
         return fresh;
+    }
+
+    /// Marks the restorable session shape as changed so the next maintenance
+    /// tick persists it.
+    ///
+    /// ```zig
+    /// application.noteSessionChange();
+    /// ```
+    pub fn noteSessionChange(application: *Application) void {
+        SessionCheckpoint.noteChange(application);
+    }
+
+    /// Rebuilds the model from the checkpoint file. Runs once at startup,
+    /// before clients are accepted.
+    ///
+    /// ```zig
+    /// application.restoreSession();
+    /// ```
+    pub fn restoreSession(application: *Application) void {
+        SessionCheckpoint.restore(application);
+    }
+
+    /// Starts a checkpoint write when one is due.
+    ///
+    /// ```zig
+    /// try application.flushSessionCheckpoint();
+    /// ```
+    pub fn flushSessionCheckpoint(application: *Application) !void {
+        try SessionCheckpoint.flushIfDue(application);
+    }
+
+    /// Completes the in-flight checkpoint write.
+    ///
+    /// ```zig
+    /// application.sessionCheckpointWritten(result);
+    /// ```
+    pub fn sessionCheckpointWritten(application: *Application, result: anyerror!void) void {
+        SessionCheckpoint.handleWritten(application, result);
     }
 
     /// Reaps panes whose child exited and which no actor still borrows, then
@@ -272,6 +318,7 @@ pub const Application = struct {
 
                 application.revokePaneCredential(pane);
                 pane.destroy();
+                application.noteSessionChange();
 
                 if (!store.hasAt(location) and workspaces.reader().contains(location)) {
                     const removed = workspace_mod.removeTab(&workspaces, location).?;
