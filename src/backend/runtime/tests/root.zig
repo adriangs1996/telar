@@ -1,6 +1,7 @@
 //! Vertical contract and integration tests for runtime flows.
 
 test {
+    _ = @import("cell_projection_test.zig");
     _ = @import("close_pane_test.zig");
     _ = @import("close_tab_test.zig");
     _ = @import("copy_selection_test.zig");

@@ -138,7 +138,10 @@ pub const Attachment = struct {
     /// ```
     pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !?Prepared {
         const pane = attachment.pane;
-        if (pane.ingest_pending) return null;
+        if (pane.ingest_pending) {
+            return null;
+        }
+
         if (attachment.cells.snapshot_pending) {
             const payload = (try attachment.cells.prepare(.{
                 .io = preparation.io,
@@ -151,9 +154,13 @@ pub const Attachment = struct {
             attachment.cells.snapshot_pending = false;
             return .{ .bytes = payload, .effect = .cells };
         }
+
         if (attachment.cells.hasOutstanding() or
-            (!pane.dirty and attachment.cells.observed_revision == pane.cell_revision))
+            (!pane.render_pending and attachment.cells.observed_revision == pane.cell_revision))
+        {
             return null;
+        }
+
         const payload = (try attachment.cells.prepare(.{
             .io = preparation.io,
             .buffer = preparation.buffer,
@@ -162,6 +169,7 @@ pub const Attachment = struct {
             .metrics = preparation.metrics,
         })) orelse
             return null;
+
         return .{ .bytes = payload, .effect = .cells };
     }
 

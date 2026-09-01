@@ -256,6 +256,8 @@ pub const Sync = struct {
         if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
             !input_modes_changed and !scroll_changed)
         {
+            sync.observeProjection(pane, projection);
+
             if (comptime diagnostics.enabled) {
                 metrics.noop_frames += 1;
                 metrics.damaged_rows += diff.damaged_rows;
@@ -298,8 +300,7 @@ pub const Sync = struct {
         sync.acknowledged_mouse = pane.mouse;
         sync.acknowledged_input_modes = pane.input_modes;
         sync.acknowledged_scroll = projection.scroll;
-        if (projection.buffer == &sync.projected) @memset(sync.projected_damage, false);
-        sync.observed_revision = pane.cell_revision;
+        sync.observeProjection(pane, projection);
         sync.outstanding = .{ .frame_id = frame_id, .sent_ns = diagnostics.now(io) };
         if (comptime diagnostics.enabled) {
             var cell_count: u64 = 0;
@@ -320,6 +321,14 @@ pub const Sync = struct {
             metrics.encode.observe(diagnostics.elapsed(started, diagnostics.now(io)));
         }
         return payload;
+    }
+
+    fn observeProjection(sync: *Sync, pane: *const Pane, projection: Projection) void {
+        if (projection.buffer == &sync.projected) {
+            @memset(sync.projected_damage, false);
+        }
+
+        sync.observed_revision = pane.cell_revision;
     }
 };
 

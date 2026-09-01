@@ -196,6 +196,19 @@ sidebar scroll and attachment-modal changes advance `View.interactionVersion`.
 The view does not select tabs, focus panes, start prompts or navigate
 notifications.
 
+During the resulting draw, the view maps semantic hover to one bounded mouse
+pointer shape. Clickable chrome uses `pointer`, the sidebar separator and its
+active drag use `ew-resize`, and pane content or passive chrome restore the
+terminal default. Copy mode also restores the default because it owns every
+pointer event before the view. The default is emitted explicitly rather than as
+an empty reset so terminals implementing only CSS shape names restore it too.
+`presentation.Screen` emits OSC 22 in the synchronized frame only when that
+shape differs from the last successful flush.
+A failed flush marks it unknown so recovery re-emits it, while the platform
+leave sequence restores the default before leaving the alternate screen.
+Unsupported terminals ignore the OSC sequence. This state is per client,
+fixed-size and allocation-free.
+
 `view_interactions.apply` wires that command to
 `DispatchViewInteractionHandler`. The application handler applies the semantic
 intent before layout delivery and returns `Outcome`. The adapter maps the
@@ -413,6 +426,15 @@ captures an immutable `presentation_projection` and calls
   selected-effect failure ordering.
 - `src/frontend/client/application/input/pointer_routing.zig` proves copy, view and
   pane owner ordering before any pointer effect reaches a child.
+- `mouse pointer distinguishes clickable chrome panes and sidebar resizing` in
+  `src/frontend/client/presentation/view.zig` proves the semantic hover mapping.
+- `mouse pointer changes fold until a shape or recovery changes` in
+  `src/frontend/presentation/screen.zig` proves OSC 22 coalescence and recovery;
+  the platform sequence test proves exit restores the default before leaving
+  the alternate screen.
+- `host pointer shape follows semantic hover through paced presentation` in
+  `src/frontend/client/tests/presentation.zig` proves the complete mouse-router
+  to host-flush path with substituted terminal resources.
 - The configured-action, Lua key and Lua paste tests in
   `src/frontend/client/tests/configuration.zig` prove the adapter against prompt,
   copy-mode and acknowledged pane-mode authority.

@@ -154,6 +154,56 @@ test "host input presentation state schedules only through observation" {
     );
 }
 
+test "host pointer shape follows semantic hover through paced presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    var handler: InputHandler = .{ .client = client };
+
+    try std.testing.expectEqual(
+        presentation.pointer.Shape.default,
+        client.presenter.screen.presented_mouse_pointer.?,
+    );
+
+    try handler.mouse(.{
+        .x = client.view.regions.top.x,
+        .y = client.view.regions.top.y,
+        .kind = .move,
+    });
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(
+        presentation.pointer.Shape.pointer,
+        client.presenter.screen.presented_mouse_pointer.?,
+    );
+
+    try handler.mouse(.{
+        .x = client.view.regions.sidebar.w - 1,
+        .y = 5,
+        .kind = .move,
+    });
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(
+        presentation.pointer.Shape.horizontal_resize,
+        client.presenter.screen.presented_mouse_pointer.?,
+    );
+
+    try handler.mouse(.{
+        .x = client.view.regions.workbench.x,
+        .y = client.view.regions.workbench.y,
+        .kind = .move,
+    });
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(
+        presentation.pointer.Shape.default,
+        client.presenter.screen.presented_mouse_pointer.?,
+    );
+}
+
 test "presentation flushes an explicit empty model before bootstrap" {
     var harness: TestHarness = undefined;
     try harness.init();

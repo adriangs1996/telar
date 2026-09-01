@@ -12,6 +12,7 @@ const input_application = @import("../application/input/root.zig");
 const client_model = @import("../model/root.zig");
 const name_prompt = @import("../model/name_prompt.zig");
 const diff = presentation.diff;
+const pointer = presentation.pointer;
 const icon_graphics = @import("../../graphics/root.zig").icons;
 const kitty = @import("../../graphics/root.zig").kitty;
 const modal_graphics = @import("../../graphics/root.zig").modal;
@@ -59,6 +60,7 @@ pub const RenderInput = struct {
     proxy_tls_active: bool = false,
     system_metrics: ?client_model.SystemMetrics = null,
     status_mode: widgets.status_bar.Mode = .normal,
+    copy_mode_active: bool = false,
     bar_state: *const bars.State = &default_bars_state,
     force: bool = false,
     diagnostic: ?[]const u8 = null,
@@ -541,6 +543,7 @@ pub const State = struct {
     }
 
     pub fn render(state: *State, screen: *term.Screen, input: RenderInput) !RenderStats {
+        screen.mouse_pointer = state.mousePointerShape(input.copy_mode_active);
         // The banner must survive every present — pane composition may have
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, input.diagnostic);
@@ -694,6 +697,34 @@ pub const State = struct {
         state.modal_overlay_area = drawn_modal_area;
         return stats;
     }
+
+    fn mousePointerShape(state: *const State, copy_mode_active: bool) pointer.Shape {
+        if (copy_mode_active) {
+            return .default;
+        }
+
+        if (state.sidebar_resize_active) {
+            return .horizontal_resize;
+        }
+
+        const hovered = state.hovered orelse return .default;
+        return switch (hovered) {
+            .resize_sidebar => .horizontal_resize,
+            .toggle_sidebar,
+            .select_tab,
+            .select_workspace,
+            .toggle_workspace_list,
+            .sidebar_focus_agent,
+            .sidebar_scroll_to,
+            .notification_activate,
+            .notification_dismiss,
+            .attachment_open,
+            .attachment_dismiss,
+            .attachment_modal_close,
+            => .pointer,
+            .focus_pane, .active_workspace, .attachment_modal_hold => .default,
+        };
+    }
 };
 
 fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
@@ -763,6 +794,25 @@ test "visible regions reserve top bottom sidebar and workbench" {
     try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 62, .h = 40 }, regions.sidebar);
     try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 1, .w = 58, .h = 38 }, regions.workbench);
     try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 39, .w = 58, .h = 1 }, regions.bottom);
+}
+
+test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
+    var state = try State.init(std.testing.allocator, 80, 24);
+    defer state.deinit();
+
+    state.hovered = .toggle_sidebar;
+    try std.testing.expectEqual(pointer.Shape.pointer, state.mousePointerShape(false));
+    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(true));
+
+    state.hovered = .{ .focus_pane = @enumFromInt(7) };
+    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(false));
+
+    state.hovered = .resize_sidebar;
+    try std.testing.expectEqual(pointer.Shape.horizontal_resize, state.mousePointerShape(false));
+
+    state.hovered = null;
+    state.sidebar_resize_active = true;
+    try std.testing.expectEqual(pointer.Shape.horizontal_resize, state.mousePointerShape(false));
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {

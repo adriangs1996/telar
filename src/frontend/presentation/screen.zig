@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 const ui = @import("telar-core").ui;
 const diff = @import("diff.zig");
+const pointer = @import("pointer.zig");
 
 // The half of a TUI that speaks the terminal's language: the diff, the escape
 // sequences it turns into, and the parser for what comes back.
@@ -43,6 +44,10 @@ pub const Screen = struct {
     /// and what a terminal's own input method composes against, so a field that
     /// paints a block instead is invisible to both. It also blinks for free.
     cursor: ?Position = null,
+    /// Desired host mouse pointer and the last shape confirmed by a successful
+    /// flush. `null` forces recovery to re-emit the desired shape.
+    mouse_pointer: pointer.Shape = .default,
+    presented_mouse_pointer: ?pointer.Shape = null,
     graphics: ?GraphicsEffect = null,
 
     pub const GraphicsEffect = struct {
@@ -94,6 +99,7 @@ pub const Screen = struct {
         // compare equal to this.
         @memset(s.front.cells, .{ .len = 0, .width = 0 });
         s.full_damage = true;
+        s.presented_mouse_pointer = null;
         @memset(s.damage_rows, .{});
     }
 
@@ -156,6 +162,12 @@ pub const Screen = struct {
         // draws whatever has arrived so far. herdr wraps its own draw in this.
         try w.writeAll("\x1b[?2026h");
 
+        if (s.presented_mouse_pointer == null or
+            s.presented_mouse_pointer.? != s.mouse_pointer)
+        {
+            try w.writeAll(pointer.sequence(s.mouse_pointer));
+        }
+
         var last_style: ?ui.Style = null;
         var cursor: ?struct { x: u16, y: u16 } = null;
 
@@ -215,6 +227,7 @@ pub const Screen = struct {
         // Measured before the flush, which resets the writer's position.
         stats.bytes = w.end -| before;
         try w.flush();
+        s.presented_mouse_pointer = s.mouse_pointer;
         s.full_damage = false;
         @memset(s.damage_rows, .{});
         return stats;
@@ -1627,6 +1640,37 @@ test "the real cursor is placed only when a field asks for it" {
     // One based, row first, and shown.
     try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[2;5H") != null);
     try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[?25h") != null);
+}
+
+test "mouse pointer changes fold until a shape or recovery changes" {
+    const gpa = testing.allocator;
+    var screen = try Screen.init(gpa, 10, 3);
+    defer screen.deinit();
+
+    var out: [4096]u8 = undefined;
+    var writer: Io.Writer = .fixed(&out);
+
+    _ = try screen.flush(&writer);
+    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.default)) != null);
+
+    writer = .fixed(&out);
+    screen.mouse_pointer = .pointer;
+    _ = try screen.flush(&writer);
+    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.pointer)) != null);
+
+    writer = .fixed(&out);
+    _ = try screen.flush(&writer);
+    try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b]22;") == null);
+
+    writer = .fixed(&out);
+    screen.mouse_pointer = .horizontal_resize;
+    _ = try screen.flush(&writer);
+    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.horizontal_resize)) != null);
+
+    writer = .fixed(&out);
+    screen.invalidate();
+    _ = try screen.flush(&writer);
+    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.horizontal_resize)) != null);
 }
 
 test "no byte is lost when a read does not fit in what is left" {

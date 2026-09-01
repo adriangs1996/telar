@@ -516,6 +516,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .prompt = if (prompt) |*value| value else null,
         .proxy_tls_active = input.projection.proxy_tls_active,
         .system_metrics = input.projection.system_metrics,
+        .copy_mode_active = input.projection.copy != null,
         .bar_state = input.projection.bar_state,
         .status_mode = input.projection.status_mode,
         .force = composed.stats.full,
@@ -557,6 +558,7 @@ fn presentEmpty(presenter: *Presenter, resources: Resources) !Presented {
     const buffer = presenter.screen.buffer();
     buffer.clear(.{});
     presenter.screen.cursor = null;
+    presenter.screen.mouse_pointer = .default;
     presenter.screen.graphics = null;
     try presenter.flushScreen(resources.writer);
 

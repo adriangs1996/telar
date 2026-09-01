@@ -110,7 +110,9 @@ test "host keyboard enhancements stay inside the alternate screen" {
     try std.testing.expect(enter_alternate < push_keyboard);
 
     const pop_keyboard = std.mem.indexOf(u8, leave_sequence, "\x1b[<u").?;
+    const reset_pointer = std.mem.indexOf(u8, leave_sequence, "\x1b]22;default\x1b\\").?;
     const leave_alternate = std.mem.indexOf(u8, leave_sequence, "\x1b[?1049l").?;
+    try std.testing.expect(reset_pointer < leave_alternate);
     try std.testing.expect(pop_keyboard < leave_alternate);
 }
 
