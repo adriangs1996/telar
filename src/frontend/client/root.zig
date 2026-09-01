@@ -46,6 +46,7 @@ test {
     _ = @import("input_handler.zig");
     _ = @import("model/root.zig");
     _ = @import("model/name_prompt.zig");
+    _ = @import("model/tests/root.zig");
     _ = @import("notification_timers.zig");
     _ = @import("presentation_lifecycle.zig");
     _ = @import("presentation_projection.zig");
