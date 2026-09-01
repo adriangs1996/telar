@@ -1,13 +1,13 @@
 //! Adapts committed host-resource commands to one concrete client.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const host_application = @import("application/host/root.zig");
 const client_model = @import("model.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const pane_graphics = @import("pane_graphics.zig");
 
 const Client = @import("client.zig");
-const host_resource_delivery = client_application.host_resource_delivery;
+const host_resource_delivery = host_application.host_resource_delivery;
 const schema = core.schema;
 
 /// Delivers every disposable resource implied by one current host commit.

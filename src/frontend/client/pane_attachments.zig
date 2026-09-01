@@ -1,13 +1,14 @@
 //! Wires per-pane attachment confirmation and canonical recovery to a client.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
 
 const Client = @import("client.zig");
-const attach_pane = client_application.attach_pane;
+const attach_pane = panes_application.attach_pane;
 const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
-const tab_snapshot_recovery = client_application.tab_snapshot_recovery;
+const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
 
 /// Wires a runtime attachment confirmation to the passive client model.
 ///

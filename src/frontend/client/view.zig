@@ -7,7 +7,7 @@ const attachments = @import("../attachments/root.zig");
 const notifications = @import("../notifications/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const client_model = @import("model.zig");
 const name_prompt = @import("name_prompt.zig");
 const diff = presentation.diff;
@@ -27,7 +27,7 @@ const schema = core.schema;
 const empty_agent_snapshot: agents.Snapshot = .{};
 const empty_notifications: notifications.Center = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
-const view_interaction = client_application.view_interaction;
+const view_interaction = input_application.view_interaction;
 
 pub const sidebar_width = widgets.layout.sidebar_width;
 pub const minimum_sidebar_width = widgets.layout.minimum_sidebar_width;

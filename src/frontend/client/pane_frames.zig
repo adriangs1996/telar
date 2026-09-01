@@ -1,14 +1,14 @@
 //! Adapts runtime pane frames to recovery, resource delivery and telemetry.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
-const pane_frame = client_application.pane_frame;
-const pane_frame_delivery = client_application.pane_frame_delivery;
+const pane_frame = panes_application.pane_frame;
+const pane_frame_delivery = panes_application.pane_frame_delivery;
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 

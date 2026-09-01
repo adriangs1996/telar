@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
@@ -10,8 +10,8 @@ const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
-const tab_snapshot = client_application.tab_snapshot;
-const tab_snapshot_delivery = client_application.tab_snapshot_delivery;
+const tab_snapshot = tabs_application.tab_snapshot;
+const tab_snapshot_delivery = tabs_application.tab_snapshot_delivery;
 
 pub const Outcome = enum {
     applied,

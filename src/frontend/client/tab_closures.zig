@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
@@ -10,11 +10,11 @@ const tab_attachments = @import("tab_attachments.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 
 const Client = @import("client.zig");
-const close_tab = client_application.close_tab;
+const close_tab = tabs_application.close_tab;
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
-const tab_removal_delivery = client_application.tab_removal_delivery;
-const tab_snapshot_recovery = client_application.tab_snapshot_recovery;
+const tab_removal_delivery = tabs_application.tab_removal_delivery;
+const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
 
 pub const Outcome = enum {
     applied,

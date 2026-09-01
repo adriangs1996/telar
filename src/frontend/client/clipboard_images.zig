@@ -2,15 +2,15 @@
 
 const std = @import("std");
 const attachments = @import("../attachments/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const client_model = @import("model.zig");
 const notification_capability = @import("../notifications/root.zig");
 const notification_flow = @import("notifications.zig");
 const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
-const clipboard_image = client_application.clipboard_image;
-const clipboard_image_delivery = client_application.clipboard_image_delivery;
+const clipboard_image = input_application.clipboard_image;
+const clipboard_image_delivery = input_application.clipboard_image_delivery;
 
 pub const Completion = struct {
     execution_id: client_model.ClipboardCaptureId,

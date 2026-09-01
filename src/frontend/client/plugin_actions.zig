@@ -4,15 +4,15 @@ const std = @import("std");
 const config = @import("../config/root.zig");
 const input = @import("../input/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const client_model = @import("model.zig");
 const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
 const client_actions = @import("actions.zig");
 const notification_flow = @import("notifications.zig");
-const plugin_action = client_application.plugin_action;
-const plugin_action_delivery = client_application.plugin_action_delivery;
+const plugin_action = input_application.plugin_action;
+const plugin_action_delivery = input_application.plugin_action_delivery;
 
 pub const Completion = struct {
     execution_id: client_model.PluginExecutionId,

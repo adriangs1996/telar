@@ -1,7 +1,7 @@
 //! Wires configured actions to native, Lua, plugin and semantic input ports.
 
 const input = @import("../input/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const client_actions = @import("actions.zig");
 const key_routing = @import("key_routing.zig");
 const lua_actions = @import("lua_actions.zig");
@@ -9,8 +9,8 @@ const pane_inputs = @import("pane_inputs.zig");
 const plugin_actions = @import("plugin_actions.zig");
 
 const Client = @import("client.zig");
-const action_routing = client_application.action_routing;
-const lua_action = client_application.lua_action;
+const action_routing = input_application.action_routing;
+const lua_action = input_application.lua_action;
 const Action = input.action.Action;
 const PluginAction = input.action.PluginAction;
 const keybind = input.keybind;

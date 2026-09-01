@@ -2,13 +2,13 @@
 
 const core = @import("telar-core");
 const attachments = @import("../attachments/root.zig");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 const client_model = @import("model.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
-const active_pane_resource_delivery = client_application.active_pane_resource_delivery;
+const active_pane_resource_delivery = panes_application.active_pane_resource_delivery;
 const ui = core.ui;
 
 /// Synchronizes attachment geometry and child focus reporting from the active

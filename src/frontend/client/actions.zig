@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const input = @import("../input/root.zig");
 const workspace = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 
 const Client = @import("client.zig");
 const client_detachments = @import("client_detachments.zig");
@@ -24,7 +24,7 @@ const workspace_handoffs = @import("workspace_handoffs.zig");
 const Action = input.action.Action;
 const keybind = input.keybind;
 const layout = workspace.layout;
-const native_action = client_application.native_action;
+const native_action = input_application.native_action;
 const schema = core.schema;
 
 /// Applies one native semantic action from host input, Lua or a plugin.

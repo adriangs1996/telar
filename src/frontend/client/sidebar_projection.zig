@@ -1,13 +1,13 @@
 //! Projects committed sidebar visibility into disposable client resources.
 
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const notifications_application = @import("application/notifications/root.zig");
 const client_model = @import("model.zig");
 const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("client.zig");
 const multiplexer = workspace_capability.multiplexer;
-const sidebar_visibility_delivery = client_application.sidebar_visibility_delivery;
+const sidebar_visibility_delivery = notifications_application.sidebar_visibility_delivery;
 
 /// Applies one exact model commit to the view, physical graphics placements
 /// and attached runtime pane geometry.

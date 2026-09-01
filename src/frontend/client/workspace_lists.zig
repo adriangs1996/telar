@@ -1,12 +1,12 @@
 //! Adapts runtime workspace-list messages to the client application boundary.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const workspaces_application = @import("application/workspaces/root.zig");
 const workspace_list = @import("../workspace/root.zig").workspace_list;
 
 const Client = @import("client.zig");
 const schema = core.schema;
-const workspace_list_snapshot = client_application.workspace_list_snapshot;
+const workspace_list_snapshot = workspaces_application.workspace_list_snapshot;
 
 pub const ApplyOutcome = workspace_list_snapshot.Outcome;
 

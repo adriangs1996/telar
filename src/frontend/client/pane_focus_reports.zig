@@ -1,9 +1,9 @@
 //! Adapts model-owned pane focus reporting and canonical retirement.
 
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 
 const Client = @import("client.zig");
-const pane_focus_reporting = client_application.pane_focus_reporting;
+const pane_focus_reporting = panes_application.pane_focus_reporting;
 const runtime_transport = @import("runtime_transport.zig");
 
 pub const Outcome = pane_focus_reporting.Outcome;

@@ -1,12 +1,12 @@
 //! Adapts runtime resynchronization requirements to client application policy.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const session_application = @import("application/session/root.zig");
 
 const Client = @import("client.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
-const resync_required = client_application.resync_required;
+const resync_required = session_application.resync_required;
 const schema = core.schema;
 
 /// Resolves disposable client state and applies one validated runtime resync.

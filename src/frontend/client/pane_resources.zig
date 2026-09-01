@@ -1,10 +1,10 @@
 //! Disposable client resources keyed by pane identity.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 
 const Client = @import("client.zig");
-const pane_resource_release = client_application.pane_resource_release;
+const pane_resource_release = panes_application.pane_resource_release;
 const schema = core.schema;
 
 /// Releases copy, paste, focus and graphics state retained for one pane.

@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
@@ -12,10 +12,10 @@ const request_lifecycle = @import("request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("client.zig");
-const create_tab = client_application.create_tab;
+const create_tab = tabs_application.create_tab;
 const multiplexer = workspace_capability.multiplexer;
 const schema = core.schema;
-const tab_creation_delivery = client_application.tab_creation_delivery;
+const tab_creation_delivery = tabs_application.tab_creation_delivery;
 
 /// Wires an interactive tab creation to planning and owned request delivery.
 ///

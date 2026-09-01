@@ -29,7 +29,7 @@ const active_pane_resources = @import("active_pane_resources.zig");
 const client_actions = @import("actions.zig");
 const agent_navigation = @import("agent_navigation.zig");
 const agent_sounds = @import("agent_sounds.zig");
-const client_application = @import("application/root.zig");
+const session_application = @import("application/session/root.zig");
 const client_events = @import("client_events.zig");
 const client_startup = @import("client_startup.zig");
 const client_outbox = @import("outbox.zig");
@@ -1948,11 +1948,11 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     };
 
     try std.testing.expectEqual(
-        client_application.resync_required.Outcome.snapshot_requested,
+        session_application.resync_required.Outcome.snapshot_requested,
         try resync_requirements.apply(client, required),
     );
     try std.testing.expectEqual(
-        client_application.resync_required.Outcome.coalesced,
+        session_application.resync_required.Outcome.coalesced,
         try resync_requirements.apply(client, required),
     );
     try harness.settle();

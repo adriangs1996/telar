@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const workspaces_application = @import("application/workspaces/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
@@ -12,8 +12,8 @@ const request_lifecycle = @import("request_lifecycle.zig");
 const Client = @import("client.zig");
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
-const workspace_snapshot = client_application.workspace_snapshot;
-const workspace_snapshot_delivery = client_application.workspace_snapshot_delivery;
+const workspace_snapshot = workspaces_application.workspace_snapshot;
+const workspace_snapshot_delivery = workspaces_application.workspace_snapshot_delivery;
 
 /// Consumes one correlated response and applies its canonical workspace state.
 ///

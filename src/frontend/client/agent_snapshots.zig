@@ -3,15 +3,15 @@
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
-const client_application = @import("application/root.zig");
+const agents_application = @import("application/agents/root.zig");
 const client_model = @import("model.zig");
 const notifications = @import("../notifications/root.zig");
 const notification_flow = @import("notifications.zig");
 const sidebar_animations = @import("sidebar_animations.zig");
 
 const Client = @import("client.zig");
-const agent_snapshot = client_application.agent_snapshot;
-const agent_snapshot_delivery = client_application.agent_snapshot_delivery;
+const agent_snapshot = agents_application.agent_snapshot;
+const agent_snapshot_delivery = agents_application.agent_snapshot_delivery;
 const schema = core.schema;
 
 /// Maps one validated wire view into bounded agent inputs and synchronizes

@@ -1,12 +1,12 @@
 //! Detaches every runtime pane attachment owned by one client.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const session_application = @import("application/session/root.zig");
 
 const Client = @import("client.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
-const client_detachment = client_application.client_detachment;
+const client_detachment = session_application.client_detachment;
 const schema = core.schema;
 
 /// Detaches every tab in stable client order before the event loop exits.

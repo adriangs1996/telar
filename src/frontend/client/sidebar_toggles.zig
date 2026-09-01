@@ -1,11 +1,11 @@
 //! Wires committed sidebar state to disposable client resources.
 
-const client_application = @import("application/root.zig");
+const notifications_application = @import("application/notifications/root.zig");
 const client_model = @import("model.zig");
 const sidebar_projection = @import("sidebar_projection.zig");
 
 const Client = @import("client.zig");
-const toggle_sidebar = client_application.toggle_sidebar;
+const toggle_sidebar = notifications_application.toggle_sidebar;
 
 /// Wires sidebar toggling to view, graphics and pane geometry resources.
 ///

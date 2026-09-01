@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
 const notification_capability = @import("../notifications/root.zig");
-const client_application = @import("application/root.zig");
+const notifications_application = @import("application/notifications/root.zig");
 const client_clock = @import("clock.zig");
 const client_model = @import("model.zig");
 const notification_timers = @import("notification_timers.zig");
@@ -14,7 +14,7 @@ const workspace_handoffs = @import("workspace_handoffs.zig");
 
 const Client = @import("client.zig");
 const action = input_capability.action;
-const notification_use_cases = client_application.notifications;
+const notification_use_cases = notifications_application.notifications;
 const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
 

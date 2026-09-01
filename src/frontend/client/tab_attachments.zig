@@ -1,7 +1,7 @@
 //! Adapts tab attachment retirement to transport, requests and graphics.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_pastes = @import("pane_pastes.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
@@ -9,7 +9,7 @@ const request_lifecycle = @import("request_lifecycle.zig");
 const Client = @import("client.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
-const tab_attachment_retirement = client_application.tab_attachment_retirement;
+const tab_attachment_retirement = tabs_application.tab_attachment_retirement;
 
 /// Finishes a captured paste, clears reported focus and then detaches every
 /// attached or in-flight pane in protocol order.

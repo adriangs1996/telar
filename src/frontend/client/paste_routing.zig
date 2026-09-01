@@ -1,11 +1,11 @@
 //! Wires streamed host paste ownership to prompt and pane paste use cases.
 
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const name_prompts = @import("name_prompts.zig");
 const pane_pastes = @import("pane_pastes.zig");
 
 const Client = @import("client.zig");
-const paste_routing = client_application.paste_routing;
+const paste_routing = input_application.paste_routing;
 
 pub const Outcome = paste_routing.Outcome;
 

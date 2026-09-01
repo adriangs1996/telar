@@ -1,7 +1,7 @@
 //! Wires semantic view interactions to existing client use cases.
 
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const agent_navigation = @import("agent_navigation.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("notifications.zig");
@@ -13,7 +13,7 @@ const workspace_handoffs = @import("workspace_handoffs.zig");
 
 const Client = @import("client.zig");
 const multiplexer = workspace_capability.multiplexer;
-const view_interaction = client_application.view_interaction;
+const view_interaction = input_application.view_interaction;
 
 pub const Outcome = view_interaction.Outcome;
 

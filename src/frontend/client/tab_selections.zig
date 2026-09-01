@@ -1,7 +1,7 @@
 //! Wires semantic tab selection to one client's disposable resources.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
@@ -11,8 +11,8 @@ const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("client.zig");
 const schema = core.schema;
-const select_tab = client_application.select_tab;
-const tab_selection_delivery = client_application.tab_selection_delivery;
+const select_tab = tabs_application.select_tab;
+const tab_selection_delivery = tabs_application.tab_selection_delivery;
 
 pub const Target = select_tab.Target;
 

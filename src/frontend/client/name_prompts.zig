@@ -4,7 +4,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const prompt_state = @import("name_prompt.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const tab_renames = @import("tab_renames.zig");
@@ -12,8 +12,8 @@ const workspace_creations = @import("workspace_creations.zig");
 const workspace_renames = @import("workspace_renames.zig");
 
 const Client = @import("client.zig");
-const name_prompt = client_application.name_prompt;
-const name_prompt_opening = client_application.name_prompt_opening;
+const name_prompt = input_application.name_prompt;
+const name_prompt_opening = input_application.name_prompt_opening;
 const schema = core.schema;
 const term = presentation.screen;
 

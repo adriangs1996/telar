@@ -1,14 +1,14 @@
 //! Adapts user pane input to the client outbox and diagnostics.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const pane_viewports = @import("pane_viewports.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
-const pane_input = client_application.pane_input;
-const pane_paste = client_application.pane_paste;
+const pane_input = input_application.pane_input;
+const pane_paste = input_application.pane_paste;
 const runtime_transport = @import("runtime_transport.zig");
 
 /// Delivers one user-input command through the application boundary.

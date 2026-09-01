@@ -3,12 +3,12 @@
 const std = @import("std");
 const core = @import("telar-core");
 const platform = @import("../platform/root.zig");
-const client_application = @import("application/root.zig");
+const host_application = @import("application/host/root.zig");
 const client_model = @import("model.zig");
 const host_resources = @import("host_resources.zig");
 
 const Client = @import("client.zig");
-const host_resize = client_application.host_resize;
+const host_resize = host_application.host_resize;
 const schema = core.schema;
 
 const pixel_queries = "\x1b[14t\x1b[16t";

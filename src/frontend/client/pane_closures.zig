@@ -1,15 +1,15 @@
 //! Wires pane closure and exit use cases to one disposable client.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
-const close_pane = client_application.close_pane;
-const pane_closure_delivery = client_application.pane_closure_delivery;
+const close_pane = panes_application.close_pane;
+const pane_closure_delivery = panes_application.pane_closure_delivery;
 const schema = core.schema;
 
 /// Wires an interactive close request to the client request tracker and wire.

@@ -1,7 +1,7 @@
 //! Adapts asynchronous configuration reloads to one client's application state.
 
 const std = @import("std");
-const client_application = @import("application/root.zig");
+const configuration_application = @import("application/configuration/root.zig");
 const client_model = @import("model.zig");
 const notifications = @import("../notifications/root.zig");
 const notification_flow = @import("notifications.zig");
@@ -10,8 +10,8 @@ const sidebar_projection = @import("sidebar_projection.zig");
 
 const Client = @import("client.zig");
 const reload_worker = @import("config_reload.zig");
-const config_use_case = client_application.config_reload;
-const config_delivery = client_application.config_reload_delivery;
+const config_use_case = configuration_application.config_reload;
+const config_delivery = configuration_application.config_reload_delivery;
 
 pub const Adoption = reload_worker.Adoption;
 

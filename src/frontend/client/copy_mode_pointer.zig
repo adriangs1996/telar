@@ -3,11 +3,11 @@
 const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const copy_modes = @import("copy_modes.zig");
 
 const Client = @import("client.zig");
-const copy_mode_pointer = client_application.copy_mode_pointer;
+const copy_mode_pointer = input_application.copy_mode_pointer;
 const multiplexer = workspace_capability.multiplexer;
 const term = presentation.screen;
 const ui = core.ui;

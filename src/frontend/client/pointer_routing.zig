@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 const view_interactions = @import("view_interactions.zig");
@@ -12,7 +12,7 @@ const view_interactions = @import("view_interactions.zig");
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
 const multiplexer = workspace_capability.multiplexer;
-const pointer_routing = client_application.pointer_routing;
+const pointer_routing = input_application.pointer_routing;
 const term = presentation.screen;
 
 pub const Outcome = pointer_routing.Outcome;

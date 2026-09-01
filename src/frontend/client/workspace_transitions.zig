@@ -1,16 +1,17 @@
 //! Adapts committed workspace transitions to navigation and client ports.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
+const workspaces_application = @import("application/workspaces/root.zig");
 const client_model = @import("model.zig");
 const host_inputs = @import("host_inputs.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
-const pane_open_delivery = client_application.pane_open_delivery;
-const workspace_arrival_planning = client_application.workspace_arrival_planning;
-const workspace_transition_delivery = client_application.workspace_transition_delivery;
+const pane_open_delivery = panes_application.pane_open_delivery;
+const workspace_arrival_planning = workspaces_application.workspace_arrival_planning;
+const workspace_transition_delivery = workspaces_application.workspace_transition_delivery;
 const schema = core.schema;
 
 /// Builds a workspace arrival from the runtime-selected root and an exact

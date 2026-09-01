@@ -1,14 +1,14 @@
 //! Adapts runtime TLS interception state to the client application boundary.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const agents_application = @import("application/agents/root.zig");
 const client_model = @import("model.zig");
 const notifications = @import("../notifications/root.zig");
 
 const Client = @import("client.zig");
 const notification_flow = @import("notifications.zig");
-const proxy_status = client_application.proxy_status;
-const proxy_status_delivery = client_application.proxy_status_delivery;
+const proxy_status = agents_application.proxy_status;
+const proxy_status_delivery = agents_application.proxy_status_delivery;
 const schema = core.schema;
 
 /// Commits one decoded proxy state and announces only semantic transitions.

@@ -1,13 +1,13 @@
 //! Connects the sidebar animation use case to the client timer.
 
 const std = @import("std");
-const client_application = @import("application/root.zig");
+const notifications_application = @import("application/notifications/root.zig");
 const client_clock = @import("clock.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
 const Io = std.Io;
-const sidebar_animation = client_application.sidebar_animation;
+const sidebar_animation = notifications_application.sidebar_animation;
 
 const interval_ns = 120 * std.time.ns_per_ms;
 

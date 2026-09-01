@@ -1,7 +1,7 @@
 //! Wires host-key ownership policy to existing client input use cases.
 
 const input_capability = @import("../input/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const clipboard_images = @import("clipboard_images.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
@@ -9,7 +9,7 @@ const pane_inputs = @import("pane_inputs.zig");
 
 const Client = @import("client.zig");
 const host_input = input_capability.host;
-const key_routing = client_application.key_routing;
+const key_routing = input_application.key_routing;
 
 pub const Command = key_routing.Command;
 pub const Outcome = key_routing.Outcome;

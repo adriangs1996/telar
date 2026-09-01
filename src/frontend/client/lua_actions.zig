@@ -2,12 +2,12 @@
 
 const lua_config = @import("../config/root.zig");
 const input = @import("../input/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 
 const Client = @import("client.zig");
 const client_actions = @import("actions.zig");
 const plugin_actions = @import("plugin_actions.zig");
-const lua_action = client_application.lua_action;
+const lua_action = input_application.lua_action;
 
 pub const Command = lua_action.Command;
 pub const Outcome = lua_action.Outcome;

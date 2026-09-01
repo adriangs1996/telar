@@ -3,13 +3,13 @@
 const std = @import("std");
 const graphics = @import("../graphics/root.zig");
 const presentation = @import("../presentation/root.zig");
-const client_application = @import("application/root.zig");
+const host_application = @import("application/host/root.zig");
 const client_clock = @import("clock.zig");
 const client_model = @import("model.zig");
 const host_resources = @import("host_resources.zig");
 
 const Client = @import("client.zig");
-const host_capability = client_application.host_capabilities;
+const host_capability = host_application.host_capabilities;
 const kitty = graphics.kitty;
 const term = presentation.screen;
 

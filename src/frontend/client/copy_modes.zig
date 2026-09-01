@@ -2,11 +2,11 @@
 
 const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const pane_viewports = @import("pane_viewports.zig");
 
 const Client = @import("client.zig");
-const copy_mode = client_application.copy_mode;
+const copy_mode = input_application.copy_mode;
 const keybind = input_capability.keybind;
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;

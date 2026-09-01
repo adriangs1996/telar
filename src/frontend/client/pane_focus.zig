@@ -1,12 +1,12 @@
 //! Wires semantic pane focus to active-pane resource delivery.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 
 const Client = @import("client.zig");
-const focus_pane = client_application.focus_pane;
+const focus_pane = panes_application.focus_pane;
 const ui = core.ui;
 
 pub const Target = focus_pane.Target;

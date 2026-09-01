@@ -1,11 +1,11 @@
 //! Adapts pane-graphics reconciliation to the physical Kitty store and IPC.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 
 const Client = @import("client.zig");
 const diagnostics = core.diagnostics;
-const pane_graphics = client_application.pane_graphics;
+const pane_graphics = panes_application.pane_graphics;
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
 

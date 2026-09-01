@@ -2,7 +2,9 @@
 
 const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
+const workspaces_application = @import("application/workspaces/root.zig");
 const client_model = @import("model.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_pastes = @import("pane_pastes.zig");
@@ -13,12 +15,12 @@ const workspace_transitions = @import("workspace_transitions.zig");
 
 const Client = @import("client.zig");
 const multiplexer = workspace_capability.multiplexer;
-const pane_open_delivery = client_application.pane_open_delivery;
+const pane_open_delivery = panes_application.pane_open_delivery;
 const schema = core.schema;
-const tab_snapshot_recovery = client_application.tab_snapshot_recovery;
-const workspace_handoff = client_application.workspace_handoff;
-const workspace_handoff_admission = client_application.workspace_handoff_admission;
-const workspace_handoff_targeting = client_application.workspace_handoff_targeting;
+const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
+const workspace_handoff = workspaces_application.workspace_handoff;
+const workspace_handoff_admission = workspaces_application.workspace_handoff_admission;
+const workspace_handoff_targeting = workspaces_application.workspace_handoff_targeting;
 
 /// Resolves one workspace selection from the committed list and requests its
 /// handoff only when the target is known and actionable.

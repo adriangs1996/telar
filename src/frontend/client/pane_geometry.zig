@@ -2,15 +2,15 @@
 
 const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 const client_model = @import("model.zig");
 const runtime_transport = @import("runtime_transport.zig");
 
 const Client = @import("client.zig");
-const pane_geometry_delivery = client_application.pane_geometry_delivery;
-const resize_pane = client_application.resize_pane;
+const pane_geometry_delivery = panes_application.pane_geometry_delivery;
+const resize_pane = panes_application.resize_pane;
 const multiplexer = workspace_capability.multiplexer;
-const toggle_pane_fullscreen = client_application.toggle_pane_fullscreen;
+const toggle_pane_fullscreen = panes_application.toggle_pane_fullscreen;
 const ui = core.ui;
 
 /// Offers the current visible size of every attached pane to the runtime.

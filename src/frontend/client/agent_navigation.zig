@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
-const client_application = @import("application/root.zig");
+const agents_application = @import("application/agents/root.zig");
 const client_model = @import("model.zig");
 const pane_focus = @import("pane_focus.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
@@ -10,7 +10,7 @@ const tab_selections = @import("tab_selections.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
 
 const Client = @import("client.zig");
-const agent_navigation = client_application.agent_navigation;
+const agent_navigation = agents_application.agent_navigation;
 const schema = core.schema;
 
 pub const Outcome = agent_navigation.Outcome;

@@ -1,7 +1,7 @@
 //! Wires pane-split application ports to one disposable client.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 const client_model = @import("model.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
@@ -10,8 +10,8 @@ const request_lifecycle = @import("request_lifecycle.zig");
 const Client = @import("client.zig");
 const runtime_transport = @import("runtime_transport.zig");
 const schema = core.schema;
-const split_pane = client_application.split_pane;
-const split_confirmation_delivery = client_application.pane_split_confirmation_delivery;
+const split_pane = panes_application.split_pane;
+const split_confirmation_delivery = panes_application.pane_split_confirmation_delivery;
 
 /// Wires an interactive split request to provisional resize and delivery.
 ///

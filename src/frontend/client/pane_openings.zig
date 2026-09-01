@@ -2,7 +2,7 @@
 //! requested them and delivers one translated confirmation.
 
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
 
 const Client = @import("client.zig");
 const pane_attachments = @import("pane_attachments.zig");
@@ -10,7 +10,7 @@ const pane_splits = @import("pane_splits.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const workspace_creations = @import("workspace_creations.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
-const pane_open_delivery = client_application.pane_open_delivery;
+const pane_open_delivery = panes_application.pane_open_delivery;
 const schema = core.schema;
 
 pub const Outcome = pane_open_delivery.Outcome;

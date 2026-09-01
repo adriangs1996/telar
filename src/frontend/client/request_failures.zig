@@ -3,7 +3,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const session_application = @import("application/session/root.zig");
 const notifications = @import("../notifications/root.zig");
 const client_requests = @import("requests.zig");
 
@@ -14,7 +14,7 @@ const pane_splits = @import("pane_splits.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const tab_closures = @import("tab_closures.zig");
 const workspace_handoffs = @import("workspace_handoffs.zig");
-const request_failure = client_application.request_failure;
+const request_failure = session_application.request_failure;
 const schema = core.schema;
 
 /// Consumes one correlated continuation and applies its failure policy. Fatal

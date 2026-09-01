@@ -5,14 +5,14 @@ const core = @import("telar-core");
 const input_capability = @import("../input/root.zig");
 const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_viewports = @import("pane_viewports.zig");
 
 const Client = @import("client.zig");
 const mouse_protocol = input_capability.mouse_protocol;
 const multiplexer = workspace_capability.multiplexer;
-const pane_mouse = client_application.pane_mouse;
+const pane_mouse = input_application.pane_mouse;
 const term = presentation.screen;
 const ui = core.ui;
 

@@ -1,10 +1,10 @@
 //! Adapts one model-owned pane paste to the existing pane-input boundary.
 
-const client_application = @import("application/root.zig");
+const input_application = @import("application/input/root.zig");
 const pane_inputs = @import("pane_inputs.zig");
 
 const Client = @import("client.zig");
-const pane_paste = client_application.pane_paste;
+const pane_paste = input_application.pane_paste;
 
 pub const Outcome = pane_paste.Outcome;
 

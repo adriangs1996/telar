@@ -2,11 +2,11 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_application = @import("application/root.zig");
+const tabs_application = @import("application/tabs/root.zig");
 const client_model = @import("model.zig");
 
 const Client = @import("client.zig");
-const rename_tab = client_application.rename_tab;
+const rename_tab = tabs_application.rename_tab;
 const request_lifecycle = @import("request_lifecycle.zig");
 const schema = core.schema;
 

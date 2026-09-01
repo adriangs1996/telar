@@ -6,11 +6,11 @@ const core = @import("telar-core");
 const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
-const client_application = @import("application/root.zig");
+const presentation_application = @import("application/presentation/root.zig");
 const presentation_projection = @import("presentation_projection.zig");
 const runtime_transport = @import("runtime_transport.zig");
 
-const presentation_delivery = client_application.presentation_delivery;
+const presentation_delivery = presentation_application.presentation_delivery;
 
 /// Publishes every revision the presenter uses after one client event commits.
 ///

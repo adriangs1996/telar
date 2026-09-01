@@ -2,17 +2,18 @@
 
 const core = @import("telar-core");
 const workspace_capability = @import("../workspace/root.zig");
-const client_application = @import("application/root.zig");
+const panes_application = @import("application/panes/root.zig");
+const workspaces_application = @import("application/workspaces/root.zig");
 const client_model = @import("model.zig");
 const request_lifecycle = @import("request_lifecycle.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 
 const Client = @import("client.zig");
-const create_workspace = client_application.create_workspace;
+const create_workspace = workspaces_application.create_workspace;
 const multiplexer = workspace_capability.multiplexer;
-const pane_open_delivery = client_application.pane_open_delivery;
+const pane_open_delivery = panes_application.pane_open_delivery;
 const schema = core.schema;
-const workspace_creation_delivery = client_application.workspace_creation_delivery;
+const workspace_creation_delivery = workspaces_application.workspace_creation_delivery;
 
 /// Wires a creation prompt to the client's continuation tracker and owned
 /// outbox storage.
