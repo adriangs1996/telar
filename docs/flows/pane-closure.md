@@ -83,10 +83,11 @@ delegates copy, paste, reported-focus and graphics cleanup to
 `ReleasePaneResourcesHandler`. Report release is silent because the
 authoritative exit means no child remains to receive focus-out.
 Active-tab retirement then synchronizes the new focused pane and re-offers
-attached sizes using the workbench produced by resource synchronization.
-Inactive and stale exits do not touch active focus or geometry. The
-`pane_closures` adapter supplies only request-lifecycle, graphics, focus and
-runtime-resize ports.
+attached sizes using a workbench sampled through a separate geometry port only
+when the tab remains nonempty. Resource synchronization neither chooses nor
+returns that area. Inactive and stale exits do not touch active focus or
+geometry. The `pane_closures` adapter supplies only request-lifecycle,
+graphics, focus, area and runtime-resize ports.
 
 The handler neither invalidates the view nor requests a draw. The presenter
 observes the model revision independently and folds an active retirement into
@@ -117,8 +118,8 @@ coalescing outbox.
 - `frontend/client/application/close_pane.zig` checks request gating, pure
   planning, commit-before-delivery and committed-delivery failure.
 - `frontend/client/application/pane_closure_delivery.zig` checks exact active,
-  inactive and stale commits, effect order, tab-local ABA rejection and partial
-  failure semantics.
+  inactive and stale commits, command-before-area ordering, empty-tab area
+  suppression, tab-local ABA rejection and partial failure semantics.
 - `frontend/client/pane_closures.zig` translates wire events and implements the
   delivery ports.
 - `frontend/client/model.zig` checks active, inactive and repeated retirement

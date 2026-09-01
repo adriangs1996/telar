@@ -17,7 +17,8 @@ pub const Effects = struct {
     complete_close: *const fn (*anyopaque, schema.PaneId) void,
     clear_pane_graphics: *const fn (*anyopaque, schema.PaneId) void,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
-    synchronize_active_resources: *const fn (*anyopaque) anyerror!core.ui.Rect,
+    synchronize_active_resources: *const fn (*anyopaque) anyerror!void,
+    active_geometry_area: *const fn (*anyopaque) core.ui.Rect,
 };
 
 pub const DeliverPaneClosureHandler = struct {
@@ -59,12 +60,13 @@ pub const DeliverPaneClosureHandler = struct {
         }
 
         handler.effects.invalidate_graphics_placements(handler.effects.context);
-        const area = try handler.effects.synchronize_active_resources(handler.effects.context);
+        try handler.effects.synchronize_active_resources(handler.effects.context);
         if (retirement.tab_empty) {
             return;
         }
 
         const tab = try handler.exactTab(retirement.location);
+        const area = handler.effects.active_geometry_area(handler.effects.context);
         var offer_geometry: pane_geometry_delivery.OfferPaneGeometryHandler = .{
             .effects = handler.geometry_effects,
         };
@@ -119,6 +121,7 @@ const Event = union(enum) {
     clear_graphics: schema.PaneId,
     invalidate_placements,
     synchronize_active_resources,
+    active_geometry_area,
     resize: schema.PaneId,
 };
 
@@ -191,7 +194,7 @@ const EffectsCapture = struct {
     events: [8]Event = undefined,
     event_count: usize = 0,
     committed_state_observed: bool = true,
-    synchronized_area: core.ui.Rect = .{ .w = 40, .h = 10 },
+    geometry_area: core.ui.Rect = .{ .w = 40, .h = 10 },
     delivered_resize: ?schema.PaneResize = null,
     failure: Failure = .none,
 
@@ -203,6 +206,7 @@ const EffectsCapture = struct {
             .clear_pane_graphics = clearPaneGraphics,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .synchronize_active_resources = synchronizeActiveResources,
+            .active_geometry_area = activeGeometryArea,
         };
     }
 
@@ -233,14 +237,19 @@ const EffectsCapture = struct {
         capture.append(.invalidate_placements);
     }
 
-    fn synchronizeActiveResources(context: *anyopaque) !core.ui.Rect {
+    fn synchronizeActiveResources(context: *anyopaque) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         capture.append(.synchronize_active_resources);
         if (capture.failure == .active_resources) {
             return error.ActiveResourceSynchronizationFailed;
         }
+    }
 
-        return capture.synchronized_area;
+    fn activeGeometryArea(context: *anyopaque) core.ui.Rect {
+        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
+        capture.append(.active_geometry_area);
+
+        return capture.geometry_area;
     }
 
     fn deliverResize(context: *anyopaque, resize: schema.PaneResize) !void {
@@ -306,7 +315,7 @@ test "DeliverPaneClosureHandler releases an active exit before focus and geometr
     var capture: EffectsCapture = .{
         .model = testing.model,
         .exit = exit,
-        .synchronized_area = .{ .w = 30, .h = 8 },
+        .geometry_area = .{ .w = 30, .h = 8 },
     };
     var handler = deliveryHandler(&testing, &capture);
 
@@ -318,11 +327,12 @@ test "DeliverPaneClosureHandler releases an active exit before focus and geometr
         .{ .clear_graphics = testing.second },
         .invalidate_placements,
         .synchronize_active_resources,
+        .active_geometry_area,
         .{ .resize = testing.first },
     }, capture.eventSlice());
     try std.testing.expect(capture.committed_state_observed);
     try std.testing.expectEqualDeep(
-        testing.model.workspace.active().?.model.contentSize(testing.first, capture.synchronized_area).?,
+        testing.model.workspace.active().?.model.contentSize(testing.first, capture.geometry_area).?,
         capture.delivered_resize.?.size,
     );
     try std.testing.expect(!testing.model.panePasteActive());
@@ -507,6 +517,7 @@ test "DeliverPaneClosureHandler preserves cleanup across active delivery failure
         .{ .clear_graphics = resize_testing.second },
         .invalidate_placements,
         .synchronize_active_resources,
+        .active_geometry_area,
         .{ .resize = resize_testing.first },
     }, resize_capture.eventSlice());
     try std.testing.expect(resize_capture.committed_state_observed);

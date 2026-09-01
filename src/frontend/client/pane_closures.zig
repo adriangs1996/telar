@@ -88,6 +88,7 @@ fn deliverExit(context: *anyopaque, transition: client_model.PaneExit) !void {
             .clear_pane_graphics = clearPaneGraphics,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .synchronize_active_resources = synchronizeActiveResources,
+            .active_geometry_area = activeGeometryArea,
         },
     };
 
@@ -118,10 +119,14 @@ fn invalidateGraphicsPlacements(context: *anyopaque) void {
     client.graphics_store.invalidatePlacements();
 }
 
-fn synchronizeActiveResources(context: *anyopaque) !core.ui.Rect {
+fn synchronizeActiveResources(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try active_pane_resources.synchronize(client);
+}
+
+fn activeGeometryArea(context: *anyopaque) core.ui.Rect {
+    const client: *Client = @ptrCast(@alignCast(context));
 
     return client.view.workbench();
 }
