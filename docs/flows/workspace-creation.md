@@ -62,6 +62,8 @@ pane_openings.apply
         |
 DeliverPaneOpenHandler
         |
+PlanWorkspaceArrivalHandler
+        |
 ConfirmWorkspaceCreationHandler
         |
 ClientModel.replaceWorkspace
@@ -88,9 +90,10 @@ host resize cannot replace valid construction geometry with a zero-sized
 workbench while the response is in flight. `pane_openings.apply` consumes the
 correlation once, removes the request identity and translates the retained size
 with the response. `DeliverPaneOpenHandler` selects the workspace-creation
-confirmation port. The `created` flag is checked before mutation, and the
-concrete port stages a remembered layout only when its exact workspace and tab
-identity matches the runtime confirmation.
+confirmation port. `PlanWorkspaceArrivalHandler` builds the shared arrival and
+stages a remembered layout only when its exact workspace and tab identity
+matches the runtime confirmation. The `created` flag is then checked before
+mutation.
 
 `ClientModel.replaceWorkspace` captures the previous workspace, focused-pane
 bookmark, layout and bounded pane identities. The tab store constructs the new
@@ -146,6 +149,8 @@ still install the confirmed root, which keeps recovery deterministic.
   commit-before-delivery and post-commit failure behavior.
 - `src/frontend/client/application/pane_open_delivery.zig` proves
   successful-open routing, retired work and delivery failure propagation.
+- `src/frontend/client/application/workspace_arrival_planning.zig` proves
+  exact bookmark matching and shared arrival construction.
 - `src/frontend/client/application/workspace_creation_delivery.zig` proves
   exact replacement validation, release-before-activation order, empty-source
   recovery and partial failure semantics.

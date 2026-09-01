@@ -1,6 +1,5 @@
 //! Adapts committed workspace transitions to navigation and client ports.
 
-const std = @import("std");
 const core = @import("telar-core");
 const client_application = @import("application/root.zig");
 const client_model = @import("model.zig");
@@ -10,6 +9,7 @@ const request_lifecycle = @import("request_lifecycle.zig");
 
 const Client = @import("client.zig");
 const pane_open_delivery = client_application.pane_open_delivery;
+const workspace_arrival_planning = client_application.workspace_arrival_planning;
 const workspace_transition_delivery = client_application.workspace_transition_delivery;
 const schema = core.schema;
 
@@ -20,16 +20,25 @@ const schema = core.schema;
 /// const command = arrival(client, opened, requested_size);
 /// ```
 pub fn arrival(client: *Client, opened: pane_open_delivery.OpenedPane, size: schema.TerminalSize) client_model.WorkspaceArrival {
-    const saved_layout = if (client.navigation_history.find(opened.location.workspace)) |bookmark|
-        if (std.meta.eql(bookmark.location, opened.location)) bookmark.tab_layout else null
-    else
-        null;
+    const planner = arrivalPlanner(client);
+
+    return planner.execute(opened, size);
+}
+
+fn arrivalPlanner(client: *Client) workspace_arrival_planning.PlanWorkspaceArrivalHandler {
+    return .{ .bookmarks = .{
+        .context = client,
+        .find = findBookmark,
+    } };
+}
+
+fn findBookmark(context: *anyopaque, workspace: schema.WorkspaceLocation) ?workspace_arrival_planning.Bookmark {
+    const client: *Client = @ptrCast(@alignCast(context));
+    const bookmark = client.navigation_history.find(workspace) orelse return null;
 
     return .{
-        .pane_id = opened.pane_id,
-        .location = opened.location,
-        .size = size,
-        .saved_layout = saved_layout,
+        .location = bookmark.location,
+        .tab_layout = bookmark.tab_layout,
     };
 }
 
