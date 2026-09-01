@@ -22,7 +22,7 @@ P12 remote thin client (independent, largest)
 
 ---
 
-## P1. `done` agent state
+## P1. `done` agent state — done (`c01f9a3`)
 
 An agent that finished while nobody was looking is the state a user with six
 panes actually needs. herdr separates `done` (finished, not yet seen) from
@@ -61,7 +61,18 @@ wins, acknowledge flips, expiry keeps `done`); model test in
 
 ---
 
-## P2. Agent-native API, CLI and bundled skill
+## P2. Agent-native API, CLI and bundled skill — done (`afcd52a`, `e0c2e1a`)
+
+Deviations from the design below, decided while implementing:
+
+- `read_pane` and `send_pane_text` are their own requests; `prompt` is
+  `send_pane_text{mode = prompt}` and `pane send-keys` is `mode = raw`.
+- Waits poll `query_agents` every 250 ms from the CLI instead of the runtime
+  pushing snapshots to observers. No new handshake role was needed.
+- `telar pane split` is deferred: a runtime-created pane only enters a
+  client's layout through tab reconciliation, which needs its own flow.
+- `TELAR_SOCKET_PATH` is read by the CLI after `TELAR_SOCKET`; the runtime
+  still never injects `TELAR_SOCKET` into panes.
 
 This is herdr's headline feature and the place where telar's existing typed
 transport pays off most. The socket, handshake and schema fingerprint exist;
