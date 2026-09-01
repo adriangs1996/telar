@@ -1,6 +1,6 @@
 # Agent sound
 
-The runtime emits sound only when an agent moves from `working` to `ready` or
+The runtime emits sound only when an agent moves from `working` to `done` or
 `blocked`. The client checks the exact pane generation and owns every
 host-audio resource. A headless runtime never opens an audio device or starts
 a playback command.

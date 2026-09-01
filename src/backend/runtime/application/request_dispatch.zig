@@ -9,6 +9,8 @@ const launch_cwd = client_runtime.launch_cwd;
 const client_request_router = client_runtime.request_router;
 const client_session = client_runtime.session;
 const delivery_mod = @import("../delivery/root.zig");
+const acknowledge_agent_commands = @import("commands/acknowledge_agent.zig");
+const acknowledge_agent_controller = @import("../entrypoints/requests/acknowledge_agent.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
 const close_pane_commands = @import("commands/close_pane.zig");
@@ -74,6 +76,7 @@ const WorkspaceRepository = workspace_mod.Repository;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
+const AcknowledgeAgentController = acknowledge_agent_controller.Controller(*acknowledge_agent_commands.AcknowledgeAgentHandler);
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
@@ -154,6 +157,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .copy_selection = routeCopySelection,
             .show_notification = routeShowNotification,
             .update_client_layout = routeUpdateClientLayout,
+            .acknowledge_agent = routeAcknowledgeAgent,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -556,6 +560,16 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             var controller = PaneViewportController.init(&request.application.metrics, &handler);
 
             try controller.setPaneViewport(viewport);
+        }
+
+        fn routeAcknowledgeAgent(request: *ClientRequestContext, acknowledgement: schema.AcknowledgeAgent) !void {
+            var handler: acknowledge_agent_commands.AcknowledgeAgentHandler = .{
+                .agents = &request.application.model.agents,
+            };
+            var controller = AcknowledgeAgentController.init(&request.application.metrics, &handler);
+            const now_ms = Io.Timestamp.now(request.application.io, .real).toMilliseconds();
+
+            controller.acknowledgeAgent(acknowledgement, now_ms);
         }
 
         fn routeCopySelection(request: *ClientRequestContext, selection: schema.CopySelection) !void {

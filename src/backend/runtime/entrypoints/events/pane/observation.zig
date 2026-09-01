@@ -239,7 +239,7 @@ fn soundForTransition(previous: ?schema.AgentStatus, current: ?schema.AgentStatu
     }
 
     return switch (current orelse return null) {
-        .ready => .ready,
+        .ready, .done => .ready,
         .blocked => .needs_input,
         .unknown, .working, .failed => null,
     };
@@ -546,7 +546,7 @@ test "working to ready screen evidence publishes one generation-safe sound" {
     });
 
     try expectSteps(&capture, &.{ .sound, .description, .collect, .pump_clients });
-    try std.testing.expectEqual(schema.AgentStatus.ready, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(schema.AgentStatus.done, fixture.agents.projectedStatus(identity.key).?);
     try std.testing.expectEqualDeep(schema.AgentSoundNotification{
         .pane_id = identity.key.id,
         .pane_generation = identity.key.generation,
@@ -633,6 +633,7 @@ test "a stale generation cannot release a live observation borrow" {
 
 test "sounds are restricted to working-to-ready and working-to-blocked transitions" {
     try std.testing.expectEqual(schema.AgentSound.ready, soundForTransition(.working, .ready).?);
+    try std.testing.expectEqual(schema.AgentSound.ready, soundForTransition(.working, .done).?);
     try std.testing.expectEqual(schema.AgentSound.needs_input, soundForTransition(.working, .blocked).?);
     try std.testing.expect(soundForTransition(null, .ready) == null);
     try std.testing.expect(soundForTransition(.ready, .ready) == null);

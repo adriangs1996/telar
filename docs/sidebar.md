@@ -137,7 +137,7 @@ sidebar scroll, invalidates chrome and renders the latest snapshot. Several
 runtime revisions inside one frame interval therefore fold into one projection.
 
 Only status changes for identities present in the previous revision can emit
-an alert. Transitions to `blocked`, `ready` and `failed` are actionable, and
+an alert. Transitions to `blocked`, `done` and `failed` are actionable, and
 the use case caps them to the notification center's fixed capacity. Agent
 sounds remain separate runtime decisions; the client accepts a sound only
 when its exact pane generation exists in `ClientModel`.

@@ -76,6 +76,9 @@ process: ?Evidence = null,
 proxy: ProxyState = .{},
 screen: ?Evidence = null,
 title: Title = .{},
+/// False from a completed turn until a client acknowledges it; the projection
+/// reports `done` instead of `ready` while unseen.
+seen: bool = true,
 projected: schema.AgentSnapshotEntry,
 
 /// Creates the candidate aggregate for one exact pane generation.
@@ -313,7 +316,7 @@ pub fn reproject(agent: *Agent, context: ProjectionContext) ProjectionResult {
         .process_id = agent.agent_process_id orelse agent.process_id,
         .session_id = agent.session_id,
         .provider = provider_value,
-        .status = evidence.status,
+        .status = agent.visibleStatus(previous.status, evidence.status),
         .source = evidence.source,
         .authority = agent.authority,
         .confidence = evidence.confidence,
@@ -353,6 +356,23 @@ pub fn snapshot(agent: *const Agent) schema.AgentSnapshotEntry {
 /// ```
 pub fn projectedStatus(agent: *const Agent) schema.AgentStatus {
     return agent.projected.status;
+}
+
+/// Marks an unseen completion as seen. The caller reprojects so `done`
+/// becomes `ready`.
+///
+/// ```zig
+/// if (agent.acknowledge()) {
+///     publishProjection();
+/// }
+/// ```
+pub fn acknowledge(agent: *Agent) bool {
+    if (agent.seen) {
+        return false;
+    }
+
+    agent.seen = true;
+    return true;
 }
 
 /// Captures the first submitted request for this identified agent.
@@ -566,6 +586,22 @@ fn chooseEvidence(agent: *const Agent, now_ms: i64) ?Evidence {
     }
 
     return process;
+}
+
+/// A turn that finished while the previous projection was `working` stays
+/// `done` until acknowledged. Any other evidence status ends the unseen
+/// window so the next completion is reported again.
+fn visibleStatus(agent: *Agent, previous: schema.AgentStatus, current: schema.AgentStatus) schema.AgentStatus {
+    if (current != .ready) {
+        agent.seen = true;
+        return current;
+    }
+
+    if (previous == .working) {
+        agent.seen = false;
+    }
+
+    return if (agent.seen) .ready else .done;
 }
 
 fn projectionProvider(agent: *const Agent, evidence: Evidence) schema.AgentProvider {

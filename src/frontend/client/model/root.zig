@@ -149,6 +149,9 @@ pub const Model = struct {
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
     agent_revision: u64 = 0,
+    /// Operational state: the focused agent whose `done` status this client
+    /// already acknowledged. It carries no presentation revision.
+    acknowledged_agent: ?agents.AgentKey = null,
     sidebar_animation_frame: u8 = 0,
     sidebar_animation_revision: u64 = 0,
     proxy_tls_active: bool = false,
@@ -1088,6 +1091,36 @@ pub const Model = struct {
     /// ```
     pub fn knowsAgent(model: *const Model, key: agents.AgentKey) bool {
         return model.agent_snapshot.find(key) != null;
+    }
+
+    /// Returns the focused agent that finished unseen, once per completion,
+    /// so the client can acknowledge it. Focus and the snapshot decide; no
+    /// version advances.
+    ///
+    /// ```zig
+    /// const key = model.takeAgentAcknowledgement() orelse return;
+    /// ```
+    pub fn takeAgentAcknowledgement(model: *Model) ?agents.AgentKey {
+        const active = model.workspace.activeConst() orelse return null;
+        const pane_id = active.model.layout.focused() orelse return null;
+        const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
+        const agent = model.agent_snapshot.find(key).?;
+        const already = if (model.acknowledged_agent) |acknowledged| std.meta.eql(acknowledged, key) else false;
+
+        if (agent.status != .done) {
+            if (already) {
+                model.acknowledged_agent = null;
+            }
+
+            return null;
+        }
+
+        if (already) {
+            return null;
+        }
+
+        model.acknowledged_agent = key;
+        return key;
     }
 
     /// Reports whether the latest runtime state requires sidebar animation.

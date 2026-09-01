@@ -164,7 +164,7 @@ test "timer failure preserves projections and stops periodic maintenance" {
     try coordinator.handle(error.TimerFailed);
 
     try expectSteps(&capture, &.{});
-    try std.testing.expectEqual(schema.AgentStatus.ready, agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(schema.AgentStatus.done, agents.projectedStatus(identity.key).?);
 }
 
 test "rearm failure propagates before reading the clock or expiring evidence" {
@@ -181,7 +181,7 @@ test "rearm failure propagates before reading the clock or expiring evidence" {
     try std.testing.expectError(error.SchedulerUnavailable, coordinator.handle({}));
 
     try expectSteps(&capture, &.{.rearm_tick});
-    try std.testing.expectEqual(schema.AgentStatus.ready, agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(schema.AgentStatus.done, agents.projectedStatus(identity.key).?);
 }
 
 test "successful maintenance pumps an unchanged projection" {
@@ -195,7 +195,7 @@ test "successful maintenance pumps an unchanged projection" {
 
     try expectSteps(&capture, &.{ .rearm_tick, .clock, .pump_clients });
     try std.testing.expect(capture.pump_called);
-    try std.testing.expectEqual(schema.AgentStatus.ready, capture.pump_saw_status.?);
+    try std.testing.expectEqual(schema.AgentStatus.done, capture.pump_saw_status.?);
 }
 
 test "expired evidence is removed before clients are pumped" {

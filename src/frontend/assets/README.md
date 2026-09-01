@@ -14,15 +14,15 @@ contains the complete FreeType License and GPLv2 alternative.
 Text shaping links HarfBuzz 11.0.0 from the source archive pinned in
 `build.zig.zon`. Its complete Old MIT notice is in `HarfBuzz-COPYING.txt`.
 
-`TelarNerdIcons-Regular.ttf` is a 6,124-byte subset of
+`TelarNerdIcons-Regular.ttf` is a 6,340-byte subset of
 `SymbolsNerdFontMono-Regular.ttf` from Nerd Fonts v3.5.1. It contains only the
-22 icon glyphs used by the embedded `nerd-font` icon theme. The source release
+23 icon glyphs used by the embedded `nerd-font` icon theme. The source release
 archive SHA-256 is
 `01172f37db8543edb102e5cb5c64101c9f4686630804d49b419aa07b23a69996`;
 the source TTF SHA-256 is
 `fe471e538392f51910faab985fa8e192a39dd3426125edd15b71b3680df0e749`;
 and the subset SHA-256 is
-`4757fc5e0574a135354a91b7c81fc8f58b68c37efcd978f404b714d561650539`.
+`57ff2655b3504721c5147804b02f04c70b1abbec0b715f4f6f24d0e4aea98d0e`.
 `NerdFonts-LICENSE.txt` and `NerdFonts-README.md` record the license and
 upstream attribution shipped in the release archive.
 
@@ -31,7 +31,7 @@ The subset is reproducible with fonttools:
 ```sh
 SOURCE_DATE_EPOCH=1787335283 pyftsubset SymbolsNerdFontMono-Regular.ttf \
   --output-file=TelarNerdIcons-Regular.ttf \
-  --unicodes=U+EA76,U+EACD,U+EB53,U+F4BC,U+EFC5,U+F240-F244,U+EC20,U+EA85,U+EB32,U+EE06-EE09,U+EA6C,U+EBB3,U+EA87,U+EAB5-EAB6 \
+  --unicodes=U+EA76,U+EACD,U+EB53,U+F4BC,U+EFC5,U+F240-F244,U+EC20,U+EA85,U+EB32,U+EE06-EE09,U+EA6C,U+EBB3,U+EBA4,U+EA87,U+EAB5-EAB6 \
   --layout-features='*' --name-IDs='*' --name-legacy \
   --name-languages='*' --notdef-glyph --recommended-glyphs
 ```

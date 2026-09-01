@@ -9,6 +9,7 @@ const types = @import("types.zig");
 
 pub const description = @import("description.zig");
 pub const Tracker = tracker.Tracker;
+pub const AcknowledgeResult = tracker.AcknowledgeResult;
 
 pub const max_records = types.max_records;
 pub const ScreenStatus = types.ScreenStatus;

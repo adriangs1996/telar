@@ -82,9 +82,9 @@ pub const DeliverAgentSnapshotHandler = struct {
 fn alertInput(change: client_model.AgentStatusChange, message_buffer: *[64]u8) ?notification_capability.Input {
     const level: notification_capability.Level = switch (change.current) {
         .blocked => .warning,
-        .ready => .success,
+        .done => .success,
         .failed => .failure,
-        .unknown, .working => return null,
+        .unknown, .working, .ready => return null,
     };
     const message = std.fmt.bufPrint(
         message_buffer,
@@ -96,9 +96,9 @@ fn alertInput(change: client_model.AgentStatusChange, message_buffer: *[64]u8) ?
         .level = level,
         .title = switch (change.current) {
             .blocked => "Agent needs input",
-            .ready => "Agent ready",
+            .done => "Agent done",
             .failed => "Agent failed",
-            .unknown, .working => unreachable,
+            .unknown, .working, .ready => unreachable,
         },
         .message = message,
         .target = .{ .focus_pane = change.key.pane_id },
@@ -120,6 +120,7 @@ fn providerName(provider: schema.AgentProvider) []const u8 {
 fn statusName(status: schema.AgentStatus) []const u8 {
     return switch (status) {
         .blocked => "waiting for input",
+        .done => "done",
         .ready => "ready",
         .failed => "failed",
         .unknown, .working => "active",
@@ -243,8 +244,8 @@ fn expectedAlert(input: notification_capability.Input, index: usize) bool {
             std.meta.eql(input.target, notification_capability.Target{ .focus_pane = @enumFromInt(1) }) and
             input.duration_ns == notification_capability.default_duration_ns,
         1 => input.level == .success and
-            std.mem.eql(u8, input.title, "Agent ready") and
-            std.mem.eql(u8, input.message, "Claude in pane 2 is ready") and
+            std.mem.eql(u8, input.title, "Agent done") and
+            std.mem.eql(u8, input.message, "Claude in pane 2 is done") and
             std.meta.eql(input.target, notification_capability.Target{ .focus_pane = @enumFromInt(2) }) and
             input.duration_ns == notification_capability.default_duration_ns,
         2 => input.level == .failure and
@@ -269,7 +270,7 @@ test "DeliverAgentSnapshotHandler orders attachments bounded alerts and animatio
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try commitStatuses(&model, 1, &.{ .working, .working, .working, .working, .working, .working });
-    const commit = try commitStatuses(&model, 2, &.{ .blocked, .ready, .failed, .unknown, .blocked, .ready });
+    const commit = try commitStatuses(&model, 2, &.{ .blocked, .done, .failed, .unknown, .blocked, .done });
     var capture: Capture = .{ .model = &model, .commit = &commit };
     var handler = deliveryHandler(&model, &capture);
 
@@ -309,7 +310,7 @@ test "DeliverAgentSnapshotHandler rejects stale commits before effects" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try commitStatuses(&model, 1, &.{ .working, .working });
-    const commit = try commitStatuses(&model, 2, &.{ .blocked, .ready });
+    const commit = try commitStatuses(&model, 2, &.{ .blocked, .done });
     var capture: Capture = .{ .model = &model, .commit = &commit };
     var handler = deliveryHandler(&model, &capture);
 
@@ -353,7 +354,7 @@ test "DeliverAgentSnapshotHandler stops after each failed delivery stage" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try commitStatuses(&model, 1, &.{ .working, .working, .working, .working, .working, .working });
-    const commit = try commitStatuses(&model, 2, &.{ .blocked, .ready, .failed, .unknown, .blocked, .ready });
+    const commit = try commitStatuses(&model, 2, &.{ .blocked, .done, .failed, .unknown, .blocked, .done });
 
     var attachments: Capture = .{ .model = &model, .commit = &commit, .failure = .attachments };
     var attachments_handler = deliveryHandler(&model, &attachments);

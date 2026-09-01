@@ -135,6 +135,7 @@ pub const ClientTag = enum(u8) {
     copy_selection = 0x18,
     show_notification = 0x19,
     update_client_layout = 0x1a,
+    acknowledge_agent = 0x1b,
 };
 
 pub const ServerTag = enum(u8) {
@@ -386,6 +387,13 @@ pub const SetPaneViewport = struct {
     offset: u32,
 };
 
+/// Marks one exact agent generation as seen so a `done` status returns to
+/// `ready`. A stale generation is ignored by the runtime.
+pub const AcknowledgeAgent = struct {
+    pane_id: PaneId,
+    pane_generation: u64,
+};
+
 /// Selection coordinates use the full screen history, not viewport rows.
 pub const CopySelection = struct {
     pane_id: PaneId,
@@ -556,6 +564,7 @@ pub const ClientMessage = union(enum) {
     set_pane_viewport: SetPaneViewport,
     copy_selection: CopySelection,
     show_notification: ShowNotification,
+    acknowledge_agent: AcknowledgeAgent,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -1158,6 +1167,15 @@ pub fn encodeSetPaneViewport(buffer: []u8, message: SetPaneViewport) ![]const u8
     );
 }
 
+pub fn encodeAcknowledgeAgent(buffer: []u8, message: AcknowledgeAgent) ![]const u8 {
+    return encodeDerived(
+        @intFromEnum(ClientTag.acknowledge_agent),
+        AcknowledgeAgent,
+        buffer,
+        message,
+    );
+}
+
 pub fn encodeCopySelection(buffer: []u8, message: CopySelection) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.copy_selection),
@@ -1229,6 +1247,9 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
             .notification = try decodeNotificationBody(&decoder),
         } },
         .update_client_layout => .{ .update_client_layout = try decodeClientLayoutUpdate(&decoder) },
+        .acknowledge_agent => .{
+            .acknowledge_agent = try Derived(AcknowledgeAgent).decode(&decoder),
+        },
     };
     try decoder.ensureEnd();
     return message;

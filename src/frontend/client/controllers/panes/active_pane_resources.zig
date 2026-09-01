@@ -1,11 +1,13 @@
 //! Adapts active-pane resource commands to one concrete client.
 
 const core = @import("telar-core");
+const agents = @import("../../../agents/root.zig");
 const attachments = @import("../../../attachments/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 
 const Client = @import("../../client.zig");
 const active_pane_resource_delivery = panes_application.active_pane_resource_delivery;
@@ -54,8 +56,18 @@ fn handler(client: *Client) active_pane_resource_delivery.DeliverActivePaneResou
             .sync_focus_reporting = syncFocusReporting,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .offer_pane_geometry = offerPaneGeometry,
+            .acknowledge_agent = acknowledgeAgent,
         },
     };
+}
+
+fn acknowledgeAgent(raw_context: *anyopaque, key: agents.AgentKey) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    try runtime_transport.enqueue(client, .{ .acknowledge_agent = .{
+        .pane_id = key.pane_id,
+        .pane_generation = key.pane_generation,
+    } });
 }
 
 fn syncAttachmentTarget(raw_context: *anyopaque, target: ?attachments.Target) ?ui.Rect {

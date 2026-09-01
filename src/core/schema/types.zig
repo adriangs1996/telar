@@ -232,6 +232,9 @@ pub const AgentStatus = enum(u8) {
     blocked = 2,
     ready = 3,
     failed = 4,
+    /// Finished a turn while no client had the pane focused. Clears back to
+    /// `ready` once a client acknowledges the agent.
+    done = 5,
 };
 
 /// Audible client-side effects produced by exact runtime-owned agent

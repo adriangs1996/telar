@@ -156,6 +156,7 @@ pub const Message = union(enum) {
     copy_selection: schema.CopySelection,
     show_notification: OwnedNotification,
     client_layout: u8,
+    acknowledge_agent: schema.AcknowledgeAgent,
 };
 
 fn messageLaunchCwd(message: Message) ?[]const u8 {
@@ -472,6 +473,7 @@ pub const Outbox = struct {
             .copy_selection => |value| schema.encodeCopySelection(buffer, value),
             .show_notification => |*value| schema.encodeShowNotification(buffer, value.view()),
             .client_layout => |slot| outbox.client_layouts[slot].slice(),
+            .acknowledge_agent => |value| schema.encodeAcknowledgeAgent(buffer, value),
         };
     }
 

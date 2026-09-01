@@ -349,7 +349,7 @@ fn drawStatus(
     _ = context.buffer.writeText(area, x, area.y, statusLabel(status), .{
         .fg = statusColor(context, status),
         .bg = background,
-        .flags = .{ .bold = status == .blocked or status == .failed },
+        .flags = .{ .bold = status == .blocked or status == .failed or status == .done },
     });
 }
 
@@ -363,6 +363,7 @@ fn statusIcon(status: schema.AgentStatus, animation_frame: u8) ui.icons.Icon {
         .working => ui.icons.working(animation_frame),
         .blocked => .agent_blocked,
         .ready => .agent_ready,
+        .done => .agent_done,
         .failed => .agent_failed,
     };
 }
@@ -397,6 +398,7 @@ fn statusLabel(status: schema.AgentStatus) []const u8 {
         .working => "working",
         .blocked => "needs input",
         .ready => "ready",
+        .done => "done",
         .failed => "failed",
     };
 }
@@ -407,6 +409,7 @@ fn statusColor(context: *const widget.Context, status: schema.AgentStatus) ui.Co
         .working => context.palette.accent,
         .blocked => context.palette.yellow,
         .ready => context.palette.green,
+        .done => context.palette.teal,
         .failed => context.palette.red,
     };
 }
@@ -804,6 +807,7 @@ test "minions icon occupies one cell" {
 test "working status uses an animated glyph" {
     try std.testing.expect(statusIcon(.working, 0) != statusIcon(.working, 1));
     try std.testing.expectEqualStrings("✓", statusIcon(.ready, 0).unicodeGlyph());
+    try std.testing.expectEqualStrings("✔", statusIcon(.done, 0).unicodeGlyph());
     try std.testing.expectEqualStrings("!", statusIcon(.blocked, 0).unicodeGlyph());
 }
 

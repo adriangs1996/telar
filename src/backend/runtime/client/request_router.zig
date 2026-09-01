@@ -45,6 +45,7 @@ pub fn Handlers(comptime Context: type) type {
         copy_selection: *const fn (*Context, schema.CopySelection) anyerror!void,
         show_notification: *const fn (*Context, schema.ShowNotification) anyerror!void,
         update_client_layout: *const fn (*Context, schema.ClientLayoutUpdateView) anyerror!void,
+        acknowledge_agent: *const fn (*Context, schema.AcknowledgeAgent) anyerror!void,
     };
 }
 
@@ -102,6 +103,7 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .copy_selection => |request| handlers.copy_selection(router.context, request),
                 .show_notification => |request| handlers.show_notification(router.context, request),
                 .update_client_layout => |request| handlers.update_client_layout(router.context, request),
+                .acknowledge_agent => |request| handlers.acknowledge_agent(router.context, request),
             };
         }
     };
@@ -184,6 +186,7 @@ const testing_handlers: Handlers(Capture) = .{
     .copy_selection = captureHandler(.copy_selection, schema.CopySelection),
     .show_notification = captureHandler(.show_notification, schema.ShowNotification),
     .update_client_layout = captureHandler(.update_client_layout, schema.ClientLayoutUpdateView),
+    .acknowledge_agent = captureHandler(.acknowledge_agent, schema.AcknowledgeAgent),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -240,6 +243,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
             .tab_count = 0,
             .encoded_tabs = "",
         } },
+        .{ .acknowledge_agent = .{ .pane_id = pane_id, .pane_generation = 1 } },
     };
 }
 

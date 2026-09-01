@@ -24,10 +24,35 @@ const ProxyObservation = types.ProxyObservation;
 const DescriptionFinished = types.DescriptionFinished;
 const Repository = repository_mod.Repository;
 
+pub const AcknowledgeResult = enum {
+    unknown_agent,
+    unchanged,
+    acknowledged,
+};
+
 pub const Tracker = struct {
     repository: Repository = .{},
     revision: u64 = 1,
     sequence: u64 = 0,
+
+    /// Marks one exact agent generation as seen and republishes a `done`
+    /// projection as `ready`. A stale or unknown generation changes nothing.
+    ///
+    /// ```zig
+    /// if (tracker.acknowledge(key, now_ms) == .acknowledged) {
+    ///     pumpClients();
+    /// }
+    /// ```
+    pub fn acknowledge(tracker: *Tracker, key: PaneKey, now_ms: i64) AcknowledgeResult {
+        const agent = tracker.repository.find(key) orelse return .unknown_agent;
+
+        if (!agent.acknowledge()) {
+            return .unchanged;
+        }
+
+        _ = tracker.reproject(agent, now_ms);
+        return .acknowledged;
+    }
 
     /// Applies one foreground-process observation to its pane-generation
     /// aggregate and republishes the resulting projection.
@@ -515,7 +540,7 @@ test "only a confirmed prompt settles model work" {
 
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 400)));
     snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 
@@ -537,7 +562,7 @@ test "explicit Codex prompt settles working without repetition" {
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 
@@ -909,7 +934,7 @@ test "a contradictory provider cannot complete another agent's exchange" {
     }));
     snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentProvider.claude, snapshot[0].provider);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
 }
 
 test "transport completion without provider turn completion remains working" {
@@ -962,7 +987,7 @@ test "provider turn completion projects ready and ignores later transport comple
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     var snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
     try std.testing.expectEqual(@as(u8, 99), snapshot[0].confidence);
     try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
@@ -975,7 +1000,7 @@ test "provider turn completion projects ready and ignores later transport comple
         .observed_at_ms = 300,
     }));
     snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
     try std.testing.expectEqual(@as(i64, 200), snapshot[0].observed_at_ms);
 }
 
@@ -1014,7 +1039,7 @@ test "all concurrent model exchanges must complete before ready" {
         .observed_at_ms = 300,
     }));
     snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
 }
 
 test "new model work supersedes a completed response" {
@@ -1130,7 +1155,7 @@ test "completed HTTP2 streams do not settle the agent turn" {
 
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.codex, 400)));
     snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
 }
 
 test "sequential model requests stay working until a confirmed prompt" {
@@ -1176,7 +1201,7 @@ test "sequential model requests stay working until a confirmed prompt" {
 
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 500)));
     snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 

@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const agents = @import("../../../agents/root.zig");
 const attachments = @import("../../../attachments/root.zig");
 const client_model = @import("../../model/root.zig");
 
@@ -14,19 +15,25 @@ pub const Effects = struct {
     sync_focus_reporting: *const fn (*anyopaque) anyerror!void,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
     offer_pane_geometry: *const fn (*anyopaque, ui.Rect) anyerror!void,
+    acknowledge_agent: *const fn (*anyopaque, agents.AgentKey) anyerror!void,
 };
 
 pub const DeliverActivePaneResourcesHandler = struct {
     model: *client_model.Model,
     effects: Effects,
 
-    /// Reconciles only the focused attachment shelf and re-offers geometry
-    /// when its visibility changes the workbench.
+    /// Acknowledges a focused `done` agent, then reconciles only the focused
+    /// attachment shelf and re-offers geometry when its visibility changes
+    /// the workbench.
     ///
     /// ```zig
     /// _ = try handler.synchronizeAttachments();
     /// ```
     pub fn synchronizeAttachments(handler: *DeliverActivePaneResourcesHandler) !bool {
+        if (handler.model.takeAgentAcknowledgement()) |key| {
+            try handler.effects.acknowledge_agent(handler.effects.context, key);
+        }
+
         const area = handler.effects.sync_attachment_target(
             handler.effects.context,
             handler.model.focusedAttachmentTarget(),
@@ -75,6 +82,7 @@ pub const DeliverActivePaneResourcesHandler = struct {
 };
 
 const Event = enum {
+    acknowledge_agent,
     attachment_target,
     focus_reporting,
     invalidate_placements,
@@ -99,6 +107,7 @@ const EffectCapture = struct {
     geometry_count: usize = 0,
     committed_focus_observed: bool = true,
     failure: Failure = .none,
+    acknowledged: ?agents.AgentKey = null,
 
     fn effects(capture: *EffectCapture) Effects {
         return .{
@@ -107,7 +116,14 @@ const EffectCapture = struct {
             .sync_focus_reporting = syncFocusReporting,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .offer_pane_geometry = offerPaneGeometry,
+            .acknowledge_agent = acknowledgeAgent,
         };
+    }
+
+    fn acknowledgeAgent(raw_context: *anyopaque, key: agents.AgentKey) !void {
+        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
+        capture.append(.acknowledge_agent);
+        capture.acknowledged = key;
     }
 
     fn syncAttachmentTarget(raw_context: *anyopaque, target: ?attachments.Target) ?ui.Rect {
@@ -333,4 +349,37 @@ test "DeliverActivePaneResourcesHandler stops after each failed resource" {
         try std.testing.expectEqualSlices(Event, events, capture.eventSlice());
         try std.testing.expect(capture.committed_focus_observed);
     }
+}
+
+test "DeliverActivePaneResourcesHandler acknowledges a focused done agent before the shelf" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const focus = try prepareModel(&model, false);
+    const key: agents.AgentKey = .{ .pane_id = focus.focused, .pane_generation = 3 };
+    const entry: agents.AgentInput = .{
+        .key = key,
+        .location = focus.location,
+        .pane_index = 1,
+        .provider = .claude,
+        .status = .done,
+    };
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{entry} });
+    var capture: EffectCapture = .{ .model = &model };
+    var handler: DeliverActivePaneResourcesHandler = .{
+        .model = &model,
+        .effects = capture.effects(),
+    };
+
+    try std.testing.expect(!try handler.synchronizeAttachments());
+
+    try std.testing.expectEqualSlices(Event, &.{
+        .acknowledge_agent,
+        .attachment_target,
+    }, capture.eventSlice());
+    try std.testing.expectEqualDeep(key, capture.acknowledged.?);
+
+    try std.testing.expect(!try handler.synchronizeAttachments());
+
+    try std.testing.expectEqual(@as(usize, 3), capture.event_count);
+    try std.testing.expectEqual(Event.attachment_target, capture.eventSlice()[2]);
 }

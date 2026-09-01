@@ -50,6 +50,7 @@ pub const Icon = enum {
     agent_working_3,
     agent_blocked,
     agent_ready,
+    agent_done,
     agent_failed,
     close,
 
@@ -76,6 +77,7 @@ pub const Icon = enum {
             .agent_working_3 => "\u{25d2}",
             .agent_blocked => "!",
             .agent_ready => "\u{2713}",
+            .agent_done => "\u{2714}",
             .agent_failed => "\u{00d7}",
             .close => "\u{00d7}",
         };
@@ -103,6 +105,7 @@ pub const Icon = enum {
             .agent_working_3 => "\u{ee09}", // extra-progress-spinner-4
             .agent_blocked => "\u{ea6c}", // cod-warning
             .agent_ready => "\u{ebb3}", // cod-pass-filled
+            .agent_done => "\u{eba4}", // cod-pass
             .agent_failed => "\u{ea87}", // cod-error
             .close => "\u{ea76}", // cod-close
         };
@@ -134,6 +137,7 @@ pub const Icon = enum {
             => "*",
             .agent_blocked => "!",
             .agent_ready => "+",
+            .agent_done => "*",
             .agent_failed => "x",
             .close => "x",
         };

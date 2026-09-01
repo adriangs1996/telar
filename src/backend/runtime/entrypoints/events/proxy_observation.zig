@@ -348,8 +348,8 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         try adapter.handle(completed);
 
         try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description, .pump_clients });
-        try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.capture.status_at_description_schedule.?);
-        try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        try std.testing.expectEqual(core.schema.AgentStatus.done, fixture.capture.status_at_description_schedule.?);
+        try std.testing.expectEqual(core.schema.AgentStatus.done, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
         fixture.capture.len = 0;
 
         var finished = fixture.event(.response_finished, protocol);
@@ -359,7 +359,7 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         finished.observed_at_ms = 300;
         try adapter.handle(finished);
 
-        try std.testing.expectEqual(core.schema.AgentStatus.ready, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        try std.testing.expectEqual(core.schema.AgentStatus.done, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
     }
 }
 

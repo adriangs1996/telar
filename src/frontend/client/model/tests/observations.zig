@@ -364,3 +364,73 @@ test "agent navigation and focused attachments derive from committed client stat
         .pane_generation = remote_key.pane_generation + 1,
     }) == null);
 }
+
+test "focused done agent is acknowledged once per completion without a version change" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const key: agents.AgentKey = .{
+        .pane_id = @enumFromInt(1),
+        .pane_generation = 4,
+    };
+    try model.workspace.bootstrap(key.pane_id, location, .{ .cols = 20, .rows = 5 });
+    var entry: agents.AgentInput = .{
+        .key = key,
+        .location = location,
+        .pane_index = 1,
+        .provider = .claude,
+        .status = .working,
+    };
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{entry} });
+
+    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+
+    entry.status = .done;
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{entry} });
+    const version = model.version();
+
+    try std.testing.expectEqualDeep(key, model.takeAgentAcknowledgement().?);
+    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+    try std.testing.expectEqualDeep(version, model.version());
+
+    entry.status = .ready;
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 3, .agents = &.{entry} });
+    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+
+    entry.status = .done;
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 4, .agents = &.{entry} });
+    try std.testing.expectEqualDeep(key, model.takeAgentAcknowledgement().?);
+}
+
+test "an unfocused done agent is never acknowledged" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    try model.workspace.bootstrap(first, location, .{ .cols = 80, .rows = 24 });
+    try model.workspace.active().?.model.split(first, second, location, .horizontal, area);
+    const done_key: agents.AgentKey = .{ .pane_id = first, .pane_generation = 2 };
+    const entry: agents.AgentInput = .{
+        .key = done_key,
+        .location = location,
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .done,
+    };
+    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{entry} });
+    _ = model.focusPane(.{ .target = .{ .pane_id = second }, .area = area });
+
+    try std.testing.expect(model.takeAgentAcknowledgement() == null);
+
+    _ = model.focusPane(.{ .target = .{ .pane_id = first }, .area = area });
+
+    try std.testing.expectEqualDeep(done_key, model.takeAgentAcknowledgement().?);
+}

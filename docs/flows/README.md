@@ -8,7 +8,8 @@ line numbers are intentionally omitted because symbols survive refactors.
 | Flow | Trigger | Visible result | Proof |
 | --- | --- | --- | --- |
 | [Agent snapshot](agent-snapshot.md) | Runtime agent evidence changes | The client commits one bounded replica, emits actionable transitions and the presenter projects the latest revision | Storage, model, effect-order, protocol and presenter tests |
-| [Agent sound](agent-sound.md) | Runtime agent moves from working to ready or blocked | One exact current client plays at most one host sound with one coalesced successor | Identity, policy, queue, configuration and worker tests |
+| [Agent done](agent-done.md) | A runtime agent finishes a turn while no client has its pane focused | The agent stays `done` until the focused client acknowledges it once, then returns to `ready` | Aggregate, tracker, controller, model, effect-order and protocol tests |
+| [Agent sound](agent-sound.md) | Runtime agent moves from working to done or blocked | One exact current client plays at most one host sound with one coalesced successor | Identity, policy, queue, configuration and worker tests |
 | [Claude turn completion](claude-turn-completion.md) | Claude reports `end_turn` in an intercepted SSE response | The runtime projects the agent as ready when no exchange remains | HTTP/1.1, HTTP/2, adapter and aggregate tests |
 | [Clipboard image preview](clipboard-image.md) | An attachment-capable pane receives `Ctrl+V` | The child gets its paste first, then one current bounded preview enters paced client media | Identity, ownership, bounds, stale-result and presenter tests |
 | [Client diagnostic state](client-diagnostic.md) | Lua, configuration or plugin work succeeds or fails | One validated bounded banner is replaced or cleared before optional notification and paced presentation | Validation, fallback, no-op, producer and presenter tests |
