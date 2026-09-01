@@ -9,6 +9,15 @@ const builtin = @import("builtin");
 const core = @import("telar-core");
 
 const schema = core.schema;
+const process_cwd = @import("cwd.zig");
+
+/// Reads a process working directory into caller-owned storage without
+/// allocating.
+///
+/// ```zig
+/// const path = cwd(pid, &buffer) orelse return;
+/// ```
+pub const cwd = process_cwd.read;
 
 const Native = if (builtin.os.tag == .macos) struct {
     const c = @cImport({
@@ -70,23 +79,28 @@ pub const Probe = struct {
     inspected: bool = false,
 };
 
+const ProbeInput = struct {
+    process_group_id: ?std.c.pid_t,
+    shell_pid: std.c.pid_t,
+    previous: Cache,
+};
+
 /// Resolve a process group without allocating. A known group is cached until
 /// `tcgetpgrp` reports a different one. Unknown groups receive a small bounded
 /// retry window because process metadata can lag just behind terminal control.
-pub fn probe(
-    process_group_id: ?std.c.pid_t,
-    shell_pid: std.c.pid_t,
-    previous: Cache,
-) Probe {
-    return probeWith(process_group_id, shell_pid, previous, identifyProcessGroup);
+///
+/// ```zig
+/// const result = probe(process_group_id, shell_pid, previous);
+/// ```
+pub fn probe(process_group_id: ?std.c.pid_t, shell_pid: std.c.pid_t, previous: Cache) Probe {
+    return probeWith(.{ .process_group_id = process_group_id, .shell_pid = shell_pid, .previous = previous }, identifyProcessGroup);
 }
 
-fn probeWith(
-    process_group_id: ?std.c.pid_t,
-    shell_pid: std.c.pid_t,
-    previous: Cache,
-    comptime identify: fn (u32) Identification,
-) Probe {
+fn probeWith(input: ProbeInput, comptime identify: fn (u32) Identification) Probe {
+    const process_group_id = input.process_group_id;
+    const shell_pid = input.shell_pid;
+    const previous = input.previous;
+
     const native_pgid = process_group_id orelse return .{ .cache = previous };
     const pgid = std.math.cast(u32, native_pgid) orelse return .{ .cache = previous };
     const shell = std.math.cast(u32, shell_pid) orelse 0;
@@ -408,32 +422,31 @@ test "process acquisition is bounded and cached" {
         }
     };
     const shell: std.c.pid_t = 10;
-    const shell_probe = probeWith(
-        10,
-        shell,
-        .{ .process_group_id = 20, .provider = .claude },
-        Fake.unknown,
-    );
+    const shell_probe = probeWith(.{
+        .process_group_id = 10,
+        .shell_pid = shell,
+        .previous = .{ .process_group_id = 20, .provider = .claude },
+    }, Fake.unknown);
     try std.testing.expect(shell_probe.changed);
     try std.testing.expect(shellForeground(shell_probe.cache, shell));
     try std.testing.expectEqual(schema.AgentProvider.unknown, shell_probe.cache.provider);
 
-    const identified = probeWith(20, shell, .{}, Fake.claude);
+    const identified = probeWith(.{ .process_group_id = 20, .shell_pid = shell, .previous = .{} }, Fake.claude);
     try std.testing.expect(identified.changed);
     try std.testing.expect(identified.inspected);
     try std.testing.expectEqual(schema.AgentProvider.claude, identified.cache.provider);
     try std.testing.expectEqualStrings("Claude Code", identified.cache.name());
-    const cached = probeWith(20, shell, identified.cache, Fake.unknown);
+    const cached = probeWith(.{ .process_group_id = 20, .shell_pid = shell, .previous = identified.cache }, Fake.unknown);
     try std.testing.expect(!cached.changed);
     try std.testing.expect(!cached.inspected);
 
     var acquiring: Cache = .{};
     for (0..max_acquisition_attempts) |_| {
-        const attempt = probeWith(30, shell, acquiring, Fake.unknown);
+        const attempt = probeWith(.{ .process_group_id = 30, .shell_pid = shell, .previous = acquiring }, Fake.unknown);
         try std.testing.expect(attempt.inspected);
         acquiring = attempt.cache;
     }
-    const stable = probeWith(30, shell, acquiring, Fake.claude);
+    const stable = probeWith(.{ .process_group_id = 30, .shell_pid = shell, .previous = acquiring }, Fake.claude);
     try std.testing.expect(!stable.changed);
     try std.testing.expect(!stable.inspected);
 }

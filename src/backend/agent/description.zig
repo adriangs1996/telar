@@ -19,6 +19,11 @@ pub const Command = struct {
     timeout_ms: u32,
 };
 
+pub const Generation = struct {
+    command: Command,
+    job: Job,
+};
+
 pub const Capture = struct {
     scanner: escape.InputScanner = .{},
     bytes: [max_query_bytes]u8 = undefined,
@@ -27,6 +32,12 @@ pub const Capture = struct {
     submitted: bool = false,
 
     /// Returns true exactly once, when the first non-cancelled submit lands.
+    ///
+    /// ```zig
+    /// if (capture.feed(input)) {
+    ///     startGeneration(capture.raw());
+    /// }
+    /// ```
     pub fn feed(capture: *Capture, input: []const u8) bool {
         if (capture.submitted) return false;
         for (input) |byte| {
@@ -91,13 +102,15 @@ pub const Result = struct {
     }
 };
 
-pub fn generate(
-    io: std.Io,
-    gpa: std.mem.Allocator,
-    command: Command,
-    job_value: Job,
-) Result {
-    var job = job_value;
+/// Runs one bounded title-generation subprocess and returns a validated,
+/// fixed-size result without retaining the captured prompt.
+///
+/// ```zig
+/// const result = generate(io, gpa, .{ .command = command, .job = job });
+/// ```
+pub fn generate(io: std.Io, gpa: std.mem.Allocator, generation: Generation) Result {
+    const command = generation.command;
+    var job = generation.job;
     defer std.crypto.secureZero(u8, &job.query);
     var result: Result = .{
         .pane = job.pane,
@@ -178,6 +191,10 @@ pub fn generate(
 
 /// Applies terminal editing controls and strips transport escape sequences.
 /// The output is one trimmed line suitable for the fixed generator prompt.
+///
+/// ```zig
+/// const query = try normalizeQuery(raw, &storage);
+/// ```
 pub fn normalizeQuery(raw: []const u8, output: *[max_query_bytes]u8) ![]const u8 {
     var output_len: usize = 0;
     var index: usize = 0;
@@ -251,6 +268,10 @@ pub fn normalizeQuery(raw: []const u8, output: *[max_query_bytes]u8) ![]const u8
 /// Accepts exactly one non-empty display line from a generator. Surrounding
 /// whitespace and matching ASCII quotes are removed; controls and extra lines
 /// are rejected rather than silently changing their meaning.
+///
+/// ```zig
+/// const title = try normalizeTitle(raw, &storage);
+/// ```
 pub fn normalizeTitle(raw: []const u8, output: *[schema.max_agent_session_title_bytes]u8) ![]const u8 {
     var trimmed = std.mem.trim(u8, raw, " \t\r\n");
     if (trimmed.len >= 2 and
@@ -355,27 +376,39 @@ test "description command succeeds, rejects invalid output, times out, and may b
         .query_len = 0,
     };
     const success = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{ "/bin/sh", "-c", "printf 'Improve agent sidebar\\n'" },
-        .timeout_ms = 1000,
-    }, job);
+        .command = .{
+            .arguments = &.{ "/bin/sh", "-c", "printf 'Improve agent sidebar\\n'" },
+            .timeout_ms = 1000,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.success, success.status);
     try std.testing.expectEqualStrings("Improve agent sidebar", success.titleSlice());
 
     const invalid = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{ "/bin/sh", "-c", "printf 'first\\nsecond\\n'" },
-        .timeout_ms = 1000,
-    }, job);
+        .command = .{
+            .arguments = &.{ "/bin/sh", "-c", "printf 'first\\nsecond\\n'" },
+            .timeout_ms = 1000,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.invalid_output, invalid.status);
 
     const timed_out = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{ "/bin/sh", "-c", "sleep 1" },
-        .timeout_ms = 20,
-    }, job);
+        .command = .{
+            .arguments = &.{ "/bin/sh", "-c", "sleep 1" },
+            .timeout_ms = 20,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.timeout, timed_out.status);
 
     const unavailable = generate(std.testing.io, std.testing.allocator, .{
-        .arguments = &.{"/definitely/not/a/telar-command"},
-        .timeout_ms = 1000,
-    }, job);
+        .command = .{
+            .arguments = &.{"/definitely/not/a/telar-command"},
+            .timeout_ms = 1000,
+        },
+        .job = job,
+    });
     try std.testing.expectEqual(ResultStatus.unavailable, unavailable.status);
 }

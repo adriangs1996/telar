@@ -20,6 +20,7 @@ pub const ProxyPhase = types.ProxyPhase;
 pub const ProxyProtocol = types.ProxyProtocol;
 pub const ProxyExchange = types.ProxyExchange;
 pub const ProxyObservation = types.ProxyObservation;
+pub const DescriptionFinished = types.DescriptionFinished;
 
 test {
     _ = @import("agent.zig");

@@ -19,22 +19,68 @@ answer "what happens after this external event?".
 The remaining files in `src/core/` are small pure support modules. Core owns no
 live runtime or client state and imports neither process package.
 
+## Executable entrypoints
+
+| Capability | Root | Responsibility |
+| --- | --- | --- |
+| Command line | `src/cli/root.zig` | Parse commands and own each process-specific startup flow |
+
+`src/main.zig` collects process arguments and selects one command-line
+entrypoint. The server entrypoint selects production dependencies and
+initializes the public runtime instance; the client entrypoint prepares the
+disposable frontend process.
+
 ## Runtime capabilities
 
 | Capability | Root | Owns |
 | --- | --- | --- |
-| Runtime | `src/backend/runtime/root.zig` | Runtime event loop, client sessions and cross-capability orchestration |
+| Runtime | `src/backend/runtime/root.zig` | Public lifecycle for one runtime instance |
 | Pane | `src/backend/pane/root.zig` | One child process, PTY terminal state, cell projection and pane lifecycle |
-| PTY | `src/backend/pty/root.zig` | Child process and pseudo-terminal platform adapter |
+| PTY | `src/backend/pty/root.zig` | Verified child launch, PTY I/O and child lifecycle |
 | Media | `src/backend/media/root.zig` | Bounded child Kitty-graphics ingestion |
-| Process | `src/backend/process/root.zig` | Bounded foreground-process observation |
+| Process | `src/backend/process/root.zig` | Native process metadata and bounded foreground-process observation |
 | Agent | `src/backend/agent/root.zig` | Agent evidence precedence and projected agent state |
 | History | `src/backend/history/root.zig` | Command observation, queries and durable storage |
 | Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |
 | Transport | `src/backend/transport/root.zig` | Runtime side of local connection and handshake |
 
-The runtime root is an orchestrator. High fan-out is expected there and is a
-defect in a leaf capability unless an invariant requires it.
+`src/cli/server.zig` selects the production dependencies and initializes the
+public runtime instance. Behind `src/backend/runtime/root.zig`, the lifetime is
+split without changing that public contract:
+
+| Runtime part | File | Responsibility |
+| --- | --- | --- |
+| Runtime composition | `src/backend/runtime/instance.zig` | Acquire, compose, run and tear down one runtime |
+| Physical resources | `src/backend/runtime/resources/root.zig` | Own concrete process resources and startup rollback |
+| Event loop | `src/backend/runtime/event_loop.zig` | Own bounded event storage, selection and stop coordination |
+| Application | `src/backend/runtime/application/root.zig` | Own the live model, client application state and cross-capability invariants |
+| Runtime model | `src/backend/runtime/application/model.zig` | Hold authoritative semantic state without implementing behavior |
+| Pane launcher | `src/backend/runtime/application/pane_launcher.zig` | Commit or roll back pane creation and actor startup as one transaction |
+| Event sources | `src/backend/runtime/event_sources.zig` | Arm infrastructure work that produces runtime events |
+| Event dispatcher | `src/backend/runtime/application/event_dispatcher/root.zig` | Classify completions and delegate them to capability-specific adapters |
+| Operation scheduler | `src/backend/runtime/application/operation_scheduler.zig` | Start bounded asynchronous work requested by the application |
+| Request dispatch | `src/backend/runtime/application/request_dispatch.zig` | Build request-scoped controllers and application handlers |
+
+Below that composition layer, directory names describe runtime roles rather
+than repeating backend capability names:
+
+| Runtime role | Location | Responsibility |
+| --- | --- | --- |
+| Application commands | `src/backend/runtime/application/commands/` | Synchronous use cases and transaction policy |
+| Application queries | `src/backend/runtime/application/queries/` | Read-only application operations |
+| Application coordinators | `src/backend/runtime/application/coordinators/root.zig` | Description work and agent evidence expiry |
+| Request entrypoints | `src/backend/runtime/entrypoints/requests/` | Wire translation, expected-error mapping and response enqueueing |
+| Event entrypoints | `src/backend/runtime/entrypoints/events/root.zig` | Completion policy for actors and asynchronous resources |
+| Resource owners | `src/backend/runtime/resources/root.zig` | Startup, stable ownership and teardown of physical resources |
+| Attachment | `src/backend/runtime/attachment/root.zig` | Per-client pane projection and acknowledgement |
+| Client coordination | `src/backend/runtime/client/root.zig` | Admission, request routing and send completion |
+| Delivery | `src/backend/runtime/delivery/root.zig` | Bounded response scheduling, encoding and send transactions |
+| Lifecycle | `src/backend/runtime/lifecycle/root.zig` | Stop authority, external stop signal and ordered teardown |
+| Observability | `src/backend/runtime/observability/root.zig` | Host metrics and diagnostic telemetry |
+
+High fan-out is restricted to composition, actor binding and request dispatch.
+It is a defect in a leaf capability unless an indivisible invariant requires
+it.
 
 ## Client capabilities
 
@@ -132,26 +178,27 @@ entrypoints below.
 
 ### Runtime
 
-All runtime handlers are in `src/backend/runtime/root.zig`.
+`Runtime.run` receives every event and handles only stop completion. Every
+non-stop event crosses `application.handle` into
+`event_dispatcher.Dispatcher.handle`, which delegates to the owning adapter.
 
-| Event | Entrypoint |
+| Event | Owner after classification |
 | --- | --- |
-| Accepted socket | `Server.handleAcceptedEvent` |
-| Completed handshake | `Server.handleHandshakenEvent` |
-| Client socket read | `Server.handleClientMessageEvent` |
-| Completed client write | `Server.handleClientSentEvent` |
-| History worker result | `Server.handleHistoryResponseEvent` |
-| Proxy observation | `Server.handleProxyEvent` |
-| Agent expiry tick | `Server.handleAgentTickEvent` |
-| System metrics tick | `Server.handleMetricsTickEvent` |
-| Completed PTY input write | `Server.handlePaneInputWrittenEvent` |
-| Completed terminal response write | `Server.handlePaneResponseWrittenEvent` |
-| PTY read | `Server.handlePaneOutputEvent` |
-| Completed VT ingestion | `Server.handlePaneIngestedEvent` |
-| Observation worker result | `Server.handlePaneObservedEvent` |
-| Media worker result | `Server.handlePaneMediaEvent` |
-| Child exit | `Server.handlePaneExitEvent` |
-| Telemetry tick/write | `Server.handleTelemetryTickEvent`, `Server.handleTelemetryWrittenEvent` |
+| Accepted socket / completed handshake | `runtime/client/admission.zig` |
+| Client socket read | `runtime/application/event_dispatcher/client.zig` -> `Application.dispatchClientMessage` |
+| Completed client write | `runtime/client/send_coordinator.zig` |
+| History worker result | `runtime/entrypoints/events/history_response.zig` |
+| Proxy observation | `runtime/entrypoints/events/proxy_observation.zig` |
+| Agent expiry / description completion | `runtime/application/coordinators/agent_*.zig` |
+| System metrics tick | `runtime/observability/system_metrics_coordinator.zig` |
+| Completed PTY input write | `runtime/entrypoints/events/pane/input.zig` |
+| Completed terminal response write | `runtime/entrypoints/events/pane/response.zig` |
+| PTY read | `runtime/entrypoints/events/pane/output.zig` |
+| Completed VT ingestion | `runtime/entrypoints/events/pane/ingest.zig` |
+| Observation worker result | `runtime/entrypoints/events/pane/observation.zig` |
+| Media worker result | `runtime/entrypoints/events/pane/media.zig` |
+| Child exit | `runtime/entrypoints/events/pane/exit.zig` |
+| Telemetry tick / write | `runtime/observability/telemetry_tick_coordinator.zig`, telemetry state |
 
 Entrypoints name causal boundaries. They do not imply that synchronous work may
 cross the interactive, media and observation budgets.

@@ -21,6 +21,7 @@ const ScreenObservation = types.ScreenObservation;
 const ProxyPhase = types.ProxyPhase;
 const ProxyExchange = types.ProxyExchange;
 const ProxyObservation = types.ProxyObservation;
+const DescriptionFinished = types.DescriptionFinished;
 const Repository = repository_mod.Repository;
 
 pub const Tracker = struct {
@@ -260,22 +261,20 @@ pub const Tracker = struct {
         return null;
     }
 
-    /// A completion applies only to the exact session which launched it. A
-    /// manual title changes the phase, so a concurrent generated result is
-    /// stale by construction.
+    /// A completion applies only to the exact session which launched it. The
+    /// returned event owns the aggregate-validated title projection; a manual
+    /// title makes a concurrent generated result stale by construction.
     ///
     /// ```zig
-    /// _ = tracker.finishDescription(&result);
+    /// const finished = tracker.finishDescription(&result) orelse return;
     /// ```
-    pub fn finishDescription(tracker: *Tracker, result: *const description.Result) bool {
-        const agent = tracker.repository.find(result.pane) orelse return false;
+    pub fn finishDescription(tracker: *Tracker, result: *const description.Result) ?DescriptionFinished {
+        const agent = tracker.repository.find(result.pane) orelse return null;
 
-        if (!agent.finishDescription(result)) {
-            return false;
-        }
+        const finished = agent.finishDescription(result) orelse return null;
 
         tracker.bumpRevision();
-        return true;
+        return finished;
     }
 
     /// Replaces generated or pending title state for one existing agent.
@@ -646,7 +645,13 @@ test "first working turn starts one generated session title" {
         .title_len = "Improve agent sidebar".len,
     };
     @memcpy(result.title[0..result.title_len], "Improve agent sidebar");
-    try std.testing.expect(tracker.finishDescription(&result));
+    const finished = tracker.finishDescription(&result).?;
+    @memset(result.title[0..result.title_len], 'x');
+    try std.testing.expectEqualDeep(job.pane, finished.pane);
+    try std.testing.expectEqualSlices(u8, &job.session_id, &finished.session_id);
+    try std.testing.expectEqualStrings("Improve agent sidebar", finished.titleSlice());
+    try std.testing.expectEqual(schema.AgentTitleSource.generated, finished.source);
+    try std.testing.expectEqual(schema.AgentTitleState.ready, finished.state);
     snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqualStrings("Improve agent sidebar", snapshot[0].session_title);
     try std.testing.expectEqual(schema.AgentTitleSource.generated, snapshot[0].title_source);
@@ -676,7 +681,7 @@ test "manual title wins over a late generated result" {
         .title_len = "Generated title".len,
     };
     @memcpy(result.title[0..result.title_len], "Generated title");
-    try std.testing.expect(!tracker.finishDescription(&result));
+    try std.testing.expect(tracker.finishDescription(&result) == null);
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqualStrings("Release audit", snapshot[0].session_title);

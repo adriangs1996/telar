@@ -18,6 +18,7 @@ const PaneKey = pane_mod.PaneKey;
 const ProcessObservation = types.ProcessObservation;
 const ProxyExchange = types.ProxyExchange;
 const ProxyObservation = types.ProxyObservation;
+const DescriptionFinished = types.DescriptionFinished;
 const ProxyState = proxy_state_mod.ProxyState;
 const ScreenObservation = types.ScreenObservation;
 const schema = core.schema;
@@ -430,16 +431,16 @@ pub fn startDescriptionJob(agent: *Agent) DescriptionJobResult {
 }
 
 /// Applies a generated title only to the session and running job that launched
-/// it.
+/// it, then returns the aggregate-validated title projection for persistence.
 ///
 /// ```zig
-/// _ = agent.finishDescription(&result);
+/// const finished = agent.finishDescription(&result) orelse return;
 /// ```
-pub fn finishDescription(agent: *Agent, result: *const description.Result) bool {
+pub fn finishDescription(agent: *Agent, result: *const description.Result) ?DescriptionFinished {
     if (!agent.matches(result.pane) or agent.title.phase != .running or
         !std.mem.eql(u8, &agent.session_id, &result.session_id))
     {
-        return false;
+        return null;
     }
 
     if (result.status == .success) {
@@ -460,7 +461,20 @@ pub fn finishDescription(agent: *Agent, result: *const description.Result) bool 
         agent.title.state = .failed;
     }
 
-    return true;
+    std.debug.assert(agent.title.state == .ready or agent.title.state == .failed);
+    var finished: DescriptionFinished = .{
+        .pane = agent.key,
+        .session_id = agent.session_id,
+        .source = if (agent.title.state == .ready) agent.title.source else .telar,
+        .state = agent.title.state,
+    };
+
+    if (agent.title.state == .ready) {
+        finished.title_len = agent.title.len;
+        @memcpy(finished.title[0..agent.title.len], agent.title.slice());
+    }
+
+    return finished;
 }
 
 /// Replaces any generated or pending title with a validated manual title.

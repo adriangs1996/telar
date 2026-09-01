@@ -23,6 +23,10 @@ capacity check -> provisional detach -> TabCloseIntent
 close_tab request and typed continuation
         |
 runtime socket
+        |
+Runtime.run -> application.handle(.client_message)
+        |
+RequestDispatcher.dispatch -> close_tab.Controller
 ```
 
 `RequestCloseTabHandler` resolves the active tab identity without changing the
@@ -54,7 +58,11 @@ close adapter supplies only request-lifecycle ports.
 ## Runtime transaction
 
 ```text
-Server.dispatchClientMessage
+Runtime.run
+        |
+application.handle(.client_message)
+        |
+RequestDispatcher.dispatch
         |
 close_tab.Controller
         |
@@ -87,21 +95,22 @@ reconciliation. They do not receive the requesting client's correlation ID.
 ```text
 pane child exit
         |
-Server.collectFinished
+Application.collectFinished
         |
-workspace.removeTab
+destroy final pane -> workspace.removeTab
         |
-TabRemoved
+TabRemoved -> schema.tab_closed(request_id = none)
         |
-tab_closed(request_id = none)
+tab_closures.apply
 ```
 
 The runtime destroys an exited pane only after no actor or client attachment
-still borrows it. When that pane was the tab's last pane, lifecycle cleanup
-uses the same repository operation and publishes the same `TabRemoved` fact.
-Every client still observing the workspace receives `tab_closed` with
-`RequestId.none`. A saturated response queue records a resynchronization
-requirement instead of blocking PTY work.
+still borrows it. If no pane remains at that location,
+`Application.collectFinished` invokes the same workspace operation used by the
+explicit handler and publishes the same `TabRemoved` fact. Every client still
+observing the workspace receives `schema.TabClosed` with `RequestId.none`. If a
+client queue is full, `ResponseQueue.pushOrDrop` records the workspace and
+predecessor needed for resynchronization instead of blocking PTY work.
 
 ## Client application
 
@@ -197,11 +206,13 @@ new client rebuilds its disposable model through workspace and tab snapshots.
 - `src/backend/workspace/commands.zig` and
   `src/backend/workspace/events.zig` prove aggregate removal and owned event
   invariants.
-- `src/backend/runtime/commands/close_tab.zig` proves commit ordering, pane
+- `src/backend/runtime/application/commands/close_tab.zig` proves commit ordering, pane
   closure, publication and missing-target behavior.
-- `src/backend/runtime/controllers/close_tab.zig` proves protocol translation
+- `src/backend/runtime/entrypoints/requests/close_tab.zig` proves protocol translation
   and expected failure mapping.
-- `src/backend/runtime/close_tab_test.zig` proves response backpressure does
+- `src/backend/runtime/tests/close_tab_test.zig` proves response backpressure does
   not undo the runtime commit or suppress publication.
-- `src/transport_integration_test.zig` proves requested and final-pane removal
-  across the runtime socket.
+- `runtime owns the complete tab lifecycle`, `runtime destroys a pane after its
+  shell exits` and `the last pane closes only its tab when the workspace has
+  another tab` in `transport_integration_test.zig` cover both triggers across
+  the runtime socket.

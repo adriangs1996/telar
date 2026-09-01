@@ -5,6 +5,26 @@ controlled by disposable clients.
 
 ## Language
 
+**Runtime instance**:
+One running lifetime of Telar's backend, including its authoritative runtime
+model and the physical resources that support it until ordered shutdown. Its
+implementation composes `Application`, `Resources` and `EventLoop`; none is a
+second runtime.
+_Avoid_: Server, Runtime model
+
+**Runtime application**:
+The runtime-owned application state and orchestration around `RuntimeModel`.
+It applies use cases, manages disposable client sessions and enforces
+cross-capability invariants, but does not own the process event loop or acquire
+physical resources.
+_Avoid_: Server, AppState, Runtime model
+
+**Runtime resources**:
+The live allocators, environment, listener, proxy, telemetry, client-session
+storage and history adapter acquired for one runtime lifetime. They support the
+model but are neither semantic state nor persistable checkpoint data.
+_Avoid_: Runtime model, Global state
+
 **Runtime model**:
 The authoritative semantic state owned by one running runtime. Client
 projections and durable checkpoints derive from it; infrastructure resources

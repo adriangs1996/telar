@@ -126,13 +126,21 @@ capability.
 ## Agent state
 
 Hosts below `anthropic.com` identify Claude Code and hosts below `openai.com`
-or `chatgpt.com` identify Codex. A request start, response data, or successful
-response completion means `working`: one completed model exchange may be
-followed by local tool execution and another model request within the same
-agent turn. HTTP/1.1 error responses, HTTP/2 stream resets, and failures while
-connecting or establishing TLS mean `failed`. HTTP/2 response status is decoded
-from HPACK, so a completed response with status 400 or greater also means
-`failed`.
+or `chatgpt.com` identify Codex. `POST /v1/messages` is a Claude inference
+candidate. Telar publishes it as an inference request only when its complete
+JSON body has top-level `stream: true` and a non-empty top-level `tools` array.
+Claude Code also sends startup probes and helper requests to that route, so the
+route cannot establish `working` by itself. Only `POST /v1/responses` and
+`POST /backend-api/codex/responses` belong to Codex. Queries do not change
+route ownership. Cross-provider routes, unknown hosts, and other requests are
+auxiliary and do not drive agent lifecycle.
+
+An inference request start, response data, or successful response completion
+means `working`: one completed model exchange may be followed by local tool
+execution and another model request within the same agent turn. HTTP/1.1 error
+responses, HTTP/2 stream resets, and failures while connecting or establishing
+TLS mean `failed`. HTTP/2 response status is decoded from HPACK, so a completed
+response with status 400 or greater also means `failed`.
 
 HTTP/2 lifecycle state is keyed by protocol, connection ID, and stream ID.
 Completing every active stream still does not prove that the agent turn ended.
@@ -141,12 +149,27 @@ while a graceful duplicate sentinel after all streams completed does not
 overwrite their result. Both the protocol observer and agent store track at
 most 128 concurrent streams per bounded record.
 
+For a successful candidate response, the proxy inspects forwarded payload
+fragments without retaining them. A native request transform replaces
+`Accept-Encoding` with `identity` for Claude `POST /v1/messages`, allowing the
+SSE decoder to inspect the forwarded representation directly without a second
+decompression path. The transform preserves all other routes, other
+providers, response heads, and bodies. Successful response headers must still
+describe identity-encoded `text/event-stream`; an origin that ignores the
+negotiation remains unobservable.
+
+A Claude `message_delta` whose JSON type also equals `message_delta` and whose
+`stop_reason` is `end_turn` publishes `provider_turn_completed`. The agent
+becomes `ready` only after every active model exchange has produced that
+outcome. Truncated or malformed events and continuation outcomes such as
+`tool_use` do not complete the turn.
+
 Network evidence cannot see a terminal permission dialog, so the observation
 worker also recognizes bounded presentation hints found in Codex, Claude Code,
 and herdr behavior. Permission and confirmation prompts produce `blocked` and
 override proxy activity. Working text overrides an early response completion.
-Claude becomes `ready` only when the emulated terminal's current screen has a
-visible cursor immediately after its `❯` input prompt. The raw PTY byte stream
+Claude's emulated terminal screen can independently confirm `ready` when it has
+a visible cursor immediately after its `❯` input prompt. The raw PTY byte stream
 cannot establish that state because a later terminal control sequence may have
 erased or moved the glyph. Claude identity must already be known from the
 foreground process, proxy, or branding; a bare `❯` never establishes it.
@@ -158,12 +181,37 @@ identity prevent a late event from attaching to a reused pane.
 These are sidebar hints, not agent authority. A heuristic never approves a
 command, resumes a session, kills a process, or generates terminal input.
 Observation values contain only connection, stream, protocol, provider, phase,
-status code, pane identity, and timestamps. Queue saturation drops
-observations, never traffic.
+status code, pane identity, and timestamps. One fixed 256-event channel checks
+the pane credential both before publication and before delivery. Revocation
+therefore removes queued authority as well as rejecting later observations.
+Saturation or closure drops publication, never traffic; a normal close drains
+already-buffered observations before receivers see `error.Closed`.
 
 Bounded counters distinguish rejected authentication, upstream connection
 failures, each TLS interception stage, HTTP/2 decode failures, and passthrough
-connections. They never retain the destination hostname or payload.
+connections. Observation metrics expose reserved delivery depth, its high-water
+mark, and publications lost to capacity or closure. Rejected and subsequently
+revoked credentials do not increment the loss counter because they were never
+eligible for delivery. No metric retains the destination hostname or payload.
+
+Runtime telemetry exposes five Claude-specific counters without retaining
+headers or response data:
+
+- `proxy_claude_inference_requests` counts body-classified `/v1/messages`
+  starts.
+- `proxy_claude_sse_payload_fragments` counts response payload fragments
+  examined by the SSE interpreter.
+- `proxy_claude_turn_completions` counts verified `end_turn` outcomes.
+- `proxy_claude_successful_responses` counts successful transport completions.
+- `proxy_claude_failure_observations` counts published failure outcomes.
+
+If requests increase but SSE fragments do not, inspect response status, body
+framing, content coding, and HTTP/2 decode failures; the origin may have ignored
+identity negotiation. If fragments increase without turn completions, the
+received SSE did not contain a valid, non-truncated Claude `end_turn`. If turn
+completions increase while the agent remains `working`, compare observation
+queue loss and active concurrent model exchanges; provider interpretation has
+already succeeded.
 
 ## Lua middleware boundary
 

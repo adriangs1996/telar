@@ -16,11 +16,7 @@ pub const Decision = union(enum) {
     },
 };
 
-/// Chooses whether the caller should preserve or replace an HTTP head.
-///
-/// Every parsing, middleware, encoding, size, or compatibility failure returns
-/// `.preserve`. On `.replace`, the encoded bytes occupy `output[0..len]`.
-pub fn decide(
+pub const Input = struct {
     original: []const u8,
     original_head: head.Head,
     is_response: bool,
@@ -29,17 +25,51 @@ pub fn decide(
     io: std.Io,
     context: middleware.TransformContext,
     output: []u8,
-) Decision {
+};
+
+const Encoding = struct {
+    output: []u8,
+    start_line: []const u8,
+    is_response: bool,
+    headers: *const middleware.Headers,
+};
+
+const TestDecisionInput = struct {
+    original: []const u8,
+    is_response: bool,
+    pipeline: *const middleware.TransformPipeline,
+    output: []u8,
+};
+
+/// Chooses whether the caller should preserve or replace an HTTP head.
+///
+/// Every parsing, middleware, encoding, size, or compatibility failure returns
+/// `.preserve`. On `.replace`, the encoded bytes occupy `output[0..len]`.
+///
+/// ```zig
+/// const decision = decide(input);
+/// ```
+pub fn decide(input: Input) Decision {
+    const original = input.original;
+    const original_head = input.original_head;
+    const is_response = input.is_response;
+    const response_to_head = input.response_to_head;
+    const output = input.output;
+
     var headers: middleware.Headers = .{};
     const start_line = parseHeaders(original, is_response, &headers) orelse return .preserve;
-    if (!pipeline.apply(io, context, &headers)) return .preserve;
-
-    const len = encodeHead(output, start_line, is_response, &headers) orelse return .preserve;
-    var transformed = head.analyze(output[0..len], is_response, response_to_head) orelse
+    if (!input.pipeline.apply(.{ .io = input.io, .context = input.context, .headers = &headers })) {
         return .preserve;
+    }
+
+    const len = encodeHead(.{ .output = output, .start_line = start_line, .is_response = is_response, .headers = &headers }) orelse return .preserve;
+    var transformed = head.analyze(output[0..len], .{
+        .is_response = is_response,
+        .response_to_head = response_to_head,
+    }) orelse return .preserve;
     if (!compatible(original_head, transformed)) return .preserve;
 
-    transformed.inference_request = original_head.inference_request;
+    transformed.classification = original_head.classification;
     return .{ .replace = .{ .head = transformed, .len = len } };
 }
 
@@ -50,24 +80,20 @@ fn compatible(original: head.Head, transformed: head.Head) bool {
         original.message.closes == transformed.message.closes;
 }
 
-fn parseHeaders(
-    bytes: []const u8,
-    is_response: bool,
-    headers: *middleware.Headers,
-) ?[]const u8 {
+fn parseHeaders(bytes: []const u8, is_response: bool, headers: *middleware.Headers) ?[]const u8 {
     const first_line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return null;
     const start_line = bytes[0..first_line_end];
     if (is_response) {
         var parts = std.mem.splitScalar(u8, start_line, ' ');
         _ = parts.next() orelse return null;
         const status = parts.next() orelse return null;
-        headers.append(":status", status, false) catch return null;
+        headers.append(.{ .name = ":status", .value = status }) catch return null;
     } else {
         const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return null;
         const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return null;
         if (method_end == version_start) return null;
-        headers.append(":method", start_line[0..method_end], false) catch return null;
-        headers.append(":path", start_line[method_end + 1 .. version_start], false) catch return null;
+        headers.append(.{ .name = ":method", .value = start_line[0..method_end] }) catch return null;
+        headers.append(.{ .name = ":path", .value = start_line[method_end + 1 .. version_start] }) catch return null;
     }
 
     var lines = std.mem.splitSequence(u8, bytes[first_line_end + 2 ..], "\r\n");
@@ -76,17 +102,17 @@ fn parseHeaders(
         const colon = std.mem.indexOfScalar(u8, line, ':') orelse return null;
         const name = std.mem.trim(u8, line[0..colon], " \t");
         const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
-        headers.append(name, value, middleware.isSensitiveName(name)) catch return null;
+        headers.append(.{ .name = name, .value = value, .sensitive = middleware.isSensitiveName(name) }) catch return null;
     }
     return start_line;
 }
 
-fn encodeHead(
-    output: []u8,
-    start_line: []const u8,
-    is_response: bool,
-    headers: *const middleware.Headers,
-) ?usize {
+fn encodeHead(encoding: Encoding) ?usize {
+    const output = encoding.output;
+    const start_line = encoding.start_line;
+    const is_response = encoding.is_response;
+    const headers = encoding.headers;
+
     var len: usize = 0;
     if (is_response) {
         const version_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return null;
@@ -151,33 +177,30 @@ fn append(output: []u8, len: *usize, bytes: []const u8) ?void {
     len.* += bytes.len;
 }
 
-fn testDecision(
-    original: []const u8,
-    is_response: bool,
-    pipeline: *const middleware.TransformPipeline,
-    output: []u8,
-) Decision {
-    return decide(
-        original,
-        head.analyze(original, is_response, false).?,
-        is_response,
-        false,
-        pipeline,
-        std.testing.io,
-        undefined,
-        output,
-    );
+fn testDecision(input: TestDecisionInput) Decision {
+    const original = input.original;
+    const is_response = input.is_response;
+
+    return decide(.{
+        .original = original,
+        .original_head = head.analyze(original, .{
+            .is_response = is_response,
+            .response_to_head = false,
+            .provider = if (is_response) .unknown else .claude,
+        }).?,
+        .is_response = is_response,
+        .response_to_head = false,
+        .pipeline = input.pipeline,
+        .io = std.testing.io,
+        .context = undefined,
+        .output = input.output,
+    });
 }
 
 test "a safe header transformation produces a replacement" {
     const AddHeader = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set("x-telar", "enabled", false) catch return .preserve;
+        fn apply(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
@@ -187,7 +210,7 @@ test "a safe header transformation produces a replacement" {
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    const replacement = switch (testDecision(original, false, &pipeline, &output)) {
+    const replacement = switch (testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output })) {
         .preserve => return error.ExpectedReplacement,
         .replace => |value| value,
     };
@@ -201,12 +224,7 @@ test "a safe header transformation produces a replacement" {
 
 test "a transformer without effects preserves the original" {
     const NoEffects = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn apply(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -216,23 +234,13 @@ test "a transformer without effects preserves the original" {
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(
-        original,
-        false,
-        &pipeline,
-        &output,
-    ));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
 }
 
 test "a transformation cannot change body framing" {
     const ChangeLength = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set("content-length", "5", false) catch return .preserve;
+        fn apply(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = "content-length", .value = "5" }) catch return .preserve;
             return .apply;
         }
     };
@@ -242,23 +250,13 @@ test "a transformation cannot change body framing" {
     const original = "POST /upload HTTP/1.1\r\nHost: example.test\r\nContent-Length: 4\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(
-        original,
-        false,
-        &pipeline,
-        &output,
-    ));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
 }
 
 test "invalid transformed request lines preserve the original" {
     const InvalidMethod = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set(":method", "NOT VALID", false) catch return .preserve;
+        fn apply(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = ":method", .value = "NOT VALID" }) catch return .preserve;
             return .apply;
         }
     };
@@ -268,23 +266,13 @@ test "invalid transformed request lines preserve the original" {
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(
-        original,
-        false,
-        &pipeline,
-        &output,
-    ));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
 }
 
 test "an encoded head that exceeds the output bound is preserved" {
     const AddHeader = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set("x-telar", "enabled", false) catch return .preserve;
+        fn apply(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
@@ -294,24 +282,14 @@ test "an encoded head that exceeds the output bound is preserved" {
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [8]u8 = undefined;
 
-    try std.testing.expectEqual(Decision.preserve, testDecision(
-        original,
-        false,
-        &pipeline,
-        &output,
-    ));
+    try std.testing.expectEqual(Decision.preserve, testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output }));
 }
 
 test "request classification remains tied to the original route" {
     const RewriteRoute = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set(":method", "PUT", false) catch return .preserve;
-            effects.set(":path", "/v1/responses", false) catch return .preserve;
+        fn apply(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = ":method", .value = "PUT" }) catch return .preserve;
+            transformation.effects.set(.{ .name = ":path", .value = "/v1/responses" }) catch return .preserve;
             return .apply;
         }
     };
@@ -321,11 +299,11 @@ test "request classification remains tied to the original route" {
     const original = "POST /v1/messages HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
 
-    const replacement = switch (testDecision(original, false, &pipeline, &output)) {
+    const replacement = switch (testDecision(.{ .original = original, .is_response = false, .pipeline = &pipeline, .output = &output })) {
         .preserve => return error.ExpectedReplacement,
         .replace => |value| value,
     };
-    try std.testing.expect(replacement.head.inference_request);
+    try std.testing.expectEqual(@import("../provider/request.zig").RequestClass.inference, replacement.head.classification);
     try std.testing.expect(std.mem.startsWith(
         u8,
         output[0..replacement.len],

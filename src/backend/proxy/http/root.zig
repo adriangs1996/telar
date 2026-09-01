@@ -1,14 +1,17 @@
 //! Public HTTP/1.1 relay for intercepted TLS streams.
 //!
-//! This module owns operation ordering and transport failure policy. `head.zig`
+//! `connection.zig` owns exchange ordering and connection policy. `head.zig`
 //! reads and analyzes heads, `transform.zig` chooses whether to rewrite them,
 //! and `body.zig` relays bodies without changing their wire representation.
 
 const std = @import("std");
 const body = @import("body.zig");
+const connection = @import("connection.zig");
 const head = @import("head.zig");
 const transform = @import("transform.zig");
+const types = @import("types.zig");
 const middleware = @import("../middleware.zig");
+const provider = @import("../provider/request.zig");
 const tls = @import("../tls.zig");
 
 pub const max_head_bytes = head.max_bytes;
@@ -18,12 +21,25 @@ pub const Framing = head.Framing;
 pub const Head = head.Head;
 pub const BodyFragment = body.Fragment;
 pub const BodyRoute = body.Route;
+pub const BodyPlan = types.BodyPlan;
+pub const RequestClass = types.RequestClass;
+pub const ResponseContext = types.ResponseContext;
+pub const ResponseKind = types.ResponseKind;
+pub const ConnectionPolicy = types.ConnectionPolicy;
+pub const RequestHead = types.RequestHead;
+pub const ResponseHead = types.ResponseHead;
+pub const ExchangeOutcome = connection.ExchangeOutcome;
+pub const ExchangePort = connection.ExchangePort;
+pub const Exchange = connection.Exchange;
+pub const ConnectionPort = connection.Port;
+pub const Connection = connection.Connection;
 
 pub const MessageRoute = struct {
     from: tls.Session.Side,
     to: tls.Session.Side,
     is_response: bool,
     response_to_head: bool,
+    provider: provider.AgentProvider = .unknown,
 };
 
 pub const HeadTransform = struct {
@@ -68,7 +84,11 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
         return null;
     }
 
-    return head.analyze(buffer[0..len], route.is_response, route.response_to_head);
+    return head.analyze(buffer[0..len], .{
+        .is_response = route.is_response,
+        .response_to_head = route.response_to_head,
+        .provider = route.provider,
+    });
 }
 
 /// Relays one HTTP head after applying the configured transformation pipeline.
@@ -87,24 +107,24 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?He
 
     var original: [max_head_bytes]u8 = undefined;
     const original_len = head.read(session, transformation.route.from, &original) orelse return null;
-    const original_head = head.analyze(
-        original[0..original_len],
-        transformation.route.is_response,
-        transformation.route.response_to_head,
-    ) orelse return null;
+    const original_head = head.analyze(original[0..original_len], .{
+        .is_response = transformation.route.is_response,
+        .response_to_head = transformation.route.response_to_head,
+        .provider = transformation.route.provider,
+    }) orelse return null;
 
     var encoded: [max_head_bytes]u8 = undefined;
     var selected_head = original_head;
-    const selected_bytes = switch (transform.decide(
-        original[0..original_len],
-        original_head,
-        transformation.route.is_response,
-        transformation.route.response_to_head,
-        transformation.pipeline,
-        transformation.io,
-        transformation.context,
-        &encoded,
-    )) {
+    const selected_bytes = switch (transform.decide(.{
+        .original = original[0..original_len],
+        .original_head = original_head,
+        .is_response = transformation.route.is_response,
+        .response_to_head = transformation.route.response_to_head,
+        .pipeline = transformation.pipeline,
+        .io = transformation.io,
+        .context = transformation.context,
+        .output = &encoded,
+    })) {
         .preserve => original[0..original_len],
         .replace => |replacement| select: {
             selected_head = replacement.head;
@@ -168,13 +188,8 @@ test "request head is forwarded before its body is consumed" {
 
 test "transformed head selection is the only head written" {
     const AddHeader = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            effects: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
-            effects.set("x-telar", "enabled", false) catch return .preserve;
+        fn apply(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+            transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
@@ -196,19 +211,14 @@ test "transformed head selection is the only head written" {
         .context = undefined,
     }).?;
 
-    try std.testing.expectEqualDeep(Framing{ .length = 4 }, parsed.framing);
+    try std.testing.expectEqualDeep(Framing{ .content_length = 4 }, parsed.framing);
     try std.testing.expect(std.mem.indexOf(u8, fake.originOutput(), "x-telar: enabled\r\n") != null);
     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, fake.originOutput(), "POST /upload"));
 }
 
 test "a preserved transformation forwards the original head exactly" {
     const NoEffects = struct {
-        fn apply(
-            _: *anyopaque,
-            _: std.Io,
-            _: middleware.HeaderSnapshot,
-            _: *middleware.EffectBatch,
-        ) middleware.TransformStatus {
+        fn apply(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
@@ -252,8 +262,142 @@ test "informational response is delimited before the final response" {
     try std.testing.expectEqualStrings(responses, fake.childOutput());
 }
 
+const ConnectionIntegration = struct {
+    session: FakeSession,
+    request_classes: [2]RequestClass = undefined,
+    request_count: usize = 0,
+    response_statuses: [2]u16 = undefined,
+    response_count: usize = 0,
+    failure_count: usize = 0,
+    upgraded: bool = false,
+
+    fn io(_: *ConnectionIntegration) std.Io {
+        return std.testing.io;
+    }
+
+    fn readRequest(context: *ConnectionIntegration) ?RequestHead {
+        const parsed = relayHead(&context.session, .{
+            .from = .child,
+            .to = .origin,
+            .is_response = false,
+            .response_to_head = false,
+            .provider = .claude,
+        }) orelse return null;
+
+        return .{
+            .classification = parsed.classification,
+            .body = parsed.framing,
+            .response_context = if (parsed.message.head_request) .head_request else .normal,
+        };
+    }
+
+    fn relayRequestBody(context: *ConnectionIntegration, plan: BodyPlan) bool {
+        return relayBody(
+            &context.session,
+            .{ .from = .child, .to = .origin, .framing = plan },
+            IgnoreTestObserver{},
+        );
+    }
+
+    fn relayResponse(context: *ConnectionIntegration, request: RequestHead) ?ResponseHead {
+        while (true) {
+            const parsed = relayHead(&context.session, .{
+                .from = .origin,
+                .to = .child,
+                .is_response = true,
+                .response_to_head = request.response_context == .head_request,
+            }) orelse return null;
+
+            if (!relayBody(
+                &context.session,
+                .{ .from = .origin, .to = .child, .framing = parsed.framing },
+                IgnoreTestObserver{},
+            )) {
+                return null;
+            }
+
+            if (parsed.message.informational) {
+                continue;
+            }
+
+            return .{
+                .status_code = parsed.message.status_code,
+                .body = parsed.framing,
+                .kind = if (parsed.message.upgrade) .upgrade else .final,
+                .connection = if (parsed.message.closes) .close else .keep_alive,
+            };
+        }
+    }
+
+    fn exchange(context: *ConnectionIntegration, request: RequestHead) ExchangeOutcome {
+        return IntegrationExchange.execute(context, request);
+    }
+
+    fn publishRequest(context: *ConnectionIntegration, request: RequestHead) void {
+        context.request_classes[context.request_count] = request.classification;
+        context.request_count += 1;
+    }
+
+    fn publishResponse(context: *ConnectionIntegration, response: ResponseHead) void {
+        context.response_statuses[context.response_count] = response.status_code;
+        context.response_count += 1;
+    }
+
+    fn publishFailure(context: *ConnectionIntegration) void {
+        context.failure_count += 1;
+    }
+
+    fn upgrade(context: *ConnectionIntegration) void {
+        context.upgraded = true;
+    }
+};
+
+const integration_exchange_port: ExchangePort(ConnectionIntegration) = .{
+    .io = ConnectionIntegration.io,
+    .relay_body = ConnectionIntegration.relayRequestBody,
+    .relay_response = ConnectionIntegration.relayResponse,
+};
+
+const IntegrationExchange = Exchange(ConnectionIntegration, integration_exchange_port);
+
+const integration_connection_port: ConnectionPort(ConnectionIntegration) = .{
+    .read_request = ConnectionIntegration.readRequest,
+    .exchange = ConnectionIntegration.exchange,
+    .publish_request = ConnectionIntegration.publishRequest,
+    .publish_response = ConnectionIntegration.publishResponse,
+    .publish_failure = ConnectionIntegration.publishFailure,
+    .upgrade = ConnectionIntegration.upgrade,
+};
+
+const IntegrationConnection = Connection(ConnectionIntegration, integration_connection_port);
+
+test "HTTP connection composition relays keep-alive exchanges and publishes final results" {
+    const requests = "POST /v1/messages HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n" ++
+        "GET /health HTTP/1.1\r\nHost: example.test\r\n\r\n";
+    const responses = "HTTP/1.1 103 Early Hints\r\nLink: </style.css>\r\n\r\n" ++
+        "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok" ++
+        "HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 3\r\n\r\nbad";
+    var context: ConnectionIntegration = .{
+        .session = .{
+            .child_input = requests,
+            .origin_input = responses,
+        },
+    };
+
+    IntegrationConnection.run(&context);
+
+    try std.testing.expectEqualStrings(requests, context.session.originOutput());
+    try std.testing.expectEqualStrings(responses, context.session.childOutput());
+    try std.testing.expectEqualSlices(RequestClass, &.{ .inference, .auxiliary }, context.request_classes[0..context.request_count]);
+    try std.testing.expectEqualSlices(u16, &.{ 200, 404 }, context.response_statuses[0..context.response_count]);
+    try std.testing.expectEqual(@as(usize, 0), context.failure_count);
+    try std.testing.expect(!context.upgraded);
+}
+
 test {
+    std.testing.refAllDecls(connection);
     std.testing.refAllDecls(head);
     std.testing.refAllDecls(transform);
     std.testing.refAllDecls(body);
+    std.testing.refAllDecls(types);
 }

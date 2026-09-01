@@ -22,6 +22,22 @@ const max_cert_len = 1024;
 const max_pem_len = 2 * max_cert_len;
 const ca_common_name = "telar local CA";
 
+pub const Resources = struct {
+    io: Io,
+    allocator: std.mem.Allocator,
+};
+
+pub const AuthorityFiles = struct {
+    key: []const u8,
+    certificate: []const u8,
+};
+
+const SecureWrite = struct {
+    path: []const u8,
+    bytes: []const u8,
+    exclusive: bool,
+};
+
 pub const Pair = struct {
     key_pair: x509.KeyPair,
     cert_buf: [max_cert_len]u8 = undefined,
@@ -46,42 +62,49 @@ pub const Pair = struct {
 pub const Authority = struct {
     pair: Pair,
 
-    pub fn loadOrCreate(
-        io: Io,
-        gpa: std.mem.Allocator,
-        key_path: []const u8,
-        cert_path: []const u8,
-    ) Error!Authority {
+    /// Loads one complete authority or atomically creates both missing files.
+    /// A partial key/certificate pair is rejected instead of being repaired.
+    ///
+    /// ```zig
+    /// var authority = try Authority.loadOrCreate(resources, files);
+    /// ```
+    pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) Error!Authority {
+        const io = resources.io;
+        const key_path = files.key;
+        const cert_path = files.certificate;
+
         const key_exists = pathExists(io, key_path) catch return error.ReadFailed;
         const cert_exists = pathExists(io, cert_path) catch return error.ReadFailed;
         if (key_exists != cert_exists) return error.IncompleteAuthority;
         if (key_exists) {
             try validateStoredFile(io, key_path);
             try validateStoredFile(io, cert_path);
-            return .{ .pair = try load(io, gpa, key_path, cert_path) };
+            return .{ .pair = try load(resources, files) };
         }
 
         var pair = try generate(io);
         defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
-        try persist(io, &pair, key_path, cert_path);
+        try persist(io, &pair, files);
         return .{ .pair = pair };
     }
 
     /// `SSL_CERT_FILE` replaces system trust. The child therefore receives a
     /// bundle containing both platform roots and Telar's private authority.
-    pub fn writeBundle(
-        authority: *const Authority,
-        io: Io,
-        gpa: std.mem.Allocator,
-        output_path: []const u8,
-    ) Error!void {
+    ///
+    /// ```zig
+    /// try authority.writeBundle(resources, output_path);
+    /// ```
+    pub fn writeBundle(authority: *const Authority, resources: Resources, output_path: []const u8) Error!void {
+        const io = resources.io;
+        const gpa = resources.allocator;
+
         const roots = readSystemRoots(io, gpa) catch return error.ReadFailed;
         defer gpa.free(roots);
         var pem_buffer: [max_pem_len]u8 = undefined;
         const ours = try authority.pair.certPem(&pem_buffer);
         const bundle = std.mem.concat(gpa, u8, &.{ roots, ours }) catch return error.WriteFailed;
         defer gpa.free(bundle);
-        try writeSecure(io, output_path, bundle, false);
+        try writeSecure(io, .{ .path = output_path, .bytes = bundle, .exclusive = false });
     }
 
     pub fn mint(authority: *const Authority, io: Io, host: []const u8) Error!Pair {
@@ -125,19 +148,17 @@ fn generate(io: Io) Error!Pair {
     return pair;
 }
 
-fn load(
-    io: Io,
-    gpa: std.mem.Allocator,
-    key_path: []const u8,
-    cert_path: []const u8,
-) Error!Pair {
-    const key_pem = Io.Dir.cwd().readFileAlloc(io, key_path, gpa, .limited(max_pem_len)) catch
+fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
+    const io = resources.io;
+    const gpa = resources.allocator;
+
+    const key_pem = Io.Dir.cwd().readFileAlloc(io, files.key, gpa, .limited(max_pem_len)) catch
         return error.ReadFailed;
     defer {
         std.crypto.secureZero(u8, key_pem);
         gpa.free(key_pem);
     }
-    const cert_pem = Io.Dir.cwd().readFileAlloc(io, cert_path, gpa, .limited(max_pem_len)) catch
+    const cert_pem = Io.Dir.cwd().readFileAlloc(io, files.certificate, gpa, .limited(max_pem_len)) catch
         return error.ReadFailed;
     defer gpa.free(cert_pem);
 
@@ -173,17 +194,19 @@ fn load(
     return pair;
 }
 
-fn persist(io: Io, pair: *const Pair, key_path: []const u8, cert_path: []const u8) Error!void {
+fn persist(io: Io, pair: *const Pair, files: AuthorityFiles) Error!void {
     var buffer: [max_pem_len]u8 = undefined;
     defer std.crypto.secureZero(u8, &buffer);
     // Create both destinations with 0600 from their first inode. Exclusive
     // creation refuses to overwrite another runtime's authority.
-    try writeSecure(io, key_path, try pair.keyPem(&buffer), true);
-    writeSecure(io, cert_path, try pair.certPem(&buffer), true) catch
+    try writeSecure(io, .{ .path = files.key, .bytes = try pair.keyPem(&buffer), .exclusive = true });
+    writeSecure(io, .{ .path = files.certificate, .bytes = try pair.certPem(&buffer), .exclusive = true }) catch
         return error.IncompleteAuthority;
 }
 
-fn writeSecure(io: Io, path: []const u8, bytes: []const u8, exclusive: bool) Error!void {
+fn writeSecure(io: Io, write: SecureWrite) Error!void {
+    const path = write.path;
+
     if (!std.fs.path.isAbsolute(path)) return error.WriteFailed;
     var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
     for (0..8) |_| {
@@ -201,7 +224,7 @@ fn writeSecure(io: Io, path: []const u8, bytes: []const u8, exclusive: bool) Err
             error.PathAlreadyExists => continue,
             else => return error.WriteFailed,
         };
-        file.writeStreamingAll(io, bytes) catch {
+        file.writeStreamingAll(io, write.bytes) catch {
             file.close(io);
             Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
             return error.WriteFailed;
@@ -213,7 +236,7 @@ fn writeSecure(io: Io, path: []const u8, bytes: []const u8, exclusive: bool) Err
         };
         file.close(io);
         const cwd = Io.Dir.cwd();
-        if (exclusive) {
+        if (write.exclusive) {
             Io.Dir.renamePreserve(cwd, temp_path, cwd, path, io) catch {
                 Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
                 return error.WriteFailed;
@@ -284,9 +307,11 @@ test "authority files and derived bundle are owner-only" {
     const cert_path = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory});
     const bundle_path = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory});
 
-    var authority = try Authority.loadOrCreate(io, gpa, key_path, cert_path);
-    try authority.writeBundle(io, gpa, bundle_path);
-    _ = try Authority.loadOrCreate(io, gpa, key_path, cert_path);
+    const resources: Resources = .{ .io = io, .allocator = gpa };
+    const files: AuthorityFiles = .{ .key = key_path, .certificate = cert_path };
+    var authority = try Authority.loadOrCreate(resources, files);
+    try authority.writeBundle(resources, bundle_path);
+    _ = try Authority.loadOrCreate(resources, files);
     for ([_][]const u8{ key_path, cert_path, bundle_path }) |path| {
         const stat = try Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
         try std.testing.expectEqual(File.Kind.file, stat.kind);

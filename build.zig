@@ -238,6 +238,14 @@ pub fn build(b: *std.Build) void {
     // ---------------------------------------------------------------------
 
     const test_step = b.step("test", "Run the tests");
+    // zls auto-enables build-on-save when a step named "check" exists, giving
+    // editors real compiler diagnostics on every save. The step compiles twin
+    // instances of the test suites that nothing installs or runs, so Zig stops
+    // after semantic analysis and a save never pays for codegen or linking.
+    const check_step = b.step("check", "Semantic-analyze the test suites without running them");
+    const parallel_test_prerequisites = testBarrier(b, "run parallel test prerequisites");
+    const transport_test_prerequisites = testBarrier(b, "run transport test prerequisites");
+    const schema_test_prerequisites = testBarrier(b, "run schema test prerequisites");
     const backend_proxy_test_step = b.step(
         "test-backend-proxy",
         "Run the runtime observation proxy tests",
@@ -255,14 +263,6 @@ pub fn build(b: *std.Build) void {
     release_step.dependOn(&release_benchmarks.step);
     release_step.dependOn(b.getInstallStep());
 
-    const Suite = struct {
-        path: []const u8,
-        vt: bool = false,
-        libc: bool = false,
-        transport: bool = false,
-        schema: bool = false,
-        frontend: bool = false,
-    };
     const suites = [_]Suite{
         .{ .path = "src/core/ui/root.zig" },
         .{ .path = "src/core/select.zig" },
@@ -282,7 +282,7 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
         .{ .path = "src/backend/history/agent_detection.zig" },
-        .{ .path = "src/backend/runtime/system_metrics.zig" },
+        .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
         .{ .path = "src/frontend/workspace/workspace_list.zig" },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/pane/blit.zig", .vt = true, .libc = true },
@@ -291,44 +291,60 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/backend/pty/root.zig", .libc = true },
         .{ .path = "src/backend/root.zig", .vt = true, .libc = true },
         .{ .path = "src/backend/transport/local.zig", .libc = true, .transport = true },
+        .{ .path = "src/main.zig", .vt = true, .libc = true },
+        .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
+        .{ .path = "examples/terminal_browser_pane.zig", .vt = true, .libc = true },
         .{
             .path = "src/transport_integration_test.zig",
             .vt = true,
             .libc = true,
             .transport = true,
             .schema = true,
+            .isolated = true,
         },
-        .{ .path = "src/main.zig", .vt = true, .libc = true },
-        .{ .path = "examples/sidebar.zig", .vt = true, .libc = true },
-        .{ .path = "examples/terminal_browser_pane.zig", .vt = true, .libc = true },
+    };
+    const suite_modules: SuiteModules = .{
+        .unicode = unicode,
+        .core = core,
+        .backend = backend,
+        .frontend = frontend,
+        .lua_api = lua_api,
+        .tls = tls,
+        .freetype = freetype,
+        .ghostty_vt = ghostty_vt,
+        .nghttp2_prefix = nghttp2_prefix,
+        .target = target,
+        .optimize = optimize,
     };
     for (suites) |suite| {
-        const tests = b.addTest(.{
-            .root_module = b.createModule(.{
-                .root_source_file = b.path(suite.path),
-                .target = target,
-                .optimize = optimize,
-                .link_libc = suite.libc,
-            }),
-        });
-        tests.root_module.addImport("unicode", unicode);
-        tests.root_module.addImport("telar-core", core);
-        tests.root_module.addImport("telar-backend", backend);
-        tests.root_module.addImport("telar-frontend", frontend);
-        tests.root_module.addImport("lua-api", lua_api);
-        tests.root_module.addImport("tls", tls);
-        tests.root_module.addImport("freetype", freetype);
-        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
-        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
-        tests.root_module.linkSystemLibrary("nghttp2", .{});
-        if (suite.vt) tests.root_module.addImport("ghostty-vt", ghostty_vt);
+        const tests = suite_modules.addSuiteTest(b, suite);
         coverage.instrumentTest(tests);
+
+        check_step.dependOn(&suite_modules.addSuiteTest(b, suite).step);
+
+        if (suite.isolated) {
+            // These PTY, process, and socket tests share finite host resources.
+            // Separate runs preserve each test step's scope while ensuring the
+            // integration event loops start after that step's other binaries.
+            const default_run = isolatedTestRun(b, tests, parallel_test_prerequisites);
+            test_step.dependOn(&default_run.step);
+            if (suite.transport) {
+                const transport_run = isolatedTestRun(b, tests, transport_test_prerequisites);
+                transport_test_step.dependOn(&transport_run.step);
+            }
+            if (suite.schema) {
+                const schema_run = isolatedTestRun(b, tests, schema_test_prerequisites);
+                schema_test_step.dependOn(&schema_run.step);
+            }
+            continue;
+        }
+
         const run_tests = b.addRunArtifact(tests);
-        test_step.dependOn(&run_tests.step);
+        parallel_test_prerequisites.dependOn(&run_tests.step);
         if (std.mem.eql(u8, suite.path, "src/backend/proxy_test.zig"))
             backend_proxy_test_step.dependOn(&run_tests.step);
-        if (suite.transport) transport_test_step.dependOn(&run_tests.step);
-        if (suite.schema) schema_test_step.dependOn(&run_tests.step);
+        if (suite.transport) transport_test_prerequisites.dependOn(&run_tests.step);
+        if (suite.schema) schema_test_prerequisites.dependOn(&run_tests.step);
         if (suite.frontend) frontend_test_step.dependOn(&run_tests.step);
     }
 
@@ -351,7 +367,7 @@ pub fn build(b: *std.Build) void {
     });
     substitution.root_module.addImport("unicode", unicode_fake);
     coverage.instrumentTest(substitution);
-    test_step.dependOn(&b.addRunArtifact(substitution).step);
+    parallel_test_prerequisites.dependOn(&b.addRunArtifact(substitution).step);
 
     // ---------------------------------------------------------------------
     // The proxy example
@@ -489,7 +505,73 @@ pub fn build(b: *std.Build) void {
             cross_step.dependOn(&local_transport_check.step);
         }
     }
-    test_step.dependOn(cross_step);
+    parallel_test_prerequisites.dependOn(cross_step);
+}
+
+const Suite = struct {
+    path: []const u8,
+    vt: bool = false,
+    libc: bool = false,
+    transport: bool = false,
+    schema: bool = false,
+    frontend: bool = false,
+    isolated: bool = false,
+};
+
+// The shared modules every test suite links against, so the run instances and
+// the analysis-only `check` twins are wired identically from one place.
+const SuiteModules = struct {
+    unicode: *std.Build.Module,
+    core: *std.Build.Module,
+    backend: *std.Build.Module,
+    frontend: *std.Build.Module,
+    lua_api: *std.Build.Module,
+    tls: *std.Build.Module,
+    freetype: *std.Build.Module,
+    ghostty_vt: *std.Build.Module,
+    nghttp2_prefix: []const u8,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+
+    fn addSuiteTest(modules: SuiteModules, b: *std.Build, suite: Suite) *std.Build.Step.Compile {
+        const tests = b.addTest(.{
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(suite.path),
+                .target = modules.target,
+                .optimize = modules.optimize,
+                .link_libc = suite.libc,
+            }),
+        });
+
+        tests.root_module.addImport("unicode", modules.unicode);
+        tests.root_module.addImport("telar-core", modules.core);
+        tests.root_module.addImport("telar-backend", modules.backend);
+        tests.root_module.addImport("telar-frontend", modules.frontend);
+        tests.root_module.addImport("lua-api", modules.lua_api);
+        tests.root_module.addImport("tls", modules.tls);
+        tests.root_module.addImport("freetype", modules.freetype);
+        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });
+        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "lib" }) });
+        tests.root_module.linkSystemLibrary("nghttp2", .{});
+
+        if (suite.vt) {
+            tests.root_module.addImport("ghostty-vt", modules.ghostty_vt);
+        }
+
+        return tests;
+    }
+};
+
+fn testBarrier(b: *std.Build, name: []const u8) *std.Build.Step {
+    const barrier = b.allocator.create(std.Build.Step) catch @panic("OOM");
+    barrier.* = std.Build.Step.init(.{ .id = .custom, .name = name, .owner = b });
+    return barrier;
+}
+
+fn isolatedTestRun(b: *std.Build, tests: *std.Build.Step.Compile, prerequisites: *std.Build.Step) *std.Build.Step.Run {
+    const run = b.addRunArtifact(tests);
+    run.step.dependOn(prerequisites);
+    return run;
 }
 
 const Coverage = struct {

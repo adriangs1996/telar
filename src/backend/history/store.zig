@@ -135,11 +135,11 @@ pub const Store = struct {
         _ = c.sqlite3_extended_result_codes(opened, 1);
         if (c.sqlite3_exec(opened, database_schema, null, null, null) != c.SQLITE_OK)
             return error.HistorySchemaFailed;
-        try ensureColumn(opened, "session", "tab_id", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
-        try ensureColumn(opened, "command", "tab_id", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;");
-        try ensureColumn(opened, "session", "title", "ALTER TABLE session ADD COLUMN title TEXT;");
-        try ensureColumn(opened, "session", "title_source", "ALTER TABLE session ADD COLUMN title_source INTEGER;");
-        try ensureColumn(opened, "session", "title_state", "ALTER TABLE session ADD COLUMN title_state INTEGER;");
+        try ensureColumn(opened, .{ .table = "session", .column = "tab_id", .alter_sql = "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;" });
+        try ensureColumn(opened, .{ .table = "command", .column = "tab_id", .alter_sql = "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;" });
+        try ensureColumn(opened, .{ .table = "session", .column = "title", .alter_sql = "ALTER TABLE session ADD COLUMN title TEXT;" });
+        try ensureColumn(opened, .{ .table = "session", .column = "title_source", .alter_sql = "ALTER TABLE session ADD COLUMN title_source INTEGER;" });
+        try ensureColumn(opened, .{ .table = "session", .column = "title_state", .alter_sql = "ALTER TABLE session ADD COLUMN title_state INTEGER;" });
         const fts_available = enableCommandSearchIndex(opened);
 
         const insert_launch_attempt = try prepare(opened, insert_launch_attempt_sql);
@@ -249,11 +249,13 @@ pub const Store = struct {
         try stepDone(stmt);
     }
 
-    pub fn query(
-        store: *Store,
-        gpa: std.mem.Allocator,
-        request: *const model.Query,
-    ) !*model.QueryResult {
+    /// Executes one bounded history query and returns an owned result that the
+    /// caller must deinitialize.
+    ///
+    /// ```zig
+    /// const result = try store.query(gpa, &request);
+    /// ```
+    pub fn query(store: *Store, gpa: std.mem.Allocator, request: *const model.Query) !*model.QueryResult {
         var sql_buffer: [1024]u8 = undefined;
         var sql = std.Io.Writer.fixed(&sql_buffer);
         try sql.writeAll(
@@ -416,27 +418,31 @@ fn queryCharacters(text: []const u8) usize {
     return std.unicode.utf8CountCodepoints(text) catch text.len;
 }
 
-fn ensureColumn(
-    db: *c.sqlite3,
+const ColumnMigration = struct {
     table: []const u8,
     column: []const u8,
     alter_sql: [:0]const u8,
-) !void {
+};
+
+fn ensureColumn(db: *c.sqlite3, migration: ColumnMigration) !void {
     var pragma_buffer: [64]u8 = undefined;
-    const pragma = try std.fmt.bufPrint(&pragma_buffer, "PRAGMA table_info({s});", .{table});
+    const pragma = try std.fmt.bufPrint(&pragma_buffer, "PRAGMA table_info({s});", .{migration.table});
     const stmt = try prepare(db, pragma);
     defer _ = c.sqlite3_finalize(stmt);
     while (true) switch (c.sqlite3_step(stmt)) {
         c.SQLITE_ROW => {
             const len: usize = @intCast(c.sqlite3_column_bytes(stmt, 1));
             const pointer = c.sqlite3_column_text(stmt, 1) orelse continue;
-            if (std.mem.eql(u8, pointer[0..len], column)) return;
+            if (std.mem.eql(u8, pointer[0..len], migration.column)) {
+                return;
+            }
         },
         c.SQLITE_DONE => break,
         else => return error.HistorySchemaFailed,
     };
-    if (c.sqlite3_exec(db, alter_sql.ptr, null, null, null) != c.SQLITE_OK)
+    if (c.sqlite3_exec(db, migration.alter_sql.ptr, null, null, null) != c.SQLITE_OK) {
         return error.HistorySchemaFailed;
+    }
 }
 
 fn prepare(db: *c.sqlite3, sql: []const u8) !*c.sqlite3_stmt {
@@ -582,12 +588,12 @@ test "persists sessions and filters command history" {
         .shell = @constCast("/bin/zsh"),
     };
     try store.startSession(&session);
-    const session_title = try model.SessionTitle.init(
-        session_id,
-        "Improve agent sidebar",
-        .generated,
-        .ready,
-    );
+    const session_title = try model.SessionTitle.init(.{
+        .id = session_id,
+        .title = "Improve agent sidebar",
+        .source = .generated,
+        .state = .ready,
+    });
     try store.setSessionTitle(&session_title);
     const title_stmt = try prepare(
         store.db,
@@ -638,16 +644,18 @@ test "persists sessions and filters command history" {
     try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(tab_stmt));
     try std.testing.expectEqual(@as(c_longlong, 2), c.sqlite3_column_int64(tab_stmt, 0));
 
-    const request = try model.Query.init(
-        @enumFromInt(1),
-        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
-        "git",
-        .cwd,
-        "/work",
-        .invalid,
-        true,
-        20,
-    );
+    const request = try model.Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = .{
+            .client = .{ .id = 1, .generation = 1 },
+            .close_after_reply = false,
+        },
+        .text = "git",
+        .scope = .cwd,
+        .scope_value = "/work",
+        .failed_only = true,
+        .limit = 20,
+    });
     const result = try store.query(gpa, &request);
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.entries.len);
@@ -659,32 +667,28 @@ test "persists sessions and filters command history" {
     try std.testing.expect(store.fts_available);
 
     // Index path: case-insensitive and substring-capable.
-    const indexed = try model.Query.init(
-        @enumFromInt(2),
-        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
-        "IT COM",
-        .global,
-        "",
-        .invalid,
-        false,
-        20,
-    );
+    const indexed = try model.Query.init(.{
+        .request_id = @enumFromInt(2),
+        .origin = .{
+            .client = .{ .id = 1, .generation = 1 },
+            .close_after_reply = false,
+        },
+        .text = "IT COM",
+    });
     const indexed_result = try store.query(gpa, &indexed);
     defer indexed_result.deinit();
     try std.testing.expectEqual(@as(usize, 1), indexed_result.entries.len);
     try std.testing.expectEqualStrings("git commit", indexed_result.entries[0].command);
 
     // Below three characters the query takes the scan fallback.
-    const short = try model.Query.init(
-        @enumFromInt(3),
-        .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
-        "gi",
-        .global,
-        "",
-        .invalid,
-        false,
-        20,
-    );
+    const short = try model.Query.init(.{
+        .request_id = @enumFromInt(3),
+        .origin = .{
+            .client = .{ .id = 1, .generation = 1 },
+            .close_after_reply = false,
+        },
+        .text = "gi",
+    });
     const short_result = try store.query(gpa, &short);
     defer short_result.deinit();
     try std.testing.expectEqual(@as(usize, 2), short_result.entries.len);

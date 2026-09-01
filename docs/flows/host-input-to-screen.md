@@ -38,17 +38,19 @@ runtime_transport.enqueueInput
 Outbox.encodeNext -> schema.pane_input -> socket
       |
       v
-Server.handleClientMessageEvent -> dispatchClientMessage
+Runtime.run -> application.handle(.client_message) -> ClientEvents.handleMessage
+      |
+Application.dispatchClientMessage
       |
 Pane input queue -> writePaneInput -> child PTY
       |
       | child emits output
       v
-Server.handlePaneOutputEvent -> ingestPane -> Pane.ingest
+application.handle(.pane_output) -> PaneEvents.Pipeline -> Pane.ingest
       |
-Server.handlePaneIngestedEvent -> Server.pump
+application.handle(.pane_ingested) -> pane ingest Coordinator -> Application.pump
       |
-runtime.encoder.encodeFrame -> schema.pane_frame -> socket
+Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
       v
 runtime_transport.handleRead -> server_messages -> pane_frames
@@ -267,20 +269,23 @@ wire order is `set_pane_viewport` followed by `pane_input`.
 
 ## 3. Runtime input entry
 
-`receiveSession` completes as `.client_message`. The runtime loop delegates it
-to `Server.handleClientMessageEvent` in `src/backend/runtime/root.zig`. That
-entrypoint resolves the client generation, decodes the message, establishes
-the connection role, calls `Server.dispatchClientMessage`, pumps pending
-responses and schedules the next socket read.
+`receiveSession` completes as `.client_message`. `Runtime.run` delegates it
+through `application.handle` to `Dispatcher.handleMessage` in
+`src/backend/runtime/application/event_dispatcher/client.zig`. That adapter
+resolves the client generation, decodes the message, establishes the connection
+role, calls `Application.dispatchClientMessage`, pumps pending responses and
+schedules the next socket read.
 
-The `.pane_input` case in `Server.dispatchClientMessage`:
+`RequestDispatcher.dispatch` in
+`src/backend/runtime/application/request_dispatch.zig` routes `.pane_input`
+through its request-scoped controller:
 
 1. resolves the client's attachment and rejects stale or exited panes;
 2. copies the bytes into the best-effort history observer;
 3. appends them to the pane's bounded input queue;
-4. calls `schedulePaneInput`.
+4. asks `operation_scheduler.zig` to schedule pane input.
 
-`schedulePaneInput` permits one in-flight write per pane.
+`PaneEvents.Io.scheduleInput` permits one in-flight write per pane.
 `writePaneInput` serializes PTY writes with terminal-query responses and writes
 the bytes to the child PTY. Its `.pane_input_written` completion consumes the
 queue prefix and schedules the next chunk. A blocked pane write does not block
@@ -292,7 +297,9 @@ The child may echo the input, repaint, emit unrelated output, or emit nothing.
 There is no assumption that one key produces one frame.
 
 `readPane` completes as `.pane_output`, which delegates to
-`Server.handlePaneOutputEvent`. The entrypoint:
+`Pipeline.handle` in
+`src/backend/runtime/entrypoints/events/pane/output.zig` through
+`application/event_dispatcher/pane/pipeline.zig`. The pipeline:
 
 1. marks EOF or failure as completed output;
 2. feeds copies to the observation and media queues;
@@ -303,21 +310,21 @@ the bytes to its `vt.Terminal`, snapshots child input modes and marks its cell
 projection dirty. VT is the only component that interprets child escape
 sequences.
 
-The `.pane_ingested` completion delegates to
-`Server.handlePaneIngestedEvent`. It applies deferred resize state, schedules
-terminal responses and the next PTY read, then calls `Server.pumpAll`.
+The `.pane_ingested` completion delegates to `Coordinator` in
+`src/backend/runtime/entrypoints/events/pane/ingest.zig`. It applies deferred
+resize state, schedules terminal responses and the next PTY read, then calls
+`Application.pumpAll`.
 
 ## 5. Runtime frame publication
 
-`Server.pump` publishes a pane only after ingestion is complete and only when
-that client's prior frame has been acknowledged. It calls
-`runtime.encoder.encodeFrame` in `src/backend/runtime/encoder.zig`.
-
-`encodeFrame` renders pending VT state through the pane projection, computes a
-bounded cell diff against that attachment's acknowledged buffer, and calls
-`schema.encodePaneFrame`. `startSessionSend` writes the `.pane_frame` message
-to that client. Intermediate visual states may be folded; they are not queued
-as a replay.
+`Application.pump` publishes a pane only after ingestion is complete and only when
+that client's prior frame has been acknowledged. `Delivery.prepare` selects
+the attachment cell lane and calls `Attachment.prepareNextCells`. The internal
+`cell.Sync.prepare` in `src/backend/runtime/attachment/cell.zig` renders the
+pending VT state, computes a bounded cell diff against that attachment's
+acknowledged buffer and calls `schema.encodePaneFrame`. `startSessionSend`
+writes the `.pane_frame` message to that client. Intermediate visual states may
+be folded; they are not queued as a replay.
 
 ## 6. Client frame and host presentation
 

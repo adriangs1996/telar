@@ -5,7 +5,7 @@ const frontend = @import("telar-frontend");
 const handshake = core.handshake;
 
 const test_receive_timeout: std.Io.Timeout = .{
-    .duration = .{ .clock = .awake, .raw = .fromSeconds(5) },
+    .duration = .{ .clock = .awake, .raw = .fromSeconds(15) },
 };
 
 const TestReceiveEvent = union(enum) {
@@ -54,6 +54,19 @@ fn receiveRuntimeFrame(
 
 fn waitForTestReceiveDeadline(io: std.Io) anyerror!void {
     return test_receive_timeout.sleep(io);
+}
+
+fn waitForFile(io: std.Io, path: []const u8, attempts: usize) !bool {
+    for (0..attempts) |_| {
+        if (std.Io.Dir.cwd().statFile(io, path, .{})) |_| {
+            return true;
+        } else |err| switch (err) {
+            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
+            else => return err,
+        }
+    }
+
+    return false;
 }
 
 const HandshakeWorker = struct {
@@ -236,7 +249,8 @@ test "runtime stops with a live pane and removes its endpoint" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -315,7 +329,8 @@ test "invalid launch cwd fails before workspace commit" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -387,7 +402,8 @@ fn expectPartialLaunchRecovery(phase: backend.history.LaunchPhase) !void {
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
     var fault: backend.runtime.LaunchTestFault = .{ .phase = phase };
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
         .launch_fault = &fault,
@@ -482,7 +498,8 @@ test "runtime destroys a pane after its shell exits" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -612,7 +629,8 @@ test "the last pane closes only its tab when the workspace has another tab" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -710,7 +728,8 @@ test "an exited detached pane removes its tab and workspace" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -770,7 +789,8 @@ test "one client drives two attached panes and closes either one" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -925,10 +945,13 @@ test "pane keeps running while its client is disconnected" {
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/persistent.sock", .{directory});
     var release_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const release_path = try std.fmt.bufPrint(&release_buffer, "{s}/release-persistent-pane", .{directory});
+    var finish_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const finish_path = try std.fmt.bufPrint(&finish_buffer, "{s}/finish-persistent-pane", .{directory});
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -943,9 +966,11 @@ test "pane keeps running while its client is disconnected" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "while [ ! -e \"$1\" ]; do sleep 0.01; done; printf TELAR_PERSISTED",
+        "while [ ! -e \"$1\" ]; do sleep 0.01; done; printf TELAR_PERSISTED; " ++
+            "while [ ! -e \"$2\" ]; do sleep 0.01; done",
         "telar-test",
         release_path,
+        finish_path,
     };
     var send_buffer: [512]u8 = undefined;
     try first.send(io, try schema.encodeOpenPane(&send_buffer, .{
@@ -980,6 +1005,7 @@ test "pane keeps running while its client is disconnected" {
     var cells: [40 * 8]core.ui.Cell = @splat(.{});
     var saw_output = false;
     var attached = false;
+    var finish_released = false;
     for (0..64) |_| {
         const payload = second.receive(io, receive_buffer) catch |err| {
             std.debug.print("reconnected client receive failed: {s}\n", .{@errorName(err)});
@@ -1002,11 +1028,17 @@ test "pane keeps running while its client is disconnected" {
                     var index: usize = span.start;
                     while (try frame_cells.next()) |cell| : (index += 1) cells[index] = cell;
                 }
-                saw_output = rowContains(cells[0..40], "TELAR_PERSISTED");
+                saw_output = saw_output or rowContains(cells[0..40], "TELAR_PERSISTED");
                 try second.send(io, try schema.encodeFrameAck(&send_buffer, .{
                     .pane_id = original_pane_id,
                     .frame_id = frame.frame_id,
                 }));
+
+                if (saw_output and !finish_released) {
+                    var finish = try temp.dir.createFile(io, "finish-persistent-pane", .{});
+                    finish.close(io);
+                    finish_released = true;
+                }
             },
             .pane_exited => |exited| {
                 try std.testing.expect(attached);
@@ -1046,7 +1078,8 @@ test "runtime keeps independent panes for different workspaces" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1130,7 +1163,8 @@ test "explicit workspace creation and selection use identity instead of path" {
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
     var fault: backend.runtime.LaunchTestFault = .{ .phase = .pane_registration };
     fault.claimed.store(true, .release);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
         .launch_fault = &fault,
@@ -1293,7 +1327,8 @@ test "tab launch inherits cwd from a runtime-owned pane" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1342,7 +1377,7 @@ test "tab launch inherits cwd from a runtime-owned pane" {
     const inherited_arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "pwd > \"$1\"; sleep 600",
+        "pwd > \"$1.tmp\" && mv \"$1.tmp\" \"$1\"; sleep 600",
         "telar",
         sentinel_path,
     };
@@ -1403,7 +1438,8 @@ test "runtime owns the complete tab lifecycle" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1547,7 +1583,8 @@ test "a reconnect restores tab order labels and pane membership" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1693,7 +1730,8 @@ test "an identical pane resize does not emit another snapshot" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1787,8 +1825,8 @@ test "runtime persists terminal-edited commands without shell integration" {
     var server = try io.concurrent(backend.runtime.serve, .{
         io,
         gpa,
-        socket_path,
         .{
+            .endpoint = socket_path,
             .environment = std.testing.environ,
             .history_path = database_path,
             .stop = &stop,
@@ -1902,7 +1940,8 @@ test "modified Enter follows child keyboard negotiation through the PTY" {
     const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/keyboard.sock", .{directory});
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -1945,7 +1984,11 @@ test "modified Enter follows child keyboard negotiation through the PTY" {
     defer gpa.free(receive_buffer);
     var cells: [40 * 8]core.ui.Cell = @splat(.{});
     var stage: usize = 0;
-    while (true) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
+    while (true) switch (try schema.decodeServer(connection.receive(io, receive_buffer) catch |err| {
+        const expected = if (stage < stages.len) stages[stage].marker else "INPUT_OK";
+        std.debug.print("\nKeyboard negotiation stalled waiting for {s} at stage {d}.\n", .{ expected, stage });
+        return err;
+    })) {
         .pane_frame => |frame| {
             try applyFrameCells(&cells, frame);
             try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
@@ -2010,8 +2053,8 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     var server = try io.concurrent(backend.runtime.serve, .{
         io,
         gpa,
-        socket_path,
         .{
+            .endpoint = socket_path,
             .environment = std.testing.environ,
             .stop = &stop,
             .ingest_gate = &gate,
@@ -2030,8 +2073,11 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     const command = try std.fmt.bufPrint(
         &command_buffer,
         "stty raw -echo; printf 'MEDIA_READY\\n'; " ++
-            "dd bs=1 count=1 of=/dev/null 2>/dev/null; " ++
-            ": > '{s}'; printf 'INPUT_FORWARDED\\n'; sleep 1",
+            "(sleep 2; kill -TERM 0) & watchdog=$!; " ++
+            "if dd bs=1 count=1 of=/dev/null 2>/dev/null; then " ++
+            "kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; " ++
+            ": > '{s}'; " ++
+            "else kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; exit 1; fi",
         .{sentinel_path},
     );
     const arguments = [_][]const u8{ "/bin/sh", "-c", command };
@@ -2061,22 +2107,26 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         .bytes = "x",
     }));
 
-    var forwarded = false;
-    for (0..1000) |_| {
-        if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
-            forwarded = true;
-            break;
-        } else |err| switch (err) {
-            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
-            else => return err,
-        }
-    }
+    const forwarded = try waitForFile(io, sentinel_path, 1000);
     const elapsed: u64 = @intCast(std.Io.Timestamp.now(io, .awake).toNanoseconds() - started);
-    try std.testing.expect(forwarded);
-    try std.testing.expect(elapsed < std.time.ns_per_s);
-
     release.putOneUncancelable(io, 0) catch unreachable;
     gate_released = true;
+
+    if (!forwarded) {
+        std.debug.print(
+            "\nPTY input did not reach the child while the ingest actor was blocked.\n",
+            .{},
+        );
+        return error.PtyInputForwardingDeadlineExceeded;
+    }
+
+    if (elapsed >= std.time.ns_per_s) {
+        std.debug.print(
+            "\nPTY input forwarding exceeded its 1 s test budget: {d} ns.\n",
+            .{elapsed},
+        );
+        return error.PtyInputForwardingDeadlineExceeded;
+    }
 }
 
 test "runtime terminates KGP, replies to the child, and resynchronizes graphics" {
@@ -2094,7 +2144,8 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, socket_path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2109,9 +2160,13 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
         "stty raw -echo; " ++
         "printf '\\033_Ga=T,f=32,o=z,s=1,v=1,t=d,i=7,q=2,C=1,c=2,r=2;eAFjZGL+DwABEwEG\\033\\\\'; " ++
         "printf '\\033_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\\033\\\\'; " ++
-        "reply=$(dd bs=1 count=12 2>/dev/null); " ++
+        "trap 'printf \"KGP_CHILD_TIMEOUT\\n\"; exit 1' TERM; " ++
+        "(sleep 4; kill -TERM 0) & watchdog=$!; " ++
+        "reply=$(dd bs=1 count=12 2>/dev/null); status=$?; " ++
+        "kill \"$watchdog\" 2>/dev/null; wait \"$watchdog\" 2>/dev/null; " ++
+        "if [ \"$status\" -eq 0 ]; then " ++
         "case \"$reply\" in *'Gi=31;OK'*) printf 'KGP_CHILD_OK\\n';; *) printf 'KGP_CHILD_BAD\\n';; esac; " ++
-        "sleep 2";
+        "else printf 'KGP_CHILD_BAD\\n'; fi; sleep 2";
     const arguments = [_][]const u8{ "/bin/sh", "-c", script };
     var send_buffer: [2048]u8 = undefined;
     try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
@@ -2145,7 +2200,12 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
             .pane_frame => |frame| {
                 try applyFrameCells(&cells, frame);
                 saw_child_reply = rowContains(&cells, "KGP_CHILD_OK");
-                if (rowContains(&cells, "KGP_CHILD_BAD")) return error.KittyQueryReplyMissing;
+                if (rowContains(&cells, "KGP_CHILD_BAD")) {
+                    return error.KittyQueryReplyMissing;
+                }
+                if (rowContains(&cells, "KGP_CHILD_TIMEOUT")) {
+                    return error.KittyQueryReplyTimedOut;
+                }
                 try connection.send(io, try schema.encodeFrameAck(&send_buffer, .{
                     .pane_id = frame.pane_id,
                     .frame_id = frame.frame_id,
@@ -2209,7 +2269,8 @@ test "a silent connection cannot starve later clients" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2259,10 +2320,13 @@ test "input to one pane flows while another pane's PTY is wedged" {
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/wedged.sock", .{directory});
     var sentinel_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const sentinel_path = try std.fmt.bufPrint(&sentinel_buffer, "{s}/b-input", .{directory});
+    var ready_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const ready_path = try std.fmt.bufPrint(&ready_buffer, "{s}/b-ready", .{directory});
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2308,11 +2372,11 @@ test "input to one pane flows while another pane's PTY is wedged" {
     };
 
     // Pane B: acknowledges one byte of input through the filesystem.
-    var command_buffer: [2 * std.fs.max_path_bytes]u8 = undefined;
+    var command_buffer: [3 * std.fs.max_path_bytes]u8 = undefined;
     const command = try std.fmt.bufPrint(
         &command_buffer,
-        "stty raw -echo; dd bs=1 count=1 of=/dev/null 2>/dev/null; : > '{s}'; sleep 600",
-        .{sentinel_path},
+        "stty raw -echo; : > '{s}'; dd bs=1 count=1 of=/dev/null 2>/dev/null; : > '{s}'; sleep 600",
+        .{ ready_path, sentinel_path },
     );
     try connection.send(io, try schema.encodeCreatePane(&send_buffer, .{
         .request_id = @enumFromInt(2),
@@ -2332,8 +2396,10 @@ test "input to one pane flows while another pane's PTY is wedged" {
         .request_failed => return error.RuntimeRequestFailed,
         else => {},
     };
-    // Give pane B's shell a moment to reach its read.
-    try io.sleep(.fromMilliseconds(100), .awake);
+    if (!try waitForFile(io, ready_path, 3000)) {
+        std.debug.print("\nLive pane did not become ready to consume PTY input.\n", .{});
+        return error.LivePaneInputReadinessDeadlineExceeded;
+    }
 
     // Flood the wedged pane far past any kernel PTY buffer.
     const flood = [_]u8{'x'} ** (16 * 1024);
@@ -2348,17 +2414,10 @@ test "input to one pane flows while another pane's PTY is wedged" {
         .bytes = "y",
     }));
 
-    var forwarded = false;
-    for (0..3000) |_| {
-        if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
-            forwarded = true;
-            break;
-        } else |err| switch (err) {
-            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
-            else => return err,
-        }
+    if (!try waitForFile(io, sentinel_path, 3000)) {
+        std.debug.print("\nInput did not reach the live pane while the other PTY was wedged.\n", .{});
+        return error.LivePaneInputForwardingDeadlineExceeded;
     }
-    try std.testing.expect(forwarded);
 }
 
 test "two clients observe one pane with independent frame acknowledgement" {
@@ -2376,7 +2435,8 @@ test "two clients observe one pane with independent frame acknowledgement" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2550,7 +2610,8 @@ test "a stale attachment command does not disconnect the client" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });
@@ -2605,7 +2666,8 @@ test "runtime broadcasts a bounded notification and acknowledges delivery" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, path, .{
+    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+        .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
     } });

@@ -70,6 +70,26 @@ pub const Service = struct {
         available: bool,
     };
 
+    pub const LaunchAttemptRequest = struct {
+        pane_id: model_mod.schema.PaneId,
+        pane_generation: u64,
+        location: model_mod.schema.TabLocation,
+        workspace_path: []const u8,
+        shell: []const u8,
+        started_at_ms: i64,
+        phase: LaunchPhase,
+        cause: []const u8,
+    };
+
+    pub const SessionStartRequest = struct {
+        session_id: SessionId,
+        pane_id: model_mod.schema.PaneId,
+        location: model_mod.schema.TabLocation,
+        workspace_path: []const u8,
+        shell: []const u8,
+        started_at_ms: i64,
+    };
+
     pub fn init(gpa: std.mem.Allocator, database_path: [:0]const u8) !Service {
         const request_storage = try gpa.alloc(model_mod.Request, request_capacity);
         errdefer gpa.free(request_storage);
@@ -129,36 +149,30 @@ pub const Service = struct {
         return session_id;
     }
 
-    pub fn recordLaunchAttempt(
-        service: *Service,
-        io: std.Io,
-        pane_id: model_mod.schema.PaneId,
-        pane_generation: u64,
-        location: model_mod.schema.TabLocation,
-        workspace_path: []const u8,
-        shell: []const u8,
-        started_at_ms: i64,
-        phase: LaunchPhase,
-        cause: []const u8,
-    ) bool {
+    /// Copies and queues one failed pane-launch transaction for persistence.
+    ///
+    /// ```zig
+    /// _ = service.recordLaunchAttempt(io, .{ .pane_id = pane_id, .pane_generation = generation, .location = location, .workspace_path = path, .shell = shell, .started_at_ms = started, .phase = .output_actor, .cause = "WriteFailed" });
+    /// ```
+    pub fn recordLaunchAttempt(service: *Service, io: std.Io, request: LaunchAttemptRequest) bool {
         const value = service.gpa.create(model_mod.LaunchAttempt) catch return false;
         value.* = .{
-            .pane_id = pane_id,
-            .pane_generation = pane_generation,
-            .location = location,
-            .started_at_ms = started_at_ms,
+            .pane_id = request.pane_id,
+            .pane_generation = request.pane_generation,
+            .location = request.location,
+            .started_at_ms = request.started_at_ms,
             .failed_at_ms = std.Io.Timestamp.now(io, .real).toMilliseconds(),
-            .phase = phase,
-            .workspace_path = service.gpa.dupe(u8, workspace_path) catch {
+            .phase = request.phase,
+            .workspace_path = service.gpa.dupe(u8, request.workspace_path) catch {
                 service.gpa.destroy(value);
                 return false;
             },
-            .shell = service.gpa.dupe(u8, shell) catch {
+            .shell = service.gpa.dupe(u8, request.shell) catch {
                 service.gpa.free(value.workspace_path);
                 service.gpa.destroy(value);
                 return false;
             },
-            .cause = service.gpa.dupe(u8, cause) catch {
+            .cause = service.gpa.dupe(u8, request.cause) catch {
                 service.gpa.free(value.shell);
                 service.gpa.free(value.workspace_path);
                 service.gpa.destroy(value);
@@ -168,27 +182,23 @@ pub const Service = struct {
         return service.submit(io, .{ .launch_attempt = value });
     }
 
-    pub fn startSession(
-        service: *Service,
-        io: std.Io,
-        session_id: SessionId,
-        pane_id: model_mod.schema.PaneId,
-        location: model_mod.schema.TabLocation,
-        workspace_path: []const u8,
-        shell: []const u8,
-        started_at_ms: i64,
-    ) bool {
+    /// Copies and queues the immutable identity of one committed pane session.
+    ///
+    /// ```zig
+    /// _ = service.startSession(io, .{ .session_id = id, .pane_id = pane_id, .location = location, .workspace_path = path, .shell = shell, .started_at_ms = started });
+    /// ```
+    pub fn startSession(service: *Service, io: std.Io, request: SessionStartRequest) bool {
         const value = service.gpa.create(model_mod.SessionStarted) catch return false;
         value.* = .{
-            .id = session_id,
-            .pane_id = pane_id,
-            .location = location,
-            .started_at_ms = started_at_ms,
-            .workspace_path = service.gpa.dupe(u8, workspace_path) catch {
+            .id = request.session_id,
+            .pane_id = request.pane_id,
+            .location = request.location,
+            .started_at_ms = request.started_at_ms,
+            .workspace_path = service.gpa.dupe(u8, request.workspace_path) catch {
                 service.gpa.destroy(value);
                 return false;
             },
-            .shell = service.gpa.dupe(u8, shell) catch {
+            .shell = service.gpa.dupe(u8, request.shell) catch {
                 service.gpa.free(value.workspace_path);
                 service.gpa.destroy(value);
                 return false;
@@ -197,32 +207,22 @@ pub const Service = struct {
         return service.submit(io, .{ .session_started = value });
     }
 
-    pub fn finishSession(
-        service: *Service,
-        io: std.Io,
-        session_id: SessionId,
-        finished_at_ms: i64,
-    ) bool {
-        return service.submit(io, .{ .session_finished = .{
-            .id = session_id,
-            .finished_at_ms = finished_at_ms,
-        } });
+    /// Queues the terminal timestamp for one history session.
+    ///
+    /// ```zig
+    /// _ = service.finishSession(io, .{ .id = session_id, .finished_at_ms = finished });
+    /// ```
+    pub fn finishSession(service: *Service, io: std.Io, finished: model_mod.SessionFinished) bool {
+        return service.submit(io, .{ .session_finished = finished });
     }
 
-    pub fn setSessionTitle(
-        service: *Service,
-        io: std.Io,
-        session_id: SessionId,
-        title: []const u8,
-        source: model_mod.schema.AgentTitleSource,
-        state: model_mod.schema.AgentTitleState,
-    ) bool {
-        const value = model_mod.SessionTitle.init(
-            session_id,
-            title,
-            source,
-            state,
-        ) catch return false;
+    /// Validates and queues the latest authoritative title state for a session.
+    ///
+    /// ```zig
+    /// _ = service.setSessionTitle(io, .{ .id = session_id, .title = "Fix tests", .source = .generated, .state = .ready });
+    /// ```
+    pub fn setSessionTitle(service: *Service, io: std.Io, definition: model_mod.SessionTitle.Definition) bool {
+        const value = model_mod.SessionTitle.init(definition) catch return false;
         return service.submit(io, .{ .session_title = value });
     }
 
@@ -236,12 +236,21 @@ pub const Service = struct {
         rows: u16,
     };
 
-    pub fn recordCommand(
-        service: *Service,
-        io: std.Io,
+    pub const CommandRecord = struct {
         context: CommandContext,
         command: terminal_mod.Command,
-    ) bool {
+    };
+
+    /// Copies one completed command into a single owned allocation and queues
+    /// it for the history worker.
+    ///
+    /// ```zig
+    /// _ = service.recordCommand(io, .{ .context = context, .command = command });
+    /// ```
+    pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
+        const context = record.context;
+        const command = record.command;
+
         const allocation_len = @sizeOf(model_mod.CommandFinished) + command.bytes.len +
             command.cwd.len + context.workspace_path.len;
         const allocation = service.gpa.alignedAlloc(
@@ -499,20 +508,19 @@ test "launch attempt recording releases every partial allocation" {
         var service = try Service.init(gpa, ":memory:");
         var failing: std.testing.FailingAllocator = .init(gpa, .{ .fail_index = fail_index });
         service.gpa = failing.allocator();
-        completed = service.recordLaunchAttempt(
-            io,
-            @enumFromInt(7),
-            3,
-            .{
+        completed = service.recordLaunchAttempt(io, .{
+            .pane_id = @enumFromInt(7),
+            .pane_generation = 3,
+            .location = .{
                 .workspace = .{ .workspace = @enumFromInt(2) },
                 .tab_id = @enumFromInt(5),
             },
-            "/work/telar",
-            "/bin/sh",
-            1_000,
-            .output_actor,
-            "InjectedLaunchFailure",
-        );
+            .workspace_path = "/work/telar",
+            .shell = "/bin/sh",
+            .started_at_ms = 1_000,
+            .phase = .output_actor,
+            .cause = "InjectedLaunchFailure",
+        });
         service.deinit(io);
     }
 }

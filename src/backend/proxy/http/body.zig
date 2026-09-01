@@ -39,7 +39,7 @@ pub fn relay(session: anytype, route: Route, observer: anytype) bool {
 
     return switch (route.framing) {
         .none => true,
-        .length => |len| relayExact(session, .{
+        .content_length => |len| relayExact(session, .{
             .direction = direction,
             .count = len,
             .payload = true,
@@ -196,7 +196,7 @@ test "a fixed body stops at its declared length across short reads" {
 
     try std.testing.expect(relay(
         &fake,
-        testRoute(.child, .origin, .{ .length = 4 }),
+        testRoute(.child, .origin, .{ .content_length = 4 }),
         &activity,
     ));
     try std.testing.expectEqual(@as(usize, 4), fake.child_offset);
@@ -212,7 +212,7 @@ test "an incomplete fixed body reports failure after forwarding its prefix" {
 
     try std.testing.expect(!relay(
         &fake,
-        testRoute(.child, .origin, .{ .length = 4 }),
+        testRoute(.child, .origin, .{ .content_length = 4 }),
         &activity,
     ));
     try std.testing.expectEqualStrings("ab", fake.originOutput());

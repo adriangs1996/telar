@@ -7,9 +7,21 @@
 const std = @import("std");
 const core = @import("telar-core");
 const claude = @import("claude.zig");
+const claude_transport = @import("claude_transport.zig");
+const request = @import("request.zig");
+const request_body = @import("request_body.zig");
 const sse = @import("../sse.zig");
 
-const AgentProvider = core.schema.AgentProvider;
+pub const AgentProvider = core.schema.AgentProvider;
+
+pub const Request = request.Request;
+pub const RequestClass = request.RequestClass;
+pub const identify = request.identify;
+pub const classify = request.classify;
+pub const RequestObserver = request_body.Observer;
+pub const RequestFragment = request_body.Fragment;
+pub const RequestStreams = request_body.Streams;
+pub const claudeRequestTransformer = claude_transport.requestTransformer;
 
 pub const max_concurrent_responses = 128;
 
@@ -45,7 +57,15 @@ pub const ResponseObserver = struct {
             return false;
         }
 
-        observer.decoder.feed(input, observer, inspectEvent);
+        const EventSink = struct {
+            observer: *ResponseObserver,
+
+            pub fn emit(sink: *@This(), event: sse.Event) void {
+                sink.observer.inspectEvent(event);
+            }
+        };
+        var sink: EventSink = .{ .observer = observer };
+        observer.decoder.feed(input, &sink);
         return observer.completed;
     }
 
@@ -93,7 +113,9 @@ pub const ResponseStreams = struct {
     /// only semantic observation; transport forwarding remains unaffected.
     ///
     /// ```zig
-    /// if (streams.feed(stream_id, bytes)) publishCompletion(stream_id);
+    /// if (streams.feed(stream_id, bytes)) {
+    ///     publishCompletion(stream_id);
+    /// }
     /// ```
     pub fn feed(streams: *ResponseStreams, stream_id: u32, input: []const u8) bool {
         if (stream_id == 0 or streams.provider != .claude) {
@@ -283,4 +305,5 @@ test "response streams degrade locally at their fixed concurrency bound" {
 
 test {
     std.testing.refAllDecls(claude);
+    std.testing.refAllDecls(request);
 }

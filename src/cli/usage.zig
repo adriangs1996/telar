@@ -1,0 +1,97 @@
+//! User-facing command-line help.
+
+const std = @import("std");
+
+pub const text =
+    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
+    \\       telar server
+    \\       telar server stop
+    \\       telar config check [PATH] [--profile NAME]
+    \\       telar plugin inspect PATH
+    \\       telar plugin install PATH
+    \\       telar plugin trust PATH [--capability NAME]...
+    \\       telar history list [options]
+    \\       telar history search <query> [options]
+    \\       telar notification show <title> [options]
+    \\
+    \\Run an interactive shell inside telar's multiplexer UI.
+    \\With a command, run that command instead of $SHELL.
+    \\The local runtime starts automatically when needed.
+    \\
+    \\Commands:
+    \\  server           Run the local runtime in the foreground
+    \\  server stop      Stop the local runtime
+    \\  history list     Show recent command history
+    \\  history search   Search command history
+    \\  notification show  Show a toast in every connected UI client
+    \\  config check     Compile and validate config.lua, then exit
+    \\  plugin inspect   Validate a package and print its immutable identity
+    \\  plugin install   Copy a package into the content-addressed local store
+    \\  plugin trust     Grant declared capabilities to one exact package digest
+    \\
+    \\History options:
+    \\  --cwd            Restrict results to the current directory
+    \\  --workspace PATH Restrict results to a workspace path
+    \\  --pane ID        Restrict results to a pane
+    \\  --failed         Only show commands with a non-zero exit status
+    \\  --limit N        Return at most N results (default 20, maximum 100)
+    \\  --socket PATH    Query a specific local runtime
+    \\
+    \\Notification options:
+    \\  --body TEXT      Add detail text below the title
+    \\  --level LEVEL    info, success, warning, or failure
+    \\  --duration MS    Keep it visible for 500..60000 ms (default 4000)
+    \\  --pane ID        Make it focus a pane when clicked
+    \\  --tab ID         Make it select a tab when clicked
+    \\  --workspace ID   Make it select a workspace when clicked
+    \\  --socket PATH    Notify clients of a specific local runtime
+    \\
+    \\Options:
+    \\  --config PATH     Load a specific Lua configuration
+    \\  --no-config       Do not load Lua configuration
+    \\  --profile NAME    Overlay a named Lua profile before CLI options
+    \\  --theme NAME      UI theme: vesper, catppuccin, tokyo-night, terminal
+    \\  --sidebar-renderer MODE  automatic, cells, kitty-hybrid, kitty-full
+    \\Server options:
+    \\  --graphics-pane-mib N    Decoded KGP memory per pane (default 64)
+    \\  --graphics-global-mib N  Decoded KGP memory for the runtime (default 256)
+    \\  -h, --help       Show this help
+    \\  -V, --version    Show the version
+    \\  --               Stop parsing telar options
+    \\
+    \\Default keybindings (prefix Ctrl-b):
+    \\  % / "             Split left/right or top/bottom
+    \\  Arrow keys       Focus a pane by direction
+    \\  Shift+arrows     Resize the focused pane
+    \\  z                Toggle pane fullscreen
+    \\  s                Toggle the sidebar
+    \\  w                Toggle the workspace list
+    \\  N                Create and select a workspace
+    \\  W                Rename the active workspace
+    \\  x                Close the focused pane
+    \\  [                Enter copy mode
+    \\  c                Create and select a tab
+    \\  n / p            Select the next or previous tab
+    \\  1..9             Select a tab by position
+    \\  T                Rename the active tab
+    \\  X                Close the active tab
+    \\  , / .            Move the active tab left or right
+    \\  d                Detach the client
+    \\
+;
+
+test "usage names every public subcommand" {
+    for ([_][]const u8{
+        "server",
+        "server stop",
+        "config check",
+        "plugin inspect",
+        "plugin install",
+        "plugin trust",
+        "history list",
+        "history search",
+        "notification show",
+    }) |command| {
+        try std.testing.expect(std.mem.indexOf(u8, text, command) != null);
+    }
+}

@@ -7,11 +7,12 @@ pub fn perform(io: @import("std").Io, connection: anytype) !schema.ServerRespons
     return performSchema(io, connection, schema.schema_id);
 }
 
-pub fn performSchema(
-    io: @import("std").Io,
-    connection: anytype,
-    supported: schema.SchemaId,
-) !schema.ServerResponse {
+/// Negotiates an explicit schema identifier, primarily for compatibility tests.
+///
+/// ```zig
+/// const response = try performSchema(io, &connection, supported);
+/// ```
+pub fn performSchema(io: @import("std").Io, connection: anytype, supported: schema.SchemaId) !schema.ServerResponse {
     var request_buffer: [schema.max_message_size]u8 = undefined;
     const request = try connection.receive(io, &request_buffer);
     const hello = try schema.decodeClientHello(request);

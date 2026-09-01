@@ -479,13 +479,12 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         context.current[context.changed_index].bytes[0] = if (iteration & 1 == 0) '0' else '1';
-        const diff = backend.damage.collectSpans(
-            context.current,
-            context.acknowledged,
-            cols,
-            context.damaged_rows,
-            context.spans,
-        );
+        const diff = backend.damage.collectSpans(.{
+            .current = context.current,
+            .acknowledged = context.acknowledged,
+            .cols = cols,
+            .damaged_rows = context.damaged_rows,
+        }, context.spans);
         checksum +%= diff.scanned_cells + diff.span_count;
     }
     return checksum;
@@ -508,13 +507,12 @@ const FrameContext = struct {
     }
 
     fn encode(context: *FrameContext) ![]const u8 {
-        const diff = backend.damage.collectSpans(
-            context.damage.current,
-            context.damage.acknowledged,
-            cols,
-            context.damage.damaged_rows,
-            context.damage.spans,
-        );
+        const diff = backend.damage.collectSpans(.{
+            .current = context.damage.current,
+            .acknowledged = context.damage.acknowledged,
+            .cols = cols,
+            .damaged_rows = context.damage.damaged_rows,
+        }, context.damage.spans);
         return schema.encodePaneFrame(
             context.encode_buffer,
             frame(2, context.damage.spans[0..diff.span_count]),

@@ -14,6 +14,16 @@ pub const Error = error{
     MintFailed,
 };
 
+pub const InterceptOptions = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+    authority: *const ca.Authority,
+    roots: *const Roots,
+    host: []const u8,
+    child: net.Stream,
+    origin: net.Stream,
+};
+
 const alpn_offer = [_][]const u8{ "h2", "http/1.1" };
 const alpn_h2_only = [_][]const u8{"h2"};
 const alpn_http11_only = [_][]const u8{"http/1.1"};
@@ -51,12 +61,6 @@ pub const Session = struct {
         fn wire(endpoint: *End, io: Io) void {
             endpoint.reader = endpoint.stream.reader(io, &endpoint.input_buffer);
             endpoint.writer = endpoint.stream.writer(io, &endpoint.output_buffer);
-        }
-
-        fn concrete(endpoint: *End, err: anyerror) anyerror {
-            if (err == error.WriteFailed) return endpoint.writer.err orelse err;
-            if (err == error.ReadFailed) return endpoint.reader.err orelse err;
-            return err;
         }
     };
 
@@ -102,44 +106,49 @@ pub const Session = struct {
     }
 };
 
-pub fn intercept(
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: *const ca.Authority,
-    roots: *const Roots,
-    host: []const u8,
-    child: net.Stream,
-    origin: net.Stream,
-    cause: *anyerror,
-) Error!*Session {
-    cause.* = error.Unknown;
-    const session = gpa.create(Session) catch return error.ContextFailed;
-    errdefer gpa.destroy(session);
+/// Establishes verified TLS towards the origin and mirrored TLS towards the
+/// child. Every failure releases all partially initialized TLS state; the
+/// caller retains ownership of both streams.
+///
+/// ```zig
+/// const session = try intercept(options);
+/// defer session.deinit();
+/// ```
+pub fn intercept(options: InterceptOptions) Error!*Session {
+    const session = options.gpa.create(Session) catch return error.ContextFailed;
+    errdefer {
+        std.crypto.secureZero(u8, std.mem.asBytes(session));
+        options.gpa.destroy(session);
+    }
     session.* = .{
-        .io = io,
-        .gpa = gpa,
-        .random = .{ .io = io },
-        .auth = try mintAuth(io, gpa, authority, host, cause),
-        .child = .{ .stream = child },
-        .origin = .{ .stream = origin },
+        .io = options.io,
+        .gpa = options.gpa,
+        .random = .{ .io = options.io },
+        .auth = try mintAuth(.{
+            .io = options.io,
+            .gpa = options.gpa,
+            .authority = options.authority,
+            .host = options.host,
+        }),
+        .child = .{ .stream = options.child },
+        .origin = .{ .stream = options.origin },
     };
-    errdefer session.auth.deinit(gpa);
-    session.child.wire(io);
-    session.origin.wire(io);
+    errdefer session.auth.deinit(options.gpa);
+    session.child.wire(options.io);
+    session.origin.wire(options.io);
 
     const offer = peekAlpnOffer(&session.child.reader.interface);
     session.origin.connection = tlsz.client(
         &session.origin.reader.interface,
         &session.origin.writer.interface,
         .{
-            .host = host,
-            .root_ca = roots.bundle,
-            .now = Io.Clock.real.now(io),
+            .host = options.host,
+            .root_ca = options.roots.bundle,
+            .now = Io.Clock.real.now(options.io),
             .rng = session.random.interface(),
             .alpn_protocols = offer,
         },
-    ) catch |err| {
-        cause.* = session.origin.concrete(err);
+    ) catch {
         return error.UpstreamHandshakeFailed;
     };
 
@@ -148,13 +157,12 @@ pub fn intercept(
         &session.child.writer.interface,
         .{
             .auth = &session.auth,
-            .now = Io.Clock.real.now(io),
+            .now = Io.Clock.real.now(options.io),
             .rng = session.random.interface(),
             .alpn_protocols = mirroredAlpn(session.origin.connection.alpn_protocol),
             .cipher_suites_tls12 = &tlsz.config.cipher_suites.tls12_secure,
         },
-    ) catch |err| {
-        cause.* = session.child.concrete(err);
+    ) catch {
         return error.DownstreamHandshakeFailed;
     };
     return session;
@@ -237,15 +245,15 @@ const Cursor = struct {
     }
 };
 
-fn mintAuth(
+const MintOptions = struct {
     io: Io,
     gpa: std.mem.Allocator,
     authority: *const ca.Authority,
     host: []const u8,
-    cause: *anyerror,
-) Error!tlsz.config.CertKeyPair {
-    var leaf = authority.mint(io, host) catch |err| {
-        cause.* = err;
+};
+
+fn mintAuth(options: MintOptions) Error!tlsz.config.CertKeyPair {
+    var leaf = options.authority.mint(options.io, options.host) catch {
         return error.MintFailed;
     };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&leaf));
@@ -254,16 +262,15 @@ fn mintAuth(
     defer std.crypto.secureZero(u8, &key_buffer);
     const result = block: {
         const leaf_pem = leaf.certPem(&chain_buffer) catch |err| break :block err;
-        const ca_pem = authority.pair.certPem(chain_buffer[leaf_pem.len..]) catch |err| break :block err;
+        const ca_pem = options.authority.pair.certPem(chain_buffer[leaf_pem.len..]) catch |err| break :block err;
         const key_pem = leaf.keyPem(&key_buffer) catch |err| break :block err;
         break :block tlsz.config.CertKeyPair.fromSlice(
-            gpa,
-            io,
+            options.gpa,
+            options.io,
             chain_buffer[0 .. leaf_pem.len + ca_pem.len],
             key_pem,
         );
-    } catch |err| {
-        cause.* = err;
+    } catch {
         return error.MintFailed;
     };
     return result;
