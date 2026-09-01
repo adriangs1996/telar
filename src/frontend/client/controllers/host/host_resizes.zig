@@ -11,7 +11,9 @@ const Client = @import("../../client.zig");
 const host_resize = host_application.host_resize;
 const schema = core.schema;
 
-const pixel_queries = "\x1b[14t\x1b[16t";
+/// Pixel geometry plus the host background, so the appearance follows the
+/// outer terminal after every resize as well as at startup.
+const pixel_queries = "\x1b[14t\x1b[16t\x1b]11;?\x07";
 
 pub const Source = struct {
     tty: *const platform.Tty,

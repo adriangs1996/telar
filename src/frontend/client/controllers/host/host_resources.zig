@@ -33,7 +33,20 @@ fn effects(client: *Client) host_resource_delivery.Effects {
         .resize_presenter = resizePresenter,
         .resize_view = resizeView,
         .sync_pane_geometry = syncPaneGeometry,
+        .apply_appearance = applyAppearance,
     };
+}
+
+fn applyAppearance(raw_context: *anyopaque, appearance: client_model.HostAppearance) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+    if (client.options.theme_locked) return;
+    const theme = switch (appearance) {
+        .unknown => return,
+        .light => client.appearance_themes.light orelse return,
+        .dark => client.appearance_themes.dark orelse return,
+    };
+
+    client.view.setTheme(theme);
 }
 
 fn syncGraphicsFallbacks(raw_context: *anyopaque) void {

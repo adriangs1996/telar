@@ -1067,6 +1067,28 @@ pub const Generation = struct {
         generation.snapshot.runtime.session_path_len = @intCast(path.len);
     }
 
+    /// Parses `client.appearance`: the themes adopted when the host terminal
+    /// reports a light or dark background.
+    fn parseAppearance(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.client.appearance must be a table", .{});
+            return error.InvalidConfig;
+        }
+        try ensureOnlyFields(state, absolute, &.{ "light", "dark" }, "config.client.appearance", diagnostic);
+
+        _ = lua.lua_getfield(state, absolute, "light");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            generation.snapshot.theme_light = try parseTheme(state, -1, diagnostic);
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "dark");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            generation.snapshot.theme_dark = try parseTheme(state, -1, diagnostic);
+        pop(state, 1);
+    }
+
     fn parseNotifications(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
         const state = generation.vm.state;
         const absolute = lua.lua_absindex(state, index);
@@ -1116,7 +1138,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "input", "keybindings", "bars" },
+            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars" },
             "config.client",
             diagnostic,
         );
@@ -1191,6 +1213,11 @@ pub const Generation = struct {
         _ = lua.lua_getfield(state, absolute, "notifications");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseNotifications(-1, diagnostic);
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "appearance");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseAppearance(-1, diagnostic);
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "input");
@@ -4115,4 +4142,29 @@ test "notification delivery parses and rejects unknown channels" {
         &invalid,
     ));
     try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar, terminal or system", invalid.message());
+}
+
+test "appearance themes parse and reject unknown names" {
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { appearance = { light = \"catppuccin\", dark = \"vesper\" } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    try std.testing.expectEqual(theme_mod.Builtin.catppuccin, generation.snapshot.theme_light.?.base);
+    try std.testing.expectEqual(theme_mod.Builtin.vesper, generation.snapshot.theme_dark.?.base);
+
+    var invalid: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { appearance = { light = \"neon\" } } }",
+        "@config.lua",
+        1,
+        &invalid,
+    ));
 }

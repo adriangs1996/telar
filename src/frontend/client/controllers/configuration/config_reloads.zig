@@ -146,6 +146,7 @@ const AdoptionContext = struct {
         client.sidebar_rendering = context.adoption.sidebar_rendering;
         client.sound_playback.configure(snapshot.sound);
         client.notification_delivery = snapshot.notification_delivery;
+        client.appearance_themes = .{ .light = snapshot.theme_light, .dark = snapshot.theme_dark };
         context.consumed = true;
 
         if (previous_generation) |generation| {
@@ -171,7 +172,12 @@ fn projectAppearance(raw_context: *anyopaque, apply_theme: bool) void {
     const snapshot = &context.adoption.generation.snapshot;
 
     if (apply_theme) {
-        context.client.view.setTheme(snapshot.theme);
+        const appearance_theme: ?@TypeOf(snapshot.theme) = switch (context.client.model.hostCapabilities().appearance) {
+            .unknown => null,
+            .light => snapshot.theme_light,
+            .dark => snapshot.theme_dark,
+        };
+        context.client.view.setTheme(appearance_theme orelse snapshot.theme);
     }
     context.client.view.setIconTheme(snapshot.icon_theme);
 }

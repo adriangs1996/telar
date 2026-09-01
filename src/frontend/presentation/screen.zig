@@ -380,11 +380,14 @@ pub const Event = union(enum) {
     /// Bytes that arrived but do not yet form a complete sequence.
     incomplete,
 
+    pub const Rgb8 = struct { r: u8, g: u8, b: u8 };
+
     pub const TerminalResponse = union(enum) {
         kitty_graphics: struct { image_id: u32, supported: bool },
         window_pixels: struct { width: u32, height: u32 },
         cell_pixels: struct { width: u32, height: u32 },
         mouse_pixels: struct { supported: bool },
+        background_color: Rgb8,
         primary_device_attributes,
     };
 
@@ -517,6 +520,57 @@ pub const Parsed = struct {
 /// the start of an arrow key until the next byte does or does not come. This
 /// reports `incomplete` with a length of zero and lets the caller keep the
 /// bytes, which is the only honest thing to do.
+/// Parses one OSC reply from the host. Only the OSC 11 background report is
+/// surfaced; every other OSC is consumed silently once its terminator
+/// arrives.
+fn parseOscReply(input: []const u8) Parsed {
+    var end: usize = 2;
+    var terminator_len: usize = 0;
+    while (end < input.len) : (end += 1) {
+        if (input[end] == 0x07) {
+            terminator_len = 1;
+            break;
+        }
+        if (input[end] == 0x1b) {
+            if (end + 1 >= input.len) return .{ .event = .incomplete, .len = 0 };
+            if (input[end + 1] == '\\') {
+                terminator_len = 2;
+                break;
+            }
+            return .{ .event = .incomplete, .len = end };
+        }
+    } else return .{ .event = .incomplete, .len = 0 };
+
+    const length = end + terminator_len;
+    const body = input[2..end];
+    if (std.mem.startsWith(u8, body, "11;")) {
+        if (parseOscColor(body[3..])) |color| {
+            return .{ .event = .{ .terminal_response = .{ .background_color = color } }, .len = length };
+        }
+    }
+
+    return .{ .event = .incomplete, .len = length };
+}
+
+/// Accepts `rgb:RRRR/GGGG/BBBB` with 1..4 hex digits per channel, scaling to
+/// eight bits from the leading digits.
+fn parseOscColor(text: []const u8) ?Event.Rgb8 {
+    if (!std.mem.startsWith(u8, text, "rgb:")) return null;
+    var channels: [3]u8 = undefined;
+    var iterator = std.mem.splitScalar(u8, text[4..], '/');
+    for (&channels) |*channel| {
+        const digits = iterator.next() orelse return null;
+        if (digits.len == 0 or digits.len > 4) return null;
+        var value: u16 = 0;
+        for (digits[0..@min(digits.len, 2)]) |digit| {
+            value = value * 16 + (std.fmt.charToDigit(digit, 16) catch return null);
+        }
+        channel.* = if (digits.len == 1) @intCast(value * 17) else @intCast(value);
+    }
+    if (iterator.next() != null) return null;
+    return .{ .r = channels[0], .g = channels[1], .b = channels[2] };
+}
+
 pub fn parse(input: []const u8) ?Parsed {
     if (input.len == 0) return null;
 
@@ -526,6 +580,7 @@ pub fn parse(input: []const u8) ?Parsed {
     // callers that already own event framing can treat it as the key itself.
     if (input.len == 1) return key(.escape, .{}, 1);
     if (input[1] == '_') return parseApc(input);
+    if (input[1] == ']') return parseOscReply(input);
     // SS3, which is what a terminal in application cursor mode sends for the
     // arrows and for Home and End. Ignoring it makes those keys dead in exactly
     // the terminals that use it.
@@ -1866,4 +1921,25 @@ test "an oversized copy fails rather than silently doing nothing" {
     var huge: [max_clipboard_bytes + 1]u8 = undefined;
     @memset(&huge, 'x');
     try testing.expectError(error.TooLarge, writeClipboard(&w, &huge));
+}
+
+test "an OSC 11 reply reports the host background and other OSCs are consumed" {
+    const reply = "\x1b]11;rgb:1e1e/2222/2e2e\x1b\\";
+    const parsed = parse(reply).?;
+    try std.testing.expectEqual(reply.len, parsed.len);
+    const color = parsed.event.terminal_response.background_color;
+    try std.testing.expectEqual(@as(u8, 0x1e), color.r);
+    try std.testing.expectEqual(@as(u8, 0x22), color.g);
+    try std.testing.expectEqual(@as(u8, 0x2e), color.b);
+
+    const bel = parse("\x1b]11;rgb:f/f/f\x07").?;
+    try std.testing.expectEqual(@as(u8, 0xff), bel.event.terminal_response.background_color.r);
+
+    const other = parse("\x1b]52;c;abc\x07").?;
+    try std.testing.expect(other.event == .incomplete);
+    try std.testing.expectEqual("\x1b]52;c;abc\x07".len, other.len);
+
+    const partial = parse("\x1b]11;rgb:1e1e/22").?;
+    try std.testing.expect(partial.event == .incomplete);
+    try std.testing.expectEqual(@as(usize, 0), partial.len);
 }

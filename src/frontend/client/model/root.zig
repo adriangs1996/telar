@@ -97,6 +97,7 @@ pub const PaneViewportTarget = model_types.PaneViewportTarget;
 pub const PaneViewportCommand = model_types.PaneViewportCommand;
 pub const PaneViewportChange = model_types.PaneViewportChange;
 pub const CopyModeCommand = model_types.CopyModeCommand;
+pub const HostAppearance = model_types.HostAppearance;
 pub const CopyModeProjection = model_types.CopyModeProjection;
 const CopyModeFrame = model_types.CopyModeFrame;
 pub const CopyModePlan = model_types.CopyModePlan;

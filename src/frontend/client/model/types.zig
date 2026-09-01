@@ -305,6 +305,8 @@ pub const InitialClientState = struct {
     host_capabilities: HostCapabilities = .{},
 };
 
+pub const HostAppearance = enum { unknown, light, dark };
+
 pub const HostCapabilities = struct {
     kitty_graphics: kitty.Support = .unknown,
     kitty_zlib: kitty.Support = .unknown,
@@ -313,6 +315,7 @@ pub const HostCapabilities = struct {
     cell_width_px: u32 = 0,
     cell_height_px: u32 = 0,
     mouse_pixels: kitty.Support = .unknown,
+    appearance: HostAppearance = .unknown,
 
     /// Resolves one cell size, preferring the host's explicit cell report.
     ///
@@ -358,6 +361,11 @@ pub const HostCapabilities = struct {
                 next.cell_height_px = size.height;
             },
             .mouse_pixels => |support| next.mouse_pixels = observedSupport(support),
+            .background => |color| {
+                // ITU-R BT.601 luma; the midpoint splits light from dark.
+                const luma = 299 * @as(u32, color.r) + 587 * @as(u32, color.g) + 114 * @as(u32, color.b);
+                next.appearance = if (luma >= 128_000) .light else .dark;
+            },
         }
 
         return next;
@@ -392,6 +400,7 @@ pub const HostCapabilityObservation = union(enum) {
     window_pixels: PixelSize,
     cell_pixels: PixelSize,
     mouse_pixels: HostCapabilitySupport,
+    background: struct { r: u8, g: u8, b: u8 },
 };
 
 fn observedSupport(support: HostCapabilitySupport) kitty.Support {

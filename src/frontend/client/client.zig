@@ -16,6 +16,7 @@ const client_view = @import("presentation/view.zig");
 const client_model = @import("model/root.zig");
 const lua_config = @import("../config/root.zig");
 const sound_capability = @import("../sound/root.zig");
+const theme_capability = @import("../ui/theme.zig");
 const notification_capability = @import("../notifications/root.zig");
 const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
@@ -76,6 +77,11 @@ const presenter_mod = @import("presentation/presenter.zig");
 const request_lifecycle_mod = @import("connection/request_lifecycle.zig");
 const runtime_transport_mod = @import("connection/runtime_transport.zig");
 const sidebar_animations = @import("controllers/notifications/sidebar_animations.zig");
+
+pub const AppearanceThemes = struct {
+    light: ?theme_capability.Theme = null,
+    dark: ?theme_capability.Theme = null,
+};
 
 pub const ClientEvent = union(enum) {
     input: anyerror!InputChunk,
@@ -144,6 +150,7 @@ reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
 sound_playback: sound_capability.Playback,
 notification_delivery: notification_capability.Delivery = .telar,
+appearance_themes: AppearanceThemes = .{},
 clipboard_capture_resources: attachments.CaptureResources = .{},
 
 request_lifecycle: request_lifecycle_mod.State = .{},

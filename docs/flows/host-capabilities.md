@@ -49,7 +49,12 @@ Presenter
 ```
 
 The protocol adapter recognizes the two reserved Kitty image IDs, window and
-cell pixel reports, and mode 1016 support. It converts them into
+cell pixel reports, mode 1016 support, and the OSC 11 background report,
+which resolves the host appearance (light or dark) by luminance. When the
+appearance changes and `client.appearance` configures a theme for it, the
+delivery handler swaps the view theme unless `--theme` locked it; the same
+preference applies when a configuration generation is adopted. The
+background is re-queried with the pixel probes on every host resize. It converts them into
 `HostCapabilityObservation`, which contains no parser or terminal-protocol
 types. An unrelated Kitty image ID and primary device attributes are no-ops.
 

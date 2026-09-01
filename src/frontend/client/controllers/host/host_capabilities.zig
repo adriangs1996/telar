@@ -97,6 +97,7 @@ pub fn translate(response: term.Event.TerminalResponse) ?client_model.HostCapabi
             .height = size.height,
         } },
         .mouse_pixels => |reply| .{ .mouse_pixels = support(reply.supported) },
+        .background_color => |color| .{ .background = .{ .r = color.r, .g = color.g, .b = color.b } },
         .primary_device_attributes => null,
     };
 }

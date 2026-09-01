@@ -457,3 +457,13 @@ test "pane titles are stored per pane and exposed for the focused pane" {
     _ = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "" } })).?;
     try std.testing.expectEqualStrings("", model.focusedPaneTitle());
 }
+
+test "a host background report resolves the appearance by luminance" {
+    const light = client_model.HostCapabilities{};
+    const bright = light.withObservation(.{ .background = .{ .r = 0xee, .g = 0xee, .b = 0xee } });
+    try std.testing.expectEqual(client_model.HostAppearance.light, bright.appearance);
+
+    const dim = light.withObservation(.{ .background = .{ .r = 0x1e, .g = 0x22, .b = 0x2e } });
+    try std.testing.expectEqual(client_model.HostAppearance.dark, dim.appearance);
+    try std.testing.expectEqual(client_model.HostAppearance.dark, dim.withExpiredProbes().appearance);
+}

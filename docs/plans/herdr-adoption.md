@@ -386,7 +386,11 @@ agent alerts, runtime notices and local diagnostics all follow one setting.
 
 ---
 
-## P11. Automatic light/dark theme
+## P11. Automatic light/dark theme — done
+
+Deviation: the background is queried at startup and on every host resize
+rather than on focus-in (the client does not enable host focus reporting),
+and Mode 2031 forwarding to children stays with ghostty-vt.
 
 - Host capability probe (`docs/flows/host-capabilities.md`) adds OSC 11;
   re-query on focus-in (focus events already reach the client). Luminance
