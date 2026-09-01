@@ -34,6 +34,7 @@ pub const Sources = struct {
     panes: *const PaneStore,
     workspaces: workspace_mod.Reader,
     agents: *const agent_mod.Tracker,
+    manifests: *const core.agent_manifest.Table = &core.agent_manifest.builtin_table,
     system_metrics: *const system_metrics_mod.Sampler,
     proxy_active: bool,
     home: ?[]const u8,
@@ -311,6 +312,10 @@ pub const Delivery = struct {
                 const pane_index = sources.panes.positionAt(pane) orelse continue;
                 entry_storage[enriched_count] = entry;
                 entry_storage[enriched_count].location = pane.location;
+                entry_storage[enriched_count].provider_name = if (entry.provider == .unknown)
+                    ""
+                else
+                    sources.manifests.providerName(entry.provider);
                 entry_storage[enriched_count].pane_index = pane_index;
                 if (workspaces.workspaceName(pane.location.workspace)) |workspace_name|
                     entry_storage[enriched_count].workspace_label = copyDisplayPrefix(

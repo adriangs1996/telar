@@ -29,6 +29,8 @@ pub const Resources = struct {
     heap: diagnostics.Heap,
     gpa: std.mem.Allocator,
     child_environment: pty.ChildEnvironment,
+    /// Immutable after startup; observation workers borrow it by pointer.
+    agent_manifests: core.agent_manifest.Table,
     proxy: proxy_runtime.Runtime,
     listener: transport.local.LocalListener,
     telemetry: telemetry.State,
@@ -54,6 +56,7 @@ pub const Resources = struct {
         try initialization.options.graphics.validate();
         attachment.initSharedFreezeNonce(resources.io());
 
+        resources.agent_manifests = initialization.options.agent_manifests;
         resources.child_environment = try pty.ChildEnvironment.init(resources.gpa, initialization.options.environment, "telar");
         errdefer resources.child_environment.deinit();
         try checkpoint(fail_after, .child_environment);

@@ -241,11 +241,21 @@ pub const HistoryEntry = struct {
 
 /// Agent vocabulary published by the runtime. These values describe evidence,
 /// not authority to act on behalf of an agent.
+/// Agent identity. Built-in providers have names here; indexes from
+/// `first_custom_agent_provider` are assigned by the agent manifest table in
+/// configuration order, and `AgentSnapshotEntry.provider_name` carries the
+/// display name so clients never need the table.
 pub const AgentProvider = enum(u8) {
     unknown = 0,
     claude = 1,
     codex = 2,
+    _,
 };
+
+pub const max_agent_manifests = 16;
+pub const first_custom_agent_provider: u8 = 3;
+pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
+pub const max_agent_provider_name_bytes = 32;
 
 pub const AgentStatus = enum(u8) {
     unknown = 0,
@@ -321,6 +331,8 @@ pub const AgentSnapshotEntry = struct {
     title_state: AgentTitleState = .placeholder,
     cwd_label: []const u8 = "",
     provider: AgentProvider,
+    /// Display name for `provider`; empty only for `unknown`.
+    provider_name: []const u8 = "",
     status: AgentStatus,
     source: AgentSource,
     authority: AgentAuthority,

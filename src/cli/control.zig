@@ -31,6 +31,18 @@ pub const Agent = struct {
     title_len: u8 = 0,
     cwd_label: [schema.max_agent_cwd_label_bytes]u8 = undefined,
     cwd_label_len: u8 = 0,
+    provider_name: [schema.max_agent_provider_name_bytes]u8 = undefined,
+    provider_name_len: u8 = 0,
+
+    /// Manifest name of the provider, or the built-in label when the runtime
+    /// sent none.
+    pub fn providerLabel(agent: *const Agent) []const u8 {
+        if (agent.provider_name_len != 0) {
+            return agent.provider_name[0..agent.provider_name_len];
+        }
+
+        return providerName(agent.provider);
+    }
 
     pub fn workspaceLabel(agent: *const Agent) []const u8 {
         return agent.workspace_label[0..agent.workspace_label_len];
@@ -62,6 +74,7 @@ pub const Agent = struct {
         agent.tab_label_len = copyBounded(&agent.tab_label, entry.tab_label);
         agent.title_len = copyBounded(&agent.title, entry.session_title);
         agent.cwd_label_len = copyBounded(&agent.cwd_label, entry.cwd_label);
+        agent.provider_name_len = copyBounded(&agent.provider_name, entry.provider_name);
         return agent;
     }
 };
@@ -318,6 +331,7 @@ pub fn providerName(provider: schema.AgentProvider) []const u8 {
         .unknown => "unknown",
         .claude => "claude",
         .codex => "codex",
+        else => "custom",
     };
 }
 
@@ -355,8 +369,8 @@ pub fn writeAgentJson(writer: *Io.Writer, agent: *const Agent) !void {
         agent.tab_id,
         agent.pane_index,
     });
-    try writeJsonString(writer, providerName(agent.provider));
-    try writer.writeAll(",\"status\":");
+    try writeJsonString(writer, agent.providerLabel());
+    try writer.print(",\"provider_index\":{d},\"status\":", .{@intFromEnum(agent.provider)});
     try writeJsonString(writer, statusName(agent.status));
     try writer.writeAll(",\"workspace\":");
     try writeJsonString(writer, agent.workspaceLabel());
@@ -379,7 +393,7 @@ pub fn writeAgentRow(writer: *Io.Writer, agent: *const Agent) !void {
         agent.pane_id,
         agent.pane_generation,
         statusName(agent.status),
-        providerName(agent.provider),
+        agent.providerLabel(),
         agent.workspaceLabel(),
         agent.tabLabel(),
         agent.titleSlice(),

@@ -104,6 +104,7 @@ pub const Runtime = struct {
             .child_environment = &runtime.resources.child_environment,
             .inherited_environment = options.environment,
             .socket_path = options.endpoint,
+            .agent_manifests = &runtime.resources.agent_manifests,
             .proxy_runtime = &runtime.resources.proxy,
             .agent_description_options = options.agent_descriptions,
             .launch_fault = options.launch_fault,

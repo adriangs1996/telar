@@ -1,6 +1,7 @@
 //! Public construction contract and opt-in integration seams for a runtime.
 
 const std = @import("std");
+const core = @import("telar-core");
 const pane = @import("../pane/root.zig");
 const pane_launcher = @import("application/pane_launcher.zig");
 const proxy_resource = @import("resources/proxy.zig");
@@ -30,6 +31,8 @@ pub const Options = struct {
     history_path: [:0]const u8 = ":memory:",
     proxy: ?ProxyOptions = null,
     agent_descriptions: ?AgentDescriptionOptions = null,
+    /// Agent identification rules; the built-in table unless configured.
+    agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     /// Test seam: stops the otherwise long-lived runtime without signals.
     stop: ?*Io.Queue(u8) = null,
     /// Test seam: holds a pane's ingest actor open.

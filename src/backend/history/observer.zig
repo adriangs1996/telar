@@ -33,6 +33,7 @@ pub const Initialization = struct {
     gpa: std.mem.Allocator,
     cwd: []const u8,
     size: schema.TerminalSize,
+    manifests: *const agent_detection.Table = &core.agent_manifest.builtin_table,
 };
 
 pub const InputObservation = struct {
@@ -122,6 +123,7 @@ pub const Observer = struct {
     resets: u64 = 0,
     failures: u64 = 0,
     detector: agent_detection.Detector = .{},
+    manifests: *const agent_detection.Table = &core.agent_manifest.builtin_table,
 
     /// Initializes the disposable history emulator and its bounded event
     /// buffers for one pane.
@@ -154,6 +156,7 @@ pub const Observer = struct {
         observer.resets = 0;
         observer.failures = 0;
         observer.detector = .{};
+        observer.manifests = initialization.manifests;
     }
 
     pub fn deinit(observer: *Observer) void {
@@ -295,7 +298,7 @@ pub const Observer = struct {
             }, sink),
             .interrupt => |clock| observer.tracker.interrupt(clock, sink),
         };
-        const stream_signal = observer.detector.signal();
+        const stream_signal = observer.detector.signal(observer.manifests);
         const screen_signal = claudeReadyPrompt(&observer.terminal);
         stats.agent_signal = if (stream_signal) |signal|
             if (signal.status == .blocked)

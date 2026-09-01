@@ -42,7 +42,7 @@ pub const Observer = struct {
 
         switch (observer.provider) {
             .claude => observer.claude_decoder.feed(input),
-            .codex, .unknown => {},
+            else => {},
         }
     }
 
@@ -59,7 +59,7 @@ pub const Observer = struct {
 
         return switch (observer.provider) {
             .claude => if (observer.claude_decoder.finish()) .inference else .auxiliary,
-            .codex, .unknown => .auxiliary,
+            else => .auxiliary,
         };
     }
 

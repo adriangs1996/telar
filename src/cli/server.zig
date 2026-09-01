@@ -69,6 +69,7 @@ const Launch = struct {
     proxy_passthrough_hosts: []const []const u8 = &.{},
     description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
     agent_description_options: ?backend.runtime.AgentDescriptionOptions = null,
+    agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     history_buffer: [std.fs.max_path_bytes]u8 = undefined,
     history_path: HistoryPath = undefined,
     default_proxy_buffer: [std.fs.max_path_bytes]u8 = undefined,
@@ -103,6 +104,7 @@ const Launch = struct {
 
     fn applyConfig(launch: *Launch, generation: *frontend.config.Generation) !void {
         const runtime_config = &generation.snapshot.runtime;
+        launch.agent_manifests = runtime_config.agent_manifests;
         if (!launch.options.graphics_pane_set) {
             launch.options.graphics.pane_bytes = runtime_config.graphics_pane_bytes;
         }
@@ -177,6 +179,7 @@ const Launch = struct {
                 .history_path = launch.history_path.path,
                 .proxy = launch.proxy_options,
                 .agent_descriptions = launch.agent_description_options,
+                .agent_manifests = launch.agent_manifests,
             },
         };
     }

@@ -712,10 +712,14 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "graphics", "history", "proxy", "agent_descriptions" },
+            &.{ "graphics", "history", "proxy", "agent_descriptions", "agents" },
             "config.runtime",
             diagnostic,
         );
+        _ = lua.lua_getfield(state, absolute, "agents");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseAgentManifests(-1, diagnostic);
+        pop(state, 1);
         _ = lua.lua_getfield(state, absolute, "history");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseHistory(-1, diagnostic);
@@ -765,6 +769,63 @@ pub const Generation = struct {
         {
             diagnostic.set("runtime graphics limits are outside Telar's safe bounds", .{});
             return error.InvalidConfig;
+        }
+    }
+
+    /// Parses `config.runtime.agents`, an array of manifests that add agents
+    /// or extend the built-in `claude` and `codex` phrase lists.
+    fn parseAgentManifests(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.agents must be an array", .{});
+            return error.InvalidConfig;
+        }
+
+        const count = lua.lua_rawlen(state, absolute);
+        try ensureArrayOnly(state, absolute, count, "config.runtime.agents", diagnostic);
+        const table = &generation.snapshot.runtime.agent_manifests;
+        for (1..count + 1) |position| {
+            _ = lua.lua_rawgeti(state, absolute, @intCast(position));
+            defer pop(state, 1);
+            if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+                diagnostic.set("config.runtime.agents[{d}] must be a table", .{position});
+                return error.InvalidConfig;
+            }
+
+            const entry = lua.lua_absindex(state, -1);
+            try ensureOnlyFields(
+                state,
+                entry,
+                &.{ "name", "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" },
+                "config.runtime.agents[]",
+                diagnostic,
+            );
+
+            _ = lua.lua_getfield(state, entry, "name");
+            var name_len: usize = 0;
+            var name: []const u8 = "";
+            if (lua.lua_type(state, -1) == lua.LUA_TSTRING) {
+                if (lua.lua_tolstring(state, -1, &name_len)) |raw| name = raw[0..name_len];
+            }
+            const manifest = table.add(name) catch |err| {
+                pop(state, 1);
+                diagnostic.set("config.runtime.agents[{d}].name {s}", .{ position, switch (err) {
+                    error.InvalidName => "must be lowercase letters, digits, '-', '_' or '.' (1..32 bytes)",
+                    error.DuplicateName => "is already defined",
+                    error.TooManyAgents => "exceeds the agent limit",
+                } });
+                return error.InvalidConfig;
+            };
+            pop(state, 1);
+
+            try parseManifestList(state, entry, "process_names", &manifest.process_names, position, diagnostic);
+            try parseManifestList(state, entry, "process_paths", &manifest.process_paths, position, diagnostic);
+            try parseManifestList(state, entry, "brand", &manifest.brand, position, diagnostic);
+            try parseManifestList(state, entry, "identity", &manifest.identity, position, diagnostic);
+            try parseManifestList(state, entry, "working", &manifest.working, position, diagnostic);
+            try parseManifestList(state, entry, "blocked", &manifest.blocked, position, diagnostic);
+            try parseManifestList(state, entry, "ready_prompt", &manifest.ready_prompt, position, diagnostic);
         }
     }
 
@@ -2689,6 +2750,43 @@ fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext) vo
     freezeTable(state);
 }
 
+/// Appends one optional string array of a manifest entry to its bounded list.
+fn parseManifestList(state: *lua.lua_State, entry: c_int, comptime field: [:0]const u8, list: anytype, position: usize, diagnostic: *Diagnostic) !void {
+    _ = lua.lua_getfield(state, entry, field.ptr);
+    defer pop(state, 1);
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) return;
+    if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+        diagnostic.set("config.runtime.agents[{d}]." ++ field ++ " must be an array of strings", .{position});
+        return error.InvalidConfig;
+    }
+
+    const array = lua.lua_absindex(state, -1);
+    const count = lua.lua_rawlen(state, array);
+    try ensureArrayOnly(state, array, count, "config.runtime.agents[]." ++ field, diagnostic);
+    for (1..count + 1) |item| {
+        _ = lua.lua_rawgeti(state, array, @intCast(item));
+        defer pop(state, 1);
+        var len: usize = 0;
+        var text: []const u8 = "";
+        if (lua.lua_type(state, -1) == lua.LUA_TSTRING) {
+            if (lua.lua_tolstring(state, -1, &len)) |raw| text = raw[0..len];
+        }
+        if (text.len == 0 or !std.unicode.utf8ValidateSlice(text) or hasControlBytes(text)) {
+            diagnostic.set("config.runtime.agents[{d}]." ++ field ++ "[{d}] must be a printable string", .{ position, item });
+            return error.InvalidConfig;
+        }
+
+        list.append(text) catch |err| {
+            diagnostic.set("config.runtime.agents[{d}]." ++ field ++ "[{d}] {s}", .{ position, item, switch (err) {
+                error.EntryTooLong => "is too long",
+                error.TooManyEntries => "exceeds the list limit",
+                error.EmptyEntry => "is empty",
+            } });
+            return error.InvalidConfig;
+        };
+    }
+}
+
 fn hasControlBytes(text: []const u8) bool {
     for (text) |byte| {
         if (byte < 0x20 or byte == 0x7f) return true;
@@ -3863,4 +3961,55 @@ test {
     // Only referenced through non-pub imports above, so its tests never run
     // unless the container is referenced here.
     _ = default_bindings;
+}
+
+test "runtime agents extend built-ins and add custom manifests" {
+    const source =
+        \\return {
+        \\  api_version = 2,
+        \\  runtime = {
+        \\    agents = {
+        \\      { name = "gemini", process_names = { "gemini" }, process_paths = { "/@google/gemini-cli/" },
+        \\        brand = { "gemini" }, identity = { "gemini cli" }, working = { "esc to cancel" } },
+        \\      { name = "claude", working = { "brewing" } },
+        \\    },
+        \\  },
+        \\}
+    ;
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(std.testing.allocator, std.testing.io, source, "@config.lua", 1, &diagnostic);
+    defer generation.deinit();
+    const table = &generation.snapshot.runtime.agent_manifests;
+
+    try std.testing.expectEqual(@as(u8, 3), table.count);
+    const gemini = table.find(@enumFromInt(core.schema.first_custom_agent_provider)).?;
+    try std.testing.expectEqualStrings("gemini", gemini.nameSlice());
+    try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);
+    try std.testing.expectEqual(gemini.provider, table.detect("Gemini CLI  esc to cancel").?.provider);
+    try std.testing.expectEqual(core.agent_manifest.Status.working, table.detect("brewing").?.status);
+    try std.testing.expectEqual(core.schema.AgentProvider.claude, table.detect("Claude Code").?.provider);
+}
+
+test "runtime agents reject bad names and oversized phrases" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { agents = { { name = \"Gemini\" } } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    ));
+    try std.testing.expect(std.mem.startsWith(u8, diagnostic.message(), "config.runtime.agents[1].name must be"));
+
+    var long_phrase: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { agents = { { name = \"x\", working = { string.rep(\"a\", 49) } } } } }",
+        "@config.lua",
+        1,
+        &long_phrase,
+    ));
+    try std.testing.expectEqualStrings("config.runtime.agents[1].working[1] is too long", long_phrase.message());
 }

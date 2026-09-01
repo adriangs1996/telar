@@ -111,6 +111,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         history_service: *history.Service,
         inherited_environment: std.process.Environ,
         socket_path: []const u8,
+        manifests: *const core.agent_manifest.Table,
         proxy: ?*proxy_mod.Proxy,
         panes: *PaneStore,
         launch_fault: ?*LaunchTestFault,
@@ -166,6 +167,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 .gpa = launcher.gpa,
                 .history_service = launcher.history_service,
                 .graphics_budget = &launcher.panes.graphics_budget,
+                .manifests = launcher.manifests,
             }, .{
                 .identity = pane_key,
                 .location = request.location,

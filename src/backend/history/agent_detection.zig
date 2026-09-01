@@ -1,4 +1,4 @@
-//! Bounded terminal-output heuristics for Codex and Claude Code.
+//! Bounded terminal-output sampling for agent screen heuristics.
 //!
 //! These patterns are presentation hints only. They may mark a pane as busy or
 //! visibly blocked; they never grant permission or generate input.
@@ -8,17 +8,9 @@ const core = @import("telar-core");
 
 const schema = core.schema;
 
-pub const Status = enum { working, blocked, ready };
-
-pub const Signal = struct {
-    provider: schema.AgentProvider = .unknown,
-    status: Status,
-    confidence: u8,
-    identity_confirmed: bool = false,
-    /// The sample contains an input prompt which proves the agent is waiting.
-    /// Provider branding alone confirms identity, not readiness.
-    ready_confirmed: bool = false,
-};
+pub const Status = core.agent_manifest.Status;
+pub const Signal = core.agent_manifest.Signal;
+pub const Table = core.agent_manifest.Table;
 
 /// A sample spans one sealed observation batch, so a prompt which disappeared
 /// cannot remain authoritative in a long-lived byte ring.
@@ -37,49 +29,13 @@ pub const Detector = struct {
         for (input) |byte| detector.observeByte(byte);
     }
 
-    pub fn signal(detector: *const Detector) ?Signal {
-        const text = detector.bytes[0..detector.len];
-        if (containsAnyAscii(text, &.{
-            "press enter to confirm",
-            "enter to submit answer",
-            "enter to select",
-            "allow command?",
-            "[y/n]",
-            "do you want to proceed?",
-            "waiting for permission",
-            "yes, and don't ask again",
-        })) return .{ .provider = inferProvider(text), .status = .blocked, .confidence = 88 };
-
-        if (containsAnyAscii(text, &.{
-            "esc to interrupt",
-            "working (",
-            "waiting for background agents",
-            "tasks still running",
-            "background shells",
-        })) return .{ .provider = inferProvider(text), .status = .working, .confidence = 78 };
-
-        if (containsAsciiInsensitive(text, "ask codex to do anything"))
-            return .{
-                .provider = .codex,
-                .status = .ready,
-                .confidence = 94,
-                .identity_confirmed = true,
-                .ready_confirmed = true,
-            };
-
-        // Claude's branded header establishes identity only. Readiness comes
-        // from the observer's emulated screen, where the prompt must be next to
-        // the visible cursor. A prompt glyph in this byte sample may already
-        // have been erased by a later control sequence.
-        if (containsAsciiInsensitive(text, "claude code"))
-            return .{
-                .provider = .claude,
-                .status = .ready,
-                .confidence = 90,
-                .identity_confirmed = true,
-            };
-
-        return null;
+    /// Applies the manifest table's heuristics to the plain-text sample.
+    ///
+    /// ```zig
+    /// const signal = detector.signal(&core.agent_manifest.builtin_table);
+    /// ```
+    pub fn signal(detector: *const Detector, table: *const Table) ?Signal {
+        return table.detect(detector.bytes[0..detector.len]);
     }
 
     fn observeByte(detector: *Detector, byte: u8) void {
@@ -126,31 +82,10 @@ pub const Detector = struct {
     }
 };
 
-fn inferProvider(text: []const u8) schema.AgentProvider {
-    if (containsAsciiInsensitive(text, "claude")) return .claude;
-    if (containsAsciiInsensitive(text, "codex")) return .codex;
-    return .unknown;
-}
-
-fn containsAnyAscii(haystack: []const u8, needles: []const []const u8) bool {
-    for (needles) |needle| if (containsAsciiInsensitive(haystack, needle)) return true;
-    return false;
-}
-
-fn containsAsciiInsensitive(haystack: []const u8, needle: []const u8) bool {
-    if (needle.len == 0 or haystack.len < needle.len) return false;
-    for (0..haystack.len - needle.len + 1) |offset| {
-        for (needle, 0..) |expected, index| {
-            if (std.ascii.toLower(haystack[offset + index]) != std.ascii.toLower(expected)) break;
-        } else return true;
-    }
-    return false;
-}
-
 test "strips terminal controls and recognizes permission prompts" {
     var detector: Detector = .{};
     detector.observe("\x1b[31mClaude\x1b[0m\r\nDo you want to proceed?  Enter to confirm");
-    const detected = detector.signal().?;
+    const detected = detector.signal(&core.agent_manifest.builtin_table).?;
     try std.testing.expectEqual(Status.blocked, detected.status);
     try std.testing.expectEqual(schema.AgentProvider.claude, detected.provider);
 }
@@ -160,7 +95,7 @@ test "recognizes codex work split across output bursts" {
     detector.observe("Cod");
     detector.observe("ex  Work");
     detector.observe("ing (12s, esc to interrupt)");
-    const detected = detector.signal().?;
+    const detected = detector.signal(&core.agent_manifest.builtin_table).?;
     try std.testing.expectEqual(Status.working, detected.status);
     try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
 }
@@ -168,7 +103,7 @@ test "recognizes codex work split across output bursts" {
 test "recognizes an open Codex prompt without proxy evidence" {
     var detector: Detector = .{};
     detector.observe("OpenAI Codex  Ask Codex to do anything");
-    const detected = detector.signal().?;
+    const detected = detector.signal(&core.agent_manifest.builtin_table).?;
     try std.testing.expectEqual(Status.ready, detected.status);
     try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
     try std.testing.expect(detected.identity_confirmed);
@@ -178,7 +113,7 @@ test "recognizes an open Codex prompt without proxy evidence" {
 test "Claude branding confirms identity without claiming a prompt" {
     var detector: Detector = .{};
     detector.observe("\x1b[1mClaude Code\x1b[0m v2.1");
-    const branded = detector.signal().?;
+    const branded = detector.signal(&core.agent_manifest.builtin_table).?;
     try std.testing.expectEqual(Status.ready, branded.status);
     try std.testing.expectEqual(schema.AgentProvider.claude, branded.provider);
     try std.testing.expect(branded.identity_confirmed);
@@ -186,7 +121,7 @@ test "Claude branding confirms identity without claiming a prompt" {
 
     detector.resetSample();
     detector.observe("\xe2\x9d\xaf");
-    try std.testing.expect(detector.signal() == null);
+    try std.testing.expect(detector.signal(&core.agent_manifest.builtin_table) == null);
 }
 
 test "terminal controls may split at every byte" {
@@ -195,7 +130,7 @@ test "terminal controls may split at every byte" {
         var detector: Detector = .{};
         detector.observe(input[0..split]);
         detector.observe(input[split..]);
-        const detected = detector.signal().?;
+        const detected = detector.signal(&core.agent_manifest.builtin_table).?;
         try std.testing.expectEqual(Status.blocked, detected.status);
         try std.testing.expectEqual(schema.AgentProvider.claude, detected.provider);
     }

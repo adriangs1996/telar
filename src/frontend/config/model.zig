@@ -206,6 +206,7 @@ pub const RuntimeSnapshot = struct {
     proxy_ca_dir_len: u16 = 0,
     proxy_passthrough_hosts: ProxyPassthroughHosts = .{},
     agent_descriptions: AgentDescriptionCommand = .{},
+    agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
 
     pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
         if (snapshot.history_path_len == 0) return null;

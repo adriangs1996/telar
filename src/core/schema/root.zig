@@ -32,6 +32,10 @@ pub const max_panes_per_tab = types.max_panes_per_tab;
 pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
 pub const max_pane_title_bytes = types.max_pane_title_bytes;
+pub const max_agent_manifests = types.max_agent_manifests;
+pub const first_custom_agent_provider = types.first_custom_agent_provider;
+pub const max_agent_provider_index = types.max_agent_provider_index;
+pub const max_agent_provider_name_bytes = types.max_agent_provider_name_bytes;
 pub const max_pane_text_rows = types.max_pane_text_rows;
 pub const max_pane_text_bytes = types.max_pane_text_bytes;
 pub const max_pane_text_input_bytes = types.max_pane_text_input_bytes;
@@ -2553,6 +2557,8 @@ fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !
     try validateAgentDisplayText(entry.tab_label, max_tab_label_bytes, true);
     try validateAgentDisplayText(entry.session_title, max_agent_session_title_bytes, true);
     try validateAgentDisplayText(entry.cwd_label, max_agent_cwd_label_bytes, true);
+    try validateAgentDisplayText(entry.provider_name, max_agent_provider_name_bytes, true);
+    try validateAgentProvider(entry.provider);
     try validateAgentTitle(entry);
     try encoder.writeInt(u64, id.raw(entry.pane_id));
     try encoder.writeInt(u64, entry.pane_generation);
@@ -2567,6 +2573,7 @@ fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !
     try encoder.writeByte(@intFromEnum(entry.title_state));
     try encoder.writeSized16(entry.cwd_label);
     try encoder.writeByte(@intFromEnum(entry.provider));
+    try encoder.writeSized16(entry.provider_name);
     try encoder.writeByte(@intFromEnum(entry.status));
     try encoder.writeByte(@intFromEnum(entry.source));
     try encoder.writeByte(@intFromEnum(entry.authority));
@@ -2592,8 +2599,8 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
         .title_state = std.enums.fromInt(AgentTitleState, try decoder.readByte()) orelse
             return error.InvalidAgentTitleState,
         .cwd_label = try decoder.readSized16(),
-        .provider = std.enums.fromInt(AgentProvider, try decoder.readByte()) orelse
-            return error.InvalidAgentProvider,
+        .provider = try decodeAgentProvider(try decoder.readByte()),
+        .provider_name = try decoder.readSized16(),
         .status = std.enums.fromInt(AgentStatus, try decoder.readByte()) orelse
             return error.InvalidAgentStatus,
         .source = std.enums.fromInt(AgentSource, try decoder.readByte()) orelse
@@ -2613,8 +2620,18 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
     try validateAgentDisplayText(entry.tab_label, max_tab_label_bytes, true);
     try validateAgentDisplayText(entry.session_title, max_agent_session_title_bytes, true);
     try validateAgentDisplayText(entry.cwd_label, max_agent_cwd_label_bytes, true);
+    try validateAgentDisplayText(entry.provider_name, max_agent_provider_name_bytes, true);
     try validateAgentTitle(entry);
     return entry;
+}
+
+fn validateAgentProvider(provider: AgentProvider) !void {
+    if (@intFromEnum(provider) > max_agent_provider_index) return error.InvalidAgentProvider;
+}
+
+fn decodeAgentProvider(value: u8) !AgentProvider {
+    if (value > max_agent_provider_index) return error.InvalidAgentProvider;
+    return @enumFromInt(value);
 }
 
 fn validateAgentDisplayText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {

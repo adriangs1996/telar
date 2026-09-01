@@ -26,6 +26,7 @@ pub const AgentInput = struct {
     title_state: schema.AgentTitleState = .placeholder,
     cwd_label: []const u8 = "",
     provider: schema.AgentProvider,
+    provider_name: []const u8 = "",
     status: schema.AgentStatus,
 };
 
@@ -43,8 +44,28 @@ pub const Agent = struct {
     title_state: schema.AgentTitleState,
     cwd_label: [schema.max_agent_cwd_label_bytes]u8 = undefined,
     cwd_label_len: u8 = 0,
+    provider_name: [schema.max_agent_provider_name_bytes]u8 = undefined,
+    provider_name_len: u8 = 0,
     provider: schema.AgentProvider,
     status: schema.AgentStatus,
+
+    /// Display name of the provider: the runtime's manifest name, or the
+    /// built-in label when the runtime sent none.
+    ///
+    /// ```zig
+    /// const name = agent.providerName();
+    /// ```
+    pub fn providerName(agent: *const Agent) []const u8 {
+        if (agent.provider_name_len != 0) {
+            return agent.provider_name[0..agent.provider_name_len];
+        }
+
+        return switch (agent.provider) {
+            .claude => "claude",
+            .codex => "codex",
+            else => "agent",
+        };
+    }
 
     fn init(input: AgentInput) !Agent {
         var agent: Agent = .{
@@ -60,6 +81,7 @@ pub const Agent = struct {
         agent.tab_label_len = try copyLabel(&agent.tab_label, input.tab_label);
         agent.session_title_len = try copyLabel(&agent.session_title, input.session_title);
         agent.cwd_label_len = try copyLabel(&agent.cwd_label, input.cwd_label);
+        agent.provider_name_len = try copyLabel(&agent.provider_name, input.provider_name);
 
         return agent;
     }

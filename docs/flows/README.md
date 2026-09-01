@@ -9,6 +9,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | --- | --- | --- | --- |
 | [Agent snapshot](agent-snapshot.md) | Runtime agent evidence changes | The client commits one bounded replica, emits actionable transitions and the presenter projects the latest revision | Storage, model, effect-order, protocol and presenter tests |
 | [Agent control](agent-control.md) | An agent or script runs `telar agent` or `telar pane` | The runtime answers one bounded query, read or send over the control socket without any attachment | Schema, controller, handler, launcher and parser tests |
+| [Agent manifests](agent-manifests.md) | Configuration declares or extends an agent | The runtime identifies its process and screen states from the manifest and clients render its name | Table, detection, process and config tests |
 | [Agent done](agent-done.md) | A runtime agent finishes a turn while no client has its pane focused | The agent stays `done` until the focused client acknowledges it once, then returns to `ready` | Aggregate, tracker, controller, model, effect-order and protocol tests |
 | [Agent sound](agent-sound.md) | Runtime agent moves from working to done or blocked | One exact current client plays at most one host sound with one coalesced successor | Identity, policy, queue, configuration and worker tests |
 | [Claude turn completion](claude-turn-completion.md) | Claude reports `end_turn` in an intercepted SSE response | The runtime projects the agent as ready when no exchange remains | HTTP/1.1, HTTP/2, adapter and aggregate tests |

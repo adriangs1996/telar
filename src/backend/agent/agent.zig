@@ -632,7 +632,7 @@ fn ensurePlaceholder(agent: *Agent, provider_value: schema.AgentProvider) void {
     const placeholder = switch (provider_value) {
         .codex => "New Codex session",
         .claude => "New Claude Code session",
-        .unknown => "New agent session",
+        else => "New agent session",
     };
 
     if (std.mem.eql(u8, agent.title.slice(), placeholder)) {

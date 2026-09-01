@@ -480,6 +480,9 @@ pub const Pane = struct {
         gpa: std.mem.Allocator,
         history_service: *history.Service,
         graphics_budget: *GraphicsBudget,
+        /// Runtime-owned, immutable after startup; shared with observation
+        /// workers.
+        manifests: *const core.agent_manifest.Table = &core.agent_manifest.builtin_table,
     };
 
     pub const CreationRequest = struct {
@@ -553,6 +556,7 @@ pub const Pane = struct {
     workspace_path: []u8,
     cwd: CwdState,
     title: TitleState = .{},
+    manifests: *const core.agent_manifest.Table,
     pending_size: ?schema.TerminalSize = null,
     /// When the child's synchronized-output block started holding frames
     /// back, null while no hold is active. See `holdFrames`.
@@ -604,6 +608,7 @@ pub const Pane = struct {
             .started_at_ms = 0,
             .workspace_path = workspace_copy,
             .cwd = try .init(launch_cwd),
+            .manifests = resources.manifests,
             .session = undefined,
             .size = size,
             .terminal = undefined,
@@ -649,7 +654,13 @@ pub const Pane = struct {
             .write_pty = Pane.writeMediaPty,
         });
         errdefer pane.media.deinit();
-        try pane.history_observer.init(.{ .io = io, .gpa = gpa, .cwd = launch_cwd, .size = size });
+        try pane.history_observer.init(.{
+            .io = io,
+            .gpa = gpa,
+            .cwd = launch_cwd,
+            .size = size,
+            .manifests = resources.manifests,
+        });
         errdefer pane.history_observer.deinit();
         pane.screen = try .init(gpa, size.cols, size.rows);
         errdefer pane.screen.deinit();

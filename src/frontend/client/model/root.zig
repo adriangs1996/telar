@@ -1232,7 +1232,7 @@ pub const Model = struct {
         const agent = model.agent_snapshot.find(key).?;
         switch (agent.provider) {
             .claude, .codex => return key,
-            .unknown => return null,
+            else => return null,
         }
     }
 

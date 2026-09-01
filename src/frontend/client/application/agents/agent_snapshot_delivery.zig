@@ -111,9 +111,9 @@ fn alertInput(change: client_model.AgentStatusChange, message_buffer: *[64]u8) ?
 
 fn providerName(provider: schema.AgentProvider) []const u8 {
     return switch (provider) {
-        .unknown => "Agent",
         .claude => "Claude",
         .codex => "Codex",
+        else => "Agent",
     };
 }
 

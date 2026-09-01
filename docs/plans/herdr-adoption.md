@@ -185,7 +185,13 @@ model label fallback order; `docs/flows/pane-title.md`.
 
 ---
 
-## P4. Detection rules as data
+## P4. Detection rules as data — done
+
+Deviations: `AgentProvider` stays an enum, made non-exhaustive, with custom
+indexes assigned from configuration; `provider_name` travels in the snapshot
+entry. Proxy host mapping and SSE turn parsing remain built-in code.
+`telar agent explain` is covered by `telar agent get --json`, which already
+reports source, confidence and authority.
 
 `src/backend/history/agent_detection.zig:39-80` hardcodes phrases for two
 providers. herdr ships 21 agents because its rules are TOML manifests.

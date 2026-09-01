@@ -306,7 +306,7 @@ fn drawAgentMeta(
 ) void {
     if (area.w <= 3) return;
     const style: ui.Style = .{ .fg = context.palette.overlay0, .bg = background };
-    const provider = providerLabel(agent.provider);
+    const provider = providerLabel(agent);
     var x = area.x + 3;
     var remaining = area.w - 3;
     const provider_width = ui.measure(provider);
@@ -368,27 +368,28 @@ fn statusIcon(status: schema.AgentStatus, animation_frame: u8) ui.icons.Icon {
     };
 }
 
-fn providerLabel(provider: schema.AgentProvider) []const u8 {
-    return switch (provider) {
+fn providerLabel(agent: *const agents.Agent) []const u8 {
+    return switch (agent.provider) {
         .unknown => "Agent",
         .claude => "Claude Code",
         .codex => "Codex",
+        else => agent.providerName(),
     };
 }
 
 fn fallbackTitle(provider: schema.AgentProvider) []const u8 {
     return switch (provider) {
-        .unknown => "New agent session",
         .claude => "New Claude Code session",
         .codex => "New Codex session",
+        else => "New agent session",
     };
 }
 
 fn providerIcon(provider: schema.AgentProvider) ui.icons.Icon {
     return switch (provider) {
-        .unknown => .provider_unknown,
         .claude => .provider_claude,
         .codex => .provider_codex,
+        else => .provider_unknown,
     };
 }
 

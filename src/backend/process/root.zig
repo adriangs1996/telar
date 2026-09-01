@@ -9,6 +9,7 @@ const builtin = @import("builtin");
 const core = @import("telar-core");
 
 const schema = core.schema;
+const Table = core.agent_manifest.Table;
 const process_cwd = @import("cwd.zig");
 
 /// Reads a process working directory into caller-owned storage without
@@ -79,10 +80,11 @@ pub const Probe = struct {
     inspected: bool = false,
 };
 
-const ProbeInput = struct {
+pub const ProbeInput = struct {
     process_group_id: ?std.c.pid_t,
     shell_pid: std.c.pid_t,
     previous: Cache,
+    manifests: *const Table = &core.agent_manifest.builtin_table,
 };
 
 /// Resolve a process group without allocating. A known group is cached until
@@ -90,13 +92,13 @@ const ProbeInput = struct {
 /// retry window because process metadata can lag just behind terminal control.
 ///
 /// ```zig
-/// const result = probe(process_group_id, shell_pid, previous);
+/// const result = probe(.{ .process_group_id = pgid, .shell_pid = shell_pid, .previous = previous, .manifests = manifests });
 /// ```
-pub fn probe(process_group_id: ?std.c.pid_t, shell_pid: std.c.pid_t, previous: Cache) Probe {
-    return probeWith(.{ .process_group_id = process_group_id, .shell_pid = shell_pid, .previous = previous }, identifyProcessGroup);
+pub fn probe(input: ProbeInput) Probe {
+    return probeWith(input, identifyProcessGroup);
 }
 
-fn probeWith(input: ProbeInput, comptime identify: fn (u32) Identification) Probe {
+fn probeWith(input: ProbeInput, comptime identify: fn (*const Table, u32) Identification) Probe {
     const process_group_id = input.process_group_id;
     const shell_pid = input.shell_pid;
     const previous = input.previous;
@@ -108,7 +110,7 @@ fn probeWith(input: ProbeInput, comptime identify: fn (u32) Identification) Prob
     if (pgid == shell) {
         if (previous.process_group_id == pgid and previous.foreground_name_len != 0)
             return .{ .cache = previous };
-        const identification = identify(pgid);
+        const identification = identify(input.manifests, pgid);
         var next: Cache = .{ .process_group_id = pgid };
         next.setName(identification.slice());
         return .{ .cache = next, .changed = !sameCache(previous, next) };
@@ -117,7 +119,7 @@ fn probeWith(input: ProbeInput, comptime identify: fn (u32) Identification) Prob
         (previous.provider != .unknown or previous.attempts >= max_acquisition_attempts))
         return .{ .cache = previous };
 
-    const identification = identify(pgid);
+    const identification = identify(input.manifests, pgid);
     var next: Cache = .{
         .process_group_id = pgid,
         .provider = identification.provider,
@@ -149,15 +151,15 @@ fn sameCache(left: Cache, right: Cache) bool {
         std.mem.eql(u8, left.name(), right.name());
 }
 
-fn identifyProcessGroup(process_group_id: u32) Identification {
+fn identifyProcessGroup(table: *const Table, process_group_id: u32) Identification {
     return switch (builtin.os.tag) {
-        .macos => identifyMacosProcessGroup(process_group_id),
-        .linux => identifyLinuxProcessGroup(process_group_id),
+        .macos => identifyMacosProcessGroup(table, process_group_id),
+        .linux => identifyLinuxProcessGroup(table, process_group_id),
         else => .{},
     };
 }
 
-fn identifyMacosProcessGroup(process_group_id: u32) Identification {
+fn identifyMacosProcessGroup(table: *const Table, process_group_id: u32) Identification {
     if (comptime builtin.os.tag != .macos) return .{};
     if (process_group_id > std.math.maxInt(c_int)) return .{};
 
@@ -168,7 +170,7 @@ fn identifyMacosProcessGroup(process_group_id: u32) Identification {
         &pids,
         @intCast(@sizeOf(@TypeOf(pids))),
     );
-    if (byte_count <= 0) return identifyMacosProcess(process_group_id);
+    if (byte_count <= 0) return identifyMacosProcess(table, process_group_id);
 
     const count = @min(
         pids.len,
@@ -176,20 +178,20 @@ fn identifyMacosProcessGroup(process_group_id: u32) Identification {
     );
     // The group leader is the most useful candidate and avoids depending on
     // libproc's enumeration order.
-    const leader = identifyMacosProcess(process_group_id);
+    const leader = identifyMacosProcess(table, process_group_id);
     if (leader.provider != .unknown) return leader;
     var fallback = leader;
     for (pids[0..count]) |pid| {
         const candidate = std.math.cast(u32, pid) orelse continue;
         if (candidate == process_group_id) continue;
-        const identified = identifyMacosProcess(candidate);
+        const identified = identifyMacosProcess(table, candidate);
         if (identified.provider != .unknown) return identified;
         if (fallback.name_len == 0 and identified.name_len != 0) fallback = identified;
     }
     return fallback;
 }
 
-fn identifyMacosProcess(pid: u32) Identification {
+fn identifyMacosProcess(table: *const Table, pid: u32) Identification {
     if (comptime builtin.os.tag != .macos) return .{};
     if (pid > std.math.maxInt(c_int)) return .{};
 
@@ -208,7 +210,7 @@ fn identifyMacosProcess(pid: u32) Identification {
     var args_buffer: [max_process_args_bytes]u8 = undefined;
     const argv = readMacosArgv(pid, &args_buffer) orelse &.{};
     const command = comm_bytes[0..comm_end];
-    return .init(identifyCommand(command, argv), command);
+    return .init(identifyCommand(table, command, argv), command);
 }
 
 fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
@@ -229,7 +231,7 @@ fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
     return rest[offset..];
 }
 
-fn identifyLinuxProcessGroup(process_group_id: u32) Identification {
+fn identifyLinuxProcessGroup(table: *const Table, process_group_id: u32) Identification {
     if (comptime builtin.os.tag != .linux) return .{};
     var pending: [max_group_processes]u32 = @splat(0);
     var count: usize = 1;
@@ -240,7 +242,7 @@ fn identifyLinuxProcessGroup(process_group_id: u32) Identification {
     while (index < count) : (index += 1) {
         const pid = pending[index];
         if (linuxProcessGroup(pid) != process_group_id) continue;
-        const identified = identifyLinuxProcess(pid);
+        const identified = identifyLinuxProcess(table, pid);
         if (identified.provider != .unknown) return identified;
         if (fallback.name_len == 0 and identified.name_len != 0) fallback = identified;
         appendLinuxChildren(pid, &pending, &count);
@@ -248,7 +250,7 @@ fn identifyLinuxProcessGroup(process_group_id: u32) Identification {
     return fallback;
 }
 
-fn identifyLinuxProcess(pid: u32) Identification {
+fn identifyLinuxProcess(table: *const Table, pid: u32) Identification {
     if (comptime builtin.os.tag != .linux) return .{};
     var path_buffer: [64]u8 = undefined;
     var comm_buffer: [256]u8 = undefined;
@@ -258,7 +260,7 @@ fn identifyLinuxProcess(pid: u32) Identification {
     const args_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/cmdline", .{pid}) catch return .{};
     const argv = readSmallFile(args_path, &args_buffer) orelse &.{};
     const command = std.mem.trim(u8, comm, " \r\n\t");
-    return .init(identifyCommand(command, argv), command);
+    return .init(identifyCommand(table, command, argv), command);
 }
 
 fn linuxProcessGroup(pid: u32) ?u32 {
@@ -308,17 +310,17 @@ fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
     return buffer[0..len];
 }
 
-fn identifyCommand(comm: []const u8, argv: []const u8) schema.AgentProvider {
-    if (providerFromToken(comm)) |provider| return provider;
+fn identifyCommand(table: *const Table, comm: []const u8, argv: []const u8) schema.AgentProvider {
+    if (providerFromToken(table, comm)) |provider| return provider;
 
     var args = std.mem.tokenizeScalar(u8, argv, 0);
     const argv0 = args.next() orelse return .unknown;
-    if (providerFromToken(argv0)) |provider| return provider;
+    if (providerFromToken(table, argv0)) |provider| return provider;
     if (!genericRuntime(argv0)) return .unknown;
 
     while (args.next()) |arg| {
         if (arg.len == 0 or arg[0] == '-') continue;
-        if (providerFromExecutablePath(arg)) |provider| return provider;
+        if (providerFromExecutablePath(table, arg)) |provider| return provider;
         return .unknown;
     }
     return .unknown;
@@ -328,7 +330,7 @@ fn applicationName(provider: schema.AgentProvider, command: []const u8) []const 
     return switch (provider) {
         .claude => "Claude Code",
         .codex => "Codex",
-        .unknown => boundedCommandName(command),
+        else => boundedCommandName(command),
     };
 }
 
@@ -341,21 +343,13 @@ fn boundedCommandName(command: []const u8) []const u8 {
     return candidate;
 }
 
-fn providerFromToken(token: []const u8) ?schema.AgentProvider {
-    const basename = pathBasename(token);
-    if (equalExecutableName(basename, "claude") or
-        equalExecutableName(basename, "claude-code")) return .claude;
-    if (equalExecutableName(basename, "codex")) return .codex;
-    return null;
+fn providerFromToken(table: *const Table, token: []const u8) ?schema.AgentProvider {
+    return table.providerFromExecutable(pathBasename(token));
 }
 
-fn providerFromExecutablePath(path: []const u8) ?schema.AgentProvider {
-    if (providerFromToken(path)) |provider| return provider;
-    if (containsAsciiInsensitive(path, "/@anthropic-ai/claude-code/") or
-        containsAsciiInsensitive(path, "\\@anthropic-ai\\claude-code\\")) return .claude;
-    if (containsAsciiInsensitive(path, "/@openai/codex/") or
-        containsAsciiInsensitive(path, "\\@openai\\codex\\")) return .codex;
-    return null;
+fn providerFromExecutablePath(table: *const Table, path: []const u8) ?schema.AgentProvider {
+    if (providerFromToken(table, path)) |provider| return provider;
+    return table.providerFromPath(path);
 }
 
 fn genericRuntime(token: []const u8) bool {
@@ -398,14 +392,15 @@ fn endsWithAsciiInsensitive(value: []const u8, suffix: []const u8) bool {
 }
 
 test "identifies direct agent executables" {
-    try std.testing.expectEqual(schema.AgentProvider.claude, identifyCommand("claude", "claude\x00"));
-    try std.testing.expectEqual(schema.AgentProvider.claude, identifyCommand("node", "/usr/bin/node\x00/opt/claude-code/claude-code\x00"));
-    try std.testing.expectEqual(schema.AgentProvider.codex, identifyCommand("codex", "codex\x00"));
-    try std.testing.expectEqual(schema.AgentProvider.codex, identifyCommand("node", "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00"));
+    try std.testing.expectEqual(schema.AgentProvider.claude, identifyCommand(&core.agent_manifest.builtin_table, "claude", "claude\x00"));
+    try std.testing.expectEqual(schema.AgentProvider.claude, identifyCommand(&core.agent_manifest.builtin_table, "node", "/usr/bin/node\x00/opt/claude-code/claude-code\x00"));
+    try std.testing.expectEqual(schema.AgentProvider.codex, identifyCommand(&core.agent_manifest.builtin_table, "codex", "codex\x00"));
+    try std.testing.expectEqual(schema.AgentProvider.codex, identifyCommand(&core.agent_manifest.builtin_table, "node", "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00"));
 }
 
 test "does not infer an agent from arbitrary runtime arguments" {
     try std.testing.expectEqual(schema.AgentProvider.unknown, identifyCommand(
+        &core.agent_manifest.builtin_table,
         "node",
         "node\x00script.js\x00tell claude to review this\x00",
     ));
@@ -413,11 +408,11 @@ test "does not infer an agent from arbitrary runtime arguments" {
 
 test "process acquisition is bounded and cached" {
     const Fake = struct {
-        fn claude(_: u32) Identification {
+        fn claude(_: *const Table, _: u32) Identification {
             return .init(.claude, "claude");
         }
 
-        fn unknown(_: u32) Identification {
+        fn unknown(_: *const Table, _: u32) Identification {
             return .init(.unknown, "node");
         }
     };

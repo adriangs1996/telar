@@ -51,7 +51,7 @@ pub fn classify(provider: AgentProvider, request: Request) RequestClass {
         .claude => std.mem.eql(u8, path, "/v1/messages"),
         .codex => std.mem.eql(u8, path, "/v1/responses") or
             std.mem.eql(u8, path, "/backend-api/codex/responses"),
-        .unknown => false,
+        else => false,
     };
 
     return if (inference) .inference else .auxiliary;

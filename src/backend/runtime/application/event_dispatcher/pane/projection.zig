@@ -113,11 +113,12 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             defer path.restore();
 
             var stats: history.observer.Stats = .{};
-            const process_probe = agent_process.probe(
-                work.pane.session.foregroundProcessGroup(),
-                work.pane.session.processId(),
-                work.process_cache,
-            );
+            const process_probe = agent_process.probe(.{
+                .process_group_id = work.pane.session.foregroundProcessGroup(),
+                .shell_pid = work.pane.session.processId(),
+                .previous = work.process_cache,
+                .manifests = work.pane.manifests,
+            });
             work.pane.processHistoryObservation(work.current_size, &stats);
             return .{ .pane = work.pane.key(), .stats = stats, .process_probe = process_probe };
         }
