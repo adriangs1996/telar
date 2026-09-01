@@ -11,6 +11,10 @@ const client_session = client_runtime.session;
 const delivery_mod = @import("../delivery/root.zig");
 const acknowledge_agent_commands = @import("commands/acknowledge_agent.zig");
 const acknowledge_agent_controller = @import("../entrypoints/requests/acknowledge_agent.zig");
+const query_agents_controller = @import("../entrypoints/requests/query_agents.zig");
+const read_pane_controller = @import("../entrypoints/requests/read_pane.zig");
+const send_pane_text_commands = @import("commands/send_pane_text.zig");
+const send_pane_text_controller = @import("../entrypoints/requests/send_pane_text.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
 const close_pane_commands = @import("commands/close_pane.zig");
@@ -77,6 +81,8 @@ const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const AcknowledgeAgentController = acknowledge_agent_controller.Controller(*acknowledge_agent_commands.AcknowledgeAgentHandler);
+const QueryAgentsController = query_agents_controller.Controller(*Delivery);
+const SendPaneTextController = send_pane_text_controller.Controller(*send_pane_text_commands.SendPaneTextHandler);
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
@@ -158,6 +164,9 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .show_notification = routeShowNotification,
             .update_client_layout = routeUpdateClientLayout,
             .acknowledge_agent = routeAcknowledgeAgent,
+            .query_agents = routeQueryAgents,
+            .read_pane = routeReadPane,
+            .send_pane_text = routeSendPaneText,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -570,6 +579,35 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             const now_ms = Io.Timestamp.now(request.application.io, .real).toMilliseconds();
 
             controller.acknowledgeAgent(acknowledgement, now_ms);
+        }
+
+        fn routeQueryAgents(request: *ClientRequestContext, query: schema.QueryAgents) !void {
+            var controller = QueryAgentsController.init(&request.session.delivery);
+
+            controller.queryAgents(query);
+        }
+
+        fn routeReadPane(request: *ClientRequestContext, read: schema.ReadPane) !void {
+            var controller = read_pane_controller.Controller.init(&request.session.delivery.responses);
+
+            try controller.readPane(read);
+        }
+
+        fn routeSendPaneText(request: *ClientRequestContext, send: schema.SendPaneText) !void {
+            const application = request.application;
+            var handler: send_pane_text_commands.SendPaneTextHandler = .{
+                .panes = &application.model.panes,
+                .agents = &application.model.agents,
+                .input = .{
+                    .io = application.io,
+                    .metrics = &application.metrics,
+                    .agent_input = if (application.agent_description_options != null) &application.model.agents else null,
+                    .scheduler = paneInputScheduler(application),
+                },
+            };
+            var controller = SendPaneTextController.init(&request.session.delivery.responses, &handler);
+
+            try controller.sendPaneText(send);
         }
 
         fn routeCopySelection(request: *ClientRequestContext, selection: schema.CopySelection) !void {

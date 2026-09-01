@@ -103,6 +103,7 @@ pub const Runtime = struct {
             .history_service = runtime.resources.history.service(),
             .child_environment = &runtime.resources.child_environment,
             .inherited_environment = options.environment,
+            .socket_path = options.endpoint,
             .proxy_runtime = &runtime.resources.proxy,
             .agent_description_options = options.agent_descriptions,
             .launch_fault = options.launch_fault,

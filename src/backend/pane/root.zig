@@ -407,6 +407,16 @@ pub const CwdState = struct {
     }
 };
 
+pub const TextRequest = struct {
+    rows: u16,
+    source: schema.PaneTextSource,
+};
+
+pub const TextDump = struct {
+    len: usize,
+    truncated: bool,
+};
+
 pub const Pane = struct {
     pub const CreationResources = struct {
         io: Io,
@@ -657,6 +667,46 @@ pub const Pane = struct {
             .sgr = modes.get(.mouse_format_sgr) or pixels,
             .pixels = pixels,
         };
+    }
+
+    /// Copies visible or recent rows as plain text, newest rows last. Output
+    /// is bounded by `storage`; when older rows do not fit the dump keeps the
+    /// prefix and reports truncation. No styling or escape bytes are emitted.
+    ///
+    /// ```zig
+    /// var storage: [schema.max_pane_text_bytes]u8 = undefined;
+    /// const dump = pane.dumpText(.{ .rows = 40, .source = .recent }, &storage);
+    /// const text = storage[0..dump.len];
+    /// ```
+    pub fn dumpText(pane: *const Pane, request: TextRequest, storage: []u8) TextDump {
+        const screen: *const vt.Screen = pane.terminal.screens.active;
+        const pages = &screen.pages;
+        const total: usize = switch (request.source) {
+            .screen => pages.rows,
+            .recent => pages.total_rows,
+        };
+        const wanted = @min(@as(usize, request.rows), total);
+        if (wanted == 0) {
+            return .{ .len = 0, .truncated = false };
+        }
+
+        const start_y: u32 = @intCast(total - wanted);
+        const top_left = pages.pin(switch (request.source) {
+            .screen => .{ .active = .{ .x = 0, .y = start_y } },
+            .recent => .{ .screen = .{ .x = 0, .y = start_y } },
+        }) orelse return .{ .len = 0, .truncated = false };
+        const bottom_right = pages.getBottomRight(switch (request.source) {
+            .screen => .active,
+            .recent => .screen,
+        }) orelse return .{ .len = 0, .truncated = false };
+
+        var writer = std.Io.Writer.fixed(storage);
+        var truncated = false;
+        screen.dumpString(&writer, .{ .tl = top_left, .br = bottom_right, .unwrap = false }) catch {
+            truncated = true;
+        };
+
+        return .{ .len = writer.end, .truncated = truncated };
     }
 
     pub fn key(pane: *const Pane) PaneKey {

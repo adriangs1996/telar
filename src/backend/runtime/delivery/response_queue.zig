@@ -83,6 +83,15 @@ pub const PendingNotification = struct {
     }
 };
 
+/// Late-bound text read. The pane resolves at encode time so a queued read
+/// cannot borrow storage from a pane that exits before its send slot frees.
+pub const PendingPaneText = struct {
+    request_id: schema.RequestId,
+    pane: pane.PaneKey,
+    rows: u16,
+    source: schema.PaneTextSource,
+};
+
 pub const PendingResponse = union(enum) {
     pane_opened: schema.PaneOpened,
     request_failed: PendingFailure,
@@ -96,6 +105,8 @@ pub const PendingResponse = union(enum) {
     notification_shown: schema.NotificationShown,
     agent_sound: schema.AgentSoundNotification,
     history_result: *history.model.QueryResult,
+    request_completed: schema.RequestCompleted,
+    pane_text: PendingPaneText,
 };
 
 pub const ResponseQueue = struct {

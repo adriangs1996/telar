@@ -34,6 +34,48 @@ pub const LaunchRequest = struct {
     workspace_path: []const u8,
 };
 
+pub const PaneIdentity = struct {
+    key: pane_mod.PaneKey,
+    location: schema.TabLocation,
+    socket_path: []const u8,
+};
+
+/// Fixed storage for the environment variables that let a child find the
+/// runtime and name its own pane. `TELAR_SOCKET` stays absent on purpose: a
+/// nested runtime must not inherit the outer listener as its own.
+pub const PaneOverrides = struct {
+    pub const count = 4;
+
+    pane_id: [20]u8 = undefined,
+    workspace_id: [20]u8 = undefined,
+    tab_id: [20]u8 = undefined,
+    entries: [count]pty.ChildEnvironment.Override = undefined,
+
+    /// Formats the identity into owned decimal storage and returns the
+    /// override slice borrowed from `overrides`.
+    ///
+    /// ```zig
+    /// var overrides: PaneOverrides = .{};
+    /// const entries = overrides.build(.{ .key = key, .location = location, .socket_path = path });
+    /// ```
+    pub fn build(overrides: *PaneOverrides, identity: PaneIdentity) []const pty.ChildEnvironment.Override {
+        const pane_id = std.fmt.bufPrint(&overrides.pane_id, "{d}", .{schema.id.raw(identity.key.id)}) catch unreachable;
+        const workspace_id = std.fmt.bufPrint(&overrides.workspace_id, "{d}", .{schema.id.raw(identity.location.workspace.workspace)}) catch unreachable;
+        const tab_id = std.fmt.bufPrint(&overrides.tab_id, "{d}", .{schema.id.raw(identity.location.tab_id)}) catch unreachable;
+        overrides.entries = .{
+            .{ .name = "TELAR_SOCKET_PATH", .value = identity.socket_path },
+            .{ .name = "TELAR_PANE_ID", .value = pane_id },
+            .{ .name = "TELAR_WORKSPACE_ID", .value = workspace_id },
+            .{ .name = "TELAR_TAB_ID", .value = tab_id },
+        };
+        return &overrides.entries;
+    }
+};
+
+comptime {
+    std.debug.assert(PaneOverrides.count <= proxy_mod.max_pane_overrides);
+}
+
 const LaunchFailure = struct {
     shell: []const u8,
     phase: history.LaunchPhase,
@@ -67,8 +109,8 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         gpa: std.mem.Allocator,
         select: *Io.Select(RuntimeEvent),
         history_service: *history.Service,
-        child_environment: *const pty.ChildEnvironment,
         inherited_environment: std.process.Environ,
+        socket_path: []const u8,
         proxy: ?*proxy_mod.Proxy,
         panes: *PaneStore,
         launch_fault: ?*LaunchTestFault,
@@ -81,8 +123,16 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         /// ```
         pub fn launch(launcher: *Self, request: LaunchRequest) !*Pane {
             const pane_key = try launcher.panes.allocateKey();
+            var pane_overrides: PaneOverrides = .{};
+            const identity_overrides = pane_overrides.build(.{
+                .key = pane_key,
+                .location = request.location,
+                .socket_path = launcher.socket_path,
+            });
             var proxy_environment: ?proxy_mod.PaneEnvironment = null;
             defer if (proxy_environment) |*owned| owned.deinit();
+            var owned_environment: ?pty.ChildEnvironment = null;
+            defer if (owned_environment) |*owned| owned.deinit();
             var proxy_registered = false;
             errdefer if (proxy_registered) if (launcher.proxy) |proxy|
                 proxy.revokePane(pane_key);
@@ -90,10 +140,18 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 proxy_environment = try proxy.registerPane(
                     pane_key,
                     launcher.inherited_environment,
+                    identity_overrides,
                 );
                 proxy_registered = true;
                 break :block proxy_environment.?.environment();
-            } else launcher.child_environment;
+            } else block: {
+                owned_environment = try pty.ChildEnvironment.initWithOverrides(
+                    launcher.gpa,
+                    launcher.inherited_environment,
+                    .{ .telar_term_program = "telar", .overrides = identity_overrides },
+                );
+                break :block &owned_environment.?;
+            };
 
             var command = try OwnedCommand.init(.{
                 .gpa = launcher.gpa,
@@ -242,4 +300,27 @@ pub fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
 
 fn waitPane(pane: *Pane) PaneExitEvent {
     return .{ .pane = pane.key(), .result = pane.session.wait() };
+}
+
+test "pane overrides name the runtime socket and the pane's own identity" {
+    var overrides: PaneOverrides = .{};
+
+    const entries = overrides.build(.{
+        .key = .{ .id = try schema.id.pane(12), .generation = 3 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(4) },
+            .tab_id = @enumFromInt(9),
+        },
+        .socket_path = "/tmp/telar.sock",
+    });
+
+    try std.testing.expectEqual(@as(usize, 4), entries.len);
+    try std.testing.expectEqualStrings("TELAR_SOCKET_PATH", entries[0].name);
+    try std.testing.expectEqualStrings("/tmp/telar.sock", entries[0].value);
+    try std.testing.expectEqualStrings("TELAR_PANE_ID", entries[1].name);
+    try std.testing.expectEqualStrings("12", entries[1].value);
+    try std.testing.expectEqualStrings("TELAR_WORKSPACE_ID", entries[2].name);
+    try std.testing.expectEqualStrings("4", entries[2].value);
+    try std.testing.expectEqualStrings("TELAR_TAB_ID", entries[3].name);
+    try std.testing.expectEqualStrings("9", entries[3].value);
 }

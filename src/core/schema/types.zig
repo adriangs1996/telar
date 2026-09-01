@@ -26,6 +26,9 @@ pub const max_agent_session_title_bytes = 96;
 pub const max_agent_cwd_label_bytes = 48;
 pub const max_foreground_name_bytes = 48;
 pub const max_workspace_list_entries = 64;
+pub const max_pane_text_rows = 200;
+pub const max_pane_text_bytes = 64 * 1024;
+pub const max_pane_text_input_bytes = 16 * 1024;
 pub const max_notification_title_bytes = 48;
 pub const max_notification_message_bytes = 192;
 pub const max_client_layout_clients = 8;
@@ -159,6 +162,23 @@ pub const FailureCode = enum(u16) {
     internal = 6,
     workspace_not_found = 7,
     tab_not_found = 8,
+    agent_blocked = 9,
+    pane_exited = 10,
+};
+
+/// Rows a text read covers: the visible screen, or the most recent rows of
+/// scrollback plus screen.
+pub const PaneTextSource = enum(u8) {
+    screen = 0,
+    recent = 1,
+};
+
+/// How text sent to a pane is delivered. `prompt` wraps it in bracketed paste
+/// when the child enabled that mode, appends Enter, and is refused while the
+/// agent is blocked.
+pub const PaneTextMode = enum(u8) {
+    raw = 0,
+    prompt = 1,
 };
 
 pub const PaneLifecycle = enum(u8) {

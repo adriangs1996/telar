@@ -32,9 +32,11 @@ pub const Scheduler = struct {
     input: *const fn (*anyopaque, *pane_mod.Pane) anyerror!void,
 };
 
-pub const PaneInputHandler = struct {
+/// The attachment-independent half of pane input: observation first, then the
+/// bounded PTY queue. Shared by attached-client input and control requests
+/// that resolve panes by exact generation.
+pub const Forwarder = struct {
     io: Io,
-    attachments: *AttachmentStore,
     metrics: *RuntimeMetrics,
     agent_input: ?*agent_mod.Tracker,
     scheduler: Scheduler,
@@ -43,6 +45,40 @@ pub const PaneInputHandler = struct {
     /// it available to the PTY writer. This ordering prevents child output from
     /// overtaking the input observation. PTY queue saturation drops the complete
     /// message while preserving previously queued bytes.
+    ///
+    /// ```zig
+    /// try forwarder.forward(pane, "help\r");
+    /// ```
+    pub inline fn forward(forwarder: *const Forwarder, pane: *pane_mod.Pane, bytes: []const u8) !void {
+        if (comptime diagnostics.enabled) {
+            forwarder.metrics.input_events += 1;
+            forwarder.metrics.input_bytes += bytes.len;
+        }
+
+        if (forwarder.agent_input) |tracker| {
+            _ = tracker.observeInput(pane.key(), bytes);
+        }
+
+        pane.queueHistoryInput(.{
+            .bytes = bytes,
+            .shell_foreground = pane.session.shellForeground() orelse false,
+            .clock = pane_mod.historyClock(forwarder.io),
+        });
+        try forwarder.scheduler.observation(forwarder.scheduler.context, pane);
+
+        _ = pane.queuePtyInput(bytes);
+        try forwarder.scheduler.input(forwarder.scheduler.context, pane);
+    }
+};
+
+pub const PaneInputHandler = struct {
+    io: Io,
+    attachments: *AttachmentStore,
+    metrics: *RuntimeMetrics,
+    agent_input: ?*agent_mod.Tracker,
+    scheduler: Scheduler,
+
+    /// Validates the requesting client's attachment, then forwards the bytes.
     ///
     /// ```zig
     /// const result = try handler.execute(.{ .pane_id = pane_id, .bytes = "help\r" });
@@ -55,25 +91,21 @@ pub const PaneInputHandler = struct {
             return .pane_exited;
         }
 
-        if (comptime diagnostics.enabled) {
-            handler.metrics.input_events += 1;
-            handler.metrics.input_bytes += command.bytes.len;
-        }
-
-        if (handler.agent_input) |tracker| {
-            _ = tracker.observeInput(pane.key(), command.bytes);
-        }
-
-        pane.queueHistoryInput(.{
-            .bytes = command.bytes,
-            .shell_foreground = pane.session.shellForeground() orelse false,
-            .clock = pane_mod.historyClock(handler.io),
-        });
-        try handler.scheduler.observation(handler.scheduler.context, pane);
-
-        _ = pane.queuePtyInput(command.bytes);
-        try handler.scheduler.input(handler.scheduler.context, pane);
-
+        try handler.forwarder().forward(pane, command.bytes);
         return .handled;
+    }
+
+    /// Exposes the attachment-independent forwarding half of this handler.
+    ///
+    /// ```zig
+    /// try handler.forwarder().forward(pane, bytes);
+    /// ```
+    pub fn forwarder(handler: *const PaneInputHandler) Forwarder {
+        return .{
+            .io = handler.io,
+            .metrics = handler.metrics,
+            .agent_input = handler.agent_input,
+            .scheduler = handler.scheduler,
+        };
     }
 };

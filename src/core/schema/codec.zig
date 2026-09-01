@@ -179,7 +179,7 @@ pub fn Derived(comptime T: type) type {
                 bool => try encoder.writeByte(@intFromBool(value)),
                 u8 => try encoder.writeByte(value),
                 u16, u32, u64, i32, i64 => try encoder.writeInt(F, value),
-                types.ExitKind, types.TabMoveDirection => {
+                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode => {
                     try encoder.writeByte(@intFromEnum(value));
                 },
                 else => @compileError("underivable field type " ++ @typeName(F)),
@@ -209,6 +209,10 @@ pub fn Derived(comptime T: type) type {
                     1 => .next,
                     else => return error.InvalidTabMoveDirection,
                 },
+                types.PaneTextSource => std.enums.fromInt(types.PaneTextSource, try decoder.readByte()) orelse
+                    return error.InvalidPaneTextSource,
+                types.PaneTextMode => std.enums.fromInt(types.PaneTextMode, try decoder.readByte()) orelse
+                    return error.InvalidPaneTextMode,
                 else => @compileError("underivable field type " ++ @typeName(F)),
             };
         }

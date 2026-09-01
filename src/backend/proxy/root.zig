@@ -114,12 +114,15 @@ pub const Proxy = struct {
     }
 
     /// Registers one pane generation and returns its owned child environment.
+    /// `pane_overrides` carries the pane's identity variables; the proxy adds
+    /// its own credentials and trust configuration after them.
     ///
     /// ```zig
-    /// var pane_environment = try proxy.registerPane(key, inherited);
+    /// var pane_environment = try proxy.registerPane(key, inherited, pane_overrides);
     /// defer pane_environment.deinit();
     /// ```
-    pub fn registerPane(proxy: *Proxy, key: PaneKey, inherited: std.process.Environ) !PaneEnvironment {
+    pub fn registerPane(proxy: *Proxy, key: PaneKey, inherited: std.process.Environ, pane_overrides: []const pty.ChildEnvironment.Override) !PaneEnvironment {
+        std.debug.assert(pane_overrides.len <= max_pane_overrides);
         const service = proxy.lifecycle.service;
         var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
         defer std.crypto.secureZero(u8, &credential.token);
@@ -129,14 +132,17 @@ pub const Proxy = struct {
         defer std.crypto.secureZero(u8, &url_buffer);
         const proxy_url = try service.credentialUrl(&url_buffer, &credential);
         const client = service.clientConfiguration();
-        const overrides = environmentOverrides(
+        const proxy_overrides = environmentOverrides(
             proxy_url,
             client.certificate_path,
             client.bundle_path,
         );
+        var overrides: [max_pane_overrides + environment_override_count]pty.ChildEnvironment.Override = undefined;
+        @memcpy(overrides[0..pane_overrides.len], pane_overrides);
+        @memcpy(overrides[pane_overrides.len .. pane_overrides.len + proxy_overrides.len], &proxy_overrides);
         return .{ .value = try pty.ChildEnvironment.initWithOverrides(proxy.gpa, inherited, .{
             .telar_term_program = "telar",
-            .overrides = &overrides,
+            .overrides = overrides[0 .. pane_overrides.len + proxy_overrides.len],
         }) };
     }
 
@@ -190,6 +196,10 @@ pub const Proxy = struct {
 };
 
 const environment_override_count = 11;
+
+/// Upper bound on identity variables a pane launch may add before the proxy's
+/// own overrides.
+pub const max_pane_overrides = 4;
 
 fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]pty.ChildEnvironment.Override {
     return .{
@@ -283,7 +293,9 @@ test "pane registration owns and disposes its ephemeral environment" {
     const inherited_block = try inherited_map.createPosixBlock(gpa, .{});
     defer inherited_block.deinit(gpa);
     const key: PaneKey = .{ .id = try core.schema.id.pane(7), .generation = 2 };
-    var environment = try proxy.registerPane(key, .{ .block = inherited_block });
+    var environment = try proxy.registerPane(key, .{ .block = inherited_block }, &.{
+        .{ .name = "TELAR_PANE_ID", .value = "7" },
+    });
     const child: std.process.Environ = .{ .block = environment.environment().block };
     try std.testing.expect(std.mem.startsWith(
         u8,

@@ -110,6 +110,7 @@ pub const Delivery = struct {
     client_layout_sent: bool = false,
     proxy_status_sent: bool = false,
     agent_revision_sent: u64 = 0,
+    agent_snapshot_requested: bool = false,
     system_metrics_revision_sent: u64 = 0,
     workspace_list_revision_sent: u64 = 0,
     clipboard_storage: [schema.max_clipboard_bytes]u8 = undefined,
@@ -142,6 +143,17 @@ pub const Delivery = struct {
     pub fn requestWorkspaceResync(delivery: *Delivery, workspace: schema.WorkspaceLocation, previous_workspace: ?schema.WorkspaceId) void {
         delivery.responses.resync_workspace = workspace;
         delivery.responses.resync_previous_workspace = previous_workspace;
+    }
+
+    /// Schedules one agent snapshot for a client that holds no runtime-state
+    /// subscription. The snapshot is the same enriched projection UI clients
+    /// receive; the next delivery sends it regardless of revision baselines.
+    ///
+    /// ```zig
+    /// delivery.requestAgentSnapshot();
+    /// ```
+    pub fn requestAgentSnapshot(delivery: *Delivery) void {
+        delivery.agent_snapshot_requested = true;
     }
 
     /// Enables level-triggered runtime projections for this client. Repeated
@@ -284,8 +296,8 @@ pub const Delivery = struct {
                 .proxy_status,
             );
 
-        if (delivery.runtime_state_requested and
-            delivery.agent_revision_sent < sources.agents.revision)
+        if (delivery.agent_snapshot_requested or (delivery.runtime_state_requested and
+            delivery.agent_revision_sent < sources.agents.revision))
         {
             var entry_storage: [agent_mod.max_records]schema.AgentSnapshotEntry = undefined;
             var display_storage: [agent_mod.max_records]AgentDisplayStorage = undefined;
@@ -424,7 +436,10 @@ pub const Delivery = struct {
             .clipboard => delivery.clipboard_pending = false,
             .client_layout => delivery.client_layout_sent = true,
             .proxy_status => delivery.proxy_status_sent = true,
-            .agent_revision => |revision| delivery.agent_revision_sent = revision,
+            .agent_revision => |revision| {
+                delivery.agent_revision_sent = revision;
+                delivery.agent_snapshot_requested = false;
+            },
             .system_metrics_revision => |revision| delivery.system_metrics_revision_sent = revision,
             .workspace_list_revision => |revision| delivery.workspace_list_revision_sent = revision,
             .attachment => |work| {

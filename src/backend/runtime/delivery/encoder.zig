@@ -37,6 +37,7 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
     var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
     var tab_storage: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
     var history_storage: [history.model.max_results]schema.HistoryEntry = undefined;
+    var text_storage: [schema.max_pane_text_bytes]u8 = undefined;
     return switch (response.*) {
         .request_failed => |failure| try schema.encodeRequestFailed(buffer, .{
             .request_id = failure.request_id,
@@ -95,6 +96,22 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
         .history_result => |result| payload: {
             history_result.* = result;
             break :payload try encodeHistoryResult(buffer, result, &history_storage);
+        },
+        .request_completed => |completed| try schema.encodeRequestCompleted(buffer, completed),
+        .pane_text => |*read| payload: {
+            const target = panes.resolveConst(read.pane) orelse
+                break :payload try schema.encodeRequestFailed(buffer, .{
+                    .request_id = read.request_id,
+                    .code = .pane_not_found,
+                    .message = "pane closed before its text was read",
+                });
+            const dump = target.dumpText(.{ .rows = read.rows, .source = read.source }, &text_storage);
+            break :payload try schema.encodePaneText(buffer, .{
+                .request_id = read.request_id,
+                .pane_id = read.pane.id,
+                .truncated = dump.truncated,
+                .text = text_storage[0..dump.len],
+            });
         },
     };
 }

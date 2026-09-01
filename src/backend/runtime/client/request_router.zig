@@ -46,6 +46,9 @@ pub fn Handlers(comptime Context: type) type {
         show_notification: *const fn (*Context, schema.ShowNotification) anyerror!void,
         update_client_layout: *const fn (*Context, schema.ClientLayoutUpdateView) anyerror!void,
         acknowledge_agent: *const fn (*Context, schema.AcknowledgeAgent) anyerror!void,
+        query_agents: *const fn (*Context, schema.QueryAgents) anyerror!void,
+        read_pane: *const fn (*Context, schema.ReadPane) anyerror!void,
+        send_pane_text: *const fn (*Context, schema.SendPaneText) anyerror!void,
     };
 }
 
@@ -104,6 +107,9 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .show_notification => |request| handlers.show_notification(router.context, request),
                 .update_client_layout => |request| handlers.update_client_layout(router.context, request),
                 .acknowledge_agent => |request| handlers.acknowledge_agent(router.context, request),
+                .query_agents => |request| handlers.query_agents(router.context, request),
+                .read_pane => |request| handlers.read_pane(router.context, request),
+                .send_pane_text => |request| handlers.send_pane_text(router.context, request),
             };
         }
     };
@@ -117,7 +123,13 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
 /// ```
 pub fn classify(tag: Tag) RequestClass {
     return switch (tag) {
-        .runtime_stop, .query_history, .show_notification => .control,
+        .runtime_stop,
+        .query_history,
+        .show_notification,
+        .query_agents,
+        .read_pane,
+        .send_pane_text,
+        => .control,
         else => .ui,
     };
 }
@@ -187,6 +199,9 @@ const testing_handlers: Handlers(Capture) = .{
     .show_notification = captureHandler(.show_notification, schema.ShowNotification),
     .update_client_layout = captureHandler(.update_client_layout, schema.ClientLayoutUpdateView),
     .acknowledge_agent = captureHandler(.acknowledge_agent, schema.AcknowledgeAgent),
+    .query_agents = captureHandler(.query_agents, schema.QueryAgents),
+    .read_pane = captureHandler(.read_pane, schema.ReadPane),
+    .send_pane_text = captureHandler(.send_pane_text, schema.SendPaneText),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -244,6 +259,9 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
             .encoded_tabs = "",
         } },
         .{ .acknowledge_agent = .{ .pane_id = pane_id, .pane_generation = 1 } },
+        .{ .query_agents = .{ .request_id = request_id } },
+        .{ .read_pane = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .rows = 40, .source = .screen } },
+        .{ .send_pane_text = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .mode = .prompt, .text = "ls" } },
     };
 }
 
@@ -264,7 +282,13 @@ test "Router delegates every client tag exactly once and preserves classificatio
 
         try std.testing.expectEqual(tag, capture.last.?);
         const expected_class: RequestClass = switch (tag) {
-            .runtime_stop, .query_history, .show_notification => .control,
+            .runtime_stop,
+            .query_history,
+            .show_notification,
+            .query_agents,
+            .read_pane,
+            .send_pane_text,
+            => .control,
             else => .ui,
         };
         try std.testing.expectEqual(expected_class, classify(tag));

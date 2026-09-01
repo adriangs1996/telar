@@ -31,6 +31,9 @@ pub const max_tabs_per_workspace = types.max_tabs_per_workspace;
 pub const max_panes_per_tab = types.max_panes_per_tab;
 pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
+pub const max_pane_text_rows = types.max_pane_text_rows;
+pub const max_pane_text_bytes = types.max_pane_text_bytes;
+pub const max_pane_text_input_bytes = types.max_pane_text_input_bytes;
 pub const max_history_command_bytes = types.max_history_command_bytes;
 pub const max_agent_snapshot_entries = types.max_agent_snapshot_entries;
 pub const max_agent_workspace_label_bytes = types.max_agent_workspace_label_bytes;
@@ -66,6 +69,8 @@ pub const PaneLifecycle = types.PaneLifecycle;
 pub const PaneDescriptor = types.PaneDescriptor;
 pub const TabDescriptor = types.TabDescriptor;
 pub const HistoryScope = types.HistoryScope;
+pub const PaneTextSource = types.PaneTextSource;
+pub const PaneTextMode = types.PaneTextMode;
 pub const HistoryStatus = types.HistoryStatus;
 pub const HistoryEntry = types.HistoryEntry;
 pub const AgentProvider = types.AgentProvider;
@@ -136,6 +141,9 @@ pub const ClientTag = enum(u8) {
     show_notification = 0x19,
     update_client_layout = 0x1a,
     acknowledge_agent = 0x1b,
+    query_agents = 0x1c,
+    read_pane = 0x1d,
+    send_pane_text = 0x1e,
 };
 
 pub const ServerTag = enum(u8) {
@@ -170,6 +178,8 @@ pub const ServerTag = enum(u8) {
     pane_foreground = 0x9d,
     agent_sound = 0x9e,
     client_layout_snapshot = 0x9f,
+    pane_text = 0xa0,
+    request_completed = 0xa1,
 };
 
 pub const LaunchView = struct {
@@ -394,6 +404,48 @@ pub const AcknowledgeAgent = struct {
     pane_generation: u64,
 };
 
+/// One-shot request for the current agent snapshot. The reply is the same
+/// `agent_snapshot` message that runtime-state subscribers receive.
+pub const QueryAgents = struct {
+    request_id: RequestId,
+};
+
+/// Bounded plain-text read of one exact pane generation.
+pub const ReadPane = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    pane_generation: u64,
+    rows: u16,
+    source: PaneTextSource,
+
+    pub fn validateWire(message: ReadPane) !void {
+        if (message.rows == 0 or message.rows > max_pane_text_rows) return error.InvalidPaneTextRows;
+    }
+};
+
+/// Text delivered to one exact pane generation without a client attachment.
+pub const SendPaneText = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    pane_generation: u64,
+    mode: PaneTextMode,
+    text: []const u8,
+};
+
+/// Reply to `read_pane`. `truncated` reports that older rows were omitted to
+/// respect `max_pane_text_bytes`.
+pub const PaneText = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    truncated: bool,
+    text: []const u8,
+};
+
+/// Reply for requests that succeed without producing data.
+pub const RequestCompleted = struct {
+    request_id: RequestId,
+};
+
 /// Selection coordinates use the full screen history, not viewport rows.
 pub const CopySelection = struct {
     pane_id: PaneId,
@@ -565,6 +617,9 @@ pub const ClientMessage = union(enum) {
     copy_selection: CopySelection,
     show_notification: ShowNotification,
     acknowledge_agent: AcknowledgeAgent,
+    query_agents: QueryAgents,
+    read_pane: ReadPane,
+    send_pane_text: SendPaneText,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -906,6 +961,8 @@ pub const ServerMessage = union(enum) {
     notification_shown: NotificationShown,
     agent_sound: AgentSoundNotification,
     client_layout_snapshot: ClientLayoutSnapshotView,
+    pane_text: PaneText,
+    request_completed: RequestCompleted,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -1167,6 +1224,76 @@ pub fn encodeSetPaneViewport(buffer: []u8, message: SetPaneViewport) ![]const u8
     );
 }
 
+pub fn encodeQueryAgents(buffer: []u8, message: QueryAgents) ![]const u8 {
+    return encodeDerived(@intFromEnum(ClientTag.query_agents), QueryAgents, buffer, message);
+}
+
+pub fn encodeReadPane(buffer: []u8, message: ReadPane) ![]const u8 {
+    return encodeDerived(@intFromEnum(ClientTag.read_pane), ReadPane, buffer, message);
+}
+
+pub fn encodeSendPaneText(buffer: []u8, message: SendPaneText) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    try validateBytes(message.text, max_pane_text_input_bytes, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.send_pane_text));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(@intFromEnum(message.mode));
+    try encoder.writeSized16(message.text);
+    return encoder.finish();
+}
+
+fn decodeSendPaneText(decoder: *wire.Decoder) !SendPaneText {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const pane_generation = try decoder.readInt(u64);
+    const mode = std.enums.fromInt(PaneTextMode, try decoder.readByte()) orelse
+        return error.InvalidPaneTextMode;
+    const text = try decoder.readSized16();
+    try validateBytes(text, max_pane_text_input_bytes, false);
+    return .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .pane_generation = pane_generation,
+        .mode = mode,
+        .text = text,
+    };
+}
+
+pub fn encodePaneText(buffer: []u8, message: PaneText) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    if (message.text.len > max_pane_text_bytes) return error.InvalidByteString;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.pane_text));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeByte(@intFromBool(message.truncated));
+    try encoder.writeSized32(message.text);
+    return encoder.finish();
+}
+
+fn decodePaneText(decoder: *wire.Decoder) !PaneText {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const truncated = try decoder.readBool();
+    const text = try decoder.readSized32();
+    if (text.len > max_pane_text_bytes) return error.InvalidByteString;
+    return .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .truncated = truncated,
+        .text = text,
+    };
+}
+
+pub fn encodeRequestCompleted(buffer: []u8, message: RequestCompleted) ![]const u8 {
+    return encodeDerived(@intFromEnum(ServerTag.request_completed), RequestCompleted, buffer, message);
+}
+
 pub fn encodeAcknowledgeAgent(buffer: []u8, message: AcknowledgeAgent) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.acknowledge_agent),
@@ -1250,6 +1377,9 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .acknowledge_agent => .{
             .acknowledge_agent = try Derived(AcknowledgeAgent).decode(&decoder),
         },
+        .query_agents => .{ .query_agents = try Derived(QueryAgents).decode(&decoder) },
+        .read_pane => .{ .read_pane = try Derived(ReadPane).decode(&decoder) },
+        .send_pane_text => .{ .send_pane_text = try decodeSendPaneText(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -1607,6 +1737,8 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .client_layout_snapshot => .{
             .client_layout_snapshot = try decodeClientLayoutSnapshot(&decoder),
         },
+        .pane_text => .{ .pane_text = try decodePaneText(&decoder) },
+        .request_completed => .{ .request_completed = try Derived(RequestCompleted).decode(&decoder) },
     };
     if (message == .agent_sound and message.agent_sound.pane_generation == 0)
         return error.InvalidPaneGeneration;
