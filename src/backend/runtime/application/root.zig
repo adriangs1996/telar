@@ -12,6 +12,7 @@ const delivery = @import("../delivery/root.zig");
 const runtime_event = @import("../event.zig");
 const pane_launcher = @import("pane_launcher.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
+const git_status = @import("git_status.zig");
 const pane_mod = @import("../../pane/root.zig");
 const model = @import("model.zig");
 const pty = @import("../../pty/root.zig");
@@ -29,6 +30,7 @@ const diagnostics = core.diagnostics;
 const Pane = pane_mod.Pane;
 const PaneLauncher = pane_launcher.PaneLauncher;
 const SessionCheckpoint = session_checkpoint.Checkpointer(Application);
+const GitObserver = git_status.Observer(Application);
 const WorkspaceRepository = workspace_mod.Repository;
 const RuntimeModel = model.RuntimeModel;
 const ClientAdmissionState = client_mod.admission.State(core.transport.SocketChannel);
@@ -107,6 +109,7 @@ pub const Application = struct {
     metrics: RuntimeMetrics,
     session: session_checkpoint.State = .{},
     session_write_buffer: ?[]u8 = null,
+    git_probe_in_flight: bool = false,
 
     /// Composes application state from stable, runtime-owned capabilities.
     ///
@@ -283,6 +286,24 @@ pub const Application = struct {
     /// ```
     pub fn flushSessionCheckpoint(application: *Application) !void {
         try SessionCheckpoint.flushIfDue(application);
+    }
+
+    /// Starts one git probe for the stalest due workspace.
+    ///
+    /// ```zig
+    /// application.tickGitStatus();
+    /// ```
+    pub fn tickGitStatus(application: *Application) void {
+        GitObserver.tick(application);
+    }
+
+    /// Applies one git probe result.
+    ///
+    /// ```zig
+    /// application.gitStatusCompleted(completion);
+    /// ```
+    pub fn gitStatusCompleted(application: *Application, completion: git_status.Completion) void {
+        GitObserver.handleCompletion(application, completion);
     }
 
     /// Completes the in-flight checkpoint write.

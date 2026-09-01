@@ -22,6 +22,8 @@ pub const EntryInput = struct {
     name: []const u8,
     path: []const u8,
     tab_count: u16,
+    branch: []const u8 = "",
+    dirty: bool = false,
 };
 
 pub const SnapshotInput = struct {
@@ -36,6 +38,9 @@ const Entry = struct {
     path_offset: u32,
     path_len: u32,
     tab_count: u16,
+    branch: [schema.max_git_branch_bytes]u8 = undefined,
+    branch_len: u8 = 0,
+    dirty: bool = false,
 };
 
 pub const Snapshot = struct {
@@ -86,6 +91,10 @@ pub const Snapshot = struct {
                 .path_len = @intCast(entry.path.len),
                 .tab_count = entry.tab_count,
             };
+            const branch = entry.branch[0..@min(entry.branch.len, stored.branch.len)];
+            @memcpy(stored.branch[0..branch.len], branch);
+            stored.branch_len = @intCast(branch.len);
+            stored.dirty = entry.dirty;
             @memcpy(stored.name[0..name.len], name);
             @memcpy(replacement.path_pool[replacement.pool_len..][0..entry.path.len], entry.path);
             replacement.pool_len += entry.path.len;
@@ -94,6 +103,20 @@ pub const Snapshot = struct {
 
         snapshot.* = replacement;
         return true;
+    }
+
+    /// Returns one git branch borrowed from the snapshot, empty when unknown.
+    ///
+    /// ```zig
+    /// const branch = snapshot.branchAt(0);
+    /// ```
+    pub fn branchAt(snapshot: *const Snapshot, index: usize) []const u8 {
+        const entry = &snapshot.entries[index];
+        return entry.branch[0..entry.branch_len];
+    }
+
+    pub fn dirtyAt(snapshot: *const Snapshot, index: usize) bool {
+        return snapshot.entries[index].dirty;
     }
 
     /// Returns one display name borrowed from the snapshot.

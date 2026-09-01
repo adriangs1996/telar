@@ -210,11 +210,19 @@ fn drawWorkspace(
     row_end: u16,
     y: u16,
 ) u16 {
-    var label_buffer: [workspace_list.max_name_bytes + 2]u8 = undefined;
-    const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
-        workspaceNameAt(snapshot, index, active_index, active_name),
-    }) catch
-        " workspace ";
+    var label_buffer: [workspace_list.max_name_bytes + core.schema.max_git_branch_bytes + 8]u8 = undefined;
+    const branch = snapshot.branchAt(index);
+    const dirty_mark: []const u8 = if (snapshot.dirtyAt(index)) "*" else "";
+    const label = if (branch.len != 0)
+        std.fmt.bufPrint(&label_buffer, " {s} \u{2387}{s}{s} ", .{
+            workspaceNameAt(snapshot, index, active_index, active_name),
+            branch,
+            dirty_mark,
+        }) catch " workspace "
+    else
+        std.fmt.bufPrint(&label_buffer, " {s} ", .{
+            workspaceNameAt(snapshot, index, active_index, active_name),
+        }) catch " workspace ";
     const width = @min(ui.measure(label), row_end -| x);
     if (width == 0) return x;
     const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };

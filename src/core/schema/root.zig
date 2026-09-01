@@ -39,6 +39,7 @@ pub const max_agent_provider_name_bytes = types.max_agent_provider_name_bytes;
 pub const max_agent_session_reference_bytes = types.max_agent_session_reference_bytes;
 pub const max_pane_text_rows = types.max_pane_text_rows;
 pub const max_search_needle_bytes = types.max_search_needle_bytes;
+pub const max_git_branch_bytes = types.max_git_branch_bytes;
 pub const max_search_matches = types.max_search_matches;
 pub const SearchMatch = types.SearchMatch;
 pub const max_pane_text_bytes = types.max_pane_text_bytes;
@@ -918,6 +919,10 @@ pub const WorkspaceListEntry = struct {
     name: []const u8,
     path: []const u8,
     tab_count: u16,
+    /// Current git branch (or short commit), empty when the workspace is not
+    /// a repository or has not been probed yet.
+    branch: []const u8 = "",
+    dirty: bool = false,
 };
 
 pub const WorkspaceList = struct {
@@ -1814,6 +1819,9 @@ pub fn encodeWorkspaceList(buffer: []u8, message: WorkspaceList) ![]const u8 {
         try encoder.writeSized16(entry.name);
         try encoder.writeSized16(entry.path);
         try encoder.writeInt(u16, entry.tab_count);
+        try validateBytes(entry.branch, max_git_branch_bytes, true);
+        try encoder.writeSized16(entry.branch);
+        try encoder.writeByte(@intFromBool(entry.dirty));
     }
     return encoder.finish();
 }
@@ -2875,7 +2883,17 @@ fn decodeWorkspaceListEntry(decoder: *wire.Decoder) !WorkspaceListEntry {
     try validateBytes(path, max_cwd_bytes, false);
     const tab_count = try decoder.readInt(u16);
     if (tab_count > max_tabs_per_workspace) return error.TooManyTabs;
-    return .{ .workspace = workspace, .name = name, .path = path, .tab_count = tab_count };
+    const branch = try decoder.readSized16();
+    try validateBytes(branch, max_git_branch_bytes, true);
+    const dirty = try decoder.readBool();
+    return .{
+        .workspace = workspace,
+        .name = name,
+        .path = path,
+        .tab_count = tab_count,
+        .branch = branch,
+        .dirty = dirty,
+    };
 }
 
 fn decodeWorkspaceList(decoder: *wire.Decoder) !WorkspaceListView {

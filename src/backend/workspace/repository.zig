@@ -271,6 +271,8 @@ pub const Reader = struct {
                 .name = workspace.name(),
                 .path = workspace.pathSlice(),
                 .tab_count = @intCast(workspace.tabCount()),
+                .branch = workspace.gitBranch(),
+                .dirty = workspace.git_dirty,
             };
             count_value += 1;
         }

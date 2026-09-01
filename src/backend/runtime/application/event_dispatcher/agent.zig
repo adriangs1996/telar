@@ -40,6 +40,7 @@ pub fn Dispatcher(comptime Application: type) type {
             var coordinator = agentMaintenanceCoordinator(application);
             try coordinator.handle(result);
             try application.flushSessionCheckpoint();
+            application.tickGitStatus();
         }
 
         /// Applies one generated description and persists the resulting title.

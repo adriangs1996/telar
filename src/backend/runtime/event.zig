@@ -8,6 +8,7 @@ const proxy = @import("../proxy/root.zig");
 const client_session = @import("client/root.zig").session;
 const pane_events = @import("entrypoints/events/pane/root.zig");
 const pane_launcher = @import("application/pane_launcher.zig");
+const git_status = @import("application/git_status.zig");
 
 const diagnostics = core.diagnostics;
 
@@ -41,6 +42,7 @@ pub const Event = union(enum) {
     agent_description: agent.description.Result,
     metrics_tick: anyerror!void,
     checkpoint_written: anyerror!void,
+    git_status: git_status.Completion,
     stopped: anyerror!void,
 };
 
@@ -73,6 +75,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) diagnostics.Path {
         .telemetry_tick,
         .telemetry_written,
         .checkpoint_written,
+        .git_status,
         => .observation,
         .accepted,
         .handshaken,

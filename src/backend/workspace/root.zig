@@ -11,6 +11,7 @@ const workspace = @import("workspace.zig");
 
 pub const State = state.State;
 pub const Repository = repository.Repository;
+pub const Workspace = workspace.Workspace;
 pub const Reader = repository.Reader;
 pub const Ensured = repository.Ensured;
 pub const Insert = repository.Insert;

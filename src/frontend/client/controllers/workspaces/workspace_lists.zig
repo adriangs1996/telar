@@ -27,6 +27,8 @@ pub fn apply(client: *Client, list: schema.WorkspaceListView) !ApplyOutcome {
             .name = entry.name,
             .path = entry.path,
             .tab_count = entry.tab_count,
+            .branch = entry.branch,
+            .dirty = entry.dirty,
         };
         count += 1;
     }

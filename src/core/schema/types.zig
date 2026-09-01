@@ -27,6 +27,7 @@ pub const max_agent_cwd_label_bytes = 48;
 pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
+pub const max_git_branch_bytes = 64;
 pub const max_search_needle_bytes = 128;
 pub const max_search_matches = 64;
 pub const max_pane_text_rows = 200;

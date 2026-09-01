@@ -372,7 +372,11 @@ agent alerts, runtime notices and local diagnostics all follow one setting.
 
 ---
 
-## P10. Git in the sidebar, worktrees per workspace
+## P10. Git in the sidebar, worktrees per workspace — status done; worktrees pending
+
+Branch and dirty state are observed per workspace on the maintenance tick
+and rendered in the workspace list. `telar workspace create --worktree`
+remains open.
 
 - Observation worker in the runtime: branch from reading `.git/HEAD` (no
   subprocess, ≤ 4 KiB), dirty flag from `git status --porcelain` at

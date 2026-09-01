@@ -113,6 +113,9 @@ pub fn Dispatcher(comptime Application: type) type {
                 .checkpoint_written => |result| {
                     application.sessionCheckpointWritten(result);
                 },
+                .git_status => |completion| {
+                    application.gitStatusCompleted(completion);
+                },
             }
 
             return false;

@@ -47,6 +47,11 @@ pub const Workspace = struct {
     explicit_name_len: u8 = 0,
     tabs: [max_tabs_per_workspace]?Tab = [_]?Tab{null} ** max_tabs_per_workspace,
     tab_count: usize = 0,
+    git_branch: [schema.max_git_branch_bytes]u8 = undefined,
+    git_branch_len: u8 = 0,
+    git_dirty: bool = false,
+    git_checked_at_ms: i64 = 0,
+    git_probe_pending: bool = false,
 
     pub fn init(options: Init) !Workspace {
         if (options.path.len == 0 or options.path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, options.path, 0) != null) {
@@ -81,6 +86,24 @@ pub const Workspace = struct {
 
     pub fn pathSlice(workspace: *const Workspace) []const u8 {
         return workspace.path;
+    }
+
+    pub fn gitBranch(workspace: *const Workspace) []const u8 {
+        return workspace.git_branch[0..workspace.git_branch_len];
+    }
+
+    /// Stores one git observation and reports whether the projection changed.
+    ///
+    /// ```zig
+    /// if (workspace.applyGitStatus("main", true)) publishListChange();
+    /// ```
+    pub fn applyGitStatus(workspace: *Workspace, branch: []const u8, dirty: bool) bool {
+        const bounded = branch[0..@min(branch.len, workspace.git_branch.len)];
+        const changed = !std.mem.eql(u8, workspace.gitBranch(), bounded) or workspace.git_dirty != dirty;
+        @memcpy(workspace.git_branch[0..bounded.len], bounded);
+        workspace.git_branch_len = @intCast(bounded.len);
+        workspace.git_dirty = dirty;
+        return changed;
     }
 
     /// The user-chosen name, or null when the name derives from the path.
