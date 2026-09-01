@@ -200,3 +200,7 @@ pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {}
 
 - Do not clamp parameter's list. A function could have at most 3 parameters. More is a smell and
   needs to get worked around
+
+- Every change should preserve or improve the code architecture. Follow Single Responsability Principle
+  and express the semantics of what is being done with functions and structs that encapsulate
+  their state and their state mutations.
