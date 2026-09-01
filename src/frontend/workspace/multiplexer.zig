@@ -49,6 +49,9 @@ pub const Pane = struct {
     cwd: []u8 = &.{},
     foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
     foreground_name_len: u8 = 0,
+    /// Owned copy of the child's window title; empty until the runtime
+    /// reports one. Allocated on change so idle panes cost nothing.
+    title: []u8 = &.{},
 
     fn init(
         gpa: std.mem.Allocator,
@@ -74,6 +77,7 @@ pub const Pane = struct {
 
     fn deinit(pane: *Pane) void {
         if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
+        if (pane.title.len != 0) pane.gpa.free(pane.title);
         pane.gpa.free(pane.damage_rows);
         pane.buffer.deinit();
     }
@@ -123,6 +127,25 @@ pub const Pane = struct {
 
     pub fn foregroundName(pane: *const Pane) []const u8 {
         return pane.foreground_name[0..pane.foreground_name_len];
+    }
+
+    fn setTitle(pane: *Pane, title: []const u8) !bool {
+        std.debug.assert(title.len <= schema.max_pane_title_bytes);
+        if (std.mem.eql(u8, pane.title, title)) {
+            return false;
+        }
+
+        const replacement = if (title.len != 0) try pane.gpa.dupe(u8, title) else &[_]u8{};
+        if (pane.title.len != 0) {
+            pane.gpa.free(pane.title);
+        }
+
+        pane.title = @constCast(replacement);
+        return true;
+    }
+
+    pub fn titleSlice(pane: *const Pane) []const u8 {
+        return pane.title;
     }
 };
 
@@ -751,6 +774,17 @@ pub const Model = struct {
         const pane = model.find(pane_id) orelse return .unchanged;
 
         return if (pane.setForegroundName(name)) .display_changed else .unchanged;
+    }
+
+    /// Stores one pane window title without mutating composition caches.
+    ///
+    /// ```zig
+    /// const change = model.setPaneTitle(pane_id, "vim README.md");
+    /// ```
+    pub fn setPaneTitle(model: *Model, pane_id: schema.PaneId, title: []const u8) !MetadataChange {
+        const pane = model.find(pane_id) orelse return .unchanged;
+
+        return if (try pane.setTitle(title)) .display_changed else .unchanged;
     }
 
     pub fn addRoot(

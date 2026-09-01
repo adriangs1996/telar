@@ -47,6 +47,7 @@ pub const Attachment = struct {
         const Effect = union(enum) {
             cwd: u64,
             foreground: u64,
+            title: u64,
             cells,
             exit,
             graphics: GraphicsCounts,
@@ -63,6 +64,9 @@ pub const Attachment = struct {
     graphics: graphics.Sync,
     observed_cwd_revision: u64 = 0,
     observed_foreground_revision: u64 = 0,
+    /// Starts at the empty-title revision so a fresh attachment learns only
+    /// titles a child actually set.
+    observed_title_revision: u64 = 1,
     exit_sent: bool = false,
 
     pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
@@ -115,6 +119,18 @@ pub const Attachment = struct {
                 .cwd = pane.cwd.slice(),
             }),
             .effect = .{ .cwd = pane.cwd.revision },
+        };
+    }
+
+    pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?Prepared {
+        const pane = attachment.pane;
+        if (attachment.observed_title_revision == pane.title.revision) return null;
+        return .{
+            .bytes = try schema.encodePaneTitle(buffer, .{
+                .pane_id = pane.id,
+                .title = pane.title.slice(),
+            }),
+            .effect = .{ .title = pane.title.revision },
         };
     }
 
@@ -276,6 +292,10 @@ pub const Attachment = struct {
             },
             .foreground => |revision| effect: {
                 attachment.observed_foreground_revision = revision;
+                break :effect .{};
+            },
+            .title => |revision| effect: {
+                attachment.observed_title_revision = revision;
                 break :effect .{};
             },
             .cells => .{},

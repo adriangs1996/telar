@@ -407,6 +407,63 @@ pub const CwdState = struct {
     }
 };
 
+/// Bounded copy of the child's OSC 0/2 window title. Control bytes are
+/// dropped and long titles are cut on a UTF-8 boundary, so every stored
+/// value is safe to place in a frame or a host title sequence.
+pub const TitleState = struct {
+    bytes: [schema.max_pane_title_bytes]u8 = undefined,
+    len: u16 = 0,
+    revision: u64 = 1,
+
+    pub fn slice(state: *const TitleState) []const u8 {
+        return state.bytes[0..state.len];
+    }
+
+    /// Stores a sanitized copy and reports whether the title changed.
+    ///
+    /// ```zig
+    /// if (state.observe(terminal.getTitle() orelse "")) publish();
+    /// ```
+    pub fn observe(state: *TitleState, raw: []const u8) bool {
+        var candidate: [schema.max_pane_title_bytes]u8 = undefined;
+        const len = sanitizeTitle(&candidate, raw);
+        if (std.mem.eql(u8, state.slice(), candidate[0..len])) {
+            return false;
+        }
+
+        @memcpy(state.bytes[0..len], candidate[0..len]);
+        state.len = @intCast(len);
+        state.revision +%= 1;
+        if (state.revision == 0) {
+            state.revision = 1;
+        }
+
+        return true;
+    }
+};
+
+fn sanitizeTitle(storage: *[schema.max_pane_title_bytes]u8, raw: []const u8) usize {
+    var len: usize = 0;
+    var view = std.unicode.Utf8View.initUnchecked(raw);
+    var iterator = view.iterator();
+    while (iterator.nextCodepointSlice()) |sequence| {
+        if (sequence.len == 1 and (sequence[0] < 0x20 or sequence[0] == 0x7f)) {
+            continue;
+        }
+        if (!std.unicode.utf8ValidateSlice(sequence)) {
+            continue;
+        }
+        if (len + sequence.len > storage.len) {
+            break;
+        }
+
+        @memcpy(storage[len .. len + sequence.len], sequence);
+        len += sequence.len;
+    }
+
+    return len;
+}
+
 pub const TextRequest = struct {
     rows: u16,
     source: schema.PaneTextSource,
@@ -495,6 +552,7 @@ pub const Pane = struct {
     history_exit_queued: bool = false,
     workspace_path: []u8,
     cwd: CwdState,
+    title: TitleState = .{},
     pending_size: ?schema.TerminalSize = null,
     /// When the child's synchronized-output block started holding frames
     /// back, null while no hold is active. See `holdFrames`.
@@ -820,6 +878,7 @@ pub const Pane = struct {
         const background = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
         pane.input_modes = pane.inputModeState();
+        _ = pane.title.observe(pane.terminal.getTitle() orelse "");
         if (!std.meta.eql(pane.foreground_override, foreground) or
             !std.meta.eql(pane.background_override, background))
         {

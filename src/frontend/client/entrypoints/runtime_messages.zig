@@ -45,6 +45,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_frame => |frame| _ = try pane_frames.apply(client, frame),
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
+        .pane_title => |title| _ = try pane_metadata.applyTitle(client, title),
         .pane_clipboard => |clipboard| try pane_clipboards.apply(client, clipboard),
         .pane_exited => |exited| _ = try pane_closures.applyExit(client, exited),
         .request_failed => |failure| _ = try request_failures.apply(client, failure),

@@ -70,6 +70,8 @@ pub const Projection = struct {
     workspace_list_collapsed: bool,
     host_capabilities: client_model.HostCapabilities,
     host_size: schema.TerminalSize,
+    /// Configured host window title template; empty leaves the host alone.
+    window_title_template: []const u8 = "",
 };
 
 pub const Resources = struct {
@@ -104,6 +106,7 @@ presented_presentation_ingress: PresentationIngress = .{
     .view_interaction = 0,
     .input_routing = 0,
 },
+window_title: presentation.window_title.State = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
 media_tick_pending: bool = false,
@@ -331,6 +334,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     const force_composition = workspace_changed or configuration_changed or host_changed or
         active_tab_changed or panes_changed or pane_foreground_changed or pane_graphics_changed or
         viewport_changed;
+    try presenter.syncWindowTitle(projection, resources.writer);
     const presented = if (projection.model) |model|
         try presenter.present(.{
             .projection = projection,
@@ -627,6 +631,26 @@ const CombinedGraphicsWriter = struct {
         return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes + modal_bytes + attachment_bytes;
     }
 };
+
+/// Sends the host window title when the rendered template changes. The
+/// bytes join the frame already being flushed, so a title never costs an
+/// extra host write.
+fn syncWindowTitle(presenter: *Presenter, projection: Projection, writer: *Io.Writer) !void {
+    const tab_label = if (projection.tabs.activeConst()) |tab| tab.labelSlice() else "";
+    const pane_title = if (projection.model) |model| focusedPaneTitle(model) else "";
+
+    try presenter.window_title.sync(writer, projection.window_title_template, .{
+        .workspace = projection.tabs.workspaceName(),
+        .tab = tab_label,
+        .pane_title = pane_title,
+    });
+}
+
+fn focusedPaneTitle(model: *const multiplexer.Model) []const u8 {
+    const pane_id = model.layout.focused() orelse return "";
+    const pane = model.findConst(pane_id) orelse return "";
+    return pane.titleSlice();
+}
 
 fn flushScreen(presenter: *Presenter, writer: *Io.Writer) !void {
     const started = diagnostics.now(presenter.io);

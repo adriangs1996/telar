@@ -18,6 +18,7 @@ test {
     _ = @import("open_pane_test.zig");
     _ = @import("pane_input_test.zig");
     _ = @import("pane_resize_test.zig");
+    _ = @import("pane_title_test.zig");
     _ = @import("pane_viewport_test.zig");
     _ = @import("read_pane_test.zig");
     _ = @import("send_pane_text_test.zig");

@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 66;
+const corpus_len = 67;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -693,6 +693,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add("request_completed", .server, false, golden.request_completed, helper.commit(
         try schema.encodeRequestCompleted(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
+    helper.add("pane_title", .server, false, golden.pane_title, helper.commit(
+        try schema.encodePaneTitle(helper.space(), .{
+            .pane_id = @enumFromInt(5),
+            .title = "vim",
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -737,6 +743,7 @@ const golden = struct {
     pub const send_pane_text = "1e0500000000000000050000000000000003000000000000000102006c73";
     pub const pane_text = "a00500000000000000050000000000000000020000006869";
     pub const request_completed = "a10500000000000000";
+    pub const pane_title = "a20500000000000000030076696d";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
     pub const pane_frame = "82040000000000000001000000000000000000000000000000020001000101000000000000000000010000050101000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";

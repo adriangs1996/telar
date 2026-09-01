@@ -225,12 +225,16 @@ pub const RuntimeSnapshot = struct {
     }
 };
 
+pub const max_window_title_bytes = 128;
+
 pub const Snapshot = struct {
     theme: theme.Theme = theme.default_theme,
     icon_theme: icons.Theme = .unicode,
     sidebar_rendering: kitty.SidebarRendering = .automatic,
     sidebar_visible: bool = true,
     pane_gaps: bool = true,
+    window_title_bytes: [max_window_title_bytes]u8 = undefined,
+    window_title_len: u8 = 0,
     sound: SoundConfig = .{},
     bars: bars.Configuration = .{},
     prefix: keybind.Key = keybind.default_prefix,
@@ -245,6 +249,15 @@ pub const Snapshot = struct {
 
     pub fn bindingSlice(snapshot: *const Snapshot) []const ConfiguredBinding {
         return snapshot.bindings[0..snapshot.binding_count];
+    }
+
+    /// The host window title template; empty leaves the host title alone.
+    ///
+    /// ```zig
+    /// const template = snapshot.windowTitle();
+    /// ```
+    pub fn windowTitle(snapshot: *const Snapshot) []const u8 {
+        return snapshot.window_title_bytes[0..snapshot.window_title_len];
     }
 };
 
@@ -278,6 +291,8 @@ pub const BarCallbackContext = struct {
     time: BarTime,
     metrics: ?BarMetrics,
     command_output: ?[]const u8 = null,
+    /// Window title of the focused pane in the active tab, empty when unset.
+    pane_title: []const u8 = "",
 };
 
 pub const BarInvocation = struct {

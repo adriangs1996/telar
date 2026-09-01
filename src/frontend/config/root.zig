@@ -982,7 +982,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "sound", "input", "keybindings", "bars" },
+            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "input", "keybindings", "bars" },
             "config.client",
             diagnostic,
         );
@@ -1025,6 +1025,27 @@ pub const Generation = struct {
                 return error.InvalidConfig;
             }
             generation.snapshot.pane_gaps = lua.lua_toboolean(state, -1) != 0;
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "window_title");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TSTRING) {
+                pop(state, 1);
+                diagnostic.set("config.client.window_title must be a string", .{});
+                return error.InvalidConfig;
+            }
+
+            var len: usize = 0;
+            const template: []const u8 = if (lua.lua_tolstring(state, -1, &len)) |raw| raw[0..len] else "";
+            if (template.len > config_model.max_window_title_bytes or !std.unicode.utf8ValidateSlice(template) or hasControlBytes(template)) {
+                pop(state, 1);
+                diagnostic.set("config.client.window_title must be printable UTF-8 of at most {d} bytes", .{config_model.max_window_title_bytes});
+                return error.InvalidConfig;
+            }
+
+            @memcpy(generation.snapshot.window_title_bytes[0..template.len], template);
+            generation.snapshot.window_title_len = @intCast(template.len);
         }
         pop(state, 1);
 
@@ -2662,7 +2683,17 @@ fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext) vo
         lua.lua_setfield(state, -2, "output");
     }
 
+    _ = lua.lua_pushlstring(state, context.pane_title.ptr, context.pane_title.len);
+    lua.lua_setfield(state, -2, "pane_title");
+
     freezeTable(state);
+}
+
+fn hasControlBytes(text: []const u8) bool {
+    for (text) |byte| {
+        if (byte < 0x20 or byte == 0x7f) return true;
+    }
+    return false;
 }
 
 fn freezeTable(state: *lua.lua_State) void {

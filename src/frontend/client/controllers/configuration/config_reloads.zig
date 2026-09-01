@@ -111,6 +111,7 @@ pub fn apply(client: *Client, adoption: Adoption) !client_model.ConfigurationCom
             .generation = adoption.generation.number,
             .sidebar_visible = snapshot.sidebar_visible,
             .pane_gaps = snapshot.pane_gaps,
+            .window_title = snapshot.windowTitle(),
             .bars = snapshot.bars.presentation(),
         },
         .theme_locked = client.options.theme_locked,

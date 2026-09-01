@@ -134,6 +134,8 @@ pub const Model = struct {
     name_prompt: name_prompt.State = .{},
     workspace_revision: u64 = 0,
     configuration_generation: u64 = 0,
+    window_title_template: [model_types.max_window_title_template_bytes]u8 = undefined,
+    window_title_template_len: u8 = 0,
     configuration_revision: u64 = 0,
     client_diagnostic: lua_config.Diagnostic = .{},
     diagnostic_revision: u64 = 0,
@@ -657,6 +659,10 @@ pub const Model = struct {
             model.bars_revision +%= 1;
         }
 
+        std.debug.assert(input.window_title.len <= model.window_title_template.len);
+        @memcpy(model.window_title_template[0..input.window_title.len], input.window_title);
+        model.window_title_template_len = @intCast(input.window_title.len);
+
         model.configuration_generation = input.generation;
         model.configuration_revision +%= 1;
 
@@ -669,6 +675,15 @@ pub const Model = struct {
             .bars_changed = bars_changed,
             .bars_revision = model.bars_revision,
         };
+    }
+
+    /// Returns the configured host window title template; empty disables it.
+    ///
+    /// ```zig
+    /// const template = model.windowTitleTemplate();
+    /// ```
+    pub fn windowTitleTemplate(model: *const Model) []const u8 {
+        return model.window_title_template[0..model.window_title_template_len];
     }
 
     /// Returns the immutable configured bar presentation owned by this client.
@@ -1082,6 +1097,19 @@ pub const Model = struct {
     /// ```
     pub fn agentSnapshot(model: *const Model) *const agents.Snapshot {
         return &model.agent_snapshot;
+    }
+
+    /// Returns the window title the focused pane of the active tab last set,
+    /// or an empty slice.
+    ///
+    /// ```zig
+    /// const title = model.focusedPaneTitle();
+    /// ```
+    pub fn focusedPaneTitle(model: *const Model) []const u8 {
+        const active = model.workspace.activeConst() orelse return "";
+        const pane_id = active.model.layout.focused() orelse return "";
+        const pane = active.model.findConst(pane_id) orelse return "";
+        return pane.titleSlice();
     }
 
     /// Reports whether one exact pane generation is current.
@@ -1527,12 +1555,14 @@ pub const Model = struct {
         const pane_id = switch (command) {
             .cwd => |cwd| cwd.pane_id,
             .foreground => |foreground| foreground.pane_id,
+            .title => |title| title.pane_id,
         };
         const tab = model.workspace.tabForPane(pane_id) orelse return null;
         const kind = std.meta.activeTag(command);
         const change = switch (command) {
             .cwd => |cwd| try tab.model.setPaneCwd(cwd.pane_id, cwd.path),
             .foreground => |foreground| tab.model.setPaneForeground(foreground.pane_id, foreground.name),
+            .title => |title| try tab.model.setPaneTitle(title.pane_id, title.title),
         };
         if (change == .unchanged) {
             return null;

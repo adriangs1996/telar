@@ -25,6 +25,7 @@ pub const max_agent_workspace_label_bytes = 48;
 pub const max_agent_session_title_bytes = 96;
 pub const max_agent_cwd_label_bytes = 48;
 pub const max_foreground_name_bytes = 48;
+pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
 pub const max_pane_text_rows = 200;
 pub const max_pane_text_bytes = 64 * 1024;
@@ -290,6 +291,9 @@ pub const AgentTitleSource = enum(u8) {
     telar = 0,
     generated = 1,
     manual = 2,
+    /// The child's own OSC 0/2 window title, shown until a generated or
+    /// manual title exists.
+    terminal = 3,
 };
 
 pub const AgentTitleState = enum(u8) {

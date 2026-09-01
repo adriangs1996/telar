@@ -55,6 +55,7 @@ pub fn projection(client: *const Client) presenter.Projection {
         .workspace_list_collapsed = client.model.workspaceListCollapsed(),
         .host_capabilities = client.model.hostCapabilities(),
         .host_size = client.model.hostSize(),
+        .window_title_template = client.model.windowTitleTemplate(),
     };
 }
 

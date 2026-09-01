@@ -319,6 +319,13 @@ pub const Delivery = struct {
                     );
                 if (workspaces.tabLabel(pane.location)) |tab_label|
                     entry_storage[enriched_count].tab_label = tab_label;
+                if (entry.title_source == .telar and pane.title.len != 0) {
+                    entry_storage[enriched_count].session_title = truncateUtf8(
+                        pane.title.slice(),
+                        schema.max_agent_session_title_bytes,
+                    );
+                    entry_storage[enriched_count].title_source = .terminal;
+                }
                 entry_storage[enriched_count].cwd_label = shortenCwd(
                     &display_storage[enriched_count].cwd,
                     pane.cwd.slice(),
@@ -372,6 +379,10 @@ pub const Delivery = struct {
         }
 
         if (try delivery.prepareAttachment(preparation, .foreground)) |prepared| {
+            return prepared;
+        }
+
+        if (try delivery.prepareAttachment(preparation, .title)) |prepared| {
             return prepared;
         }
 
@@ -485,7 +496,7 @@ pub const Delivery = struct {
         }
     }
 
-    const Lane = enum { cwd, foreground, cells, exit, graphics };
+    const Lane = enum { cwd, foreground, title, cells, exit, graphics };
 
     fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
         const attachments = preparation.attachments;
@@ -498,6 +509,7 @@ pub const Delivery = struct {
             const candidate: ?attachment_mod.Attachment.Prepared = switch (lane) {
                 .cwd => try attachment.prepareCwd(buffer),
                 .foreground => try attachment.prepareForeground(buffer),
+                .title => try attachment.prepareTitle(buffer),
                 .cells => try attachment.prepareNextCells(.{ .io = preparation.io, .buffer = buffer, .metrics = preparation.metrics }),
                 .exit => try attachment.prepareExit(buffer),
                 .graphics => graphics: {
@@ -531,6 +543,14 @@ pub const Delivery = struct {
         return .{ .payload = payload, .ticket = ticket };
     }
 };
+
+/// Cuts `text` to at most `limit` bytes on a UTF-8 boundary.
+fn truncateUtf8(text: []const u8, limit: usize) []const u8 {
+    if (text.len <= limit) return text;
+    var end = limit;
+    while (end > 0 and (text[end] & 0xc0) == 0x80) : (end -= 1) {}
+    return text[0..end];
+}
 
 const AgentDisplayStorage = struct {
     workspace: [schema.max_agent_workspace_label_bytes]u8 = undefined,

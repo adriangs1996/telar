@@ -248,7 +248,11 @@ pub const ConfigurationInput = struct {
     sidebar_visible: bool,
     pane_gaps: bool,
     bars: bars.Layout = .{},
+    /// Borrowed only for the synchronous transition; copied into the model.
+    window_title: []const u8 = "",
 };
+
+pub const max_window_title_template_bytes = 128;
 
 pub const ConfigurationCommit = struct {
     generation: u64,
@@ -573,6 +577,7 @@ pub const PaneGraphicsFallbackCommit = struct {
 pub const PaneMetadataKind = enum {
     cwd,
     foreground,
+    title,
 };
 
 pub const PaneMetadataCommand = union(PaneMetadataKind) {
@@ -585,6 +590,11 @@ pub const PaneMetadataCommand = union(PaneMetadataKind) {
         pane_id: schema.PaneId,
         /// Borrowed only for the synchronous transition.
         name: []const u8,
+    },
+    title: struct {
+        pane_id: schema.PaneId,
+        /// Borrowed only for the synchronous transition; empty clears it.
+        title: []const u8,
     },
 };
 

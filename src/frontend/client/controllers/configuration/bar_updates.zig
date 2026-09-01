@@ -327,6 +327,7 @@ fn callbackContext(client: *const Client, output: ?[]const u8) lua_config.BarCal
         },
         .metrics = metrics,
         .command_output = output,
+        .pane_title = client.model.focusedPaneTitle(),
     };
 }
 

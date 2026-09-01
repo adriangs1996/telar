@@ -29,3 +29,15 @@ pub fn applyForeground(client: *Client, message: schema.PaneForeground) !?client
         .name = message.name,
     } });
 }
+
+/// Stores one decoded pane window-title fact.
+///
+/// ```zig
+/// _ = try applyTitle(client, message);
+/// ```
+pub fn applyTitle(client: *Client, message: schema.PaneTitle) !?client_model.PaneMetadataCommit {
+    return client.model.updatePaneMetadata(.{ .title = .{
+        .pane_id = message.pane_id,
+        .title = message.title,
+    } });
+}

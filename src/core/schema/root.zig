@@ -31,6 +31,7 @@ pub const max_tabs_per_workspace = types.max_tabs_per_workspace;
 pub const max_panes_per_tab = types.max_panes_per_tab;
 pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
+pub const max_pane_title_bytes = types.max_pane_title_bytes;
 pub const max_pane_text_rows = types.max_pane_text_rows;
 pub const max_pane_text_bytes = types.max_pane_text_bytes;
 pub const max_pane_text_input_bytes = types.max_pane_text_input_bytes;
@@ -180,6 +181,7 @@ pub const ServerTag = enum(u8) {
     client_layout_snapshot = 0x9f,
     pane_text = 0xa0,
     request_completed = 0xa1,
+    pane_title = 0xa2,
 };
 
 pub const LaunchView = struct {
@@ -439,6 +441,13 @@ pub const PaneText = struct {
     pane_id: PaneId,
     truncated: bool,
     text: []const u8,
+};
+
+/// The child's window title as last set through OSC 0 or OSC 2. An empty
+/// title means the child cleared it.
+pub const PaneTitle = struct {
+    pane_id: PaneId,
+    title: []const u8,
 };
 
 /// Reply for requests that succeed without producing data.
@@ -963,6 +972,7 @@ pub const ServerMessage = union(enum) {
     client_layout_snapshot: ClientLayoutSnapshotView,
     pane_text: PaneText,
     request_completed: RequestCompleted,
+    pane_title: PaneTitle,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -1288,6 +1298,23 @@ fn decodePaneText(decoder: *wire.Decoder) !PaneText {
         .truncated = truncated,
         .text = text,
     };
+}
+
+pub fn encodePaneTitle(buffer: []u8, message: PaneTitle) ![]const u8 {
+    try validatePaneId(message.pane_id);
+    try validateBytes(message.title, max_pane_title_bytes, true);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.pane_title));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeSized16(message.title);
+    return encoder.finish();
+}
+
+fn decodePaneTitle(decoder: *wire.Decoder) !PaneTitle {
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const title = try decoder.readSized16();
+    try validateBytes(title, max_pane_title_bytes, true);
+    return .{ .pane_id = pane_id, .title = title };
 }
 
 pub fn encodeRequestCompleted(buffer: []u8, message: RequestCompleted) ![]const u8 {
@@ -1739,6 +1766,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         },
         .pane_text => .{ .pane_text = try decodePaneText(&decoder) },
         .request_completed => .{ .request_completed = try Derived(RequestCompleted).decode(&decoder) },
+        .pane_title => .{ .pane_title = try decodePaneTitle(&decoder) },
     };
     if (message == .agent_sound and message.agent_sound.pane_generation == 0)
         return error.InvalidPaneGeneration;
@@ -2601,6 +2629,7 @@ fn validateAgentTitle(entry: AgentSnapshotEntry) !void {
         .telar => if (entry.title_state == .ready) return error.InvalidAgentTitle,
         .generated, .manual => if (entry.title_state != .ready or entry.session_title.len == 0)
             return error.InvalidAgentTitle,
+        .terminal => if (entry.session_title.len == 0) return error.InvalidAgentTitle,
     }
 }
 

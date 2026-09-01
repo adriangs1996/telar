@@ -434,3 +434,26 @@ test "an unfocused done agent is never acknowledged" {
 
     try std.testing.expectEqualDeep(done_key, model.takeAgentAcknowledgement().?);
 }
+
+test "pane titles are stored per pane and exposed for the focused pane" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane, location, .{ .cols = 20, .rows = 5 });
+    try std.testing.expectEqualStrings("", model.focusedPaneTitle());
+
+    const commit = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } })).?;
+
+    try std.testing.expectEqual(client_model.PaneMetadataKind.title, commit.kind);
+    try std.testing.expect(commit.display_changed);
+    try std.testing.expectEqualStrings("vim", model.focusedPaneTitle());
+    try std.testing.expect(try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } }) == null);
+    try std.testing.expect(try model.updatePaneMetadata(.{ .title = .{ .pane_id = @enumFromInt(9), .title = "x" } }) == null);
+
+    _ = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "" } })).?;
+    try std.testing.expectEqualStrings("", model.focusedPaneTitle());
+}

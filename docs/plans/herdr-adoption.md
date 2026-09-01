@@ -157,7 +157,11 @@ a runtime, spawns a fake agent, and runs `agent wait --until done`.
 
 ---
 
-## P3. Terminal titles (OSC 0/2) and host window title
+## P3. Terminal titles (OSC 0/2) and host window title — done
+
+Deviation: titles are not yet agent evidence; that waits for the manifests in
+P4. Tab labels keep their own semantics; the title reaches the sidebar as the
+placeholder session title, the Lua bar context and the host window title.
 
 Telar handles OSC 133/7/52 and nothing else. Titles are free evidence the
 emulator already parses, and herdr uses them as a detection signal (Claude
