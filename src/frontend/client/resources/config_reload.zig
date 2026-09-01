@@ -6,15 +6,15 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const graphics = @import("../graphics/root.zig");
-const lua_config = @import("../config/root.zig");
-const plugin_broker = @import("../plugins/root.zig");
+const graphics = @import("../../graphics/root.zig");
+const lua_config = @import("../../config/root.zig");
+const plugin_broker = @import("../../plugins/root.zig");
 const kitty = graphics.kitty;
-const host_inputs = @import("controllers/input/host_inputs.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
 
 const Io = std.Io;
 
-const client_mod = @import("client.zig");
+const client_mod = @import("../client.zig");
 const ClientEvent = client_mod.ClientEvent;
 const InputRouter = host_inputs.Router;
 

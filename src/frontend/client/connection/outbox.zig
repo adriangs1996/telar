@@ -7,7 +7,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const pane_input = @import("application/input/pane_input.zig");
+const pane_input = @import("../application/input/pane_input.zig");
 
 const schema = core.schema;
 

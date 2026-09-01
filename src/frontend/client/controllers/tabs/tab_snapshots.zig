@@ -6,7 +6,7 @@ const tabs_application = @import("../../application/tabs/root.zig");
 const client_model = @import("../../model/root.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");
 const schema = core.schema;

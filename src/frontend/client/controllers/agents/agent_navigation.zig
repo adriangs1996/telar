@@ -5,7 +5,7 @@ const agents = @import("../../../agents/root.zig");
 const agents_application = @import("../../application/agents/root.zig");
 const client_model = @import("../../model/root.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 

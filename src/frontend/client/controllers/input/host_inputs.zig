@@ -4,12 +4,12 @@ const std = @import("std");
 const input_capability = @import("../../../input/root.zig");
 const lua_config = @import("../../../config/root.zig");
 const widgets = @import("../../../widgets/root.zig");
-const client_clock = @import("../../clock.zig");
-const deadline_timer = @import("../../deadline_timer.zig");
-const runtime_transport = @import("../../runtime_transport.zig");
+const client_clock = @import("../../resources/clock.zig");
+const deadline_timer = @import("../../resources/deadline_timer.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 
 const Client = @import("../../client.zig");
-const InputHandler = @import("../../input_handler.zig");
+const InputHandler = @import("../../resources/input_handler.zig");
 const Io = std.Io;
 const File = Io.File;
 const Action = input_capability.action.Action;

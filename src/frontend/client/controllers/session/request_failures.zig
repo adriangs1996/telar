@@ -5,13 +5,13 @@ const builtin = @import("builtin");
 const core = @import("telar-core");
 const session_application = @import("../../application/session/root.zig");
 const notifications = @import("../../../notifications/root.zig");
-const client_requests = @import("../../requests.zig");
+const client_requests = @import("../../connection/requests.zig");
 
 const Client = @import("../../client.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_attachments = @import("../panes/pane_attachments.zig");
 const pane_splits = @import("../panes/pane_splits.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_closures = @import("../tabs/tab_closures.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const request_failure = session_application.request_failure;

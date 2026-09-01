@@ -5,7 +5,7 @@
 
 const std = @import("std");
 const input_capability = @import("../input/root.zig");
-const client_view = @import("view.zig");
+const client_view = @import("presentation/view.zig");
 const client_model = @import("model/root.zig");
 const host_capability_adapter = @import("controllers/host/host_capabilities.zig");
 const lua_config = @import("../config/root.zig");
@@ -21,7 +21,7 @@ pub const Options = Client.Options;
 pub const View = client_view.State;
 pub const sidebar_width = client_view.sidebar_width;
 pub const ConfiguredBinding = lua_config.ConfiguredBinding;
-pub const trustWatchFingerprint = @import("config_reload.zig").trustWatchFingerprint;
+pub const trustWatchFingerprint = @import("resources/config_reload.zig").trustWatchFingerprint;
 pub const HostCapabilities = client_model.HostCapabilities;
 pub const HostCapabilityObservation = client_model.HostCapabilityObservation;
 pub const HostCapabilitySupport = client_model.HostCapabilitySupport;
@@ -36,27 +36,17 @@ test {
     // The client capability's own files, collected for the suite.
     _ = @import("application/root.zig");
     _ = @import("client.zig");
+    _ = @import("connection/root.zig");
     _ = @import("controllers/root.zig");
     _ = @import("entrypoints/events.zig");
     _ = @import("client_test.zig");
-    _ = @import("clock.zig");
-    _ = @import("config_reload.zig");
-    _ = @import("deadline_timer.zig");
     _ = @import("entrypoints/runtime_messages.zig");
-    _ = @import("input_handler.zig");
     _ = @import("model/root.zig");
     _ = @import("model/name_prompt.zig");
     _ = @import("model/tests/root.zig");
-    _ = @import("notification_timers.zig");
-    _ = @import("presentation_lifecycle.zig");
-    _ = @import("presentation_projection.zig");
-    _ = @import("presenter.zig");
-    _ = @import("request_lifecycle.zig");
-    _ = @import("requests.zig");
+    _ = @import("presentation/root.zig");
+    _ = @import("resources/root.zig");
     _ = @import("run.zig");
-    _ = @import("runtime_transport.zig");
-    _ = @import("telemetry.zig");
-    _ = @import("view.zig");
 }
 
 test "configured action names cover multiplexer operations" {

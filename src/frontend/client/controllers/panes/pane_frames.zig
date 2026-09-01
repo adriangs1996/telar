@@ -9,7 +9,7 @@ const Client = @import("../../client.zig");
 const diagnostics = core.diagnostics;
 const pane_frame = panes_application.pane_frame;
 const pane_frame_delivery = panes_application.pane_frame_delivery;
-const runtime_transport = @import("../../runtime_transport.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 const schema = core.schema;
 
 /// Reconciles one decoded runtime frame through the client application

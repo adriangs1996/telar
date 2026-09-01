@@ -6,7 +6,7 @@ const client_model = @import("../../model/root.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_attachments = @import("tab_attachments.zig");
 
 const Client = @import("../../client.zig");

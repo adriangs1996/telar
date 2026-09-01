@@ -4,10 +4,10 @@ const core = @import("telar-core");
 const tabs_application = @import("../../application/tabs/root.zig");
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");
-const runtime_transport = @import("../../runtime_transport.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 const schema = core.schema;
 const tab_attachment_retirement = tabs_application.tab_attachment_retirement;
 

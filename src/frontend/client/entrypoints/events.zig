@@ -7,16 +7,16 @@ const platform = @import("../../platform/root.zig");
 
 const Client = @import("../client.zig");
 const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
-const client_telemetry = @import("../telemetry.zig");
+const client_telemetry = @import("../resources/telemetry.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const notifications = @import("../controllers/notifications/notifications.zig");
-const presentation_lifecycle = @import("../presentation_lifecycle.zig");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const runtime_transport = @import("../runtime_transport.zig");
+const runtime_transport = @import("../connection/runtime_transport.zig");
 const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
 
 const diagnostics = core.diagnostics;

@@ -5,10 +5,10 @@ const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");
-const runtime_transport = @import("../../runtime_transport.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 const schema = core.schema;
 const split_pane = panes_application.split_pane;
 const split_confirmation_delivery = panes_application.pane_split_confirmation_delivery;

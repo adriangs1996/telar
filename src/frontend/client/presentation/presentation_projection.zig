@@ -2,9 +2,9 @@
 //! one synchronous client frame.
 
 const presenter = @import("presenter.zig");
-const multiplexer = @import("../workspace/root.zig").multiplexer;
+const multiplexer = @import("../../workspace/root.zig").multiplexer;
 
-const Client = @import("client.zig");
+const Client = @import("../client.zig");
 
 /// Captures the bounded revisions observed by the presenter after one client
 /// event without exposing the client aggregate.

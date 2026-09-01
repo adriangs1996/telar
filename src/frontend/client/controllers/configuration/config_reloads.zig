@@ -9,7 +9,7 @@ const pane_geometry = @import("../panes/pane_geometry.zig");
 const sidebar_projection = @import("../notifications/sidebar_projection.zig");
 
 const Client = @import("../../client.zig");
-const reload_worker = @import("../../config_reload.zig");
+const reload_worker = @import("../../resources/config_reload.zig");
 const config_use_case = configuration_application.config_reload;
 const config_delivery = configuration_application.config_reload_delivery;
 

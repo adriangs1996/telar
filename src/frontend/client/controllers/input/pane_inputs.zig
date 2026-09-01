@@ -9,7 +9,7 @@ const Client = @import("../../client.zig");
 const diagnostics = core.diagnostics;
 const pane_input = input_application.pane_input;
 const pane_paste = input_application.pane_paste;
-const runtime_transport = @import("../../runtime_transport.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 
 /// Delivers one user-input command through the application boundary.
 ///

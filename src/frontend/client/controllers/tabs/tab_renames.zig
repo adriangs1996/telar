@@ -7,7 +7,7 @@ const client_model = @import("../../model/root.zig");
 
 const Client = @import("../../client.zig");
 const rename_tab = tabs_application.rename_tab;
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const schema = core.schema;
 
 /// Wires a rename request to the client's continuation tracker and outbox.

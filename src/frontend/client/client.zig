@@ -9,8 +9,8 @@ const presentation = @import("../presentation/root.zig");
 const workspace_capability = @import("../workspace/root.zig");
 const graphics = @import("../graphics/root.zig");
 const attachments = @import("../attachments/root.zig");
-const client_telemetry = @import("telemetry.zig");
-const client_view = @import("view.zig");
+const client_telemetry = @import("resources/telemetry.zig");
+const client_view = @import("presentation/view.zig");
 const client_model = @import("model/root.zig");
 const lua_config = @import("../config/root.zig");
 const sound_capability = @import("../sound/root.zig");
@@ -63,13 +63,13 @@ pub const Options = struct {
 };
 
 const clipboard_images = @import("controllers/host/clipboard_images.zig");
-const config_reload = @import("config_reload.zig");
+const config_reload = @import("resources/config_reload.zig");
 const host_inputs = @import("controllers/input/host_inputs.zig");
-const notification_timers = @import("notification_timers.zig");
+const notification_timers = @import("resources/notification_timers.zig");
 const plugin_actions = @import("controllers/configuration/plugin_actions.zig");
-const presenter_mod = @import("presenter.zig");
-const request_lifecycle_mod = @import("request_lifecycle.zig");
-const runtime_transport_mod = @import("runtime_transport.zig");
+const presenter_mod = @import("presentation/presenter.zig");
+const request_lifecycle_mod = @import("connection/request_lifecycle.zig");
+const runtime_transport_mod = @import("connection/runtime_transport.zig");
 const sidebar_animations = @import("controllers/notifications/sidebar_animations.zig");
 
 pub const ClientEvent = union(enum) {

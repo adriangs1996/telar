@@ -4,10 +4,10 @@ const std = @import("std");
 const core = @import("telar-core");
 const client_outbox = @import("outbox.zig");
 
-const client_mod = @import("client.zig");
+const client_mod = @import("../client.zig");
 const Client = client_mod;
-const host_inputs = @import("controllers/input/host_inputs.zig");
-const server_messages = @import("entrypoints/runtime_messages.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const server_messages = @import("../entrypoints/runtime_messages.zig");
 
 const Io = std.Io;
 const diagnostics = core.diagnostics;

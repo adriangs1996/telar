@@ -6,7 +6,7 @@ const tabs_application = @import("../../application/tabs/root.zig");
 
 const Client = @import("../../client.zig");
 const attach_pane = panes_application.attach_pane;
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const schema = core.schema;
 const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
 

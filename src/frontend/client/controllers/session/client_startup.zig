@@ -7,12 +7,12 @@ const platform = @import("../../../platform/root.zig");
 const workspace = @import("../../../workspace/root.zig");
 
 const Client = @import("../../client.zig");
-const client_telemetry = @import("../../telemetry.zig");
+const client_telemetry = @import("../../resources/telemetry.zig");
 const config_reloads = @import("../configuration/config_reloads.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
 const host_resizes = @import("../host/host_resizes.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
-const runtime_transport = @import("../../runtime_transport.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 
 const kitty = graphics.kitty;
 const schema = core.schema;

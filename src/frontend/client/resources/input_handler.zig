@@ -1,18 +1,18 @@
 //! Host input dispatch for one attached client. Constructed per event by the
 //! client's entrypoints.
 
-const input_capability = @import("../input/root.zig");
-const presentation = @import("../presentation/root.zig");
-const action_routing = @import("controllers/input/action_routing.zig");
-const host_capabilities = @import("controllers/host/host_capabilities.zig");
-const key_routing = @import("controllers/input/key_routing.zig");
-const paste_routing = @import("controllers/input/paste_routing.zig");
-const pointer_routing = @import("controllers/input/pointer_routing.zig");
+const input_capability = @import("../../input/root.zig");
+const presentation = @import("../../presentation/root.zig");
+const action_routing = @import("../controllers/input/action_routing.zig");
+const host_capabilities = @import("../controllers/host/host_capabilities.zig");
+const key_routing = @import("../controllers/input/key_routing.zig");
+const paste_routing = @import("../controllers/input/paste_routing.zig");
+const pointer_routing = @import("../controllers/input/pointer_routing.zig");
 const action_mod = input_capability.action;
 const keybind = input_capability.keybind;
 const term = presentation.screen;
 
-const Client = @import("client.zig");
+const Client = @import("../client.zig");
 const Action = action_mod.Action;
 
 const InputHandler = @This();

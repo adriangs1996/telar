@@ -4,7 +4,7 @@ const std = @import("std");
 const graphics = @import("../../../graphics/root.zig");
 const presentation = @import("../../../presentation/root.zig");
 const host_application = @import("../../application/host/root.zig");
-const client_clock = @import("../../clock.zig");
+const client_clock = @import("../../resources/clock.zig");
 const client_model = @import("../../model/root.zig");
 const host_resources = @import("host_resources.zig");
 

@@ -6,7 +6,7 @@ const panes_application = @import("../../application/panes/root.zig");
 const Client = @import("../../client.zig");
 const diagnostics = core.diagnostics;
 const pane_graphics = panes_application.pane_graphics;
-const runtime_transport = @import("../../runtime_transport.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 const schema = core.schema;
 
 /// Reconciles one decoded runtime graphics command through the application

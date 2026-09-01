@@ -8,8 +8,8 @@ const workspaces_application = @import("../../application/workspaces/root.zig");
 const client_model = @import("../../model/root.zig");
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
-const runtime_transport = @import("../../runtime_transport.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 const tab_attachments = @import("../tabs/tab_attachments.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 

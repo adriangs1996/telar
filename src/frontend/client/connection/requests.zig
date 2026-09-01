@@ -6,7 +6,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const layout = @import("../workspace/root.zig").layout;
+const layout = @import("../../workspace/root.zig").layout;
 
 const schema = core.schema;
 const ui = core.ui;

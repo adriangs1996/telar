@@ -5,7 +5,7 @@ const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 
 const Client = @import("../../client.zig");
-const runtime_transport = @import("../../runtime_transport.zig");
+const runtime_transport = @import("../../connection/runtime_transport.zig");
 const pane_viewport_delivery = panes_application.pane_viewport_delivery;
 const set_pane_viewport = panes_application.set_pane_viewport;
 const schema = core.schema;

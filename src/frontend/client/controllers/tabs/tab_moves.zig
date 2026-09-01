@@ -7,7 +7,7 @@ const client_model = @import("../../model/root.zig");
 
 const Client = @import("../../client.zig");
 const move_tab = tabs_application.move_tab;
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const schema = core.schema;
 
 /// Wires an interactive move to the tab-operation gate and runtime request.

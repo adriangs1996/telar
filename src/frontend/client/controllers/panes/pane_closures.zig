@@ -5,7 +5,7 @@ const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");
 const close_pane = panes_application.close_pane;

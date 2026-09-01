@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const client_requests = @import("requests.zig");
 const runtime_transport = @import("runtime_transport.zig");
 
-const Client = @import("client.zig");
+const Client = @import("../client.zig");
 const schema = core.schema;
 
 /// The request that opens the first pane. Generated request identities start

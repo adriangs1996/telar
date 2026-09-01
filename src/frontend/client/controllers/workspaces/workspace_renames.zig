@@ -1,7 +1,7 @@
 //! Client adapters for workspace-rename requests.
 
 const workspaces_application = @import("../../application/workspaces/root.zig");
-const request_lifecycle = @import("../../request_lifecycle.zig");
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");
 const rename_workspace = workspaces_application.rename_workspace;

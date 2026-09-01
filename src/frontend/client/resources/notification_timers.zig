@@ -3,7 +3,7 @@
 const client_clock = @import("clock.zig");
 const deadline_timer = @import("deadline_timer.zig");
 
-const Client = @import("client.zig");
+const Client = @import("../client.zig");
 
 pub const Scheduler = deadline_timer.Scheduler;
 
