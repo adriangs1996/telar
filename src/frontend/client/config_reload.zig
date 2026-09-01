@@ -10,7 +10,7 @@ const graphics = @import("../graphics/root.zig");
 const lua_config = @import("../config/root.zig");
 const plugin_broker = @import("../plugins/root.zig");
 const kitty = graphics.kitty;
-const host_inputs = @import("host_inputs.zig");
+const host_inputs = @import("controllers/input/host_inputs.zig");
 
 const Io = std.Io;
 

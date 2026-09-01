@@ -62,15 +62,15 @@ pub const Options = struct {
     profile: ?[]const u8 = null,
 };
 
-const clipboard_images = @import("clipboard_images.zig");
+const clipboard_images = @import("controllers/host/clipboard_images.zig");
 const config_reload = @import("config_reload.zig");
-const host_inputs = @import("host_inputs.zig");
+const host_inputs = @import("controllers/input/host_inputs.zig");
 const notification_timers = @import("notification_timers.zig");
-const plugin_actions = @import("plugin_actions.zig");
+const plugin_actions = @import("controllers/configuration/plugin_actions.zig");
 const presenter_mod = @import("presenter.zig");
 const request_lifecycle_mod = @import("request_lifecycle.zig");
 const runtime_transport_mod = @import("runtime_transport.zig");
-const sidebar_animations = @import("sidebar_animations.zig");
+const sidebar_animations = @import("controllers/notifications/sidebar_animations.zig");
 
 pub const ClientEvent = union(enum) {
     input: anyerror!InputChunk,

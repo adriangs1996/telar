@@ -12,8 +12,8 @@ const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
 const client_events = @import("entrypoints/events.zig");
-const client_startup = @import("client_startup.zig");
-const host_resizes = @import("host_resizes.zig");
+const client_startup = @import("controllers/session/client_startup.zig");
+const host_resizes = @import("controllers/host/host_resizes.zig");
 const Options = Client.Options;
 
 pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, options: Options) !u8 {
