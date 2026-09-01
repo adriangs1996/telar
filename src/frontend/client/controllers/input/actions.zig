@@ -107,6 +107,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
         },
         .enter_copy_mode => _ = copy_modes.enter(client),
         .command_tab => |*command| try createCommandTab(client, command),
+        .goto_picker => _ = name_prompts.beginGotoPicker(client),
         .notification => |*notification| _ = try notification_flow.requestDelivery(client, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }

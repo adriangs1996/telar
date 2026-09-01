@@ -170,6 +170,7 @@ pub const Registry = struct {
                 .select_tab,
                 .enter_copy_mode,
                 .command_tab,
+                .goto_picker,
                 => null,
                 .notification => .notifications,
                 .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,

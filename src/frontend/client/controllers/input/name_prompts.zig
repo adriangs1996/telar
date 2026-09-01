@@ -10,7 +10,11 @@ const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const connection_outbox = @import("../../connection/outbox.zig");
 const runtime_transport = @import("../../connection/runtime_transport.zig");
 const input_capability = @import("../../../input/root.zig");
+const agent_navigation = @import("../agents/agent_navigation.zig");
+const goto_picker = @import("../../model/goto_picker.zig");
 const tab_renames = @import("../tabs/tab_renames.zig");
+const tab_selections = @import("../tabs/tab_selections.zig");
+const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
 
@@ -83,10 +87,58 @@ pub fn beginCopySearch(client: *Client, direction: input_capability.copy_mode.Di
     return use_case.execute(.{ .copy_search = direction });
 }
 
+/// Opens the fuzzy goto picker over workspaces, tabs and agents.
+///
+/// ```zig
+/// _ = beginGotoPicker(client);
+/// ```
+pub fn beginGotoPicker(client: *Client) bool {
+    var use_case = openingHandler(client);
+
+    return use_case.execute(.goto_picker);
+}
+
 pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     var use_case = handler(client);
 
-    return dispatchInput(&use_case, bytes);
+    const outcome = try dispatchInput(&use_case, bytes);
+    clampPickerSelection(client);
+    return outcome;
+}
+
+/// Keeps the picker selection inside the deterministic result set the
+/// renderer and the submit path both derive from the current query.
+fn clampPickerSelection(client: *Client) void {
+    const prompt = client.model.name_prompt.current() orelse return;
+    if (prompt.target != .goto or prompt.selection == 0) {
+        return;
+    }
+
+    var results: goto_picker.Results = .{};
+    goto_picker.collect(pickerSources(client), prompt.field.text(), &results);
+    const limit: u16 = if (results.len == 0) 0 else @as(u16, results.len) - 1;
+    if (prompt.selection > limit) {
+        prompt.selection = limit;
+    }
+}
+
+fn pickerSources(client: *Client) goto_picker.Sources {
+    return .{
+        .agents = client.model.agentSnapshot(),
+        .workspaces = client.model.workspaceListSnapshot(),
+        .tabs = &client.model.workspace,
+    };
+}
+
+fn navigatePickerItem(client: *Client, item: goto_picker.Item) !void {
+    switch (item) {
+        .workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(client, .{ .workspace = workspace }),
+        .tab => |tab_id| {
+            var use_case = tab_selections.selectionHandler(client);
+            _ = try use_case.execute(.{ .target = .{ .tab_id = tab_id } });
+        },
+        .agent => |key| _ = try agent_navigation.apply(client, key),
+    }
 }
 
 fn handler(client: *Client) name_prompt.NamePromptHandler {
@@ -137,6 +189,18 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
                 .label = submission.name,
             });
         },
+        .goto => blk: {
+            var results: goto_picker.Results = .{};
+            goto_picker.collect(pickerSources(client), submission.name, &results);
+            if (results.len == 0) {
+                break :blk true;
+            }
+
+            const prompt = client.model.name_prompt.currentConst() orelse break :blk true;
+            const index = @min(prompt.selection, @as(u16, results.len) - 1);
+            try navigatePickerItem(client, results.slice()[index].item);
+            break :blk true;
+        },
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;
             const request_id = try request_lifecycle.nextId(client);
@@ -178,6 +242,8 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
                 .delete => .delete,
                 .left => .{ .move_left = key.mods.shift },
                 .right => .{ .move_right = key.mods.shift },
+                .up => .move_up,
+                .down => .move_down,
                 .home => .{ .home = key.mods.shift },
                 .end => .{ .end = key.mods.shift },
                 .char => |char| if (!key.mods.ctrl and !key.mods.alt)

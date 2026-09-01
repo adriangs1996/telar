@@ -11,6 +11,7 @@ const workspace_capability = @import("../../workspace/root.zig");
 const input_application = @import("../application/input/root.zig");
 const client_model = @import("../model/root.zig");
 const name_prompt = @import("../model/name_prompt.zig");
+const goto_picker_model = @import("../model/goto_picker.zig");
 const diff = presentation.diff;
 const pointer = presentation.pointer;
 const icon_graphics = @import("../../graphics/root.zig").icons;
@@ -582,7 +583,7 @@ pub const State = struct {
             .tabs = input.tabs,
             .model = input.model,
             .layout = layout,
-            .rename_field = if (input.prompt) |prompt| &prompt.field else null,
+            .rename_field = promptField(input.prompt),
             .rename_kind = promptKind(input.prompt),
             .sidebar_snapshot = input.agents,
             .sidebar_state = &state.sidebar,
@@ -606,8 +607,11 @@ pub const State = struct {
             state.regions.attachments,
             &attachment_snapshot,
         );
+        const picker_prompt = pickerPrompt(input.prompt);
         const current_modal_area = if (attachment_snapshot.modal != null)
             widgets.attachment_preview.modalArea(state.regions.workbench)
+        else if (picker_prompt != null)
+            widgets.goto_picker.modalArea(state.regions.workbench)
         else
             ui.Rect{};
         const graphical_modal = state.graphicalModalCovers(current_modal_area);
@@ -635,13 +639,26 @@ pub const State = struct {
                     widgets.toast.render(&context, toast_area, input.notifications);
             }
         }
-        const drawn_modal_area = widgets.attachment_preview.renderModal(
+        var drawn_modal_area = widgets.attachment_preview.renderModal(
             &context,
             state.regions.workbench,
             &attachment_snapshot,
             &attachment_plan,
             graphical_modal,
         );
+        var picker_cursor: ?widgets.Cursor = null;
+        if (picker_prompt) |prompt| {
+            if (drawn_modal_area.isEmpty()) {
+                const picker_output = renderGotoPicker(&context, state.regions.workbench, .{
+                    .prompt = prompt,
+                    .agents = input.agents,
+                    .workspaces = input.workspaces,
+                    .tabs = input.tabs,
+                });
+                drawn_modal_area = picker_output.area;
+                picker_cursor = picker_output.cursor;
+            }
+        }
         if (hybrid) {
             var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;
             var provider_mark_count: usize = 0;
@@ -692,6 +709,12 @@ pub const State = struct {
                 .y = cursor.cursor_y,
             };
         }
+        if (picker_cursor) |cursor| {
+            screen.cursor = .{
+                .x = cursor.cursor_x,
+                .y = cursor.cursor_y,
+            };
+        }
         state.dirty = false;
         state.toast_overlay_drawn = has_toasts;
         state.modal_overlay_area = drawn_modal_area;
@@ -731,7 +754,7 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
     const current = prompt orelse return .rename_tab;
 
     return switch (current.target) {
-        .rename_tab => .rename_tab,
+        .rename_tab, .goto => .rename_tab,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
         .copy_search => |direction| switch (direction) {
@@ -739,6 +762,66 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
             .backward => .copy_search_backward,
         },
     };
+}
+
+fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
+    const current = prompt orelse return null;
+    if (current.target != .goto) {
+        return null;
+    }
+
+    return current;
+}
+
+fn promptField(prompt: ?*name_prompt.Prompt) ?*widgets.tab_rename.Field {
+    const current = prompt orelse return null;
+    if (current.target == .goto) {
+        return null;
+    }
+
+    return &current.field;
+}
+
+const PickerSources = struct {
+    prompt: *name_prompt.Prompt,
+    agents: *const agents.Snapshot,
+    workspaces: *const workspace_list.Snapshot,
+    tabs: ?*const tabs_mod.Model,
+};
+
+/// Computes the deterministic result set and renders the visible window with
+/// the clamped selection highlighted, scrolled so the selection stays visible.
+fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
+    var results: goto_picker_model.Results = .{};
+    const match_sources: goto_picker_model.Sources = .{
+        .agents = sources.agents,
+        .workspaces = sources.workspaces,
+        .tabs = sources.tabs,
+    };
+    goto_picker_model.collect(match_sources, sources.prompt.field.text(), &results);
+
+    const total: u16 = results.len;
+    const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection, total - 1);
+    const window: u16 = @min(@as(u16, widgets.goto_picker.max_rows), total);
+    const start: u16 = if (selected + 1 > window) selected + 1 - window else 0;
+
+    var rows: [widgets.goto_picker.max_rows]widgets.goto_picker.Row = undefined;
+    for (0..window) |offset| {
+        const index = start + offset;
+        var label: [goto_picker_model.max_label_bytes]u8 = undefined;
+        const text = goto_picker_model.describe(match_sources, results.slice()[index].item, &label);
+        var row: widgets.goto_picker.Row = .{ .selected = index == selected };
+        const len = @min(text.len, widgets.goto_picker.max_row_bytes);
+        @memcpy(row.text[0..len], text[0..len]);
+        row.len = @intCast(len);
+        rows[offset] = row;
+    }
+
+    return widgets.goto_picker.render(context, workbench, .{
+        .field = &sources.prompt.field,
+        .rows = rows[0..window],
+        .total = total,
+    });
 }
 
 fn optionalActionEql(a: ?Action, b: ?Action) bool {

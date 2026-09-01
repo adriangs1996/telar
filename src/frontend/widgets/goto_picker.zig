@@ -1,0 +1,128 @@
+//! Centered goto-picker modal: one query line above a scored result list.
+
+const std = @import("std");
+const core = @import("telar-core");
+const edit = @import("../input/root.zig").edit;
+const widget = @import("context.zig");
+const ui = @import("../ui/root.zig");
+
+const schema = core.schema;
+
+pub const Field = edit.Field(schema.max_tab_label_bytes);
+pub const max_rows = 12;
+pub const max_row_bytes = 160;
+const modal_max_width: u16 = 64;
+
+pub const Row = struct {
+    text: [max_row_bytes]u8 = undefined,
+    len: u8 = 0,
+    selected: bool = false,
+
+    pub fn slice(row: *const Row) []const u8 {
+        return row.text[0..row.len];
+    }
+};
+
+pub const Input = struct {
+    field: *Field,
+    rows: []const Row,
+    total: u16,
+};
+
+pub const Output = struct {
+    area: ui.Rect,
+    cursor: ?widget.Cursor,
+};
+
+/// Centered rectangle sized for the query line plus the visible result rows.
+///
+/// ```zig
+/// const area = modalArea(regions.workbench);
+/// ```
+pub fn modalArea(workbench: ui.Rect) ui.Rect {
+    if (workbench.w < 20 or workbench.h < 6) {
+        return .{};
+    }
+
+    const width = @min(modal_max_width, workbench.w -| 4);
+    const height = @min(@as(u16, max_rows + 3), workbench.h -| 2);
+    return .{
+        .x = workbench.x + (workbench.w - width) / 2,
+        .y = workbench.y + (workbench.h - height) / 2,
+        .w = width,
+        .h = height,
+    };
+}
+
+/// Draws the picker into the workbench and returns its area with the query
+/// cursor position, so the caller can synchronize the modal overlay and the
+/// terminal cursor.
+///
+/// ```zig
+/// const output = render(context, regions.workbench, picker_input);
+/// ```
+pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output {
+    const area = modalArea(workbench);
+    if (area.isEmpty()) {
+        return .{ .area = area, .cursor = null };
+    }
+
+    const style: ui.Style = .{ .fg = context.palette.text, .bg = context.palette.surface0 };
+    context.buffer.fill(area, " ", style);
+    context.buffer.edgeBox(area, .{
+        .fg = context.palette.accent,
+        .bg = context.palette.surface0,
+    }, null);
+    const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
+    _ = context.buffer.writeTruncated(title, title.x, title.y, "goto", title.w, .{
+        .fg = context.palette.accent,
+        .bg = context.palette.surface0,
+        .flags = .{ .bold = true },
+    });
+
+    const inner = area.inner(1);
+    const query: ui.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
+    const prefix_width = context.buffer.writeText(query, query.x, query.y, "> ", .{
+        .fg = context.palette.accent,
+        .bg = context.palette.surface0,
+        .flags = .{ .bold = true },
+    });
+    const field_width = query.w -| prefix_width;
+    const view = input.field.view(field_width);
+    _ = context.buffer.writeTruncated(query, query.x + prefix_width, query.y, view.text, field_width, style);
+
+    var row_y = query.y + 1;
+    for (input.rows) |*row| {
+        if (row_y >= inner.y + inner.h) {
+            break;
+        }
+
+        const line: ui.Rect = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
+        const background = if (row.selected) context.palette.surface1 else context.palette.surface0;
+        context.buffer.fill(line, " ", .{ .fg = context.palette.text, .bg = background });
+        _ = context.buffer.writeTruncated(line, line.x + 1, line.y, row.slice(), line.w -| 2, .{
+            .fg = if (row.selected) context.palette.accent else context.palette.text,
+            .bg = background,
+            .flags = .{ .bold = row.selected },
+        });
+        row_y += 1;
+    }
+
+    if (input.total > input.rows.len) {
+        var counter: [24]u8 = undefined;
+        const text = std.fmt.bufPrint(&counter, "+{d} more", .{input.total - input.rows.len}) catch "";
+        const footer: ui.Rect = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
+        _ = context.buffer.writeTruncated(footer, footer.x, footer.y, text, footer.w, .{
+            .fg = context.palette.subtext0,
+            .bg = context.palette.surface0,
+        });
+    }
+
+    return .{
+        .area = area,
+        .cursor = .{
+            .cursor_x = query.x + prefix_width + view.cursor,
+            .cursor_y = query.y,
+        },
+    };
+}

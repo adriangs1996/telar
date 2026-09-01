@@ -56,7 +56,7 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writer.writeByte(17);
             try writer.writeByte(value);
         },
-        .enter_copy_mode, .command_tab => return error.InvalidWorkerEffect,
+        .enter_copy_mode, .command_tab, .goto_picker => return error.InvalidWorkerEffect,
         .notification => |*value| {
             try writer.writeByte(18);
             try writer.writeByte(@intFromEnum(value.level));

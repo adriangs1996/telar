@@ -16,6 +16,7 @@ pub const Intent = union(enum) {
     /// Copy-mode search input; the only prompt allowed while copy mode is
     /// active, and meaningless outside it.
     copy_search: name_prompt.Direction,
+    goto_picker,
 };
 
 pub const WorkspaceCreationGate = struct {
@@ -76,6 +77,7 @@ pub const OpenNamePromptHandler = struct {
                 const tab = handler.model.workspace.find(tab_id) orelse return false;
                 break :rename renameTab(tab_id, tab.labelSlice());
             },
+            .goto_picker => .goto_picker,
             .copy_search => unreachable,
         };
 
@@ -219,6 +221,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
         .rename_workspace,
         .rename_active_tab,
         .{ .rename_tab = @enumFromInt(2) },
+        .goto_picker,
     };
 
     var copy = try TestingModel.init();
@@ -285,5 +288,19 @@ test "OpenNamePromptHandler rejects missing rename targets without mutation" {
     try std.testing.expect(!handler.execute(.rename_active_tab));
     try std.testing.expect(!testing.model.name_prompt.active());
     try std.testing.expectEqualDeep(departed_version, testing.model.version());
+    try std.testing.expectEqual(@as(usize, 0), capture.calls);
+}
+
+test "OpenNamePromptHandler opens the goto picker without extra gates" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var capture: GateCapture = .{ .blocked = true };
+    var handler = capture.handler(testing.model);
+
+    try std.testing.expect(handler.execute(.goto_picker));
+    const prompt = testing.model.name_prompt.currentConst().?;
+    try std.testing.expect(prompt.target == .goto);
+    try std.testing.expectEqualStrings("", prompt.field.text());
+    try std.testing.expectEqual(@as(u16, 0), prompt.selection);
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
 }

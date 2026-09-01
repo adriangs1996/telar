@@ -316,11 +316,16 @@ that never becomes a dependency.
 
 ---
 
-## P7. Search in the UI — copy-mode search done; pickers pending
+## P7. Search in the UI — copy-mode search and goto picker done; history palette pending
 
 `/`, `?`, `n`, `N` work in copy mode through `search_pane`/`pane_matches`.
-The goto picker and the history palette remain open; they need a list-modal
-capability that does not exist yet.
+`prefix+g` opens the goto picker: a fuzzy list modal over the committed
+workspace list, active-workspace tabs and agent snapshot, built as a new
+`goto` name-prompt target (the prompt editor gained `move_up`/`move_down`
+and a selection that renderer and submit clamp against the same
+deterministic result set in `model/goto_picker.zig`). The modal reuses the
+attachment-preview overlay bookkeeping and the KGP modal border. Keyboard
+only for now; the history palette remains open.
 
 Nothing in the client searches today; `copy_mode.zig` has no find.
 

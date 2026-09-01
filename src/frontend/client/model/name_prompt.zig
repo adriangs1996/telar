@@ -18,6 +18,8 @@ pub const Target = union(enum) {
     rename_workspace: schema.WorkspaceLocation,
     /// Copy-mode search input; the direction was chosen by `/` or `?`.
     copy_search: copy_mode.Direction,
+    /// Fuzzy goto picker over workspaces, tabs and agents.
+    goto,
 };
 
 pub const Begin = union(enum) {
@@ -31,12 +33,15 @@ pub const Begin = union(enum) {
         workspace: schema.WorkspaceLocation,
         name: []const u8,
     },
+    goto_picker,
 };
 
 pub const Command = union(enum) {
     paste_start,
     paste_end,
     insert: []const u8,
+    move_up,
+    move_down,
     submit,
     cancel,
     backspace,
@@ -66,6 +71,9 @@ pub const Prompt = struct {
     target: Target,
     field: Field,
     pasting: bool = false,
+    /// Goto-picker list selection; the renderer and the submit path clamp it
+    /// against the same deterministic result set.
+    selection: u16 = 0,
 };
 
 pub const State = struct {
@@ -93,6 +101,10 @@ pub const State = struct {
             },
             .copy_search => |direction| .{
                 .target = .{ .copy_search = direction },
+                .field = .init(""),
+            },
+            .goto_picker => .{
+                .target = .goto,
                 .field = .init(""),
             },
         };
@@ -164,7 +176,7 @@ pub const State = struct {
                 if (prompt.pasting) {
                     return state.editField(.{ .insert = " " });
                 }
-                if (prompt.field.text().len == 0) {
+                if (prompt.field.text().len == 0 and prompt.target != .goto) {
                     return .unchanged;
                 }
 
@@ -177,6 +189,24 @@ pub const State = struct {
                 state.value = null;
                 state.revision +%= 1;
                 return .cancelled;
+            },
+            .move_up => {
+                if (prompt.target != .goto or prompt.selection == 0) {
+                    return .unchanged;
+                }
+
+                prompt.selection -= 1;
+                state.revision +%= 1;
+                return .changed;
+            },
+            .move_down => {
+                if (prompt.target != .goto) {
+                    return .unchanged;
+                }
+
+                prompt.selection +|= 1;
+                state.revision +%= 1;
+                return .changed;
             },
             .insert,
             .backspace,
@@ -216,12 +246,15 @@ pub const State = struct {
             .move_right => |extend| prompt.field.moveRight(extend),
             .home => |extend| prompt.field.home(extend),
             .end => |extend| prompt.field.end(extend),
-            .paste_start, .paste_end, .submit, .cancel => unreachable,
+            .paste_start, .paste_end, .submit, .cancel, .move_up, .move_down => unreachable,
         }
         if (!before.changed(&prompt.field)) {
             return .unchanged;
         }
 
+        if (prompt.target == .goto and before.len != prompt.field.len) {
+            prompt.selection = 0;
+        }
         state.revision +%= 1;
         return .changed;
     }
@@ -302,4 +335,33 @@ test "cancel closes the prompt and empty submit is inert" {
     try std.testing.expect(state.apply(.cancel) == .cancelled);
     try std.testing.expect(!state.active());
     try std.testing.expectEqual(@as(u64, 2), state.version());
+}
+
+test "goto picker submits empty queries and tracks a resettable selection" {
+    var state: State = .{};
+    state.begin(.goto_picker);
+
+    try std.testing.expect(state.apply(.move_up) == .unchanged);
+    try std.testing.expect(state.apply(.move_down) == .changed);
+    try std.testing.expect(state.apply(.move_down) == .changed);
+    try std.testing.expectEqual(@as(u16, 2), state.currentConst().?.selection);
+
+    try std.testing.expect(state.apply(.{ .insert = "a" }) == .changed);
+    try std.testing.expectEqual(@as(u16, 0), state.currentConst().?.selection);
+
+    const submitted = state.apply(.submit).submitted;
+    try std.testing.expectEqualStrings("a", submitted.name);
+    try std.testing.expect(state.finish(.goto));
+
+    state.begin(.goto_picker);
+    try std.testing.expect(state.apply(.submit) == .submitted);
+}
+
+test "rename prompts ignore picker selection commands" {
+    var state: State = .{};
+    state.begin(.create_workspace);
+
+    try std.testing.expect(state.apply(.move_down) == .unchanged);
+    try std.testing.expect(state.apply(.move_up) == .unchanged);
+    try std.testing.expectEqual(@as(u64, 1), state.version());
 }

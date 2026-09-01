@@ -105,6 +105,7 @@ pub const text =
     \\  W                Rename the active workspace
     \\  x                Close the focused pane
     \\  [                Enter copy mode
+    \\  g                Open the goto picker
     \\  c                Create and select a tab
     \\  n / p            Select the next or previous tab
     \\  1..9             Select a tab by position

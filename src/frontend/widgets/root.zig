@@ -14,6 +14,7 @@ pub const tab_rename = @import("tab_rename.zig");
 pub const status_bar = @import("status_bar.zig");
 pub const workbench = @import("workbench.zig");
 pub const attachment_preview = @import("attachment_preview.zig");
+pub const goto_picker = @import("goto_picker.zig");
 pub const composition = @import("composition.zig");
 
 pub const Action = context.Action;
