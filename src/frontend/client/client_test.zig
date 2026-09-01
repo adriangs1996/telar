@@ -1147,6 +1147,7 @@ test "workspace handoff capacity failure preserves the source model" {
     }
     const version_before = client.model.version();
     const focus_before = client.model.reportedPaneFocus();
+    const next_request_id = client.request_lifecycle.next_request_id;
 
     try std.testing.expectError(
         error.ClientOutboxFull,
@@ -1158,7 +1159,35 @@ test "workspace handoff capacity failure preserves the source model" {
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
     try std.testing.expect(client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
-    try std.testing.expect(client.request_lifecycle.tracker.has(.tab_snapshot));
+    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(client_outbox.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
+}
+
+test "workspace handoff request exhaustion preserves the source model" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    client.request_lifecycle.next_request_id = std.math.maxInt(u64) - 1;
+    const version_before = client.model.version();
+    const focus_before = client.model.reportedPaneFocus();
+    const outbox_len = client.runtime_transport.outbox.len;
+
+    try std.testing.expectError(
+        error.RequestIdExhausted,
+        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
+    );
+
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
+    try std.testing.expectEqualDeep(version_before, client.model.version());
+    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
+    try std.testing.expectEqual(std.math.maxInt(u64) - 1, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
 }
 
 test "workspace handoff reserves its focus-out message" {

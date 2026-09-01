@@ -3,6 +3,10 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../model.zig");
+const pane_focus_reporting = @import("pane_focus_reporting.zig");
+const pane_paste = @import("pane_paste.zig");
+const workspace_attachment_retirement = @import("workspace_attachment_retirement.zig");
+const workspace_handoff_preparation = @import("workspace_handoff_preparation.zig");
 const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
 
 const schema = core.schema;
@@ -73,7 +77,6 @@ pub const WorkspaceHandoffGate = struct {
 
 pub const HandoffRequestEffects = struct {
     context: *anyopaque,
-    detach: *const fn (*anyopaque) anyerror!void,
     send: *const fn (*anyopaque, WorkspaceHandoff) anyerror!void,
     release: *const fn (*anyopaque, *const client_model.WorkspaceDeparture) void,
 };
@@ -81,12 +84,14 @@ pub const HandoffRequestEffects = struct {
 pub const RequestWorkspaceHandoffHandler = struct {
     model: *client_model.Model,
     gate: WorkspaceHandoffGate,
+    preparation: workspace_handoff_preparation.PrepareWorkspaceHandoffHandler,
+    retirement: workspace_attachment_retirement.RetireWorkspaceAttachmentsHandler,
     restoration: workspace_handoff_restoration.RestoreWorkspaceHandoffHandler,
     effects: HandoffRequestEffects,
 
-    /// Delivers every detach before the open request, then commits departure.
-    /// Local delivery failure leaves the semantic model intact and asks the
-    /// adapter to restore canonical attachment state.
+    /// Preflights without effects, retires every attachment before the open
+    /// request, then commits departure. Only post-preflight failure requests
+    /// canonical attachment restoration.
     ///
     /// ```zig
     /// const departure = try handler.execute(command);
@@ -96,7 +101,9 @@ pub const RequestWorkspaceHandoffHandler = struct {
             return error.WorkspaceSwitchWhileRequestPending;
         }
 
-        handler.effects.detach(handler.effects.context) catch |err| {
+        try handler.preparation.execute();
+
+        handler.retirement.execute() catch |err| {
             _ = handler.restoration.execute(handler.model) catch {};
             return err;
         };
@@ -176,6 +183,7 @@ pub const RecoverWorkspaceHandoffHandler = struct {
 const TestingModel = struct {
     model: *client_model.Model,
     location: schema.TabLocation,
+    pane_id: schema.PaneId,
 
     fn init(occupied: bool) !TestingModel {
         const model = try std.testing.allocator.create(client_model.Model);
@@ -186,11 +194,12 @@ const TestingModel = struct {
             .workspace = .{ .workspace = @enumFromInt(1) },
             .tab_id = @enumFromInt(1),
         };
+        const pane_id: schema.PaneId = @enumFromInt(1);
         if (occupied) {
-            try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+            try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
         }
 
-        return .{ .model = model, .location = location };
+        return .{ .model = model, .location = location, .pane_id = pane_id };
     }
 
     fn deinit(testing: *TestingModel) void {
@@ -311,6 +320,7 @@ test "SelectWorkspaceHandler permits base workspace selection from a worktree" {
 }
 
 const RequestEvent = enum {
+    prepare,
     detach,
     send,
     restore_graphics,
@@ -320,12 +330,13 @@ const RequestEvent = enum {
 };
 
 const RequestCapture = struct {
-    model: *const client_model.Model,
+    model: *client_model.Model,
     blocked: bool = false,
+    fail_prepare: bool = false,
     fail_detach: bool = false,
     fail_send: bool = false,
     fail_restore: bool = false,
-    events: [6]RequestEvent = undefined,
+    events: [7]RequestEvent = undefined,
     event_count: usize = 0,
     command: ?WorkspaceHandoff = null,
     departure: ?client_model.WorkspaceDeparture = null,
@@ -338,9 +349,41 @@ const RequestCapture = struct {
     fn port(capture: *RequestCapture) HandoffRequestEffects {
         return .{
             .context = capture,
-            .detach = detach,
             .send = send,
             .release = release,
+        };
+    }
+
+    fn preparation(capture: *RequestCapture) workspace_handoff_preparation.PrepareWorkspaceHandoffHandler {
+        return .{
+            .model = capture.model,
+            .requests = .{
+                .context = capture,
+                .ensure = ensureRequests,
+            },
+            .deliveries = .{
+                .context = capture,
+                .available = availableDeliveries,
+            },
+            .pending_attachments = .{
+                .context = capture,
+                .pending = attachmentPending,
+            },
+        };
+    }
+
+    fn retirement(capture: *RequestCapture) workspace_attachment_retirement.RetireWorkspaceAttachmentsHandler {
+        return .{
+            .model = capture.model,
+            .paste_effects = .{ .context = capture, .deliver = deliverPaste },
+            .focus_effects = .{ .context = capture, .deliver = deliverFocus },
+            .attachment_effects = .{
+                .context = capture,
+                .attachment_pending = attachmentPending,
+                .detach_pane = detachPane,
+                .retire_attachment = retireAttachment,
+                .hide_graphics = hideGraphics,
+            },
         };
     }
 
@@ -368,13 +411,39 @@ const RequestCapture = struct {
         capture.event_count += 1;
     }
 
-    fn detach(context: *anyopaque) !void {
+    fn ensureRequests(context: *anyopaque, _: u64) !void {
+        const capture: *RequestCapture = @ptrCast(@alignCast(context));
+        capture.record(.prepare);
+        if (capture.fail_prepare) {
+            return error.PreparationFailed;
+        }
+    }
+
+    fn availableDeliveries(_: *anyopaque) usize {
+        return std.math.maxInt(usize);
+    }
+
+    fn deliverPaste(_: *anyopaque, _: pane_paste.Delivery) !bool {
+        return true;
+    }
+
+    fn deliverFocus(_: *anyopaque, _: pane_focus_reporting.Delivery) !void {}
+
+    fn attachmentPending(_: *anyopaque, _: schema.PaneId) bool {
+        return false;
+    }
+
+    fn detachPane(context: *anyopaque, _: schema.PaneId) !void {
         const capture: *RequestCapture = @ptrCast(@alignCast(context));
         capture.record(.detach);
         if (capture.fail_detach) {
             return error.DetachFailed;
         }
     }
+
+    fn retireAttachment(_: *anyopaque, _: schema.PaneId) void {}
+
+    fn hideGraphics(_: *anyopaque, _: schema.PaneId) !void {}
 
     fn send(context: *anyopaque, command: WorkspaceHandoff) !void {
         const capture: *RequestCapture = @ptrCast(@alignCast(context));
@@ -429,6 +498,8 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
+        .preparation = capture.preparation(),
+        .retirement = capture.retirement(),
         .restoration = capture.restoration(),
         .effects = capture.port(),
     };
@@ -436,7 +507,7 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
 
     const departure = try handler.execute(command);
 
-    try std.testing.expectEqualSlices(RequestEvent, &.{ .detach, .send, .release }, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualSlices(RequestEvent, &.{ .prepare, .detach, .send, .release }, capture.events[0..capture.event_count]);
     try std.testing.expectEqualDeep(command, capture.command.?);
     try std.testing.expectEqualDeep(departure.source, capture.departure.?.source);
     try std.testing.expect(capture.observed_commit);
@@ -450,6 +521,8 @@ test "RequestWorkspaceHandoffHandler gates without effects or model mutation" {
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
+        .preparation = capture.preparation(),
+        .retirement = capture.retirement(),
         .restoration = capture.restoration(),
         .effects = capture.port(),
     };
@@ -461,6 +534,30 @@ test "RequestWorkspaceHandoffHandler gates without effects or model mutation" {
     try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
+test "RequestWorkspaceHandoffHandler rejects preflight without recovery" {
+    var testing = try TestingModel.init(true);
+    defer testing.deinit();
+    var capture: RequestCapture = .{
+        .model = testing.model,
+        .fail_prepare = true,
+    };
+    var handler: RequestWorkspaceHandoffHandler = .{
+        .model = testing.model,
+        .gate = capture.gate(),
+        .preparation = capture.preparation(),
+        .retirement = capture.retirement(),
+        .restoration = capture.restoration(),
+        .effects = capture.port(),
+    };
+
+    try std.testing.expectError(error.PreparationFailed, handler.execute(testingHandoff()));
+
+    try std.testing.expectEqualSlices(RequestEvent, &.{.prepare}, capture.events[0..capture.event_count]);
+    try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
+    try std.testing.expect(testing.model.workspace.findPane(testing.pane_id).?.attached);
+    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+}
+
 test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
     inline for (.{
         .{
@@ -468,21 +565,21 @@ test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
             .send = false,
             .restore = false,
             .expected = error.DetachFailed,
-            .events = &[_]RequestEvent{ .detach, .restore_graphics, .restore_snapshot_pending, .restore_snapshot },
+            .events = &[_]RequestEvent{ .prepare, .detach, .restore_graphics, .restore_snapshot_pending, .restore_snapshot },
         },
         .{
             .detach = false,
             .send = true,
             .restore = false,
             .expected = error.SendFailed,
-            .events = &[_]RequestEvent{ .detach, .send, .restore_graphics, .restore_snapshot_pending, .restore_snapshot },
+            .events = &[_]RequestEvent{ .prepare, .detach, .send, .restore_graphics, .restore_snapshot_pending, .restore_snapshot },
         },
         .{
             .detach = true,
             .send = false,
             .restore = true,
             .expected = error.DetachFailed,
-            .events = &[_]RequestEvent{ .detach, .restore_graphics },
+            .events = &[_]RequestEvent{ .prepare, .detach, .restore_graphics },
         },
     }) |scenario| {
         var testing = try TestingModel.init(true);
@@ -496,6 +593,8 @@ test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
         var handler: RequestWorkspaceHandoffHandler = .{
             .model = testing.model,
             .gate = capture.gate(),
+            .preparation = capture.preparation(),
+            .retirement = capture.retirement(),
             .restoration = capture.restoration(),
             .effects = capture.port(),
         };

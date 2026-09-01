@@ -1,62 +1,54 @@
-//! Application policy for preflighting and retiring every current workspace
-//! attachment before a handoff request.
+//! Application policy for reserving every bounded resource required by one
+//! provisional workspace handoff before it produces effects.
 
 const std = @import("std");
 const core = @import("telar-core");
 const client_model = @import("../model.zig");
-const pane_focus_reporting = @import("pane_focus_reporting.zig");
-const pane_paste = @import("pane_paste.zig");
 const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
 
 const schema = core.schema;
 
-pub const Capacity = struct {
+pub const RequestCapacity = struct {
+    context: *anyopaque,
+    ensure: *const fn (*anyopaque, u64) anyerror!void,
+};
+
+pub const DeliveryCapacity = struct {
     context: *anyopaque,
     available: *const fn (*anyopaque) usize,
 };
 
 pub const PrepareWorkspaceHandoffHandler = struct {
     model: *client_model.Model,
-    capacity: Capacity,
-    paste_effects: pane_paste.Effects,
-    focus_effects: pane_focus_reporting.Effects,
-    attachment_effects: tab_attachment_retirement.Effects,
+    requests: RequestCapacity,
+    deliveries: DeliveryCapacity,
+    pending_attachments: tab_attachment_retirement.PendingAttachments,
 
-    /// Reserves the closing paste marker, focus-out, every attached or
-    /// in-flight pane detach and the final open request before retiring tabs.
+    /// Reserves one open request, its recovery identity and every outbound
+    /// delivery required to retire the current workspace without effects.
     ///
     /// ```zig
     /// try handler.execute();
     /// ```
-    pub fn execute(handler: *PrepareWorkspaceHandoffHandler) !void {
-        const required_capacity = try handler.requiredCapacity();
-        if (required_capacity > handler.capacity.available(handler.capacity.context)) {
-            return error.ClientOutboxFull;
-        }
+    pub fn execute(handler: *const PrepareWorkspaceHandoffHandler) !void {
+        try handler.requests.ensure(handler.requests.context, 2);
 
-        var tabs = handler.model.workspace.tabIterator();
-        while (tabs.next()) |tab| {
-            var retire: tab_attachment_retirement.RetireTabAttachmentsHandler = .{
-                .model = handler.model,
-                .paste_effects = handler.paste_effects,
-                .focus_effects = handler.focus_effects,
-                .effects = handler.attachment_effects,
-            };
-            try retire.execute(tab.location);
+        const required_capacity = try handler.requiredDeliveryCapacity();
+        if (required_capacity > handler.deliveries.available(handler.deliveries.context)) {
+            return error.ClientOutboxFull;
         }
     }
 
-    fn requiredCapacity(handler: *const PrepareWorkspaceHandoffHandler) !usize {
+    fn requiredDeliveryCapacity(handler: *const PrepareWorkspaceHandoffHandler) !usize {
         var required: usize = 1;
-        const pending_attachments: tab_attachment_retirement.PendingAttachments = .{
-            .context = handler.attachment_effects.context,
-            .pending = handler.attachment_effects.attachment_pending,
-        };
 
         var tabs = handler.model.workspace.tabIterator();
         while (tabs.next()) |tab| {
             const plan = try handler.model.planTabDetachment(tab.location);
-            required += tab_attachment_retirement.requiredDeliveryCapacity(&plan, pending_attachments);
+            required += tab_attachment_retirement.requiredDeliveryCapacity(
+                &plan,
+                handler.pending_attachments,
+            );
         }
 
         return required;
@@ -64,19 +56,13 @@ pub const PrepareWorkspaceHandoffHandler = struct {
 };
 
 const Event = union(enum) {
+    ensure_requests: u64,
     attachment_pending: schema.PaneId,
-    available_capacity,
-    paste_finish: schema.PaneId,
-    focus_out: schema.PaneId,
-    detach: schema.PaneId,
-    retire_attachment: schema.PaneId,
-    hide_graphics: schema.PaneId,
+    available_deliveries,
 };
 
 const TestingModel = struct {
     model: *client_model.Model,
-    active: schema.TabLocation,
-    other: schema.TabLocation,
     root: schema.PaneId,
     sibling: schema.PaneId,
     other_root: schema.PaneId,
@@ -100,13 +86,7 @@ const TestingModel = struct {
         const sibling: schema.PaneId = @enumFromInt(2);
         const other_root: schema.PaneId = @enumFromInt(3);
         try model.workspace.bootstrap(root, active, .{ .cols = 40, .rows = 10 });
-        try model.workspace.active().?.model.split(
-            root,
-            sibling,
-            active,
-            .horizontal,
-            .{ .w = 40, .h = 10 },
-        );
+        try model.workspace.active().?.model.split(root, sibling, active, .horizontal, .{ .w = 40, .h = 10 });
         _ = try model.workspace.addCreated(.{
             .location = other,
             .position = 1,
@@ -129,8 +109,6 @@ const TestingModel = struct {
 
         return .{
             .model = model,
-            .active = active,
-            .other = other,
             .root = root,
             .sibling = sibling,
             .other_root = other_root,
@@ -147,60 +125,42 @@ const Capture = struct {
     model: *client_model.Model,
     pending_pane: ?schema.PaneId,
     available: usize,
-    fail_detach: ?schema.PaneId = null,
-    events: [32]Event = undefined,
+    request_failure: ?anyerror = null,
+    events: [5]Event = undefined,
     event_count: usize = 0,
     queries_observed_unchanged: bool = true,
 
-    fn capacity(capture: *Capture) Capacity {
-        return .{ .context = capture, .available = availableCapacity };
-    }
-
-    fn pasteEffects(capture: *Capture) pane_paste.Effects {
-        return .{ .context = capture, .deliver = deliverPaste };
-    }
-
-    fn focusEffects(capture: *Capture) pane_focus_reporting.Effects {
-        return .{ .context = capture, .deliver = deliverFocus };
-    }
-
-    fn attachmentEffects(capture: *Capture) tab_attachment_retirement.Effects {
+    fn handler(capture: *Capture) PrepareWorkspaceHandoffHandler {
         return .{
-            .context = capture,
-            .attachment_pending = attachmentPending,
-            .detach_pane = detachPane,
-            .retire_attachment = retireAttachment,
-            .hide_graphics = hideGraphics,
+            .model = capture.model,
+            .requests = .{
+                .context = capture,
+                .ensure = ensureRequests,
+            },
+            .deliveries = .{
+                .context = capture,
+                .available = availableDeliveries,
+            },
+            .pending_attachments = .{
+                .context = capture,
+                .pending = attachmentPending,
+            },
         };
     }
 
-    fn availableCapacity(context: *anyopaque) usize {
+    fn ensureRequests(context: *anyopaque, count: u64) !void {
         const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.available_capacity);
+        capture.append(.{ .ensure_requests = count });
+        if (capture.request_failure) |failure| {
+            return failure;
+        }
+    }
+
+    fn availableDeliveries(context: *anyopaque) usize {
+        const capture: *Capture = @ptrCast(@alignCast(context));
+        capture.append(.available_deliveries);
 
         return capture.available;
-    }
-
-    fn deliverPaste(context: *anyopaque, delivery: pane_paste.Delivery) !bool {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        const marker = switch (delivery) {
-            .marker => |value| value,
-            .content => return error.UnexpectedPasteContent,
-        };
-        if (marker.boundary != .finish) {
-            return error.UnexpectedPasteBoundary;
-        }
-        capture.append(.{ .paste_finish = marker.session.pane_id });
-
-        return true;
-    }
-
-    fn deliverFocus(context: *anyopaque, delivery: pane_focus_reporting.Delivery) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        if (delivery.direction != .focus_out) {
-            return error.UnexpectedFocusDirection;
-        }
-        capture.append(.{ .focus_out = delivery.pane_id });
     }
 
     fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
@@ -214,24 +174,6 @@ const Capture = struct {
         return capture.pending_pane == pane_id;
     }
 
-    fn detachPane(context: *anyopaque, pane_id: schema.PaneId) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .detach = pane_id });
-        if (capture.fail_detach == pane_id) {
-            return error.DetachFailed;
-        }
-    }
-
-    fn retireAttachment(context: *anyopaque, pane_id: schema.PaneId) void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .retire_attachment = pane_id });
-    }
-
-    fn hideGraphics(context: *anyopaque, pane_id: schema.PaneId) !void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.append(.{ .hide_graphics = pane_id });
-    }
-
     fn append(capture: *Capture, event: Event) void {
         capture.events[capture.event_count] = event;
         capture.event_count += 1;
@@ -242,17 +184,39 @@ const Capture = struct {
     }
 };
 
-fn handlerFor(testing: *TestingModel, capture: *Capture) PrepareWorkspaceHandoffHandler {
-    return .{
-        .model = testing.model,
-        .capacity = capture.capacity(),
-        .paste_effects = capture.pasteEffects(),
-        .focus_effects = capture.focusEffects(),
-        .attachment_effects = capture.attachmentEffects(),
-    };
+fn expectModelUnchanged(testing: *const TestingModel) !void {
+    try std.testing.expect(testing.model.panePasteActive());
+    try std.testing.expect(testing.model.reportedPaneFocus() != null);
+    try std.testing.expect(testing.model.workspace.findPane(testing.root).?.attached);
+    try std.testing.expect(!testing.model.workspace.findPane(testing.sibling).?.attached);
+    try std.testing.expect(testing.model.workspace.findPane(testing.other_root).?.attached);
+    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
 }
 
-test "PrepareWorkspaceHandoffHandler reserves pending detaches before effects" {
+test "PrepareWorkspaceHandoffHandler accepts exact bounded capacity without effects" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var capture: Capture = .{
+        .model = testing.model,
+        .pending_pane = testing.sibling,
+        .available = 6,
+    };
+    const handler = capture.handler();
+
+    try handler.execute();
+
+    try std.testing.expectEqualDeep(&[_]Event{
+        .{ .ensure_requests = 2 },
+        .{ .attachment_pending = testing.root },
+        .{ .attachment_pending = testing.sibling },
+        .{ .attachment_pending = testing.other_root },
+        .available_deliveries,
+    }, capture.eventSlice());
+    try std.testing.expect(capture.queries_observed_unchanged);
+    try expectModelUnchanged(&testing);
+}
+
+test "PrepareWorkspaceHandoffHandler rejects delivery exhaustion without effects" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: Capture = .{
@@ -260,83 +224,36 @@ test "PrepareWorkspaceHandoffHandler reserves pending detaches before effects" {
         .pending_pane = testing.sibling,
         .available = 5,
     };
-    var handler = handlerFor(&testing, &capture);
+    const handler = capture.handler();
 
     try std.testing.expectError(error.ClientOutboxFull, handler.execute());
 
-    try std.testing.expectEqualSlices(Event, &.{
+    try std.testing.expectEqualDeep(&[_]Event{
+        .{ .ensure_requests = 2 },
         .{ .attachment_pending = testing.root },
         .{ .attachment_pending = testing.sibling },
         .{ .attachment_pending = testing.other_root },
-        .available_capacity,
+        .available_deliveries,
     }, capture.eventSlice());
     try std.testing.expect(capture.queries_observed_unchanged);
-    try std.testing.expect(testing.model.panePasteActive());
-    try std.testing.expect(testing.model.reportedPaneFocus() != null);
-    try std.testing.expect(testing.model.workspace.findPane(testing.root).?.attached);
-    try std.testing.expect(!testing.model.workspace.findPane(testing.sibling).?.attached);
-    try std.testing.expect(testing.model.workspace.findPane(testing.other_root).?.attached);
+    try expectModelUnchanged(&testing);
 }
 
-test "PrepareWorkspaceHandoffHandler retires every tab at exact capacity" {
+test "PrepareWorkspaceHandoffHandler rejects request exhaustion before delivery queries" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var capture: Capture = .{
         .model = testing.model,
         .pending_pane = testing.sibling,
         .available = 6,
+        .request_failure = error.RequestIdExhausted,
     };
-    var handler = handlerFor(&testing, &capture);
+    const handler = capture.handler();
 
-    try handler.execute();
+    try std.testing.expectError(error.RequestIdExhausted, handler.execute());
 
-    try std.testing.expectEqualSlices(Event, &.{
-        .{ .attachment_pending = testing.root },
-        .{ .attachment_pending = testing.sibling },
-        .{ .attachment_pending = testing.other_root },
-        .available_capacity,
-        .{ .paste_finish = testing.root },
-        .{ .focus_out = testing.root },
-        .{ .attachment_pending = testing.root },
-        .{ .detach = testing.root },
-        .{ .retire_attachment = testing.root },
-        .{ .hide_graphics = testing.root },
-        .{ .attachment_pending = testing.sibling },
-        .{ .detach = testing.sibling },
-        .{ .retire_attachment = testing.sibling },
-        .{ .hide_graphics = testing.sibling },
-        .{ .attachment_pending = testing.other_root },
-        .{ .detach = testing.other_root },
-        .{ .retire_attachment = testing.other_root },
-        .{ .hide_graphics = testing.other_root },
+    try std.testing.expectEqualDeep(&[_]Event{
+        .{ .ensure_requests = 2 },
     }, capture.eventSlice());
-    try std.testing.expect(!testing.model.panePasteActive());
-    try std.testing.expect(testing.model.reportedPaneFocus() == null);
-    try std.testing.expect(!testing.model.workspace.findPane(testing.root).?.attached);
-    try std.testing.expect(!testing.model.workspace.findPane(testing.sibling).?.attached);
-    try std.testing.expect(!testing.model.workspace.findPane(testing.other_root).?.attached);
-}
-
-test "PrepareWorkspaceHandoffHandler preserves deferred tab commits after detach failure" {
-    var testing = try TestingModel.init();
-    defer testing.deinit();
-    var capture: Capture = .{
-        .model = testing.model,
-        .pending_pane = testing.sibling,
-        .available = 6,
-        .fail_detach = testing.sibling,
-    };
-    var handler = handlerFor(&testing, &capture);
-
-    try std.testing.expectError(error.DetachFailed, handler.execute());
-
-    try std.testing.expectEqualDeep(
-        Event{ .detach = testing.sibling },
-        capture.eventSlice()[capture.event_count - 1],
-    );
-    try std.testing.expect(!testing.model.panePasteActive());
-    try std.testing.expect(testing.model.reportedPaneFocus() == null);
-    try std.testing.expect(testing.model.workspace.findPane(testing.root).?.attached);
-    try std.testing.expect(!testing.model.workspace.findPane(testing.sibling).?.attached);
-    try std.testing.expect(testing.model.workspace.findPane(testing.other_root).?.attached);
+    try expectModelUnchanged(&testing);
 }

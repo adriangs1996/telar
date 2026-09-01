@@ -16,7 +16,6 @@ const multiplexer = workspace_capability.multiplexer;
 const pane_open_delivery = client_application.pane_open_delivery;
 const schema = core.schema;
 const workspace_handoff = client_application.workspace_handoff;
-const workspace_handoff_preparation = client_application.workspace_handoff_preparation;
 const tab_snapshot_recovery = client_application.tab_snapshot_recovery;
 
 /// Resolves one workspace selection from the committed list and requests its
@@ -99,11 +98,34 @@ fn request(client: *Client, plan: RequestPlan, ignore_pending: bool) !client_mod
 }
 
 fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.RequestWorkspaceHandoffHandler {
+    const attachment_effects = tab_attachments.effects(client);
+
     return .{
         .model = &client.model,
         .gate = .{
             .context = client,
             .pending = if (ignore_pending) neverPending else requestPending,
+        },
+        .preparation = .{
+            .model = &client.model,
+            .requests = .{
+                .context = client,
+                .ensure = ensureHandoffRequests,
+            },
+            .deliveries = .{
+                .context = client,
+                .available = availableDeliveryCapacity,
+            },
+            .pending_attachments = .{
+                .context = attachment_effects.context,
+                .pending = attachment_effects.attachment_pending,
+            },
+        },
+        .retirement = .{
+            .model = &client.model,
+            .paste_effects = pane_pastes.effects(client),
+            .focus_effects = pane_focus_reports.effects(client),
+            .attachment_effects = attachment_effects,
         },
         .restoration = .{
             .effects = .{
@@ -114,7 +136,6 @@ fn requestHandler(client: *Client, ignore_pending: bool) workspace_handoff.Reque
         },
         .effects = .{
             .context = client,
-            .detach = detachCurrent,
             .send = sendHandoff,
             .release = releaseDeparture,
         },
@@ -205,23 +226,13 @@ fn requestSelectedWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) 
     _ = try requestWorkspace(client, workspace);
 }
 
-fn detachCurrent(context: *anyopaque) !void {
+fn ensureHandoffRequests(context: *anyopaque, count: u64) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: workspace_handoff_preparation.PrepareWorkspaceHandoffHandler = .{
-        .model = &client.model,
-        .capacity = .{
-            .context = client,
-            .available = availableCapacity,
-        },
-        .paste_effects = pane_pastes.effects(client),
-        .focus_effects = pane_focus_reports.effects(client),
-        .attachment_effects = tab_attachments.effects(client),
-    };
 
-    try use_case.execute();
+    try request_lifecycle.ensureCanStart(client, count);
 }
 
-fn availableCapacity(context: *anyopaque) usize {
+fn availableDeliveryCapacity(context: *anyopaque) usize {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return runtime_transport.availableCapacity(client);

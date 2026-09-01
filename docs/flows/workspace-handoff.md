@@ -16,7 +16,9 @@ sidebar agent, resync or workspace closure ----------------+
                                                            |
                                       PrepareWorkspaceHandoffHandler
                                                            |
-detach active runtime attachments -> schema.open_pane
+                               RetireWorkspaceAttachmentsHandler
+                                                           |
+                             detach attachments -> schema.open_pane
                                                            |
 ClientModel.departWorkspace
                                                            |
@@ -41,23 +43,29 @@ that the projected workspace disappeared. It forgets the closed workspace's
 bookmark first and uses the runtime's canonical predecessor as the target. A
 failed handoff cannot restore identity that no longer exists.
 
-`PrepareWorkspaceHandoffHandler` checks that the fixed outbox has room for a
-required paste-closing marker, focus-out, every detach and the final open before
-it changes attachment state. It reserves focus-out only when the reported pane
-still exists, remains attached and has focus events enabled. Every attached
-pane and every unattached pane with an attachment request in flight reserves a
-detach slot. This prevents a pending attachment from consuming capacity that
-the old adapter preflight did not account for. The per-tab count is owned by
-the same retirement rule used by tab closure, so both flows reserve identical
-paste, focus and attachment deliveries.
+`PrepareWorkspaceHandoffHandler` is a preflight-only boundary. It first checks
+that two consecutive request identities remain: one for `open_pane` and one
+for synchronous snapshot recovery. It then checks that the fixed outbox has
+room for a required paste-closing marker, focus-out, every detach and the final
+open. Request exhaustion stops before delivery queries; outbox exhaustion stops
+before any client authority or attachment changes. Neither failure requests a
+repair because there is nothing to repair.
 
-After the capacity gate, the preparation handler delegates each tab to
+The capacity calculation reserves focus-out only when the reported pane still
+exists, remains attached and has focus events enabled. Every attached pane and
+every unattached pane with an attachment request in flight reserves a detach
+slot. The per-tab count is owned by the same retirement rule used by tab
+closure, so both flows reserve identical paste, focus and attachment
+deliveries.
+
+After preflight, `RetireWorkspaceAttachmentsHandler` delegates each tab to
 `RetireTabAttachmentsHandler`, which closes the paste and delivers detaches in
 tab and pane order before `open_pane`; socket order prevents the new attachment
-from preceding retirement of the old ones. `workspace_handoffs` now supplies
-only outbox capacity and the physical paste, focus, attachment and graphics
-ports. A local detach or open failure does not commit departure and requests a
-canonical tab snapshot to repair any provisional attachment effects.
+from preceding retirement of the old ones. `workspace_handoffs` supplies only
+request and outbox capacity plus the physical paste, focus, attachment and
+graphics ports. A local retirement or open failure does not commit departure
+and requests a canonical tab snapshot to repair provisional attachment
+effects.
 
 `RestoreWorkspaceHandoffHandler` owns that local recovery. It captures the
 still-active tab, restores graphics for its panes in stable order and then
@@ -157,8 +165,10 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
 - `src/frontend/client/application/pane_open_delivery.zig` checks
   successful-open routing, retired work and delivery failure propagation.
 - `src/frontend/client/application/workspace_handoff_preparation.zig` checks
-  complete capacity accounting, pending attachments, preflight-before-effects,
-  multi-tab retirement order and partial detach failures.
+  request-identity and delivery-capacity accounting, pending attachments and
+  rejection before effects.
+- `src/frontend/client/application/workspace_attachment_retirement.zig` checks
+  stable multi-tab retirement, empty projections and partial detach failures.
 - `src/frontend/client/application/workspace_handoff_restoration.zig` checks
   active-pane graphics order, snapshot coalescence and partial recovery
   failures.
@@ -168,8 +178,8 @@ normal cell buffer and damage-row bootstrap allocations occur before commit.
 - `src/frontend/client/model.zig` checks idempotent departure, bounded capture,
   atomic arrival, rejected arrival and saved-layout staging.
 - `src/frontend/client/client_test.zig` checks protocol order, navigation and
-  resource cleanup, outbox preflight, the presented empty version, confirmed
-  arrival and stale-pane fallback.
+  resource cleanup, request and outbox preflight, the presented empty version,
+  confirmed arrival and stale-pane fallback.
 - `src/frontend/client/presenter.zig` owns both empty and populated model
   presentation; neither handoff use case contains a draw decision.
 - `src/backend/runtime/controllers/open_pane.zig` checks authoritative target
