@@ -602,6 +602,11 @@ pub const max_import_entries = 64;
 pub const max_import_source_bytes = 256;
 pub const max_import_command_bytes = 4096;
 
+pub const HistoryMatch = enum(u8) {
+    fts = 0,
+    fuzzy = 1,
+};
+
 /// Deletes one exact history entry.
 pub const DeleteHistory = struct {
     request_id: RequestId,
@@ -652,6 +657,8 @@ pub const QueryHistory = struct {
     pane_id: PaneId = .invalid,
     failed_only: bool = false,
     author: HistoryAuthorFilter = .all,
+    match: HistoryMatch = .fts,
+    distinct: bool = false,
     limit: u16 = 20,
 };
 
@@ -1543,6 +1550,8 @@ pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
     }
     try encoder.writeByte(@intFromBool(message.failed_only));
     try encoder.writeByte(@intFromEnum(message.author));
+    try encoder.writeByte(@intFromEnum(message.match));
+    try encoder.writeByte(@intFromBool(message.distinct));
     try encoder.writeInt(u16, message.limit);
     return encoder.finish();
 }
@@ -2869,6 +2878,9 @@ fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
     const failed_only = try decoder.readBool();
     const author = std.enums.fromInt(HistoryAuthorFilter, try decoder.readByte()) orelse
         return error.InvalidHistoryAuthor;
+    const match = std.enums.fromInt(HistoryMatch, try decoder.readByte()) orelse
+        return error.InvalidHistoryMatch;
+    const distinct = try decoder.readBool();
     const limit = try decoder.readInt(u16);
     if (limit == 0 or limit > max_history_results) return error.InvalidHistoryLimit;
     return .{
@@ -2879,6 +2891,8 @@ fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
         .pane_id = pane_id,
         .failed_only = failed_only,
         .author = author,
+        .match = match,
+        .distinct = distinct,
         .limit = limit,
     };
 }

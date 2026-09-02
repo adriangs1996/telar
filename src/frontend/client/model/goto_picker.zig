@@ -117,43 +117,8 @@ pub fn describe(sources: Sources, item: Item, buffer: *[max_label_bytes]u8) []co
     return writer.buffered();
 }
 
-/// Case-insensitive subsequence score; null when the needle does not match.
-/// Earlier and tighter matches score higher, so `results` ordering follows
-/// intuition without a full fuzzy library.
-pub fn score(haystack: []const u8, needle: []const u8) ?u32 {
-    if (needle.len == 0) {
-        return 1;
-    }
-    if (needle.len > haystack.len) {
-        return null;
-    }
-
-    var first: ?usize = null;
-    var last: usize = 0;
-    var needle_index: usize = 0;
-    for (haystack, 0..) |byte, index| {
-        if (needle_index == needle.len) {
-            break;
-        }
-        if (std.ascii.toLower(byte) != std.ascii.toLower(needle[needle_index])) {
-            continue;
-        }
-
-        if (first == null) {
-            first = index;
-        }
-        last = index;
-        needle_index += 1;
-    }
-    if (needle_index != needle.len) {
-        return null;
-    }
-
-    const start = first.?;
-    const span = last - start + 1;
-    const base: u32 = 4096;
-    return base -| @as(u32, @intCast(start * 8)) -| @as(u32, @intCast((span - needle.len) * 16));
-}
+/// Shared subsequence scorer; see `telar-core`'s `fuzzy.score`.
+pub const score = core.fuzzy.score;
 
 fn scoreItem(sources: Sources, item: Item, query: []const u8, buffer: *[max_label_bytes]u8) ?u32 {
     return score(describe(sources, item, buffer), query);
@@ -178,15 +143,6 @@ fn insert(results: *Results, item: Item, item_score: u32) void {
     if (results.len != max_results) {
         results.len += 1;
     }
-}
-
-test "scores prefer earlier and tighter subsequence matches" {
-    try std.testing.expect(score("telar", "") != null);
-    try std.testing.expect(score("telar", "tr").? > 0);
-    try std.testing.expect(score("Telar", "tel").? > score("proxy-telar", "tel").?);
-    try std.testing.expect(score("telar", "tel").? > score("t-e-l", "tel").?);
-    try std.testing.expect(score("telar", "xyz") == null);
-    try std.testing.expect(score("ab", "abc") == null);
 }
 
 test "collect keeps matches ordered by score with a stable bound" {

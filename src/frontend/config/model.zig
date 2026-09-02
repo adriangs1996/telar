@@ -258,6 +258,7 @@ pub const Snapshot = struct {
     notification_delivery: NotificationDelivery = .telar,
     history_show_agent_commands: bool = false,
     history_enter_runs: bool = false,
+    history_match_fts: bool = false,
     theme_light: ?theme.Theme = null,
     theme_dark: ?theme.Theme = null,
     bars: bars.Configuration = .{},

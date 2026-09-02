@@ -50,6 +50,8 @@ pub const Controller = struct {
             .pane_id = request.pane_id,
             .failed_only = request.failed_only,
             .author = request.author,
+            .match = request.match,
+            .distinct = request.distinct,
             .limit = request.limit,
         }) catch |err| switch (err) {
             error.InvalidHistoryQuery => {

@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const model = @import("model.zig");
+const core_fuzzy = @import("telar-core").fuzzy;
 
 const c = @cImport({
     @cInclude("sqlite3.h");
@@ -413,6 +414,112 @@ pub const Store = struct {
         try stepDone(stmt);
     }
 
+    /// Fuzzy path: scans the newest candidates in scope and keeps the best
+    /// `limit` subsequence matches. Distinct always applies here, because
+    /// repeated commands would otherwise crowd out every other match.
+    fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const model.Query) !*model.QueryResult {
+        const max_candidates = 1000;
+        var sql_buffer: [1024]u8 = undefined;
+        var sql = std.Io.Writer.fixed(&sql_buffer);
+        try sql.writeAll(
+            "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
+                "command, cwd, workspace_path, author FROM command WHERE 1=1",
+        );
+        if (request.failed_only)
+            try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
+        if (request.author != .all)
+            try sql.writeAll(" AND author = ?");
+        switch (request.scope) {
+            .global => {},
+            .cwd => try sql.writeAll(" AND cwd = ?"),
+            .workspace => try sql.writeAll(" AND workspace_path = ?"),
+            .pane => try sql.writeAll(" AND pane_id = ?"),
+        }
+        try sql.writeAll(" ORDER BY started_at_ms DESC, id DESC LIMIT ?;");
+
+        const stmt = try prepare(store.db, sql.buffered());
+        defer _ = c.sqlite3_finalize(stmt);
+        var parameter: c_int = 1;
+        if (request.author != .all) {
+            const author: model.schema.HistoryAuthor = if (request.author == .human) .human else .agent;
+            _ = c.sqlite3_bind_int(stmt, parameter, @intFromEnum(author));
+            parameter += 1;
+        }
+        switch (request.scope) {
+            .global => {},
+            .cwd, .workspace => {
+                bindText(stmt, parameter, request.scopeSlice());
+                parameter += 1;
+            },
+            .pane => {
+                _ = c.sqlite3_bind_int64(
+                    stmt,
+                    parameter,
+                    @intCast(model.schema.id.raw(request.pane_id)),
+                );
+                parameter += 1;
+            },
+        }
+        _ = c.sqlite3_bind_int(stmt, parameter, max_candidates);
+
+        const Scored = struct { score: u32, entry: model.Entry };
+        var best: [model.max_results]Scored = undefined;
+        var count: usize = 0;
+        var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
+        defer seen.deinit(gpa);
+        errdefer for (best[0..count]) |*scored| scored.entry.deinit(gpa);
+
+        while (true) switch (c.sqlite3_step(stmt)) {
+            c.SQLITE_ROW => {
+                const hash = commandHash(stmt);
+                if (seen.contains(hash)) continue;
+                try seen.put(gpa, hash, {});
+                const command = columnSlice(stmt, 6);
+                const score = core_fuzzy.score(command, request.textSlice()) orelse continue;
+                if (count == request.limit and score <= best[count - 1].score) continue;
+
+                var entry = try readEntry(gpa, stmt);
+                var index: usize = count;
+                if (count == request.limit) {
+                    best[count - 1].entry.deinit(gpa);
+                    index = count - 1;
+                } else {
+                    count += 1;
+                }
+                while (index > 0 and best[index - 1].score < score) : (index -= 1) {
+                    best[index] = best[index - 1];
+                }
+                best[index] = .{ .score = score, .entry = entry };
+                entry = undefined;
+            },
+            c.SQLITE_DONE => break,
+            else => return error.HistoryQueryFailed,
+        };
+
+        var encoded_bytes: usize = model.encoded_result_header_bytes;
+        var kept: usize = 0;
+        while (kept < count) : (kept += 1) {
+            const entry = &best[kept].entry;
+            const entry_bytes = model.encoded_entry_overhead_bytes +
+                entry.command.len + entry.cwd.len + entry.workspace_path.len;
+            if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) break;
+            encoded_bytes += entry_bytes;
+        }
+        for (best[kept..count]) |*scored| scored.entry.deinit(gpa);
+
+        const result = try gpa.create(model.QueryResult);
+        errdefer gpa.destroy(result);
+        const entries = try gpa.alloc(model.Entry, kept);
+        for (best[0..kept], 0..) |scored, index| entries[index] = scored.entry;
+        result.* = .{
+            .request_id = request.request_id,
+            .origin = request.origin,
+            .entries = entries,
+            .gpa = gpa,
+        };
+        return result;
+    }
+
     /// Deletes one exact entry; its output row cascades and the FTS delete
     /// trigger keeps the index consistent.
     ///
@@ -499,6 +606,10 @@ pub const Store = struct {
     /// const result = try store.query(gpa, &request);
     /// ```
     pub fn query(store: *Store, gpa: std.mem.Allocator, request: *const model.Query) !*model.QueryResult {
+        if (request.match == .fuzzy and request.text_len != 0) {
+            return store.queryFuzzy(gpa, request);
+        }
+
         var sql_buffer: [1024]u8 = undefined;
         var sql = std.Io.Writer.fixed(&sql_buffer);
         try sql.writeAll(
@@ -564,12 +675,19 @@ pub const Store = struct {
 
         var entries: std.ArrayList(model.Entry) = .empty;
         var encoded_bytes: usize = model.encoded_result_header_bytes;
+        var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
+        defer seen.deinit(gpa);
         errdefer {
             for (entries.items) |*entry| entry.deinit(gpa);
             entries.deinit(gpa);
         }
         while (true) switch (c.sqlite3_step(stmt)) {
             c.SQLITE_ROW => {
+                if (request.distinct) {
+                    if (seen.contains(commandHash(stmt))) continue;
+                    try seen.put(gpa, commandHash(stmt), {});
+                }
+
                 var entry = try readEntry(gpa, stmt);
                 const entry_bytes = model.encoded_entry_overhead_bytes +
                     entry.command.len + entry.cwd.len + entry.workspace_path.len;
@@ -769,6 +887,18 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
         .cwd = cwd,
         .workspace_path = workspace_path,
     };
+}
+
+/// Borrows the row's command text for hashing/scoring; valid only until the
+/// next step or reset.
+fn columnSlice(stmt: *c.sqlite3_stmt, column: c_int) []const u8 {
+    const ptr = c.sqlite3_column_text(stmt, column) orelse return "";
+    const len: usize = @intCast(c.sqlite3_column_bytes(stmt, column));
+    return ptr[0..len];
+}
+
+fn commandHash(stmt: *c.sqlite3_stmt) u64 {
+    return std.hash.Wyhash.hash(0x74656c6172, columnSlice(stmt, 6));
 }
 
 fn columnText(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt, column: c_int) ![]u8 {
@@ -1173,4 +1303,77 @@ test "command output rows round trip through the store" {
     defer missing.deinit();
     try std.testing.expectEqual(@as(u64, 0), missing.observed_bytes);
     try std.testing.expectEqual(@as(usize, 0), missing.content.len);
+}
+
+test "fuzzy matching ranks subsequences and collapses duplicates" {
+    var store = try Store.open(":memory:");
+    defer store.close();
+    const location: model.schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const session: model.SessionStarted = .{
+        .id = @splat(8),
+        .pane_id = @enumFromInt(1),
+        .location = location,
+        .started_at_ms = 1_000,
+        .workspace_path = @constCast("/work"),
+        .shell = @constCast("/bin/zsh"),
+    };
+    try store.startSession(&session);
+
+    var value: model.CommandFinished = .{
+        .session_id = session.id,
+        .pane_id = session.pane_id,
+        .location = location,
+        .sequence = 0,
+        .started_at_ms = 0,
+        .duration_ns = 1,
+        .exit_code = 0,
+        .status = .completed,
+        .author = .human,
+        .cols = 80,
+        .rows = 24,
+        .command = @constCast(""),
+        .cwd = @constCast("/work"),
+        .workspace_path = @constCast("/work"),
+        .command_truncated = false,
+        .output = @constCast(""),
+        .output_truncated = false,
+        .output_observed = 0,
+    };
+    const commands = [_][]const u8{ "zig build test", "zig build test", "git status", "zebra-tail", "ls" };
+    for (commands, 0..) |command, index| {
+        value.sequence = index + 1;
+        value.started_at_ms = @intCast((index + 1) * 1_000);
+        value.command = @constCast(command);
+        try store.insertCommand(&value);
+    }
+
+    const origin: model.QueryOrigin = .{
+        .client = .{ .id = 1, .generation = 1 },
+        .close_after_reply = false,
+    };
+    var query_value = try model.Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .text = "zbt",
+        .match = .fuzzy,
+        .distinct = true,
+    });
+    const fuzzy = try store.query(std.testing.allocator, &query_value);
+    defer fuzzy.deinit();
+    try std.testing.expectEqual(@as(usize, 2), fuzzy.entries.len);
+    try std.testing.expectEqualStrings("zig build test", fuzzy.entries[0].command);
+    try std.testing.expectEqualStrings("zebra-tail", fuzzy.entries[1].command);
+
+    var distinct_query = try model.Query.init(.{
+        .request_id = @enumFromInt(2),
+        .origin = origin,
+        .distinct = true,
+    });
+    const collapsed = try store.query(std.testing.allocator, &distinct_query);
+    defer collapsed.deinit();
+    try std.testing.expectEqual(@as(usize, 4), collapsed.entries.len);
+    try std.testing.expectEqualStrings("ls", collapsed.entries[0].command);
 }

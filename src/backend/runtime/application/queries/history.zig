@@ -16,6 +16,8 @@ pub const Request = struct {
     pane_id: schema.PaneId,
     failed_only: bool,
     author: schema.HistoryAuthorFilter,
+    match: schema.HistoryMatch,
+    distinct: bool,
     limit: u16,
 };
 
@@ -68,6 +70,8 @@ pub const Handler = struct {
             .pane_id = request.pane_id,
             .failed_only = request.failed_only,
             .author = request.author,
+            .match = request.match,
+            .distinct = request.distinct,
             .limit = request.limit,
         }) catch {
             return error.InvalidHistoryQuery;
@@ -123,6 +127,8 @@ fn testingRequest() Request {
         .pane_id = .invalid,
         .failed_only = true,
         .author = .all,
+        .match = .fts,
+        .distinct = false,
         .limit = 12,
     };
 }

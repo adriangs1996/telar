@@ -41,6 +41,7 @@ pub fn sendQuery(client: *Client, query: []const u8) !void {
         .request_id = request_id,
         .query_len = @intCast(@min(query.len, connection_outbox.OwnedHistoryQuery.max_query_bytes)),
         .author = if (client.history_show_agent_commands) .all else .human,
+        .match = if (client.history_match_fts) .fts else .fuzzy,
         .limit = history_palette.max_entries,
     };
     @memcpy(owned.query[0..owned.query_len], query[0..owned.query_len]);

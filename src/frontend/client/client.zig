@@ -155,6 +155,9 @@ history_show_agent_commands: bool = false,
 /// Whether Enter in the history palette runs the command instead of only
 /// pasting it; shift+enter always does the opposite.
 history_enter_runs: bool = false,
+/// Whether the palette uses trigram substring matching instead of the
+/// default fuzzy subsequence matching.
+history_match_fts: bool = false,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
 appearance_themes: AppearanceThemes = .{},

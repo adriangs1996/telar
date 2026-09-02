@@ -183,6 +183,8 @@ pub const Query = struct {
         pane_id: schema.PaneId = .invalid,
         failed_only: bool = false,
         author: schema.HistoryAuthorFilter = .all,
+        match: schema.HistoryMatch = .fts,
+        distinct: bool = false,
         limit: u16 = 20,
     };
 
@@ -196,6 +198,8 @@ pub const Query = struct {
     pane_id: schema.PaneId = .invalid,
     failed_only: bool = false,
     author: schema.HistoryAuthorFilter = .all,
+    match: schema.HistoryMatch = .fts,
+    distinct: bool = false,
     limit: u16 = 20,
 
     /// Copies a validated query into fixed storage so it can cross the
@@ -236,6 +240,8 @@ pub const Query = struct {
             .pane_id = input.pane_id,
             .failed_only = input.failed_only,
             .author = input.author,
+            .match = input.match,
+            .distinct = input.distinct,
             .limit = input.limit,
         };
         @memcpy(query.text[0..input.text.len], input.text);

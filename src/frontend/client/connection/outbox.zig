@@ -133,6 +133,7 @@ pub const OwnedHistoryQuery = struct {
     scope_value_len: u16 = 0,
     pane_id: schema.PaneId = .invalid,
     author: schema.HistoryAuthorFilter = .all,
+    match: schema.HistoryMatch = .fts,
     limit: u16,
 
     fn view(value: *const OwnedHistoryQuery) schema.QueryHistory {
@@ -144,6 +145,8 @@ pub const OwnedHistoryQuery = struct {
             .pane_id = value.pane_id,
             .failed_only = false,
             .author = value.author,
+            .match = value.match,
+            .distinct = true,
             .limit = value.limit,
         };
     }

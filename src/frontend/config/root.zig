@@ -1222,7 +1222,26 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
 
-        try ensureOnlyFields(state, absolute, &.{ "show_agent_commands", "enter" }, "config.client.history", diagnostic);
+        try ensureOnlyFields(state, absolute, &.{ "show_agent_commands", "enter", "match" }, "config.client.history", diagnostic);
+
+        _ = lua.lua_getfield(state, absolute, "match");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            const mode = string(state, -1) orelse {
+                pop(state, 1);
+                diagnostic.set("config.client.history.match must be fuzzy or fts", .{});
+                return error.InvalidConfig;
+            };
+            if (std.mem.eql(u8, mode, "fts")) {
+                generation.snapshot.history_match_fts = true;
+            } else if (std.mem.eql(u8, mode, "fuzzy")) {
+                generation.snapshot.history_match_fts = false;
+            } else {
+                pop(state, 1);
+                diagnostic.set("config.client.history.match must be fuzzy or fts", .{});
+                return error.InvalidConfig;
+            }
+        }
+        pop(state, 1);
         _ = lua.lua_getfield(state, absolute, "show_agent_commands");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
             if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
@@ -4460,6 +4479,30 @@ test "client history enter mode parses paste or run only" {
         std.testing.allocator,
         std.testing.io,
         "return { api_version = 2, client = { history = { enter = \"always\" } } }",
+        "@config.lua",
+        1,
+        &invalid,
+    ));
+}
+
+test "client history match mode parses fuzzy or fts only" {
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { history = { match = \"fts\" } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    try std.testing.expect(generation.snapshot.history_match_fts);
+
+    var invalid: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { history = { match = \"regex\" } } }",
         "@config.lua",
         1,
         &invalid,
