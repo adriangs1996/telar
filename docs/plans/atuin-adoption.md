@@ -166,7 +166,7 @@ telar *is* the PTY proxy atuin had to bolt on. The `command_output` table
 - Output is not FTS-indexed (cost, secrets); note it in docs.
 - Tests: zone tail bounds, truncation flag, off-by-default, wire corpus.
 
-## P7. Fuzzy matching and palette dedup
+## P7. Fuzzy matching and palette dedup — done
 
 FTS5 trigram gives substring, not fuzzy. Do fuzzy where the candidates are.
 
