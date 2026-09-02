@@ -1192,7 +1192,16 @@ fn validateWorktreeBranch(branch: []const u8) !void {
     }
 }
 
-pub const HookAgent = enum { claude };
+/// Agents whose official lifecycle Telar can receive: Claude Code through
+/// its settings hooks, Pi through the Telar extension.
+pub const HookAgent = enum {
+    claude,
+    pi,
+
+    fn parse(name: []const u8) !HookAgent {
+        return std.meta.stringToEnum(HookAgent, name) orelse error.UnknownHookAgent;
+    }
+};
 
 pub const HookOptions = struct {
     agent: HookAgent,
@@ -1202,11 +1211,8 @@ pub const HookOptions = struct {
         if (args.len == 0) {
             return error.MissingHookAgent;
         }
-        if (!std.mem.eql(u8, std.mem.span(args[0]), "claude")) {
-            return error.UnknownHookAgent;
-        }
 
-        var options: HookOptions = .{ .agent = .claude };
+        var options: HookOptions = .{ .agent = try HookAgent.parse(std.mem.span(args[0])) };
         var index: usize = 1;
         while (index < args.len) : (index += 2) {
             if (!std.mem.eql(u8, std.mem.span(args[index]), "--socket") or index + 1 >= args.len) {
@@ -1239,11 +1245,8 @@ pub const IntegrationOptions = struct {
             .status
         else
             return error.UnknownIntegrationAction;
-        if (!std.mem.eql(u8, std.mem.span(args[1]), "claude")) {
-            return error.UnknownHookAgent;
-        }
 
-        var options: IntegrationOptions = .{ .action = action, .agent = .claude };
+        var options: IntegrationOptions = .{ .action = action, .agent = try HookAgent.parse(std.mem.span(args[1])) };
         var index: usize = 2;
         while (index < args.len) : (index += 2) {
             if (!std.mem.eql(u8, std.mem.span(args[index]), "--settings") or index + 1 >= args.len) {
@@ -1817,6 +1820,13 @@ test "CLI parses hook and integration commands" {
 
     const unknown = [_][*:0]const u8{ "telar", "integration", "install", "gemini" };
     try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));
+
+    const pi_hook = [_][*:0]const u8{ "telar", "hook", "pi", "--socket", "/tmp/s.sock" };
+    const pi_cli = try Cli.parse(&pi_hook, .empty);
+    try std.testing.expectEqual(HookAgent.pi, pi_cli.hook.agent);
+    try std.testing.expectEqualStrings("/tmp/s.sock", std.mem.span(pi_cli.hook.socket.?));
+    const pi_status = [_][*:0]const u8{ "telar", "integration", "status", "pi" };
+    try std.testing.expectEqual(HookAgent.pi, (try Cli.parse(&pi_status, .empty)).integration.agent);
 }
 
 test "CLI parses the remote destination and the server endpoint action" {
