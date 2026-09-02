@@ -39,6 +39,7 @@ disposable frontend process.
 | PTY | `src/backend/pty/root.zig` | Verified child launch, PTY I/O and child lifecycle |
 | Media | `src/backend/media/root.zig` | Bounded child Kitty-graphics ingestion |
 | Process | `src/backend/process/root.zig` | Native process metadata and bounded foreground-process observation |
+| Engine | `src/backend/engine/root.zig` | Bounded prompts to one headless agent child on the observation path |
 | Agent | `src/backend/agent/root.zig` | Agent evidence precedence and projected agent state |
 | History | `src/backend/history/root.zig` | Command observation, queries and durable storage |
 | Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |

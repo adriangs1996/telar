@@ -98,13 +98,14 @@ agent_descriptions = {
 
 `runtime.engine` keeps one headless agent process alive between prompts
 instead of starting a command per request. It speaks Pi's RPC contract (JSON
-lines over stdin and stdout) and is the same privacy opt-in as
-`agent_descriptions`: when both are configured, session titles go to the
-engine. The child starts on the first prompt from `/`, never from a
-repository, and is killed after `idle_timeout_ms` without work (10000 to
-3600000, default 300000) or after any protocol failure. `command` and
-`timeout_ms` follow the `agent_descriptions` bounds. Run the engine without
-tools and without project context unless a feature needs them:
+lines over stdin and stdout) and is independent from `agent_descriptions`:
+session titles always use the one-shot command, and the engine only serves
+the features that name it below. The child starts on the first prompt from
+`/`, never from a repository, and is killed after `idle_timeout_ms` without
+work (10000 to 3600000, default 300000) or after any protocol failure.
+`command` and `timeout_ms` follow the `agent_descriptions` bounds. Run the
+engine without tools and without project context unless a feature needs
+them:
 
 ```lua
 engine = {

@@ -109,8 +109,8 @@ test "the engine runtime answers through its actor and stops cleanly" {
     });
     defer runtime.deinit();
 
-    const purpose: engine.Purpose = .{ .title = .{ .pane_id = 1, .pane_generation = 1, .session_id = .{0} ** 16 } };
-    try std.testing.expect(runtime.service().submit(io, .{ .prompt = try engine.Prompt.init(purpose, "title") }));
+    const purpose: engine.Purpose = .{ .suggestion = .{ .client_id = 1, .client_generation = 1, .request_id = 1 } };
+    try std.testing.expect(runtime.service().submit(io, .{ .prompt = try engine.Prompt.init(purpose, "suggest") }));
     const response = try runtime.service().receiveResponse(io);
     try std.testing.expectEqual(engine.Status.unavailable, response.status);
 }

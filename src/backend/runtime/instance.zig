@@ -114,7 +114,6 @@ pub const Runtime = struct {
             .proxy_runtime = &runtime.resources.proxy,
             .agent_description_options = options.agent_descriptions,
             .engine_service = runtime.resources.engineService(),
-            .engine_options = options.engine,
             .launch_fault = options.launch_fault,
             .clients = runtime.resources.clients,
             .graphics = options.graphics,

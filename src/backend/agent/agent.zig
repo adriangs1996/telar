@@ -275,6 +275,16 @@ pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
         return false;
     }
 
+    // Codex runs `Stop` hooks before other hooks may continue the turn. Only
+    // the newer input prompt proves that its conservative working report ended.
+    if (signal.provider == .codex and signal.status == .ready and signal.ready_confirmed) {
+        if (agent.report) |report| {
+            if (report.status == .working and observation.observed_at_ms > report.observed_at_ms) {
+                agent.report = null;
+            }
+        }
+    }
+
     agent.screen = Evidence.fromScreen(known_provider, &observation);
 
     if (signal.status == .blocked) {

@@ -2,10 +2,11 @@
 
 `runtime.engine` gives the runtime one headless agent it can ask questions
 without opening a pane: Pi in RPC mode, or any command that speaks the same
-JSON-lines contract. The first feature on it is session titles, which used to
-start one `agent_descriptions` subprocess per request; the second is the
-[command suggestion](suggest-command.md) palette. Every request carries a
-`Purpose` that says who asked, so replies route without runtime state.
+JSON-lines contract. Its only feature today is the
+[command suggestion](suggest-command.md) palette; session titles keep their
+own one-shot `agent_descriptions` command and never touch the engine. Every
+request carries a `Purpose` that says who asked, so replies route without
+runtime state.
 
 ## End-to-end path
 
@@ -18,10 +19,10 @@ telar server: Launch.engine_options -> runtime Options.engine
         |
 Resources.engine (resources/engine.zig) starts the engine.Service actor
         |
-first user request in an agent pane -> description coordinator -> port.start
+prefix+? in a client -> suggest_command -> routeSuggestCommand
         |
-AgentEvents.startEngineDescription: description.titlePrompt -> engine.Prompt
-        |                                                   (purpose = title{pane, session})
+suggestion.buildPrompt -> engine.Prompt (purpose = suggestion{client, request})
+        |
 Service.submit (bounded ring, never blocks the runtime)
         |
 actor: Session.open (spawn on first prompt, cwd "/") -> rpc.encodePrompt ->
@@ -29,7 +30,7 @@ actor: Session.open (spawn on first prompt, cwd "/") -> rpc.encodePrompt ->
         |
 Event.engine_response (observation path) -> AgentEvents.handleEngineResponse
         |
-description.resultFromReply -> handleDescription -> title persisted, clients pumped
+deliverSuggestion -> command_suggestion queued for that client, clients pumped
 ```
 
 ## Ownership and budgets
@@ -39,7 +40,7 @@ routed by the `Purpose` carried in each request, so the runtime keeps no
 per-request state. Prompts and replies are fixed-size (`max_prompt_bytes`,
 `max_reply_bytes`); the request and response rings hold
 `max_pending_requests` entries and `submit` refuses instead of blocking. A
-refused title request fails that title like a generator failure would.
+refused request answers its feature with a status instead of waiting.
 
 Everything runs on the observation path. The actor parses one JSON record at
 a time with the runtime allocator, drops records above `rpc.max_line_bytes`
@@ -54,8 +55,8 @@ is queued only while a child is alive and no check is pending.
 
 Prompts never enter process arguments and the child starts from `/`, so
 project context files, trust prompts and tool access are exactly the flags
-written in `config.lua`. Configuring the engine is a privacy opt-in: title
-prompts carry the user's first request.
+written in `config.lua`. Configuring the engine is a privacy opt-in: each
+feature documents what its prompt carries.
 
 ## Contract with Pi
 
@@ -71,9 +72,12 @@ working, and a Pi that renames one of these four degrades to a timeout.
 
 - `src/backend/engine/rpc.zig` proves encoding, escaping and record
   classification.
-- `src/backend/engine/root.zig` proves child reuse, idle kill, timeout,
-  rejection, child exit, empty and oversized replies, missing binary, ring
-  capacity and actor shutdown against a shell fake of the RPC contract.
+- `src/backend/engine/session.zig` proves the dialogue against a shell fake
+  of the RPC contract: settled text, timeout, rejection, child exit, empty
+  and oversized replies.
+- `src/backend/engine/service.zig` proves child reuse, idle kill, which
+  failures discard the child, missing binary, ring capacity and actor
+  shutdown.
 - `src/backend/runtime/resources/engine.zig` and `worker_lifecycle.zig` prove
   ownership rollback and teardown order.
 - `src/frontend/config/root.zig` proves parsing and bounds.

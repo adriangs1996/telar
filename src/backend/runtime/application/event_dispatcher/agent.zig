@@ -3,7 +3,6 @@
 const std = @import("std");
 const agent_mod = @import("../../../agent/root.zig");
 const engine = @import("../../../engine/root.zig");
-const pane_mod = @import("../../../pane/root.zig");
 const proxy_mod = @import("../../../proxy/root.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 const suggestion = @import("../suggestion.zig");
@@ -77,8 +76,7 @@ pub fn Dispatcher(comptime Application: type) type {
 
         const RuntimeAgentDescriptionCoordinator = agent_description_coordinator.Coordinator(Application, agent_description_runtime_port);
 
-        /// Applies one engine reply and rearms the engine receive. Title
-        /// replies enter the description coordinator like a one-shot result.
+        /// Applies one engine reply and rearms the engine receive.
         ///
         /// ```zig
         /// try AgentEvents.handleEngineResponse(&application, result);
@@ -90,7 +88,6 @@ pub fn Dispatcher(comptime Application: type) type {
             try sources.receiveEngine(service);
 
             switch (response.purpose) {
-                .title => |title| handleDescription(application, describeFromEngine(title, &response)),
                 .suggestion => |target| deliverSuggestion(application, target, &response),
             }
         }
@@ -133,29 +130,8 @@ pub fn Dispatcher(comptime Application: type) type {
             service.requestIdleCheck(application.io);
         }
 
-        fn describeFromEngine(title: engine.Purpose.Title, response: *const engine.Response) agent_mod.description.Result {
-            const pane: pane_mod.PaneKey = .{ .id = @enumFromInt(title.pane_id), .generation = title.pane_generation };
-            return switch (response.status) {
-                .success => agent_mod.description.resultFromReply(pane, title.session_id, response.textSlice()),
-                .unavailable, .timeout, .invalid_output, .failed => |status| .{
-                    .pane = pane,
-                    .session_id = title.session_id,
-                    .status = switch (status) {
-                        .unavailable => .unavailable,
-                        .timeout => .timeout,
-                        .invalid_output => .invalid_output,
-                        else => .failed,
-                    },
-                },
-            };
-        }
-
-        /// The generator the coordinator may start: the engine when one is
-        /// configured, otherwise the one-shot description command.
         fn agentDescriptionCoordinator(application: *Application) RuntimeAgentDescriptionCoordinator {
-            const command: ?agent_mod.description.Command = if (application.engine_options) |options|
-                .{ .arguments = options.arguments, .timeout_ms = options.timeout_ms }
-            else if (application.agent_description_options) |options|
+            const command: ?agent_mod.description.Command = if (application.agent_description_options) |options|
                 .{ .arguments = options.arguments, .timeout_ms = options.timeout_ms }
             else
                 null;
@@ -171,31 +147,11 @@ pub fn Dispatcher(comptime Application: type) type {
             var job = job_value;
             defer std.crypto.secureZero(u8, &job.query);
 
-            if (application.engine_service) |service| {
-                return startEngineDescription(application, service, &job);
-            }
-
             try application.select.concurrent(
                 .agent_description,
                 agent_mod.description.generate,
                 .{ application.io, application.gpa, .{ .command = command, .job = job } },
             );
-        }
-
-        fn startEngineDescription(application: *Application, service: *engine.Service, job: *const agent_mod.description.Job) !void {
-            var prompt_buffer: [agent_mod.description.max_title_prompt_bytes]u8 = undefined;
-            defer std.crypto.secureZero(u8, &prompt_buffer);
-            const purpose: engine.Purpose = .{ .title = .{
-                .pane_id = @intFromEnum(job.pane.id),
-                .pane_generation = job.pane.generation,
-                .session_id = job.session_id,
-            } };
-            var request: engine.Request = .{ .prompt = try engine.Prompt.init(purpose, agent_mod.description.titlePrompt(job, &prompt_buffer)) };
-            defer std.crypto.secureZero(u8, &request.prompt.bytes);
-
-            if (!service.submit(application.io, request)) {
-                return error.EngineBusy;
-            }
         }
 
         fn persistAgentDescription(application: *Application, finished: agent_mod.DescriptionFinished) void {

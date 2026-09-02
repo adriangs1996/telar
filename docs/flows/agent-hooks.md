@@ -48,7 +48,8 @@ a new session reference marks the session checkpoint dirty
 | `UserPromptSubmit` | `working` |
 | `PermissionRequest` | `blocked` |
 | `PostToolUse` | `working`, recovering from a resolved permission request |
-| `Stop`, `Interrupt` | `ready` |
+| `Stop` | `working`; a confirmed input prompt closes the turn |
+| `Interrupt` | `ready` |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
 | any event with `agent_id` (subagent) | ignored |
 
@@ -97,6 +98,11 @@ The runtime keeps the report as `Agent.report`, the first evidence
 `working_expiry_ms`, other states with `settled_expiry_ms`; `applyProcess`
 clears it when a different process takes the pane. Sounds follow the same
 transition rule as screen evidence.
+
+Codex runs every matching `Stop` hook before it decides whether another hook
+will continue the turn. A `Stop` report therefore keeps the agent `working`.
+A newer, explicit Codex input prompt withdraws that report and projects
+`done`; a continuation produces no prompt and no premature notification.
 
 `telar integration` edits only the event arrays owned by the selected agent,
 adds an entry once per event, removes only entries whose command ends in

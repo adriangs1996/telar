@@ -121,7 +121,8 @@ pub fn mapClaudeHook(input: ClaudeHookInput) ?Report {
 }
 
 /// Maps one Codex hook event to a report. Subagent events are ignored. A
-/// compacted session remains working because compaction happens inside a turn.
+/// compacted session and `Stop` remain working because neither event proves
+/// that Codex returned to its input prompt.
 ///
 /// ```zig
 /// const report = mapCodexHook(input) orelse return;
@@ -144,7 +145,11 @@ pub fn mapCodexHook(input: CodexHookInput) ?Report {
     if (std.mem.eql(u8, event, "PermissionRequest")) {
         return .{ .state = .blocked, .session = session };
     }
-    if (std.mem.eql(u8, event, "Stop") or std.mem.eql(u8, event, "Interrupt")) {
+    if (std.mem.eql(u8, event, "Stop")) {
+        return .{ .state = .working, .session = session };
+    }
+
+    if (std.mem.eql(u8, event, "Interrupt")) {
         return .{ .state = .ready, .session = session };
     }
     if (std.mem.eql(u8, event, "SessionEnd")) {
@@ -249,7 +254,7 @@ test "Codex hook events map to reports and subagents are ignored" {
     try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "UserPromptSubmit" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.blocked, mapCodexHook(.{ .hook_event_name = "PermissionRequest" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "PostToolUse" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.ready, mapCodexHook(.{ .hook_event_name = "Stop" }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "Stop" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.ready, mapCodexHook(.{ .hook_event_name = "Interrupt" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.exited, mapCodexHook(.{ .hook_event_name = "SessionEnd" }).?.state);
     try std.testing.expect(mapCodexHook(.{ .hook_event_name = "PreToolUse" }) == null);

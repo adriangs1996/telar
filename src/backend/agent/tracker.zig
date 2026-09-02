@@ -610,6 +610,75 @@ test "explicit Codex prompt settles working without repetition" {
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
 }
 
+test "Codex Stop stays working until a newer input prompt confirms completion" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(tracker.observeProcess(.{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 42,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(tracker.observeReport(.{
+        .identity = identity,
+        .state = .working,
+        .observed_at_ms = 200,
+    }));
+
+    try std.testing.expect(tracker.observeReport(.{
+        .identity = identity,
+        .state = .working,
+        .observed_at_ms = 300,
+    }));
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+
+    try std.testing.expect(tracker.observeScreen(.{
+        .identity = identity,
+        .signal = .{
+            .provider = .codex,
+            .status = .ready,
+            .confidence = 94,
+            .identity_confirmed = true,
+            .ready_confirmed = true,
+        },
+        .observed_at_ms = 400,
+    }));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = tracker.snapshot(&entries);
+    try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+}
+
+test "an older Codex prompt cannot overrule current lifecycle work" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    try std.testing.expect(tracker.observeProcess(.{
+        .identity = identity,
+        .provider = .codex,
+        .process_id = 42,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(tracker.observeReport(.{
+        .identity = identity,
+        .state = .working,
+        .observed_at_ms = 300,
+    }));
+
+    try std.testing.expect(!tracker.observeScreen(.{
+        .identity = identity,
+        .signal = .{
+            .provider = .codex,
+            .status = .ready,
+            .confidence = 94,
+            .identity_confirmed = true,
+            .ready_confirmed = true,
+        },
+        .observed_at_ms = 200,
+    }));
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+}
+
 test "agent branding alone does not settle working" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();

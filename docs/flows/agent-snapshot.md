@@ -73,7 +73,7 @@ every reported current identity, the delivery handler enters
 attachment shelf and re-offers pane geometry only if the shelf appeared,
 disappeared or moved to another pane, delegating active-tab selection to
 `OfferActivePaneGeometryHandler`; it cannot emit child focus reports. Delivery
-then translates transitions to `blocked`, `ready` or `failed` into notification
+then translates transitions to `blocked`, `done` or `failed` into notification
 inputs and emits at most the notification center capacity. Failure in a
 delivery stage does not roll back the committed runtime state.
 

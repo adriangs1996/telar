@@ -37,7 +37,6 @@ const RuntimeModel = model.RuntimeModel;
 const ClientAdmissionState = client_mod.admission.State(core.transport.SocketChannel);
 const RuntimeMetrics = observability.telemetry.RuntimeMetrics;
 const AgentDescriptionOptions = runtime_config.AgentDescriptionOptions;
-const EngineOptions = runtime_config.EngineOptions;
 const LaunchTestFault = runtime_config.LaunchTestFault;
 const ClientKey = client_mod.session.Key;
 const ClientSession = client_mod.session.Session;
@@ -70,7 +69,6 @@ pub const Initialization = struct {
     proxy_runtime: *proxy_resource.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
     engine_service: ?*engine.Service = null,
-    engine_options: ?EngineOptions = null,
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     graphics: runtime_config.GraphicsLimits,
@@ -105,10 +103,8 @@ pub const Application = struct {
     proxy_runtime: *proxy_resource.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
     agent_description_state: agent_description_coordinator.State = .{},
-    /// The headless engine, when `runtime.engine` is configured. Titles go
-    /// here instead of a one-shot description command.
+    /// The headless engine, when `runtime.engine` is configured.
     engine_service: ?*engine.Service,
-    engine_options: ?EngineOptions,
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     client_admission: ClientAdmissionState = .{},
@@ -147,7 +143,6 @@ pub const Application = struct {
             .proxy_runtime = initialization.proxy_runtime,
             .agent_description_options = initialization.agent_description_options,
             .engine_service = initialization.engine_service,
-            .engine_options = initialization.engine_options,
             .launch_fault = initialization.launch_fault,
             .clients = initialization.clients,
             .model = .{

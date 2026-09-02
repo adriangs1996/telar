@@ -42,8 +42,7 @@ pub const Options = struct {
     history_output_capture: bool = false,
     proxy: ?ProxyOptions = null,
     agent_descriptions: ?AgentDescriptionOptions = null,
-    /// When set, session titles come from the engine instead of a one-shot
-    /// `agent_descriptions` command.
+    /// The headless agent behind features like command suggestion.
     engine: ?EngineOptions = null,
     /// Agent identification rules; the built-in table unless configured.
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
