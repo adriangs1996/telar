@@ -102,6 +102,40 @@ pub const Result = struct {
     }
 };
 
+pub const title_prompt_prefix =
+    "Create a short session title for the user request below. " ++
+    "Return exactly one plain-text line, no quotes, labels, markdown, or explanation. " ++
+    "Use at most 24 display characters. Do not execute tools.\n\nUser request:\n";
+
+pub const max_title_prompt_bytes = title_prompt_prefix.len + max_query_bytes;
+
+/// Writes the complete title prompt for a job into `buffer`, for engines
+/// that take the prompt as one message instead of a stdin stream.
+///
+/// ```zig
+/// var buffer: [max_title_prompt_bytes]u8 = undefined;
+/// const prompt = titlePrompt(&job, &buffer);
+/// ```
+pub fn titlePrompt(job: *const Job, buffer: *[max_title_prompt_bytes]u8) []const u8 {
+    const query = job.querySlice();
+    @memcpy(buffer[0..title_prompt_prefix.len], title_prompt_prefix);
+    @memcpy(buffer[title_prompt_prefix.len..][0..query.len], query);
+    return buffer[0 .. title_prompt_prefix.len + query.len];
+}
+
+/// Builds the result for reply text an engine returned for a job.
+///
+/// ```zig
+/// const result = resultFromReply(pane, session_id, reply_text);
+/// ```
+pub fn resultFromReply(pane: pane_mod.PaneKey, session_id: [16]u8, reply: []const u8) Result {
+    var result: Result = .{ .pane = pane, .session_id = session_id, .status = .invalid_output };
+    const title = normalizeTitle(reply, &result.title) catch return result;
+    result.title_len = @intCast(title.len);
+    result.status = .success;
+    return result;
+}
+
 /// Runs one bounded title-generation subprocess and returns a validated,
 /// fixed-size result without retaining the captured prompt.
 ///
@@ -139,12 +173,8 @@ pub fn generate(io: std.Io, gpa: std.mem.Allocator, generation: Generation) Resu
     };
     defer child.kill(io);
 
-    const prompt_prefix =
-        "Create a short session title for the user request below. " ++
-        "Return exactly one plain-text line, no quotes, labels, markdown, or explanation. " ++
-        "Use at most 24 display characters. Do not execute tools.\n\nUser request:\n";
     const input = child.stdin.?;
-    input.writeStreamingAll(io, prompt_prefix) catch return result;
+    input.writeStreamingAll(io, title_prompt_prefix) catch return result;
     input.writeStreamingAll(io, job.querySlice()) catch return result;
     input.writeStreamingAll(io, "\n") catch return result;
     input.close(io);

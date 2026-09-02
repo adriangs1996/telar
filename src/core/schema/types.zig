@@ -183,6 +183,22 @@ pub const FailureCode = enum(u16) {
     pane_exited = 10,
 };
 
+/// Outcome of asking the runtime's engine for a command suggestion. Failures
+/// travel in the reply itself so the palette shows them without consuming a
+/// request continuation.
+pub const SuggestionStatus = enum(u8) {
+    ready = 0,
+    /// No engine is configured or its command cannot start.
+    unavailable = 1,
+    timeout = 2,
+    failed = 3,
+};
+
+/// Bound for the user's request text in `suggest_command`.
+pub const max_suggestion_request_bytes = 512;
+/// Bound for the suggested command line in `command_suggestion`.
+pub const max_suggestion_bytes = 1024;
+
 /// Rows a text read covers: the visible screen, or the most recent rows of
 /// scrollback plus screen.
 pub const PaneTextSource = enum(u8) {
@@ -286,11 +302,12 @@ pub const AgentProvider = enum(u8) {
     unknown = 0,
     claude = 1,
     codex = 2,
+    pi = 3,
     _,
 };
 
 pub const max_agent_manifests = 16;
-pub const first_custom_agent_provider: u8 = 3;
+pub const first_custom_agent_provider: u8 = 4;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
 /// Bound for an agent's own session reference as reported by its hooks.

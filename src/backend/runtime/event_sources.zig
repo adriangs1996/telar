@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const engine = @import("../engine/root.zig");
 const history = @import("../history/root.zig");
 const proxy_mod = @import("../proxy/root.zig");
 const transport = @import("../transport/root.zig");
@@ -61,6 +62,15 @@ pub const Sources = struct {
         try sources.select.concurrent(.history_response, history.Service.receiveResponse, .{ history_service, sources.io });
     }
 
+    /// Arms the next engine reply receive.
+    ///
+    /// ```zig
+    /// try sources.receiveEngine(engine_service);
+    /// ```
+    pub fn receiveEngine(sources: *Sources, engine_service: *engine.Service) !void {
+        try sources.select.concurrent(.engine_response, engine.Service.receiveResponse, .{ engine_service, sources.io });
+    }
+
     /// Arms the next proxy observation when the proxy is active.
     ///
     /// ```zig
@@ -105,6 +115,7 @@ pub const InitialSources = struct {
     listener: *transport.local.LocalListener,
     stop_signal: *stop_signal_mod.Coordinator,
     history_service: *history.Service,
+    engine_service: ?*engine.Service = null,
     proxy_runtime: *proxy_resource.Runtime,
     telemetry_available: bool,
 
@@ -117,6 +128,9 @@ pub const InitialSources = struct {
         try initial_sources.sources.acceptClient(initial_sources.listener);
         try initial_sources.sources.waitForStop(initial_sources.stop_signal);
         try initial_sources.sources.receiveHistory(initial_sources.history_service);
+        if (initial_sources.engine_service) |engine_service| {
+            try initial_sources.sources.receiveEngine(engine_service);
+        }
         try initial_sources.sources.receiveProxyObservation(initial_sources.proxy_runtime);
         try initial_sources.sources.waitForAgentMaintenance();
         try initial_sources.sources.waitForSystemMetrics();

@@ -113,6 +113,7 @@ fn providerName(provider: schema.AgentProvider) []const u8 {
     return switch (provider) {
         .claude => "Claude",
         .codex => "Codex",
+        .pi => "Pi",
         else => "Agent",
     };
 }

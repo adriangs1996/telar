@@ -373,6 +373,7 @@ fn providerLabel(agent: *const agents.Agent) []const u8 {
         .unknown => "Agent",
         .claude => "Claude Code",
         .codex => "Codex",
+        .pi => "Pi",
         else => agent.providerName(),
     };
 }
@@ -381,6 +382,7 @@ fn fallbackTitle(provider: schema.AgentProvider) []const u8 {
     return switch (provider) {
         .claude => "New Claude Code session",
         .codex => "New Codex session",
+        .pi => "New Pi session",
         else => "New agent session",
     };
 }

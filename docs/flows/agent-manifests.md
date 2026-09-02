@@ -2,7 +2,7 @@
 
 Which processes are agents and which screen phrases mean working, blocked or
 ready is data, not code. `telar-core` owns a bounded manifest table with
-built-in entries for `claude` and `codex`; `config.runtime.agents` adds agents
+built-in entries for `claude`, `codex` and `pi`; `config.runtime.agents` adds agents
 or extends the built-in phrase lists without a rebuild.
 
 ## End-to-end path
@@ -60,6 +60,15 @@ error, never a partially loaded table.
 Proxy provider identification is unchanged: only the built-in providers have
 network-side turn detection, because parsing an SSE stream is provider code,
 not a phrase list.
+
+The proxy names the API family it saw on the wire, not the agent. Pi talks to
+Anthropic, OpenAI or other hosts from one process, so once a process has
+claimed a pane its exchanges count whatever the host says; the wire family
+only decides identity while no process is known. `pi` is the third built-in
+manifest. It is identified by its executable name and the
+`pi-coding-agent` entry-point path under either npm scope, and it carries no
+screen phrases or brand word because Pi renders no permission prompts and the
+word "pi" occurs inside "api" and "pipe".
 
 ## Proof
 

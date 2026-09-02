@@ -436,6 +436,7 @@ pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: schema.Age
     const template: []const u8 = switch (provider) {
         .claude => "claude --resume ",
         .codex => "codex resume ",
+        .pi => "pi --session ",
         else => return null,
     };
     const len = template.len + session.len + 1;
@@ -463,7 +464,8 @@ test "resume commands exist only for built-in providers and UUID references" {
 
     try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session).?);
     try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
-    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(3), session) == null);
+    try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session).?);
+    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(schema.first_custom_agent_provider), session) == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid") == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g") == null);
 }

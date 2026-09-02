@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const coordinators = @import("coordinators/root.zig");
 const agent_description_coordinator = coordinators.agent_description;
 const history = @import("../../history/root.zig");
+const engine = @import("../../engine/root.zig");
 const attachment_mod = @import("../attachment/root.zig");
 const client_mod = @import("../client/root.zig");
 const runtime_config = @import("../config.zig");
@@ -36,6 +37,7 @@ const RuntimeModel = model.RuntimeModel;
 const ClientAdmissionState = client_mod.admission.State(core.transport.SocketChannel);
 const RuntimeMetrics = observability.telemetry.RuntimeMetrics;
 const AgentDescriptionOptions = runtime_config.AgentDescriptionOptions;
+const EngineOptions = runtime_config.EngineOptions;
 const LaunchTestFault = runtime_config.LaunchTestFault;
 const ClientKey = client_mod.session.Key;
 const ClientSession = client_mod.session.Session;
@@ -67,6 +69,8 @@ pub const Initialization = struct {
     agent_manifests: *const core.agent_manifest.Table,
     proxy_runtime: *proxy_resource.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
+    engine_service: ?*engine.Service = null,
+    engine_options: ?EngineOptions = null,
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     graphics: runtime_config.GraphicsLimits,
@@ -101,6 +105,10 @@ pub const Application = struct {
     proxy_runtime: *proxy_resource.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
     agent_description_state: agent_description_coordinator.State = .{},
+    /// The headless engine, when `runtime.engine` is configured. Titles go
+    /// here instead of a one-shot description command.
+    engine_service: ?*engine.Service,
+    engine_options: ?EngineOptions,
     launch_fault: ?*LaunchTestFault,
     clients: *ClientStore,
     client_admission: ClientAdmissionState = .{},
@@ -138,6 +146,8 @@ pub const Application = struct {
             .session = .{ .path = initialization.session_path, .resume_agents = initialization.resume_agents },
             .proxy_runtime = initialization.proxy_runtime,
             .agent_description_options = initialization.agent_description_options,
+            .engine_service = initialization.engine_service,
+            .engine_options = initialization.engine_options,
             .launch_fault = initialization.launch_fault,
             .clients = initialization.clients,
             .model = .{

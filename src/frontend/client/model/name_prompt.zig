@@ -22,6 +22,9 @@ pub const Target = union(enum) {
     goto,
     /// History palette; results live in the history-palette model state.
     history,
+    /// Command-suggestion palette; the reply lives in the suggestion model
+    /// state and Enter asks or pastes depending on it.
+    suggest,
 };
 
 pub const Begin = union(enum) {
@@ -37,6 +40,7 @@ pub const Begin = union(enum) {
     },
     goto_picker,
     history_palette,
+    suggest_palette,
 };
 
 pub const HistoryScope = enum(u8) {
@@ -147,6 +151,10 @@ pub const State = struct {
             },
             .history_palette => .{
                 .target = .history,
+                .field = .init(""),
+            },
+            .suggest_palette => .{
+                .target = .suggest,
                 .field = .init(""),
             },
         };
@@ -322,8 +330,10 @@ pub const State = struct {
 };
 
 /// Targets whose prompt drives a list selection instead of a plain name.
+/// The suggestion palette lists one row, so Enter on an empty field can
+/// still paste it.
 fn selects(target: Target) bool {
-    return target == .goto or target == .history;
+    return target == .goto or target == .history or target == .suggest;
 }
 
 const FieldPosition = struct {
@@ -452,4 +462,19 @@ test "the history palette cycles scope with Tab and only there" {
 
     state.begin(.create_workspace);
     try std.testing.expect(state.apply(.cycle_scope) == .unchanged);
+}
+
+test "the suggestion palette submits empty fields and ignores history-only commands" {
+    var state: State = .{};
+    state.begin(.suggest_palette);
+    try std.testing.expectEqual(Target.suggest, state.currentConst().?.target);
+
+    try std.testing.expect(state.apply(.cycle_scope) == .unchanged);
+    try std.testing.expect(state.apply(.remove_entry) == .unchanged);
+    try std.testing.expect(state.apply(.submit) == .submitted);
+    try std.testing.expect(state.apply(.{ .insert = "list files" }) == .changed);
+    const submitted = state.apply(.submit).submitted;
+    try std.testing.expectEqualStrings("list files", submitted.name);
+    try std.testing.expect(state.finish(.suggest));
+    try std.testing.expect(!state.active());
 }

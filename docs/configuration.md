@@ -96,6 +96,33 @@ agent_descriptions = {
 }
 ```
 
+`runtime.engine` keeps one headless agent process alive between prompts
+instead of starting a command per request. It speaks Pi's RPC contract (JSON
+lines over stdin and stdout) and is the same privacy opt-in as
+`agent_descriptions`: when both are configured, session titles go to the
+engine. The child starts on the first prompt from `/`, never from a
+repository, and is killed after `idle_timeout_ms` without work (10000 to
+3600000, default 300000) or after any protocol failure. `command` and
+`timeout_ms` follow the `agent_descriptions` bounds. Run the engine without
+tools and without project context unless a feature needs them:
+
+```lua
+engine = {
+  command = {
+    "pi", "--mode", "rpc", "--no-session", "--no-tools",
+    "--no-extensions", "--no-skills", "--no-context-files",
+  },
+  timeout_ms = 20000,
+  idle_timeout_ms = 300000,
+}
+```
+
+See [Agent engine](flows/engine.md) for the runtime path. With an engine
+configured, `prefix+?` (`telar.action.suggest_command()`) opens the
+[command suggestion](flows/suggest-command.md) palette: it sends the focused
+pane's working directory, its last visible rows and your request to the
+engine, and Enter pastes the answer without running it.
+
 `client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd
 Font theme uses a glyph subset embedded in Telar and does not require a Nerd
 Font in the host terminal. It needs Kitty Graphics support and RGB theme

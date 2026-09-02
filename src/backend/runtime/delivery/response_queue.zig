@@ -15,6 +15,19 @@ pub const PendingFailure = struct {
     message: []const u8,
 };
 
+/// One engine reply for a command suggestion, copied out of the engine
+/// response so the queue owns it.
+pub const PendingSuggestion = struct {
+    request_id: schema.RequestId,
+    status: schema.SuggestionStatus,
+    text: [schema.max_suggestion_bytes]u8 = undefined,
+    text_len: u16 = 0,
+
+    pub fn textSlice(pending: *const PendingSuggestion) []const u8 {
+        return pending.text[0..pending.text_len];
+    }
+};
+
 pub const PendingTabSnapshot = struct {
     request_id: schema.RequestId,
     location: schema.TabLocation,
@@ -122,6 +135,7 @@ pub const PendingResponse = union(enum) {
     history_stats: *history.model.StatsResult,
     pane_focus_command: schema.PaneFocusCommand,
     pane_focus_result: schema.PaneFocusResult,
+    command_suggestion: PendingSuggestion,
 };
 
 pub const ResponseQueue = struct {

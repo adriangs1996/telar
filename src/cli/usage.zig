@@ -24,8 +24,8 @@ pub const text =
     \\       telar pane focus --current --direction left|right|up|down [--json]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar api schema [--json]
-    \\       telar integration install|uninstall|status claude|codex [--settings PATH]
-    \\       telar hook claude|codex
+    \\       telar integration install|uninstall|status claude|codex|pi [--settings PATH]
+    \\       telar hook claude|codex|pi
     \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.
@@ -54,7 +54,7 @@ pub const text =
     \\  pane focus       Move from Neovim into an adjacent Telar pane
     \\  workspace create Add a git worktree and open a workspace on it
     \\  api schema       Print the wire contract of this binary
-    \\  integration      Register telar's lifecycle hooks in an agent's settings
+    \\  integration      Register telar's lifecycle reports with an agent (claude hooks, pi extension)
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)
     \\  --skill          Print the bundled agent skill
     \\  config check     Compile and validate config.lua, then exit

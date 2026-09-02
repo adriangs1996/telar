@@ -1,6 +1,7 @@
 //! `telar integration install|uninstall|status <agent>`: registers telar's
-//! hook command in an agent's settings so its lifecycle reaches the runtime
-//! as official reports.
+//! lifecycle reporting with an agent so its official events reach the
+//! runtime. Claude Code and Codex get a command hook in their settings
+//! files; Pi gets a Telar extension in its global extension directory.
 
 const std = @import("std");
 const parser = @import("parser.zig");
@@ -8,11 +9,18 @@ const parser = @import("parser.zig");
 const Io = std.Io;
 const File = Io.File;
 const max_settings_bytes = 4 * 1024 * 1024;
+const max_extension_bytes = 64 * 1024;
 
 pub const claude_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "Stop", "Notification", "SessionEnd" };
 pub const codex_events = [_][]const u8{ "SessionStart", "UserPromptSubmit", "PermissionRequest", "PostToolUse", "Stop", "Interrupt", "SessionEnd" };
 pub const claude_marker = " hook claude";
 pub const codex_marker = " hook codex";
+
+/// First line of the extension Telar writes for Pi; uninstall touches only
+/// files that start with it.
+pub const pi_marker = "// telar-integration: pi";
+pub const pi_extension_template = @embedFile("integration/pi.ts");
+const pi_executable_placeholder = "\"__TELAR_EXECUTABLE__\"";
 
 const Integration = struct {
     name: []const u8,
@@ -37,6 +45,10 @@ pub const HookSet = struct {
 /// std.process.exit(try integration.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
+    if (options.agent == .pi) {
+        return runPi(init, options);
+    }
+
     const integration = integrationFor(options.agent);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = if (options.settings) |value|
@@ -114,7 +126,126 @@ fn integrationFor(agent: parser.HookAgent) Integration {
             .events = &codex_events,
             .timeout_seconds = 3,
         },
+        // Pi has no hook settings; `run` dispatches it to `runPi` first.
+        .pi => unreachable,
     };
+}
+
+/// Installs, removes or reports the Telar extension for Pi. `--settings`
+/// overrides the extension file path.
+fn runPi(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = if (options.settings) |value|
+        std.mem.span(value)
+    else
+        try piExtensionPath(init.minimal.environ, &path_buffer);
+    var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const executable = executable_buffer[0..try std.process.executablePath(init.io, &executable_buffer)];
+    var rendered_buffer: [max_extension_bytes]u8 = undefined;
+    const rendered = try renderPiExtension(&rendered_buffer, executable);
+    var output_buffer: [4096]u8 = undefined;
+    var output = File.stdout().writerStreaming(init.io, &output_buffer);
+    const writer = &output.interface;
+    defer writer.flush() catch {};
+
+    const existing: ?[]u8 = Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_extension_bytes)) catch |err| switch (err) {
+        error.FileNotFound => null,
+        else => return err,
+    };
+    defer if (existing) |bytes| init.gpa.free(bytes);
+    const ours = if (existing) |bytes| isTelarExtension(bytes) else false;
+
+    switch (options.action) {
+        .status => {
+            const state = if (existing == null) "absent" else if (ours) "installed" else "foreign";
+            try writer.print("telar extension: {s} at {s}\n", .{ state, path });
+            return 0;
+        },
+        .install => {
+            if (existing) |bytes| {
+                if (std.mem.eql(u8, bytes, rendered)) {
+                    try writer.print("telar integration: pi extension already present at {s}\n", .{path});
+                    return 0;
+                }
+
+                if (!ours) {
+                    std.debug.print("telar integration: {s} exists and is not telar's extension; move it first\n", .{path});
+                    return 1;
+                }
+            }
+
+            try installPiExtension(init.io, path, rendered);
+            try writer.print("telar integration: pi extension {s} at {s}\n", .{ if (existing == null) "installed" else "updated", path });
+            return 0;
+        },
+        .uninstall => {
+            if (existing == null) {
+                try writer.print("telar integration: pi extension not present at {s}\n", .{path});
+                return 0;
+            }
+
+            if (!ours) {
+                std.debug.print("telar integration: {s} is not telar's extension; left untouched\n", .{path});
+                return 1;
+            }
+
+            try Io.Dir.deleteFileAbsolute(init.io, path);
+            try writer.print("telar integration: pi extension removed from {s}\n", .{path});
+            return 0;
+        },
+    }
+}
+
+fn piExtensionPath(environ: std.process.Environ, buffer: *[std.fs.max_path_bytes]u8) ![]const u8 {
+    const home = std.process.Environ.getPosix(environ, "HOME") orelse return error.HomeUnavailable;
+    return std.fmt.bufPrint(buffer, "{s}/.pi/agent/extensions/telar.ts", .{home});
+}
+
+/// Fills the Telar executable path into the bundled Pi extension. The path
+/// is written as a JSON string, so any byte a path may contain stays inert
+/// inside the TypeScript literal.
+///
+/// ```zig
+/// const source = try renderPiExtension(&buffer, "/usr/local/bin/telar");
+/// ```
+pub fn renderPiExtension(buffer: []u8, executable: []const u8) ![]const u8 {
+    const placeholder = std.mem.indexOf(u8, pi_extension_template, pi_executable_placeholder) orelse return error.InvalidTemplate;
+    var writer: Io.Writer = .fixed(buffer);
+    try writer.print("{s}{f}{s}", .{
+        pi_extension_template[0..placeholder],
+        std.json.fmt(executable, .{}),
+        pi_extension_template[placeholder + pi_executable_placeholder.len ..],
+    });
+    return writer.buffered();
+}
+
+/// Reports whether a file was written by Telar, so uninstall never deletes
+/// a user's own extension at the same path.
+///
+/// ```zig
+/// if (!isTelarExtension(bytes)) return error.ForeignExtension;
+/// ```
+pub fn isTelarExtension(bytes: []const u8) bool {
+    return std.mem.startsWith(u8, bytes, pi_marker);
+}
+
+/// Creates the extension directory and replaces the file atomically with
+/// owner-only permissions.
+///
+/// ```zig
+/// try installPiExtension(io, "/home/me/.pi/agent/extensions/telar.ts", source);
+/// ```
+pub fn installPiExtension(io: Io, path: []const u8, source: []const u8) !void {
+    if (std.fs.path.dirname(path)) |directory| {
+        try Io.Dir.cwd().createDirPath(io, directory);
+    }
+
+    var temp = try TempFile.begin(io, path);
+    temp.file.writeStreamingAll(io, source) catch |err| {
+        temp.discard();
+        return err;
+    };
+    try temp.commit();
 }
 
 fn hookSetFor(integration: Integration, command: []const u8) HookSet {
@@ -282,24 +413,50 @@ fn ensureArray(arena: std.mem.Allocator, object: *std.json.ObjectMap, name: []co
     return object.getPtr(name).?;
 }
 
+/// An owner-only temporary next to `path`, renamed over it on commit.
+const TempFile = struct {
+    io: Io,
+    file: File,
+    path: []const u8,
+    temp_buffer: [std.fs.max_path_bytes]u8 = undefined,
+    temp_len: usize = 0,
+
+    fn begin(io: Io, path: []const u8) !TempFile {
+        var temp: TempFile = .{ .io = io, .file = undefined, .path = path };
+        const temp_path = try std.fmt.bufPrint(&temp.temp_buffer, "{s}.telar-tmp", .{path});
+        temp.temp_len = temp_path.len;
+        temp.file = try Io.Dir.createFileAbsolute(io, temp_path, .{ .truncate = true, .permissions = File.Permissions.fromMode(0o600) });
+        return temp;
+    }
+
+    fn tempPath(temp: *const TempFile) []const u8 {
+        return temp.temp_buffer[0..temp.temp_len];
+    }
+
+    fn commit(temp: *TempFile) !void {
+        temp.file.close(temp.io);
+        try Io.Dir.renameAbsolute(temp.tempPath(), temp.path, temp.io);
+    }
+
+    fn discard(temp: *TempFile) void {
+        temp.file.close(temp.io);
+        Io.Dir.deleteFileAbsolute(temp.io, temp.tempPath()) catch {};
+    }
+};
+
 fn writeSettings(io: Io, path: []const u8, settings: std.json.Value) !void {
-    var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const temp_path = try std.fmt.bufPrint(&temp_buffer, "{s}.telar-tmp", .{path});
-    const file = try Io.Dir.createFileAbsolute(io, temp_path, .{ .truncate = true, .permissions = File.Permissions.fromMode(0o600) });
+    var temp = try TempFile.begin(io, path);
     var buffer: [16 * 1024]u8 = undefined;
-    var file_writer = file.writerStreaming(io, &buffer);
+    var file_writer = temp.file.writerStreaming(io, &buffer);
     file_writer.interface.print("{f}\n", .{std.json.fmt(settings, .{ .whitespace = .indent_2 })}) catch |err| {
-        file.close(io);
-        Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+        temp.discard();
         return err;
     };
     file_writer.interface.flush() catch |err| {
-        file.close(io);
-        Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+        temp.discard();
         return err;
     };
-    file.close(io);
-    try Io.Dir.renameAbsolute(temp_path, path, io);
+    try temp.commit();
 }
 
 test "Claude install adds telar hooks once and uninstall removes only them" {
@@ -363,4 +520,40 @@ test "Codex settings prefer CODEX_HOME while Claude uses HOME" {
 
     try std.testing.expectEqualStrings("/state/codex/hooks.json", try defaultSettingsPath(environ, integrationFor(.codex), &buffer));
     try std.testing.expectEqualStrings("/home/adrian/.claude/settings.json", try defaultSettingsPath(environ, integrationFor(.claude), &buffer));
+    try std.testing.expectEqualStrings("/home/adrian/.pi/agent/extensions/telar.ts", try piExtensionPath(environ, &buffer));
+}
+
+test "the Pi extension is rendered with the executable path as a string literal" {
+    var buffer: [max_extension_bytes]u8 = undefined;
+    const source = try renderPiExtension(&buffer, "/opt/tel\"ar/bin/telar");
+    try std.testing.expect(isTelarExtension(source));
+    try std.testing.expect(std.mem.indexOf(u8, source, "const TELAR = \"/opt/tel\\\"ar/bin/telar\";") != null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "__TELAR_EXECUTABLE__") == null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "[\"hook\", \"pi\"]") != null);
+    try std.testing.expect(!isTelarExtension("export default function () {}"));
+}
+
+test "the Pi extension is installed atomically under a fresh directory" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/agent/extensions/telar.ts", .{directory_buffer[0..directory_len]});
+
+    var source_buffer: [max_extension_bytes]u8 = undefined;
+    const source = try renderPiExtension(&source_buffer, "/opt/telar");
+    try installPiExtension(io, path, source);
+    try installPiExtension(io, path, source);
+
+    const written = try Io.Dir.cwd().readFileAlloc(io, path, std.testing.allocator, .limited(max_extension_bytes));
+    defer std.testing.allocator.free(written);
+    try std.testing.expectEqualStrings(source, written);
+    const stat = try Io.Dir.cwd().statFile(io, path, .{});
+    try std.testing.expectEqual(@as(u32, 0o600), @as(u32, @intCast(stat.permissions.toMode() & 0o777)));
+
+    var temp_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const temp_path = try std.fmt.bufPrint(&temp_path_buffer, "{s}.telar-tmp", .{path});
+    try std.testing.expectError(error.FileNotFound, Io.Dir.cwd().statFile(io, temp_path, .{}));
 }

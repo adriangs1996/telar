@@ -11,6 +11,7 @@ const input_capability = @import("../../input/root.zig");
 const notifications = @import("../../notifications/root.zig");
 const frontend_ui = @import("../../ui/root.zig");
 const history_palette_mod = @import("history_palette.zig");
+const suggestion_mod = @import("suggestion.zig");
 const name_prompt = @import("name_prompt.zig");
 const workspace_capability = @import("../../workspace/root.zig");
 
@@ -135,6 +136,7 @@ pub const Model = struct {
     workspace: tabs_mod.Model,
     name_prompt: name_prompt.State = .{},
     history_palette: history_palette_mod.State = .{},
+    suggestion: suggestion_mod.State = .{},
     workspace_revision: u64 = 0,
     configuration_generation: u64 = 0,
     window_title_template: [model_types.max_window_title_template_bytes]u8 = undefined,
@@ -270,6 +272,7 @@ pub const Model = struct {
             .chrome = model.chrome_revision,
             .prompt = model.name_prompt.version(),
             .history = model.history_palette.version(),
+            .suggestion = model.suggestion.version(),
             .copy = model.copy_revision,
             .viewport = model.viewport_revision,
         };

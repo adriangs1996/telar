@@ -63,6 +63,7 @@ pub const Agent = struct {
         return switch (agent.provider) {
             .claude => "claude",
             .codex => "codex",
+            .pi => "pi",
             else => "agent",
         };
     }

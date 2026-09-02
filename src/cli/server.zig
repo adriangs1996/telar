@@ -83,6 +83,8 @@ const Launch = struct {
     proxy_intercept_hosts: []const []const u8 = &.{},
     description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
     agent_description_options: ?backend.runtime.AgentDescriptionOptions = null,
+    engine_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
+    engine_options: ?backend.runtime.EngineOptions = null,
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     history_filters: core.history_filter.Filters = .{},
     history_output_capture: bool = false,
@@ -164,6 +166,13 @@ const Launch = struct {
                 .timeout_ms = runtime_config.agent_descriptions.timeout_ms,
             };
         }
+        if (runtime_config.engine.enabled()) {
+            launch.engine_options = .{
+                .arguments = runtime_config.engine.arguments(&launch.engine_arguments),
+                .timeout_ms = runtime_config.engine.timeout_ms,
+                .idle_timeout_ms = runtime_config.engine_idle_timeout_ms,
+            };
+        }
     }
 
     fn prepareRuntimeStorage(launch: *Launch) !void {
@@ -219,6 +228,7 @@ const Launch = struct {
                 .history_output_capture = launch.history_output_capture,
                 .proxy = launch.proxy_options,
                 .agent_descriptions = launch.agent_description_options,
+                .engine = launch.engine_options,
                 .agent_manifests = launch.agent_manifests,
                 .session_path = launch.session_path,
                 .resume_agents = launch.session_resume_agents,

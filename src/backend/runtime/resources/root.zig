@@ -7,6 +7,7 @@ const transport = @import("../../transport/root.zig");
 const client_store = @import("../client/root.zig").store;
 const config = @import("../config.zig");
 const history_runtime = @import("history.zig");
+const engine_runtime = @import("engine.zig");
 const attachment = @import("../attachment/root.zig");
 const proxy_runtime = @import("proxy.zig");
 const telemetry = @import("../observability/root.zig").telemetry;
@@ -21,6 +22,7 @@ const AcquisitionPhase = enum {
     telemetry,
     clients,
     history,
+    engine,
 };
 
 /// Owns runtime-wide physical resources acquired during startup.
@@ -36,6 +38,8 @@ pub const Resources = struct {
     telemetry: telemetry.State,
     clients: *client_store.Store,
     history: history_runtime.Runtime,
+    /// Present only when `runtime.engine` is configured.
+    engine: ?engine_runtime.Runtime,
 
     /// Acquires physical resources in dependency order and rolls back every
     /// completed acquisition if a later one fails.
@@ -84,6 +88,26 @@ pub const Resources = struct {
         });
         errdefer resources.history.deinit();
         try checkpoint(fail_after, .history);
+
+        resources.engine = if (initialization.options.engine) |options|
+            try engine_runtime.Runtime.init(resources.io(), resources.gpa, options)
+        else
+            null;
+        errdefer if (resources.engine) |*engine| engine.deinit();
+        try checkpoint(fail_after, .engine);
+    }
+
+    /// Borrows the engine service, or null when no engine is configured.
+    ///
+    /// ```zig
+    /// const service = resources.engineService() orelse return;
+    /// ```
+    pub fn engineService(resources: *Resources) ?*engine_runtime.Runtime.Service {
+        if (resources.engine) |*engine| {
+            return engine.service();
+        }
+
+        return null;
     }
 
     /// Returns the I/O implementation selected by the process root.
@@ -101,6 +125,7 @@ pub const Resources = struct {
     /// resources.deinitUnstarted();
     /// ```
     pub fn deinitUnstarted(resources: *Resources) void {
+        if (resources.engine) |*engine| engine.deinit();
         resources.history.deinit();
         resources.gpa.destroy(resources.clients);
         resources.telemetry.deinit(resources.io());

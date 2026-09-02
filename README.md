@@ -42,6 +42,10 @@ and plugin package live under [`examples/`](examples/).
 The [Neovim adapter](integrations/nvim/README.md) integrates Telar's
 navigation-aware `ctrl+h/j/k/l` action with `smart-splits.nvim`.
 
+The [Pi integration](integrations/pi/README.md) reports Pi's own lifecycle
+to the runtime through `telar integration install pi`, and `runtime.engine`
+keeps a headless Pi alive as Telar's model engine.
+
 ## Themes
 
 Vesper is the default client theme. Catppuccin Mocha, Tokyo Night, and a

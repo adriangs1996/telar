@@ -35,6 +35,9 @@ pub const max_agent_description_command_args = 32;
 pub const max_agent_description_command_bytes = 4096;
 pub const max_bar_callbacks = 64;
 pub const default_agent_description_timeout_ms: u32 = 15_000;
+pub const default_engine_idle_timeout_ms: u32 = 300_000;
+pub const min_engine_idle_timeout_ms: u32 = 10_000;
+pub const max_engine_idle_timeout_ms: u32 = 3_600_000;
 pub const min_agent_description_timeout_ms: u32 = 1_000;
 pub const max_agent_description_timeout_ms: u32 = 60_000;
 
@@ -65,7 +68,8 @@ pub const PluginSpec = struct {
     }
 };
 
-pub const AgentDescriptionCommand = struct {
+/// One configured subprocess: a bounded argv plus its deadline.
+pub const CommandSpec = struct {
     bytes: [max_agent_description_command_bytes]u8 = undefined,
     byte_len: u16 = 0,
     offsets: [max_agent_description_command_args]u16 = @splat(0),
@@ -73,18 +77,18 @@ pub const AgentDescriptionCommand = struct {
     argument_count: u8 = 0,
     timeout_ms: u32 = default_agent_description_timeout_ms,
 
-    pub fn enabled(command: *const AgentDescriptionCommand) bool {
+    pub fn enabled(command: *const CommandSpec) bool {
         return command.argument_count != 0;
     }
 
-    pub fn argument(command: *const AgentDescriptionCommand, index: usize) ?[]const u8 {
+    pub fn argument(command: *const CommandSpec, index: usize) ?[]const u8 {
         if (index >= command.argument_count) return null;
         const start = command.offsets[index];
         return command.bytes[start .. start + command.lengths[index]];
     }
 
     pub fn arguments(
-        command: *const AgentDescriptionCommand,
+        command: *const CommandSpec,
         storage: *[max_agent_description_command_args][]const u8,
     ) []const []const u8 {
         for (0..command.argument_count) |index| storage[index] = command.argument(index).?;
@@ -92,6 +96,7 @@ pub const AgentDescriptionCommand = struct {
     }
 };
 
+pub const AgentDescriptionCommand = CommandSpec;
 pub const SoundConfig = sound.Config;
 pub const NotificationDelivery = notifications.Delivery;
 
@@ -241,7 +246,9 @@ pub const RuntimeSnapshot = struct {
     proxy_ca_dir_bytes: [max_proxy_path_bytes]u8 = undefined,
     proxy_ca_dir_len: u16 = 0,
     proxy_intercept_hosts: ProxyInterceptHosts = defaultProxyInterceptHosts(),
-    agent_descriptions: AgentDescriptionCommand = .{},
+    agent_descriptions: CommandSpec = .{},
+    engine: CommandSpec = .{},
+    engine_idle_timeout_ms: u32 = default_engine_idle_timeout_ms,
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     history_filters: core.history_filter.Filters = .{},
     history_output_capture: bool = false,

@@ -110,16 +110,12 @@ pub const Table = struct {
     pub fn add(table: *Table, name: []const u8) AddError!*Manifest {
         if (!validName(name)) return error.InvalidName;
         if (table.findByName(name)) |existing| {
-            if (existing.provider == .claude or existing.provider == .codex) return existing;
+            if (isBuiltinProvider(existing.provider)) return existing;
             return error.DuplicateName;
         }
         if (table.count == max_agents) return error.TooManyAgents;
 
-        const provider: AgentProvider = if (std.mem.eql(u8, name, "claude"))
-            .claude
-        else if (std.mem.eql(u8, name, "codex"))
-            .codex
-        else
+        const provider: AgentProvider = builtinProvider(name) orelse
             @enumFromInt(first_custom_provider + table.customCount());
         const manifest = &table.items[table.count];
         manifest.* = .{ .provider = provider };
@@ -245,6 +241,26 @@ pub const Table = struct {
     }
 };
 
+/// Reports whether a provider ships with Telar. Only built-in providers may
+/// carry a session resume command and keep their index across configurations.
+///
+/// ```zig
+/// if (isBuiltinProvider(manifest.provider)) allowResume();
+/// ```
+pub fn isBuiltinProvider(provider: AgentProvider) bool {
+    return switch (provider) {
+        .claude, .codex, .pi => true,
+        else => false,
+    };
+}
+
+fn builtinProvider(name: []const u8) ?AgentProvider {
+    if (std.mem.eql(u8, name, "claude")) return .claude;
+    if (std.mem.eql(u8, name, "codex")) return .codex;
+    if (std.mem.eql(u8, name, "pi")) return .pi;
+    return null;
+}
+
 /// The agents Telar knows without configuration. Configuration may extend
 /// their phrase lists under the same names.
 pub const builtin_table: Table = buildBuiltin();
@@ -283,6 +299,21 @@ fn buildBuiltin() Table {
     for ([_][]const u8{ "/@openai/codex/", "\\@openai\\codex\\" }) |path| codex.process_paths.append(path) catch unreachable;
     codex.brand.append("codex") catch unreachable;
     codex.ready_prompt.append("ask codex to do anything") catch unreachable;
+
+    // Pi launches as `node .../pi-coding-agent/dist/bundle/cli.js`, so its
+    // entry-point path is the reliable identity; the package moved from the
+    // author's scope to the company's in 2026. Pi shows no permission prompts
+    // and no fixed status phrases, so it carries no screen heuristics and no
+    // brand word: "pi" would match "api" or "pipe" in any pane. Its state
+    // comes from process detection, the proxy and its own lifecycle reports.
+    const pi = table.add("pi") catch unreachable;
+    pi.process_names.append("pi") catch unreachable;
+    for ([_][]const u8{
+        "/@earendil-works/pi-coding-agent/",
+        "\\@earendil-works\\pi-coding-agent\\",
+        "/@mariozechner/pi-coding-agent/",
+        "\\@mariozechner\\pi-coding-agent\\",
+    }) |path| pi.process_paths.append(path) catch unreachable;
 
     return table;
 }
@@ -349,6 +380,29 @@ test "built-in table reproduces the historical Claude and Codex heuristics" {
     try std.testing.expectEqual(AgentProvider.codex, table.providerFromPath("/usr/lib/node_modules/@openai/codex/bin/codex.js").?);
     try std.testing.expectEqualStrings("codex", table.providerName(.codex));
     try std.testing.expectEqualStrings("unknown", table.providerName(.unknown));
+}
+
+test "built-in Pi is identified by its process and entry point only" {
+    const table = &builtin_table;
+
+    try std.testing.expectEqual(AgentProvider.pi, table.providerFromExecutable("pi").?);
+    try std.testing.expectEqual(AgentProvider.pi, table.providerFromPath("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js").?);
+    try std.testing.expectEqual(AgentProvider.pi, table.providerFromPath("/usr/lib/node_modules/@mariozechner/pi-coding-agent/dist/cli.js").?);
+    try std.testing.expectEqualStrings("pi", table.providerName(.pi));
+    try std.testing.expect(isBuiltinProvider(.pi));
+    try std.testing.expect(!isBuiltinProvider(@enumFromInt(first_custom_provider)));
+
+    // No brand word: a generic blocked phrase next to "api" stays unattributed.
+    const blocked = table.detect("api call pending [y/n]").?;
+    try std.testing.expectEqual(Status.blocked, blocked.status);
+    try std.testing.expectEqual(AgentProvider.unknown, blocked.provider);
+    try std.testing.expect(table.detect("pi> ") == null);
+
+    var extended = builtin_table;
+    const same = try extended.add("pi");
+    try std.testing.expectEqual(AgentProvider.pi, same.provider);
+    try same.working.append("thinking");
+    try std.testing.expectEqual(first_custom_provider, @intFromEnum((try extended.add("gemini")).provider));
 }
 
 test "custom agents receive stable provider indexes and extend built-ins by name" {

@@ -149,6 +149,11 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
         },
         .pane_focus_command => |command| try schema.encodePaneFocusCommand(buffer, command),
         .pane_focus_result => |result| try schema.encodePaneFocusResult(buffer, result),
+        .command_suggestion => |*suggested| try schema.encodeCommandSuggestion(buffer, .{
+            .request_id = suggested.request_id,
+            .status = suggested.status,
+            .text = suggested.textSlice(),
+        }),
     };
 }
 
@@ -201,4 +206,34 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
 
     try std.testing.expect(decoded == .request_failed);
     try std.testing.expectEqual(schema.FailureCode.workspace_not_found, decoded.request_failed.code);
+}
+
+test "a command suggestion encodes its owned text and a bare status" {
+    var workspaces: workspace.State = .{};
+    var panes: PaneStore = .{};
+    var buffer: [2048]u8 = undefined;
+    var history_result: ?*history.model.QueryResult = null;
+    var history_output: ?*history.model.OutputResult = null;
+    var history_stats: ?*history.model.StatsResult = null;
+    const context: EncodeContext = .{
+        .buffer = &buffer,
+        .panes = &panes,
+        .workspaces = workspace.Reader.init(&workspaces),
+        .history_result = &history_result,
+        .history_output = &history_output,
+        .history_stats = &history_stats,
+    };
+
+    var ready: PendingResponse = .{ .command_suggestion = .{ .request_id = @enumFromInt(41), .status = .ready } };
+    @memcpy(ready.command_suggestion.text[0..6], "ls -lS");
+    ready.command_suggestion.text_len = 6;
+    const decoded = try schema.decodeServer(try encodeResponse(context, &ready));
+    try std.testing.expect(decoded == .command_suggestion);
+    try std.testing.expectEqual(schema.SuggestionStatus.ready, decoded.command_suggestion.status);
+    try std.testing.expectEqualStrings("ls -lS", decoded.command_suggestion.text);
+
+    var timed_out: PendingResponse = .{ .command_suggestion = .{ .request_id = @enumFromInt(42), .status = .timeout } };
+    const bare = try schema.decodeServer(try encodeResponse(context, &timed_out));
+    try std.testing.expectEqual(schema.SuggestionStatus.timeout, bare.command_suggestion.status);
+    try std.testing.expectEqual(@as(usize, 0), bare.command_suggestion.text.len);
 }

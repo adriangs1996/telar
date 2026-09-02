@@ -18,6 +18,7 @@ pub const Intent = union(enum) {
     copy_search: name_prompt.Direction,
     goto_picker,
     history_palette,
+    suggest_palette,
 };
 
 pub const WorkspaceCreationGate = struct {
@@ -80,6 +81,7 @@ pub const OpenNamePromptHandler = struct {
             },
             .goto_picker => .goto_picker,
             .history_palette => .history_palette,
+            .suggest_palette => .suggest_palette,
             .copy_search => unreachable,
         };
 
@@ -225,6 +227,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
         .{ .rename_tab = @enumFromInt(2) },
         .goto_picker,
         .history_palette,
+        .suggest_palette,
     };
 
     var copy = try TestingModel.init();

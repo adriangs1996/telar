@@ -80,6 +80,9 @@ pub fn Dispatcher(comptime Application: type) type {
                 .agent_description => |result| {
                     AgentEvents.handleDescription(application, result);
                 },
+                .engine_response => |result| {
+                    try AgentEvents.handleEngineResponse(application, result);
+                },
                 .metrics_tick => |result| {
                     try ObservabilityEvents.handleMetricsTick(application, result);
                 },

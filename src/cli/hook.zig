@@ -36,6 +36,48 @@ pub const CodexHookInput = struct {
     source: []const u8 = "",
 };
 
+/// The payload the Telar extension for Pi sends. Pi has no hook files: the
+/// extension installed by `telar integration install pi` runs
+/// `telar hook pi` on Pi's own extension events.
+pub const PiHookInput = struct {
+    event: []const u8 = "",
+    session_id: []const u8 = "",
+    /// Whether Pi had no run in progress when the event fired.
+    idle: ?bool = null,
+};
+
+/// Maps one Pi extension event to a report. A closed UI prompt reports
+/// `working` while a run continues and `ready` when Pi was idle.
+///
+/// ```zig
+/// const report = mapPiHook(input) orelse return;
+/// ```
+pub fn mapPiHook(input: PiHookInput) ?Report {
+    const event = input.event;
+    const session = if (schema.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
+
+    if (std.mem.eql(u8, event, "session_start")) {
+        return .{ .state = .ready, .session = session };
+    }
+    if (std.mem.eql(u8, event, "agent_start")) {
+        return .{ .state = .working, .session = session };
+    }
+    if (std.mem.eql(u8, event, "agent_settled")) {
+        return .{ .state = .ready, .session = session };
+    }
+    if (std.mem.eql(u8, event, "ui_prompt_start")) {
+        return .{ .state = .blocked, .session = session };
+    }
+    if (std.mem.eql(u8, event, "ui_prompt_end")) {
+        return .{ .state = if (input.idle == true) .ready else .working, .session = session };
+    }
+    if (std.mem.eql(u8, event, "session_shutdown")) {
+        return .{ .state = .exited };
+    }
+
+    return null;
+}
+
 /// Maps one Claude Code hook event to a report. Subagent events and
 /// notifications that do not change what the user must do are ignored.
 ///
@@ -130,6 +172,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
     const report = switch (options.agent) {
         .claude => parseClaude(init.gpa, input[0..len]) orelse return,
         .codex => parseCodex(init.gpa, input[0..len]) orelse return,
+        .pi => parsePi(init.gpa, input[0..len]) orelse return,
     };
 
     var session = control.Session.open(init, options.socket) catch return;
@@ -149,6 +192,36 @@ fn parseCodex(gpa: std.mem.Allocator, bytes: []const u8) ?Report {
     defer parsed.deinit();
     const mapped = mapCodexHook(parsed.value) orelse return null;
     return .{ .state = mapped.state, .session = mapped.session };
+}
+
+fn parsePi(gpa: std.mem.Allocator, bytes: []const u8) ?Report {
+    const parsed = std.json.parseFromSlice(PiHookInput, gpa, bytes, .{ .ignore_unknown_fields = true }) catch return null;
+    defer parsed.deinit();
+    const mapped = mapPiHook(parsed.value) orelse return null;
+    return .{ .state = mapped.state, .session = mapped.session };
+}
+
+test "Pi extension events map to reports and prompts close into the right state" {
+    const session = "01a061a3-a2e7-7574-9e07-997b8d59340d";
+    const start = mapPiHook(.{ .event = "session_start", .session_id = session }).?;
+    try std.testing.expectEqual(schema.AgentReportState.ready, start.state);
+    try std.testing.expectEqualStrings(session, start.session);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "agent_start" }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.ready, mapPiHook(.{ .event = "agent_settled" }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.blocked, mapPiHook(.{ .event = "ui_prompt_start" }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "ui_prompt_end", .idle = false }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "ui_prompt_end" }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.ready, mapPiHook(.{ .event = "ui_prompt_end", .idle = true }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.exited, mapPiHook(.{ .event = "session_shutdown" }).?.state);
+    try std.testing.expect(mapPiHook(.{ .event = "tool_execution_start" }) == null);
+    try std.testing.expectEqualStrings("", mapPiHook(.{ .event = "agent_start", .session_id = "../etc" }).?.session);
+}
+
+test "Pi hook JSON accepts the extension payload" {
+    const report = parsePi(std.testing.allocator, "{\"event\":\"session_start\",\"session_id\":\"01a061a3-a2e7-7574-9e07-997b8d59340d\",\"idle\":true}").?;
+    try std.testing.expectEqual(schema.AgentReportState.ready, report.state);
+    try std.testing.expectEqualStrings("01a061a3-a2e7-7574-9e07-997b8d59340d", report.session);
+    try std.testing.expect(parsePi(std.testing.allocator, "not json") == null);
 }
 
 test "Claude hook events map to reports and subagents are ignored" {

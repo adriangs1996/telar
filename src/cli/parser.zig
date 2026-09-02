@@ -1192,7 +1192,9 @@ fn validateWorktreeBranch(branch: []const u8) !void {
     }
 }
 
-pub const HookAgent = enum { claude, codex };
+/// Agents whose official lifecycle Telar can receive: Claude Code and
+/// Codex through their settings hooks, Pi through the Telar extension.
+pub const HookAgent = enum { claude, codex, pi };
 
 pub const HookOptions = struct {
     agent: HookAgent,
@@ -1253,6 +1255,9 @@ fn parseHookAgent(text: []const u8) !HookAgent {
     }
     if (std.mem.eql(u8, text, "codex")) {
         return .codex;
+    }
+    if (std.mem.eql(u8, text, "pi")) {
+        return .pi;
     }
 
     return error.UnknownHookAgent;
@@ -1823,6 +1828,13 @@ test "CLI parses hook and integration commands" {
 
     const codex_install = [_][*:0]const u8{ "telar", "integration", "install", "codex" };
     try std.testing.expectEqual(HookAgent.codex, (try Cli.parse(&codex_install, .empty)).integration.agent);
+
+    const pi_hook = [_][*:0]const u8{ "telar", "hook", "pi", "--socket", "/tmp/s.sock" };
+    const pi_cli = try Cli.parse(&pi_hook, .empty);
+    try std.testing.expectEqual(HookAgent.pi, pi_cli.hook.agent);
+    try std.testing.expectEqualStrings("/tmp/s.sock", std.mem.span(pi_cli.hook.socket.?));
+    const pi_status = [_][*:0]const u8{ "telar", "integration", "status", "pi" };
+    try std.testing.expectEqual(HookAgent.pi, (try Cli.parse(&pi_status, .empty)).integration.agent);
 
     const unknown = [_][*:0]const u8{ "telar", "integration", "install", "gemini" };
     try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));
