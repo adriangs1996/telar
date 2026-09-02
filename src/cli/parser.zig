@@ -522,6 +522,7 @@ pub const HistoryAction = enum {
     delete,
     prune,
     show,
+    stats,
     list,
     search,
 };
@@ -534,6 +535,7 @@ pub const HistoryOptions = struct {
     import_file: ?[*:0]const u8 = null,
     delete_id: u64 = 0,
     before_ms: i64 = 0,
+    period_days: u16 = 0,
     dry_run: bool = false,
     assume_yes: bool = false,
     query: ?[*:0]const u8 = null,
@@ -559,6 +561,8 @@ pub const HistoryOptions = struct {
             }
 
             break :search .{ .action = .search, .query = args[1] };
+        } else if (std.mem.eql(u8, action_text, "stats")) .{
+            .action = .stats,
         } else if (std.mem.eql(u8, action_text, "show")) show: {
             if (args.len < 2) {
                 return error.MissingHistoryId;
@@ -641,6 +645,28 @@ pub const HistoryOptions = struct {
             } else if (std.mem.eql(u8, arg, "--failed")) {
                 options.failed_only = true;
                 index += 1;
+            } else if (std.mem.eql(u8, arg, "--period")) {
+                if (options.action != .stats) {
+                    return error.UnknownHistoryOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingHistoryPeriod;
+                }
+
+                const period = std.mem.span(args[index + 1]);
+                options.period_days = if (std.mem.eql(u8, period, "today"))
+                    1
+                else if (std.mem.eql(u8, period, "week"))
+                    7
+                else if (std.mem.eql(u8, period, "month"))
+                    30
+                else if (std.mem.eql(u8, period, "year"))
+                    365
+                else if (std.mem.eql(u8, period, "all"))
+                    0
+                else
+                    return error.InvalidHistoryPeriod;
+                index += 2;
             } else if (std.mem.eql(u8, arg, "--before")) {
                 if (options.action != .prune) {
                     return error.UnknownHistoryOption;
@@ -1795,5 +1821,16 @@ test "history import parses kinds and the file option" {
     try std.testing.expectError(error.UnknownHistoryImportKind, Cli.parse(&unknown, .empty));
 
     const misplaced = [_][*:0]const u8{ "telar", "history", "list", "--file", "/tmp/h" };
+    try std.testing.expectError(error.UnknownHistoryOption, Cli.parse(&misplaced, .empty));
+}
+
+test "history stats parses periods and rejects unknown ones" {
+    const week = [_][*:0]const u8{ "telar", "history", "stats", "--period", "week" };
+    try std.testing.expectEqual(@as(u16, 7), (try Cli.parse(&week, .empty)).history.period_days);
+
+    const invalid = [_][*:0]const u8{ "telar", "history", "stats", "--period", "decade" };
+    try std.testing.expectError(error.InvalidHistoryPeriod, Cli.parse(&invalid, .empty));
+
+    const misplaced = [_][*:0]const u8{ "telar", "history", "list", "--period", "week" };
     try std.testing.expectError(error.UnknownHistoryOption, Cli.parse(&misplaced, .empty));
 }

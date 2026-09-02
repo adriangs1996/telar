@@ -520,6 +520,104 @@ pub const Store = struct {
         return result;
     }
 
+    /// Aggregates totals, distinct commands, and the top command groups in
+    /// one scope. Grouping folds known multi-word tools (git, docker, ...)
+    /// to their first two tokens and skips a leading `sudo`, computed over
+    /// the 400 most frequent full commands.
+    ///
+    /// ```zig
+    /// const result = try store.stats(gpa, &query);
+    /// ```
+    pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const model.StatsQuery) !*model.StatsResult {
+        var sql_buffer: [1024]u8 = undefined;
+        var sql = std.Io.Writer.fixed(&sql_buffer);
+        try sql.writeAll("SELECT COUNT(*), COUNT(DISTINCT command) FROM command WHERE 1=1");
+        try appendStatsFilters(&sql, request);
+        const totals_stmt = try prepare(store.db, sql.buffered());
+        var total: u64 = 0;
+        var unique: u64 = 0;
+        {
+            defer _ = c.sqlite3_finalize(totals_stmt);
+            bindStatsFilters(totals_stmt, request);
+            switch (c.sqlite3_step(totals_stmt)) {
+                c.SQLITE_ROW => {
+                    total = @intCast(c.sqlite3_column_int64(totals_stmt, 0));
+                    unique = @intCast(c.sqlite3_column_int64(totals_stmt, 1));
+                },
+                else => return error.HistoryQueryFailed,
+            }
+        }
+
+        var top_sql_buffer: [1024]u8 = undefined;
+        var top_sql = std.Io.Writer.fixed(&top_sql_buffer);
+        try top_sql.writeAll("SELECT command, COUNT(*) AS n FROM command WHERE 1=1");
+        try appendStatsFilters(&top_sql, request);
+        try top_sql.writeAll(" GROUP BY command ORDER BY n DESC LIMIT 400;");
+        const stmt = try prepare(store.db, top_sql.buffered());
+        defer _ = c.sqlite3_finalize(stmt);
+        bindStatsFilters(stmt, request);
+
+        var buckets: std.StringHashMapUnmanaged(u64) = .empty;
+        defer {
+            var keys = buckets.keyIterator();
+            while (keys.next()) |key| gpa.free(key.*);
+            buckets.deinit(gpa);
+        }
+        while (true) switch (c.sqlite3_step(stmt)) {
+            c.SQLITE_ROW => {
+                const command = columnSlice(stmt, 0);
+                const count: u64 = @intCast(c.sqlite3_column_int64(stmt, 1));
+                const key = statsGroupKey(command);
+                if (buckets.getPtr(key)) |slot| {
+                    slot.* += count;
+                } else {
+                    try buckets.put(gpa, try gpa.dupe(u8, key), count);
+                }
+            },
+            c.SQLITE_DONE => break,
+            else => return error.HistoryQueryFailed,
+        };
+
+        const Top = struct { count: u64, key: []const u8 };
+        var best: [model.schema.max_history_stats_top]Top = undefined;
+        var best_len: usize = 0;
+        var iterator = buckets.iterator();
+        while (iterator.next()) |entry| {
+            const count = entry.value_ptr.*;
+            if (best_len == best.len and count <= best[best_len - 1].count) continue;
+            var index = if (best_len == best.len) best_len - 1 else blk: {
+                best_len += 1;
+                break :blk best_len - 1;
+            };
+            while (index > 0 and best[index - 1].count < count) : (index -= 1) {
+                best[index] = best[index - 1];
+            }
+            best[index] = .{ .count = count, .key = entry.key_ptr.* };
+        }
+
+        const result = try gpa.create(model.StatsResult);
+        errdefer gpa.destroy(result);
+        const top = try gpa.alloc(model.StatsTop, best_len);
+        var copied: usize = 0;
+        errdefer {
+            for (top[0..copied]) |entry| gpa.free(entry.command);
+            gpa.free(top);
+        }
+        for (best[0..best_len], 0..) |entry, index| {
+            top[index] = .{ .count = entry.count, .command = try gpa.dupe(u8, entry.key) };
+            copied += 1;
+        }
+        result.* = .{
+            .request_id = request.request_id,
+            .origin = request.origin,
+            .total = total,
+            .unique = unique,
+            .top = top,
+            .gpa = gpa,
+        };
+        return result;
+    }
+
     /// Deletes one exact entry; its output row cascades and the FTS delete
     /// trigger keeps the index consistent.
     ///
@@ -899,6 +997,61 @@ fn columnSlice(stmt: *c.sqlite3_stmt, column: c_int) []const u8 {
 
 fn commandHash(stmt: *c.sqlite3_stmt) u64 {
     return std.hash.Wyhash.hash(0x74656c6172, columnSlice(stmt, 6));
+}
+
+fn appendStatsFilters(sql: *std.Io.Writer, request: *const model.StatsQuery) !void {
+    if (request.since_ms != 0)
+        try sql.writeAll(" AND started_at_ms >= ?");
+    switch (request.scope) {
+        .global => {},
+        .cwd => try sql.writeAll(" AND cwd = ?"),
+        .workspace => try sql.writeAll(" AND workspace_path = ?"),
+        .pane => try sql.writeAll(" AND pane_id = ?"),
+    }
+}
+
+fn bindStatsFilters(stmt: *c.sqlite3_stmt, request: *const model.StatsQuery) void {
+    var parameter: c_int = 1;
+    if (request.since_ms != 0) {
+        _ = c.sqlite3_bind_int64(stmt, parameter, request.since_ms);
+        parameter += 1;
+    }
+    switch (request.scope) {
+        .global => {},
+        .cwd, .workspace => bindText(stmt, parameter, request.scopeSlice()),
+        .pane => _ = c.sqlite3_bind_int64(
+            stmt,
+            parameter,
+            @intCast(model.schema.id.raw(request.pane_id)),
+        ),
+    }
+}
+
+const stats_subcommand_leaders = [_][]const u8{
+    "git", "docker", "kubectl", "cargo", "zig", "npm", "pnpm", "yarn", "make", "brew", "systemctl",
+};
+
+/// Grouping key for stats: skips a leading `sudo`, keeps two tokens for
+/// known multi-word tools, one token otherwise.
+fn statsGroupKey(command: []const u8) []const u8 {
+    var rest = std.mem.trimStart(u8, command, " ");
+    if (std.mem.startsWith(u8, rest, "sudo ")) {
+        rest = std.mem.trimStart(u8, rest["sudo ".len..], " ");
+    }
+
+    const start = rest;
+    const first_end = std.mem.indexOfScalar(u8, rest, ' ') orelse return start;
+    const first = rest[0..first_end];
+    for (stats_subcommand_leaders) |leader| {
+        if (!std.mem.eql(u8, first, leader)) continue;
+        const after = std.mem.trimStart(u8, rest[first_end..], " ");
+        if (after.len == 0 or after[0] == '-') break;
+        const second_end = std.mem.indexOfScalar(u8, after, ' ') orelse after.len;
+        const total_len = (after.ptr + second_end) - start.ptr;
+        return start[0..total_len];
+    }
+
+    return first;
 }
 
 fn columnText(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt, column: c_int) ![]u8 {
@@ -1364,8 +1517,9 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     const fuzzy = try store.query(std.testing.allocator, &query_value);
     defer fuzzy.deinit();
     try std.testing.expectEqual(@as(usize, 2), fuzzy.entries.len);
-    try std.testing.expectEqualStrings("zig build test", fuzzy.entries[0].command);
-    try std.testing.expectEqualStrings("zebra-tail", fuzzy.entries[1].command);
+    // Tighter subsequence spans rank higher: z·b·t sits in 7 bytes here.
+    try std.testing.expectEqualStrings("zebra-tail", fuzzy.entries[0].command);
+    try std.testing.expectEqualStrings("zig build test", fuzzy.entries[1].command);
 
     var distinct_query = try model.Query.init(.{
         .request_id = @enumFromInt(2),

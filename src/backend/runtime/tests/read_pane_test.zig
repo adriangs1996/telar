@@ -76,12 +76,14 @@ test "read crosses controller and encoder and degrades to a failure for a gone p
     defer std.testing.allocator.free(buffer);
     var history_result: ?*history.model.QueryResult = null;
     var history_output: ?*history.model.OutputResult = null;
+    var history_stats: ?*history.model.StatsResult = null;
     const context: encoder.EncodeContext = .{
         .buffer = buffer,
         .panes = &panes,
         .workspaces = workspaces.reader(),
         .history_result = &history_result,
         .history_output = &history_output,
+        .history_stats = &history_stats,
     };
 
     try controller.readPane(.{

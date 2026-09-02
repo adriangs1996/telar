@@ -187,6 +187,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .delete_history = routeDeleteHistory,
             .prune_history = routePruneHistory,
             .read_history_output = routeReadHistoryOutput,
+            .history_stats = routeHistoryStats,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -441,6 +442,22 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                     .close_after_reply = request.session.role == .control,
                 },
                 .request = read,
+            });
+        }
+
+        fn routeHistoryStats(request: *ClientRequestContext, query: schema.HistoryStatsQuery) !void {
+            var controller = history_output_controller.Controller.init(
+                &request.session.delivery.responses,
+                request.application.history_service,
+            );
+
+            try controller.historyStats(.{
+                .io = request.application.io,
+                .origin = .{
+                    .client = request.session.key,
+                    .close_after_reply = request.session.role == .control,
+                },
+                .request = query,
             });
         }
 

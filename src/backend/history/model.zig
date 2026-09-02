@@ -351,6 +351,75 @@ pub const Request = union(enum) {
     delete: Delete,
     prune: Prune,
     read_output: Delete,
+    stats: StatsQuery,
+};
+
+/// Bounded owned stats filters.
+pub const StatsQuery = struct {
+    pub const Input = struct {
+        request_id: schema.RequestId,
+        origin: QueryOrigin,
+        scope: Scope = .global,
+        scope_value: []const u8 = "",
+        pane_id: schema.PaneId = .invalid,
+        since_ms: i64 = 0,
+    };
+
+    request_id: schema.RequestId,
+    origin: QueryOrigin,
+    scope: Scope = .global,
+    scope_text: [schema.max_cwd_bytes]u8 = undefined,
+    scope_text_len: u16 = 0,
+    pane_id: schema.PaneId = .invalid,
+    since_ms: i64 = 0,
+
+    pub fn init(input: Input) !StatsQuery {
+        if (input.scope_value.len > schema.max_cwd_bytes) {
+            return error.ScopeTooLong;
+        }
+        if (input.scope == .pane and input.pane_id == .invalid) {
+            return error.InvalidPaneId;
+        }
+        if (input.scope != .pane and input.pane_id != .invalid) {
+            return error.UnexpectedPaneId;
+        }
+
+        var query: StatsQuery = .{
+            .request_id = input.request_id,
+            .origin = input.origin,
+            .scope = input.scope,
+            .pane_id = input.pane_id,
+            .since_ms = input.since_ms,
+        };
+        @memcpy(query.scope_text[0..input.scope_value.len], input.scope_value);
+        query.scope_text_len = @intCast(input.scope_value.len);
+        return query;
+    }
+
+    pub fn scopeSlice(query: *const StatsQuery) []const u8 {
+        return query.scope_text[0..query.scope_text_len];
+    }
+};
+
+pub const StatsTop = struct {
+    count: u64,
+    command: []u8,
+};
+
+/// Owned aggregate result for one stats query.
+pub const StatsResult = struct {
+    request_id: schema.RequestId,
+    origin: QueryOrigin,
+    total: u64,
+    unique: u64,
+    top: []StatsTop,
+    gpa: std.mem.Allocator,
+
+    pub fn deinit(result: *StatsResult) void {
+        for (result.top) |entry| result.gpa.free(entry.command);
+        result.gpa.free(result.top);
+        result.gpa.destroy(result);
+    }
 };
 
 pub const Delete = struct {
@@ -544,6 +613,7 @@ pub const Response = union(enum) {
     failed: Failure,
     pruned: Pruned,
     output_result: *OutputResult,
+    stats_result: *StatsResult,
 };
 
 /// Owned captured-output read result.
@@ -568,7 +638,7 @@ pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
         .session_started => |value| value.deinit(gpa),
         .command_finished => |value| value.deinit(gpa),
         .import => |value| value.deinit(gpa),
-        .session_finished, .session_title, .query, .delete, .prune, .read_output => {},
+        .session_finished, .session_title, .query, .delete, .prune, .read_output, .stats => {},
     }
 }
 
@@ -577,5 +647,6 @@ pub fn deinitResponse(response: Response, _: std.mem.Allocator) void {
         .query_result => |value| value.deinit(),
         .failed, .pruned => {},
         .output_result => |value| value.deinit(),
+        .stats_result => |value| value.deinit(),
     }
 }

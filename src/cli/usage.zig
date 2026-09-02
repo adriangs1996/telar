@@ -17,6 +17,7 @@ pub const text =
     \\       telar history show <id>
     \\       telar history delete <id>
     \\       telar history prune [filters] [--before DATE] [--dry-run] [--yes]
+    \\       telar history stats [--period today|week|month|year|all]
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar pane read|send-keys <pane|--current> [options]
@@ -39,6 +40,7 @@ pub const text =
     \\  history show     Print an entry's captured output
     \\  history delete   Remove one exact history entry
     \\  history prune    Remove every entry matching the filters
+    \\  history stats    Aggregate totals and top commands
     \\  notification show  Show a toast in every connected UI client
     \\  agent list       List the agents the runtime knows about
     \\  agent get        Show one agent by pane id, title or --current

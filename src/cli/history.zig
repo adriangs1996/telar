@@ -27,6 +27,9 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     if (options.action == .show) {
         return runShow(init, options);
     }
+    if (options.action == .stats) {
+        return runStats(init, options);
+    }
 
     const connector = try RuntimeConnector.init(init, options.socket);
     var connection = try connector.connectOrStart(.{});
@@ -664,4 +667,64 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
     if (output.truncated) {
         std.debug.print("telar history: output truncated ({d} bytes observed)\n", .{output.observed_bytes});
     }
+}
+
+/// Prints aggregate history statistics for one scope and period.
+fn runStats(init: std.process.Init, options: HistoryOptions) !void {
+    const connector = try RuntimeConnector.init(init, options.socket);
+    var connection = try connector.connectOrStart(.{});
+    defer connection.deinit(init.io);
+
+    var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const scope_value: []const u8 = switch (options.scope) {
+        .cwd => cwd: {
+            const len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
+            break :cwd cwd_buffer[0..len];
+        },
+        .workspace => std.mem.span(options.scope_value.?),
+        .global, .pane => "",
+    };
+    const since_ms: i64 = if (options.period_days == 0)
+        0
+    else
+        Io.Timestamp.now(init.io, .real).toMilliseconds() - @as(i64, options.period_days) * 86_400_000;
+
+    var send_buffer: [4096]u8 = undefined;
+    try connection.send(init.io, try core.schema.encodeHistoryStatsQuery(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .scope = options.scope,
+        .scope_value = scope_value,
+        .pane_id = options.pane_id,
+        .since_ms = since_ms,
+    }));
+
+    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    defer init.gpa.free(receive_buffer);
+    const response = try core.schema.decodeServer(try connection.receive(init.io, receive_buffer));
+    const stats = switch (response) {
+        .history_stats_result => |value| value,
+        .request_failed => |failure| {
+            std.debug.print("telar history: {s}\n", .{failure.message});
+            return error.HistoryQueryFailed;
+        },
+        else => return error.UnexpectedRuntimeResponse,
+    };
+
+    var stdout_buffer: [8 * 1024]u8 = undefined;
+    var output = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    const writer = &output.interface;
+    try writer.print("commands: {d}\nunique:   {d}\n", .{ stats.total, stats.unique });
+    var top = stats.top();
+    var first = true;
+    while (try top.next()) |entry| {
+        if (first) {
+            try writer.writeAll("top:\n");
+            first = false;
+        }
+
+        try writer.print("  {d:>7}  ", .{entry.count});
+        try writeField(writer, entry.command);
+        try writer.writeAll("\n");
+    }
+    try writer.flush();
 }

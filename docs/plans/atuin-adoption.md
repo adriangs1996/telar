@@ -184,7 +184,7 @@ FTS5 trigram gives substring, not fuzzy. Do fuzzy where the candidates are.
   "fts" | "fuzzy"` overrides.
 - Tests: scorer parity with goto picker, distinct on both paths, corpus.
 
-## P8. Stats
+## P8. Stats — done
 
 Cheap and loved. `telar history stats [--period today|week|month|year|all]`.
 
@@ -193,8 +193,11 @@ Cheap and loved. `telar history stats [--period today|week|month|year|all]`.
   (command prefix, count). Corpus + bump.
 - Subcommand awareness like atuin: a builtin list (`git`, `docker`,
   `kubectl`, `cargo`, `zig`, `npm`, …) groups by the first two tokens, and
-  `sudo` is skipped as a prefix. Config `runtime.history.stats_subcommands`
-  extends the list.
+  `sudo` is skipped as a prefix. Deviations: the
+  `runtime.history.stats_subcommands` config extension is deferred
+  (builtin list only), top groups aggregate over the 400 most frequent
+  full commands, periods are computed client-side as day offsets, and
+  there is no `--json` yet.
 - SQL only — the indexes exist. Render as aligned rows; `--json` for
   scripts.
 - Tests: grouping rules, period boundaries, corpus.

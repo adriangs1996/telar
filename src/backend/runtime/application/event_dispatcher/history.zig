@@ -38,6 +38,7 @@ pub fn Dispatcher(comptime Application: type) type {
             .enqueue_failure = enqueueHistoryFailure,
             .enqueue_pruned = enqueueHistoryPruned,
             .enqueue_output_result = enqueueHistoryOutputResult,
+            .enqueue_stats_result = enqueueHistoryStatsResult,
             .dispose_query_result = disposeHistoryQueryResult,
             .pump_clients = pumpRuntimeClients,
         };
@@ -72,6 +73,11 @@ pub fn Dispatcher(comptime Application: type) type {
                 .code = .internal,
                 .message = failure.message,
             }) catch return false;
+            return true;
+        }
+
+        fn enqueueHistoryStatsResult(_: *Application, session: *ClientSession, result: *history.model.StatsResult) bool {
+            session.delivery.responses.push(.{ .history_stats = result }) catch return false;
             return true;
         }
 

@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 77;
+const corpus_len = 79;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -241,6 +241,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try schema.encodeReadHistoryOutput(helper.space(), .{
             .request_id = @enumFromInt(37),
             .id = 11,
+        }),
+    ));
+    helper.add("history_stats", .client, false, golden.history_stats, helper.commit(
+        try schema.encodeHistoryStatsQuery(helper.space(), .{
+            .request_id = @enumFromInt(38),
+            .scope = .workspace,
+            .scope_value = "/work/telar",
+            .since_ms = 1700000000000,
         }),
     ));
     helper.add("query_history_pane", .client, false, golden.query_history_pane, helper.commit(
@@ -505,6 +513,18 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .truncated = true,
             .observed_bytes = 9000,
             .content = "error: exit 1\n",
+        }),
+    ));
+    const stats_top = [_]schema.HistoryStatsTop{
+        .{ .count = 30, .command = "git status" },
+        .{ .count = 12, .command = "zig build" },
+    };
+    helper.add("history_stats_result", .server, false, golden.history_stats_result, helper.commit(
+        try schema.encodeHistoryStats(helper.space(), .{
+            .request_id = @enumFromInt(38),
+            .total = 120,
+            .unique = 40,
+            .top = &stats_top,
         }),
     ));
     helper.add("history_pruned", .server, false, golden.history_pruned, helper.commit(
@@ -809,6 +829,8 @@ const golden = struct {
     pub const create_pane = "09150000000000000000070000000000000003000000000000003c0014000000000005002f776f726b0600000000000000010007002f62696e2f7368000000";
     pub const close_pane = "0a16000000000000000800000000000000";
     pub const query_history_cwd = "0b1f0000000000000009007a6967206275696c64010b002f776f726b2f74656c6172010001010c00";
+    pub const history_stats = "262600000000000000020b002f776f726b2f74656c61720068e5cf8b010000";
+    pub const history_stats_result = "a6260000000000000078000000000000002800000000000000021e000000000000000a00676974207374617475730c0000000000000009007a6967206275696c64";
     pub const read_history_output = "2525000000000000000b00000000000000";
     pub const history_output = "a525000000000000000b000000000000000128230000000000000e0000006572726f723a206578697420310a";
     pub const delete_history = "2323000000000000000b00000000000000";

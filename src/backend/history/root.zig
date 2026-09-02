@@ -294,6 +294,15 @@ pub const Service = struct {
         return service.submit(io, .{ .read_output = request });
     }
 
+    /// Queues one stats aggregation; the worker answers asynchronously.
+    ///
+    /// ```zig
+    /// _ = service.statsHistory(io, query);
+    /// ```
+    pub fn statsHistory(service: *Service, io: std.Io, stats_query: model_mod.StatsQuery) bool {
+        return service.submit(io, .{ .stats = stats_query });
+    }
+
     pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
         const context = record.context;
         const command = record.command;
@@ -462,6 +471,24 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
                 else
                     error.HistoryUnavailable;
                 observeWrite(service, elapsedSince(io, started), result);
+            },
+            .stats => |stats_query| {
+                const response: model_mod.Response = if (service.store) |*store| blk: {
+                    const result = store.stats(service.gpa, &stats_query) catch
+                        break :blk .{ .failed = .{
+                            .request_id = stats_query.request_id,
+                            .origin = stats_query.origin,
+                            .message = "history stats failed",
+                        } };
+                    break :blk .{ .stats_result = result };
+                } else .{ .failed = .{
+                    .request_id = stats_query.request_id,
+                    .origin = stats_query.origin,
+                    .message = "history database is unavailable",
+                } };
+                service.responses.putOne(io, response) catch {
+                    model_mod.deinitResponse(response, service.gpa);
+                };
             },
             .read_output => |read_request| {
                 const response: model_mod.Response = if (service.store) |*store| blk: {

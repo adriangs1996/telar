@@ -19,6 +19,7 @@ pub const EncodeContext = struct {
     workspaces: workspace.Reader,
     history_result: *?*history.model.QueryResult,
     history_output: *?*history.model.OutputResult,
+    history_stats: *?*history.model.StatsResult,
 };
 
 /// Encodes one queued response against the *current* stores. A response can
@@ -35,6 +36,7 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
     const workspaces = context.workspaces;
     const history_result = context.history_result;
     const history_output = context.history_output;
+    const history_stats = context.history_stats;
 
     var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
     var tab_storage: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
@@ -101,6 +103,19 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
         },
         .request_completed => |completed| try schema.encodeRequestCompleted(buffer, completed),
         .history_pruned => |pruned| try schema.encodeHistoryPruned(buffer, pruned),
+        .history_stats => |result| payload: {
+            history_stats.* = result;
+            var top_storage: [schema.max_history_stats_top]schema.HistoryStatsTop = undefined;
+            for (result.top, 0..) |entry, index| {
+                top_storage[index] = .{ .count = entry.count, .command = entry.command };
+            }
+            break :payload try schema.encodeHistoryStats(buffer, .{
+                .request_id = result.request_id,
+                .total = result.total,
+                .unique = result.unique,
+                .top = top_storage[0..result.top.len],
+            });
+        },
         .history_output => |result| payload: {
             history_output.* = result;
             break :payload try schema.encodeHistoryOutput(buffer, .{
@@ -170,6 +185,7 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
     var buffer: [1024]u8 = undefined;
     var history_result: ?*history.model.QueryResult = null;
     var history_output: ?*history.model.OutputResult = null;
+    var history_stats: ?*history.model.StatsResult = null;
 
     const payload = try encodeResponse(.{
         .buffer = &buffer,
@@ -177,6 +193,7 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
         .workspaces = workspace.Reader.init(&workspaces),
         .history_result = &history_result,
         .history_output = &history_output,
+        .history_stats = &history_stats,
     }, &response);
     const decoded = try schema.decodeServer(payload);
 

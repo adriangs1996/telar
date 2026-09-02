@@ -56,6 +56,7 @@ pub fn Handlers(comptime Context: type) type {
         delete_history: *const fn (*Context, schema.DeleteHistory) anyerror!void,
         prune_history: *const fn (*Context, schema.PruneHistory) anyerror!void,
         read_history_output: *const fn (*Context, schema.ReadHistoryOutput) anyerror!void,
+        history_stats: *const fn (*Context, schema.HistoryStatsQuery) anyerror!void,
     };
 }
 
@@ -124,6 +125,7 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .delete_history => |request| handlers.delete_history(router.context, request),
                 .prune_history => |request| handlers.prune_history(router.context, request),
                 .read_history_output => |request| handlers.read_history_output(router.context, request),
+                .history_stats => |request| handlers.history_stats(router.context, request),
             };
         }
     };
@@ -143,6 +145,7 @@ pub fn classify(tag: Tag) RequestClass {
         .delete_history,
         .prune_history,
         .read_history_output,
+        .history_stats,
         .show_notification,
         .query_agents,
         .read_pane,
@@ -229,6 +232,7 @@ const testing_handlers: Handlers(Capture) = .{
     .delete_history = captureHandler(.delete_history, schema.DeleteHistory),
     .prune_history = captureHandler(.prune_history, schema.PruneHistory),
     .read_history_output = captureHandler(.read_history_output, schema.ReadHistoryOutput),
+    .history_stats = captureHandler(.history_stats, schema.HistoryStatsQuery),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -302,6 +306,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         .{ .delete_history = .{ .request_id = request_id, .id = 7 } },
         .{ .prune_history = .{ .request_id = request_id, .before_ms = 5 } },
         .{ .read_history_output = .{ .request_id = request_id, .id = 4 } },
+        .{ .history_stats = .{ .request_id = request_id } },
     };
 }
 
@@ -328,6 +333,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .delete_history,
             .prune_history,
             .read_history_output,
+            .history_stats,
             .show_notification,
             .query_agents,
             .read_pane,
