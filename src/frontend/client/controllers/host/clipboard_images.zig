@@ -85,6 +85,10 @@ fn schedule(raw_context: *anyopaque, capture: client_model.ClipboardCapture) !vo
     const request: attachments.CaptureRequest = .{
         .target = capture.target,
         .sequence = @intFromEnum(capture.id),
+        .marker_policy = if (client.model.attachmentProvider(capture.target) == .claude)
+            .stable_number
+        else
+            .ordered,
     };
 
     try client.select.concurrent(.clipboard_image, executeWorker, .{
@@ -104,8 +108,19 @@ fn executeWorker(gpa: std.mem.Allocator, request: attachments.CaptureRequest, or
 fn adopt(raw_context: *anyopaque) !bool {
     const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
     const capture = context.capture orelse return error.ClipboardCaptureMissing;
-    const layout_changed = try context.client.view.adoptAttachment(capture);
+    const request = capture.request;
+    var layout_changed = try context.client.view.adoptAttachment(capture);
     context.capture = null;
+    if (request.marker_policy == .stable_number) {
+        const tab = context.client.model.workspace.tabForPaneConst(request.target.pane_id);
+        const pane = if (tab) |value| value.model.findConst(request.target.pane_id) else null;
+        if (pane) |value| {
+            layout_changed = layout_changed or (context.client.view.reconcileAttachmentMarkers(request.target, .{
+                .buffer = &value.buffer,
+                .cursor = value.cursor,
+            }) orelse false);
+        }
+    }
 
     return layout_changed;
 }

@@ -3,6 +3,7 @@
 const workspace_capability = @import("../../../workspace/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
+const attachment_prompts = @import("attachment_prompts.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
@@ -45,9 +46,10 @@ pub fn apply(client: *Client, model: *multiplexer.Model, interaction: view_inter
     return use_case.execute(interaction);
 }
 
-fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !void {
+fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !view_interaction.IntentOutcome {
     const context: *Context = @ptrCast(@alignCast(raw_context));
     const client = context.client;
+    var outcome: view_interaction.IntentOutcome = .{};
 
     switch (intent) {
         .none => {},
@@ -82,7 +84,10 @@ fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !void {
         .select_workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(client, .{ .workspace = workspace }),
         .notification_activate => |id| _ = try notification_flow.activateNow(client, id),
         .notification_dismiss => |id| _ = try notification_flow.dismissNow(client, id),
+        .attachment_dismiss => |id| outcome.layout_changed = try attachment_prompts.dismiss(client, id),
     }
+
+    return outcome;
 }
 
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {

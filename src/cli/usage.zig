@@ -24,8 +24,8 @@ pub const text =
     \\       telar pane focus --current --direction left|right|up|down [--json]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar api schema [--json]
-    \\       telar integration install|uninstall|status claude [--settings PATH]
-    \\       telar hook claude
+    \\       telar integration install|uninstall|status claude|codex [--settings PATH]
+    \\       telar hook claude|codex
     \\       telar --skill
     \\
     \\Run an interactive shell inside telar's multiplexer UI.

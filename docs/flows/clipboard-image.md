@@ -2,7 +2,8 @@
 
 This flow starts when the focused child receives an unmodified `Ctrl+V`. Telar
 then tries to mirror a local clipboard image for an attachment-capable agent.
-The preview is disposable client media. The child remains responsible for
+The preview is disposable client media paired by prompt order with the
+`[Image #N]` marker owned by Codex or Claude. The child remains responsible for
 accepting or rejecting the paste.
 
 ## End-to-end path
@@ -48,6 +49,29 @@ the adapter maps those effects to `pane_inputs.send` followed by
 independently. A missing target, unsupported platform, busy worker or
 scheduling failure can drop the preview, but none can retract or delay an
 already accepted pane input transaction. See [Key routing](key-routing.md).
+
+## Prompt coupling
+
+The attachment store scopes previews to one exact pane generation and applies
+the provider's marker identity. Codex treats each marker as one atomic editor
+element and renumbers the remaining markers after deletion, so its previews
+follow prompt order. Claude keeps increasing marker numbers after deletion, so
+Telar learns and retains the actual number rendered for each Claude preview.
+
+Closing a preview produces a bounded synthetic key sequence for its pane. The
+sequence moves to the corresponding marker, deletes that atomic element and
+restores the prior cursor position. `PaneInputHandler.executeKeys` encodes the
+whole sequence against the pane's current keyboard modes and enqueues it as one
+input transaction. Telar retires the local image only after that transaction is
+accepted.
+
+For input in the other direction, a plain `Backspace` or `Delete` next to a
+known marker retires its preview. Committed Claude frames also reconcile stable
+marker numbers, covering deletion paths that happen inside Claude's attachment
+navigation context. A plain `Enter` delivered to the owning pane retires every
+preview for that prompt. It also cancels an exact clipboard capture still in
+flight, so a late worker completion cannot recreate previews for a prompt that
+was already sent. Retiring image buffers remains deferred to the media path.
 
 ## State and worker ownership
 
@@ -127,8 +151,12 @@ event does not wipe megabytes synchronously.
   delivery.
 - `src/frontend/client/application/clipboard_image_delivery.zig` proves quiet
   outcomes, notification mapping and publication failure propagation.
+- `src/frontend/client/application/input/attachment_prompt.zig` proves child
+  marker deletion precedes local retirement, and prompt submission cancels an
+  in-flight capture.
 - `src/frontend/attachments/root.zig` proves cancellation ownership, image
-  bounds, retained-byte limits, target scoping and ingress revision.
+  bounds, retained-byte limits, target scoping, marker planning and ingress
+  revision.
 - `src/frontend/client/client_test.zig` proves pane delivery without a target,
   successful resource observation, stale target cleanup, quiet clipboard-empty
   behavior and notification failures without direct presentation.

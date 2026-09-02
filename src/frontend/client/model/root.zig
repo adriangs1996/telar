@@ -514,6 +514,23 @@ pub const Model = struct {
         return capture;
     }
 
+    /// Cancels only a capture owned by the prompt that has just been sent.
+    /// Its worker may still complete, but exact completion matching will
+    /// classify that result as obsolete and release its private buffer.
+    ///
+    /// ```zig
+    /// _ = model.cancelClipboardCapture(target);
+    /// ```
+    pub fn cancelClipboardCapture(model: *Model, target: attachments.Target) bool {
+        const capture = model.clipboard_capture orelse return false;
+        if (!std.meta.eql(capture.target, target)) {
+            return false;
+        }
+
+        model.clipboard_capture = null;
+        return true;
+    }
+
     /// Returns the pane-gap preference used by current and future tabs.
     ///
     /// ```zig
@@ -1264,6 +1281,24 @@ pub const Model = struct {
         return .{
             .pane_id = key.pane_id,
             .pane_generation = key.pane_generation,
+        };
+    }
+
+    /// Resolves the provider only while the exact pane generation still owns
+    /// an attachment-capable agent.
+    ///
+    /// ```zig
+    /// const provider = model.attachmentProvider(target) orelse return;
+    /// ```
+    pub fn attachmentProvider(model: *const Model, target: attachments.Target) ?schema.AgentProvider {
+        const agent = model.agent_snapshot.find(.{
+            .pane_id = target.pane_id,
+            .pane_generation = target.pane_generation,
+        }) orelse return null;
+
+        return switch (agent.provider) {
+            .claude, .codex => agent.provider,
+            else => null,
         };
     }
 

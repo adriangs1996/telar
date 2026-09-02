@@ -36,10 +36,10 @@ SOURCE_DATE_EPOCH=1787335283 pyftsubset SymbolsNerdFontMono-Regular.ttf \
   --name-languages='*' --notdef-glyph --recommended-glyphs
 ```
 
-`provider-marks-512x256.rgba` is the reproducible KGP provider atlas. Its two
-256 x 256 RGBA slots contain official PNG assets in Claude, Codex order. The
-atlas SHA-256 is
-`a5525d88a91a85c3d9361736eb1a5c932c31d5c68717c5e003fdcc64e430b824`.
+`provider-marks-768x256.rgba` is the reproducible KGP provider atlas. Its three
+256 x 256 RGBA slots contain official PNG assets in Claude, Codex, Pi order.
+The atlas SHA-256 is
+`2e2236e04ef2b1be9fa3da8fb63522fd969a90ad00710d098b0ac00f970279e0`.
 `tools/build_provider_atlas.py` rebuilds it with Pillow 12.2.0 and Lanczos
 resampling.
 
@@ -57,6 +57,22 @@ SHA-256 is
 the extracted 2048 x 2048 RGBA PNG SHA-256 is
 `3453947a9ce2709b7ec51c0559c7eb976e4ac53b232b607d1d81b0d1d1048b61`.
 
+`Pi.svg` is the square badge from the Pi press kit, downloaded on 2026-09-02
+from `https://pi.dev/favicon.svg`. The press kit describes it as the square
+mark for favicons and compact badges; the primary logo at
+`https://pi.dev/logo.svg` is a white mark without a background and would
+vanish on light terminals. Its SHA-256 is
+`a5624bc3b8cac94de75f6f13701eca2ad3ef67bbeba286c4af3f398806f0858a`.
+Pi is published by Earendil Inc. under the MIT License.
+
+`Pi.png` is the 256 x 256 RGBA rasterization of `Pi.svg` with SHA-256
+`9397ec24ab94be1917b12fac5748baf0e70bbf6c25f79b00e4960f5b1906d22b`. It is
+reproducible with librsvg 2.62.3:
+
+```sh
+rsvg-convert -w 256 -h 256 -f png -o Pi.png Pi.svg
+```
+
 At runtime Telar downsamples the atlas's checked-in 256 px source slots with
 premultiplied-alpha bilinear filtering. It centers the square artwork inside
 slots that match the terminal cell aspect ratio, so a two-column by two-row
@@ -69,3 +85,6 @@ Official sources and usage terms:
 - <https://openai.com/codex/for-work/>
 - <https://persistent.oaistatic.com/codex-app-prod/Codex.dmg>
 - <https://openai.com/brand/>
+- <https://pi.dev/press-kit>
+- <https://pi.dev/favicon.svg>
+- <https://github.com/earendil-works/pi/blob/main/LICENSE>

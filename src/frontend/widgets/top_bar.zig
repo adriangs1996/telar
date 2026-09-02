@@ -31,28 +31,53 @@ pub const Input = struct {
 
 pub fn render(context: *widget.Context, input: Input) void {
     const area = input.area;
-    if (area.isEmpty()) return;
-    const bar_style: ui.Style = .{ .fg = context.palette.text, .bg = context.palette.panel_bg };
+
+    if (area.isEmpty()) {
+        return;
+    }
+
+    const bar_style: ui.Style = .{
+        .fg = context.palette.text,
+        .bg = context.palette.panel_bg,
+    };
     context.buffer.fill(area, " ", bar_style);
 
-    const toggle: ui.Rect = .{ .x = area.x, .y = area.y, .w = @min(area.w, 4), .h = 1 };
+    const toggle: ui.Rect = .{
+        .x = area.x,
+        .y = area.y,
+        .w = @min(area.w, 4),
+        .h = 1,
+    };
+
     context.hits.add(toggle, .toggle_sidebar);
-    const toggle_style: ui.Style = if (context.isHovered(.toggle_sidebar))
-        .{
-            .fg = context.palette.accent,
-            .bg = context.palette.surface1,
-            .flags = .{ .bold = true, .underline = .single },
-        }
-    else
-        .{ .fg = context.palette.accent, .bg = context.palette.panel_bg, .flags = .{ .bold = true } };
+
+    const toggle_style: ui.Style =
+        if (context.isHovered(.toggle_sidebar))
+            .{
+                .fg = context.palette.accent,
+                .bg = context.palette.surface1,
+                .flags = .{ .bold = true, .underline = .single },
+            }
+        else
+            .{
+                .fg = context.palette.accent,
+                .bg = context.palette.panel_bg,
+                .flags = .{
+                    .bold = true,
+                },
+            };
+
     context.buffer.fill(toggle, " ", toggle_style);
-    if (toggle.w != 0) _ = context.drawIcon(
-        toggle,
-        toggle.x + (toggle.w - 1) / 2,
-        toggle.y,
-        if (input.sidebar_visible) .sidebar_collapse else .sidebar_expand,
-        toggle_style,
-    );
+
+    if (toggle.w != 0) {
+        _ = context.drawIcon(
+            toggle,
+            toggle.x + (toggle.w - 1) / 2,
+            toggle.y,
+            if (input.sidebar_visible) .sidebar_collapse else .sidebar_expand,
+            toggle_style,
+        );
+    }
 
     // The badge is reserved first so a long workspace list cannot push the
     // interception signal off screen.
@@ -139,14 +164,7 @@ fn renderRight(context: *widget.Context, area: ui.Rect, input: Input) void {
     }
 }
 
-fn renderList(
-    context: *widget.Context,
-    input: Input,
-    active_id: ?schema.WorkspaceId,
-    start_x: u16,
-    row_end: u16,
-    y: u16,
-) void {
+fn renderList(context: *widget.Context, input: Input, active_id: ?schema.WorkspaceId, start_x: u16, row_end: u16, y: u16) void {
     const snapshot = input.workspaces;
     const available = row_end -| start_x;
     const active_index = if (active_id) |id| snapshot.indexOf(id) else null;
@@ -200,20 +218,10 @@ fn renderList(
     }
 }
 
-fn drawWorkspace(
-    context: *widget.Context,
-    snapshot: *const workspace_list.Snapshot,
-    index: usize,
-    active_index: ?usize,
-    active_name: []const u8,
-    x: u16,
-    row_end: u16,
-    y: u16,
-) u16 {
+fn drawWorkspace(context: *widget.Context, snapshot: *const workspace_list.Snapshot, index: usize, active_index: ?usize, active_name: []const u8, x: u16, row_end: u16, y: u16) u16 {
     var label_buffer: [workspace_list.max_name_bytes + 4]u8 = undefined;
-    const label = std.fmt.bufPrint(&label_buffer, " {s}{s} ", .{
+    const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
         workspaceNameAt(snapshot, index, active_index, active_name),
-        dirtyMark(snapshot, index),
     }) catch " workspace ";
     const width = @min(ui.measure(label), row_end -| x);
     if (width == 0) return x;
@@ -283,14 +291,9 @@ fn listWidth(
 ) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
-        total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) +
-            ui.measure(dirtyMark(snapshot, index)) + 2;
+        total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) + 2;
     }
     return total;
-}
-
-fn dirtyMark(snapshot: *const workspace_list.Snapshot, index: usize) []const u8 {
-    return if (snapshot.dirtyAt(index)) "*" else "";
 }
 
 fn workspaceNameAt(
@@ -372,7 +375,7 @@ test "the list collapses when the row cannot fit every workspace" {
     try std.testing.expect(!listFits(&snapshot, null, "", 11));
 }
 
-test "the workspace label shows the name and dirty mark but never the branch" {
+test "the workspace label ignores git branch and dirty state" {
     var snapshot: workspace_list.Snapshot = .{};
     const entries = [_]workspace_list.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1, .branch = "main", .dirty = true },
@@ -397,10 +400,10 @@ test "the workspace label shows the name and dirty mark but never the branch" {
         @memcpy(text[len .. len + cell_text.len], cell_text);
         len += cell_text.len;
     }
-    try std.testing.expectEqualStrings(" telar* ", text[0..len]);
-    // " telar* " + " api " = 13 columns, and the dirty mark counts toward the fit.
-    try std.testing.expect(listFits(&snapshot, null, "", 13));
-    try std.testing.expect(!listFits(&snapshot, null, "", 12));
+    try std.testing.expectEqualStrings(" telar ", text[0..len]);
+    // " telar " + " api " = 12 columns regardless of git state.
+    try std.testing.expect(listFits(&snapshot, null, "", 12));
+    try std.testing.expect(!listFits(&snapshot, null, "", 11));
 }
 
 test "the active name replaces only the active workspace snapshot name" {

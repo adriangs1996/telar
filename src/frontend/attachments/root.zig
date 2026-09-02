@@ -19,6 +19,11 @@ pub const max_source_bytes: usize = 32 * 1024 * 1024;
 pub const max_png_bytes: usize = 16 * 1024 * 1024;
 pub const max_pixels: u64 = 16 * 1024 * 1024;
 pub const max_retained_bytes: usize = 32 * 1024 * 1024;
+pub const max_marker_navigation_steps: u8 = 120;
+
+const marker_prefix = "[Image #";
+const marker_prefix_width: u16 = marker_prefix.len;
+const minimum_marker_width: u16 = marker_prefix_width + 2;
 
 pub fn platformSupported() bool {
     return builtin.os.tag == .macos;
@@ -37,6 +42,12 @@ pub const Target = struct {
 pub const CaptureRequest = struct {
     target: Target,
     sequence: u64,
+    marker_policy: MarkerPolicy = .ordered,
+};
+
+pub const MarkerPolicy = enum {
+    ordered,
+    stable_number,
 };
 
 pub const Capture = struct {
@@ -105,6 +116,25 @@ pub const Snapshot = struct {
     }
 };
 
+pub const MarkerScreen = struct {
+    buffer: *const ui.Buffer,
+    cursor: schema.frame.Cursor,
+};
+
+pub const MarkerDeletion = enum {
+    backward,
+    forward,
+};
+
+pub const MarkerRemoval = struct {
+    direction: enum {
+        left,
+        right,
+    },
+    steps: u8,
+    deletion: MarkerDeletion,
+};
+
 pub const PlanItem = struct {
     id: Id,
     area: ui.Rect,
@@ -136,6 +166,8 @@ const Slot = struct {
     emitted_thumbnail: ?kitty.OutputPlacement = null,
     desired_modal: ?kitty.OutputPlacement = null,
     emitted_modal: ?kitty.OutputPlacement = null,
+    marker_policy: MarkerPolicy,
+    marker_number: ?u16 = null,
     retire_pending: bool = false,
 };
 
@@ -157,6 +189,7 @@ pub const Store = struct {
     gpa: std.mem.Allocator,
     slots: [max_items]?Slot = @splat(null),
     active_target: ?Target = null,
+    stable_deletion_pending: ?Target = null,
     modal: ?Id = null,
     supported: bool = false,
     cell_width: u16 = 0,
@@ -234,6 +267,7 @@ pub const Store = struct {
             null;
         if (optionalTargetEql(store.active_target, target)) return .{};
         store.active_target = target;
+        store.stable_deletion_pending = null;
         store.modal = null;
         if (store.partial) |index| {
             const slot = &store.slots[index].?;
@@ -333,6 +367,7 @@ pub const Store = struct {
             .image_id = first_image_id + host_id,
             .thumbnail_placement_id = first_thumbnail_placement_id + host_id,
             .modal_placement_id = first_modal_placement_id + host_id,
+            .marker_policy = request.marker_policy,
         };
         store.total_bytes += png.len;
         store.ingress_version +%= 1;
@@ -346,6 +381,170 @@ pub const Store = struct {
             return true;
         }
         return false;
+    }
+
+    /// Retires every preview belonging to one submitted prompt.
+    ///
+    /// ```zig
+    /// const removed = store.removeVisible(target);
+    /// ```
+    pub fn removeVisible(store: *Store, target: Target) u8 {
+        var removed: u8 = 0;
+        for (&store.slots, 0..) |*slot, index| {
+            if (slot.* == null or slot.*.?.retire_pending or !std.meta.eql(slot.*.?.target, target)) {
+                continue;
+            }
+
+            store.retireAt(index);
+            removed += 1;
+        }
+        if (removed != 0) {
+            store.modal = null;
+        }
+        if (optionalTargetEql(store.stable_deletion_pending, target)) {
+            store.stable_deletion_pending = null;
+        }
+
+        return removed;
+    }
+
+    /// Plans an atomic marker deletion while restoring the child's cursor.
+    /// Image placeholders count as one editor step even though they occupy ten
+    /// terminal cells.
+    ///
+    /// ```zig
+    /// const plan = store.planMarkerRemoval(id, screen) orelse return;
+    /// ```
+    pub fn planMarkerRemoval(store: *const Store, id: Id, screen: MarkerScreen) ?MarkerRemoval {
+        const visible = store.snapshot();
+        const ordinal = snapshotOrdinal(&visible, id) orelse return null;
+        const slot = store.findConst(id) orelse return null;
+        const marker_number = slot.marker_number orelse @as(u16, ordinal) + 1;
+        if (!screen.cursor.visible) {
+            return null;
+        }
+
+        const marker = findMarker(screen.buffer, marker_number, screen.cursor) orelse return null;
+        if (marker.y != screen.cursor.y) {
+            return null;
+        }
+
+        if (screen.cursor.x >= marker.end) {
+            const steps = atomicSteps(screen.buffer, marker.end, screen.cursor.x, marker.y) orelse return null;
+
+            return .{ .direction = .left, .steps = steps, .deletion = .backward };
+        }
+
+        const steps = atomicSteps(screen.buffer, screen.cursor.x, marker.start, marker.y) orelse return null;
+
+        return .{ .direction = .right, .steps = steps, .deletion = .forward };
+    }
+
+    /// Resolves a Backspace or Delete positioned directly beside an image
+    /// marker to the preview that the child editor will remove.
+    ///
+    /// ```zig
+    /// const id = store.idAtMarkerDeletion(screen, .backward) orelse return;
+    /// ```
+    pub fn idAtMarkerDeletion(store: *const Store, screen: MarkerScreen, deletion: MarkerDeletion) ?Id {
+        if (!screen.cursor.visible) {
+            return null;
+        }
+
+        const visible = store.snapshot();
+        for (visible.slice(), 0..) |item, index| {
+            const slot = store.findConst(item.id) orelse continue;
+            const ordinal = slot.marker_number orelse @as(u16, @intCast(index + 1));
+            if (markerTouchesCursor(screen.buffer, .{
+                .ordinal = ordinal,
+                .cursor = screen.cursor,
+                .deletion = deletion,
+            })) {
+                return item.id;
+            }
+        }
+
+        return null;
+    }
+
+    /// Reports whether a deletion targets the next marker whose clipboard
+    /// capture has not reached the preview store yet.
+    ///
+    /// ```zig
+    /// if (store.pendingMarkerAtDeletion(screen, .backward)) cancelCapture();
+    /// ```
+    pub fn pendingMarkerAtDeletion(store: *const Store, screen: MarkerScreen, deletion: MarkerDeletion) bool {
+        if (!screen.cursor.visible) {
+            return false;
+        }
+
+        const visible = store.snapshot();
+        if (visible.len >= max_items) {
+            return false;
+        }
+
+        return markerTouchesCursor(screen.buffer, .{
+            .ordinal = @as(u16, visible.len) + 1,
+            .cursor = screen.cursor,
+            .deletion = deletion,
+        });
+    }
+
+    pub fn expectStableMarkerDeletion(store: *Store, target: Target) void {
+        for (store.slots) |maybe_slot| {
+            const slot = maybe_slot orelse continue;
+            if (!slot.retire_pending and slot.marker_policy == .stable_number and
+                std.meta.eql(slot.target, target))
+            {
+                store.stable_deletion_pending = target;
+                return;
+            }
+        }
+    }
+
+    /// Learns Claude's stable marker numbers and retires previews whose
+    /// previously observed marker disappeared from a committed pane frame.
+    ///
+    /// ```zig
+    /// const removed = store.reconcileStableMarkers(target, screen);
+    /// ```
+    pub fn reconcileStableMarkers(store: *Store, target: Target, screen: MarkerScreen) u8 {
+        const visible = store.snapshot();
+        for (visible.slice()) |item| {
+            const slot = store.find(item.id) orelse continue;
+            if (slot.marker_policy != .stable_number or slot.marker_number != null or
+                !std.meta.eql(slot.target, target))
+            {
+                continue;
+            }
+
+            slot.marker_number = markerForNextUnpaired(store, target, screen.buffer);
+        }
+
+        if (!optionalTargetEql(store.stable_deletion_pending, target)) {
+            return 0;
+        }
+        store.stable_deletion_pending = null;
+
+        var removed: u8 = 0;
+        for (&store.slots, 0..) |*maybe_slot, index| {
+            const slot = if (maybe_slot.*) |*value| value else continue;
+            const number = slot.marker_number orelse continue;
+            if (slot.retire_pending or slot.marker_policy != .stable_number or
+                !std.meta.eql(slot.target, target) or markerPresent(screen.buffer, number))
+            {
+                continue;
+            }
+
+            const id = slot.id;
+            store.retireAt(index);
+            if (store.modal == id) {
+                store.modal = null;
+            }
+            removed += 1;
+        }
+
+        return removed;
     }
 
     pub fn openModal(store: *Store, id: Id) bool {
@@ -563,6 +762,13 @@ pub const Store = struct {
         return null;
     }
 
+    fn findConst(store: *const Store, id: Id) ?*const Slot {
+        for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
+            if (slot.id == id) return slot;
+        };
+        return null;
+    }
+
     fn freeIndex(store: *const Store) ?usize {
         for (store.slots, 0..) |slot, index| if (slot == null) return index;
         return null;
@@ -638,6 +844,250 @@ pub const Store = struct {
         maybe_slot.* = null;
     }
 };
+
+const MarkerPosition = struct {
+    number: u16,
+    start: u16,
+    end: u16,
+    y: u16,
+};
+
+fn snapshotOrdinal(snapshot: *const Snapshot, id: Id) ?u8 {
+    for (snapshot.slice(), 0..) |item, index| {
+        if (item.id == id) {
+            return @intCast(index);
+        }
+    }
+
+    return null;
+}
+
+fn findMarker(buffer: *const ui.Buffer, number: u16, cursor: schema.frame.Cursor) ?MarkerPosition {
+    if (number == 0 or buffer.w < minimum_marker_width) {
+        return null;
+    }
+
+    var best: ?MarkerPosition = null;
+    var best_distance: u32 = std.math.maxInt(u32);
+    var y: u16 = 0;
+    while (y < buffer.h) : (y += 1) {
+        var x: u16 = 0;
+        while (x <= buffer.w -| minimum_marker_width) : (x += 1) {
+            const candidate = parseMarker(buffer, x, y) orelse continue;
+            if (candidate.number != number) {
+                continue;
+            }
+
+            const row_distance = if (candidate.y > cursor.y) candidate.y - cursor.y else cursor.y - candidate.y;
+            const column_distance = if (candidate.end > cursor.x) candidate.end - cursor.x else cursor.x - candidate.end;
+            const distance = @as(u32, row_distance) * (@as(u32, buffer.w) + 1) + column_distance;
+            if (distance < best_distance) {
+                best = candidate;
+                best_distance = distance;
+            }
+        }
+    }
+
+    return best;
+}
+
+fn markerForNextUnpaired(store: *const Store, target: Target, buffer: *const ui.Buffer) ?u16 {
+    if (buffer.w < minimum_marker_width) {
+        return null;
+    }
+
+    var candidates: [max_items]u16 = @splat(0);
+    var candidate_count: u8 = 0;
+    var y: u16 = 0;
+    while (y < buffer.h) : (y += 1) {
+        var x: u16 = 0;
+        while (x <= buffer.w -| minimum_marker_width) : (x += 1) {
+            const marker = parseMarker(buffer, x, y) orelse continue;
+            if (markerNumberClaimed(store, target, marker.number)) {
+                continue;
+            }
+
+            var duplicate = false;
+            for (candidates[0..candidate_count]) |candidate| {
+                duplicate = duplicate or candidate == marker.number;
+            }
+            if (duplicate) {
+                continue;
+            }
+
+            var at: usize = candidate_count;
+            if (candidate_count < candidates.len) {
+                candidate_count += 1;
+            } else if (marker.number <= candidates[candidates.len - 1]) {
+                continue;
+            } else {
+                at = candidates.len - 1;
+            }
+            while (at != 0 and candidates[at - 1] < marker.number) : (at -= 1) {
+                if (at < candidates.len) {
+                    candidates[at] = candidates[at - 1];
+                }
+            }
+            if (at < candidates.len) {
+                candidates[at] = marker.number;
+            }
+        }
+    }
+
+    const unpaired = unpairedStableCount(store, target);
+    if (unpaired == 0 or candidate_count < unpaired) {
+        return null;
+    }
+
+    return candidates[unpaired - 1];
+}
+
+fn unpairedStableCount(store: *const Store, target: Target) u8 {
+    var count: u8 = 0;
+    for (store.slots) |maybe_slot| {
+        const slot = maybe_slot orelse continue;
+        if (!slot.retire_pending and slot.marker_policy == .stable_number and
+            slot.marker_number == null and std.meta.eql(slot.target, target))
+        {
+            count += 1;
+        }
+    }
+
+    return count;
+}
+
+fn markerNumberClaimed(store: *const Store, target: Target, number: u16) bool {
+    for (store.slots) |maybe_slot| {
+        const slot = maybe_slot orelse continue;
+        if (!slot.retire_pending and slot.marker_policy == .stable_number and
+            std.meta.eql(slot.target, target) and slot.marker_number == number)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+fn markerPresent(buffer: *const ui.Buffer, number: u16) bool {
+    if (buffer.w < minimum_marker_width) {
+        return false;
+    }
+
+    var y: u16 = 0;
+    while (y < buffer.h) : (y += 1) {
+        var x: u16 = 0;
+        while (x <= buffer.w -| minimum_marker_width) : (x += 1) {
+            const marker = parseMarker(buffer, x, y) orelse continue;
+            if (marker.number == number) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+const MarkerBoundary = struct {
+    ordinal: u16,
+    cursor: schema.frame.Cursor,
+    deletion: MarkerDeletion,
+};
+
+fn markerTouchesCursor(buffer: *const ui.Buffer, boundary: MarkerBoundary) bool {
+    if (boundary.cursor.y >= buffer.h or boundary.ordinal == 0 or
+        buffer.w < minimum_marker_width)
+    {
+        return false;
+    }
+
+    var x: u16 = 0;
+    while (x <= buffer.w - minimum_marker_width) : (x += 1) {
+        const marker = parseMarker(buffer, x, boundary.cursor.y) orelse continue;
+        if (marker.number != boundary.ordinal) {
+            continue;
+        }
+
+        const matches = switch (boundary.deletion) {
+            .backward => marker.end == boundary.cursor.x,
+            .forward => marker.start == boundary.cursor.x,
+        };
+        if (matches) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+fn parseMarker(buffer: *const ui.Buffer, x: u16, y: u16) ?MarkerPosition {
+    if (y >= buffer.h or x > buffer.w -| minimum_marker_width) {
+        return null;
+    }
+
+    for (marker_prefix, 0..) |expected, offset| {
+        const cell = buffer.cells[@as(usize, y) * buffer.w + x + offset];
+        if (cell.width == 0 or cell.text().len != 1 or cell.text()[0] != expected) {
+            return null;
+        }
+    }
+
+    var number: u16 = 0;
+    var at = x + marker_prefix_width;
+    while (at < buffer.w) : (at += 1) {
+        const cell = buffer.cells[@as(usize, y) * buffer.w + at];
+        if (cell.width == 0 or cell.text().len != 1) {
+            return null;
+        }
+        const byte = cell.text()[0];
+        if (byte == ']') {
+            if (at == x + marker_prefix_width or number == 0) {
+                return null;
+            }
+
+            return .{ .number = number, .start = x, .end = at + 1, .y = y };
+        }
+        if (byte < '0' or byte > '9') {
+            return null;
+        }
+
+        number = std.math.mul(u16, number, 10) catch return null;
+        number = std.math.add(u16, number, byte - '0') catch return null;
+    }
+
+    return null;
+}
+
+fn markerWidthAt(buffer: *const ui.Buffer, x: u16, y: u16) u16 {
+    const marker = parseMarker(buffer, x, y) orelse return 0;
+
+    return marker.end - marker.start;
+}
+
+fn atomicSteps(buffer: *const ui.Buffer, start: u16, end: u16, y: u16) ?u8 {
+    if (start > end or end > buffer.w) {
+        return null;
+    }
+
+    var steps: u16 = 0;
+    var x = start;
+    while (x < end) {
+        const width = markerWidthAt(buffer, x, y);
+        if (width != 0 and x + width <= end) {
+            steps += 1;
+            x += width;
+        } else {
+            const cell = buffer.cells[@as(usize, y) * buffer.w + x];
+            steps += @intFromBool(cell.width != 0);
+            x += 1;
+        }
+        if (steps > max_marker_navigation_steps) {
+            return null;
+        }
+    }
+
+    return @intCast(steps);
+}
 
 fn optionalTargetEql(a: ?Target, b: ?Target) bool {
     if (a == null or b == null) return a == null and b == null;
@@ -830,6 +1280,106 @@ test "switching visible previews between panes changes their layout owner" {
     try std.testing.expect(changed.changed);
     try std.testing.expect(changed.layout_changed);
     try std.testing.expectEqual(second, store.visibleTarget().?);
+}
+
+test "marker removal keeps preview order aligned with atomic child placeholders" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(target);
+    try store.adopt(try testCapture(std.testing.allocator, testRequest(1, target), "first"));
+    try store.adopt(try testCapture(std.testing.allocator, testRequest(2, target), "second"));
+    var buffer = try ui.Buffer.init(std.testing.allocator, 64, 2);
+    defer buffer.deinit();
+    const prompt = "> [Image #1]xx[Image #2]tail";
+    const cursor_x = buffer.writeText(buffer.area(), 0, 0, prompt, .{});
+    const screen: MarkerScreen = .{
+        .buffer = &buffer,
+        .cursor = .{ .visible = true, .x = cursor_x, .y = 0 },
+    };
+
+    const removal = store.planMarkerRemoval(@enumFromInt(1), screen).?;
+
+    try std.testing.expect(removal.direction == .left);
+    try std.testing.expectEqual(@as(u8, 7), removal.steps);
+    try std.testing.expect(removal.deletion == .backward);
+
+    const second_end: u16 = 2 + minimum_marker_width + 2 + minimum_marker_width;
+    try std.testing.expectEqual(
+        @as(Id, @enumFromInt(2)),
+        store.idAtMarkerDeletion(.{
+            .buffer = &buffer,
+            .cursor = .{ .visible = true, .x = second_end, .y = 0 },
+        }, .backward).?,
+    );
+    try std.testing.expectEqual(
+        @as(Id, @enumFromInt(1)),
+        store.idAtMarkerDeletion(.{
+            .buffer = &buffer,
+            .cursor = .{ .visible = true, .x = 2, .y = 0 },
+        }, .forward).?,
+    );
+
+    buffer.clear(.{});
+    const pending_cursor = buffer.writeText(buffer.area(), 0, 0, "> [Image #1][Image #2][Image #3]", .{});
+    try std.testing.expect(store.pendingMarkerAtDeletion(.{
+        .buffer = &buffer,
+        .cursor = .{ .visible = true, .x = pending_cursor, .y = 0 },
+    }, .backward));
+}
+
+test "Claude previews retain stable marker numbers across attachment deletion" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(target);
+    const first = try testCapture(std.testing.allocator, testRequest(1, target), "first");
+    first.request.marker_policy = .stable_number;
+    try store.adopt(first);
+    const second = try testCapture(std.testing.allocator, testRequest(2, target), "second");
+    second.request.marker_policy = .stable_number;
+    try store.adopt(second);
+    var buffer = try ui.Buffer.init(std.testing.allocator, 64, 2);
+    defer buffer.deinit();
+    var cursor_x = buffer.writeText(buffer.area(), 0, 0, "> [Image #7][Image #12]", .{});
+
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileStableMarkers(target, .{
+        .buffer = &buffer,
+        .cursor = .{ .visible = true, .x = cursor_x, .y = 0 },
+    }));
+    const removal = store.planMarkerRemoval(@enumFromInt(1), .{
+        .buffer = &buffer,
+        .cursor = .{ .visible = true, .x = cursor_x, .y = 0 },
+    }).?;
+    try std.testing.expectEqual(@as(u8, 1), removal.steps);
+
+    buffer.clear(.{});
+    cursor_x = buffer.writeText(buffer.area(), 0, 0, "> [Image #12]", .{});
+    store.expectStableMarkerDeletion(target);
+    try std.testing.expectEqual(@as(u8, 1), store.reconcileStableMarkers(target, .{
+        .buffer = &buffer,
+        .cursor = .{ .visible = true, .x = cursor_x, .y = 0 },
+    }));
+
+    const remaining = store.snapshot();
+    try std.testing.expectEqual(@as(u8, 1), remaining.len);
+    try std.testing.expectEqual(@as(u64, 2), @intFromEnum(remaining.items[0].id));
+}
+
+test "submitted prompt retires only previews owned by its target" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const submitted: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    const other: Target = .{ .pane_id = @enumFromInt(9), .pane_generation = 2 };
+    _ = store.setTarget(submitted);
+    try store.adopt(try testCapture(std.testing.allocator, testRequest(1, submitted), "first"));
+    try store.adopt(try testCapture(std.testing.allocator, testRequest(2, submitted), "second"));
+    try store.adopt(try testCapture(std.testing.allocator, testRequest(3, other), "other"));
+
+    try std.testing.expectEqual(@as(u8, 2), store.removeVisible(submitted));
+    try std.testing.expectEqual(@as(u8, 0), store.snapshot().len);
+    try std.testing.expect(store.setTarget(other).layout_changed);
+    try std.testing.expectEqual(@as(u8, 1), store.snapshot().len);
 }
 
 test "preview store emits PNG and client-owned z-index placements" {

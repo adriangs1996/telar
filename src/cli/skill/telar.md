@@ -46,8 +46,8 @@ must be unique) or `--current`.
 4. Nothing here changes layout or focus; those belong to the user's client.
 5. `agent report-session` stores your own session id with your pane. After a
    runtime restart, telar relaunches the pane's shell and types the resume
-   command for it (`claude --resume`, `codex resume`). Claude Code hooks can
-   call it with the `session_id` they receive.
+   command for it (`claude --resume`, `codex resume`). Agent hooks report the
+   `session_id` they receive through the same runtime request.
 
 ## Orchestrating
 

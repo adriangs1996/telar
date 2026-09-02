@@ -87,6 +87,35 @@ pub const PaneInputHandler = struct {
         return try handler.deliver(plan, prepared);
     }
 
+    /// Encodes one bounded synthetic key sequence as a single pane-input
+    /// transaction. This keeps cursor motion plus marker deletion atomic with
+    /// respect to Telar's outbox.
+    ///
+    /// ```zig
+    /// _ = try handler.executeKeys(.{ .pane = pane_id }, keys);
+    /// ```
+    pub fn executeKeys(handler: *PaneInputHandler, target: client_model.PaneInputTarget, keys: []const keybind.Key) !?Delivery {
+        if (keys.len == 0 or keys.len > max_bytes / 32) {
+            return error.InvalidInputLength;
+        }
+
+        const plan = handler.model.planPaneInput(target) orelse return null;
+        var encoded: [max_bytes]u8 = undefined;
+        var len: usize = 0;
+        for (keys) |key| {
+            var key_bytes: [32]u8 = undefined;
+            const bytes = try host_input.encodeKey(&key_bytes, key, plan.input_modes);
+            if (bytes.len > encoded.len - len) {
+                return error.InvalidInputLength;
+            }
+
+            @memcpy(encoded[len..][0..bytes.len], bytes);
+            len += bytes.len;
+        }
+
+        return try handler.deliver(plan, .{ .source = .host, .bytes = encoded[0..len] });
+    }
+
     /// Frames one bounded paste against the target child's current mode and
     /// delivers it through the same viewport policy as streamed paste.
     ///
@@ -281,6 +310,24 @@ test "PaneInputHandler encodes keys after resolution and restores live output" {
     try std.testing.expectEqual(@as(usize, 3), delivery.byte_count);
     try std.testing.expectEqual(Source.host, delivery.source);
     try std.testing.expectEqual(client_model.Version{ .viewport = 1 }, testing.model.version());
+}
+
+test "PaneInputHandler sends synthetic marker editing as one transaction" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    var capture: EffectsCapture = .{ .model = testing.model };
+    var handler: PaneInputHandler = .{ .model = testing.model, .effects = capture.port() };
+    const keys = [_]keybind.Key{
+        .{ .code = .left },
+        .{ .code = .backspace },
+        .{ .code = .right },
+    };
+
+    const delivery = (try handler.executeKeys(.{ .pane = testing.pane_id }, &keys)).?;
+
+    try std.testing.expectEqual(@as(usize, 1), capture.input_calls);
+    try std.testing.expectEqualStrings("\x1bOD\x7f\x1bOC", capture.input[0..capture.input_len]);
+    try std.testing.expectEqual(@as(usize, 7), delivery.byte_count);
 }
 
 test "PaneInputHandler drops legacy releases without changing the viewport" {

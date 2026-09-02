@@ -4,6 +4,8 @@ const core = @import("telar-core");
 const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const active_pane_resources = @import("active_pane_resources.zig");
+const attachment_prompts = @import("../input/attachment_prompts.zig");
+const pane_geometry = @import("pane_geometry.zig");
 
 const Client = @import("../../client.zig");
 const diagnostics = core.diagnostics;
@@ -30,6 +32,10 @@ pub fn apply(client: *Client, frame: schema.frame.FrameView) !client_model.PaneF
             client.telemetry.metrics.frame_spans += commit.spans;
             client.telemetry.metrics.snapshots += @intFromBool(commit.snapshot);
             client.telemetry.metrics.apply.observe(diagnostics.elapsed(started, diagnostics.now(client.io)));
+        }
+        if (attachment_prompts.reconcileFrame(client, commit.pane_id)) {
+            client.graphics_store.invalidatePlacements();
+            try pane_geometry.offerActive(client, client.view.workbench());
         }
     }
 

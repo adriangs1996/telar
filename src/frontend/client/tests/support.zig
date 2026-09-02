@@ -547,6 +547,10 @@ pub fn installTestingPlugin(client: *Client) !TestingPlugin {
 }
 
 pub fn installTestingAttachmentTarget(client: *Client, generation: u64) !attachments.Target {
+    return installTestingAttachmentProvider(client, generation, .codex);
+}
+
+pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provider: schema.AgentProvider) !attachments.Target {
     const target: attachments.Target = .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = generation,
@@ -560,7 +564,7 @@ pub fn installTestingAttachmentTarget(client: *Client, generation: u64) !attachm
             },
             .location = TestHarness.bootstrap_location,
             .pane_index = 1,
-            .provider = .codex,
+            .provider = provider,
             .status = .working,
         }},
     });

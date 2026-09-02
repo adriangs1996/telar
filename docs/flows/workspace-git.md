@@ -1,8 +1,9 @@
 # Workspace git status
 
-Every workspace row can show its git branch and whether the tree is dirty.
+The runtime observes each workspace's git branch and whether the tree is dirty.
 Probing lives entirely on the observation path; rendering and input never
-touch the filesystem or a subprocess.
+touch the filesystem or a subprocess. The top bar deliberately renders only
+workspace names and does not mark dirty workspaces.
 
 ## End-to-end path
 
@@ -20,9 +21,9 @@ git -C <path> status --porcelain --no-renames   (2 s timeout, 64 KiB cap)
 Event.git_status -> Workspace.applyGitStatus (bounded branch copy, change
                     detection) -> recordListChange on change
         |
-schema.workspace_list entries now carry `branch` and `dirty`
+schema.workspace_list entries carry `branch` and `dirty`
         |
-client workspace_list.Snapshot -> top bar rows render " name ⎇branch* "
+client workspace_list.Snapshot -> navigation metadata; top bar renders " name "
 ```
 
 ## Ownership and bounds

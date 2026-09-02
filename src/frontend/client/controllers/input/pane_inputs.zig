@@ -1,6 +1,7 @@
 //! Adapts user pane input to the client outbox and diagnostics.
 
 const core = @import("telar-core");
+const input_capability = @import("../../../input/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const client_model = @import("../../model/root.zig");
@@ -21,6 +22,18 @@ pub fn send(client: *Client, command: pane_input.Command) !?pane_input.Delivery 
     var use_case = handler(client);
 
     return record(client, started, try use_case.execute(command));
+}
+
+/// Delivers one synthetic key sequence in a single pane-input transaction.
+///
+/// ```zig
+/// _ = try sendKeys(client, .{ .pane = pane_id }, keys);
+/// ```
+pub fn sendKeys(client: *Client, target: client_model.PaneInputTarget, keys: []const input_capability.Key) !?pane_input.Delivery {
+    const started = diagnostics.now(client.io);
+    var use_case = handler(client);
+
+    return record(client, started, try use_case.executeKeys(target, keys));
 }
 
 /// Encodes one Lua paste decision against the current child modes.

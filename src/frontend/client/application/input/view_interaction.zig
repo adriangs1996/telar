@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const agents = @import("../../../agents/root.zig");
+const attachments = @import("../../../attachments/root.zig");
 const notification_capability = @import("../../../notifications/root.zig");
 
 const schema = core.schema;
@@ -19,6 +20,7 @@ pub const Intent = union(enum) {
     select_workspace: schema.WorkspaceId,
     notification_activate: notification_capability.Id,
     notification_dismiss: notification_capability.Id,
+    attachment_dismiss: attachments.Id,
 };
 
 pub const Command = struct {
@@ -31,9 +33,13 @@ pub const Outcome = struct {
     consume_pane_input: bool,
 };
 
+pub const IntentOutcome = struct {
+    layout_changed: bool = false,
+};
+
 pub const Effects = struct {
     context: *anyopaque,
-    apply_intent: *const fn (*anyopaque, Intent) anyerror!void,
+    apply_intent: *const fn (*anyopaque, Intent) anyerror!IntentOutcome,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
     offer_pane_geometry: *const fn (*anyopaque) anyerror!void,
 };
@@ -48,12 +54,16 @@ pub const DispatchViewInteractionHandler = struct {
     /// const outcome = try handler.execute(command);
     /// ```
     pub fn execute(handler: *DispatchViewInteractionHandler, command: Command) !Outcome {
+        var layout_changed = command.layout_changed;
         switch (command.intent) {
             .none => {},
-            else => try handler.effects.apply_intent(handler.effects.context, command.intent),
+            else => {
+                const applied = try handler.effects.apply_intent(handler.effects.context, command.intent);
+                layout_changed = layout_changed or applied.layout_changed;
+            },
         }
 
-        if (command.layout_changed) {
+        if (layout_changed) {
             handler.effects.invalidate_graphics_placements(handler.effects.context);
             try handler.effects.offer_pane_geometry(handler.effects.context);
         }
@@ -102,13 +112,18 @@ const Capture = struct {
         capture.count += 1;
     }
 
-    fn applyIntent(context: *anyopaque, intent: Intent) !void {
+    fn applyIntent(context: *anyopaque, intent: Intent) !IntentOutcome {
         const capture: *Capture = @ptrCast(@alignCast(context));
         capture.record(.{ .intent = intent });
 
         if (capture.failure == .intent) {
             return error.ViewIntentFailed;
         }
+
+        return .{ .layout_changed = switch (intent) {
+            .attachment_dismiss => true,
+            else => false,
+        } };
     }
 
     fn invalidateGraphicsPlacements(context: *anyopaque) void {
@@ -145,6 +160,19 @@ test "DispatchViewInteractionHandler orders intent invalidation and pane geometr
     }, outcome);
     try std.testing.expectEqual(@as(usize, 3), capture.count);
     try std.testing.expectEqualDeep(Intent{ .focus_agent = key }, capture.events[0].intent);
+    try std.testing.expect(capture.events[1] == .invalidate_graphics_placements);
+    try std.testing.expect(capture.events[2] == .offer_pane_geometry);
+}
+
+test "attachment dismissal can discover its layout change while applying the intent" {
+    var capture: Capture = .{};
+    var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
+    const id: attachments.Id = @enumFromInt(4);
+
+    _ = try handler.execute(.{ .intent = .{ .attachment_dismiss = id } });
+
+    try std.testing.expectEqual(@as(usize, 3), capture.count);
+    try std.testing.expectEqualDeep(Intent{ .attachment_dismiss = id }, capture.events[0].intent);
     try std.testing.expect(capture.events[1] == .invalidate_graphics_placements);
     try std.testing.expect(capture.events[2] == .offer_pane_geometry);
 }

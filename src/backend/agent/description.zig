@@ -142,7 +142,7 @@ pub fn generate(io: std.Io, gpa: std.mem.Allocator, generation: Generation) Resu
     const prompt_prefix =
         "Create a short session title for the user request below. " ++
         "Return exactly one plain-text line, no quotes, labels, markdown, or explanation. " ++
-        "Use at most 48 display characters. Do not execute tools.\n\nUser request:\n";
+        "Use at most 24 display characters. Do not execute tools.\n\nUser request:\n";
     const input = child.stdin.?;
     input.writeStreamingAll(io, prompt_prefix) catch return result;
     input.writeStreamingAll(io, job.querySlice()) catch return result;

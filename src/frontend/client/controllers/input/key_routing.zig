@@ -3,10 +3,12 @@
 const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
 const input_application = @import("../../application/input/root.zig");
+const attachment_prompts = @import("attachment_prompts.zig");
 const clipboard_images = @import("../host/clipboard_images.zig");
 const copy_modes = @import("copy_modes.zig");
 const name_prompts = @import("name_prompts.zig");
 const pane_inputs = @import("pane_inputs.zig");
+const pane_geometry = @import("../panes/pane_geometry.zig");
 
 const Client = @import("../../client.zig");
 const host_input = input_capability.host;
@@ -95,7 +97,13 @@ fn routePane(raw_context: *anyopaque, command: key_routing.PaneCommand) !?schema
         },
     });
 
-    return if (delivery) |completed| completed.pane_id else null;
+    const completed = delivery orelse return null;
+    if (attachment_prompts.observe(client, completed.pane_id, command.input)) {
+        client.graphics_store.invalidatePlacements();
+        try pane_geometry.offerActive(client, client.view.workbench());
+    }
+
+    return completed.pane_id;
 }
 
 fn startPreview(raw_context: *anyopaque) !void {

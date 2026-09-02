@@ -8,9 +8,9 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "src" / "frontend" / "assets"
-SOURCES = (ASSETS / "Claude.png", ASSETS / "Codex.png")
+SOURCES = (ASSETS / "Claude.png", ASSETS / "Codex.png", ASSETS / "Pi.png")
 SLOT_SIZE = 256
-OUTPUT = ASSETS / "provider-marks-512x256.rgba"
+OUTPUT = ASSETS / f"provider-marks-{len(SOURCES) * SLOT_SIZE}x{SLOT_SIZE}.rgba"
 
 
 def main() -> None:

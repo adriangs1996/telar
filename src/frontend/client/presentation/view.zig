@@ -358,6 +358,62 @@ pub const State = struct {
         return layout_changed;
     }
 
+    /// Retires one preview after its child marker deletion has been delivered.
+    /// A null result means the preview was already absent.
+    ///
+    /// ```zig
+    /// const layout_changed = view.removeAttachment(id) orelse return;
+    /// ```
+    pub fn removeAttachment(state: *State, id: attachments.Id) ?bool {
+        const had_items = state.attachment_store.hasVisibleItems();
+        if (!state.attachment_store.remove(id)) {
+            return null;
+        }
+
+        const has_items = state.attachment_store.hasVisibleItems();
+        state.hovered = null;
+        state.recordInteraction();
+
+        return had_items != has_items;
+    }
+
+    /// Retires all previews owned by one prompt after that prompt is sent.
+    ///
+    /// ```zig
+    /// const layout_changed = view.removePromptAttachments(target) orelse return;
+    /// ```
+    pub fn removePromptAttachments(state: *State, target: attachments.Target) ?bool {
+        const had_items = state.attachment_store.hasVisibleItems();
+        if (state.attachment_store.removeVisible(target) == 0) {
+            return null;
+        }
+
+        const has_items = state.attachment_store.hasVisibleItems();
+        state.hovered = null;
+        state.recordInteraction();
+
+        return had_items != has_items;
+    }
+
+    /// Reconciles Claude's stable image markers after a pane frame commits.
+    /// A null result means no previously paired marker disappeared.
+    ///
+    /// ```zig
+    /// const layout_changed = view.reconcileAttachmentMarkers(target, screen) orelse return;
+    /// ```
+    pub fn reconcileAttachmentMarkers(state: *State, target: attachments.Target, screen: attachments.MarkerScreen) ?bool {
+        const had_items = state.attachment_store.hasVisibleItems();
+        if (state.attachment_store.reconcileStableMarkers(target, screen) == 0) {
+            return null;
+        }
+
+        const has_items = state.attachment_store.hasVisibleItems();
+        state.hovered = null;
+        state.recordInteraction();
+
+        return had_items != has_items;
+    }
+
     pub fn hasAttachmentModal(state: *const State) bool {
         return state.attachment_store.hasModal();
     }
@@ -518,13 +574,7 @@ pub const State = struct {
             },
             .attachment_dismiss => |id| {
                 result.consumed = true;
-                const had_items = state.attachment_store.hasVisibleItems();
-                if (state.attachment_store.remove(id)) {
-                    const has_items = state.attachment_store.hasVisibleItems();
-                    result.layout_changed = had_items != has_items;
-                    state.hovered = null;
-                    state.recordInteraction();
-                }
+                result.intent = .{ .attachment_dismiss = id };
             },
             .attachment_shelf_hold => result.consumed = true,
             .attachment_modal_close => {

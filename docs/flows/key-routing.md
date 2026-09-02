@@ -59,7 +59,8 @@ Semantic keys use this order:
 2. The name prompt receives the key encoded with neutral terminal modes.
 3. Copy mode receives the semantic key.
 4. The focused pane receives the key and encodes it against its acknowledged
-   child modes.
+   child modes. After confirmed delivery, attachment prompt policy mirrors a
+   marker deletion or prompt submission into the local preview store.
 
 When the host reports a physical identity, the press records the selected
 owner in a fixed 64-entry table. Pane ownership includes the delivered
@@ -106,9 +107,13 @@ capability adapter. No asynchronous task retains the snapshot or input slice.
 
 A successful modal close advances `View.interactionVersion`. Prompt and copy
 changes advance their own `ClientModel.Version` fields. `Presenter` observes
-both through the paced loop. Pane input produces no presentation revision
-unless its existing viewport policy commits a scroll change. Clipboard media
-follows its independent ingress version.
+both through the paced loop. Pane input normally produces no presentation
+revision unless its viewport policy commits a scroll change. Removing a paired
+image marker also advances `View.interactionVersion`; removing the last marker
+re-offers pane geometry. Claude marker identity is additionally reconciled
+after committed pane frames because its attachment context can remove a chip
+without editing it as Codex text. Clipboard media follows its independent
+ingress version.
 
 Prompt, copy and pane failures preserve the transaction rules of their
 existing handlers. The key router does not retry or reinterpret a failed

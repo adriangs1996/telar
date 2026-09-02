@@ -9,16 +9,16 @@ evidence so a silent hook hands control back.
 ## End-to-end path
 
 ```text
-telar integration install claude
+telar integration install claude|codex
         |
-~/.claude/settings.json  hooks.{SessionStart,UserPromptSubmit,Stop,Notification,SessionEnd}
-        += { type = command, command = "<telar> hook claude", timeout = 5 }
+~/.claude/settings.json or ~/.codex/hooks.json
+        hooks.<owned event> += { type = command, command = "<telar> hook <agent>", timeout = bounded }
 
-Claude Code fires a hook inside the pane
+Claude Code or Codex fires a hook inside the pane
         |
-telar hook claude   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the env)
+telar hook <agent>   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the env)
         |
-hook.mapClaudeHook -> { state, session }
+hook.mapClaudeHook or hook.mapCodexHook -> { state, session }
         |
 schema.report_agent -> routeReportAgent -> ReportAgentHandler
         |
@@ -41,6 +41,17 @@ a new session reference marks the session checkpoint dirty
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
 | any event with `agent_id` (subagent) | ignored |
 
+| Codex event | Report |
+| --- | --- |
+| `SessionStart` | `ready` + session reference |
+| `SessionStart` with source `compact` | `working` + session reference |
+| `UserPromptSubmit` | `working` |
+| `PermissionRequest` | `blocked` |
+| `PostToolUse` | `working`, recovering from a resolved permission request |
+| `Stop`, `Interrupt` | `ready` |
+| `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
+| any event with `agent_id` (subagent) | ignored |
+
 ## Ownership
 
 `telar hook` never fails loudly: outside a pane, with a malformed payload or
@@ -53,10 +64,15 @@ The runtime keeps the report as `Agent.report`, the first evidence
 clears it when a different process takes the pane. Sounds follow the same
 transition rule as screen evidence.
 
-`telar integration` edits only the five event arrays it owns, adds an entry
-once per event, removes only entries whose command ends in ` hook claude`,
-and rewrites the file atomically with two-space indentation. Other settings
-and other hooks are untouched.
+`telar integration` edits only the event arrays owned by the selected agent,
+adds an entry once per event, removes only entries whose command ends in
+` hook claude` or ` hook codex`, and rewrites the file atomically with
+two-space indentation. Other settings and hooks are untouched. Codex uses
+`$CODEX_HOME/hooks.json` when `CODEX_HOME` is set and `~/.codex/hooks.json`
+otherwise. Codex asks the user to trust the new hook definitions; telar does
+not write Codex's trust state or bypass that check. Claude hooks use a
+five-second timeout. Codex hooks use three seconds, the maximum Codex accepts
+for `SessionEnd` and `Interrupt`.
 
 ## Proof
 

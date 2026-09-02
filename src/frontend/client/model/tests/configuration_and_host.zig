@@ -224,6 +224,12 @@ test "clipboard capture is single flight and completion matches its exact identi
     const second = (try model.beginClipboardCapture(target)).?;
 
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(second.id));
+    try std.testing.expect(!model.cancelClipboardCapture(.{
+        .pane_id = target.pane_id,
+        .pane_generation = target.pane_generation + 1,
+    }));
+    try std.testing.expect(model.cancelClipboardCapture(target));
+    try std.testing.expect(model.clipboardCapture() == null);
     try std.testing.expectEqualDeep(client_model.Version{}, model.version());
 }
 

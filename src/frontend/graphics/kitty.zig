@@ -1738,7 +1738,7 @@ test "PNG transmissions use encoded format without raw pixel dimensions" {
     try std.testing.expect(std.mem.indexOf(u8, bytes, ",v=") == null);
 }
 
-pub const SidebarProvider = enum { claude, codex };
+pub const SidebarProvider = enum { claude, codex, pi };
 
 pub const SidebarProviderPlacement = struct {
     area: core.ui.Rect,
@@ -1759,11 +1759,11 @@ pub const KittySidebarRenderer = struct {
     const provider_atlas_id: u32 = 0x80000003;
     const first_provider_placement_id: u32 = 0x80000100;
     const max_provider_placements = 64;
-    const provider_count = 2;
+    const provider_count = 3;
     const provider_source_size = 256;
     const provider_source_width = provider_count * provider_source_size;
     const provider_raster_size = 64;
-    const provider_source_pixels: []const u8 = @embedFile("../assets/provider-marks-512x256.rgba");
+    const provider_source_pixels: []const u8 = @embedFile("../assets/provider-marks-768x256.rgba");
     // A flat rounded card needs little source resolution. This keeps its RGBA
     // payload plus the provider atlas comfortably inside one media pass even
     // after base64 expansion.
@@ -2008,10 +2008,7 @@ pub const KittySidebarRenderer = struct {
                         .row = mark.area.y,
                         .offset_x = 0,
                         .offset_y = 0,
-                        .source_x = switch (mark.provider) {
-                            .claude => 0,
-                            .codex => renderer.provider_slot_width,
-                        },
+                        .source_x = @as(u32, @intFromEnum(mark.provider)) * renderer.provider_slot_width,
                         .source_y = 0,
                         .source_width = renderer.provider_slot_width,
                         .source_height = renderer.provider_slot_height,
@@ -3466,6 +3463,10 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
             .area = .{ .x = 3, .y = 7, .w = 2, .h = 2 },
             .provider = .codex,
         },
+        .{
+            .area = .{ .x = 3, .y = 9, .w = 2, .h = 2 },
+            .provider = .pi,
+        },
     };
     try renderer.prepare(area, null, &providers, 10, 20);
     try std.testing.expectEqual(@as(u32, 60), renderer.provider_slot_width);
@@ -3475,6 +3476,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     _ = try renderer.write(&initial);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "a=t") != null);
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=60,y=0,w=60,h=120,c=2,r=2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=120,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(renderer.provider_emitted);
 
     try renderer.prepare(area, null, &providers, 10, 20);
@@ -3494,6 +3496,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     var resized = Io.Writer.fixed(&resized_buffer);
     _ = try renderer.write(&resized);
     try std.testing.expect(std.mem.indexOf(u8, resized.buffered(), "x=63,y=0,w=63,h=126,c=2,r=2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, resized.buffered(), "x=126,y=0,w=63,h=126,c=2,r=2") != null);
 }
 
 test "sidebar focused card is rounded bounded and moves without retransmission" {

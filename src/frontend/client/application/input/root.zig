@@ -1,6 +1,7 @@
 //! Semantic input flows owned by the client application.
 
 pub const action_routing = @import("action_routing.zig");
+pub const attachment_prompt = @import("attachment_prompt.zig");
 pub const clipboard_image = @import("clipboard_image.zig");
 pub const clipboard_image_delivery = @import("clipboard_image_delivery.zig");
 pub const copy_mode = @import("copy_mode.zig");
@@ -21,6 +22,7 @@ pub const view_interaction = @import("view_interaction.zig");
 
 test {
     _ = action_routing;
+    _ = attachment_prompt;
     _ = clipboard_image;
     _ = clipboard_image_delivery;
     _ = copy_mode;

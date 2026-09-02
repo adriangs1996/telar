@@ -39,6 +39,7 @@ const config_reload_worker = @import("../resources/config_reload.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
+const view_interactions = @import("../controllers/input/view_interactions.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const name_prompts = @import("../controllers/input/name_prompts.zig");
 const notification_flow = @import("../controllers/notifications/notifications.zig");
@@ -85,7 +86,145 @@ const TestingPlugin = support.TestingPlugin;
 const testing_plugin_context = support.testing_plugin_context;
 const installTestingPlugin = support.installTestingPlugin;
 const installTestingAttachmentTarget = support.installTestingAttachmentTarget;
+const installTestingAttachmentProvider = support.installTestingAttachmentProvider;
 const testingClipboardCapture = support.testingClipboardCapture;
+
+test "closing a preview deletes its matching atomic image marker" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try installTestingAttachmentTarget(client, 1);
+    for (1..3) |sequence| {
+        const capture = try client.gpa.create(attachments.Capture);
+        capture.* = .{
+            .request = .{ .target = target, .sequence = sequence },
+            .png = try client.gpa.dupe(u8, "png"),
+            .width = 2,
+            .height = 2,
+        };
+        _ = try client.view.adoptAttachment(capture);
+    }
+    const pane = client.model.activeTabModel().?.find(target.pane_id).?;
+    pane.buffer.clear(.{});
+    const prompt = "> [Image #1]xx[Image #2]tail";
+    pane.cursor = .{
+        .visible = true,
+        .x = pane.buffer.writeText(pane.buffer.area(), 0, 0, prompt, .{}),
+        .y = 0,
+    };
+    const first = client.view.kittyAttachments().snapshot().items[0].id;
+    const model = client.model.activeTabModel().?;
+
+    _ = try view_interactions.apply(client, model, .{
+        .intent = .{ .attachment_dismiss = first },
+        .consumed = true,
+    });
+
+    const remaining = client.view.kittyAttachments().snapshot();
+    try std.testing.expectEqual(@as(u8, 1), remaining.len);
+    try std.testing.expectEqual(@as(u64, 2), @intFromEnum(remaining.items[0].id));
+    try harness.settle();
+    var buffer: [512]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .pane_input);
+    try std.testing.expectEqualStrings(
+        "\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x7f\x1b[C\x1b[C\x1b[C\x1b[C\x1b[C\x1b[C\x1b[C",
+        message.pane_input.bytes,
+    );
+}
+
+test "child marker deletion and prompt submission retire paired previews" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try installTestingAttachmentTarget(client, 1);
+    const capture = try client.gpa.create(attachments.Capture);
+    capture.* = .{
+        .request = .{ .target = target, .sequence = 1 },
+        .png = try client.gpa.dupe(u8, "png"),
+        .width = 2,
+        .height = 2,
+    };
+    _ = try client.view.adoptAttachment(capture);
+    const pane = client.model.activeTabModel().?.find(target.pane_id).?;
+    pane.buffer.clear(.{});
+    pane.cursor = .{
+        .visible = true,
+        .x = pane.buffer.writeText(pane.buffer.area(), 0, 0, "> [Image #1]", .{}),
+        .y = 0,
+    };
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.key(try keybind.parseKey("backspace"));
+
+    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    const pending = (try client.model.beginClipboardCapture(target)).?;
+    try handler.key(try keybind.parseKey("enter"));
+    try std.testing.expect(client.model.clipboardCapture() == null);
+    const completed = try testingClipboardCapture(client, pending, "private png");
+
+    try clipboard_images.complete(client, .{ .execution_id = pending.id, .result = completed });
+
+    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+}
+
+test "Claude marker disappearance in a committed frame retires its paired preview" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const target = try installTestingAttachmentProvider(client, 1, .claude);
+    const capture = try client.gpa.create(attachments.Capture);
+    capture.* = .{
+        .request = .{ .target = target, .sequence = 1, .marker_policy = .stable_number },
+        .png = try client.gpa.dupe(u8, "png"),
+        .width = 2,
+        .height = 2,
+    };
+    _ = try client.view.adoptAttachment(capture);
+    var pane_buffer = try core.ui.Buffer.init(std.testing.allocator, 40, 3);
+    defer pane_buffer.deinit();
+    _ = pane_buffer.writeText(pane_buffer.area(), 0, 1, "> [Image #7]", .{});
+    var payload: [16 * 1024]u8 = undefined;
+    const marker_frame = try schema.encodePaneFrame(&payload, .{
+        .pane_id = target.pane_id,
+        .frame_id = 1,
+        .base_frame_id = 0,
+        .cols = pane_buffer.w,
+        .rows = pane_buffer.h,
+        .cursor = .{ .visible = true, .x = 0, .y = 1 },
+        .scroll = .{ .total_rows = pane_buffer.h, .offset = 0 },
+        .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(marker_frame));
+    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
+    var handler: InputHandler = .{ .client = client };
+    try handler.key(try keybind.parseKey("backspace"));
+    try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
+
+    pane_buffer.clear(.{});
+    const empty_cursor = pane_buffer.writeText(pane_buffer.area(), 0, 1, "> ", .{});
+    const empty_frame = try schema.encodePaneFrame(&payload, .{
+        .pane_id = target.pane_id,
+        .frame_id = 2,
+        .base_frame_id = 0,
+        .cols = pane_buffer.w,
+        .rows = pane_buffer.h,
+        .cursor = .{ .visible = true, .x = empty_cursor, .y = 1 },
+        .scroll = .{ .total_rows = pane_buffer.h, .offset = 0 },
+        .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
+    });
+
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(empty_frame));
+    try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
+}
 
 test "host Enter variants use the keyboard modes received in a pane frame" {
     const cases = [_]struct { modes: schema.frame.InputModes, expected: []const u8 }{
