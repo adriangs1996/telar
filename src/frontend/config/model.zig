@@ -210,6 +210,7 @@ pub const RuntimeSnapshot = struct {
     agent_descriptions: AgentDescriptionCommand = .{},
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     history_filters: core.history_filter.Filters = .{},
+    history_output_capture: bool = false,
     session_persist: bool = true,
     session_resume_agents: bool = true,
     session_path_bytes: [max_history_path_bytes]u8 = undefined,

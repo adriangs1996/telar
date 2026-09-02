@@ -75,11 +75,13 @@ test "read crosses controller and encoder and degrades to a failure for a gone p
     const buffer = try std.testing.allocator.alloc(u8, core.transport.max_frame_size);
     defer std.testing.allocator.free(buffer);
     var history_result: ?*history.model.QueryResult = null;
+    var history_output: ?*history.model.OutputResult = null;
     const context: encoder.EncodeContext = .{
         .buffer = buffer,
         .panes = &panes,
         .workspaces = workspaces.reader(),
         .history_result = &history_result,
+        .history_output = &history_output,
     };
 
     try controller.readPane(.{

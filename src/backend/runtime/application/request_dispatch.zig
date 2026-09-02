@@ -15,6 +15,7 @@ const query_agents_controller = @import("../entrypoints/requests/query_agents.zi
 const read_pane_controller = @import("../entrypoints/requests/read_pane.zig");
 const import_history_controller = @import("../entrypoints/requests/import_history.zig");
 const prune_history_controller = @import("../entrypoints/requests/prune_history.zig");
+const history_output_controller = @import("../entrypoints/requests/history_output.zig");
 const send_pane_text_commands = @import("commands/send_pane_text.zig");
 const send_pane_text_controller = @import("../entrypoints/requests/send_pane_text.zig");
 const report_agent_session_commands = @import("commands/report_agent_session.zig");
@@ -185,6 +186,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .import_history = routeImportHistory,
             .delete_history = routeDeleteHistory,
             .prune_history = routePruneHistory,
+            .read_history_output = routeReadHistoryOutput,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -423,6 +425,22 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                     .close_after_reply = request.session.role == .control,
                 },
                 .request = prune,
+            });
+        }
+
+        fn routeReadHistoryOutput(request: *ClientRequestContext, read: schema.ReadHistoryOutput) !void {
+            var controller = history_output_controller.Controller.init(
+                &request.session.delivery.responses,
+                request.application.history_service,
+            );
+
+            try controller.readHistoryOutput(.{
+                .io = request.application.io,
+                .origin = .{
+                    .client = request.session.key,
+                    .close_after_reply = request.session.role == .control,
+                },
+                .request = read,
             });
         }
 

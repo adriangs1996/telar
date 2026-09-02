@@ -733,6 +733,7 @@ pub const Pane = struct {
             .cwd = launch_cwd,
             .size = size,
             .manifests = resources.manifests,
+            .capture_output = resources.history_service.capture_output,
         });
         errdefer pane.history_observer.deinit();
         pane.screen = try .init(gpa, size.cols, size.rows);

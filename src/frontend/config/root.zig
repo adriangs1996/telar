@@ -1121,10 +1121,29 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "path", "secrets_filter", "command_filters", "cwd_filters" },
+            &.{ "path", "secrets_filter", "command_filters", "cwd_filters", "output" },
             "config.runtime.history",
             diagnostic,
         );
+
+        _ = lua.lua_getfield(state, absolute, "output");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            const mode = string(state, -1) orelse {
+                pop(state, 1);
+                diagnostic.set("config.runtime.history.output must be off or bounded", .{});
+                return error.InvalidConfig;
+            };
+            if (std.mem.eql(u8, mode, "bounded")) {
+                generation.snapshot.runtime.history_output_capture = true;
+            } else if (std.mem.eql(u8, mode, "off")) {
+                generation.snapshot.runtime.history_output_capture = false;
+            } else {
+                pop(state, 1);
+                diagnostic.set("config.runtime.history.output must be off or bounded", .{});
+                return error.InvalidConfig;
+            }
+        }
+        pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "path");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {

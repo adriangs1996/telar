@@ -35,9 +35,16 @@ const Completion = struct {
     status: Status,
 };
 
+pub const max_output_tail_bytes = 64 * 1024;
+
 pub const Tracker = struct {
     gpa: std.mem.Allocator,
     aux: osc.Tracker,
+    /// Bounded raw output tail for the running command; null unless output
+    /// capture is enabled at startup.
+    output_tail: ?[]u8 = null,
+    output_len: usize = 0,
+    output_observed: u64 = 0,
     anchor: *vt.Pin,
     right_prompt: *vt.Pin,
     right_prompt_active: bool = false,
@@ -66,13 +73,25 @@ pub const Tracker = struct {
         running,
     };
 
-    pub fn init(gpa: std.mem.Allocator, cwd: []const u8, terminal: *vt.Terminal) !Tracker {
+    pub const Config = struct {
+        cwd: []const u8,
+        terminal: *vt.Terminal,
+        capture_output: bool = false,
+    };
+
+    pub fn init(gpa: std.mem.Allocator, config: Config) !Tracker {
+        const terminal = config.terminal;
         const screen = terminal.screens.active;
         const anchor = try screen.pages.trackPin(screen.cursor.page_pin.*);
         errdefer screen.pages.untrackPin(anchor);
+        const output_tail: ?[]u8 = if (config.capture_output)
+            try gpa.alloc(u8, max_output_tail_bytes)
+        else
+            null;
         return .{
             .gpa = gpa,
-            .aux = .init(cwd),
+            .aux = .init(config.cwd),
+            .output_tail = output_tail,
             // Allocate the tracked pin once. Starting an edit then only copies
             // the terminal cursor into it, so pane input remains allocation-free.
             .anchor = anchor,
@@ -81,6 +100,8 @@ pub const Tracker = struct {
     }
 
     pub fn deinit(tracker: *Tracker, terminal: *vt.Terminal) void {
+        if (tracker.output_tail) |tail| tracker.gpa.free(tail);
+        tracker.output_tail = null;
         tracker.freeCommand();
         terminal.screens.active.pages.untrackPin(tracker.right_prompt);
         terminal.screens.active.pages.untrackPin(tracker.anchor);
@@ -225,6 +246,7 @@ pub const Tracker = struct {
         const shell_foreground = observation.shell_foreground;
 
         if (bytes.len != 0) tracker.last_output_awake_ns = clock.awake_ns;
+        if (tracker.phase == .running) tracker.captureOutput(bytes);
 
         const Relay = struct {
             tracker: *Tracker,
@@ -341,6 +363,7 @@ pub const Tracker = struct {
         };
         const command_len = validPrefixLength(owned, max_command_bytes);
         const duration = @max(@as(i64, 0), completion.clock.awake_ns - tracker.started_awake_ns);
+        const output: []const u8 = if (tracker.output_tail) |tail| tail[0..tracker.output_len] else "";
         sink.emit(.{
             .bytes = owned[0..command_len],
             .cwd = tracker.command_cwd[0..tracker.command_cwd_len],
@@ -349,6 +372,9 @@ pub const Tracker = struct {
             .exit_code = completion.exit_code,
             .status = completion.status,
             .truncated = tracker.command_truncated,
+            .output = output,
+            .output_truncated = tracker.output_observed > tracker.output_len,
+            .output_observed = tracker.output_observed,
         });
         tracker.reset(.idle);
     }
@@ -359,6 +385,31 @@ pub const Tracker = struct {
         tracker.input.reset();
         tracker.command_truncated = false;
         tracker.saw_foreground_child = false;
+        tracker.output_len = 0;
+        tracker.output_observed = 0;
+    }
+
+    /// Keeps the newest bytes of the running command's raw output in the
+    /// bounded tail: when full, the older half is discarded so the ending -
+    /// where errors usually are - survives.
+    fn captureOutput(tracker: *Tracker, bytes: []const u8) void {
+        const tail = tracker.output_tail orelse return;
+        tracker.output_observed +|= bytes.len;
+        if (bytes.len >= tail.len) {
+            @memcpy(tail, bytes[bytes.len - tail.len ..]);
+            tracker.output_len = tail.len;
+            return;
+        }
+
+        if (tracker.output_len + bytes.len > tail.len) {
+            const keep = tail.len / 2;
+            const drop = tracker.output_len - keep;
+            std.mem.copyForwards(u8, tail[0..keep], tail[drop..tracker.output_len]);
+            tracker.output_len = keep;
+        }
+
+        @memcpy(tail[tracker.output_len .. tracker.output_len + bytes.len], bytes);
+        tracker.output_len += bytes.len;
     }
 
     fn freeCommand(tracker: *Tracker) void {
@@ -433,7 +484,7 @@ test "captures the rendered line even when the edit cursor is not at its end" {
     defer stream.deinit();
     stream.nextSlice("$ ");
 
-    var tracker = try Tracker.init(gpa, "/work", &terminal);
+    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
     _ = tracker.observeInput(.{
@@ -466,7 +517,7 @@ test "excludes an unchanged right prompt from the submitted command" {
     defer stream.deinit();
     stream.nextSlice("$ \x1b[30GSTATUS\x1b[3G");
 
-    var tracker = try Tracker.init(gpa, "/work", &terminal);
+    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
     _ = tracker.observeInput(.{
@@ -501,7 +552,7 @@ test "a captured command is bounded in bytes while resident" {
     defer stream.deinit();
     stream.nextSlice("$ ");
 
-    var tracker = try Tracker.init(gpa, "/work", &terminal);
+    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
     _ = tracker.observeInput(.{
@@ -528,7 +579,7 @@ test "Kitty graphics commands do not enter shell history" {
     defer stream.deinit();
     stream.nextSlice("$ ");
 
-    var tracker = try Tracker.init(gpa, "/work", &terminal);
+    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
     var collected: Collected = .{};
     _ = tracker.observeInput(.{
@@ -545,4 +596,40 @@ test "Kitty graphics commands do not enter shell history" {
         .exit_code = 0,
     }, &collected);
     try std.testing.expectEqualStrings("echo safe", collected.bytes[0..collected.len]);
+}
+
+test "output capture keeps a bounded tail favoring the newest bytes" {
+    const gpa = std.testing.allocator;
+    var terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 20, .rows = 5 });
+    defer terminal.deinit(gpa);
+    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal, .capture_output = true });
+    defer tracker.deinit(&terminal);
+
+    tracker.phase = .running;
+    tracker.captureOutput("hello ");
+    tracker.captureOutput("world");
+    try std.testing.expectEqualStrings("hello world", tracker.output_tail.?[0..tracker.output_len]);
+    try std.testing.expectEqual(@as(u64, 11), tracker.output_observed);
+
+    const big = "x" ** (max_output_tail_bytes + 100);
+    tracker.captureOutput(big);
+    try std.testing.expectEqual(max_output_tail_bytes, tracker.output_len);
+    try std.testing.expectEqual(@as(u64, 11 + big.len), tracker.output_observed);
+
+    tracker.reset(.idle);
+    try std.testing.expectEqual(@as(usize, 0), tracker.output_len);
+    try std.testing.expectEqual(@as(u64, 0), tracker.output_observed);
+}
+
+test "output capture stays disabled without the opt-in" {
+    const gpa = std.testing.allocator;
+    var terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 20, .rows = 5 });
+    defer terminal.deinit(gpa);
+    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    defer tracker.deinit(&terminal);
+
+    tracker.phase = .running;
+    tracker.captureOutput("ignored");
+    try std.testing.expect(tracker.output_tail == null);
+    try std.testing.expectEqual(@as(u64, 0), tracker.output_observed);
 }

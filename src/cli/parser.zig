@@ -521,6 +521,7 @@ pub const HistoryAction = enum {
     import,
     delete,
     prune,
+    show,
     list,
     search,
 };
@@ -558,6 +559,17 @@ pub const HistoryOptions = struct {
             }
 
             break :search .{ .action = .search, .query = args[1] };
+        } else if (std.mem.eql(u8, action_text, "show")) show: {
+            if (args.len < 2) {
+                return error.MissingHistoryId;
+            }
+
+            const raw = try std.fmt.parseInt(u64, std.mem.span(args[1]), 10);
+            if (raw == 0) {
+                return error.InvalidHistoryId;
+            }
+
+            break :show .{ .action = .show, .delete_id = raw };
         } else if (std.mem.eql(u8, action_text, "delete")) delete: {
             if (args.len < 2) {
                 return error.MissingHistoryId;
@@ -591,7 +603,7 @@ pub const HistoryOptions = struct {
         } else return error.UnknownHistoryAction;
 
         var index: usize = switch (options.action) {
-            .search, .delete => 2,
+            .search, .delete, .show => 2,
             .import => if (args.len > 1 and args[1][0] != '-') 2 else 1,
             else => 1,
         };

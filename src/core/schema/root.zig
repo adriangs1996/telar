@@ -163,6 +163,7 @@ pub const ClientTag = enum(u8) {
     import_history = 0x22,
     delete_history = 0x23,
     prune_history = 0x24,
+    read_history_output = 0x25,
 };
 
 pub const ServerTag = enum(u8) {
@@ -202,6 +203,7 @@ pub const ServerTag = enum(u8) {
     pane_title = 0xa2,
     pane_matches = 0xa3,
     history_pruned = 0xa4,
+    history_output = 0xa5,
 };
 
 pub const LaunchView = struct {
@@ -618,6 +620,24 @@ pub const PruneHistory = struct {
     match: []const u8 = "",
 };
 
+/// Reads the captured output of one exact history entry.
+pub const ReadHistoryOutput = struct {
+    request_id: RequestId,
+    id: u64,
+};
+
+/// The bounded raw output tail stored for one history entry; empty when
+/// capture was off or the command printed nothing.
+pub const HistoryOutput = struct {
+    request_id: RequestId,
+    id: u64,
+    truncated: bool,
+    observed_bytes: u64,
+    content: []const u8,
+};
+
+pub const max_history_output_bytes = 64 * 1024;
+
 /// How many entries a delete or prune removed.
 pub const HistoryPruned = struct {
     request_id: RequestId,
@@ -795,6 +815,7 @@ pub const ClientMessage = union(enum) {
     import_history: ImportHistoryView,
     delete_history: DeleteHistory,
     prune_history: PruneHistory,
+    read_history_output: ReadHistoryOutput,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -1145,6 +1166,7 @@ pub const ServerMessage = union(enum) {
     pane_title: PaneTitle,
     pane_matches: PaneMatchesView,
     history_pruned: HistoryPruned,
+    history_output: HistoryOutput,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -1407,6 +1429,41 @@ fn decodePruneHistory(decoder: *wire.Decoder) !PruneHistory {
         .before_ms = before_ms,
         .failed_only = failed_only,
         .match = match,
+    };
+}
+
+pub fn encodeReadHistoryOutput(buffer: []u8, message: ReadHistoryOutput) ![]const u8 {
+    try validateRequestId(message.request_id);
+    if (message.id == 0) return error.InvalidHistoryId;
+    return encodeDerived(@intFromEnum(ClientTag.read_history_output), ReadHistoryOutput, buffer, message);
+}
+
+pub fn encodeHistoryOutput(buffer: []u8, message: HistoryOutput) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateBytes(message.content, max_history_output_bytes, true);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.history_output));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, message.id);
+    try encoder.writeByte(@intFromBool(message.truncated));
+    try encoder.writeInt(u64, message.observed_bytes);
+    try encoder.writeSized32(message.content);
+    return encoder.finish();
+}
+
+fn decodeHistoryOutput(decoder: *wire.Decoder) !HistoryOutput {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const history_id = try decoder.readInt(u64);
+    const truncated = try decoder.readBool();
+    const observed_bytes = try decoder.readInt(u64);
+    const content = try decoder.readSized32();
+    if (content.len > max_history_output_bytes) return error.InvalidByteString;
+    return .{
+        .request_id = request_id,
+        .id = history_id,
+        .truncated = truncated,
+        .observed_bytes = observed_bytes,
+        .content = content,
     };
 }
 
@@ -1831,6 +1888,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .import_history => .{ .import_history = try decodeImportHistory(&decoder) },
         .delete_history => .{ .delete_history = try Derived(DeleteHistory).decode(&decoder) },
         .prune_history => .{ .prune_history = try decodePruneHistory(&decoder) },
+        .read_history_output => .{ .read_history_output = try Derived(ReadHistoryOutput).decode(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -2196,6 +2254,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .pane_title => .{ .pane_title = try decodePaneTitle(&decoder) },
         .pane_matches => .{ .pane_matches = try decodePaneMatches(&decoder) },
         .history_pruned => .{ .history_pruned = try Derived(HistoryPruned).decode(&decoder) },
+        .history_output => .{ .history_output = try decodeHistoryOutput(&decoder) },
     };
     if (message == .agent_sound and message.agent_sound.pane_generation == 0)
         return error.InvalidPaneGeneration;

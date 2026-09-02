@@ -32,6 +32,8 @@ pub const Options = struct {
     /// Record-time history filtering: secrets refusal plus configured
     /// command and cwd patterns.
     history_filters: core.history_filter.Filters = .{},
+    /// Keep a bounded raw output tail per command (opt-in).
+    history_output_capture: bool = false,
     proxy: ?ProxyOptions = null,
     agent_descriptions: ?AgentDescriptionOptions = null,
     /// Agent identification rules; the built-in table unless configured.

@@ -142,7 +142,7 @@ Complements P1 for what was already recorded. Never destroy silently.
 - Tests: cascade + FTS consistency after delete, prune filter SQL, corpus,
   palette delete requery.
 
-## P6. Output capture (opt-in)
+## P6. Output capture (opt-in) — done
 
 telar *is* the PTY proxy atuin had to bolt on. The `command_output` table
 (schema v3) has waited for its writer since the herdr work.
@@ -155,10 +155,14 @@ telar *is* the PTY proxy atuin had to bolt on. The `command_output` table
   in the worker; on completion the worker writes `command_output`
   (`content`, `truncated`, `observed_bytes`). Interactive path untouched —
   everything stays on the observation budget.
-- Surfaces: `telar history show <id> [--output]` (new CLI verb over a
-  `read_history_output = 0x25` request, bounded reply `history_output =
-  0xa5`); agents get "what did the failing build print yesterday" through
-  the same CLI. Palette preview is out of scope here (P8 territory at most).
+- Surfaces: `telar history show <id>` over `read_history_output = 0x25`
+  answered asynchronously with `history_output = 0xa5` (schema 29);
+  `history list` now prints `#id` so entries are addressable. Agents get
+  "what did the failing build print yesterday" through the same CLI.
+  Deviations: the tail stores raw VT bytes (escape sequences included —
+  rendering a clean transcript would need a replay emulator on the read
+  path), and when the tail overflows the older half is dropped so the
+  ending survives. Palette preview stays out of scope.
 - Output is not FTS-indexed (cost, secrets); note it in docs.
 - Tests: zone tail bounds, truncation flag, off-by-default, wire corpus.
 

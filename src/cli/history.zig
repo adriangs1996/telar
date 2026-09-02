@@ -24,6 +24,9 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     if (options.action == .delete or options.action == .prune) {
         return runPrune(init, options);
     }
+    if (options.action == .show) {
+        return runShow(init, options);
+    }
 
     const connector = try RuntimeConnector.init(init, options.socket);
     var connection = try connector.connectOrStart(.{});
@@ -71,6 +74,7 @@ fn print(io: Io, results: core.schema.HistoryResultsView) !void {
     const writer = &output.interface;
     var entries = results.entries();
     while (try entries.next()) |entry| {
+        try writer.print("#{d}  ", .{entry.id});
         const timestamp = utcTimestamp(entry.started_at_ms);
         try writer.print("{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}Z  ", .{
             timestamp.year,
@@ -622,4 +626,42 @@ fn receivePruned(init: std.process.Init, connection: *core.transport.SocketChann
         },
         else => error.UnexpectedRuntimeResponse,
     };
+}
+
+/// Prints the captured output of one exact entry, raw, to stdout.
+fn runShow(init: std.process.Init, options: HistoryOptions) !void {
+    const connector = try RuntimeConnector.init(init, options.socket);
+    var connection = try connector.connectOrStart(.{});
+    defer connection.deinit(init.io);
+
+    var send_buffer: [64]u8 = undefined;
+    try connection.send(init.io, try core.schema.encodeReadHistoryOutput(&send_buffer, .{
+        .request_id = @enumFromInt(1),
+        .id = options.delete_id,
+    }));
+
+    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    defer init.gpa.free(receive_buffer);
+    const response = try core.schema.decodeServer(try connection.receive(init.io, receive_buffer));
+    const output = switch (response) {
+        .history_output => |value| value,
+        .request_failed => |failure| {
+            std.debug.print("telar history: {s}\n", .{failure.message});
+            return error.HistoryQueryFailed;
+        },
+        else => return error.UnexpectedRuntimeResponse,
+    };
+
+    if (output.observed_bytes == 0) {
+        std.debug.print("telar history: no output captured for entry {d} (runtime.history.output = \"bounded\" enables capture)\n", .{output.id});
+        return;
+    }
+
+    var stdout_buffer: [4096]u8 = undefined;
+    var writer = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    try writer.interface.writeAll(output.content);
+    try writer.interface.flush();
+    if (output.truncated) {
+        std.debug.print("telar history: output truncated ({d} bytes observed)\n", .{output.observed_bytes});
+    }
 }

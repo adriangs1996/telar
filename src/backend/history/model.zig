@@ -154,10 +154,13 @@ pub const CommandFinished = struct {
     cwd: []u8,
     workspace_path: []u8,
     command_truncated: bool,
+    output: []u8,
+    output_truncated: bool,
+    output_observed: u64,
 
     pub fn deinit(value: *CommandFinished, gpa: std.mem.Allocator) void {
         const allocation_len = @sizeOf(CommandFinished) + value.command.len +
-            value.cwd.len + value.workspace_path.len;
+            value.cwd.len + value.workspace_path.len + value.output.len;
         const allocation: [*]align(@alignOf(CommandFinished)) u8 = @ptrCast(value);
         gpa.free(allocation[0..allocation_len]);
     }
@@ -341,6 +344,7 @@ pub const Request = union(enum) {
     import: *ImportBatch,
     delete: Delete,
     prune: Prune,
+    read_output: Delete,
 };
 
 pub const Delete = struct {
@@ -533,6 +537,23 @@ pub const Response = union(enum) {
     query_result: *QueryResult,
     failed: Failure,
     pruned: Pruned,
+    output_result: *OutputResult,
+};
+
+/// Owned captured-output read result.
+pub const OutputResult = struct {
+    request_id: schema.RequestId,
+    origin: QueryOrigin,
+    id: u64,
+    truncated: bool,
+    observed_bytes: u64,
+    content: []u8,
+    gpa: std.mem.Allocator,
+
+    pub fn deinit(result: *OutputResult) void {
+        result.gpa.free(result.content);
+        result.gpa.destroy(result);
+    }
 };
 
 pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
@@ -541,7 +562,7 @@ pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
         .session_started => |value| value.deinit(gpa),
         .command_finished => |value| value.deinit(gpa),
         .import => |value| value.deinit(gpa),
-        .session_finished, .session_title, .query, .delete, .prune => {},
+        .session_finished, .session_title, .query, .delete, .prune, .read_output => {},
     }
 }
 
@@ -549,5 +570,6 @@ pub fn deinitResponse(response: Response, _: std.mem.Allocator) void {
     switch (response) {
         .query_result => |value| value.deinit(),
         .failed, .pruned => {},
+        .output_result => |value| value.deinit(),
     }
 }

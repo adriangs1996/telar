@@ -34,6 +34,7 @@ pub const Initialization = struct {
     cwd: []const u8,
     size: schema.TerminalSize,
     manifests: *const agent_detection.Table = &core.agent_manifest.builtin_table,
+    capture_output: bool = false,
 };
 
 pub const InputObservation = struct {
@@ -146,7 +147,11 @@ pub const Observer = struct {
         observer.stream = .init(.{ .allocator = gpa, .handler = handler });
         errdefer observer.stream.deinit();
         try observer.stream.handler.resize(vtResize(size));
-        observer.tracker = try .init(gpa, cwd, &observer.terminal);
+        observer.tracker = try .init(gpa, .{
+            .cwd = cwd,
+            .terminal = &observer.terminal,
+            .capture_output = initialization.capture_output,
+        });
         observer.enabled = true;
         observer.batches = .{ .{}, .{} };
         observer.active = 0;
@@ -375,7 +380,7 @@ pub const Observer = struct {
         observer.stream = .init(.{ .allocator = observer.gpa, .handler = handler });
         errdefer observer.stream.deinit();
         try observer.stream.handler.resize(vtResize(size));
-        observer.tracker = try .init(observer.gpa, cwd, &observer.terminal);
+        observer.tracker = try .init(observer.gpa, .{ .cwd = cwd, .terminal = &observer.terminal });
         observer.enabled = true;
     }
 };

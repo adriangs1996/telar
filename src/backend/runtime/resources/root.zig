@@ -80,6 +80,7 @@ pub const Resources = struct {
         resources.history = try history_runtime.Runtime.init(resources.io(), resources.gpa, .{
             .database_path = initialization.options.history_path,
             .filters = initialization.options.history_filters,
+            .capture_output = initialization.options.history_output_capture,
         });
         errdefer resources.history.deinit();
         try checkpoint(fail_after, .history);

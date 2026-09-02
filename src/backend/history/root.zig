@@ -41,6 +41,8 @@ pub const Service = struct {
     /// Record-time policy applied before a command is copied or queued, so
     /// filtered secrets never exist outside the observation emulator.
     filters: core.history_filter.Filters = .{},
+    /// Whether pane observers keep a bounded raw output tail per command.
+    capture_output: bool = false,
     stats: Stats = .{},
 
     pub const Stats = struct {
@@ -283,6 +285,15 @@ pub const Service = struct {
         return service.submit(io, .{ .prune = prune });
     }
 
+    /// Queues one captured-output read; the worker answers asynchronously.
+    ///
+    /// ```zig
+    /// _ = service.readOutput(io, request);
+    /// ```
+    pub fn readOutput(service: *Service, io: std.Io, request: model_mod.Delete) bool {
+        return service.submit(io, .{ .read_output = request });
+    }
+
     pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
         const context = record.context;
         const command = record.command;
@@ -291,7 +302,7 @@ pub const Service = struct {
         }
 
         const allocation_len = @sizeOf(model_mod.CommandFinished) + command.bytes.len +
-            command.cwd.len + context.workspace_path.len;
+            command.cwd.len + context.workspace_path.len + command.output.len;
         const allocation = service.gpa.alignedAlloc(
             u8,
             .of(model_mod.CommandFinished),
@@ -304,9 +315,12 @@ pub const Service = struct {
         const cwd_copy = allocation[cursor..][0..command.cwd.len];
         cursor += cwd_copy.len;
         const workspace_copy = allocation[cursor..][0..context.workspace_path.len];
+        cursor += workspace_copy.len;
+        const output_copy = allocation[cursor..][0..command.output.len];
         @memcpy(command_copy, command.bytes);
         @memcpy(cwd_copy, command.cwd);
         @memcpy(workspace_copy, context.workspace_path);
+        @memcpy(output_copy, command.output);
         value.* = .{
             .session_id = context.session_id,
             .pane_id = context.pane_id,
@@ -326,6 +340,9 @@ pub const Service = struct {
             .cwd = cwd_copy,
             .workspace_path = workspace_copy,
             .command_truncated = command.truncated,
+            .output = output_copy,
+            .output_truncated = command.output_truncated,
+            .output_observed = command.output_observed,
         };
         return service.submit(io, .{ .command_finished = value });
     }
@@ -428,10 +445,13 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
             .command_finished => |value| {
                 defer value.deinit(service.gpa);
                 const started = std.Io.Timestamp.now(io, .awake);
-                const result = if (service.store) |*store|
-                    store.insertCommand(value)
-                else
-                    error.HistoryUnavailable;
+                const result = if (service.store) |*store| blk: {
+                    store.insertCommand(value) catch |err| break :blk err;
+                    if (value.output_observed > 0) {
+                        store.insertCommandOutput(value) catch |err| break :blk err;
+                    }
+                    break :blk {};
+                } else error.HistoryUnavailable;
                 observeWrite(service, elapsedSince(io, started), result);
             },
             .import => |batch| {
@@ -442,6 +462,24 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
                 else
                     error.HistoryUnavailable;
                 observeWrite(service, elapsedSince(io, started), result);
+            },
+            .read_output => |read_request| {
+                const response: model_mod.Response = if (service.store) |*store| blk: {
+                    const result = store.readCommandOutput(service.gpa, read_request) catch
+                        break :blk .{ .failed = .{
+                            .request_id = read_request.request_id,
+                            .origin = read_request.origin,
+                            .message = "history output read failed",
+                        } };
+                    break :blk .{ .output_result = result };
+                } else .{ .failed = .{
+                    .request_id = read_request.request_id,
+                    .origin = read_request.origin,
+                    .message = "history database is unavailable",
+                } };
+                service.responses.putOne(io, response) catch {
+                    model_mod.deinitResponse(response, service.gpa);
+                };
             },
             .delete => |delete_request| {
                 const removed: u64 = if (service.store) |*store|
@@ -541,6 +579,9 @@ fn writeImportBatch(store: *store_mod.Store, batch: *const model_mod.ImportBatch
             .cwd = @constCast(""),
             .workspace_path = @constCast(""),
             .command_truncated = false,
+            .output = @constCast(""),
+            .output_truncated = false,
+            .output_observed = 0,
         };
         try store.importCommand(&value);
     }

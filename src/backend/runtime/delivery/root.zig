@@ -75,6 +75,7 @@ const Effect = union(enum) {
     response: struct {
         offset: u8,
         history_result: ?*history.model.QueryResult,
+        history_output: ?*history.model.OutputResult,
     },
     resync,
     clipboard,
@@ -247,15 +248,18 @@ pub const Delivery = struct {
 
         if (delivery.responses.peekManagement()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
+            var history_output: ?*history.model.OutputResult = null;
             const payload = try runtime_encoder.encodeResponse(.{
                 .buffer = buffer,
                 .panes = sources.panes,
                 .workspaces = workspaces,
                 .history_result = &history_result,
+                .history_output = &history_output,
             }, entry.response);
             return delivery.stage(payload, .{ .response = .{
                 .offset = entry.offset,
                 .history_result = history_result,
+                .history_output = history_output,
             } });
         }
 
@@ -405,15 +409,18 @@ pub const Delivery = struct {
 
         if (delivery.responses.peekObservation()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
+            var history_output: ?*history.model.OutputResult = null;
             const payload = try runtime_encoder.encodeResponse(.{
                 .buffer = buffer,
                 .panes = sources.panes,
                 .workspaces = workspaces,
                 .history_result = &history_result,
+                .history_output = &history_output,
             }, entry.response);
             return delivery.stage(payload, .{ .response = .{
                 .offset = entry.offset,
                 .history_result = history_result,
+                .history_output = history_output,
             } });
         }
         return null;
@@ -442,6 +449,7 @@ pub const Delivery = struct {
             },
             .response => |response| {
                 if (response.history_result) |result| result.deinit();
+                if (response.history_output) |result| result.deinit();
                 delivery.responses.removeAt(response.offset);
             },
             .resync => {

@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 75;
+const corpus_len = 77;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -233,6 +233,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .before_ms = 1700000000000,
             .failed_only = true,
             .match = "zig",
+        }),
+    ));
+    helper.add("read_history_output", .client, false, golden.read_history_output, helper.commit(
+        try schema.encodeReadHistoryOutput(helper.space(), .{
+            .request_id = @enumFromInt(37),
+            .id = 11,
         }),
     ));
     helper.add("query_history_pane", .client, false, golden.query_history_pane, helper.commit(
@@ -490,6 +496,15 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .workspace_path = "/work/telar",
         },
     };
+    helper.add("history_output", .server, false, golden.history_output, helper.commit(
+        try schema.encodeHistoryOutput(helper.space(), .{
+            .request_id = @enumFromInt(37),
+            .id = 11,
+            .truncated = true,
+            .observed_bytes = 9000,
+            .content = "error: exit 1\n",
+        }),
+    ));
     helper.add("history_pruned", .server, false, golden.history_pruned, helper.commit(
         try schema.encodeHistoryPruned(helper.space(), .{
             .request_id = @enumFromInt(36),
@@ -792,6 +807,8 @@ const golden = struct {
     pub const create_pane = "09150000000000000000070000000000000003000000000000003c0014000000000005002f776f726b0600000000000000010007002f62696e2f7368000000";
     pub const close_pane = "0a16000000000000000800000000000000";
     pub const query_history_cwd = "0b1f0000000000000009007a6967206275696c64010b002f776f726b2f74656c617201000c00";
+    pub const read_history_output = "2525000000000000000b00000000000000";
+    pub const history_output = "a525000000000000000b000000000000000128230000000000000e0000006572726f723a206578697420310a";
     pub const delete_history = "2323000000000000000b00000000000000";
     pub const prune_history = "242400000000000000020b002f776f726b2f74656c61720068e5cf8b0100000103007a6967";
     pub const history_pruned = "a424000000000000000300000000000000";

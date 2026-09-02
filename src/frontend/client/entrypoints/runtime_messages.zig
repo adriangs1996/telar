@@ -64,7 +64,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .runtime_stopping => return 0,
         .history_results => |results| _ = try history_palettes.apply(client, results),
         .history_pruned => |confirmation| _ = try history_palettes.pruned(client, confirmation),
-        .pane_text, .request_completed => return error.UnexpectedControlReply,
+        .pane_text, .request_completed, .history_output => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.apply(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),

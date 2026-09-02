@@ -25,6 +25,11 @@ pub const Command = struct {
     exit_code: ?i32,
     status: Status,
     truncated: bool,
+    /// Bounded raw output tail observed while the command ran; empty unless
+    /// output capture is enabled.
+    output: []const u8 = "",
+    output_truncated: bool = false,
+    output_observed: u64 = 0,
 };
 
 pub const Observation = struct {

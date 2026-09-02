@@ -118,6 +118,7 @@ pub const PendingResponse = union(enum) {
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,
     history_pruned: schema.HistoryPruned,
+    history_output: *history.model.OutputResult,
 };
 
 pub const ResponseQueue = struct {
@@ -155,6 +156,7 @@ pub const ResponseQueue = struct {
         queue.push(response) catch {
             switch (response) {
                 .history_result => |result| result.deinit(),
+                .history_output => |result| result.deinit(),
                 .tab_closed => |closed| {
                     queue.resync_workspace = closed.location.workspace;
                     queue.resync_previous_workspace = closed.previous_workspace;
@@ -258,6 +260,7 @@ pub const ResponseQueue = struct {
         while (queue.peek()) |response| {
             switch (response.*) {
                 .history_result => |result| result.deinit(),
+                .history_output => |result| result.deinit(),
                 else => {},
             }
             queue.pop();

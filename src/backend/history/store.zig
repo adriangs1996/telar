@@ -104,6 +104,15 @@ const delete_command_sql =
     \\DELETE FROM command WHERE id = ?1;
 ;
 
+const insert_command_output_sql =
+    \\INSERT INTO command_output (command_id, content, truncated, observed_bytes)
+    \\VALUES (last_insert_rowid(), ?1, ?2, ?3);
+;
+
+const read_command_output_sql =
+    \\SELECT content, truncated, observed_bytes FROM command_output WHERE command_id = ?1;
+;
+
 const insert_launch_attempt_sql =
     \\INSERT INTO launch_attempt
     \\  (pane_id, pane_generation, location_kind, location_id, tab_id,
@@ -139,6 +148,8 @@ pub const Store = struct {
     import_session: *c.sqlite3_stmt,
     import_command: *c.sqlite3_stmt,
     delete_command: *c.sqlite3_stmt,
+    insert_command_output: *c.sqlite3_stmt,
+    read_command_output: *c.sqlite3_stmt,
     fts_available: bool,
 
     pub fn open(path: [:0]const u8) !Store {
@@ -180,6 +191,10 @@ pub const Store = struct {
         errdefer _ = c.sqlite3_finalize(import_command);
         const delete_command = try prepare(opened, delete_command_sql);
         errdefer _ = c.sqlite3_finalize(delete_command);
+        const insert_command_output = try prepare(opened, insert_command_output_sql);
+        errdefer _ = c.sqlite3_finalize(insert_command_output);
+        const read_command_output = try prepare(opened, read_command_output_sql);
+        errdefer _ = c.sqlite3_finalize(read_command_output);
         return .{
             .db = opened,
             .insert_launch_attempt = insert_launch_attempt,
@@ -190,11 +205,15 @@ pub const Store = struct {
             .import_session = import_session,
             .import_command = import_command,
             .delete_command = delete_command,
+            .insert_command_output = insert_command_output,
+            .read_command_output = read_command_output,
             .fts_available = fts_available,
         };
     }
 
     pub fn close(store: *Store) void {
+        _ = c.sqlite3_finalize(store.read_command_output);
+        _ = c.sqlite3_finalize(store.insert_command_output);
         _ = c.sqlite3_finalize(store.delete_command);
         _ = c.sqlite3_finalize(store.import_command);
         _ = c.sqlite3_finalize(store.import_session);
@@ -237,6 +256,63 @@ pub const Store = struct {
         bindText(stmt, 7, value.shell);
         _ = c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
         try stepDone(stmt);
+    }
+
+    /// Writes the just-inserted command's bounded output tail. Must run
+    /// immediately after `insertCommand` on the same connection, because it
+    /// keys on `last_insert_rowid()`.
+    ///
+    /// ```zig
+    /// try store.insertCommandOutput(&value);
+    /// ```
+    pub fn insertCommandOutput(store: *Store, value: *const model.CommandFinished) !void {
+        const stmt = store.insert_command_output;
+        defer reset(stmt);
+        bindText(stmt, 1, value.output);
+        _ = c.sqlite3_bind_int(stmt, 2, @intFromBool(value.output_truncated));
+        _ = c.sqlite3_bind_int64(stmt, 3, @intCast(value.output_observed));
+        try stepDone(stmt);
+    }
+
+    /// Reads one entry's stored output into an owned result; a missing row
+    /// yields an empty result so "no output captured" is not an error.
+    ///
+    /// ```zig
+    /// const result = try store.readCommandOutput(gpa, request);
+    /// ```
+    pub fn readCommandOutput(store: *Store, gpa: std.mem.Allocator, request: model.Delete) !*model.OutputResult {
+        const stmt = store.read_command_output;
+        defer reset(stmt);
+        _ = c.sqlite3_bind_int64(stmt, 1, @intCast(request.id));
+
+        const result = try gpa.create(model.OutputResult);
+        errdefer gpa.destroy(result);
+        result.* = .{
+            .request_id = request.request_id,
+            .origin = request.origin,
+            .id = request.id,
+            .truncated = false,
+            .observed_bytes = 0,
+            .content = try gpa.alloc(u8, 0),
+            .gpa = gpa,
+        };
+        switch (c.sqlite3_step(stmt)) {
+            c.SQLITE_ROW => {
+                gpa.free(result.content);
+                result.content = try gpa.alloc(u8, 0);
+                const content = try columnText(gpa, stmt, 0);
+                gpa.free(result.content);
+                result.content = content;
+                result.truncated = c.sqlite3_column_int(stmt, 1) != 0;
+                result.observed_bytes = @intCast(c.sqlite3_column_int64(stmt, 2));
+            },
+            c.SQLITE_DONE => {},
+            else => {
+                result.deinit();
+                return error.HistoryQueryFailed;
+            },
+        }
+        return result;
     }
 
     /// Idempotent session insert for imports: the deterministic id makes a
@@ -812,6 +888,9 @@ test "persists sessions and filters command history" {
         .cwd = @constCast("/work"),
         .workspace_path = @constCast("/work"),
         .command_truncated = false,
+        .output = @constCast(""),
+        .output_truncated = false,
+        .output_observed = 0,
     };
     try store.insertCommand(&successful);
     var failed = successful;
@@ -910,6 +989,9 @@ test "author filters partition query results" {
         .cwd = @constCast("/work"),
         .workspace_path = @constCast("/work"),
         .command_truncated = false,
+        .output = @constCast(""),
+        .output_truncated = false,
+        .output_observed = 0,
     };
     try store.insertCommand(&base);
     base.sequence = 2;
@@ -981,6 +1063,9 @@ test "delete and prune remove rows and keep the FTS index consistent" {
         .cwd = @constCast("/work"),
         .workspace_path = @constCast("/work"),
         .command_truncated = false,
+        .output = @constCast(""),
+        .output_truncated = false,
+        .output_observed = 0,
     };
     try store.insertCommand(&value);
     value.sequence = 2;
@@ -1017,4 +1102,75 @@ test "delete and prune remove rows and keep the FTS index consistent" {
         .before_ms = 10_000,
     })));
     try std.testing.expectEqual(@as(u64, 1), pruned);
+}
+
+test "command output rows round trip through the store" {
+    var store = try Store.open(":memory:");
+    defer store.close();
+    const location: model.schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const session: model.SessionStarted = .{
+        .id = @splat(6),
+        .pane_id = @enumFromInt(1),
+        .location = location,
+        .started_at_ms = 1_000,
+        .workspace_path = @constCast("/work"),
+        .shell = @constCast("/bin/zsh"),
+    };
+    try store.startSession(&session);
+
+    const value: model.CommandFinished = .{
+        .session_id = session.id,
+        .pane_id = session.pane_id,
+        .location = location,
+        .sequence = 1,
+        .started_at_ms = 2_000,
+        .duration_ns = 5,
+        .exit_code = 1,
+        .status = .completed,
+        .author = .human,
+        .cols = 80,
+        .rows = 24,
+        .command = @constCast("make"),
+        .cwd = @constCast("/work"),
+        .workspace_path = @constCast("/work"),
+        .command_truncated = false,
+        .output = @constCast("error: exit 1\n"),
+        .output_truncated = true,
+        .output_observed = 9_000,
+    };
+    try store.insertCommand(&value);
+    try store.insertCommandOutput(&value);
+
+    const origin: model.QueryOrigin = .{
+        .client = .{ .id = 1, .generation = 1 },
+        .close_after_reply = false,
+    };
+    const found = try store.query(std.testing.allocator, &(try model.Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+    })));
+    const command_id = found.entries[0].id;
+    found.deinit();
+
+    const output = try store.readCommandOutput(std.testing.allocator, .{
+        .request_id = @enumFromInt(2),
+        .origin = origin,
+        .id = command_id,
+    });
+    defer output.deinit();
+    try std.testing.expectEqualStrings("error: exit 1\n", output.content);
+    try std.testing.expect(output.truncated);
+    try std.testing.expectEqual(@as(u64, 9_000), output.observed_bytes);
+
+    const missing = try store.readCommandOutput(std.testing.allocator, .{
+        .request_id = @enumFromInt(3),
+        .origin = origin,
+        .id = command_id + 999,
+    });
+    defer missing.deinit();
+    try std.testing.expectEqual(@as(u64, 0), missing.observed_bytes);
+    try std.testing.expectEqual(@as(usize, 0), missing.content.len);
 }

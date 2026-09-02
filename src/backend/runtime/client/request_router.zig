@@ -55,6 +55,7 @@ pub fn Handlers(comptime Context: type) type {
         import_history: *const fn (*Context, schema.ImportHistoryView) anyerror!void,
         delete_history: *const fn (*Context, schema.DeleteHistory) anyerror!void,
         prune_history: *const fn (*Context, schema.PruneHistory) anyerror!void,
+        read_history_output: *const fn (*Context, schema.ReadHistoryOutput) anyerror!void,
     };
 }
 
@@ -122,6 +123,7 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .import_history => |request| handlers.import_history(router.context, request),
                 .delete_history => |request| handlers.delete_history(router.context, request),
                 .prune_history => |request| handlers.prune_history(router.context, request),
+                .read_history_output => |request| handlers.read_history_output(router.context, request),
             };
         }
     };
@@ -140,6 +142,7 @@ pub fn classify(tag: Tag) RequestClass {
         .import_history,
         .delete_history,
         .prune_history,
+        .read_history_output,
         .show_notification,
         .query_agents,
         .read_pane,
@@ -225,6 +228,7 @@ const testing_handlers: Handlers(Capture) = .{
     .import_history = captureHandler(.import_history, schema.ImportHistoryView),
     .delete_history = captureHandler(.delete_history, schema.DeleteHistory),
     .prune_history = captureHandler(.prune_history, schema.PruneHistory),
+    .read_history_output = captureHandler(.read_history_output, schema.ReadHistoryOutput),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -297,6 +301,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         } },
         .{ .delete_history = .{ .request_id = request_id, .id = 7 } },
         .{ .prune_history = .{ .request_id = request_id, .before_ms = 5 } },
+        .{ .read_history_output = .{ .request_id = request_id, .id = 4 } },
     };
 }
 
@@ -322,6 +327,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .import_history,
             .delete_history,
             .prune_history,
+            .read_history_output,
             .show_notification,
             .query_agents,
             .read_pane,

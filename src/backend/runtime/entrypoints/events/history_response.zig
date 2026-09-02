@@ -20,6 +20,7 @@ pub fn RuntimePort(comptime Context: type, comptime Session: type) type {
         enqueue_query_result: *const fn (*Context, Session, *history.model.QueryResult) bool,
         enqueue_failure: *const fn (*Context, Session, history.model.Failure) bool,
         enqueue_pruned: *const fn (*Context, Session, history.model.Pruned) bool,
+        enqueue_output_result: *const fn (*Context, Session, *history.model.OutputResult) bool,
         dispose_query_result: *const fn (*Context, *history.model.QueryResult) void,
         pump_clients: *const fn (*Context) void,
     };
@@ -57,10 +58,17 @@ pub fn Controller(comptime Context: type, comptime Session: type, comptime port:
             const response = response_result catch return;
             var owned_query: ?*history.model.QueryResult = switch (response) {
                 .query_result => |result| result,
-                .failed, .pruned => null,
+                .failed, .pruned, .output_result => null,
             };
             defer if (owned_query) |result| {
                 port.dispose_query_result(controller.context, result);
+            };
+            var owned_output: ?*history.model.OutputResult = switch (response) {
+                .output_result => |result| result,
+                else => null,
+            };
+            defer if (owned_output) |result| {
+                result.deinit();
             };
 
             try port.rearm_receive(controller.context);
@@ -87,6 +95,13 @@ pub fn Controller(comptime Context: type, comptime Session: type, comptime port:
                     port.set_close_after_reply(controller.context, session, pruned.origin.close_after_reply);
                     _ = port.enqueue_pruned(controller.context, session, pruned);
                 },
+                .output_result => |result| {
+                    const session = port.resolve(controller.context, result.origin.client) orelse return;
+                    port.set_close_after_reply(controller.context, session, result.origin.close_after_reply);
+                    if (port.enqueue_output_result(controller.context, session, result)) {
+                        owned_output = null;
+                    }
+                },
             }
 
             port.pump_clients(controller.context);
@@ -100,6 +115,7 @@ const FakeSession = struct {
 
 const Step = enum {
     enqueue_pruned,
+    enqueue_output_result,
     rearm_receive,
     resolve,
     set_close_after_reply,
@@ -164,6 +180,13 @@ const Capture = struct {
         return capture.failure_queue_accepts;
     }
 
+    fn enqueueOutputResult(capture: *Capture, session: *FakeSession, result: *history.model.OutputResult) bool {
+        _ = session;
+        _ = result;
+        capture.record(.enqueue_output_result);
+        return true;
+    }
+
     fn enqueuePruned(capture: *Capture, session: *FakeSession, pruned: history.model.Pruned) bool {
         _ = session;
         capture.record(.enqueue_pruned);
@@ -188,6 +211,7 @@ const test_port: RuntimePort(Capture, *FakeSession) = .{
     .enqueue_query_result = Capture.enqueueQueryResult,
     .enqueue_failure = Capture.enqueueFailure,
     .enqueue_pruned = Capture.enqueuePruned,
+    .enqueue_output_result = Capture.enqueueOutputResult,
     .dispose_query_result = Capture.disposeQueryResult,
     .pump_clients = Capture.pumpClients,
 };

@@ -14,6 +14,7 @@ pub const text =
     \\       telar history list [options]
     \\       telar history search <query> [options]
     \\       telar history import [auto|zsh|bash|fish] [--file PATH]
+    \\       telar history show <id>
     \\       telar history delete <id>
     \\       telar history prune [filters] [--before DATE] [--dry-run] [--yes]
     \\       telar notification show <title> [options]
@@ -35,6 +36,7 @@ pub const text =
     \\  history list     Show recent command history
     \\  history search   Search command history
     \\  history import   Import an existing shell histfile
+    \\  history show     Print an entry's captured output
     \\  history delete   Remove one exact history entry
     \\  history prune    Remove every entry matching the filters
     \\  notification show  Show a toast in every connected UI client

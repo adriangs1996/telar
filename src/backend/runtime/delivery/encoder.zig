@@ -18,6 +18,7 @@ pub const EncodeContext = struct {
     panes: *const PaneStore,
     workspaces: workspace.Reader,
     history_result: *?*history.model.QueryResult,
+    history_output: *?*history.model.OutputResult,
 };
 
 /// Encodes one queued response against the *current* stores. A response can
@@ -33,6 +34,7 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
     const panes = context.panes;
     const workspaces = context.workspaces;
     const history_result = context.history_result;
+    const history_output = context.history_output;
 
     var descriptor_storage: [max_panes]schema.PaneDescriptor = undefined;
     var tab_storage: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
@@ -99,6 +101,16 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
         },
         .request_completed => |completed| try schema.encodeRequestCompleted(buffer, completed),
         .history_pruned => |pruned| try schema.encodeHistoryPruned(buffer, pruned),
+        .history_output => |result| payload: {
+            history_output.* = result;
+            break :payload try schema.encodeHistoryOutput(buffer, .{
+                .request_id = result.request_id,
+                .id = result.id,
+                .truncated = result.truncated,
+                .observed_bytes = result.observed_bytes,
+                .content = result.content,
+            });
+        },
         .pane_matches => |*found| try schema.encodePaneMatches(buffer, .{
             .request_id = found.request_id,
             .pane_id = found.pane_id,
@@ -157,12 +169,14 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
     } };
     var buffer: [1024]u8 = undefined;
     var history_result: ?*history.model.QueryResult = null;
+    var history_output: ?*history.model.OutputResult = null;
 
     const payload = try encodeResponse(.{
         .buffer = &buffer,
         .panes = &panes,
         .workspaces = workspace.Reader.init(&workspaces),
         .history_result = &history_result,
+        .history_output = &history_output,
     }, &response);
     const decoded = try schema.decodeServer(payload);
 

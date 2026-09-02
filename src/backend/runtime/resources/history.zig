@@ -79,6 +79,7 @@ pub const Runtime = struct {
     pub const Config = struct {
         database_path: [:0]const u8,
         filters: core.history_filter.Filters = .{},
+        capture_output: bool = false,
     };
 
     /// Creates the history service at a stable address and starts its worker.
@@ -95,6 +96,7 @@ pub const Runtime = struct {
             return err;
         };
         history_service.filters = config.filters;
+        history_service.capture_output = config.capture_output;
         state.* = .{
             .io = io,
             .gpa = gpa,
