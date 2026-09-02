@@ -171,7 +171,7 @@ test "pane input crosses controller and handler in observation-before-PTY order"
     var handler = handlerFor(&fixture, &capture, true);
     var controller = InputController.init(&fixture.metrics, &handler);
 
-    try controller.paneInput(.{ .pane_id = fixture.pane.id, .bytes = &input });
+    _ = try controller.paneInput(.{ .pane_id = fixture.pane.id, .bytes = &input });
 
     try std.testing.expectEqualSlices(ScheduleStep, &.{ .observation, .input }, capture.steps[0..capture.len]);
     try std.testing.expect(capture.observation_saw_history);

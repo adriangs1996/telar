@@ -39,7 +39,7 @@ pub fn Controller(comptime Executor: type) type {
         /// ```zig
         /// try controller.paneInput(request);
         /// ```
-        pub inline fn paneInput(controller: *Self, request: schema.PaneInput) !void {
+        pub inline fn paneInput(controller: *Self, request: schema.PaneInput) !pane_input_commands.PaneInputResult {
             const result = try controller.executor.execute(.{
                 .pane_id = request.pane_id,
                 .bytes = request.bytes,
@@ -51,6 +51,8 @@ pub fn Controller(comptime Executor: type) type {
                     controller.metrics.stale_client_messages += 1;
                 },
             }
+
+            return result;
         }
     };
 }
@@ -81,7 +83,7 @@ test "Controller forwards the exact pane input without stale accounting" {
     var stub: StubExecutor = .{};
     var controller = TestController.init(&metrics, &stub);
 
-    try controller.paneInput(.{ .pane_id = pane_id, .bytes = "help\r" });
+    try std.testing.expectEqual(.handled, try controller.paneInput(.{ .pane_id = pane_id, .bytes = "help\r" }));
 
     try std.testing.expectEqual(@as(usize, 1), stub.call_count);
     try std.testing.expectEqual(pane_id, stub.command.?.pane_id);
@@ -97,7 +99,7 @@ test "Controller counts unavailable pane input as stale" {
         var stub: StubExecutor = .{ .result = result };
         var controller = TestController.init(&metrics, &stub);
 
-        try controller.paneInput(.{ .pane_id = pane_id, .bytes = "x" });
+        try std.testing.expectEqual(result, try controller.paneInput(.{ .pane_id = pane_id, .bytes = "x" }));
 
         try std.testing.expectEqual(@as(usize, 1), stub.call_count);
         try std.testing.expectEqual(@as(u64, 5), metrics.stale_client_messages);

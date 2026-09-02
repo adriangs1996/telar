@@ -35,7 +35,13 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
 }
 
 fn execute(session: *control.Session, options: PaneOptions, writer: *Io.Writer, environ: std.process.Environ) !u8 {
-    const pane = try resolvePane(session, options.target, environ);
+    const pane: control.Session.PaneRef = if (options.action == .focus)
+        .{
+            .pane_id = try control.currentPaneId(environ),
+            .pane_generation = try control.currentPaneGeneration(environ),
+        }
+    else
+        try resolvePane(session, options.target, environ);
 
     switch (options.action) {
         .read => {
@@ -65,6 +71,16 @@ fn execute(session: *control.Session, options: PaneOptions, writer: *Io.Writer, 
             }
 
             try session.sendText(pane, .raw, storage[0..len]);
+        },
+        .focus => {
+            const result = try session.focusPane(pane, options.direction.?);
+            if (options.json) {
+                try writer.print("{{\"changed\":{},\"focused_pane_id\":{d},\"reason\":\"{s}\"}}\n", .{
+                    result.outcome == .focused,
+                    schema.id.raw(result.focused_pane_id),
+                    @tagName(result.outcome),
+                });
+            }
         },
     }
 

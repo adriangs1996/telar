@@ -22,6 +22,7 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writer.writeByte(2);
             try writer.writeByte(@intFromEnum(value));
         },
+        .navigate_pane => return error.InvalidWorkerEffect,
         .resize_pane => |value| {
             try writer.writeByte(12);
             try writer.writeByte(@intFromEnum(value));

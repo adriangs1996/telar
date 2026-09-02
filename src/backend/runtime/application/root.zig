@@ -95,6 +95,8 @@ pub const Application = struct {
     child_environment: *const pty.ChildEnvironment,
     inherited_environment: std.process.Environ,
     socket_path: []const u8,
+    executable_path: [std.fs.max_path_bytes]u8 = undefined,
+    executable_path_len: usize,
     agent_manifests: *const core.agent_manifest.Table,
     proxy_runtime: *proxy_resource.Runtime,
     agent_description_options: ?AgentDescriptionOptions,
@@ -110,6 +112,7 @@ pub const Application = struct {
     session: session_checkpoint.State = .{},
     session_write_buffer: ?[]u8 = null,
     git_probe_in_flight: bool = false,
+    input_sequence: u64 = 0,
 
     /// Composes application state from stable, runtime-owned capabilities.
     ///
@@ -117,6 +120,9 @@ pub const Application = struct {
     /// const application = try Application.init(initialization);
     /// ```
     pub fn init(initialization: Initialization) !Application {
+        var executable_path: [std.fs.max_path_bytes]u8 = undefined;
+        const executable_path_len = try std.process.executablePath(initialization.io, &executable_path);
+
         return .{
             .io = initialization.io,
             .gpa = initialization.gpa,
@@ -126,6 +132,8 @@ pub const Application = struct {
             .child_environment = initialization.child_environment,
             .inherited_environment = initialization.inherited_environment,
             .socket_path = initialization.socket_path,
+            .executable_path = executable_path,
+            .executable_path_len = executable_path_len,
             .agent_manifests = initialization.agent_manifests,
             .session = .{ .path = initialization.session_path, .resume_agents = initialization.resume_agents },
             .proxy_runtime = initialization.proxy_runtime,
@@ -237,6 +245,7 @@ pub const Application = struct {
             .history_service = application.history_service,
             .inherited_environment = application.inherited_environment,
             .socket_path = application.socket_path,
+            .executable_path = application.executable_path[0..application.executable_path_len],
             .manifests = application.agent_manifests,
             .proxy = application.proxy_runtime.capability(),
             .panes = &application.model.panes,
@@ -375,6 +384,7 @@ pub const Application = struct {
     pub fn dropClient(application: *Application, key: ClientKey) void {
         const session = application.clients.resolve(key) orelse return;
         if (!session.closing) {
+            application.failPaneFocusesFor(key);
             session.closing = true;
             session.connection.shutdown(application.io);
             session.attachments.deinit();
@@ -387,6 +397,28 @@ pub const Application = struct {
             application.pumpAll();
         }
         application.finalizeClient(key);
+    }
+
+    fn failPaneFocusesFor(application: *Application, key: ClientKey) void {
+        for (&application.clients.items) |*slot| {
+            const requester = slot.* orelse continue;
+            const pending = requester.pending_pane_focus orelse continue;
+
+            if (!std.meta.eql(pending.target, key)) {
+                continue;
+            }
+
+            requester.pending_pane_focus = null;
+            requester.delivery.responses.push(.{ .request_failed = .{
+                .request_id = pending.request_id,
+                .code = .invalid_request,
+                .message = "focus client disconnected",
+            } }) catch {
+                application.dropClient(requester.key);
+                continue;
+            };
+            requester.delivery.close_after_reply = true;
+        }
     }
 
     /// Removes a closing client once no read or write actor still owns it.

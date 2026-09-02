@@ -57,6 +57,8 @@ pub fn Handlers(comptime Context: type) type {
         prune_history: *const fn (*Context, schema.PruneHistory) anyerror!void,
         read_history_output: *const fn (*Context, schema.ReadHistoryOutput) anyerror!void,
         history_stats: *const fn (*Context, schema.HistoryStatsQuery) anyerror!void,
+        request_pane_focus: *const fn (*Context, schema.RequestPaneFocus) anyerror!void,
+        complete_pane_focus: *const fn (*Context, schema.CompletePaneFocus) anyerror!void,
     };
 }
 
@@ -126,6 +128,8 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .prune_history => |request| handlers.prune_history(router.context, request),
                 .read_history_output => |request| handlers.read_history_output(router.context, request),
                 .history_stats => |request| handlers.history_stats(router.context, request),
+                .request_pane_focus => |request| handlers.request_pane_focus(router.context, request),
+                .complete_pane_focus => |request| handlers.complete_pane_focus(router.context, request),
             };
         }
     };
@@ -152,6 +156,7 @@ pub fn classify(tag: Tag) RequestClass {
         .send_pane_text,
         .report_agent_session,
         .report_agent,
+        .request_pane_focus,
         => .control,
         else => .ui,
     };
@@ -233,6 +238,8 @@ const testing_handlers: Handlers(Capture) = .{
     .prune_history = captureHandler(.prune_history, schema.PruneHistory),
     .read_history_output = captureHandler(.read_history_output, schema.ReadHistoryOutput),
     .history_stats = captureHandler(.history_stats, schema.HistoryStatsQuery),
+    .request_pane_focus = captureHandler(.request_pane_focus, schema.RequestPaneFocus),
+    .complete_pane_focus = captureHandler(.complete_pane_focus, schema.CompletePaneFocus),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -307,6 +314,15 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         .{ .prune_history = .{ .request_id = request_id, .before_ms = 5 } },
         .{ .read_history_output = .{ .request_id = request_id, .id = 4 } },
         .{ .history_stats = .{ .request_id = request_id } },
+        .{ .request_pane_focus = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .direction = .left } },
+        .{ .complete_pane_focus = .{
+            .requester = .{ .id = 1, .generation = 1 },
+            .request_id = request_id,
+            .pane_id = pane_id,
+            .pane_generation = 1,
+            .outcome = .focused,
+            .focused_pane_id = @enumFromInt(3),
+        } },
     };
 }
 
@@ -340,6 +356,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .send_pane_text,
             .report_agent_session,
             .report_agent,
+            .request_pane_focus,
             => .control,
             else => .ui,
         };

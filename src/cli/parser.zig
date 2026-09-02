@@ -790,7 +790,7 @@ pub const HistoryOptions = struct {
 
 pub const AgentAction = enum { list, get, wait, prompt, read, report_session };
 
-pub const PaneAction = enum { read, send_keys };
+pub const PaneAction = enum { read, send_keys, focus };
 
 /// How a CLI argument names a pane or the agent inside it.
 pub const Target = union(enum) {
@@ -966,6 +966,7 @@ pub const PaneOptions = struct {
     source: core.schema.PaneTextSource = .recent,
     json: bool = false,
     socket: ?[*:0]const u8 = null,
+    direction: ?core.schema.PaneDirection = null,
 
     fn parse(args: []const [*:0]const u8) !PaneOptions {
         if (args.len == 0) {
@@ -977,6 +978,8 @@ pub const PaneOptions = struct {
             .read
         else if (std.mem.eql(u8, action_text, "send-keys"))
             .send_keys
+        else if (std.mem.eql(u8, action_text, "focus"))
+            .focus
         else
             return error.UnknownPaneAction;
         if (args.len < 2) {
@@ -986,6 +989,9 @@ pub const PaneOptions = struct {
         var options: PaneOptions = .{ .action = action, .target = Target.parse(args[1]) };
         if (options.target == .name) {
             return error.InvalidPaneId;
+        }
+        if (action == .focus and options.target != .current) {
+            return error.FocusRequiresCurrentPane;
         }
 
         var index: usize = 2;
@@ -1044,14 +1050,45 @@ pub const PaneOptions = struct {
 
                 options.socket = args[index + 1];
                 index += 2;
+            } else if (std.mem.eql(u8, arg, "--direction")) {
+                if (action != .focus or index + 1 >= args.len or options.direction != null) {
+                    return error.UnknownPaneOption;
+                }
+
+                options.direction = parsePaneDirection(std.mem.span(args[index + 1])) orelse return error.InvalidPaneDirection;
+                index += 2;
             } else {
                 return error.UnknownPaneOption;
             }
         }
 
+        if (action == .focus and options.direction == null) {
+            return error.MissingPaneDirection;
+        }
+
         return options;
     }
 };
+
+fn parsePaneDirection(value: []const u8) ?core.schema.PaneDirection {
+    if (std.mem.eql(u8, value, "left")) {
+        return .left;
+    }
+
+    if (std.mem.eql(u8, value, "right")) {
+        return .right;
+    }
+
+    if (std.mem.eql(u8, value, "up")) {
+        return .up;
+    }
+
+    if (std.mem.eql(u8, value, "down")) {
+        return .down;
+    }
+
+    return null;
+}
 
 pub const WorkspaceAction = enum { create };
 
@@ -1728,6 +1765,19 @@ test "CLI parses pane commands and refuses names as pane ids" {
     try std.testing.expect(send_cli.pane.target == .current);
     try std.testing.expectEqualStrings("y", std.mem.span(send_cli.pane.text.?));
     try std.testing.expect(send_cli.pane.enter);
+
+    const focus = [_][*:0]const u8{ "telar", "pane", "focus", "--current", "--direction", "left", "--json" };
+    const focus_cli = try Cli.parse(&focus, .empty);
+    try std.testing.expectEqual(PaneAction.focus, focus_cli.pane.action);
+    try std.testing.expect(focus_cli.pane.target == .current);
+    try std.testing.expectEqual(core.schema.PaneDirection.left, focus_cli.pane.direction.?);
+    try std.testing.expect(focus_cli.pane.json);
+
+    const inexact_focus = [_][*:0]const u8{ "telar", "pane", "focus", "4", "--direction", "left" };
+    try std.testing.expectError(error.FocusRequiresCurrentPane, Cli.parse(&inexact_focus, .empty));
+
+    const directionless_focus = [_][*:0]const u8{ "telar", "pane", "focus", "--current" };
+    try std.testing.expectError(error.MissingPaneDirection, Cli.parse(&directionless_focus, .empty));
 
     const named = [_][*:0]const u8{ "telar", "pane", "read", "main" };
     try std.testing.expectError(error.InvalidPaneId, Cli.parse(&named, .empty));

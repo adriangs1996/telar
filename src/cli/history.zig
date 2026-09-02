@@ -594,14 +594,15 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
         try writer.writeAll("prune permanently? type yes to continue: ");
         try writer.flush();
         var line_buffer: [16]u8 = undefined;
-        var stdin_reader = File.stdin().readerStreaming(init.io, &.{});
-        const len = stdin_reader.interface.readSliceShort(&line_buffer) catch 0;
-        const answer = std.mem.trim(u8, line_buffer[0..len], " \r\n");
-        if (!std.mem.eql(u8, answer, "yes")) {
+        var stdin_reader = File.stdin().readerStreaming(init.io, &line_buffer);
+        if (!confirmPrune(&stdin_reader.interface)) {
             try writer.writeAll("aborted\n");
             try writer.flush();
             return;
         }
+
+        connection.deinit(init.io);
+        connection = try connector.connectOrStart(.{});
     }
 
     try connection.send(init.io, try core.schema.encodePruneHistory(&send_buffer, .{
@@ -616,6 +617,28 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
     const removed = try receivePruned(init, &connection);
     try writer.print("removed {d} entries\n", .{removed});
     try writer.flush();
+}
+
+fn confirmPrune(reader: *Io.Reader) bool {
+    const line = reader.takeDelimiter('\n') catch return false;
+    const answer = std.mem.trim(u8, line orelse return false, " \r");
+
+    return std.mem.eql(u8, answer, "yes");
+}
+
+test "history prune confirmation stops reading at newline" {
+    var reader = Io.Reader.fixed("yes\nstill open");
+
+    try std.testing.expect(confirmPrune(&reader));
+    try std.testing.expectEqualStrings("still open", reader.buffered());
+}
+
+test "history prune confirmation rejects any other line" {
+    var rejected = Io.Reader.fixed("no\n");
+    var empty = Io.Reader.fixed("");
+
+    try std.testing.expect(!confirmPrune(&rejected));
+    try std.testing.expect(!confirmPrune(&empty));
 }
 
 fn receivePruned(init: std.process.Init, connection: *core.transport.SocketChannel) !u64 {

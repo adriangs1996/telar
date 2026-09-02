@@ -1116,6 +1116,19 @@ pub const Model = struct {
         return pane.titleSlice();
     }
 
+    /// Returns the executable name observed for the focused pane, or an empty slice.
+    ///
+    /// ```zig
+    /// if (std.mem.eql(u8, model.focusedPaneForeground(), "nvim")) {
+    ///     routeToEditor();
+    /// }
+    /// ```
+    pub fn focusedPaneForeground(model: *const Model) []const u8 {
+        const active = model.workspace.activeConst() orelse return "";
+        const pane = active.model.focusedPaneConst() orelse return "";
+        return pane.foregroundName();
+    }
+
     /// Reports whether one exact pane generation is current.
     ///
     /// ```zig

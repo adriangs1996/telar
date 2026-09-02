@@ -138,6 +138,20 @@ pub fn currentPaneId(environ: std.process.Environ) !u64 {
     return std.fmt.parseUnsigned(u64, value, 10) catch error.NotInsideTelarPane;
 }
 
+/// Reads the exact pane generation injected by the runtime.
+///
+/// ```zig
+/// const generation = try currentPaneGeneration(environ);
+/// ```
+pub fn currentPaneGeneration(environ: std.process.Environ) !u64 {
+    const value = std.process.Environ.getPosix(environ, "TELAR_PANE_GENERATION") orelse return error.NotInsideTelarPane;
+    const generation = std.fmt.parseUnsigned(u64, value, 10) catch return error.NotInsideTelarPane;
+    if (generation == 0) {
+        return error.NotInsideTelarPane;
+    }
+    return generation;
+}
+
 /// One connected control session with its owned receive buffer.
 pub const Session = struct {
     io: Io,
@@ -265,6 +279,28 @@ pub const Session = struct {
             .request_failed => |failure| return failureError(failure),
             else => return error.UnexpectedRuntimeResponse,
         }
+    }
+
+    /// Requests a directional focus change from the UI that owns the pane's interaction.
+    ///
+    /// ```zig
+    /// const result = try session.focusPane(pane, .left);
+    /// ```
+    pub fn focusPane(session: *Session, pane: PaneRef, direction: schema.PaneDirection) !schema.PaneFocusResult {
+        var send_buffer: [64]u8 = undefined;
+        try session.connection.send(session.io, try schema.encodeRequestPaneFocus(&send_buffer, .{
+            .request_id = session.requestId(),
+            .pane_id = try schema.id.pane(pane.pane_id),
+            .pane_generation = pane.pane_generation,
+            .direction = direction,
+        }));
+
+        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+        return switch (response) {
+            .pane_focus_result => |result| result,
+            .request_failed => |failure| failureError(failure),
+            else => error.UnexpectedRuntimeResponse,
+        };
     }
 
     /// Reports an agent's own session reference for later restore.

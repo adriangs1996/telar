@@ -1946,6 +1946,7 @@ pub const Generation = struct {
             } };
         }
         if (std.mem.eql(u8, kind, "focus-pane") or
+            std.mem.eql(u8, kind, "navigate-pane") or
             std.mem.eql(u8, kind, "resize-pane"))
         {
             try ensureOnlyFields(state, absolute, &.{ "kind", "direction" }, "action", diagnostic);
@@ -1967,6 +1968,8 @@ pub const Generation = struct {
             };
             return if (std.mem.eql(u8, kind, "focus-pane"))
                 .{ .focus_pane = parsed_direction }
+            else if (std.mem.eql(u8, kind, "navigate-pane"))
+                .{ .navigate_pane = parsed_direction }
             else
                 .{ .resize_pane = parsed_direction };
         }
@@ -2271,6 +2274,9 @@ const bootstrap =
     \\end
     \\function telar.action.focus_pane(options)
     \\  return { kind = "focus-pane", direction = options.direction }
+    \\end
+    \\function telar.action.navigate_pane(options)
+    \\  return { kind = "navigate-pane", direction = options.direction }
     \\end
     \\function telar.action.resize_pane(options)
     \\  return { kind = "resize-pane", direction = options.direction }
@@ -3296,6 +3302,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\    telar.bind({ "R" }, telar.action.resize_pane({ direction = "right" })),
         \\    telar.bind({ "z" }, telar.action.toggle_pane_fullscreen()),
         \\    telar.bind({ "S" }, telar.action.resize_sidebar({ direction = "left" })),
+        \\    telar.bind_global({ "ctrl+h" }, telar.action.navigate_pane({ direction = "left" })),
         \\  },
         \\}
         \\return config
@@ -3310,7 +3317,7 @@ test "client config compiles theme, bindings, and callbacks" {
         &diagnostic,
     );
     defer generation.deinit();
-    try std.testing.expectEqual(@as(u16, 6), generation.snapshot.binding_count);
+    try std.testing.expectEqual(@as(u16, 7), generation.snapshot.binding_count);
     try std.testing.expectEqual(@as(u16, 1), generation.callback_count);
     try std.testing.expect(!generation.snapshot.sidebar_visible);
     try std.testing.expect(!generation.snapshot.pane_gaps);
@@ -3354,6 +3361,10 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expectEqualDeep(
         action_mod.Action{ .resize_sidebar = .left },
         generation.snapshot.bindings[5].action,
+    );
+    try std.testing.expectEqualDeep(
+        action_mod.Action{ .navigate_pane = .left },
+        generation.snapshot.bindings[6].action,
     );
 }
 

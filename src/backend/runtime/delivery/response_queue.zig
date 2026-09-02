@@ -120,6 +120,8 @@ pub const PendingResponse = union(enum) {
     history_pruned: schema.HistoryPruned,
     history_output: *history.model.OutputResult,
     history_stats: *history.model.StatsResult,
+    pane_focus_command: schema.PaneFocusCommand,
+    pane_focus_result: schema.PaneFocusResult,
 };
 
 pub const ResponseQueue = struct {

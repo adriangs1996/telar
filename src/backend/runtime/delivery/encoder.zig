@@ -147,6 +147,8 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
                 .text = text_storage[0..dump.len],
             });
         },
+        .pane_focus_command => |command| try schema.encodePaneFocusCommand(buffer, command),
+        .pane_focus_result => |result| try schema.encodePaneFocusResult(buffer, result),
     };
 }
 

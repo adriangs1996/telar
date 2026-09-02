@@ -14,6 +14,7 @@ const client_layouts = @import("../controllers/session/client_layouts.zig");
 const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
 const pane_closures = @import("../controllers/panes/pane_closures.zig");
 const pane_frames = @import("../controllers/panes/pane_frames.zig");
+const pane_focus_commands = @import("../controllers/panes/pane_focus_commands.zig");
 const pane_graphics = @import("../controllers/panes/pane_graphics.zig");
 const pane_metadata = @import("../controllers/panes/pane_metadata.zig");
 const pane_openings = @import("../controllers/panes/pane_openings.zig");
@@ -48,6 +49,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
         .pane_title => |title| _ = try pane_metadata.applyTitle(client, title),
+        .pane_focus_command => |command| try pane_focus_commands.apply(client, command),
         .pane_matches => |found| _ = try copy_modes.matches(client, found),
         .pane_clipboard => |clipboard| try pane_clipboards.apply(client, clipboard),
         .pane_exited => |exited| _ = try pane_closures.applyExit(client, exited),
@@ -64,7 +66,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .runtime_stopping => return 0,
         .history_results => |results| _ = try history_palettes.apply(client, results),
         .history_pruned => |confirmation| _ = try history_palettes.pruned(client, confirmation),
-        .pane_text, .request_completed, .history_output, .history_stats_result => return error.UnexpectedControlReply,
+        .pane_text, .request_completed, .history_output, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.apply(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),

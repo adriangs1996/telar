@@ -105,6 +105,19 @@ pub const TabMoveDirection = enum(u8) {
     next = 1,
 };
 
+pub const PaneDirection = enum(u8) {
+    left = 0,
+    right = 1,
+    up = 2,
+    down = 3,
+};
+
+pub const PaneFocusOutcome = enum(u8) {
+    focused = 0,
+    no_neighbor = 1,
+    source_not_focused = 2,
+};
+
 pub const ClientIdentity = enum(u64) {
     invalid = 0,
     _,

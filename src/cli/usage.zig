@@ -21,6 +21,7 @@ pub const text =
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar pane read|send-keys <pane|--current> [options]
+    \\       telar pane focus --current --direction left|right|up|down [--json]
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar api schema [--json]
     \\       telar integration install|uninstall|status claude [--settings PATH]
@@ -50,6 +51,7 @@ pub const text =
     \\  agent report-session  Record an agent's own session id for restore
     \\  pane read        Print recent text from any pane
     \\  pane send-keys   Send raw text (and --enter) to any pane
+    \\  pane focus       Move from Neovim into an adjacent Telar pane
     \\  workspace create Add a git worktree and open a workspace on it
     \\  api schema       Print the wire contract of this binary
     \\  integration      Register telar's lifecycle hooks in an agent's settings

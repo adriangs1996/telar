@@ -11,6 +11,13 @@ const Io = std.Io;
 pub const Key = history.model.ClientKey;
 pub const Role = enum { undecided, ui, control };
 
+pub const PendingPaneFocus = struct {
+    request_id: core.schema.RequestId,
+    pane_id: core.schema.PaneId,
+    pane_generation: u64,
+    target: Key,
+};
+
 pub const Session = struct {
     key: Key,
     connection: core.transport.SocketChannel,
@@ -21,6 +28,9 @@ pub const Session = struct {
     read_pending: bool = false,
     send_pending: bool = false,
     closing: bool = false,
+    last_input_pane: core.schema.PaneId = .invalid,
+    last_input_sequence: u64 = 0,
+    pending_pane_focus: ?PendingPaneFocus = null,
 
     /// Allocates the bounded receive and delivery buffers for one connection.
     /// The returned session owns neither `gpa` nor `connection` until the

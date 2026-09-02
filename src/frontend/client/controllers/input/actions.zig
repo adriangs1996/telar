@@ -1,5 +1,6 @@
 //! Dispatches bounded semantic actions independently of their input source.
 
+const std = @import("std");
 const core = @import("telar-core");
 const input = @import("../../../input/root.zig");
 const workspace = @import("../../../workspace/root.zig");
@@ -14,6 +15,7 @@ const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_closures = @import("../panes/pane_closures.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
+const pane_inputs = @import("pane_inputs.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const pane_splits = @import("../panes/pane_splits.zig");
 const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
@@ -28,6 +30,11 @@ const keybind = input.keybind;
 const layout = workspace.layout;
 const native_action = input_application.native_action;
 const schema = core.schema;
+
+const ctrl_h = keybind.parseKey("ctrl+h") catch unreachable;
+const ctrl_j = keybind.parseKey("ctrl+j") catch unreachable;
+const ctrl_k = keybind.parseKey("ctrl+k") catch unreachable;
+const ctrl_l = keybind.parseKey("ctrl+l") catch unreachable;
 
 /// Applies one native semantic action from host input, Lua or a plugin.
 ///
@@ -68,12 +75,13 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
             .horizontal => .horizontal,
             .vertical => .vertical,
         }),
-        .focus_pane => |direction| try focusPane(client, .{ .direction = switch (direction) {
+        .focus_pane => |direction| _ = try focusPane(client, .{ .direction = switch (direction) {
             .left => .left,
             .right => .right,
             .up => .up,
             .down => .down,
         } }),
+        .navigate_pane => |direction| try navigatePane(client, direction),
         .resize_pane => |direction| try resizePane(client, switch (direction) {
             .left => .left,
             .right => .right,
@@ -123,13 +131,42 @@ fn selectTab(client: *Client, target: tab_selections.Target) !void {
     _ = try use_case.execute(.{ .target = target });
 }
 
-fn focusPane(client: *Client, target: pane_focus.Target) !void {
+fn focusPane(client: *Client, target: pane_focus.Target) !bool {
     var use_case = pane_focus.handler(client);
 
-    _ = try use_case.execute(.{
+    return try use_case.execute(.{
         .target = target,
         .area = client.view.workbench(),
-    });
+    }) != null;
+}
+
+fn navigatePane(client: *Client, direction: input.action.Direction) !void {
+    const key = navigationKey(direction);
+    if (std.mem.eql(u8, client.model.focusedPaneForeground(), "nvim")) {
+        _ = try pane_inputs.send(client, .{ .target = .focused, .source = .host, .payload = .{ .key = key } });
+        return;
+    }
+
+    const changed = try focusPane(client, .{ .direction = switch (direction) {
+        .left => .left,
+        .right => .right,
+        .up => .up,
+        .down => .down,
+    } });
+    if (changed) {
+        return;
+    }
+
+    _ = try pane_inputs.send(client, .{ .target = .focused, .source = .host, .payload = .{ .key = key } });
+}
+
+fn navigationKey(direction: input.action.Direction) keybind.Key {
+    return switch (direction) {
+        .left => ctrl_h,
+        .right => ctrl_l,
+        .up => ctrl_k,
+        .down => ctrl_j,
+    };
 }
 
 fn beginSplit(client: *Client, axis: layout.Axis) !void {

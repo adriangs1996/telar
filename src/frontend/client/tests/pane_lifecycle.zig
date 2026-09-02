@@ -159,6 +159,90 @@ test "pane focus commits before reports resize and presentation" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
+test "navigation forwards the canonical key through Neovim and at a Telar edge" {
+    for ([_][]const u8{ "nvim", "zsh" }) |foreground_name| {
+        var harness: TestHarness = undefined;
+        try harness.init();
+        defer harness.deinit();
+        try harness.bootstrap();
+
+        var payload: [128]u8 = undefined;
+        const foreground = try schema.encodePaneForeground(&payload, .{
+            .pane_id = TestHarness.bootstrap_pane,
+            .name = foreground_name,
+        });
+        _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(foreground));
+
+        _ = try client_actions.apply(harness.client, .{ .navigate_pane = .left });
+        try harness.settle();
+
+        var message_buffer: [256]u8 = undefined;
+        const message = try harness.nextClientMessage(&message_buffer);
+        try std.testing.expect(message == .pane_input);
+        try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_input.pane_id);
+        try std.testing.expectEqualStrings("\x08", message.pane_input.bytes);
+    }
+}
+
+test "runtime focus command reports a directionless client layout" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    var payload: [128]u8 = undefined;
+    const command = try schema.encodePaneFocusCommand(&payload, .{
+        .requester = .{ .id = 8, .generation = 9 },
+        .request_id = @enumFromInt(3),
+        .pane_id = TestHarness.bootstrap_pane,
+        .pane_generation = 4,
+        .direction = .left,
+    });
+    _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(command));
+    try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(message == .complete_pane_focus);
+    try std.testing.expectEqual(schema.PaneFocusOutcome.no_neighbor, message.complete_pane_focus.outcome);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, message.complete_pane_focus.focused_pane_id);
+}
+
+test "navigation lets Neovim consume internal movement before Telar focus" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const second: schema.PaneId = @enumFromInt(20);
+    _ = try client.model.commitPaneSplit(.{
+        .split = .{
+            .target_pane = TestHarness.bootstrap_pane,
+            .location = TestHarness.bootstrap_location,
+            .axis = .horizontal,
+            .area = client.view.workbench(),
+        },
+        .new_pane = second,
+    });
+
+    var payload: [128]u8 = undefined;
+    const nvim = try schema.encodePaneForeground(&payload, .{ .pane_id = second, .name = "nvim" });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(nvim));
+    _ = try client_actions.apply(client, .{ .navigate_pane = .left });
+    try std.testing.expectEqual(second, client.model.workspace.active().?.model.layout.focused().?);
+    try harness.settle();
+
+    var message_buffer: [256]u8 = undefined;
+    const forwarded = try harness.nextClientMessage(&message_buffer);
+    try std.testing.expect(forwarded == .pane_input);
+    try std.testing.expectEqual(second, forwarded.pane_input.pane_id);
+
+    const shell = try schema.encodePaneForeground(&payload, .{ .pane_id = second, .name = "zsh" });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(shell));
+    _ = try client_actions.apply(client, .{ .navigate_pane = .left });
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.workspace.active().?.model.layout.focused().?);
+}
+
 test "mouse focus precedes forwarding its triggering press" {
     var harness: TestHarness = undefined;
     try harness.init();

@@ -38,13 +38,14 @@ pub const PaneIdentity = struct {
     key: pane_mod.PaneKey,
     location: schema.TabLocation,
     socket_path: []const u8,
+    executable_path: []const u8,
 };
 
 /// Fixed storage for the environment variables that let a child find the
 /// runtime and name its own pane. `TELAR_SOCKET` stays absent on purpose: a
 /// nested runtime must not inherit the outer listener as its own.
 pub const PaneOverrides = struct {
-    pub const count = 5;
+    pub const count = 6;
 
     pane_id: [20]u8 = undefined,
     pane_generation: [20]u8 = undefined,
@@ -57,7 +58,7 @@ pub const PaneOverrides = struct {
     ///
     /// ```zig
     /// var overrides: PaneOverrides = .{};
-    /// const entries = overrides.build(.{ .key = key, .location = location, .socket_path = path });
+    /// const entries = overrides.build(.{ .key = key, .location = location, .socket_path = path, .executable_path = executable });
     /// ```
     pub fn build(overrides: *PaneOverrides, identity: PaneIdentity) []const pty.ChildEnvironment.Override {
         const pane_id = std.fmt.bufPrint(&overrides.pane_id, "{d}", .{schema.id.raw(identity.key.id)}) catch unreachable;
@@ -70,6 +71,7 @@ pub const PaneOverrides = struct {
             .{ .name = "TELAR_PANE_GENERATION", .value = pane_generation },
             .{ .name = "TELAR_WORKSPACE_ID", .value = workspace_id },
             .{ .name = "TELAR_TAB_ID", .value = tab_id },
+            .{ .name = "TELAR_BIN_PATH", .value = identity.executable_path },
         };
         return &overrides.entries;
     }
@@ -114,6 +116,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         history_service: *history.Service,
         inherited_environment: std.process.Environ,
         socket_path: []const u8,
+        executable_path: []const u8,
         manifests: *const core.agent_manifest.Table,
         proxy: ?*proxy_mod.Proxy,
         panes: *PaneStore,
@@ -132,6 +135,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 .key = pane_key,
                 .location = request.location,
                 .socket_path = launcher.socket_path,
+                .executable_path = launcher.executable_path,
             });
             var proxy_environment: ?proxy_mod.PaneEnvironment = null;
             defer if (proxy_environment) |*owned| owned.deinit();
@@ -318,9 +322,10 @@ test "pane overrides name the runtime socket and the pane's own identity" {
             .tab_id = @enumFromInt(9),
         },
         .socket_path = "/tmp/telar.sock",
+        .executable_path = "/opt/telar/bin/telar",
     });
 
-    try std.testing.expectEqual(@as(usize, 5), entries.len);
+    try std.testing.expectEqual(@as(usize, 6), entries.len);
     try std.testing.expectEqualStrings("TELAR_SOCKET_PATH", entries[0].name);
     try std.testing.expectEqualStrings("/tmp/telar.sock", entries[0].value);
     try std.testing.expectEqualStrings("TELAR_PANE_ID", entries[1].name);
@@ -331,4 +336,6 @@ test "pane overrides name the runtime socket and the pane's own identity" {
     try std.testing.expectEqualStrings("4", entries[3].value);
     try std.testing.expectEqualStrings("TELAR_TAB_ID", entries[4].name);
     try std.testing.expectEqualStrings("9", entries[4].value);
+    try std.testing.expectEqualStrings("TELAR_BIN_PATH", entries[5].name);
+    try std.testing.expectEqualStrings("/opt/telar/bin/telar", entries[5].value);
 }

@@ -5,6 +5,7 @@ pub const pane_attachments = @import("pane_attachments.zig");
 pub const pane_clipboards = @import("pane_clipboards.zig");
 pub const pane_closures = @import("pane_closures.zig");
 pub const pane_focus = @import("pane_focus.zig");
+pub const pane_focus_commands = @import("pane_focus_commands.zig");
 pub const pane_focus_reports = @import("pane_focus_reports.zig");
 pub const pane_frames = @import("pane_frames.zig");
 pub const pane_geometry = @import("pane_geometry.zig");
@@ -21,6 +22,7 @@ test {
     _ = pane_clipboards;
     _ = pane_closures;
     _ = pane_focus;
+    _ = pane_focus_commands;
     _ = pane_focus_reports;
     _ = pane_frames;
     _ = pane_geometry;

@@ -188,6 +188,8 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .prune_history = routePruneHistory,
             .read_history_output = routeReadHistoryOutput,
             .history_stats = routeHistoryStats,
+            .request_pane_focus = routeRequestPaneFocus,
+            .complete_pane_focus = routeCompletePaneFocus,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -236,7 +238,141 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             };
             var controller = PaneInputController.init(&application.metrics, &handler);
 
-            try controller.paneInput(input);
+            if (try controller.paneInput(input) == .handled) {
+                notePaneInput(application, request.session, input.pane_id);
+            }
+        }
+
+        fn routeRequestPaneFocus(request: *ClientRequestContext, focus: schema.RequestPaneFocus) !void {
+            if (request.session.role != .control) {
+                return error.InvalidClientRole;
+            }
+
+            const application = request.application;
+            const source_key: pane_mod.PaneKey = .{
+                .id = focus.pane_id,
+                .generation = focus.pane_generation,
+            };
+            const pane = application.model.panes.resolve(source_key) orelse {
+                try request.session.delivery.responses.push(.{ .request_failed = .{
+                    .request_id = focus.request_id,
+                    .code = .pane_not_found,
+                    .message = "pane not found or its generation is stale",
+                } });
+                request.session.delivery.close_after_reply = true;
+                return;
+            };
+            if (pane.exit != null) {
+                try request.session.delivery.responses.push(.{ .request_failed = .{
+                    .request_id = focus.request_id,
+                    .code = .pane_exited,
+                    .message = "pane already exited",
+                } });
+                request.session.delivery.close_after_reply = true;
+                return;
+            }
+            if (request.session.pending_pane_focus != null) {
+                try request.session.delivery.responses.push(.{ .request_failed = .{
+                    .request_id = focus.request_id,
+                    .code = .invalid_request,
+                    .message = "one pane focus request is already pending",
+                } });
+                request.session.delivery.close_after_reply = true;
+                return;
+            }
+
+            const target = paneFocusOrigin(application, source_key) orelse {
+                try request.session.delivery.responses.push(.{ .request_failed = .{
+                    .request_id = focus.request_id,
+                    .code = .invalid_request,
+                    .message = "no active UI client originated input for this pane",
+                } });
+                request.session.delivery.close_after_reply = true;
+                return;
+            };
+            request.session.pending_pane_focus = .{
+                .request_id = focus.request_id,
+                .pane_id = focus.pane_id,
+                .pane_generation = focus.pane_generation,
+                .target = target.key,
+            };
+            target.delivery.responses.push(.{ .pane_focus_command = .{
+                .requester = .{ .id = request.session.key.id, .generation = request.session.key.generation },
+                .request_id = focus.request_id,
+                .pane_id = focus.pane_id,
+                .pane_generation = focus.pane_generation,
+                .direction = focus.direction,
+            } }) catch |err| {
+                request.session.pending_pane_focus = null;
+                return err;
+            };
+            try application.pump(target);
+        }
+
+        fn routeCompletePaneFocus(request: *ClientRequestContext, completion: schema.CompletePaneFocus) !void {
+            if (request.session.role != .ui) {
+                return error.InvalidClientRole;
+            }
+
+            const requester_key: ClientKey = .{
+                .id = completion.requester.id,
+                .generation = completion.requester.generation,
+            };
+            const requester = request.application.clients.resolve(requester_key) orelse return;
+            const pending = requester.pending_pane_focus orelse return;
+
+            if (requester.role != .control or !std.meta.eql(pending.target, request.session.key) or
+                pending.request_id != completion.request_id or pending.pane_id != completion.pane_id or
+                pending.pane_generation != completion.pane_generation)
+            {
+                request.application.metrics.stale_client_messages += 1;
+                return;
+            }
+
+            try requester.delivery.responses.push(.{ .pane_focus_result = .{
+                .request_id = completion.request_id,
+                .outcome = completion.outcome,
+                .focused_pane_id = completion.focused_pane_id,
+            } });
+            requester.pending_pane_focus = null;
+            requester.delivery.close_after_reply = true;
+            try request.application.pump(requester);
+        }
+
+        fn notePaneInput(application: *Application, session: *ClientSession, pane_id: schema.PaneId) void {
+            application.input_sequence +%= 1;
+            if (application.input_sequence == 0) {
+                for (&application.clients.items) |*slot| {
+                    const client = slot.* orelse continue;
+                    client.last_input_sequence = 0;
+                }
+                application.input_sequence = 1;
+            }
+
+            session.last_input_pane = pane_id;
+            session.last_input_sequence = application.input_sequence;
+        }
+
+        fn paneFocusOrigin(application: *Application, pane_key: pane_mod.PaneKey) ?*ClientSession {
+            var found: ?*ClientSession = null;
+            var sequence: u64 = 0;
+            for (&application.clients.items) |*slot| {
+                const client = slot.* orelse continue;
+                if (!client.active() or client.role != .ui or client.last_input_pane != pane_key.id or
+                    client.last_input_sequence <= sequence)
+                {
+                    continue;
+                }
+
+                const attachment = client.attachments.find(pane_key.id) orelse continue;
+                if (!std.meta.eql(attachment.pane.key(), pane_key)) {
+                    continue;
+                }
+
+                found = client;
+                sequence = client.last_input_sequence;
+            }
+            return found;
         }
 
         fn routePaneResize(request: *ClientRequestContext, resize: schema.PaneResize) !void {

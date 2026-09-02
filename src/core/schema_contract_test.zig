@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 79;
+const corpus_len = 83;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -404,6 +404,24 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .needle = "err",
+        }),
+    ));
+    helper.add("request_pane_focus", .client, false, golden.request_pane_focus, helper.commit(
+        try schema.encodeRequestPaneFocus(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .direction = .left,
+        }),
+    ));
+    helper.add("complete_pane_focus", .client, false, golden.complete_pane_focus, helper.commit(
+        try schema.encodeCompletePaneFocus(helper.space(), .{
+            .requester = .{ .id = 9, .generation = 10 },
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .outcome = .focused,
+            .focused_pane_id = @enumFromInt(6),
         }),
     ));
 
@@ -805,6 +823,22 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .matches = &.{.{ .x = 2, .y = 7, .len = 3 }},
         }),
     ));
+    helper.add("pane_focus_command", .server, false, golden.pane_focus_command, helper.commit(
+        try schema.encodePaneFocusCommand(helper.space(), .{
+            .requester = .{ .id = 9, .generation = 10 },
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .direction = .left,
+        }),
+    ));
+    helper.add("pane_focus_result", .server, false, golden.pane_focus_result, helper.commit(
+        try schema.encodePaneFocusResult(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .outcome = .focused,
+            .focused_pane_id = @enumFromInt(6),
+        }),
+    ));
 
     std.debug.assert(index == corpus_len);
     return entries;
@@ -858,6 +892,8 @@ const golden = struct {
     pub const report_agent_session = "1f0500000000000000050000000000000003000000000000000300616263";
     pub const report_agent = "20050000000000000005000000000000000300000000000000010300616263";
     pub const search_pane = "21050000000000000005000000000000000300657272";
+    pub const request_pane_focus = "2705000000000000000500000000000000030000000000000000";
+    pub const complete_pane_focus = "2809000000000000000a00000000000000050000000000000005000000000000000300000000000000000600000000000000";
     pub const pane_matches = "a3050000000000000005000000000000000001000200070000000300";
     pub const pane_text = "a00500000000000000050000000000000000020000006869";
     pub const request_completed = "a10500000000000000";
@@ -893,6 +929,8 @@ const golden = struct {
     pub const notification_shown = "9c2e0000000000000002";
     pub const agent_sound = "9e0500000000000000070000000000000001";
     pub const client_layout_snapshot = "9f01014900010100070000000000000003000000000000000100000700000000000000030000000000000005000000000000000001030001007017000500000000000000000600000000000000";
+    pub const pane_focus_command = "a709000000000000000a0000000000000005000000000000000500000000000000030000000000000000";
+    pub const pane_focus_result = "a80500000000000000000600000000000000";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {

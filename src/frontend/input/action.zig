@@ -143,6 +143,7 @@ pub const CommandTab = struct {
 pub const Action = union(enum) {
     split_pane: SplitDirection,
     focus_pane: Direction,
+    navigate_pane: Direction,
     resize_pane: Direction,
     toggle_pane_fullscreen,
     toggle_sidebar,
@@ -182,6 +183,14 @@ pub const Action = union(enum) {
             return .{ .focus_pane = .up };
         if (std.mem.eql(u8, name, "focus-down"))
             return .{ .focus_pane = .down };
+        if (std.mem.eql(u8, name, "navigate-left"))
+            return .{ .navigate_pane = .left };
+        if (std.mem.eql(u8, name, "navigate-right"))
+            return .{ .navigate_pane = .right };
+        if (std.mem.eql(u8, name, "navigate-up"))
+            return .{ .navigate_pane = .up };
+        if (std.mem.eql(u8, name, "navigate-down"))
+            return .{ .navigate_pane = .down };
         if (std.mem.eql(u8, name, "resize-left"))
             return .{ .resize_pane = .left };
         if (std.mem.eql(u8, name, "resize-right"))
