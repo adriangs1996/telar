@@ -46,6 +46,9 @@ pub const Stats = struct {
     /// Generations the actor froze into runtime-owned shared objects for
     /// local clients to adopt without another copy.
     prepared_frames: u64 = 0,
+    /// Shared frames copied once, from the child's object straight into the
+    /// runtime-owned object that then serves as emulator storage.
+    direct_frames: u64 = 0,
     reset: bool = false,
     failed: bool = false,
 };
@@ -81,9 +84,35 @@ const SharedFrameKey = struct {
 const SharedFrame = struct {
     start: usize,
     end: usize,
+    /// The KGP command inside the envelope, APC introducer to terminator.
+    apc_start: usize,
+    apc_end: usize,
     payload_start: usize,
     payload_end: usize,
     key: SharedFrameKey,
+    byte_len: usize,
+    format: core.graphics.Format,
+    width: u32,
+    height: u32,
+};
+
+/// One complete shared-memory frame the filter selected, handed to a sink
+/// that can load it without the emulator's parser. `bytes` spans the whole
+/// synchronized envelope; the APC command sits at `apc_start..apc_end`.
+///
+/// ```zig
+/// pub fn observeSharedFrame(sink: *Sink, frame: SharedFrameView) bool
+/// ```
+pub const SharedFrameView = struct {
+    bytes: []const u8,
+    apc_start: usize,
+    apc_end: usize,
+    encoded_name: []const u8,
+    image_id: u32,
+    placement_id: u32,
+    format: core.graphics.Format,
+    width: u32,
+    height: u32,
     byte_len: usize,
 };
 
@@ -289,6 +318,7 @@ pub const Pipeline = struct {
                 stats.discarded_frames +|= filtered.discarded;
                 stats.unavailable_frames +|= filtered.unavailable;
                 stats.forwarded_frames +|= filtered.forwarded;
+                stats.direct_frames +|= filtered.direct;
                 stats.output_bytes +|= bytes.len;
             },
             .resize => |size| pipeline.stream.handler.resize(vtResize(size)) catch {
@@ -345,6 +375,8 @@ pub const FilterStats = struct {
     discarded: u64 = 0,
     unavailable: u64 = 0,
     forwarded: u64 = 0,
+    /// The subset of `forwarded` the sink loaded without the parser.
+    direct: u64 = 0,
 };
 
 const FilterInput = struct {
@@ -405,7 +437,25 @@ fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: any
                 const frame = sharedFrameAt(bytes, frame_start) orelse unreachable;
                 const chosen = selectedFrameStart(selected[0..selected_count], frame.key);
                 if (chosen == frame.start) {
-                    sink.observe(bytes[frame.start..frame.end]);
+                    // A sink that loads the object itself skips the parser's
+                    // copy; otherwise the emulator parses the command as is.
+                    const direct = sink.observeSharedFrame(.{
+                        .bytes = bytes[frame.start..frame.end],
+                        .apc_start = frame.apc_start - frame.start,
+                        .apc_end = frame.apc_end - frame.start,
+                        .encoded_name = bytes[frame.payload_start..frame.payload_end],
+                        .image_id = frame.key.image_id,
+                        .placement_id = frame.key.placement_id,
+                        .format = frame.format,
+                        .width = frame.width,
+                        .height = frame.height,
+                        .byte_len = frame.byte_len,
+                    });
+                    if (direct) {
+                        filtered.direct +|= 1;
+                    } else {
+                        sink.observe(bytes[frame.start..frame.end]);
+                    }
                     filtered.forwarded +|= 1;
                 } else if (chosen == null) {
                     // No frame of this placement survived the availability
@@ -508,17 +558,27 @@ fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
     return .{
         .start = start,
         .end = terminator + atomic_shared_suffix.len,
+        .apc_start = command_start - "\x1b_G".len,
+        .apc_end = terminator + "\x1b\\".len,
         .payload_start = command_start + separator + 1,
         .payload_end = terminator,
         .key = parsed.key,
         .byte_len = parsed.byte_len,
+        .format = parsed.format,
+        .width = parsed.width,
+        .height = parsed.height,
     };
 }
 
-fn parseSharedFrameControl(control: []const u8) ?struct {
+const SharedFrameControl = struct {
     key: SharedFrameKey,
     byte_len: usize,
-} {
+    format: core.graphics.Format,
+    width: u32,
+    height: u32,
+};
+
+fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
     var image_id: ?u32 = null;
     var placement_id: ?u32 = null;
     var format: ?u8 = null;
@@ -561,14 +621,16 @@ fn parseSharedFrameControl(control: []const u8) ?struct {
                 quiet = true;
             },
             // Chunked transmissions carry ordering state and are never folded.
-            'm' => return null,
-            else => {},
+            // Any other key (offsets, sizes, crops, z) means the frame is
+            // not the plain full replacement this fold understands.
+            else => return null,
         }
     }
     if (!transmit or !shared or !cursor_static or !quiet) return null;
     const image = image_id orelse return null;
     const placement = placement_id orelse return null;
-    const bpp: usize = if ((format orelse return null) == 24) 3 else 4;
+    const depth = format orelse return null;
+    const bpp: usize = if (depth == 24) 3 else 4;
     const pixels = std.math.mul(
         usize,
         @as(usize, width orelse return null),
@@ -578,6 +640,9 @@ fn parseSharedFrameControl(control: []const u8) ?struct {
     return .{
         .key = .{ .image_id = image, .placement_id = placement },
         .byte_len = byte_len,
+        .format = if (depth == 24) .rgb else .rgba,
+        .width = width.?,
+        .height = height.?,
     };
 }
 
@@ -658,16 +723,58 @@ fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
 const TestOutput = struct {
     bytes: [4096]u8 = undefined,
     len: usize = 0,
+    direct: bool = false,
+    direct_frames: usize = 0,
+    last_direct: ?SharedFrameView = null,
 
     pub fn observe(output: *TestOutput, bytes: []const u8) void {
         @memcpy(output.bytes[output.len..][0..bytes.len], bytes);
         output.len += bytes.len;
     }
 
+    pub fn observeSharedFrame(output: *TestOutput, frame: SharedFrameView) bool {
+        if (!output.direct) return false;
+        output.direct_frames += 1;
+        output.last_direct = frame;
+        return true;
+    }
+
     fn slice(output: *const TestOutput) []const u8 {
         return output.bytes[0..output.len];
     }
 };
+
+test "a sink that loads shared frames itself receives the parsed frame instead of bytes" {
+    const frame = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=s,i=7,p=3,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";
+    var output: TestOutput = .{ .direct = true };
+
+    try std.testing.expectEqual(
+        FilterStats{ .discarded = 0, .unavailable = 0, .forwarded = 1, .direct = 1 },
+        filterAtomicSharedFrames(.{ .bytes = "head" ++ frame ++ "tail", .storage_limit = 8 }, &output, TestAvailability.all),
+    );
+    try std.testing.expectEqualStrings("headtail", output.slice());
+    const view = output.last_direct.?;
+    try std.testing.expectEqualStrings(frame, view.bytes);
+    try std.testing.expectEqualStrings("\x1b[?2026h\x1b[H", view.bytes[0..view.apc_start]);
+    try std.testing.expectEqualStrings("\x1b[?2026l", view.bytes[view.apc_end..]);
+    try std.testing.expectEqualStrings("L3B4LTE=", view.encoded_name);
+    try std.testing.expectEqual(@as(u32, 7), view.image_id);
+    try std.testing.expectEqual(@as(u32, 3), view.placement_id);
+    try std.testing.expectEqual(core.graphics.Format.rgba, view.format);
+    try std.testing.expectEqual(@as(u32, 2), view.width);
+    try std.testing.expectEqual(@as(usize, 8), view.byte_len);
+}
+
+test "shared frames with crop or offset keys are left to the emulator parser" {
+    const cropped = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2,x=1;L3B4LTE=\x1b\\\x1b[?2026l";
+    var output: TestOutput = .{ .direct = true };
+
+    try std.testing.expectEqual(
+        FilterStats{},
+        filterAtomicSharedFrames(.{ .bytes = cropped, .storage_limit = 8 }, &output, TestAvailability.all),
+    );
+    try std.testing.expectEqualStrings(cropped, output.slice());
+}
 
 const TestAvailability = enum {
     all,
@@ -754,6 +861,10 @@ test "media terminal preserves cursor-relative KGP placement" {
 
         pub fn observe(feed: *@This(), bytes: []const u8) void {
             feed.pipeline.stream.nextSlice(bytes);
+        }
+
+        pub fn observeSharedFrame(_: *@This(), _: SharedFrameView) bool {
+            return false;
         }
     };
     var feed: Feed = .{ .pipeline = &pipeline };

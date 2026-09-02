@@ -86,6 +86,60 @@ pub fn freezeSharedPixels(pixels: []const u8) ?core.graphics.ShmName {
     return name;
 }
 
+/// A child's shared object mapped read-only for one copy out of it.
+pub const ChildObject = struct {
+    pixels: []align(std.heap.page_size_min) u8,
+
+    /// Unmaps the object; the name was already unlinked, as the protocol
+    /// asks of whoever consumes a `t=s` transmission.
+    pub fn close(object: ChildObject) void {
+        std.posix.munmap(object.pixels);
+    }
+};
+
+/// Opens, validates and maps a child's shared object by its base64 name,
+/// then unlinks the name. Null when the object is missing, undersized, or the
+/// name is malformed.
+///
+/// ```zig
+/// const child = mapChildObject(encoded_name, byte_len) orelse return false;
+/// defer child.close();
+/// ```
+pub fn mapChildObject(encoded_name: []const u8, byte_len: usize) ?ChildObject {
+    if (comptime !shm_supported) return null;
+    const Decoder = std.base64.standard.Decoder;
+    const name_len = Decoder.calcSizeForSlice(encoded_name) catch return null;
+    if (name_len == 0 or name_len > std.fs.max_path_bytes) return null;
+    var name_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    Decoder.decode(name_buffer[0..name_len], encoded_name) catch return null;
+    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) return null;
+    name_buffer[name_len] = 0;
+    const name: [:0]const u8 = name_buffer[0..name_len :0];
+    const fd = std.c.shm_open(name, @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
+    if (std.posix.errno(fd) != .SUCCESS) return null;
+    defer _ = std.c.close(fd);
+    var stat: std.c.Stat = undefined;
+    if (std.c.fstat(fd, &stat) != 0) return null;
+    if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len) return null;
+    const pixels = std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch
+        return null;
+    _ = std.c.shm_unlink(name);
+    return .{ .pixels = pixels };
+}
+
+/// Maps a runtime-owned object read-only for the life of an emulator image.
+///
+/// ```zig
+/// const storage = mapOwnObject(name, byte_len) orelse return false;
+/// ```
+pub fn mapOwnObject(name: core.graphics.ShmName, byte_len: usize) ?[]align(std.heap.page_size_min) u8 {
+    if (comptime !shm_supported) return null;
+    const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
+    if (std.posix.errno(fd) != .SUCCESS) return null;
+    defer _ = std.c.close(fd);
+    return std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch null;
+}
+
 /// One frozen generation waiting for a client attachment to adopt it.
 pub const PreparedTransfer = struct {
     metadata: core.graphics.Image,

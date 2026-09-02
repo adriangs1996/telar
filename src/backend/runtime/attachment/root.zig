@@ -866,13 +866,12 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
     var image_iterator = storage.images.iterator();
     while (image_iterator.next()) |entry| {
         const image = entry.value_ptr;
-        if (image.data.bytes() == null) continue;
+        const pixels = pane.media_allocator.imagePixels(image.data.bytes()) orelse continue;
         const key: core.graphics.ImageKey = .{
             .image_id = image.id,
             .generation = image.generation,
         };
         if (knowsImage(attachment, key)) continue;
-        const pixels = image.data.bytes() orelse continue;
         const format: core.graphics.Format = switch (image.format) {
             .rgb => .rgb,
             .rgba => .rgba,

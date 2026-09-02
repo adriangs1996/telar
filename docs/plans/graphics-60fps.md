@@ -146,65 +146,96 @@ stays non-zero and harmless: the send loop polls the lane while the actor
 runs, and adoption happens at the actor's completion anyway. P4 and P6 are
 where the actor's time goes down.
 
-## P4. Client to host: persistent file ring with an explicit ack
+## P4. One copy per frame: the frozen object is the emulator's storage
 
-Fresh shm objects cost page faults on both sides and give only an indirect
-consume signal (the client polls `shm_open` per media pass,
-`kitty.zig:379-396`). terminal-browser's file ring is the proven shape.
+The original P4 was a persistent file ring handed to the host with `t=f`.
+Measured before building it (`scratchpad/ringbench.c`, M3, 8 slots of one 4K
+frame rewritten at 60 Hz in `$TMPDIR`): 8.2 ms per frame of write cost, worse
+than a fresh shm object, and `iostat` showed the kernel writing the dirty
+pages back to disk at up to 351 MB/s. A file ring is out on macOS. The real
+cost was never the copy; it was fresh memory: Ghostty VT's 50 MiB loading
+buffer plus a fresh shared object, each faulting in ~2300 pages per frame.
 
-- Runtime: per attachment, a 0700 directory under the runtime state directory
-  with eight 0600 `O_EXCL` regular files sized on first use per (width,
-  height, format). A frozen frame is a memcpy into the next free slot through
-  a persistent mapping. A slot is free only after the client reported the
-  frame consumed; with eight slots at most seven frames are in flight.
-- Wire: `graphics_shared_image` gains `medium` (`shm` | `file`) and the slot
-  path. Corpus entries and schema bump. Hosts that fail the file probe keep
-  today's `t=s` path unchanged.
-- Client: startup probe `a=q,t=f` beside the existing 31/32 probes, capability
-  `kitty_file` with the same unknown → supported/unsupported expiry. Emission
-  uses `t=f` with `q=0`; the input parser already consumes APC replies, so the
-  `OK` for the image id becomes the consume event. Retire and credit return
-  happen on the ack, exactly. The pass-counter deadline remains as the safety
-  net for hosts that answer nothing.
-- Security: the client never opens the files unless it needs the inline
-  fallback (read-only mapping). Paths are runtime-chosen, never derived from
-  child data. Ghostty's `readFile` validates a regular file; the runtime
-  removes the directory on pane close and sweeps stale directories at start.
-- Tests: encoding, ack parsing, slot occupancy and reuse, ack-lost expiry,
-  fallback to `t=s` on probe failure, corpus.
+- The media actor handles the atomic terminal-browser frame itself
+  (`filterAtomicSharedFrames` already isolates it): maps the child's object,
+  copies it once into a fresh runtime-owned object, unlinks the child's
+  name, and maps its own object read-only for the life of the image.
+- The emulator stores a one-byte placeholder as the image data. It never
+  reads pixels in the runtime; readers resolve the placeholder to the
+  mapping through `PaneMediaAllocator.imagePixels`. Freeing the placeholder
+  (replacement, delete, pane close) unmaps the object and releases its
+  reservation, so `std.mem.Allocator`'s safety scribble never touches an
+  object a client or host may still be reading (a copy-on-write mapping
+  would have avoided that too, but macOS refuses `MAP_PRIVATE` on shm).
+- The envelope's prefix, a synthesized `a=p` placement and the suffix still
+  go through the emulator, so cursor policy and synchronized output are
+  unchanged. Frames with crop, offset or z keys keep the parser path.
+- The object doubles as the parked transfer for local clients with no extra
+  reservation; the P3 fallback copy remains for everything else.
+- Tests: the runtime test proves one copy (the emulator's data is the
+  placeholder, the pixels are the mapping), replacement unmaps the previous
+  object with flat quota, and a pane without shared clients loads the frame
+  the same way and parks nothing. Filter tests cover the direct sink and the
+  crop-key exclusion.
+- `telar-frame-source` (examples/frame_source.zig) publishes frames the way
+  terminal-browser does at a chosen size and rate, and
+  `verify_terminal_browser.py --source synthetic:WxH@FPS --measure S` runs
+  it through Telar on Ghostty, so the pipeline can be measured at exactly 4K
+  without Chromium.
 
-Exit: `--measure` at the largest local display presents ≥ 60 frames/s with
-zero resets, drops and resyncs. `shared_retire_latency` p99 under one frame.
+Exit: `--measure` at 4K presents ≥ 60 frames/s with zero resets, drops and
+resyncs.
+
+Result (2026-09-02, synthetic 3840x2160 RGBA at 120 frames/s, 15 s):
+forwarded 103.1/s, presented 62.0/s (the pacer cap), present interval
+16.7 ms avg / 34.5 ms max, media ingest 8.3 ms avg, zero drops, resets or
+resyncs, 1951 of 1951 frames direct and adopted. The runtime now has about
+two frames of headroom per pacer interval at 4K. terminal-browser runs on
+the same day were dominated by the machine's memory pressure (4.8 GB of
+6 GB swap in use, 17 GB compressed): Chromium produced 15-38 frames/s with
+2-3 folded frames total, so the browser, not Telar, was the ceiling; the
+synthetic source is the reproducible gate from here on.
 
 ## P5. Accept validated `t=f` from children
 
-terminal-browser then keeps its persistent ring inside telar too, saving the
-per-frame object creation on its side.
+terminal-browser prefers `t=f` and, inside Telar, would keep its persistent
+file ring, saving the per-frame object creation on its side. The direct path
+maps the file read-only, so Telar's side never dirties file pages.
 
 - `media/root.zig` loading limits enable `.file`. `filterAtomicSharedFrames`
   learns the `t=f` envelope so coalescing keeps working (one newest frame per
   placement per batch).
-- Validation before forwarding to the VT: absolute path, `O_NOFOLLOW`,
-  regular file, owner is the runtime uid, size equals the declared
-  `width * height * bpp`, and byte length under the screen cap. Anything else
-  answers `EBADF` on the PTY reply queue and counts `media_unavailable_frames`.
-  The child can only point at files it could already read, so the remaining
-  open-after-validate window changes nothing about what the pane can show.
+- Validation before mapping: absolute path, `O_NOFOLLOW`, regular file,
+  owner is the runtime uid, size at least the declared
+  `width * height * bpp`, and byte length under the screen cap. Anything
+  else counts `media_unavailable_frames`. The child can only point at files
+  it could already read, so the remaining open-after-validate window changes
+  nothing about what the pane can show.
 - `t=t` stays disabled; the runtime never deletes child files.
-- Tests: rejections (symlink, directory, wrong owner, size mismatch, oversize),
-  coalescing across rewritten slots, and `verify-terminal-browser` asserting
-  the "frames go through a file" log line.
+- Tests: rejections (symlink, directory, wrong owner, size mismatch,
+  oversize), coalescing across rewritten slots, and `verify-terminal-browser`
+  asserting the "frames go through a file" log line.
 
-Exit: media actor ingest p99 drops by the fresh-object cost measured in P1.
+Exit: the browser run reports the file transport and the same frames/s as
+shared memory.
 
-## P6. Loading churn in the pinned VT (only if P1 shows it matters)
+## P6. Explicit host acknowledgement instead of unlink polling
 
-`LoadingImage` grows its buffer 1.5x (~50 MiB fresh per 4K frame) and shrinks
-with `toOwnedSlice`. Options, in order of preference: pre-size the loading
-list when the declared length is known (patch to the pinned dependency, kept
-in `vendor/`), or have the media actor read atomic frames into an exact
-reusable buffer and add them to `ImageStorage` directly, bypassing
-`LoadingImage` for that fast path only. Decide with the P1 benchmark.
+The client learns that Ghostty consumed a name by probing `shm_open` on
+every writer pass (`kitty.zig:379-396`), and the 180-pass deadline is the
+only recovery. With `q=0` on the transmit, Ghostty answers `OK` for the
+image id; the client's input parser already consumes APC replies for the
+capability probes.
+
+- Emit the `t=s` transmit with `q=0`; route `OK`/error replies for pane image
+  ids to `kitty.Store`, which retires on the reply and returns credit
+  exactly. Placements keep `q=2`.
+- Keep the probe and deadline as the safety net for hosts that answer
+  nothing.
+- Tests: reply routing, retire on `OK`, inline fallback on an error reply.
+
+Exit: `shared_retire_latency` p99 under one pacer interval on the synthetic
+run.
 
 ## P7. Gate and documentation
 

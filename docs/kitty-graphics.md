@@ -74,14 +74,23 @@ deletes, and snapshot boundaries are separate ordered messages. IPC pixel
 chunks are capped at 1 MiB. The runtime freezes at most one generation per
 attachment while it crosses the socket, folds newer generations, and keeps the
 previous exterior placement visible until the replacement image and placement
-are complete. For local clients the pane's media actor freezes each decoded
-generation into the runtime-owned shared object right after the emulator
-stored it, while the pixels are still hot, and parks it on the pane (at most
-four per pane, every byte reserved against the pane quota). The runtime thread
-adopts the parked object when it stages the transfer, so no pixel copy runs on
-the thread that dispatches input; a generation nobody can adopt is released at
-the next synchronization, and a newer generation of the same image replaces
-an unadopted one. The runtime-thread copy remains only as the fallback for a
+are complete. A complete terminal-browser frame (`a=T`, `t=s`, `C=1`, `q=2`,
+no crop or offset keys) crosses the runtime with one copy: the media actor
+maps the child's object, copies it into a fresh runtime-owned object, unlinks
+the child's name, and keeps its own object mapped read-only as the image's
+pixels. The emulator stores a one-byte placeholder for that image; it never
+reads pixels in the runtime, and freeing the placeholder (replacement, delete,
+pane close) unmaps the object and releases its reservation. The envelope's
+prefix, a synthesized `a=p` placement and the suffix still go through the
+emulator, so cursor policy and synchronized output are what the child asked
+for. The same object is parked on the pane as the local client's transfer
+(at most four per pane, no second reservation). For images the emulator
+decoded itself the actor freezes the generation into a runtime-owned object
+right after decoding, while the pixels are hot. The runtime thread adopts the
+parked object when it stages the transfer, so no pixel copy runs on the thread
+that dispatches input; a generation nobody can adopt is released at the next
+synchronization, and a newer generation of the same image replaces an
+unadopted one. The runtime-thread copy remains only as the fallback for a
 generation the actor did not freeze. Moving a placement never retransmits pixels. Each client grants
 an explicit byte credit. The runtime cannot freeze another image until the
 client has retired enough image storage and returned that credit.
@@ -209,6 +218,10 @@ Telar as `-Doptimize=ReleaseFast -Ddiagnostics=true` so the counters exist
 without Debug overhead, and adds a `frames` block: frames per second forwarded
 by the media actor, published by the runtime and presented by the client, with
 the ingest, freeze, deferral and retire-latency figures behind them.
+`--source synthetic:3840x2160@120` replaces the browser with
+`telar-frame-source`, which publishes shared-memory frames of that size at
+that rate exactly as terminal-browser does, so the pipeline can be measured at
+4K without Chromium or its dependence on the machine's memory pressure.
 
 It writes its machine-readable result to
 `zig-out/terminal-browser-verification.json`. On 2026-08-23 it passed against:

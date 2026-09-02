@@ -23,6 +23,7 @@ test {
     _ = @import("read_pane_test.zig");
     _ = @import("search_pane_test.zig");
     _ = @import("send_pane_text_test.zig");
+    _ = @import("shared_frame_test.zig");
     _ = @import("rename_tab_test.zig");
     _ = @import("rename_workspace_test.zig");
     _ = @import("request_graphics_snapshot_test.zig");

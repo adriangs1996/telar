@@ -155,9 +155,72 @@ pub const PaneMediaAllocator = struct {
     budget: *GraphicsBudget,
     limit: usize,
     used: usize = 0,
+    /// Read-only mappings of runtime-owned shared objects that hold the
+    /// pixels of emulator images. The emulator stores a one-byte placeholder
+    /// as the image data and frees it through this allocator; freeing the
+    /// placeholder unmaps the object and releases its reservation. The
+    /// emulator never reads pixels here, and a placeholder keeps the
+    /// allocator's safety-checked scribble on freed memory away from an
+    /// object a client or host may still be reading. Touched only by
+    /// whoever holds the pane's media borrow.
+    mappings: [core.graphics.max_images_per_pane]?Mapping = @splat(null),
+
+    pub const Mapping = struct {
+        placeholder: [*]const u8,
+        pixels: []align(std.heap.page_size_min) u8,
+    };
 
     pub fn init(child: std.mem.Allocator, budget: *GraphicsBudget, limit: usize) PaneMediaAllocator {
         return .{ .child = child, .budget = budget, .limit = limit };
+    }
+
+    /// Registers a mapping already reserved against the budget behind the
+    /// placeholder the emulator will free. Returns false when no slot is free.
+    ///
+    /// ```zig
+    /// if (!media.adoptMapping(placeholder, map)) return error.MappingLimitReached;
+    /// ```
+    pub fn adoptMapping(media: *PaneMediaAllocator, placeholder: []const u8, pixels: []align(std.heap.page_size_min) u8) bool {
+        for (&media.mappings) |*slot| {
+            if (slot.* != null) continue;
+            slot.* = .{ .placeholder = placeholder.ptr, .pixels = pixels };
+            return true;
+        }
+        return false;
+    }
+
+    /// Resolves emulator image data to the pixels it stands for: the mapped
+    /// object behind a placeholder, or the data itself.
+    ///
+    /// ```zig
+    /// const pixels = pane.media_allocator.imagePixels(image.data.bytes()) orelse continue;
+    /// ```
+    pub fn imagePixels(media: *const PaneMediaAllocator, data: ?[]const u8) ?[]const u8 {
+        const bytes = data orelse return null;
+        for (media.mappings) |slot| {
+            const mapping = slot orelse continue;
+            if (mapping.placeholder == bytes.ptr) return mapping.pixels;
+        }
+        return bytes;
+    }
+
+    fn releaseMapping(media: *PaneMediaAllocator, memory: []u8) void {
+        for (&media.mappings) |*slot| {
+            const mapping = slot.* orelse continue;
+            if (mapping.placeholder != memory.ptr) continue;
+            std.posix.munmap(mapping.pixels);
+            media.releaseManual(mapping.pixels.len);
+            slot.* = null;
+            return;
+        }
+    }
+
+    fn isMapped(media: *const PaneMediaAllocator, memory: []u8) bool {
+        for (media.mappings) |slot| {
+            const mapping = slot orelse continue;
+            if (mapping.placeholder == memory.ptr) return true;
+        }
+        return false;
     }
 
     pub fn allocator(media: *PaneMediaAllocator) std.mem.Allocator {
@@ -193,6 +256,7 @@ pub const PaneMediaAllocator = struct {
 
     fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
+        if (media.isMapped(memory)) return false;
         if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return false;
         if (!media.child.rawResize(memory, alignment, new_len, ret_addr)) {
             if (new_len > memory.len) media.releaseManual(new_len - memory.len);
@@ -204,6 +268,7 @@ pub const PaneMediaAllocator = struct {
 
     fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
+        if (media.isMapped(memory)) return null;
         if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return null;
         const result = media.child.rawRemap(memory, alignment, new_len, ret_addr) orelse {
             if (new_len > memory.len) media.releaseManual(new_len - memory.len);
@@ -215,6 +280,7 @@ pub const PaneMediaAllocator = struct {
 
     fn free(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
+        media.releaseMapping(memory);
         media.child.rawFree(memory, alignment, ret_addr);
         media.releaseManual(memory.len);
     }
@@ -1117,6 +1183,10 @@ pub const Pane = struct {
             pub fn observe(sink: *@This(), bytes: []const u8) void {
                 sink.pane.ingestMediaOutput(bytes);
             }
+
+            pub fn observeSharedFrame(sink: *@This(), frame: media_mod.SharedFrameView) bool {
+                return sink.pane.ingestSharedFrame(frame);
+            }
         };
         var sink: Sink = .{ .pane = pane };
         pane.media.processSealed(.{ .current_size = current_size, .stats = stats }, &sink);
@@ -1166,7 +1236,7 @@ pub const Pane = struct {
         var images = storage.images.iterator();
         while (images.next()) |entry| {
             const image = entry.value_ptr;
-            const pixels = image.data.bytes() orelse continue;
+            const pixels = pane.media_allocator.imagePixels(image.data.bytes()) orelse continue;
             const image_key: core.graphics.ImageKey = .{ .image_id = image.id, .generation = image.generation };
             if (pane.prepared_transfers.covers(image_key)) continue;
             const format: core.graphics.Format = switch (image.format) {
@@ -1199,6 +1269,104 @@ pub const Pane = struct {
             }
             stats.prepared_frames +|= 1;
         }
+    }
+
+    /// Loads one complete shared-memory frame with a single copy: the child's
+    /// object is copied straight into a fresh runtime-owned object whose
+    /// read-only mapping becomes the emulator's image storage and, for local
+    /// clients, the parked transfer. The emulator still sees the envelope and
+    /// a synthesized placement, so cursor policy and synchronized output
+    /// behave as if it had parsed the frame. Returns false to let the
+    /// emulator parse the frame the ordinary way.
+    ///
+    /// ```zig
+    /// if (!pane.ingestSharedFrame(frame)) pane.ingestMediaOutput(frame.bytes);
+    /// ```
+    fn ingestSharedFrame(pane: *Pane, frame: media_mod.SharedFrameView) bool {
+        if (comptime !shared_transfer.shared_memory_supported) return false;
+        if (frame.byte_len > pane.graphics_storage_limit) return false;
+        // The emulator stamps the generation on store; validate everything
+        // else now with a placeholder that passes the identity check.
+        const metadata: core.graphics.Image = .{
+            .key = .{ .image_id = frame.image_id, .generation = 1 },
+            .format = frame.format,
+            .width = frame.width,
+            .height = frame.height,
+            .byte_len = frame.byte_len,
+        };
+        _ = metadata.validate(pane.graphics_storage_limit) catch return false;
+
+        const child = shared_transfer.mapChildObject(frame.encoded_name, frame.byte_len) orelse return false;
+        defer child.close();
+        const media = pane.media_allocator.allocator();
+        const placeholder = media.alloc(u8, 1) catch return false;
+        if (!pane.media_allocator.reserveManual(frame.byte_len)) {
+            media.free(placeholder);
+            return false;
+        }
+        const name = shared_transfer.freezeSharedPixels(child.pixels) orelse {
+            pane.media_allocator.releaseManual(frame.byte_len);
+            media.free(placeholder);
+            return false;
+        };
+        const storage = shared_transfer.mapOwnObject(name, frame.byte_len) orelse {
+            _ = std.c.shm_unlink(name.sliceZ());
+            pane.media_allocator.releaseManual(frame.byte_len);
+            media.free(placeholder);
+            return false;
+        };
+        if (!pane.media_allocator.adoptMapping(placeholder, storage)) {
+            std.posix.munmap(storage);
+            _ = std.c.shm_unlink(name.sliceZ());
+            pane.media_allocator.releaseManual(frame.byte_len);
+            media.free(placeholder);
+            return false;
+        }
+
+        pane.ingestMediaOutput(frame.bytes[0..frame.apc_start]);
+        const images = &pane.media.terminal.screens.active.kitty_images;
+        images.addImage(pane.io, media, pane.media.terminal.screens.active, .{
+            .id = frame.image_id,
+            .width = frame.width,
+            .height = frame.height,
+            .format = switch (frame.format) {
+                .rgb => .rgb,
+                .rgba => .rgba,
+            },
+            .data = .{ .complete = placeholder },
+        }) catch {
+            // Freeing the placeholder unmaps the object and releases the
+            // reservation exactly once.
+            media.free(placeholder);
+            _ = std.c.shm_unlink(name.sliceZ());
+            pane.ingestMediaOutput(frame.bytes[frame.apc_end..]);
+            return true;
+        };
+        var placement: [64]u8 = undefined;
+        const command = std.fmt.bufPrint(
+            &placement,
+            "\x1b_Ga=p,i={d},p={d},C=1,q=2\x1b\\",
+            .{ frame.image_id, frame.placement_id },
+        ) catch unreachable;
+        pane.ingestMediaOutput(command);
+        pane.ingestMediaOutput(frame.bytes[frame.apc_end..]);
+
+        const generation = images.imageById(frame.image_id).?.generation;
+        var parked = metadata;
+        parked.key.generation = generation;
+        const transfer: shared_transfer.PreparedTransfer = .{
+            .metadata = parked,
+            .name = name,
+            // The mapping's reservation belongs to emulator storage; the
+            // parked name adds no bytes of its own.
+            .reserved_len = 0,
+        };
+        if (pane.shared_transport_clients.load(.acquire) == 0 or
+            !pane.prepared_transfers.put(transfer, &pane.media_allocator))
+        {
+            _ = std.c.shm_unlink(name.sliceZ());
+        }
+        return true;
     }
 
     fn ingestMediaOutput(pane: *Pane, bytes: []const u8) void {

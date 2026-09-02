@@ -176,6 +176,9 @@ pub const RuntimeMetrics = struct {
     /// Shared frames fed to the media terminal. Moving while the graphics
     /// revision stays still isolates a silent emulator load failure.
     media_forwarded_frames: u64 = 0,
+    /// Forwarded shared frames loaded with one copy into a runtime-owned
+    /// object that doubles as emulator storage and client transfer.
+    media_direct_frames: u64 = 0,
     media_resets: u64 = 0,
     media_failures: u64 = 0,
     /// One media actor batch: shared frame folding, mapping and decoding.
@@ -443,6 +446,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
     try output.print(
         "\"graphics_stage_blocked\":{d},\"graphics_stage_deferred\":{d}," ++
             "\"graphics_transfers_prepared\":{d},\"graphics_transfers_adopted\":{d}," ++
+            "\"media_direct_frames\":{d}," ++
             "\"graphics_freeze_avg_us\":{d},\"graphics_freeze_max_us\":{d}," ++
             "\"media_ingest_avg_us\":{d},\"media_ingest_max_us\":{d},",
         .{
@@ -450,6 +454,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             metrics.graphics_stage_deferred,
             metrics.graphics_transfers_prepared,
             metrics.graphics_transfers_adopted,
+            metrics.media_direct_frames,
             metrics.graphics_freeze.average() / std.time.ns_per_us,
             metrics.graphics_freeze.max_ns / std.time.ns_per_us,
             metrics.media_ingest.average() / std.time.ns_per_us,

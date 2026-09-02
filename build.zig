@@ -233,6 +233,20 @@ pub fn build(b: *std.Build) void {
     terminal_browser_pane.root_module.addImport("ghostty-vt", ghostty_vt);
     b.installArtifact(terminal_browser_pane);
 
+    // A deterministic terminal-browser stand-in: publishes shared-memory
+    // frames of a chosen size at a chosen rate, so the graphics pipeline can
+    // be measured without Chromium.
+    const frame_source = b.addExecutable(.{
+        .name = "telar-frame-source",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/frame_source.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    b.installArtifact(frame_source);
+
     const run_terminal_browser_pane = b.addRunArtifact(terminal_browser_pane);
     run_terminal_browser_pane.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_terminal_browser_pane.addArgs(args);

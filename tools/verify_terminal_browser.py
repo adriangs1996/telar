@@ -86,6 +86,7 @@ def frame_report(
         "graphics_freeze_max_us": latest(runtime_samples, "graphics_freeze_max_us"),
         "graphics_stage_blocked": latest(runtime_samples, "graphics_stage_blocked"),
         "graphics_stage_deferred": latest(runtime_samples, "graphics_stage_deferred"),
+        "media_direct_frames": latest(runtime_samples, "media_direct_frames"),
         "graphics_transfers_prepared": latest(runtime_samples, "graphics_transfers_prepared"),
         "graphics_transfers_adopted": latest(runtime_samples, "graphics_transfers_adopted"),
         "media_deferrals": latest(client_samples, "media_deferrals"),
@@ -162,27 +163,47 @@ def main() -> int:
         help="keep the animated fixture running this long after it loads and "
         "report frames per second at each pipeline stage",
     )
+    parser.add_argument(
+        "--source",
+        default="browser",
+        metavar="browser|synthetic:WxH@FPS",
+        help="what draws in the pane: the pinned terminal-browser (default) or "
+        "telar-frame-source publishing WxH RGBA frames at FPS, which needs "
+        "--measure and skips the browser checks",
+    )
     args = parser.parse_args()
+    synthetic: tuple[int, int, int] | None = None
+    if args.source != "browser":
+        kind, _, geometry = args.source.partition(":")
+        if kind != "synthetic" or args.measure <= 0:
+            raise SystemExit("--source synthetic:WxH@FPS requires --measure SECONDS")
+        size, _, rate = geometry.partition("@")
+        width, _, height = size.partition("x")
+        synthetic = (int(width), int(height), int(rate or 120))
 
     telar_root = Path(__file__).resolve().parents[1]
     owned_checkout: tempfile.TemporaryDirectory[str] | None = None
-    if args.terminal_browser_repo:
-        browser_root = args.terminal_browser_repo.resolve()
-    else:
-        owned_checkout = tempfile.TemporaryDirectory(prefix="telar-terminal-browser-source-")
-        browser_root = Path(owned_checkout.name) / "terminal-browser"
-        run(["git", "clone", "--filter=blob:none", UPSTREAM, str(browser_root)], cwd=telar_root)
-        run(["git", "checkout", "--detach", PINNED_REVISION], cwd=browser_root)
+    browser_root: Path | None = None
+    revision = "n/a"
+    if synthetic is None:
+        if args.terminal_browser_repo:
+            browser_root = args.terminal_browser_repo.resolve()
+        else:
+            owned_checkout = tempfile.TemporaryDirectory(prefix="telar-terminal-browser-source-")
+            browser_root = Path(owned_checkout.name) / "terminal-browser"
+            run(["git", "clone", "--filter=blob:none", UPSTREAM, str(browser_root)], cwd=telar_root)
+            run(["git", "checkout", "--detach", PINNED_REVISION], cwd=browser_root)
 
-    revision = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=browser_root, text=True
-    ).strip()
-    if revision != PINNED_REVISION:
-        raise SystemExit(f"expected terminal-browser {PINNED_REVISION}, found {revision}")
+        revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=browser_root, text=True
+        ).strip()
+        if revision != PINNED_REVISION:
+            raise SystemExit(f"expected terminal-browser {PINNED_REVISION}, found {revision}")
 
     if not args.skip_build:
-        run(["pnpm", "install", "--frozen-lockfile"], cwd=browser_root)
-        run(["pnpm", "build"], cwd=browser_root)
+        if browser_root is not None:
+            run(["pnpm", "install", "--frozen-lockfile"], cwd=browser_root)
+            run(["pnpm", "build"], cwd=browser_root)
         # Measurement wants the shipped optimization level with the telemetry
         # counters still compiled in; the plain check keeps the Debug build.
         zig_build = ["zig", "build"]
@@ -191,7 +212,8 @@ def main() -> int:
         run(zig_build, cwd=telar_root)
 
     telar = telar_root / "zig-out/bin/telar"
-    cli = browser_root / "cli/dist/main.js"
+    frame_source = telar_root / "zig-out/bin/telar-frame-source"
+    cli = browser_root / "cli/dist/main.js" if browser_root is not None else frame_source
     for required in (telar, cli):
         if not required.exists():
             raise SystemExit(f"missing {required}; run without --skip-build")
@@ -216,16 +238,31 @@ def main() -> int:
         }
     )
 
-    child = [
-        str(telar),
-        "node",
-        str(cli),
-        "open",
-        str(fixture),
-        f"--preload={preload}",
-        f"--main-script={main_script}",
-        "--app-mode",
-    ]
+    if synthetic is None:
+        child = [
+            str(telar),
+            "node",
+            str(cli),
+            "open",
+            str(fixture),
+            f"--preload={preload}",
+            f"--main-script={main_script}",
+            "--app-mode",
+        ]
+    else:
+        width, height, rate = synthetic
+        child = [
+            str(telar),
+            str(frame_source),
+            "--width",
+            str(width),
+            "--height",
+            str(height),
+            "--fps",
+            str(rate),
+            "--seconds",
+            str(int(args.measure) + 2),
+        ]
     wrapper = run_directory / "launch.sh"
     wrapper.write_text(
         "#!/bin/sh\nset -eu\n"
@@ -251,7 +288,11 @@ def main() -> int:
     deadline = time.monotonic() + args.timeout + args.measure
     completed = False
     input_injected = False
-    while time.monotonic() < deadline:
+    if synthetic is not None:
+        # The source runs for the measurement window and exits by itself.
+        time.sleep(args.measure + 4)
+        completed = True
+    while synthetic is None and time.monotonic() < deadline:
         events = read_json_lines(evidence)
         if not input_injected and any(event.get("event") == "page-loaded" for event in events):
             inject_ghostty_input(terminal_id)
@@ -263,7 +304,8 @@ def main() -> int:
 
     time.sleep(1.5)
     subprocess.run([str(telar), "server", "stop"], cwd=telar_root, env=environment)
-    subprocess.run(["node", str(cli), "shutdown"], cwd=browser_root, env=environment)
+    if browser_root is not None:
+        subprocess.run(["node", str(cli), "shutdown"], cwd=browser_root, env=environment)
 
     client_log = latest_matching(run_directory, "runtime.sock.client-*.log")
     runtime_log = latest_matching(run_directory, "runtime.sock.runtime-*.log")
@@ -275,7 +317,7 @@ def main() -> int:
         with sqlite3.connect(history) as database:
             history_commands = database.execute("SELECT count(*) FROM command").fetchone()[0]
 
-    checks = {
+    browser_checks = {
         "pinned_revision": revision == PINNED_REVISION,
         "page_loaded": any(event.get("event") == "page-loaded" for event in events),
         "page_completed": completed,
@@ -283,14 +325,17 @@ def main() -> int:
             event.get("event") in {"key", "text-input"} for event in events
         ),
         "mouse_reached_chromium": any(event.get("event") == "pointer" for event in events),
+        "hybrid_sidebar_emitted": any(
+            int(sample.get("sidebar_graphics_flushed_bytes", 0)) > 0 for sample in client_samples
+        ),
+    }
+    checks = {
+        **(browser_checks if synthetic is None else {}),
         "exterior_kgp_supported": any(
             sample.get("kitty_graphics") == "supported" for sample in client_samples
         ),
         "pane_graphics_emitted": any(
             int(sample.get("pane_graphics_flushed_bytes", 0)) > 0 for sample in client_samples
-        ),
-        "hybrid_sidebar_emitted": any(
-            int(sample.get("sidebar_graphics_flushed_bytes", 0)) > 0 for sample in client_samples
         ),
         "runtime_forwarded_graphics": any(
             int(sample.get("graphics_messages", 0)) > 0 for sample in runtime_samples
@@ -312,6 +357,7 @@ def main() -> int:
         "history_isolated": history_commands == 0,
     }
     result: dict[str, object] = {
+        "source": args.source,
         "terminal_browser_revision": revision,
         "ghostty_version": subprocess.check_output(
             ["ghostty", "+version"], text=True
