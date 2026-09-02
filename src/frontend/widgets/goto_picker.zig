@@ -28,6 +28,8 @@ pub const Input = struct {
     field: *Field,
     rows: []const Row,
     total: u16,
+    /// Short status shown in the bottom border, e.g. the active scope.
+    hint: []const u8 = "",
 };
 
 pub const Output = struct {
@@ -109,11 +111,19 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
         row_y += 1;
     }
 
-    if (input.total > input.rows.len) {
-        var counter: [24]u8 = undefined;
-        const text = std.fmt.bufPrint(&counter, "+{d} more", .{input.total - input.rows.len}) catch "";
+    var footer_storage: [48]u8 = undefined;
+    const overflow = input.total -| @as(u16, @intCast(input.rows.len));
+    const footer_text = if (input.hint.len != 0 and overflow != 0)
+        std.fmt.bufPrint(&footer_storage, "{s}  +{d} more", .{ input.hint, overflow }) catch input.hint
+    else if (input.hint.len != 0)
+        input.hint
+    else if (overflow != 0)
+        std.fmt.bufPrint(&footer_storage, "+{d} more", .{overflow}) catch ""
+    else
+        "";
+    if (footer_text.len != 0) {
         const footer: ui.Rect = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
-        _ = context.buffer.writeTruncated(footer, footer.x, footer.y, text, footer.w, .{
+        _ = context.buffer.writeTruncated(footer, footer.x, footer.y, footer_text, footer.w, .{
             .fg = context.palette.subtext0,
             .bg = context.palette.surface0,
         });

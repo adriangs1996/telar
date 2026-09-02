@@ -152,6 +152,11 @@ sound_playback: sound_capability.Playback,
 notification_delivery: notification_capability.Delivery = .telar,
 /// Whether the history palette lists automation-submitted commands too.
 history_show_agent_commands: bool = false,
+/// Whether Enter in the history palette runs the command instead of only
+/// pasting it; shift+enter always does the opposite.
+history_enter_runs: bool = false,
+/// Transient: the alternate flag of the list submission being finished.
+list_submission_alternate: bool = false,
 appearance_themes: AppearanceThemes = .{},
 clipboard_capture_resources: attachments.CaptureResources = .{},
 

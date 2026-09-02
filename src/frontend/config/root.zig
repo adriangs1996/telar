@@ -1203,18 +1203,36 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
 
-        try ensureOnlyFields(state, absolute, &.{"show_agent_commands"}, "config.client.history", diagnostic);
+        try ensureOnlyFields(state, absolute, &.{ "show_agent_commands", "enter" }, "config.client.history", diagnostic);
         _ = lua.lua_getfield(state, absolute, "show_agent_commands");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                pop(state, 1);
+                diagnostic.set("config.client.history.show_agent_commands must be a boolean", .{});
+                return error.InvalidConfig;
+            }
+
+            generation.snapshot.history_show_agent_commands = lua.lua_toboolean(state, -1) != 0;
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "enter");
         defer pop(state, 1);
         if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
             return;
         }
-        if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
-            diagnostic.set("config.client.history.show_agent_commands must be a boolean", .{});
+        const value = string(state, -1) orelse {
+            diagnostic.set("config.client.history.enter must be paste or run", .{});
+            return error.InvalidConfig;
+        };
+        if (std.mem.eql(u8, value, "run")) {
+            generation.snapshot.history_enter_runs = true;
+        } else if (std.mem.eql(u8, value, "paste")) {
+            generation.snapshot.history_enter_runs = false;
+        } else {
+            diagnostic.set("config.client.history.enter must be paste or run", .{});
             return error.InvalidConfig;
         }
-
-        generation.snapshot.history_show_agent_commands = lua.lua_toboolean(state, -1) != 0;
     }
 
     fn parseClient(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -4399,6 +4417,30 @@ test "client history config toggles agent command visibility" {
         std.testing.allocator,
         std.testing.io,
         "return { api_version = 2, client = { history = { show_agent_commands = \"yes\" } } }",
+        "@config.lua",
+        1,
+        &invalid,
+    ));
+}
+
+test "client history enter mode parses paste or run only" {
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { history = { enter = \"run\" } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    try std.testing.expect(generation.snapshot.history_enter_runs);
+
+    var invalid: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { history = { enter = \"always\" } } }",
         "@config.lua",
         1,
         &invalid,

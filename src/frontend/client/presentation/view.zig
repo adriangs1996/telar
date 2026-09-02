@@ -858,11 +858,14 @@ fn renderHistoryPalette(context: *widgets.Context, workbench: ui.Rect, sources: 
         rows[offset] = row;
     }
 
+    var hint_storage: [24]u8 = undefined;
+    const hint = std.fmt.bufPrint(&hint_storage, "scope: {s}", .{sources.prompt.scope.label()}) catch "";
     return widgets.goto_picker.render(context, workbench, .{
         .title = "history",
         .field = &sources.prompt.field,
         .rows = rows[0..window],
         .total = total,
+        .hint = hint,
     });
 }
 

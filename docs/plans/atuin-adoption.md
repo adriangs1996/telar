@@ -69,25 +69,26 @@ itself inside each agent to learn this. Cheapest thesis-level win.
 - Tests: migration on a v3 database, attribution port, wire corpus, palette
   default filtering.
 
-## P3. Palette scopes and Enter/Tab semantics
+## P3. Palette scopes and Enter/Tab semantics — done
 
 The wire already supports scoping (`QueryHistory.scope` global/cwd/
 workspace/pane); only the client UI is missing. This closes the "global
 scope only" deviation recorded in the herdr plan (P7).
 
-- Scope state lives in `src/frontend/client/model/history_palette.zig`
-  (`scope: enum { global, workspace, cwd, pane }`), cycled with Tab while
-  the palette is open: `name_prompts.dispatchInput` maps `.tab` to a new
-  prompt-independent palette command; each cycle requeries.
+- Deviation: scope state lives on the prompt (`name_prompt.Prompt.scope`),
+  beside the list selection it already carries, cycled by the `.cycle_scope`
+  command Tab maps to; the controller requeries when its pre-dispatch
+  snapshot sees the scope change. Unresolvable scope values fall back to a
+  global query.
 - Scope values the client already holds: workspace path from
   `workspace_list.pathAt`, focused pane cwd from pane metadata
   (`pane_metadata.applyCwd`), pane id from the layout focus.
 - The modal footer names the active scope (`goto_picker` widget `Input`
   gains `hint: []const u8`).
 - Enter semantics via `client.history.enter = "paste" | "run"` (default
-  `paste`); `shift+enter` (or `alt+enter` where unavailable) does the
-  other one. "run" appends `\r` to the same `expressionPaste` delivery.
-  Editing before running is the default flow: paste, edit in the shell, run.
+  `paste`); shift+enter does the opposite. "run" appends `\r` to the same
+  `expressionPaste` delivery. Editing before running stays the default
+  flow: paste, edit in the shell, run.
 - Tests: scope cycle requery (model + controller), enter-mode config parse,
   footer render. No wire change.
 

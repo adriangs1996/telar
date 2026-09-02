@@ -20,7 +20,10 @@ runtime routeQueryHistory (observation path)
 ```
 
 Opening clears previous results and sends the newest history filtered to
-human-authored commands; `client.history.show_agent_commands = true` lists
+human-authored commands. Tab cycles the scope (global, workspace, cwd,
+pane) using values the client already holds — the committed workspace
+path, the focused pane's cwd or id — falling back to global when a value
+cannot be resolved; the modal footer names the active scope; `client.history.show_agent_commands = true` lists
 automation-submitted commands too, suffixed `[agent]`.
 Every visible query edit sends one more `query_history`; selection moves and
 pastes are local and send nothing. The palette records the newest request id
@@ -51,7 +54,9 @@ id changes nothing and is not a protocol error.
 
 Enter first closes the prompt, then pastes the selected command into the
 focused pane through the ordinary pane-paste path
-(`pane_inputs.expressionPaste`) without executing it. The order matters:
+(`pane_inputs.expressionPaste`). With `client.history.enter = "run"` the
+paste carries a trailing Enter; shift+enter always does the opposite of
+the configured mode. The order matters:
 `planPaneInput(.focused)` refuses input while a prompt owns it, so the
 submit effect only accepts the closure and the paste runs from a
 pre-dispatch snapshot of the selection once the prompt is gone. The goto

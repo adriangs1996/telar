@@ -147,6 +147,7 @@ const AdoptionContext = struct {
         client.sound_playback.configure(snapshot.sound);
         client.notification_delivery = snapshot.notification_delivery;
         client.history_show_agent_commands = snapshot.history_show_agent_commands;
+        client.history_enter_runs = snapshot.history_enter_runs;
         client.appearance_themes = .{ .light = snapshot.theme_light, .dark = snapshot.theme_dark };
         context.consumed = true;
 

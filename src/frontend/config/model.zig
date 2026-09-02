@@ -256,6 +256,7 @@ pub const Snapshot = struct {
     sound: SoundConfig = .{},
     notification_delivery: NotificationDelivery = .telar,
     history_show_agent_commands: bool = false,
+    history_enter_runs: bool = false,
     theme_light: ?theme.Theme = null,
     theme_dark: ?theme.Theme = null,
     bars: bars.Configuration = .{},

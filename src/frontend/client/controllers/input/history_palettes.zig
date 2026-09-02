@@ -28,7 +28,9 @@ pub fn begin(client: *Client) !bool {
     return true;
 }
 
-/// Sends one bounded history query and awaits only its reply.
+/// Sends one bounded history query in the palette's current scope and
+/// awaits only its reply. A scope whose value cannot be resolved from the
+/// committed model falls back to global.
 ///
 /// ```zig
 /// try sendQuery(client, prompt.field.text());
@@ -42,9 +44,56 @@ pub fn sendQuery(client: *Client, query: []const u8) !void {
         .limit = history_palette.max_entries,
     };
     @memcpy(owned.query[0..owned.query_len], query[0..owned.query_len]);
+    applyScope(client, &owned);
 
     client.model.history_palette.expect(schema.id.raw(request_id));
     try runtime_transport.enqueue(client, .{ .query_history = owned });
+}
+
+fn applyScope(client: *Client, owned: *connection_outbox.OwnedHistoryQuery) void {
+    const prompt = client.model.name_prompt.currentConst() orelse return;
+    if (prompt.target != .history) {
+        return;
+    }
+
+    switch (prompt.scope) {
+        .global => {},
+        .workspace => {
+            const location = client.model.workspaceLocation() orelse return;
+            const workspace = switch (location) {
+                .workspace => |workspace| workspace,
+                .worktree => return,
+            };
+            const list = client.model.workspaceListSnapshot();
+            const index = list.indexOf(workspace) orelse return;
+            const path = list.pathAt(index);
+            if (path.len == 0 or path.len > connection_outbox.OwnedHistoryQuery.max_scope_bytes) {
+                return;
+            }
+
+            owned.scope = .workspace;
+            @memcpy(owned.scope_value[0..path.len], path);
+            owned.scope_value_len = @intCast(path.len);
+        },
+        .cwd => {
+            const active = client.model.workspace.activeConst() orelse return;
+            const pane = active.model.focusedPaneConst() orelse return;
+            const cwd = pane.cwdSlice();
+            if (cwd.len == 0 or cwd.len > connection_outbox.OwnedHistoryQuery.max_scope_bytes) {
+                return;
+            }
+
+            owned.scope = .cwd;
+            @memcpy(owned.scope_value[0..cwd.len], cwd);
+            owned.scope_value_len = @intCast(cwd.len);
+        },
+        .pane => {
+            const active = client.model.workspace.activeConst() orelse return;
+            const pane = active.model.focusedPaneConst() orelse return;
+            owned.scope = .pane;
+            owned.pane_id = pane.id;
+        },
+    }
 }
 
 /// Applies one runtime reply to the palette model. Stale replies and replies
@@ -69,19 +118,34 @@ pub fn apply(client: *Client, view: schema.HistoryResultsView) !bool {
     return client.model.history_palette.apply(schema.id.raw(view.request_id), storage[0..count]);
 }
 
-/// Pastes the selected command into the focused pane. Runs after the prompt
-/// closed, because `planPaneInput(.focused)` refuses input while a prompt is
-/// active; an empty result list means there is nothing to paste.
+/// Pastes the selected command into the focused pane, optionally running it
+/// by appending Enter. Runs after the prompt closed, because
+/// `planPaneInput(.focused)` refuses input while a prompt is active; an
+/// empty result list means there is nothing to paste.
 ///
 /// ```zig
-/// try pasteSelection(client, selection);
+/// try pasteSelection(client, .{ .selection = 0, .run = false });
 /// ```
-pub fn pasteSelection(client: *Client, selection: u16) !void {
+pub fn pasteSelection(client: *Client, request: PasteRequest) !void {
     const palette = &client.model.history_palette;
     if (palette.len == 0) {
         return;
     }
 
-    const index = @min(selection, @as(u16, palette.len) - 1);
-    _ = try pane_inputs.expressionPaste(client, palette.slice()[index].commandSlice());
+    const index = @min(request.selection, @as(u16, palette.len) - 1);
+    const command = palette.slice()[index].commandSlice();
+    if (!request.run) {
+        _ = try pane_inputs.expressionPaste(client, command);
+        return;
+    }
+
+    var storage: [history_palette.max_command_bytes + 1]u8 = undefined;
+    @memcpy(storage[0..command.len], command);
+    storage[command.len] = '\r';
+    _ = try pane_inputs.expressionPaste(client, storage[0 .. command.len + 1]);
 }
+
+pub const PasteRequest = struct {
+    selection: u16,
+    run: bool,
+};

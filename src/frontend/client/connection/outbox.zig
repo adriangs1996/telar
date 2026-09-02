@@ -120,11 +120,18 @@ const OwnedCreateTab = struct {
 };
 
 pub const OwnedHistoryQuery = struct {
-    pub const max_query_bytes = 256;
+    /// The palette query comes from the prompt field, which is bounded by
+    /// the tab-label capacity; the caps keep queue messages small.
+    pub const max_query_bytes = 128;
+    pub const max_scope_bytes = 256;
 
     request_id: schema.RequestId,
     query: [max_query_bytes]u8 = undefined,
     query_len: u8 = 0,
+    scope: schema.HistoryScope = .global,
+    scope_value: [max_scope_bytes]u8 = undefined,
+    scope_value_len: u16 = 0,
+    pane_id: schema.PaneId = .invalid,
     author: schema.HistoryAuthorFilter = .all,
     limit: u16,
 
@@ -132,9 +139,9 @@ pub const OwnedHistoryQuery = struct {
         return .{
             .request_id = value.request_id,
             .query = value.query[0..value.query_len],
-            .scope = .global,
-            .scope_value = "",
-            .pane_id = .invalid,
+            .scope = value.scope,
+            .scope_value = value.scope_value[0..value.scope_value_len],
+            .pane_id = value.pane_id,
             .failed_only = false,
             .author = value.author,
             .limit = value.limit,

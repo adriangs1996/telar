@@ -39,13 +39,40 @@ pub const Begin = union(enum) {
     history_palette,
 };
 
+pub const HistoryScope = enum(u8) {
+    global = 0,
+    workspace = 1,
+    cwd = 2,
+    pane = 3,
+
+    pub fn next(scope: HistoryScope) HistoryScope {
+        return switch (scope) {
+            .global => .workspace,
+            .workspace => .cwd,
+            .cwd => .pane,
+            .pane => .global,
+        };
+    }
+
+    pub fn label(scope: HistoryScope) []const u8 {
+        return switch (scope) {
+            .global => "global",
+            .workspace => "workspace",
+            .cwd => "cwd",
+            .pane => "pane",
+        };
+    }
+};
+
 pub const Command = union(enum) {
     paste_start,
     paste_end,
     insert: []const u8,
     move_up,
     move_down,
+    cycle_scope,
     submit,
+    submit_alternate,
     cancel,
     backspace,
     delete,
@@ -60,6 +87,9 @@ pub const Submission = struct {
     /// Borrowed from the active prompt until the synchronous submit effect
     /// returns.
     name: []const u8,
+    /// True for shift+enter, which inverts the configured enter behavior of
+    /// list targets.
+    alternate: bool = false,
 };
 
 pub const Transition = union(enum) {
@@ -77,6 +107,8 @@ pub const Prompt = struct {
     /// Goto-picker list selection; the renderer and the submit path clamp it
     /// against the same deterministic result set.
     selection: u16 = 0,
+    /// History-palette search scope, cycled with Tab.
+    scope: HistoryScope = .global,
 };
 
 pub const State = struct {
@@ -179,7 +211,7 @@ pub const State = struct {
                 prompt.pasting = false;
                 return .routing_changed;
             },
-            .submit => {
+            .submit, .submit_alternate => {
                 if (prompt.pasting) {
                     return state.editField(.{ .insert = " " });
                 }
@@ -190,6 +222,7 @@ pub const State = struct {
                 return .{ .submitted = .{
                     .target = prompt.target,
                     .name = prompt.field.text(),
+                    .alternate = command == .submit_alternate,
                 } };
             },
             .cancel => {
@@ -212,6 +245,16 @@ pub const State = struct {
                 }
 
                 prompt.selection +|= 1;
+                state.revision +%= 1;
+                return .changed;
+            },
+            .cycle_scope => {
+                if (prompt.target != .history) {
+                    return .unchanged;
+                }
+
+                prompt.scope = prompt.scope.next();
+                prompt.selection = 0;
                 state.revision +%= 1;
                 return .changed;
             },
@@ -253,7 +296,7 @@ pub const State = struct {
             .move_right => |extend| prompt.field.moveRight(extend),
             .home => |extend| prompt.field.home(extend),
             .end => |extend| prompt.field.end(extend),
-            .paste_start, .paste_end, .submit, .cancel, .move_up, .move_down => unreachable,
+            .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .cycle_scope => unreachable,
         }
         if (!before.changed(&prompt.field)) {
             return .unchanged;
@@ -376,4 +419,26 @@ test "rename prompts ignore picker selection commands" {
     try std.testing.expect(state.apply(.move_down) == .unchanged);
     try std.testing.expect(state.apply(.move_up) == .unchanged);
     try std.testing.expectEqual(@as(u64, 1), state.version());
+}
+
+test "the history palette cycles scope with Tab and only there" {
+    var state: State = .{};
+    state.begin(.history_palette);
+    try std.testing.expect(state.apply(.move_down) == .changed);
+
+    try std.testing.expect(state.apply(.cycle_scope) == .changed);
+    const prompt = state.currentConst().?;
+    try std.testing.expectEqual(HistoryScope.workspace, prompt.scope);
+    try std.testing.expectEqual(@as(u16, 0), prompt.selection);
+
+    _ = state.apply(.cycle_scope);
+    _ = state.apply(.cycle_scope);
+    try std.testing.expect(state.apply(.cycle_scope) == .changed);
+    try std.testing.expectEqual(HistoryScope.global, state.currentConst().?.scope);
+
+    const submitted = state.apply(.submit_alternate).submitted;
+    try std.testing.expect(submitted.alternate);
+
+    state.begin(.create_workspace);
+    try std.testing.expect(state.apply(.cycle_scope) == .unchanged);
 }

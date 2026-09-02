@@ -119,7 +119,10 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     clampPickerSelection(client);
     try refreshHistoryQuery(client, before);
     if (outcome == .finished) {
-        try finishListSubmission(client, before);
+        var submission = before;
+        submission.alternate = client.list_submission_alternate;
+        client.list_submission_alternate = false;
+        try finishListSubmission(client, submission);
     }
     return outcome;
 }
@@ -127,6 +130,8 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
 const ListSnapshot = struct {
     kind: enum { none, goto, history } = .none,
     selection: u16 = 0,
+    scope: prompt_state.HistoryScope = .global,
+    alternate: bool = false,
     text: [schema.max_tab_label_bytes]u8 = undefined,
     len: u8 = 0,
 
@@ -144,6 +149,7 @@ fn listSnapshot(client: *Client) ListSnapshot {
     };
 
     snapshot.selection = prompt.selection;
+    snapshot.scope = prompt.scope;
     const text = prompt.field.text();
     snapshot.len = @intCast(text.len);
     @memcpy(snapshot.text[0..text.len], text);
@@ -156,7 +162,10 @@ fn listSnapshot(client: *Client) ListSnapshot {
 fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
     switch (before.kind) {
         .none => {},
-        .history => try history_palettes.pasteSelection(client, before.selection),
+        .history => try history_palettes.pasteSelection(client, .{
+            .selection = before.selection,
+            .run = client.history_enter_runs != before.alternate,
+        }),
         .goto => {
             var results: goto_picker.Results = .{};
             goto_picker.collect(pickerSources(client), before.textSlice(), &results);
@@ -179,7 +188,9 @@ fn refreshHistoryQuery(client: *Client, before: ListSnapshot) !void {
     }
 
     const text = prompt.field.text();
-    if (before.kind == .history and std.mem.eql(u8, before.textSlice(), text)) {
+    if (before.kind == .history and before.scope == prompt.scope and
+        std.mem.eql(u8, before.textSlice(), text))
+    {
         return;
     }
 
@@ -278,7 +289,10 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
         },
         // List targets only close here; the picked entry is applied by
         // `finishListSubmission` once the prompt no longer owns input.
-        .goto, .history => true,
+        .goto, .history => blk: {
+            client.list_submission_alternate = submission.alternate;
+            break :blk true;
+        },
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;
             const request_id = try request_lifecycle.nextId(client);
@@ -314,7 +328,7 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
             .paste_start => .paste_start,
             .paste_end => .paste_end,
             .key => |key| switch (key.code) {
-                .enter => .submit,
+                .enter => if (key.mods.shift) .submit_alternate else .submit,
                 .escape => .cancel,
                 .backspace => .backspace,
                 .delete => .delete,
@@ -322,6 +336,7 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
                 .right => .{ .move_right = key.mods.shift },
                 .up => .move_up,
                 .down => .move_down,
+                .tab => .cycle_scope,
                 .home => .{ .home = key.mods.shift },
                 .end => .{ .end = key.mods.shift },
                 .char => |char| if (!key.mods.ctrl and !key.mods.alt)
