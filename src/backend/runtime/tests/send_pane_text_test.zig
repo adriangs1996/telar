@@ -79,6 +79,12 @@ const Harness = struct {
 
 fn blockAgent(harness: *Harness) !void {
     const identity = agent_mod.Identity.fromPane(harness.fixture.pane);
+    try std.testing.expect(harness.fixture.agents.observeProcess(.{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = 84,
+        .observed_at_ms = 50,
+    }));
     try std.testing.expect(harness.fixture.agents.observeScreen(.{
         .identity = identity,
         .signal = .{ .provider = .claude, .status = .blocked, .confidence = 90, .identity_confirmed = true },

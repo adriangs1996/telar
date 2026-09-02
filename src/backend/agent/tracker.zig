@@ -206,8 +206,9 @@ pub const Tracker = struct {
         return tracker.reproject(agent, observation.observed_at_ms);
     }
 
-    /// Applies one screen observation after the aggregate reconciles it with
-    /// stronger process and proxy identity evidence.
+    /// Applies one screen observation to an aggregate already established by
+    /// process, proxy, or lifecycle evidence. Screen text may refine state,
+    /// but never creates an agent identity on its own.
     ///
     /// ```zig
     /// _ = tracker.observeScreen(.{
@@ -217,21 +218,12 @@ pub const Tracker = struct {
     /// });
     /// ```
     pub fn observeScreen(tracker: *Tracker, observation: ScreenObservation) bool {
-        if (tracker.repository.find(observation.identity.key)) |agent| {
-            if (!agent.applyScreen(observation)) {
-                return false;
-            }
+        const agent = tracker.repository.find(observation.identity.key) orelse return false;
 
-            return tracker.reproject(agent, observation.observed_at_ms);
-        }
-
-        var candidate = Agent.init(observation.identity);
-
-        if (!candidate.applyScreen(observation)) {
+        if (!agent.applyScreen(observation)) {
             return false;
         }
 
-        const agent = tracker.repository.insert(candidate) orelse return false;
         return tracker.reproject(agent, observation.observed_at_ms);
     }
 
@@ -639,13 +631,13 @@ test "agent branding alone does not settle working" {
     try std.testing.expectEqual(schema.AgentSource.proxy_tls, snapshot[0].source);
 }
 
-test "explicitly identified ready screen registers an agent" {
+test "screen text cannot register an agent without independent evidence" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(tracker.observeScreen(.{
+    try std.testing.expect(!tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
-            .provider = .codex,
+            .provider = .claude,
             .status = .ready,
             .confidence = 94,
             .identity_confirmed = true,
@@ -654,9 +646,7 @@ test "explicitly identified ready screen registers an agent" {
     }));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqual(@as(usize, 1), snapshot.len);
-    try std.testing.expectEqual(schema.AgentProvider.codex, snapshot[0].provider);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(@as(usize, 0), snapshot.len);
 }
 
 test "foreground process establishes agent identity without screen branding" {
@@ -875,6 +865,12 @@ test "new foreground process replaces prior session evidence" {
 test "confirmed Claude prompt refreshes branded identity" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
+    try std.testing.expect(tracker.observeProcess(.{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = 84,
+        .observed_at_ms = 50,
+    }));
     try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
@@ -897,6 +893,12 @@ test "confirmed Claude prompt refreshes branded identity" {
 test "network work resumes a visibly blocked agent" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
+    try std.testing.expect(tracker.observeProcess(.{
+        .identity = identity,
+        .provider = .claude,
+        .process_id = 84,
+        .observed_at_ms = 50,
+    }));
     try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88 },
