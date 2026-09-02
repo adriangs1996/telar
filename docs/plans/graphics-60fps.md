@@ -255,6 +255,14 @@ capability probes.
 Exit: `shared_retire_latency` p99 under one pacer interval on the synthetic
 run.
 
+Result (2026-09-02, synthetic 4K at 120 frames/s): retire latency 16.4 ms
+avg and 33.5 ms max (from 16.5 ms avg and 55.4 ms max with probing alone),
+forwarded 111.3/s, presented 61.2/s, zero expiries. Retirement is still
+observed at pass granularity because the replaced generation retires when
+the replacement's placement lands, so the average sits at one interval; the
+ack removed the tail, not the floor. The 180-pass deadline and the probe
+remain as the safety net.
+
 ## P7. Gate and documentation
 
 - `docs/performance-gates.md`: the `--measure` run becomes part of the

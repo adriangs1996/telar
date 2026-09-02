@@ -5,6 +5,8 @@ const input_capability = @import("../../input/root.zig");
 const presentation = @import("../../presentation/root.zig");
 const action_routing = @import("../controllers/input/action_routing.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const runtime_transport = @import("../connection/runtime_transport.zig");
 const key_routing = @import("../controllers/input/key_routing.zig");
 const paste_routing = @import("../controllers/input/paste_routing.zig");
 const pointer_routing = @import("../controllers/input/pointer_routing.zig");
@@ -62,13 +64,23 @@ pub fn mouse(handler: *InputHandler, event: term.Event.Mouse) !void {
     _ = try pointer_routing.apply(handler.client, event);
 }
 
-/// Reconciles one host-terminal capability response without forwarding it.
+/// Reconciles one host-terminal response without forwarding it: capability
+/// probe replies update the host model, and Kitty replies for pane images
+/// tell the graphics store whether the host took a shared object.
 ///
 /// ```zig
 /// try handler.terminalResponse(response);
 /// ```
 pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalResponse) !void {
     _ = try host_capabilities.observe(handler.client, response);
+    switch (response) {
+        .kitty_graphics => |reply| {
+            if (!handler.client.graphics_store.noteHostReply(reply.image_id, reply.supported)) return;
+            try runtime_transport.flushGraphicsCredits(handler.client);
+            try presentation_lifecycle.observe(handler.client);
+        },
+        else => {},
+    }
 }
 
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {

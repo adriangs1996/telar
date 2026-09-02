@@ -148,8 +148,13 @@ pinning pane memory credit forever. A client crash can strand at most the
 in-flight objects its credit allowed; macOS offers no way to enumerate and
 sweep them, so that bounded leak is accepted and cleared on reboot.
 
-Only when Ghostty unlinks a consumed name, or the deadline reclaims it, does
-the client retire the image and return the exact byte credit to the runtime.
+The shared transmission is the one pane escape that asks the host for a reply
+(`q=0`). Ghostty's `OK` for the exterior image id marks the object consumed,
+so a replaced generation retires on the next pass without probing the name;
+an error reply reclaims the name at once and retransmits the pixels inline.
+Hosts that answer nothing fall back to the probe: only when the name is gone,
+or the deadline reclaims it, does the client retire the image. Either way the
+client returns the exact byte credit to the runtime on retirement.
 Hosts without Kitty graphics shared-memory support and remote sessions retain
 the bounded direct-data fallback, which base64-encodes at most 256 KiB per
 media pass. Shared names, placements and deletes ride inside the cell frame's

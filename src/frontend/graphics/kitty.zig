@@ -104,6 +104,9 @@ const ImageEntry = struct {
     transmitted_pass: u64 = 0,
     /// Writer clock when the shared name was emitted; zero outside Debug.
     transmitted_ns: u64 = 0,
+    /// The host answered `OK` for the shared transmission: it copied the
+    /// object, so retirement needs no probe.
+    host_acked: bool = false,
 };
 
 /// Writer passes a host may sit on a shared name before the client reclaims
@@ -388,6 +391,7 @@ pub const Store = struct {
     fn sharedPixelsConsumed(_: *Store, entry: *const ImageEntry) bool {
         const shared = entry.shared orelse return true;
         if (!entry.emitted_shared) return true;
+        if (entry.host_acked) return true;
         if (comptime !supportsSharedMemory()) return false;
         const fd = std.c.shm_open(
             shared.sliceZ(),
@@ -414,30 +418,62 @@ pub const Store = struct {
         var images = store.images.iterator();
         while (images.next()) |entry| {
             const image = entry.value_ptr;
-            const shared = if (image.shared) |*value| value else continue;
-            if (!image.emitted_shared) continue;
+            if (image.shared == null or !image.emitted_shared) continue;
             if (store.pass_counter -% image.transmitted_pass < shared_consume_deadline_passes)
                 continue;
             if (store.sharedPixelsConsumed(image)) continue;
-            _ = std.c.shm_unlink(shared.sliceZ());
-            image.emitted_shared = false;
-            image.force_direct = true;
-            image.transmitted = false;
-            // The host dropped the image with the name, so its placements
-            // must follow the inline retransmission.
-            var placements = store.placements.iterator();
-            while (placements.next()) |placement_entry| {
-                if (placement_entry.key_ptr.pane_id != entry.key_ptr.pane_id) continue;
-                if (!std.meta.eql(placement_entry.value_ptr.placement.key, image.metadata.key))
-                    continue;
-                placement_entry.value_ptr.emitted_image_id = null;
-                placement_entry.value_ptr.dirty = true;
-            }
+            store.loseSharedName(entry.key_ptr.pane_id, image);
             store.shared_expiries +|= 1;
             if (store.shared_expiries >= shared_expiry_disable_threshold)
                 store.shared_memory = false;
-            store.damage = true;
         }
+    }
+
+    /// The host did not take the object behind a shared name: reclaim it and
+    /// send the pixels inline, placements included.
+    fn loseSharedName(store: *Store, pane_id: schema.PaneId, image: *ImageEntry) void {
+        const shared = if (image.shared) |*value| value else return;
+        _ = std.c.shm_unlink(shared.sliceZ());
+        image.emitted_shared = false;
+        image.host_acked = false;
+        image.force_direct = true;
+        image.transmitted = false;
+        // The host dropped the image with the name, so its placements must
+        // follow the inline retransmission.
+        var placements = store.placements.iterator();
+        while (placements.next()) |placement_entry| {
+            if (placement_entry.key_ptr.pane_id != pane_id) continue;
+            if (!std.meta.eql(placement_entry.value_ptr.placement.key, image.metadata.key))
+                continue;
+            placement_entry.value_ptr.emitted_image_id = null;
+            placement_entry.value_ptr.dirty = true;
+        }
+        store.damage = true;
+    }
+
+    /// Applies the host's reply to a shared transmission by exterior image id.
+    /// `OK` marks the object consumed, so a replaced generation retires at
+    /// once instead of waiting for a probe; an error reclaims the name and
+    /// retransmits inline. Returns whether any image was affected.
+    ///
+    /// ```zig
+    /// if (store.noteHostReply(reply.image_id, reply.supported)) flushCredits();
+    /// ```
+    pub fn noteHostReply(store: *Store, external_id: u32, ok: bool) bool {
+        var images = store.images.iterator();
+        while (images.next()) |entry| {
+            const image = entry.value_ptr;
+            if (image.external_id != external_id or !image.emitted_shared) continue;
+            if (ok) {
+                image.host_acked = true;
+                store.collectRetired(entry.key_ptr.pane_id, entry.key_ptr.image_id);
+            } else {
+                store.loseSharedName(entry.key_ptr.pane_id, image);
+            }
+            store.noteIngressChange();
+            return true;
+        }
+        return false;
     }
 
     fn hasPendingSharedRelease(store: *Store) bool {
@@ -1597,6 +1633,9 @@ pub fn writeTransmission(
     return progress.written;
 }
 
+/// Hands the host a shared object's name. Unlike every other pane escape it
+/// asks for a reply (`q=0`): the host's `OK` is the consume signal that
+/// retires the image, and an error reclaims the name at once.
 pub fn writeSharedTransmission(
     writer: *Io.Writer,
     external_id: u32,
@@ -1608,7 +1647,7 @@ pub fn writeSharedTransmission(
     const payload = Encoder.encode(encoded[0..Encoder.calcSize(name.len)], name);
     var written = try printCounted(
         writer,
-        "\x1b_Ga=t,f={d},s={d},v={d},t=s,i={d},q=2;",
+        "\x1b_Ga=t,f={d},s={d},v={d},t=s,i={d},q=0;",
         .{ @intFromEnum(image.format), image.width, image.height, external_id },
     );
     try writer.writeAll(payload);
@@ -3264,10 +3303,124 @@ test "shared transmission sends only a KGP resource name" {
         .byte_len = 4,
     }, "/telar-test");
     try std.testing.expectEqualStrings(
-        "\x1b_Ga=t,f=32,s=1,v=1,t=s,i=7,q=2;L3RlbGFyLXRlc3Q=\x1b\\",
+        "\x1b_Ga=t,f=32,s=1,v=1,t=s,i=7,q=0;L3RlbGFyLXRlc3Q=\x1b\\",
         writer.buffered(),
     );
     try std.testing.expectEqual(writer.buffered().len, written);
+}
+
+test "a host acknowledgement retires a replaced shared image without probing" {
+    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+
+    var store = Store.initSharedMemory(std.testing.allocator);
+    defer store.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const source = [_]u8{ 1, 2, 3, 255 };
+    var first_name_buffer: [64]u8 = undefined;
+    const first_name = try graphics.ShmName.init(try std.fmt.bufPrint(&first_name_buffer, "/tlrtest-ack1-{d}", .{std.c.getpid()}));
+    _ = std.c.shm_unlink(first_name.sliceZ());
+    try testCreateSharedObject(first_name.sliceZ(), &source);
+    defer _ = std.c.shm_unlink(first_name.sliceZ());
+    var second_name_buffer: [64]u8 = undefined;
+    const second_name = try graphics.ShmName.init(try std.fmt.bufPrint(&second_name_buffer, "/tlrtest-ack2-{d}", .{std.c.getpid()}));
+    _ = std.c.shm_unlink(second_name.sliceZ());
+    try testCreateSharedObject(second_name.sliceZ(), &source);
+    defer _ = std.c.shm_unlink(second_name.sliceZ());
+
+    const first: graphics.Image = .{ .key = .{ .image_id = 7, .generation = 1 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
+    try store.applySharedImage(.{ .pane_id = pane_id, .revision = 1, .image = first, .name = first_name });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{ .key = first.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
+    });
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 10, .rows = 5 });
+    var graphics_writer: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+    var output: [1024]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try graphics_writer.write(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "q=0;") != null);
+    const first_external = store.images.get(identity(pane_id, first.key)).?.external_id;
+
+    // A reply for an id the store does not hold changes nothing.
+    try std.testing.expect(!store.noteHostReply(first_external + 1000, true));
+    try std.testing.expect(store.noteHostReply(first_external, true));
+    try std.testing.expect(store.images.get(identity(pane_id, first.key)).?.host_acked);
+
+    // The object still exists: without the reply a probe would keep the
+    // replaced generation alive. With it, the replacement retires it.
+    const second: graphics.Image = .{ .key = .{ .image_id = 7, .generation = 2 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
+    try store.applySharedImage(.{ .pane_id = pane_id, .revision = 2, .image = second, .name = second_name });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 2,
+        .placement = .{ .key = second.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
+    });
+    var second_output: [1024]u8 = undefined;
+    var second_writer = Io.Writer.fixed(&second_output);
+    _ = try graphics_writer.write(&second_writer);
+    try std.testing.expectEqual(@as(usize, 1), store.images.count());
+    try std.testing.expect(store.images.get(identity(pane_id, second.key)) != null);
+    const credit = store.peekCredit() orelse return error.CreditNotReleased;
+    try std.testing.expectEqual(@as(usize, 4), credit.bytes);
+    store.consumeCredit(credit);
+}
+
+test "a host error reply reclaims the shared name and retransmits inline" {
+    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+
+    var store = Store.initSharedMemory(std.testing.allocator);
+    defer store.deinit();
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const source = [_]u8{ 1, 2, 3, 255 };
+    var name_buffer: [64]u8 = undefined;
+    const name = try graphics.ShmName.init(try std.fmt.bufPrint(&name_buffer, "/tlrtest-nack-{d}", .{std.c.getpid()}));
+    _ = std.c.shm_unlink(name.sliceZ());
+    try testCreateSharedObject(name.sliceZ(), &source);
+    defer _ = std.c.shm_unlink(name.sliceZ());
+    const image: graphics.Image = .{ .key = .{ .image_id = 7, .generation = 1 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
+    try store.applySharedImage(.{ .pane_id = pane_id, .revision = 1, .image = image, .name = name });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
+    });
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 10, .rows = 5 });
+    var graphics_writer: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+    var output: [1024]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try graphics_writer.write(&writer);
+    const external = store.images.get(identity(pane_id, image.key)).?.external_id;
+
+    try std.testing.expect(store.noteHostReply(external, false));
+
+    try std.testing.expect(store.damage);
+    var retry: [4096]u8 = undefined;
+    var retry_writer = Io.Writer.fixed(&retry);
+    _ = try graphics_writer.write(&retry_writer);
+    try std.testing.expect(std.mem.indexOf(u8, retry_writer.buffered(), "t=d") != null);
+    try std.testing.expect(std.mem.indexOf(u8, retry_writer.buffered(), "t=s") == null);
+    try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.inline_images);
 }
 
 test "graphics revisions ignore stale deltas and validate snapshots" {

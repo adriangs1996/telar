@@ -341,6 +341,18 @@ test "shared pane graphics reach the host inside the cell frame" {
     if (comptime core.diagnostics.enabled) {
         try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.pane_shared_images);
     }
+
+    // The transmit asked the host for a reply; its OK reaches the store.
+    try std.testing.expect(std.mem.indexOf(u8, host_bytes[transmit..place], "q=0;") != null);
+    var images = client.graphics_store.images.iterator();
+    const entry = images.next() orelse return error.ImageMissing;
+    try std.testing.expect(!entry.value_ptr.host_acked);
+    var handler: InputHandler = .{ .client = client };
+    try handler.terminalResponse(.{ .kitty_graphics = .{
+        .image_id = entry.value_ptr.external_id,
+        .supported = true,
+    } });
+    try std.testing.expect(entry.value_ptr.host_acked);
 }
 
 test "presentation worker failures release their scheduling tokens" {
