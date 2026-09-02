@@ -56,6 +56,7 @@ pub const Snapshot = config_model.Snapshot;
 pub const PluginSpec = config_model.PluginSpec;
 pub const RuntimeSnapshot = config_model.RuntimeSnapshot;
 pub const AgentDescriptionCommand = config_model.AgentDescriptionCommand;
+pub const CommandSpec = config_model.CommandSpec;
 pub const SoundConfig = config_model.SoundConfig;
 pub const BarCallbackContext = config_model.BarCallbackContext;
 pub const BarTime = config_model.BarTime;
@@ -712,10 +713,14 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "graphics", "history", "proxy", "agent_descriptions", "agents", "session" },
+            &.{ "graphics", "history", "proxy", "agent_descriptions", "engine", "agents", "session" },
             "config.runtime",
             diagnostic,
         );
+        _ = lua.lua_getfield(state, absolute, "engine");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseEngine(-1, diagnostic);
+        pop(state, 1);
         _ = lua.lua_getfield(state, absolute, "session");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parseSession(-1, diagnostic);
@@ -852,38 +857,66 @@ pub const Generation = struct {
             diagnostic,
         );
 
+        generation.snapshot.runtime.agent_descriptions = try parseCommandSpec(
+            state,
+            absolute,
+            "config.runtime.agent_descriptions",
+            diagnostic,
+        );
+    }
+
+    fn parseEngine(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.engine must be a table", .{});
+            return error.InvalidConfig;
+        }
+        try ensureOnlyFields(
+            state,
+            absolute,
+            &.{ "command", "timeout_ms", "idle_timeout_ms" },
+            "config.runtime.engine",
+            diagnostic,
+        );
+
+        generation.snapshot.runtime.engine = try parseCommandSpec(state, absolute, "config.runtime.engine", diagnostic);
+        generation.snapshot.runtime.engine_idle_timeout_ms = try parseBoundedInteger(
+            state,
+            absolute,
+            "idle_timeout_ms",
+            "config.runtime.engine.idle_timeout_ms",
+            .{ .default = config_model.default_engine_idle_timeout_ms, .min = config_model.min_engine_idle_timeout_ms, .max = config_model.max_engine_idle_timeout_ms },
+            diagnostic,
+        );
+    }
+
+    /// Reads a `command` array and optional `timeout_ms` from a validated
+    /// table into one bounded command spec.
+    fn parseCommandSpec(state: *lua.lua_State, absolute: c_int, comptime label: []const u8, diagnostic: *Diagnostic) !CommandSpec {
         _ = lua.lua_getfield(state, absolute, "command");
         defer pop(state, 1);
         if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
-            diagnostic.set("config.runtime.agent_descriptions.command must be an array", .{});
+            diagnostic.set(label ++ ".command must be an array", .{});
             return error.InvalidConfig;
         }
         const command_table = lua.lua_absindex(state, -1);
         const count = lua.lua_rawlen(state, command_table);
         if (count == 0 or count > max_agent_description_command_args) {
             diagnostic.set(
-                "config.runtime.agent_descriptions.command must contain 1..{d} arguments",
+                label ++ ".command must contain 1..{d} arguments",
                 .{max_agent_description_command_args},
             );
             return error.InvalidConfig;
         }
-        try ensureArrayOnly(
-            state,
-            command_table,
-            count,
-            "config.runtime.agent_descriptions.command",
-            diagnostic,
-        );
+        try ensureArrayOnly(state, command_table, count, label ++ ".command", diagnostic);
 
-        var command: AgentDescriptionCommand = .{};
+        var command: CommandSpec = .{};
         for (0..count) |argument_index| {
             _ = lua.lua_geti(state, command_table, @intCast(argument_index + 1));
             defer pop(state, 1);
             const argument = string(state, -1) orelse {
-                diagnostic.set(
-                    "config.runtime.agent_descriptions.command[{d}] must be a string",
-                    .{argument_index + 1},
-                );
+                diagnostic.set(label ++ ".command[{d}] must be a string", .{argument_index + 1});
                 return error.InvalidConfig;
             };
             if ((argument_index == 0 and argument.len == 0) or
@@ -892,7 +925,7 @@ pub const Generation = struct {
                 std.mem.indexOfScalar(u8, argument, 0) != null)
             {
                 diagnostic.set(
-                    "config.runtime.agent_descriptions.command exceeds its {d}-byte limit",
+                    label ++ ".command exceeds its {d}-byte limit",
                     .{max_agent_description_command_bytes},
                 );
                 return error.InvalidConfig;
@@ -904,25 +937,40 @@ pub const Generation = struct {
         }
         command.argument_count = @intCast(count);
 
-        _ = lua.lua_getfield(state, absolute, "timeout_ms");
+        command.timeout_ms = try parseBoundedInteger(
+            state,
+            absolute,
+            "timeout_ms",
+            label ++ ".timeout_ms",
+            .{ .default = command.timeout_ms, .min = min_agent_description_timeout_ms, .max = max_agent_description_timeout_ms },
+            diagnostic,
+        );
+        return command;
+    }
+
+    const IntegerBounds = struct {
+        default: u32,
+        min: u32,
+        max: u32,
+    };
+
+    fn parseBoundedInteger(state: *lua.lua_State, absolute: c_int, field: [:0]const u8, comptime label: []const u8, bounds: IntegerBounds, diagnostic: *Diagnostic) !u32 {
+        _ = lua.lua_getfield(state, absolute, field);
         defer pop(state, 1);
-        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
-            const timeout_ms = integer(state, -1) orelse {
-                diagnostic.set("config.runtime.agent_descriptions.timeout_ms must be an integer", .{});
-                return error.InvalidConfig;
-            };
-            if (timeout_ms < min_agent_description_timeout_ms or
-                timeout_ms > max_agent_description_timeout_ms)
-            {
-                diagnostic.set(
-                    "config.runtime.agent_descriptions.timeout_ms must be in {d}..{d}",
-                    .{ min_agent_description_timeout_ms, max_agent_description_timeout_ms },
-                );
-                return error.InvalidConfig;
-            }
-            command.timeout_ms = @intCast(timeout_ms);
+        if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+            return bounds.default;
         }
-        generation.snapshot.runtime.agent_descriptions = command;
+
+        const value = integer(state, -1) orelse {
+            diagnostic.set(label ++ " must be an integer", .{});
+            return error.InvalidConfig;
+        };
+        if (value < bounds.min or value > bounds.max) {
+            diagnostic.set(label ++ " must be in {d}..{d}", .{ bounds.min, bounds.max });
+            return error.InvalidConfig;
+        }
+
+        return @intCast(value);
     }
 
     fn parseProxy(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -4035,6 +4083,55 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
     try std.testing.expectEqual(@as(usize, 4), argv.len);
     try std.testing.expectEqualStrings("claude", argv[0]);
     try std.testing.expectEqualStrings("", argv[3]);
+    try std.testing.expect(!generation.snapshot.runtime.engine.enabled());
+}
+
+test "runtime engine parses its command, deadline and idle interval" {
+    var diagnostic: Diagnostic = .{};
+    const source =
+        \\return {
+        \\  api_version = 2,
+        \\  runtime = {
+        \\    engine = {
+        \\      command = { "pi", "--mode", "rpc", "--no-session", "--no-tools" },
+        \\      timeout_ms = 20000,
+        \\      idle_timeout_ms = 120000,
+        \\    },
+        \\  },
+        \\}
+    ;
+    const generation = try Generation.loadSource(std.testing.allocator, std.testing.io, source, "@config.lua", 1, &diagnostic);
+    defer generation.deinit();
+
+    const engine = &generation.snapshot.runtime.engine;
+    try std.testing.expect(engine.enabled());
+    try std.testing.expectEqual(@as(u32, 20_000), engine.timeout_ms);
+    try std.testing.expectEqual(@as(u32, 120_000), generation.snapshot.runtime.engine_idle_timeout_ms);
+    var arguments: [max_agent_description_command_args][]const u8 = undefined;
+    const argv = engine.arguments(&arguments);
+    try std.testing.expectEqual(@as(usize, 5), argv.len);
+    try std.testing.expectEqualStrings("--no-tools", argv[4]);
+    try std.testing.expect(!generation.snapshot.runtime.agent_descriptions.enabled());
+
+    const cases = [_]struct { source: []const u8, message: []const u8 }{
+        .{
+            .source = "return { api_version = 2, runtime = { engine = { command = { 'pi' }, idle_timeout_ms = 5 } } }",
+            .message = "config.runtime.engine.idle_timeout_ms must be in 10000..3600000",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { engine = { command = {} } } }",
+            .message = "config.runtime.engine.command must contain 1..32 arguments",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { engine = { command = { 'pi' }, model = 'x' } } }",
+            .message = "config.runtime.engine",
+        },
+    };
+    for (cases) |case| {
+        var case_diagnostic: Diagnostic = .{};
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(std.testing.allocator, std.testing.io, case.source, "@config.lua", 1, &case_diagnostic));
+        try std.testing.expect(std.mem.indexOf(u8, case_diagnostic.message(), case.message) != null);
+    }
 }
 
 test "runtime proxy rejects unsafe intercept host patterns" {

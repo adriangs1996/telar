@@ -2,42 +2,10 @@
 
 const std = @import("std");
 const history = @import("../../history/root.zig");
+const worker_lifecycle = @import("worker_lifecycle.zig");
 
 const Io = std.Io;
 const Worker = Io.Future(anyerror!void);
-
-fn Port(comptime StateType: type, comptime WorkerType: type) type {
-    return struct {
-        start: *const fn (*StateType) anyerror!WorkerType,
-        close: *const fn (*StateType) void,
-        join: *const fn (*StateType, *WorkerType) void,
-        destroy: *const fn (*StateType) void,
-    };
-}
-
-fn Lifecycle(comptime StateType: type, comptime WorkerType: type, comptime port: Port(StateType, WorkerType)) type {
-    return struct {
-        const Self = @This();
-
-        state: *StateType,
-        worker: WorkerType,
-
-        fn start(state: *StateType) !Self {
-            errdefer port.destroy(state);
-
-            return .{
-                .state = state,
-                .worker = try port.start(state),
-            };
-        }
-
-        fn deinit(lifecycle: *Self) void {
-            port.close(lifecycle.state);
-            port.join(lifecycle.state, &lifecycle.worker);
-            port.destroy(lifecycle.state);
-        }
-    };
-}
 
 const RuntimeState = struct {
     io: Io,
@@ -63,14 +31,14 @@ fn destroyState(state: *RuntimeState) void {
     gpa.destroy(state);
 }
 
-const lifecycle_port: Port(RuntimeState, Worker) = .{
+const lifecycle_port: worker_lifecycle.Port(RuntimeState, Worker) = .{
     .start = startWorker,
     .close = stopService,
     .join = joinWorker,
     .destroy = destroyState,
 };
 
-const HistoryLifecycle = Lifecycle(RuntimeState, Worker, lifecycle_port);
+const HistoryLifecycle = worker_lifecycle.Lifecycle(RuntimeState, Worker, lifecycle_port);
 
 pub const Runtime = struct {
     lifecycle: HistoryLifecycle,
@@ -119,97 +87,9 @@ pub const Runtime = struct {
     }
 };
 
-const Step = enum {
-    start,
-    close,
-    join,
-    destroy,
-};
-
-const Capture = struct {
-    steps: [4]Step = undefined,
-    len: usize = 0,
-    start_fails: bool = false,
-    closed: bool = false,
-    joined: bool = false,
-
-    fn record(capture: *Capture, step: Step) void {
-        std.debug.assert(capture.len < capture.steps.len);
-        capture.steps[capture.len] = step;
-        capture.len += 1;
-    }
-};
-
-const FakeState = struct {
-    capture: *Capture,
-};
-
-const FakeWorker = struct {};
-
-fn startFakeWorker(state: *FakeState) !FakeWorker {
-    state.capture.record(.start);
-
-    if (state.capture.start_fails) {
-        return error.WorkerUnavailable;
-    }
-
-    return .{};
-}
-
-fn closeFakeQueues(state: *FakeState) void {
-    std.debug.assert(!state.capture.joined);
-    state.capture.record(.close);
-    state.capture.closed = true;
-}
-
-fn joinFakeWorker(state: *FakeState, _: *FakeWorker) void {
-    std.debug.assert(state.capture.closed);
-    state.capture.record(.join);
-    state.capture.joined = true;
-}
-
-fn destroyFakeState(state: *FakeState) void {
-    if (!state.capture.start_fails) {
-        std.debug.assert(state.capture.joined);
-    }
-
-    state.capture.record(.destroy);
-}
-
-const test_port: Port(FakeState, FakeWorker) = .{
-    .start = startFakeWorker,
-    .close = closeFakeQueues,
-    .join = joinFakeWorker,
-    .destroy = destroyFakeState,
-};
-
-const TestLifecycle = Lifecycle(FakeState, FakeWorker, test_port);
-
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
-    try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
-}
-
 fn createAndDestroy(gpa: std.mem.Allocator) !void {
     var runtime = try Runtime.init(std.testing.io, gpa, .{ .database_path = ":memory:" });
     runtime.deinit();
-}
-
-test "worker startup failure releases transferred service ownership" {
-    var capture: Capture = .{ .start_fails = true };
-    var state: FakeState = .{ .capture = &capture };
-
-    try std.testing.expectError(error.WorkerUnavailable, TestLifecycle.start(&state));
-    try expectSteps(&capture, &.{ .start, .destroy });
-}
-
-test "shutdown closes queues before joining and destroying history" {
-    var capture: Capture = .{};
-    var state: FakeState = .{ .capture = &capture };
-    var lifecycle = try TestLifecycle.start(&state);
-
-    lifecycle.deinit();
-
-    try expectSteps(&capture, &.{ .start, .close, .join, .destroy });
 }
 
 test "every allocation failure rolls back history runtime ownership" {

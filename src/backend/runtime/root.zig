@@ -12,6 +12,7 @@ pub const Options = config.Options;
 pub const Runtime = instance.Runtime;
 pub const ServeOptions = Options;
 pub const AgentDescriptionOptions = config.AgentDescriptionOptions;
+pub const EngineOptions = config.EngineOptions;
 pub const ProxyOptions = config.ProxyOptions;
 pub const ClientKey = client_session.Key;
 pub const IngestTestGate = config.IngestTestGate;

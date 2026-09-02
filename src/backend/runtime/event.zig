@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const agent = @import("../agent/root.zig");
 const history = @import("../history/root.zig");
+const engine = @import("../engine/root.zig");
 const proxy = @import("../proxy/root.zig");
 const client_session = @import("client/root.zig").session;
 const pane_events = @import("entrypoints/events/pane/root.zig");
@@ -40,6 +41,7 @@ pub const Event = union(enum) {
     proxy_event: anyerror!proxy.Observation,
     agent_tick: anyerror!void,
     agent_description: agent.description.Result,
+    engine_response: anyerror!engine.Response,
     metrics_tick: anyerror!void,
     checkpoint_written: anyerror!void,
     git_status: git_status.Completion,
@@ -71,6 +73,7 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) diagnostics.Path {
         .proxy_event,
         .agent_tick,
         .agent_description,
+        .engine_response,
         .metrics_tick,
         .telemetry_tick,
         .telemetry_written,
@@ -111,6 +114,7 @@ test "observation events use the observation budget" {
         .proxy_event,
         .agent_tick,
         .agent_description,
+        .engine_response,
         .metrics_tick,
         .telemetry_tick,
         .telemetry_written,

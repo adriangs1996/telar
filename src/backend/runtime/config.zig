@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const engine = @import("../engine/root.zig");
 const pane = @import("../pane/root.zig");
 const pane_launcher = @import("application/pane_launcher.zig");
 const proxy_resource = @import("resources/proxy.zig");
@@ -21,6 +22,11 @@ pub const AgentDescriptionOptions = struct {
     timeout_ms: u32,
 };
 
+/// A headless agent engine (Pi in RPC mode) the runtime keeps alive between
+/// prompts. Configuring it is an explicit privacy opt-in: prompts carry user
+/// text such as the first request of an agent session.
+pub const EngineOptions = engine.Options;
+
 pub const ProxyOptions = proxy_resource.Config;
 
 pub const Options = struct {
@@ -36,6 +42,9 @@ pub const Options = struct {
     history_output_capture: bool = false,
     proxy: ?ProxyOptions = null,
     agent_descriptions: ?AgentDescriptionOptions = null,
+    /// When set, session titles come from the engine instead of a one-shot
+    /// `agent_descriptions` command.
+    engine: ?EngineOptions = null,
     /// Agent identification rules; the built-in table unless configured.
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     /// Absolute session checkpoint path; null keeps the session volatile.
