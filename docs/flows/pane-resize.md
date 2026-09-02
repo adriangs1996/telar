@@ -50,7 +50,9 @@ the existing client behavior, now owned by the model transition.
 fullscreen state and committed pane revision before it touches resources. It
 invalidates host graphics placements and delegates selection to
 `OfferPaneGeometryHandler`. That handler computes one bounded layout snapshot
-and emits one semantic `PaneResize` for each attached pane with visible
+and applies the current attachment reservation. The reservation shortens only
+its owning pane, leaving neighboring pane rectangles unchanged. The handler
+then emits one semantic `PaneResize` for each attached pane with visible
 content. A tiled layout normally selects every attached pane; a fullscreen
 layout selects only the focused pane. The concrete adapter only enqueues those
 commands.

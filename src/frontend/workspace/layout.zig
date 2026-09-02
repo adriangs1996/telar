@@ -56,6 +56,13 @@ pub const View = struct {
     focused: bool,
 };
 
+pub const PaneBottomReservation = struct {
+    pane_id: schema.PaneId,
+    preferred_height: u16,
+    minimum_height: u16,
+    minimum_pane_height: u16,
+};
+
 pub const ProspectiveSplit = struct {
     existing_content: ui.Rect,
     new_content: ui.Rect,
@@ -79,6 +86,30 @@ pub const Snapshot = struct {
         if (pane_id == .invalid) return null;
         const view_index = snapshot.index.get(schema.id.raw(pane_id)) orelse return null;
         return snapshot.storage[view_index];
+    }
+
+    /// Shortens one pane and returns the area immediately below it. The other
+    /// pane rectangles remain unchanged.
+    ///
+    /// ```zig
+    /// const shelf = snapshot.reserveBelowPane(reservation);
+    /// ```
+    pub fn reserveBelowPane(snapshot: *Snapshot, reservation: ?PaneBottomReservation) ui.Rect {
+        const requested = reservation orelse return .{};
+        const view_index = snapshot.index.get(schema.id.raw(requested.pane_id)) orelse return .{};
+        const view = &snapshot.storage[view_index];
+        const available = view.outer.h -| requested.minimum_pane_height;
+        const height = @min(requested.preferred_height, available);
+        if (height < requested.minimum_height) {
+            return .{};
+        }
+
+        const pane, const reserved = view.outer.splitBottom(height);
+        const borderless = std.meta.eql(view.outer, view.content);
+        view.outer = pane;
+        view.content = if (borderless) pane else borderedContent(pane);
+
+        return reserved;
     }
 
     pub fn prospectiveSplit(
@@ -827,6 +858,53 @@ test "directional focus follows pane geometry" {
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), layout.focusDirection(.left, area).?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), layout.focusDirection(.right, area).?);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(3)), layout.focusDirection(.down, area).?);
+}
+
+test "bottom reservation shortens only its target pane" {
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    var layout: Layout = .{};
+    try layout.addRoot(first);
+    try layout.splitFocused(second, .horizontal);
+
+    var geometry: Snapshot = .{};
+    layout.snapshot(.{ .w = 80, .h = 24 }, &geometry);
+    const first_before = geometry.find(first).?;
+    const second_before = geometry.find(second).?;
+    const shelf = geometry.reserveBelowPane(.{
+        .pane_id = second,
+        .preferred_height = 6,
+        .minimum_height = 3,
+        .minimum_pane_height = 3,
+    });
+    const first_after = geometry.find(first).?;
+    const second_after = geometry.find(second).?;
+
+    try std.testing.expectEqualDeep(first_before, first_after);
+    try std.testing.expectEqual(second_before.outer.x, shelf.x);
+    try std.testing.expectEqual(second_before.outer.w, shelf.w);
+    try std.testing.expectEqual(second_after.outer.y + second_after.outer.h, shelf.y);
+    try std.testing.expectEqual(second_before.outer.h, second_after.outer.h + shelf.h);
+    try std.testing.expectEqual(@as(u16, 6), shelf.h);
+}
+
+test "bottom reservation preserves a minimum pane height" {
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    var layout: Layout = .{};
+    try layout.addRoot(pane_id);
+
+    var geometry: Snapshot = .{};
+    layout.snapshot(.{ .w = 20, .h = 5 }, &geometry);
+    const before = geometry.find(pane_id).?;
+    const shelf = geometry.reserveBelowPane(.{
+        .pane_id = pane_id,
+        .preferred_height = 6,
+        .minimum_height = 3,
+        .minimum_pane_height = 3,
+    });
+
+    try std.testing.expect(shelf.isEmpty());
+    try std.testing.expectEqualDeep(before, geometry.find(pane_id).?);
 }
 
 test "directional resize grows and shrinks horizontal and vertical panes" {

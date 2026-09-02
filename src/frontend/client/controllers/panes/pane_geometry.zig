@@ -49,6 +49,7 @@ pub fn offerEffects(client: *Client) pane_geometry_delivery.OfferEffects {
     return .{
         .context = client,
         .deliver_resize = deliverResize,
+        .bottom_reservation = bottomReservation,
     };
 }
 
@@ -92,6 +93,7 @@ fn deliverGeometry(context: *anyopaque, change: client_model.PaneGeometryChange)
             .context = client,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .deliver_resize = deliverResize,
+            .bottom_reservation = bottomReservation,
         },
     };
 
@@ -108,4 +110,10 @@ fn deliverResize(raw_context: *anyopaque, resize: core.schema.PaneResize) !void 
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try runtime_transport.enqueue(client, .{ .pane_resize = resize });
+}
+
+fn bottomReservation(raw_context: *anyopaque) ?workspace_capability.layout.PaneBottomReservation {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    return client.view.attachmentReservation();
 }

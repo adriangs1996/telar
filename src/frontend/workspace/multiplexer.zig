@@ -261,6 +261,7 @@ pub const CompositionInput = struct {
     area: ui.Rect,
     palette: *const theme.Palette,
     copy: ?CopyProjection = null,
+    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
     force: bool = false,
 };
 
@@ -285,6 +286,8 @@ pub const Compositor = struct {
     source: ?schema.TabLocation = null,
     border_theme: ?BorderTheme = null,
     copy: ?CopyProjection = null,
+    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
+    bottom_reservation_area: ui.Rect = .{},
     layout_snapshot: layout_mod.Snapshot = .{},
     panes: [max_panes]PaneProjection = undefined,
     pane_count: u8 = 0,
@@ -353,6 +356,10 @@ pub const Compositor = struct {
             compositor.source = model.location;
             compositor.invalidated = true;
         }
+        if (!std.meta.eql(compositor.bottom_reservation, options.bottom_reservation)) {
+            compositor.bottom_reservation = options.bottom_reservation;
+            compositor.invalidated = true;
+        }
         compositor.copy = options.copy;
         if (options.force) {
             compositor.invalidated = true;
@@ -362,6 +369,7 @@ pub const Compositor = struct {
             compositor.invalidated = true;
         }
         model.layout.snapshot(options.area, &compositor.layout_snapshot);
+        compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
         if (compositor.paneProjectionChanged(model)) {
             compositor.invalidated = true;
         }
@@ -471,6 +479,16 @@ pub const Compositor = struct {
     /// ```
     pub fn layoutSnapshot(compositor: *const Compositor) *const layout_mod.Snapshot {
         return &compositor.layout_snapshot;
+    }
+
+    /// Returns the area removed from the pane projection for its bottom
+    /// reservation.
+    ///
+    /// ```zig
+    /// const shelf = compositor.bottomReservationArea();
+    /// ```
+    pub fn bottomReservationArea(compositor: *const Compositor) ui.Rect {
+        return compositor.bottom_reservation_area;
     }
 
     fn ensureComposed(compositor: *Compositor, width: u16, height: u16) !bool {
@@ -1248,6 +1266,7 @@ const TestingComposition = struct {
     area: ui.Rect,
     palette: *const theme.Palette = &theme.default_theme.palette,
     copy: ?CopyProjection = null,
+    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
     force: bool = false,
 };
 
@@ -1259,6 +1278,7 @@ fn testingRender(compositor: *Compositor, composition: TestingComposition) !Rend
             .area = composition.area,
             .palette = composition.palette,
             .copy = composition.copy,
+            .bottom_reservation = composition.bottom_reservation,
             .force = composition.force,
         },
     });
@@ -1310,6 +1330,56 @@ test "two pane buffers compose into their layout rectangles" {
     try std.testing.expect(!screen.back.cells[20].style.flags.inverse);
     try std.testing.expectEqualStrings(" ", screen.back.cells[19].text());
     try std.testing.expect(!screen.back.cells[19].style.flags.inverse);
+}
+
+test "compositor places a bottom reservation below only its target pane" {
+    const gpa = std.testing.allocator;
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area: ui.Rect = .{ .w = 40, .h = 12 };
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(first, location, .{ .cols = 40, .rows = 12 });
+    try model.split(first, second, location, .horizontal, area);
+
+    var screen = try term.Screen.init(gpa, area.w, area.h);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    _ = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = area,
+        .bottom_reservation = .{
+            .pane_id = second,
+            .preferred_height = 4,
+            .minimum_height = 3,
+            .minimum_pane_height = 3,
+        },
+    });
+
+    const shelf = compositor.bottomReservationArea();
+    const first_view = compositor.layoutSnapshot().find(first).?;
+    const second_view = compositor.layoutSnapshot().find(second).?;
+    try std.testing.expectEqual(@as(u16, 4), shelf.h);
+    try std.testing.expectEqual(second_view.outer.x, shelf.x);
+    try std.testing.expectEqual(second_view.outer.w, shelf.w);
+    try std.testing.expectEqual(second_view.outer.y + second_view.outer.h, shelf.y);
+    try std.testing.expectEqual(area.h, first_view.outer.h);
+    try std.testing.expectEqual(area.h - shelf.h, second_view.outer.h);
+
+    const restored = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = area,
+    });
+    try std.testing.expect(restored.full);
+    try std.testing.expect(compositor.bottomReservationArea().isEmpty());
+    try std.testing.expectEqual(area.h, compositor.layoutSnapshot().find(second).?.outer.h);
 }
 
 test "copy mode highlights an absolute scrollback selection" {

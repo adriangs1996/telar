@@ -21,7 +21,7 @@ DeliverActivePaneResourcesHandler.deliverFocus
         |
         +-- attachment target effect
         |             |
-        |       changed workbench -> pane geometry
+        |       changed pane reservation -> pane geometry
         |
         +-- PaneFocusReportingHandler
                     |
@@ -56,8 +56,8 @@ delivery rejects a superseded focus even if later navigation returned to the
 same pane.
 
 Attachment-driven geometry uses `OfferActivePaneGeometryHandler`; the active
-resource adapter supplies the changed workbench area but does not resolve the
-workspace projection itself.
+resource adapter reports whether the pane reservation changed but does not
+resolve the workspace projection itself.
 
 ## Reported focus
 
@@ -92,10 +92,11 @@ reserve the focus-out slot before they mutate attachment state.
 
 Focus reporting does not own attachment geometry.
 `DeliverActivePaneResourcesHandler` first gives the model-derived attachment
-target to a physical view effect. If the shelf changes the workbench, the
-effect returns its new rectangle and the handler re-offers pane sizes before
-focus reporting. A fullscreen focus change then invalidates graphics
-placements and re-offers the committed focus rectangle.
+target to a physical view effect. If the shelf appears, disappears or moves,
+the handler re-offers pane sizes before focus reporting. The geometry
+projection shortens only the pane that owns the shelf and places the shelf in
+the released rows below it. A fullscreen focus change then invalidates
+graphics placements and re-offers the committed focus rectangle.
 
 The same handler exposes `synchronize` for tab, workspace, frame and snapshot
 flows whose committed state may change the active pane without entering

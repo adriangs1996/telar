@@ -225,10 +225,13 @@ pub const Store = struct {
         return true;
     }
 
-    /// Returns whether the shelf changed between hidden and visible. That is
-    /// the only transition that changes pane geometry.
+    /// Returns whether the shelf appeared, disappeared or moved to another
+    /// pane. Those transitions change pane geometry.
     pub fn setTarget(store: *Store, target: ?Target) TargetChange {
-        const had_items = store.visibleCount() != 0;
+        const previous_pane = if (store.visibleCount() != 0)
+            if (store.active_target) |active| active.pane_id else null
+        else
+            null;
         if (optionalTargetEql(store.active_target, target)) return .{};
         store.active_target = target;
         store.modal = null;
@@ -236,14 +239,33 @@ pub const Store = struct {
             const slot = &store.slots[index].?;
             if (!store.slotVisible(slot)) store.cancelPartial();
         }
+        const current_pane = if (store.visibleCount() != 0)
+            if (target) |active| active.pane_id else null
+        else
+            null;
+
         return .{
             .changed = true,
-            .layout_changed = had_items != (store.visibleCount() != 0),
+            .layout_changed = previous_pane != current_pane,
         };
     }
 
     pub fn hasVisibleItems(store: *const Store) bool {
         return store.visibleCount() != 0;
+    }
+
+    /// Returns the pane that owns the visible shelf. A target with no matching
+    /// previews has no reservation.
+    ///
+    /// ```zig
+    /// const target = store.visibleTarget() orelse return;
+    /// ```
+    pub fn visibleTarget(store: *const Store) ?Target {
+        if (store.visibleCount() == 0) {
+            return null;
+        }
+
+        return store.active_target;
     }
 
     pub fn hasModal(store: *const Store) bool {
@@ -792,6 +814,22 @@ test "preview store is bounded and keeps captures scoped to their agent generati
     try std.testing.expect(changed.changed);
     try std.testing.expect(changed.layout_changed);
     try std.testing.expectEqual(@as(u8, 0), store.snapshot().len);
+}
+
+test "switching visible previews between panes changes their layout owner" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const first: Target = .{ .pane_id = @enumFromInt(7), .pane_generation = 3 };
+    const second: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(first);
+    try store.adopt(try testCapture(std.testing.allocator, testRequest(1, first), "first"));
+    try store.adopt(try testCapture(std.testing.allocator, testRequest(2, second), "second"));
+
+    const changed = store.setTarget(second);
+
+    try std.testing.expect(changed.changed);
+    try std.testing.expect(changed.layout_changed);
+    try std.testing.expectEqual(second, store.visibleTarget().?);
 }
 
 test "preview store emits PNG and client-owned z-index placements" {

@@ -70,8 +70,8 @@ focus or remote handoff selected from that plan.
 After validating the runtime revision, entry count, one-step local revision and
 every reported current identity, the delivery handler enters
 `DeliverActivePaneResourcesHandler.synchronizeAttachments`. It reconciles the
-attachment shelf and re-offers pane geometry only if shelf visibility changed
-the workbench, delegating active-tab selection to
+attachment shelf and re-offers pane geometry only if the shelf appeared,
+disappeared or moved to another pane, delegating active-tab selection to
 `OfferActivePaneGeometryHandler`; it cannot emit child focus reports. Delivery
 then translates transitions to `blocked`, `ready` or `failed` into notification
 inputs and emits at most the notification center capacity. Failure in a

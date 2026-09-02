@@ -180,7 +180,6 @@ pub const State = struct {
             .visible = state.sidebar_requested,
             .preferred_width = state.sidebar_preferred_width,
         });
-        state.regions.reserveAttachments(state.attachment_store.hasVisibleItems());
     }
 
     pub fn palette(state: *const State) *const theme_mod.Palette {
@@ -319,6 +318,23 @@ pub const State = struct {
         return &state.attachment_store;
     }
 
+    /// Returns the space requested below the pane that owns the visible image
+    /// previews.
+    ///
+    /// ```zig
+    /// const reservation = view.attachmentReservation();
+    /// ```
+    pub fn attachmentReservation(state: *const State) ?workspace_capability.layout.PaneBottomReservation {
+        const target = state.attachment_store.visibleTarget() orelse return null;
+
+        return .{
+            .pane_id = target.pane_id,
+            .preferred_height = widgets.attachment_preview.shelf_height,
+            .minimum_height = widgets.attachment_preview.shelf_minimum_height,
+            .minimum_pane_height = widgets.attachment_preview.pane_minimum_height,
+        };
+    }
+
     /// Applies an already resolved attachment identity and reports whether
     /// the shelf changed client layout.
     ///
@@ -328,8 +344,6 @@ pub const State = struct {
     pub fn syncAttachmentTarget(state: *State, target: ?attachments.Target) bool {
         const change = state.attachment_store.setTarget(target);
         if (!change.changed) return false;
-        if (change.layout_changed)
-            state.recalculateRegions(state.scratch.w, state.scratch.h);
         state.hovered = null;
         state.dirty = true;
         return change.layout_changed;
@@ -340,7 +354,6 @@ pub const State = struct {
         try state.attachment_store.adopt(capture);
         const has_items = state.attachment_store.hasVisibleItems();
         const layout_changed = had_items != has_items;
-        if (layout_changed) state.recalculateRegions(state.scratch.w, state.scratch.h);
         state.dirty = true;
         return layout_changed;
     }
@@ -431,6 +444,10 @@ pub const State = struct {
             state.hovered = hovered;
             state.recordInteraction();
         }
+        if (hovered) |action| switch (action) {
+            .attachment_open, .attachment_dismiss, .attachment_shelf_hold => result.consumed = true,
+            else => {},
+        };
         if (state.sidebar_resize_active) {
             result.consumed = true;
             switch (mouse.kind) {
@@ -505,12 +522,11 @@ pub const State = struct {
                 if (state.attachment_store.remove(id)) {
                     const has_items = state.attachment_store.hasVisibleItems();
                     result.layout_changed = had_items != has_items;
-                    if (result.layout_changed)
-                        state.recalculateRegions(state.scratch.w, state.scratch.h);
                     state.hovered = null;
                     state.recordInteraction();
                 }
             },
+            .attachment_shelf_hold => result.consumed = true,
             .attachment_modal_close => {
                 result.consumed = true;
                 _ = state.closeAttachmentModal();
@@ -576,12 +592,18 @@ pub const State = struct {
                 null,
         };
         var fallback_layout: workspace_capability.layout.Snapshot = .{};
+        var fallback_attachment_area: ui.Rect = .{};
         const layout = if (input.compositor) |compositor|
             compositor.layoutSnapshot()
         else layout: {
             input.model.layout.snapshot(state.workbench(), &fallback_layout);
+            fallback_attachment_area = fallback_layout.reserveBelowPane(state.attachmentReservation());
             break :layout &fallback_layout;
         };
+        const attachment_area = if (input.compositor) |compositor|
+            compositor.bottomReservationArea()
+        else
+            fallback_attachment_area;
         const composed = widgets.composition.render(&context, .{
             .regions = state.regions,
             .tabs = input.tabs,
@@ -608,7 +630,7 @@ pub const State = struct {
         const attachment_snapshot = state.attachment_store.snapshot();
         var attachment_plan = widgets.attachment_preview.renderShelf(
             &context,
-            state.regions.attachments,
+            attachment_area,
             &attachment_snapshot,
         );
         const picker_prompt = pickerPrompt(input.prompt);
@@ -701,7 +723,7 @@ pub const State = struct {
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.top));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.sidebar));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.bottom));
-        stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.attachments));
+        stats = addStats(stats, try syncRegion(screen, &state.scratch, attachment_area));
         if (has_toasts or state.toast_overlay_drawn)
             stats = addStats(stats, try syncRegion(screen, &state.scratch, toast_area));
         if (!state.modal_overlay_area.isEmpty())
@@ -751,7 +773,7 @@ pub const State = struct {
             .attachment_dismiss,
             .attachment_modal_close,
             => .pointer,
-            .focus_pane, .active_workspace, .attachment_modal_hold => .default,
+            .focus_pane, .active_workspace, .attachment_shelf_hold, .attachment_modal_hold => .default,
         };
     }
 };
@@ -910,6 +932,7 @@ const TestingComposition = struct {
     screen: *term.Screen,
     area: ui.Rect,
     palette: *const theme_mod.Palette = &theme_mod.default_theme.palette,
+    bottom_reservation: ?workspace_capability.layout.PaneBottomReservation = null,
 };
 
 fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingComposition) !void {
@@ -919,6 +942,7 @@ fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingCompo
         .input = .{
             .area = composition.area,
             .palette = composition.palette,
+            .bottom_reservation = composition.bottom_reservation,
         },
     });
     composition.model.commitPresentation(rendered.commit);
@@ -1137,7 +1161,7 @@ test "sidebar agent snapshots version changed hover only once" {
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
 }
 
-test "focused agent image preview reserves a shelf and opens a modal layer" {
+test "focused agent image preview reserves space below its pane and opens a modal layer" {
     const gpa = std.testing.allocator;
     var state = try State.init(gpa, 100, 30);
     defer state.deinit();
@@ -1147,12 +1171,17 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.addRoot(pane_id, location, .{ .cols = 38, .rows = 27 });
+    const first_pane: schema.PaneId = @enumFromInt(1);
+    const target_pane: schema.PaneId = @enumFromInt(2);
+    try model.addRoot(first_pane, location, .{
+        .cols = state.workbench().w,
+        .rows = state.workbench().h,
+    });
+    try model.split(first_pane, target_pane, location, .horizontal, state.workbench());
     const agent_entries = [_]agents.AgentInput{.{
-        .key = .{ .pane_id = pane_id, .pane_generation = 4 },
+        .key = .{ .pane_id = target_pane, .pane_generation = 4 },
         .location = location,
-        .pane_index = 1,
+        .pane_index = 2,
         .provider = .codex,
         .status = .ready,
     }};
@@ -1171,7 +1200,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .height = 1,
     };
     try std.testing.expect(try state.adoptAttachment(capture));
-    try std.testing.expectEqual(widgets.layout.attachment_shelf_height, state.regions.attachments.h);
+    try std.testing.expectEqual(@as(u16, 28), state.workbench().h);
 
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();
@@ -1181,6 +1210,7 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .model = &model,
         .screen = &screen,
         .area = state.workbench(),
+        .bottom_reservation = state.attachmentReservation(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
@@ -1188,6 +1218,22 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .agents = &snapshot,
         .force = true,
     });
+    const shelf = compositor.bottomReservationArea();
+    const projected = compositor.layoutSnapshot();
+    const first_view = projected.find(first_pane).?;
+    const target_view = projected.find(target_pane).?;
+    try std.testing.expectEqual(widgets.attachment_preview.shelf_height, shelf.h);
+    try std.testing.expectEqual(target_view.outer.x, shelf.x);
+    try std.testing.expectEqual(target_view.outer.w, shelf.w);
+    try std.testing.expectEqual(target_view.outer.y + target_view.outer.h, shelf.y);
+    try std.testing.expect(first_view.outer.h > target_view.outer.h);
+    try std.testing.expect(shelf.w < state.workbench().w);
+    const shelf_move = state.handleMouse(.{
+        .x = shelf.x + shelf.w - 1,
+        .y = shelf.y,
+        .kind = .move,
+    });
+    try std.testing.expect(shelf_move.consumed);
     const sidebar_before_modal = screen.back.at(20, 4).?.*;
 
     var open_point: ?struct { x: u16, y: u16 } = null;

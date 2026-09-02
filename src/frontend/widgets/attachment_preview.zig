@@ -8,6 +8,9 @@ const ui = @import("../ui/root.zig");
 
 const card_width: u16 = 18;
 const card_gap: u16 = 1;
+pub const shelf_height: u16 = 6;
+pub const shelf_minimum_height: u16 = 3;
+pub const pane_minimum_height: u16 = 3;
 
 pub fn renderShelf(
     context: *widget.Context,
@@ -17,6 +20,7 @@ pub fn renderShelf(
     var plan: attachments.Plan = .{};
     if (area.isEmpty() or snapshot.len == 0) return plan;
     const style: ui.Style = .{ .fg = context.palette.text, .bg = context.palette.surface0 };
+    context.hits.add(area, .attachment_shelf_hold);
     context.buffer.fill(area, " ", style);
     const inner = area.inner(1);
     if (inner.isEmpty()) return plan;

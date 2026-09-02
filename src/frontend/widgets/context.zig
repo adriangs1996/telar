@@ -25,6 +25,7 @@ pub const Action = union(enum) {
     notification_dismiss: notifications.Id,
     attachment_open: attachments.Id,
     attachment_dismiss: attachments.Id,
+    attachment_shelf_hold,
     attachment_modal_close,
     attachment_modal_hold,
 };

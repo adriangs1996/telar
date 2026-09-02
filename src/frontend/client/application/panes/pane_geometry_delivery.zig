@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
 const client_model = @import("../../model/root.zig");
 
+const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
 const schema = core.schema;
 const ui = core.ui;
@@ -12,12 +13,14 @@ const ui = core.ui;
 pub const OfferEffects = struct {
     context: *anyopaque,
     deliver_resize: *const fn (*anyopaque, schema.PaneResize) anyerror!void,
+    bottom_reservation: *const fn (*anyopaque) ?layout_mod.PaneBottomReservation = noBottomReservation,
 };
 
 pub const Effects = struct {
     context: *anyopaque,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
     deliver_resize: *const fn (*anyopaque, schema.PaneResize) anyerror!void,
+    bottom_reservation: *const fn (*anyopaque) ?layout_mod.PaneBottomReservation = noBottomReservation,
 };
 
 pub const OfferPaneGeometryHandler = struct {
@@ -31,7 +34,8 @@ pub const OfferPaneGeometryHandler = struct {
     /// ```
     pub fn execute(handler: *OfferPaneGeometryHandler, model: *multiplexer.Model, area: ui.Rect) !usize {
         var count: usize = 0;
-        const layout = model.layoutSnapshot(area);
+        var layout = model.layoutSnapshot(area).*;
+        _ = layout.reserveBelowPane(handler.effects.bottom_reservation(handler.effects.context));
         var panes = model.paneIterator();
         while (panes.next()) |pane| {
             if (!pane.attached) {
@@ -95,11 +99,18 @@ pub const DeliverPaneGeometryHandler = struct {
         var offer: OfferPaneGeometryHandler = .{ .effects = .{
             .context = handler.effects.context,
             .deliver_resize = handler.effects.deliver_resize,
+            .bottom_reservation = handler.effects.bottom_reservation,
         } };
 
         return offer.execute(&active.model, change.area);
     }
 };
+
+fn noBottomReservation(context: *anyopaque) ?layout_mod.PaneBottomReservation {
+    _ = context;
+
+    return null;
+}
 
 const Event = enum {
     invalidate_placements,
@@ -115,11 +126,13 @@ const EffectCapture = struct {
     resize_count: usize = 0,
     committed_geometry_observed: bool = true,
     fail_resize: ?usize = null,
+    bottom_reservation: ?layout_mod.PaneBottomReservation = null,
 
     fn offerEffects(capture: *EffectCapture) OfferEffects {
         return .{
             .context = capture,
             .deliver_resize = deliverResize,
+            .bottom_reservation = bottomReservation,
         };
     }
 
@@ -128,7 +141,14 @@ const EffectCapture = struct {
             .context = capture,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .deliver_resize = deliverResize,
+            .bottom_reservation = bottomReservation,
         };
+    }
+
+    fn bottomReservation(raw_context: *anyopaque) ?layout_mod.PaneBottomReservation {
+        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
+
+        return capture.bottom_reservation;
     }
 
     fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
@@ -227,6 +247,31 @@ test "OfferPaneGeometryHandler selects only attached visible panes" {
 
     try std.testing.expectEqual(@as(usize, 1), try handler.execute(active, testing.area));
     try std.testing.expectEqual(testing.second, capture.resizes[0].pane_id);
+}
+
+test "OfferPaneGeometryHandler reserves rows only from the target pane" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const testing = try prepareModel(&model);
+    const active = &model.workspace.active().?.model;
+    const first_size = active.contentSize(testing.first, testing.area).?;
+    const second_size = active.contentSize(testing.second, testing.area).?;
+    var capture: EffectCapture = .{};
+    var handler: OfferPaneGeometryHandler = .{ .effects = capture.offerEffects() };
+    capture.bottom_reservation = .{
+        .pane_id = testing.second,
+        .preferred_height = 6,
+        .minimum_height = 3,
+        .minimum_pane_height = 3,
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), try handler.execute(active, testing.area));
+
+    try std.testing.expectEqual(testing.first, capture.resizes[0].pane_id);
+    try std.testing.expectEqual(first_size, capture.resizes[0].size);
+    try std.testing.expectEqual(testing.second, capture.resizes[1].pane_id);
+    try std.testing.expectEqual(second_size.cols, capture.resizes[1].size.cols);
+    try std.testing.expectEqual(second_size.rows - 6, capture.resizes[1].size.rows);
 }
 
 test "OfferActivePaneGeometryHandler selects the active tab and propagates delivery failure" {

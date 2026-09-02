@@ -547,6 +547,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
             .area = input.resources.view.workbench(),
             .palette = input.resources.view.palette(),
             .copy = input.projection.copy,
+            .bottom_reservation = input.resources.view.attachmentReservation(),
             .force = input.force,
         },
     });
