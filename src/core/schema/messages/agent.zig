@@ -107,6 +107,24 @@ pub fn validateSessionReference(session: []const u8) !void {
     if (session[0] == '-') return error.InvalidSessionReference;
 }
 
+/// A session title is bounded printable UTF-8: no C0 or DEL bytes, so the
+/// value is safe in a wire frame, a checkpoint record and a host escape.
+///
+/// ```zig
+/// try validateSessionTitle("Investigate proxy lifecycle");
+/// ```
+pub fn validateSessionTitle(title: []const u8) !void {
+    if (title.len == 0 or title.len > types.max_agent_session_title_bytes or !std.unicode.utf8ValidateSlice(title)) {
+        return error.InvalidSessionTitle;
+    }
+
+    for (title) |byte| {
+        if (byte < 0x20 or byte == 0x7f) {
+            return error.InvalidSessionTitle;
+        }
+    }
+}
+
 pub fn encodeAcknowledgeAgent(buffer: []u8, message: AcknowledgeAgent) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.acknowledge_agent),

@@ -8,6 +8,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const agent_mod = @import("../../agent/root.zig");
 const checkpoint = @import("../../persistence/checkpoint.zig");
 const pane_mod = @import("../../pane/root.zig");
 const workspace_mod = @import("../../workspace/root.zig");
@@ -127,8 +128,8 @@ pub fn writeFile(job: WriteJob) anyerror!void {
 }
 
 /// Binds checkpointing to one application type. `Application` provides
-/// `io`, `gpa`, `session`, `model`, `select`, `workspaceRepository()` and
-/// `launchPane()`.
+/// `io`, `gpa`, `session`, `model`, `select`, `workspaceRepository()`,
+/// `launchPane()`, `queueRestoredInput()` and `restoreAgentTitle()`.
 ///
 /// ```zig
 /// const SessionCheckpoint = Checkpointer(Application);
@@ -313,8 +314,22 @@ pub fn Checkpointer(comptime Application: type) type {
                 if (resumeCommand(&command_buffer, @enumFromInt(record.agent_provider), record.agent_session)) |command| {
                     try application.queueRestoredInput(pane, command);
                     application.session.resumed_agents +|= 1;
+                    if (restoredTitle(record)) |title| {
+                        application.restoreAgentTitle(pane, title);
+                    }
                 }
             }
+        }
+
+        /// The title travels only with a session the runtime actually resumes;
+        /// a plain relaunched shell must not wear the old agent's title.
+        fn restoredTitle(record: checkpoint.PaneRecord) ?agent_mod.SessionTitle {
+            if (record.agent_title.len == 0) {
+                return null;
+            }
+
+            const source = std.enums.fromInt(schema.AgentTitleSource, record.agent_title_source) orelse return null;
+            return agent_mod.SessionTitle.init(record.agent_title, source) catch null;
         }
 
         fn restoreLayout(application: *Application, record: checkpoint.LayoutRecord) !void {
@@ -382,6 +397,7 @@ pub fn Checkpointer(comptime Application: type) type {
                 if (!pane.launch_record.restorable()) continue;
                 const reference = application.model.agents.sessionReference(pane.key());
                 const projected = application.model.agents.projectedProvider(pane.key());
+                const title = if (reference != null) application.model.agents.durableTitle(pane.key()) else null;
                 try encoder.pane(.{
                     .pane_id = schema.id.raw(pane.id),
                     .workspace_id = schema.id.raw(pane.location.workspace.workspace),
@@ -393,6 +409,8 @@ pub fn Checkpointer(comptime Application: type) type {
                     .argument_count = pane.launch_record.count,
                     .agent_provider = if (reference != null) @intFromEnum(projected) else 0,
                     .agent_session = if (reference) |value| value.slice() else "",
+                    .agent_title = if (title) |value| value.slice() else "",
+                    .agent_title_source = if (title) |value| @intFromEnum(value.source) else 0,
                 });
             }
 

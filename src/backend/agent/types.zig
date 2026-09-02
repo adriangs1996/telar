@@ -75,6 +75,36 @@ pub const SessionReference = struct {
     }
 };
 
+/// A ready session title with the source that produced it, bounded so the
+/// checkpoint can carry it and restore can hand it back to a resumed agent.
+pub const SessionTitle = struct {
+    bytes: [schema.max_agent_session_title_bytes]u8 = undefined,
+    len: u8 = 0,
+    source: schema.AgentTitleSource,
+
+    pub fn slice(title: *const SessionTitle) []const u8 {
+        return title.bytes[0..title.len];
+    }
+
+    /// Copies a validated title. Only generated and manual titles are durable;
+    /// placeholders and a child's own window title are never stored.
+    ///
+    /// ```zig
+    /// const title = try SessionTitle.init("Investigate proxy lifecycle", .generated);
+    /// ```
+    pub fn init(value: []const u8, source: schema.AgentTitleSource) !SessionTitle {
+        if (source != .generated and source != .manual) {
+            return error.InvalidSessionTitle;
+        }
+
+        try schema.validateSessionTitle(value);
+        var title: SessionTitle = .{ .source = source };
+        @memcpy(title.bytes[0..value.len], value);
+        title.len = @intCast(value.len);
+        return title;
+    }
+};
+
 /// One official lifecycle report from the agent's own hooks.
 pub const ReportObservation = struct {
     identity: Identity,

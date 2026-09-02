@@ -14,6 +14,7 @@ const runtime_event = @import("../event.zig");
 const pane_launcher = @import("pane_launcher.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const git_status = @import("git_status.zig");
+const agent_mod = @import("../../agent/root.zig");
 const pane_mod = @import("../../pane/root.zig");
 const model = @import("model.zig");
 const pty = @import("../../pty/root.zig");
@@ -275,6 +276,26 @@ pub const Application = struct {
 
         _ = pane.queuePtyInput(bytes);
         try RuntimeEvents.schedulePaneInput(application, pane);
+    }
+
+    /// Hands a checkpointed title to the agent that will resume in a restored
+    /// pane and records it for the pane's new history session, so the sidebar
+    /// and the history palette show the resumed session under its old name.
+    ///
+    /// ```zig
+    /// application.restoreAgentTitle(pane, title);
+    /// ```
+    pub fn restoreAgentTitle(application: *Application, pane: *const Pane, title: agent_mod.SessionTitle) void {
+        if (!application.model.agents.restoreTitle(pane.key(), title)) {
+            return;
+        }
+
+        _ = application.history_service.setSessionTitle(application.io, .{
+            .id = pane.history_session_id,
+            .title = title.slice(),
+            .source = title.source,
+            .state = .ready,
+        });
     }
 
     /// Marks the restorable session shape as changed so the next maintenance

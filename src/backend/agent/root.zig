@@ -23,6 +23,7 @@ pub const ProxyExchange = types.ProxyExchange;
 pub const ProxyObservation = types.ProxyObservation;
 pub const DescriptionFinished = types.DescriptionFinished;
 pub const SessionReference = types.SessionReference;
+pub const SessionTitle = types.SessionTitle;
 pub const ReportObservation = types.ReportObservation;
 
 test {
@@ -30,5 +31,6 @@ test {
     _ = @import("evidence.zig");
     _ = @import("proxy_state.zig");
     _ = @import("repository.zig");
+    _ = @import("restored_titles.zig");
     _ = @import("tracker.zig");
 }

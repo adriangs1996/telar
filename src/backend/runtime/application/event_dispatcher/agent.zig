@@ -161,6 +161,10 @@ pub fn Dispatcher(comptime Application: type) type {
                 .source = finished.source,
                 .state = finished.state,
             });
+
+            if (finished.state == .ready) {
+                application.noteSessionChange();
+            }
         }
 
         const agent_maintenance_runtime_port: agent_maintenance_coordinator.RuntimePort(Application) = .{

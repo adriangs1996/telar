@@ -8,6 +8,7 @@ const core = @import("telar-core");
 const Agent = @import("agent.zig");
 const pane_mod = @import("../pane/root.zig");
 const repository_mod = @import("repository.zig");
+const restored_titles_mod = @import("restored_titles.zig");
 const types = @import("types.zig");
 const description = @import("description.zig");
 
@@ -23,6 +24,8 @@ const ProxyExchange = types.ProxyExchange;
 const ProxyObservation = types.ProxyObservation;
 const DescriptionFinished = types.DescriptionFinished;
 const Repository = repository_mod.Repository;
+const RestoredTitles = restored_titles_mod.RestoredTitles;
+const SessionTitle = types.SessionTitle;
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -32,6 +35,7 @@ pub const AcknowledgeResult = enum {
 
 pub const Tracker = struct {
     repository: Repository = .{},
+    restored_titles: RestoredTitles = .{},
     revision: u64 = 1,
     sequence: u64 = 0,
 
@@ -85,6 +89,34 @@ pub const Tracker = struct {
     pub fn sessionReference(tracker: *const Tracker, key: PaneKey) ?types.SessionReference {
         const agent = tracker.repository.findConst(key) orelse return null;
         return agent.session_reference;
+    }
+
+    /// Returns the checkpoint-worthy title of one exact pane generation: a
+    /// ready generated or manual title, never a placeholder.
+    ///
+    /// ```zig
+    /// const title = tracker.durableTitle(key) orelse return;
+    /// ```
+    pub fn durableTitle(tracker: *const Tracker, key: PaneKey) ?SessionTitle {
+        const agent = tracker.repository.findConst(key) orelse return null;
+        return agent.durableTitle();
+    }
+
+    /// Holds a checkpointed title for a restored pane generation until the
+    /// resumed agent is observed; that aggregate starts with the title ready.
+    /// Returns `false` when the bounded store is full.
+    ///
+    /// ```zig
+    /// _ = tracker.restoreTitle(pane.key(), title);
+    /// ```
+    pub fn restoreTitle(tracker: *Tracker, key: PaneKey, title: SessionTitle) bool {
+        if (tracker.repository.find(key)) |agent| {
+            agent.restoreTitle(title);
+            tracker.bumpRevision();
+            return true;
+        }
+
+        return tracker.restored_titles.put(key, title);
     }
 
     /// Marks one exact agent generation as seen and republishes a `done`
@@ -258,6 +290,7 @@ pub const Tracker = struct {
     /// _ = tracker.remove(pane_key);
     /// ```
     pub fn remove(tracker: *Tracker, key: PaneKey) bool {
+        _ = tracker.restored_titles.take(key);
         const agent = tracker.repository.find(key) orelse return false;
         agent.retire();
         return tracker.removeStored(key);
@@ -380,7 +413,12 @@ pub const Tracker = struct {
             return agent;
         }
 
-        return tracker.repository.insert(Agent.init(identity));
+        const agent = tracker.repository.insert(Agent.init(identity)) orelse return null;
+        if (tracker.restored_titles.take(identity.key)) |title| {
+            agent.restoreTitle(title);
+        }
+
+        return agent;
     }
 
     fn removeStored(tracker: *Tracker, key: PaneKey) bool {
@@ -1382,6 +1420,44 @@ test "session references attach to the exact generation and replace only on chan
     try std.testing.expect(tracker.observeSessionReference(identity, second));
     try std.testing.expectError(error.InvalidSessionReference, types.SessionReference.init("-rf", 0));
     try std.testing.expectError(error.InvalidSessionReference, types.SessionReference.init("a b", 0));
+}
+
+test "a restored title waits for the resumed agent and skips title generation" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    const title = try SessionTitle.init("Investigate proxy lifecycle", .generated);
+
+    try std.testing.expect(tracker.restoreTitle(identity.key, title));
+    try std.testing.expect(tracker.durableTitle(identity.key) == null);
+    try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .claude, .process_id = 43, .observed_at_ms = 100 }));
+
+    var entries: [max_records]schema.AgentSnapshotEntry = undefined;
+    const snapshot = tracker.snapshot(&entries);
+    try std.testing.expectEqualStrings("Investigate proxy lifecycle", snapshot[0].session_title);
+    try std.testing.expectEqual(schema.AgentTitleSource.generated, snapshot[0].title_source);
+    try std.testing.expectEqual(schema.AgentTitleState.ready, snapshot[0].title_state);
+    try std.testing.expectEqualStrings("Investigate proxy lifecycle", tracker.durableTitle(identity.key).?.slice());
+
+    try std.testing.expect(!tracker.observeInput(identity.key, "fix the tests\r"));
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 200 }));
+    try std.testing.expect(tracker.nextDescriptionJob() == null);
+}
+
+test "a restored title is dropped with its pane and never reaches another generation" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    const title = try SessionTitle.init("Release audit", .manual);
+
+    try std.testing.expect(tracker.restoreTitle(identity.key, title));
+    try std.testing.expect(!tracker.remove(identity.key));
+    try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 43, .observed_at_ms = 100 }));
+    try std.testing.expect(tracker.durableTitle(identity.key) == null);
+
+    const next_generation: Identity = .{ .key = .{ .id = identity.key.id, .generation = identity.key.generation + 1 }, .process_id = 44, .session_id = .{1} ** 16 };
+    try std.testing.expect(tracker.restoreTitle(identity.key, title));
+    try std.testing.expect(tracker.observeProcess(.{ .identity = next_generation, .provider = .codex, .process_id = 45, .observed_at_ms = 100 }));
+    try std.testing.expect(tracker.durableTitle(next_generation.key) == null);
+    try std.testing.expectEqualStrings("Release audit", tracker.durableTitle(identity.key).?.slice());
 }
 
 test "lifecycle reports outrank screen and proxy evidence until they expire" {

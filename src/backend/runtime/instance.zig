@@ -319,6 +319,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         .process_id = 99,
         .observed_at_ms = 1_000,
     }));
+    try std.testing.expect(try first.application.model.agents.setManualTitle(pane.key(), "Investigate proxy lifecycle"));
     try std.testing.expect(first.application.session.dirty);
     first.deinit();
     try std.testing.expectEqual(@as(u64, 1), first.application.session.writes);
@@ -342,5 +343,17 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         "claude --resume 0192aaaa-bbbb-cccc-dddd-eeeeffff0000\r",
         restored.input_queue.nextChunk().?,
     );
+    try std.testing.expect(second.application.model.agents.observeProcess(.{
+        .identity = agent_mod.Identity.fromPane(restored),
+        .provider = .claude,
+        .process_id = 100,
+        .observed_at_ms = 2_000,
+    }));
+    var entries: [agent_mod.max_records]core.schema.AgentSnapshotEntry = undefined;
+    const agents = second.application.model.agents.snapshot(&entries);
+    try std.testing.expectEqual(@as(usize, 1), agents.len);
+    try std.testing.expectEqualStrings("Investigate proxy lifecycle", agents[0].session_title);
+    try std.testing.expectEqual(core.schema.AgentTitleSource.manual, agents[0].title_source);
+    try std.testing.expectEqual(core.schema.AgentTitleState.ready, agents[0].title_state);
     try std.testing.expect(second.application.model.workspaces.next_tab_id > core.schema.id.raw(logs_tab));
 }

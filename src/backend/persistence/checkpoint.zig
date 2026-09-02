@@ -12,7 +12,9 @@ const schema = core.schema;
 const wire = core.schema.wire;
 
 pub const magic: *const [8]u8 = "TELARCKP";
-pub const version: u16 = 1;
+/// Version 2 added the agent title to pane records; version 1 files still read.
+pub const version: u16 = 2;
+const oldest_readable_version: u16 = 1;
 pub const max_file_bytes = 4 * 1024 * 1024;
 pub const max_launch_arguments = 32;
 pub const max_launch_bytes = 1024;
@@ -55,6 +57,10 @@ pub const PaneRecord = struct {
     agent_provider: u8 = 0,
     /// The agent's reported session reference, empty when unknown.
     agent_session: []const u8 = "",
+    /// The session title shown for the agent, empty when it had none worth
+    /// keeping. `agent_title_source` is the `AgentTitleSource` that made it.
+    agent_title: []const u8 = "",
+    agent_title_source: u8 = 0,
 };
 
 pub const LayoutRecord = struct {
@@ -135,6 +141,9 @@ pub const Encoder = struct {
         if (record.agent_session.len > schema.max_agent_session_reference_bytes) return error.InvalidCheckpoint;
         try encoder.inner.writeByte(record.agent_provider);
         try encoder.inner.writeSized16(record.agent_session);
+        try validateTitle(record.agent_title, record.agent_title_source);
+        try encoder.inner.writeSized16(record.agent_title);
+        try encoder.inner.writeByte(record.agent_title_source);
     }
 
     pub fn layout(encoder: *Encoder, record: LayoutRecord) !void {
@@ -159,13 +168,15 @@ pub const Encoder = struct {
 pub const Reader = struct {
     inner: wire.Decoder,
     counters: Counters,
+    version: u16,
     finished: bool = false,
 
     pub fn init(bytes: []const u8) !Reader {
         var decoder = wire.Decoder.init(bytes);
         const header = try decoder.readBytes(magic.len);
         if (!std.mem.eql(u8, header, magic)) return error.InvalidCheckpoint;
-        if (try decoder.readInt(u16) != version) return error.UnsupportedCheckpointVersion;
+        const file_version = try decoder.readInt(u16);
+        if (file_version < oldest_readable_version or file_version > version) return error.UnsupportedCheckpointVersion;
         const counters: Counters = .{
             .next_workspace_id = try decoder.readInt(u64),
             .next_tab_id = try decoder.readInt(u64),
@@ -175,7 +186,7 @@ pub const Reader = struct {
         if (counters.next_workspace_id == 0 or counters.next_tab_id == 0 or
             counters.next_pane_id == 0 or counters.next_pane_generation == 0)
             return error.InvalidCheckpoint;
-        return .{ .inner = decoder, .counters = counters };
+        return .{ .inner = decoder, .counters = counters, .version = file_version };
     }
 
     pub fn next(reader: *Reader) !?Record {
@@ -227,6 +238,9 @@ pub const Reader = struct {
                 const agent_provider = try reader.inner.readByte();
                 const agent_session = try reader.inner.readSized16();
                 if (agent_session.len != 0) schema.validateSessionReference(agent_session) catch return error.InvalidCheckpoint;
+                const agent_title = if (reader.version >= 2) try reader.inner.readSized16() else "";
+                const agent_title_source = if (reader.version >= 2) try reader.inner.readByte() else 0;
+                try validateTitle(agent_title, agent_title_source);
                 return .{ .pane = .{
                     .pane_id = pane_id,
                     .workspace_id = workspace_id,
@@ -238,6 +252,8 @@ pub const Reader = struct {
                     .argument_count = argument_count,
                     .agent_provider = agent_provider,
                     .agent_session = agent_session,
+                    .agent_title = agent_title,
+                    .agent_title_source = agent_title_source,
                 } };
             },
             .layout => {
@@ -273,6 +289,24 @@ pub const ArgumentIterator = struct {
     }
 };
 
+/// An empty title carries no source. A present one must be printable and
+/// come from a durable source, so restore never revives a placeholder.
+fn validateTitle(title: []const u8, source: u8) !void {
+    if (title.len == 0) {
+        if (source != 0) {
+            return error.InvalidCheckpoint;
+        }
+
+        return;
+    }
+
+    schema.validateSessionTitle(title) catch return error.InvalidCheckpoint;
+    switch (std.enums.fromInt(schema.AgentTitleSource, source) orelse return error.InvalidCheckpoint) {
+        .generated, .manual => {},
+        .telar, .terminal => return error.InvalidCheckpoint,
+    }
+}
+
 fn validatePath(path: []const u8) !void {
     if (path.len == 0 or path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, path, 0) != null)
         return error.InvalidCheckpoint;
@@ -300,6 +334,8 @@ test "checkpoint records round trip through the file encoding" {
         .argument_count = 2,
         .agent_provider = 1,
         .agent_session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000",
+        .agent_title = "Investigate proxy lifecycle",
+        .agent_title_source = @intFromEnum(schema.AgentTitleSource.generated),
     });
     try encoder.layout(.{ .identity = 42, .last_used = 3, .payload = "\x1a\x01" });
     const bytes = try encoder.finish();
@@ -321,9 +357,82 @@ test "checkpoint records round trip through the file encoding" {
     try std.testing.expect(arguments.next() == null);
     try std.testing.expectEqual(@as(u8, 1), pane.agent_provider);
     try std.testing.expectEqualStrings("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", pane.agent_session);
+    try std.testing.expectEqualStrings("Investigate proxy lifecycle", pane.agent_title);
+    try std.testing.expectEqual(@intFromEnum(schema.AgentTitleSource.generated), pane.agent_title_source);
     const layout = (try reader.next()).?.layout;
     try std.testing.expectEqual(@as(u64, 42), layout.identity);
     try std.testing.expectEqualStrings("\x1a\x01", layout.payload);
+    try std.testing.expect(try reader.next() == null);
+}
+
+test "pane titles must be printable and come from a durable source" {
+    var buffer: [512]u8 = undefined;
+    const base: PaneRecord = .{
+        .pane_id = 7,
+        .workspace_id = 1,
+        .tab_id = 4,
+        .cwd = "/work",
+        .cols = 80,
+        .rows = 24,
+        .arguments = "/bin/zsh\x00",
+        .argument_count = 1,
+        .agent_provider = 1,
+        .agent_session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000",
+    };
+    const counters: Counters = .{ .next_workspace_id = 1, .next_tab_id = 1, .next_pane_id = 1, .next_pane_generation = 1 };
+
+    var placeholder = base;
+    placeholder.agent_title = "New Claude Code session";
+    placeholder.agent_title_source = @intFromEnum(schema.AgentTitleSource.telar);
+    var encoder = try Encoder.init(&buffer, counters);
+    try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(placeholder));
+
+    var control = base;
+    control.agent_title = "a\x1bb";
+    control.agent_title_source = @intFromEnum(schema.AgentTitleSource.manual);
+    encoder = try Encoder.init(&buffer, counters);
+    try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(control));
+
+    var sourced_empty = base;
+    sourced_empty.agent_title_source = @intFromEnum(schema.AgentTitleSource.generated);
+    encoder = try Encoder.init(&buffer, counters);
+    try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(sourced_empty));
+
+    encoder = try Encoder.init(&buffer, counters);
+    try encoder.pane(base);
+    var reader = try Reader.init(try encoder.finish());
+    const pane = (try reader.next()).?.pane;
+    try std.testing.expectEqualStrings("", pane.agent_title);
+}
+
+test "a version 1 checkpoint still reads, with no pane title" {
+    var buffer: [512]u8 = undefined;
+    var inner = wire.Encoder.init(&buffer);
+    try inner.writeBytes(magic);
+    try inner.writeInt(u16, 1);
+    try inner.writeInt(u64, 2);
+    try inner.writeInt(u64, 3);
+    try inner.writeInt(u64, 4);
+    try inner.writeInt(u64, 5);
+    try inner.writeByte(3);
+    try inner.writeInt(u64, 7);
+    try inner.writeInt(u64, 1);
+    try inner.writeInt(u64, 1);
+    try inner.writeSized16("/work");
+    try inner.writeInt(u16, 80);
+    try inner.writeInt(u16, 24);
+    try inner.writeInt(u16, 1);
+    try inner.writeSized16("/bin/zsh\x00");
+    try inner.writeByte(1);
+    try inner.writeSized16("0192aaaa-bbbb-cccc-dddd-eeeeffff0000");
+    try inner.writeByte(0);
+    const bytes = inner.finish();
+
+    var reader = try Reader.init(bytes);
+    try std.testing.expectEqual(@as(u16, 1), reader.version);
+    const pane = (try reader.next()).?.pane;
+    try std.testing.expectEqualStrings("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", pane.agent_session);
+    try std.testing.expectEqualStrings("", pane.agent_title);
     try std.testing.expect(try reader.next() == null);
 }
 

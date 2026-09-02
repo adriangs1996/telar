@@ -573,14 +573,42 @@ pub fn finishDescription(agent: *Agent, result: *const description.Result) ?Desc
 /// _ = try agent.setManualTitle("Investigate proxy lifecycle");
 /// ```
 pub fn setManualTitle(agent: *Agent, value: []const u8) !void {
-    if (!validTitle(value) or value.len > agent.title.bytes.len) {
+    if (!validTitle(value)) {
         return error.InvalidAgentTitle;
     }
 
+    agent.applyReadyTitle(value, .manual);
+}
+
+/// Hands a checkpointed title back to the agent that resumed the session. The
+/// title is final: no description job is queued for the first prompt.
+///
+/// ```zig
+/// agent.restoreTitle(title);
+/// ```
+pub fn restoreTitle(agent: *Agent, title: types.SessionTitle) void {
+    agent.applyReadyTitle(title.slice(), title.source);
+}
+
+/// Returns the title worth checkpointing: a ready generated or manual one.
+///
+/// ```zig
+/// const title = agent.durableTitle() orelse return;
+/// ```
+pub fn durableTitle(agent: *const Agent) ?types.SessionTitle {
+    if (agent.title.state != .ready) {
+        return null;
+    }
+
+    return types.SessionTitle.init(agent.title.slice(), agent.title.source) catch null;
+}
+
+fn applyReadyTitle(agent: *Agent, value: []const u8, source: schema.AgentTitleSource) void {
+    std.debug.assert(validTitle(value));
     agent.title.clearSensitive();
     @memcpy(agent.title.bytes[0..value.len], value);
     agent.title.len = @intCast(value.len);
-    agent.title.source = .manual;
+    agent.title.source = source;
     agent.title.state = .ready;
     agent.title.phase = .finished;
 }
@@ -739,16 +767,7 @@ fn advanceTitle(agent: *Agent, status: schema.AgentStatus, can_queue: bool) bool
 }
 
 fn validTitle(value: []const u8) bool {
-    if (value.len == 0 or value.len > schema.max_agent_session_title_bytes or !std.unicode.utf8ValidateSlice(value)) {
-        return false;
-    }
-
-    for (value) |byte| {
-        if (byte < 0x20 or byte == 0x7f) {
-            return false;
-        }
-    }
-
+    schema.validateSessionTitle(value) catch return false;
     return true;
 }
 

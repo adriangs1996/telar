@@ -278,6 +278,7 @@ pub const encodeQueryAgents = messages.agent.encodeQueryAgents;
 pub const encodeReportAgentSession = messages.agent.encodeReportAgentSession;
 pub const encodeReportAgent = messages.agent.encodeReportAgent;
 pub const validateSessionReference = messages.agent.validateSessionReference;
+pub const validateSessionTitle = messages.agent.validateSessionTitle;
 pub const encodeAcknowledgeAgent = messages.agent.encodeAcknowledgeAgent;
 pub const encodeAgentSound = messages.agent.encodeAgentSound;
 pub const encodeAgentSnapshot = messages.agent.encodeAgentSnapshot;
