@@ -21,6 +21,9 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     if (options.action == .import) {
         return runImport(init, options);
     }
+    if (options.action == .delete or options.action == .prune) {
+        return runPrune(init, options);
+    }
 
     const connector = try RuntimeConnector.init(init, options.socket);
     var connection = try connector.connectOrStart(.{});
@@ -514,4 +517,109 @@ test "fish history pairs cmd and when lines" {
     try std.testing.expect(state.feed("- cmd: htop") == null);
     const tail = state.flush().?;
     try std.testing.expectEqualStrings("htop", tail.command);
+}
+
+/// Deletes one entry or prunes by filters. Prune is destructive: without
+/// `--yes` it shows the newest matches (a dry run) and asks for
+/// confirmation on stdin.
+fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
+    const connector = try RuntimeConnector.init(init, options.socket);
+    var connection = try connector.connectOrStart(.{});
+    defer connection.deinit(init.io);
+    var stdout_buffer: [512]u8 = undefined;
+    var output = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    const writer = &output.interface;
+
+    var send_buffer: [4096]u8 = undefined;
+    if (options.action == .delete) {
+        try connection.send(init.io, try core.schema.encodeDeleteHistory(&send_buffer, .{
+            .request_id = @enumFromInt(1),
+            .id = options.delete_id,
+        }));
+        const removed = try receivePruned(init, &connection);
+        try writer.print("removed {d} entries\n", .{removed});
+        try writer.flush();
+        return;
+    }
+
+    var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const scope_value: []const u8 = switch (options.scope) {
+        .cwd => cwd: {
+            const len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
+            break :cwd cwd_buffer[0..len];
+        },
+        .workspace => std.mem.span(options.scope_value.?),
+        .global, .pane => "",
+    };
+    const match = if (options.query) |value| std.mem.span(value) else "";
+
+    if (options.dry_run or !options.assume_yes) {
+        try connection.send(init.io, try core.schema.encodeQueryHistory(&send_buffer, .{
+            .request_id = @enumFromInt(1),
+            .query = match,
+            .scope = options.scope,
+            .scope_value = scope_value,
+            .pane_id = options.pane_id,
+            .failed_only = options.failed_only,
+            .limit = core.schema.max_history_results,
+        }));
+        const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+        defer init.gpa.free(receive_buffer);
+        const response = try core.schema.decodeServer(try connection.receive(init.io, receive_buffer));
+        const results = switch (response) {
+            .history_results => |results| results,
+            .request_failed => |failure| {
+                std.debug.print("telar history: {s}\n", .{failure.message});
+                return error.HistoryQueryFailed;
+            },
+            else => return error.UnexpectedRuntimeResponse,
+        };
+        if (options.before_ms != 0) {
+            try writer.print("{d} newest entries match the text/scope filters; --before applies on top and is not previewable\n", .{results.entry_count});
+        } else {
+            try writer.print("would remove {d} entries (counting at most the newest {d})\n", .{ results.entry_count, core.schema.max_history_results });
+        }
+        try writer.flush();
+        if (options.dry_run) {
+            return;
+        }
+
+        try writer.writeAll("prune permanently? type yes to continue: ");
+        try writer.flush();
+        var line_buffer: [16]u8 = undefined;
+        var stdin_reader = File.stdin().readerStreaming(init.io, &.{});
+        const len = stdin_reader.interface.readSliceShort(&line_buffer) catch 0;
+        const answer = std.mem.trim(u8, line_buffer[0..len], " \r\n");
+        if (!std.mem.eql(u8, answer, "yes")) {
+            try writer.writeAll("aborted\n");
+            try writer.flush();
+            return;
+        }
+    }
+
+    try connection.send(init.io, try core.schema.encodePruneHistory(&send_buffer, .{
+        .request_id = @enumFromInt(2),
+        .scope = options.scope,
+        .scope_value = scope_value,
+        .pane_id = options.pane_id,
+        .before_ms = options.before_ms,
+        .failed_only = options.failed_only,
+        .match = match,
+    }));
+    const removed = try receivePruned(init, &connection);
+    try writer.print("removed {d} entries\n", .{removed});
+    try writer.flush();
+}
+
+fn receivePruned(init: std.process.Init, connection: *core.transport.SocketChannel) !u64 {
+    var receive_buffer: [1024]u8 = undefined;
+    const response = try core.schema.decodeServer(try connection.receive(init.io, &receive_buffer));
+    return switch (response) {
+        .history_pruned => |pruned| pruned.removed,
+        .request_failed => |failure| blk: {
+            std.debug.print("telar history: {s}\n", .{failure.message});
+            break :blk error.HistoryPruneFailed;
+        },
+        else => error.UnexpectedRuntimeResponse,
+    };
 }

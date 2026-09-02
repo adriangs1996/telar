@@ -264,6 +264,25 @@ pub const Service = struct {
         return service.submit(io, .{ .import = batch });
     }
 
+    /// Queues one exact-entry deletion; the worker answers with the removed
+    /// count through the asynchronous response stream.
+    ///
+    /// ```zig
+    /// _ = service.deleteHistory(io, request);
+    /// ```
+    pub fn deleteHistory(service: *Service, io: std.Io, request: model_mod.Delete) bool {
+        return service.submit(io, .{ .delete = request });
+    }
+
+    /// Queues one bounded prune; the worker answers with the removed count.
+    ///
+    /// ```zig
+    /// _ = service.pruneHistory(io, prune);
+    /// ```
+    pub fn pruneHistory(service: *Service, io: std.Io, prune: model_mod.Prune) bool {
+        return service.submit(io, .{ .prune = prune });
+    }
+
     pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
         const context = record.context;
         const command = record.command;
@@ -424,6 +443,28 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
                     error.HistoryUnavailable;
                 observeWrite(service, elapsedSince(io, started), result);
             },
+            .delete => |delete_request| {
+                const removed: u64 = if (service.store) |*store|
+                    store.deleteCommand(delete_request.id) catch 0
+                else
+                    0;
+                respondPruned(service, io, .{
+                    .request_id = delete_request.request_id,
+                    .origin = delete_request.origin,
+                    .removed = removed,
+                });
+            },
+            .prune => |prune_request| {
+                const removed: u64 = if (service.store) |*store|
+                    store.prune(&prune_request) catch 0
+                else
+                    0;
+                respondPruned(service, io, .{
+                    .request_id = prune_request.request_id,
+                    .origin = prune_request.origin,
+                    .removed = removed,
+                });
+            },
             .query => |query_value| {
                 const started = std.Io.Timestamp.now(io, .awake);
                 const response: model_mod.Response = if (service.store) |*store|
@@ -468,6 +509,10 @@ fn observeWrite(service: *Service, elapsed: u64, result: anyerror!void) void {
 
 /// Writes one imported session and its commands idempotently: both inserts
 /// are `OR IGNORE`, keyed by the deterministic session id and sequence.
+fn respondPruned(service: *Service, io: std.Io, pruned: model_mod.Pruned) void {
+    service.responses.putOne(io, .{ .pruned = pruned }) catch {};
+}
+
 fn writeImportBatch(store: *store_mod.Store, batch: *const model_mod.ImportBatch) anyerror!void {
     const session: model_mod.SessionStarted = .{
         .id = batch.session_id,

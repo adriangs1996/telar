@@ -36,6 +36,7 @@ pub fn Dispatcher(comptime Application: type) type {
             .set_close_after_reply = setHistoryCloseAfterReply,
             .enqueue_query_result = enqueueHistoryQueryResult,
             .enqueue_failure = enqueueHistoryFailure,
+            .enqueue_pruned = enqueueHistoryPruned,
             .dispose_query_result = disposeHistoryQueryResult,
             .pump_clients = pumpRuntimeClients,
         };
@@ -70,6 +71,14 @@ pub fn Dispatcher(comptime Application: type) type {
                 .code = .internal,
                 .message = failure.message,
             }) catch return false;
+            return true;
+        }
+
+        fn enqueueHistoryPruned(_: *Application, session: *ClientSession, pruned: history.model.Pruned) bool {
+            session.delivery.responses.push(.{ .history_pruned = .{
+                .request_id = pruned.request_id,
+                .removed = pruned.removed,
+            } }) catch return false;
             return true;
         }
 

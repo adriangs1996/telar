@@ -19,6 +19,7 @@ pub fn RuntimePort(comptime Context: type, comptime Session: type) type {
         set_close_after_reply: *const fn (*Context, Session, bool) void,
         enqueue_query_result: *const fn (*Context, Session, *history.model.QueryResult) bool,
         enqueue_failure: *const fn (*Context, Session, history.model.Failure) bool,
+        enqueue_pruned: *const fn (*Context, Session, history.model.Pruned) bool,
         dispose_query_result: *const fn (*Context, *history.model.QueryResult) void,
         pump_clients: *const fn (*Context) void,
     };
@@ -56,7 +57,7 @@ pub fn Controller(comptime Context: type, comptime Session: type, comptime port:
             const response = response_result catch return;
             var owned_query: ?*history.model.QueryResult = switch (response) {
                 .query_result => |result| result,
-                .failed => null,
+                .failed, .pruned => null,
             };
             defer if (owned_query) |result| {
                 port.dispose_query_result(controller.context, result);
@@ -81,6 +82,11 @@ pub fn Controller(comptime Context: type, comptime Session: type, comptime port:
                     port.set_close_after_reply(controller.context, session, failure.origin.close_after_reply);
                     _ = port.enqueue_failure(controller.context, session, failure);
                 },
+                .pruned => |pruned| {
+                    const session = port.resolve(controller.context, pruned.origin.client) orelse return;
+                    port.set_close_after_reply(controller.context, session, pruned.origin.close_after_reply);
+                    _ = port.enqueue_pruned(controller.context, session, pruned);
+                },
             }
 
             port.pump_clients(controller.context);
@@ -93,6 +99,7 @@ const FakeSession = struct {
 };
 
 const Step = enum {
+    enqueue_pruned,
     rearm_receive,
     resolve,
     set_close_after_reply,
@@ -114,6 +121,7 @@ const Capture = struct {
     enqueued_query: ?*history.model.QueryResult = null,
     disposed_query: ?*history.model.QueryResult = null,
     enqueued_failure: ?history.model.Failure = null,
+    enqueued_pruned: ?history.model.Pruned = null,
 
     fn record(capture: *Capture, step: Step) void {
         std.debug.assert(capture.len < capture.steps.len);
@@ -156,6 +164,13 @@ const Capture = struct {
         return capture.failure_queue_accepts;
     }
 
+    fn enqueuePruned(capture: *Capture, session: *FakeSession, pruned: history.model.Pruned) bool {
+        _ = session;
+        capture.record(.enqueue_pruned);
+        capture.enqueued_pruned = pruned;
+        return true;
+    }
+
     fn disposeQueryResult(capture: *Capture, result: *history.model.QueryResult) void {
         capture.record(.dispose_query_result);
         capture.disposed_query = result;
@@ -172,6 +187,7 @@ const test_port: RuntimePort(Capture, *FakeSession) = .{
     .set_close_after_reply = Capture.setCloseAfterReply,
     .enqueue_query_result = Capture.enqueueQueryResult,
     .enqueue_failure = Capture.enqueueFailure,
+    .enqueue_pruned = Capture.enqueuePruned,
     .dispose_query_result = Capture.disposeQueryResult,
     .pump_clients = Capture.pumpClients,
 };

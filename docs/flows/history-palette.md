@@ -61,7 +61,10 @@ the configured mode. The order matters:
 submit effect only accepts the closure and the paste runs from a
 pre-dispatch snapshot of the selection once the prompt is gone. The goto
 picker defers its navigation the same way. An empty result list just
-closes the palette. Escape closes it without side effects.
+closes the palette. Escape closes it without side effects. Ctrl+D sends
+`delete_history` for the selected entry; the runtime's `history_pruned`
+confirmation requeries the palette, so the row disappears only once it is
+actually gone.
 
 Deviations from herdr: global scope only (scope toggles pending) and
 keyboard-only interaction.

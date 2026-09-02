@@ -124,6 +124,9 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
         client.list_submission_alternate = false;
         try finishListSubmission(client, submission);
     }
+    if (outcome == .removed and before.kind == .history) {
+        try history_palettes.deleteSelected(client, before.selection);
+    }
     return outcome;
 }
 
@@ -341,6 +344,8 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
                 .end => .{ .end = key.mods.shift },
                 .char => |char| if (!key.mods.ctrl and !key.mods.alt)
                     .{ .insert = char.slice() }
+                else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'd')
+                    .remove_entry
                 else
                     null,
                 else => null,
@@ -351,7 +356,7 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
         const next = try use_case.execute(semantic);
         outcome = merge(outcome, next);
         switch (next) {
-            .cancelled, .blocked, .finished => return next,
+            .cancelled, .blocked, .finished, .removed => return next,
             .unchanged, .routing_changed, .changed => {},
         }
     }

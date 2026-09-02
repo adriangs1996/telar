@@ -13,6 +13,9 @@ pub const Outcome = enum {
     routing_changed,
     changed,
     cancelled,
+    /// The palette asked to delete its selected entry; the controller owns
+    /// the wire effect.
+    removed,
     blocked,
     finished,
 };
@@ -33,6 +36,7 @@ pub const NamePromptHandler = struct {
             .routing_changed => .routing_changed,
             .changed => .changed,
             .cancelled => .cancelled,
+            .removed => .removed,
             .submitted => |submission| if (!try handler.effects.submit(
                 handler.effects.context,
                 submission,

@@ -121,14 +121,17 @@ history one minute after install.
 - Tests: each parser against fixture files, batch encode/decode corpus,
   duplicate-safe reimport, filtered secrets never land.
 
-## P5. Delete and prune
+## P5. Delete and prune — done
 
 Complements P1 for what was already recorded. Never destroy silently.
 
 - Wire: `delete_history = 0x23` (single id) and `prune_history = 0x24`
   (bounded filters: scope + scope_value, `before_ms`, `failed_only`,
-  `match` FTS string), both answered with `request_completed` carrying the
-  affected count in a small `history_pruned = 0xa4` reply. Corpus + bump.
+  `match` FTS string), both answered asynchronously by the history worker
+  with `history_pruned = 0xa4` carrying the removed count (schema 28).
+  Deviation: the CLI dry run previews through `query_history`, which has
+  no time filter — with `--before` it reports the text/scope matches and
+  says the time bound is not previewable.
 - `command_output` already cascades (`ON DELETE CASCADE`); FTS triggers
   must cover DELETE (extend the trigger set at `store.zig:375`).
 - CLI: `telar history delete <id>`, `telar history prune --cwd ... --before

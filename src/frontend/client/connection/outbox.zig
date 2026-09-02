@@ -237,6 +237,7 @@ pub const Message = union(enum) {
     acknowledge_agent: schema.AcknowledgeAgent,
     search_pane: OwnedSearch,
     query_history: OwnedHistoryQuery,
+    delete_history: schema.DeleteHistory,
 };
 
 fn messageLaunchCwd(message: Message) ?[]const u8 {
@@ -560,6 +561,7 @@ pub const Outbox = struct {
             .acknowledge_agent => |value| schema.encodeAcknowledgeAgent(buffer, value),
             .search_pane => |*value| schema.encodeSearchPane(buffer, value.view()),
             .query_history => |*value| schema.encodeQueryHistory(buffer, value.view()),
+            .delete_history => |value| schema.encodeDeleteHistory(buffer, value),
         };
     }
 

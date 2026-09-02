@@ -71,6 +71,7 @@ pub const Command = union(enum) {
     move_up,
     move_down,
     cycle_scope,
+    remove_entry,
     submit,
     submit_alternate,
     cancel,
@@ -97,6 +98,8 @@ pub const Transition = union(enum) {
     routing_changed,
     changed,
     cancelled,
+    /// The history palette asked to delete its selected entry.
+    removed: u16,
     submitted: Submission,
 };
 
@@ -258,6 +261,14 @@ pub const State = struct {
                 state.revision +%= 1;
                 return .changed;
             },
+            .remove_entry => {
+                if (prompt.target != .history) {
+                    return .unchanged;
+                }
+
+                state.revision +%= 1;
+                return .{ .removed = prompt.selection };
+            },
             .insert,
             .backspace,
             .delete,
@@ -296,7 +307,7 @@ pub const State = struct {
             .move_right => |extend| prompt.field.moveRight(extend),
             .home => |extend| prompt.field.home(extend),
             .end => |extend| prompt.field.end(extend),
-            .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .cycle_scope => unreachable,
+            .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .cycle_scope, .remove_entry => unreachable,
         }
         if (!before.changed(&prompt.field)) {
             return .unchanged;

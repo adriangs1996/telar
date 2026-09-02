@@ -100,6 +100,10 @@ const import_command_sql =
     \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15);
 ;
 
+const delete_command_sql =
+    \\DELETE FROM command WHERE id = ?1;
+;
+
 const insert_launch_attempt_sql =
     \\INSERT INTO launch_attempt
     \\  (pane_id, pane_generation, location_kind, location_id, tab_id,
@@ -134,6 +138,7 @@ pub const Store = struct {
     insert_command: *c.sqlite3_stmt,
     import_session: *c.sqlite3_stmt,
     import_command: *c.sqlite3_stmt,
+    delete_command: *c.sqlite3_stmt,
     fts_available: bool,
 
     pub fn open(path: [:0]const u8) !Store {
@@ -173,6 +178,8 @@ pub const Store = struct {
         errdefer _ = c.sqlite3_finalize(import_session);
         const import_command = try prepare(opened, import_command_sql);
         errdefer _ = c.sqlite3_finalize(import_command);
+        const delete_command = try prepare(opened, delete_command_sql);
+        errdefer _ = c.sqlite3_finalize(delete_command);
         return .{
             .db = opened,
             .insert_launch_attempt = insert_launch_attempt,
@@ -182,11 +189,13 @@ pub const Store = struct {
             .insert_command = insert_command,
             .import_session = import_session,
             .import_command = import_command,
+            .delete_command = delete_command,
             .fts_available = fts_available,
         };
     }
 
     pub fn close(store: *Store) void {
+        _ = c.sqlite3_finalize(store.delete_command);
         _ = c.sqlite3_finalize(store.import_command);
         _ = c.sqlite3_finalize(store.import_session);
         _ = c.sqlite3_finalize(store.insert_command);
@@ -328,6 +337,85 @@ pub const Store = struct {
         try stepDone(stmt);
     }
 
+    /// Deletes one exact entry; its output row cascades and the FTS delete
+    /// trigger keeps the index consistent.
+    ///
+    /// ```zig
+    /// const removed = try store.deleteCommand(id);
+    /// ```
+    pub fn deleteCommand(store: *Store, command_id: u64) !u64 {
+        const stmt = store.delete_command;
+        defer reset(stmt);
+        _ = c.sqlite3_bind_int64(stmt, 1, @intCast(command_id));
+        try stepDone(stmt);
+        return @intCast(c.sqlite3_changes64(store.db));
+    }
+
+    /// Deletes every entry matching the bounded prune filters and returns
+    /// the removed count.
+    ///
+    /// ```zig
+    /// const removed = try store.prune(&prune);
+    /// ```
+    pub fn prune(store: *Store, request: *const model.Prune) !u64 {
+        var sql_buffer: [1024]u8 = undefined;
+        var sql = std.Io.Writer.fixed(&sql_buffer);
+        try sql.writeAll("DELETE FROM command WHERE 1=1");
+        var match_buffer: [2 * model.max_query_bytes + 2]u8 = undefined;
+        const use_index = store.fts_available and queryCharacters(request.matchSlice()) >= 3;
+        if (request.match_len != 0) {
+            if (use_index)
+                try sql.writeAll(
+                    " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?)",
+                )
+            else
+                try sql.writeAll(" AND instr(lower(command), lower(?)) > 0");
+        }
+        if (request.failed_only)
+            try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
+        if (request.before_ms != 0)
+            try sql.writeAll(" AND started_at_ms < ?");
+        switch (request.scope) {
+            .global => {},
+            .cwd => try sql.writeAll(" AND cwd = ?"),
+            .workspace => try sql.writeAll(" AND workspace_path = ?"),
+            .pane => try sql.writeAll(" AND pane_id = ?"),
+        }
+        try sql.writeAll(";");
+
+        const stmt = try prepare(store.db, sql.buffered());
+        defer _ = c.sqlite3_finalize(stmt);
+        var parameter: c_int = 1;
+        if (request.match_len != 0) {
+            bindText(stmt, parameter, if (use_index)
+                ftsQuote(request.matchSlice(), &match_buffer)
+            else
+                request.matchSlice());
+            parameter += 1;
+        }
+        if (request.before_ms != 0) {
+            _ = c.sqlite3_bind_int64(stmt, parameter, request.before_ms);
+            parameter += 1;
+        }
+        switch (request.scope) {
+            .global => {},
+            .cwd, .workspace => {
+                bindText(stmt, parameter, request.scopeSlice());
+                parameter += 1;
+            },
+            .pane => {
+                _ = c.sqlite3_bind_int64(
+                    stmt,
+                    parameter,
+                    @intCast(model.schema.id.raw(request.pane_id)),
+                );
+                parameter += 1;
+            },
+        }
+        try stepDone(stmt);
+        return @intCast(c.sqlite3_changes64(store.db));
+    }
+
     /// Executes one bounded history query and returns an owned result that the
     /// caller must deinitialize.
     ///
@@ -460,6 +548,9 @@ fn enableCommandSearchIndex(db: *c.sqlite3) bool {
         db,
         "CREATE TRIGGER IF NOT EXISTS command_fts_insert AFTER INSERT ON command BEGIN " ++
             "INSERT INTO command_fts(rowid, command) VALUES (new.id, new.command); " ++
+            "END; " ++
+            "CREATE TRIGGER IF NOT EXISTS command_fts_delete AFTER DELETE ON command BEGIN " ++
+            "INSERT INTO command_fts(command_fts, rowid, command) VALUES ('delete', old.id, old.command); " ++
             "END;",
         null,
         null,
@@ -855,4 +946,75 @@ test "author filters partition query results" {
     })));
     defer all.deinit();
     try std.testing.expectEqual(@as(usize, 2), all.entries.len);
+}
+
+test "delete and prune remove rows and keep the FTS index consistent" {
+    var store = try Store.open(":memory:");
+    defer store.close();
+    const location: model.schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const session: model.SessionStarted = .{
+        .id = @splat(4),
+        .pane_id = @enumFromInt(1),
+        .location = location,
+        .started_at_ms = 1_000,
+        .workspace_path = @constCast("/work"),
+        .shell = @constCast("/bin/zsh"),
+    };
+    try store.startSession(&session);
+
+    var value: model.CommandFinished = .{
+        .session_id = session.id,
+        .pane_id = session.pane_id,
+        .location = location,
+        .sequence = 1,
+        .started_at_ms = 1_000,
+        .duration_ns = 1,
+        .exit_code = 1,
+        .status = .completed,
+        .author = .human,
+        .cols = 80,
+        .rows = 24,
+        .command = @constCast("zig build unique-needle"),
+        .cwd = @constCast("/work"),
+        .workspace_path = @constCast("/work"),
+        .command_truncated = false,
+    };
+    try store.insertCommand(&value);
+    value.sequence = 2;
+    value.started_at_ms = 9_000;
+    value.exit_code = 0;
+    value.command = @constCast("git status");
+    try store.insertCommand(&value);
+
+    const origin: model.QueryOrigin = .{
+        .client = .{ .id = 1, .generation = 1 },
+        .close_after_reply = false,
+    };
+    const found = try store.query(std.testing.allocator, &(try model.Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .text = "unique-needle",
+    })));
+    const first_id = found.entries[0].id;
+    found.deinit();
+
+    try std.testing.expectEqual(@as(u64, 1), try store.deleteCommand(first_id));
+    try std.testing.expectEqual(@as(u64, 0), try store.deleteCommand(first_id));
+    const gone = try store.query(std.testing.allocator, &(try model.Query.init(.{
+        .request_id = @enumFromInt(2),
+        .origin = origin,
+        .text = "unique-needle",
+    })));
+    defer gone.deinit();
+    try std.testing.expectEqual(@as(usize, 0), gone.entries.len);
+
+    const pruned = try store.prune(&(try model.Prune.init(.{
+        .request_id = @enumFromInt(3),
+        .origin = origin,
+        .before_ms = 10_000,
+    })));
+    try std.testing.expectEqual(@as(u64, 1), pruned);
 }

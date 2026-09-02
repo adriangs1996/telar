@@ -339,6 +339,82 @@ pub const Request = union(enum) {
     command_finished: *CommandFinished,
     query: Query,
     import: *ImportBatch,
+    delete: Delete,
+    prune: Prune,
+};
+
+pub const Delete = struct {
+    request_id: schema.RequestId,
+    origin: QueryOrigin,
+    id: u64,
+};
+
+/// Bounded owned prune filters, mirroring `Query`'s storage discipline.
+pub const Prune = struct {
+    pub const Input = struct {
+        request_id: schema.RequestId,
+        origin: QueryOrigin,
+        scope: Scope = .global,
+        scope_value: []const u8 = "",
+        pane_id: schema.PaneId = .invalid,
+        before_ms: i64 = 0,
+        failed_only: bool = false,
+        match: []const u8 = "",
+    };
+
+    request_id: schema.RequestId,
+    origin: QueryOrigin,
+    scope: Scope = .global,
+    scope_text: [schema.max_cwd_bytes]u8 = undefined,
+    scope_text_len: u16 = 0,
+    pane_id: schema.PaneId = .invalid,
+    before_ms: i64 = 0,
+    failed_only: bool = false,
+    match: [max_query_bytes]u8 = undefined,
+    match_len: u16 = 0,
+
+    pub fn init(input: Input) !Prune {
+        if (input.match.len > max_query_bytes) {
+            return error.QueryTooLong;
+        }
+        if (input.scope_value.len > schema.max_cwd_bytes) {
+            return error.ScopeTooLong;
+        }
+        if (input.scope == .pane and input.pane_id == .invalid) {
+            return error.InvalidPaneId;
+        }
+        if (input.scope != .pane and input.pane_id != .invalid) {
+            return error.UnexpectedPaneId;
+        }
+
+        var prune: Prune = .{
+            .request_id = input.request_id,
+            .origin = input.origin,
+            .scope = input.scope,
+            .pane_id = input.pane_id,
+            .before_ms = input.before_ms,
+            .failed_only = input.failed_only,
+        };
+        @memcpy(prune.scope_text[0..input.scope_value.len], input.scope_value);
+        prune.scope_text_len = @intCast(input.scope_value.len);
+        @memcpy(prune.match[0..input.match.len], input.match);
+        prune.match_len = @intCast(input.match.len);
+        return prune;
+    }
+
+    pub fn scopeSlice(prune: *const Prune) []const u8 {
+        return prune.scope_text[0..prune.scope_text_len];
+    }
+
+    pub fn matchSlice(prune: *const Prune) []const u8 {
+        return prune.match[0..prune.match_len];
+    }
+};
+
+pub const Pruned = struct {
+    request_id: schema.RequestId,
+    origin: QueryOrigin,
+    removed: u64,
 };
 
 /// One owned batch of imported foreign history. The session identity is
@@ -456,6 +532,7 @@ pub const Failure = struct {
 pub const Response = union(enum) {
     query_result: *QueryResult,
     failed: Failure,
+    pruned: Pruned,
 };
 
 pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
@@ -464,13 +541,13 @@ pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
         .session_started => |value| value.deinit(gpa),
         .command_finished => |value| value.deinit(gpa),
         .import => |value| value.deinit(gpa),
-        .session_finished, .session_title, .query => {},
+        .session_finished, .session_title, .query, .delete, .prune => {},
     }
 }
 
 pub fn deinitResponse(response: Response, _: std.mem.Allocator) void {
     switch (response) {
         .query_result => |value| value.deinit(),
-        .failed => {},
+        .failed, .pruned => {},
     }
 }

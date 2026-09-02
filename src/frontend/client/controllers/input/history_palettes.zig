@@ -149,3 +149,40 @@ pub const PasteRequest = struct {
     selection: u16,
     run: bool,
 };
+
+/// Sends one exact-entry deletion for the palette's selected row. The
+/// runtime answers with `history_pruned`, which requeries the palette so
+/// the row disappears only once it is actually gone.
+///
+/// ```zig
+/// try deleteSelected(client, selection);
+/// ```
+pub fn deleteSelected(client: *Client, selection: u16) !void {
+    const palette = &client.model.history_palette;
+    if (palette.len == 0) {
+        return;
+    }
+
+    const index = @min(selection, @as(u16, palette.len) - 1);
+    const request_id = try request_lifecycle.nextId(client);
+    try runtime_transport.enqueue(client, .{ .delete_history = .{
+        .request_id = request_id,
+        .id = palette.slice()[index].id,
+    } });
+}
+
+/// Requeries the palette after the runtime confirmed a deletion.
+///
+/// ```zig
+/// _ = try pruned(client, confirmation);
+/// ```
+pub fn pruned(client: *Client, confirmation: schema.HistoryPruned) !bool {
+    _ = confirmation;
+    const prompt = client.model.name_prompt.currentConst() orelse return false;
+    if (prompt.target != .history) {
+        return false;
+    }
+
+    try sendQuery(client, prompt.field.text());
+    return true;
+}

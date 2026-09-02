@@ -14,6 +14,8 @@ pub const text =
     \\       telar history list [options]
     \\       telar history search <query> [options]
     \\       telar history import [auto|zsh|bash|fish] [--file PATH]
+    \\       telar history delete <id>
+    \\       telar history prune [filters] [--before DATE] [--dry-run] [--yes]
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar pane read|send-keys <pane|--current> [options]
@@ -33,6 +35,8 @@ pub const text =
     \\  history list     Show recent command history
     \\  history search   Search command history
     \\  history import   Import an existing shell histfile
+    \\  history delete   Remove one exact history entry
+    \\  history prune    Remove every entry matching the filters
     \\  notification show  Show a toast in every connected UI client
     \\  agent list       List the agents the runtime knows about
     \\  agent get        Show one agent by pane id, title or --current

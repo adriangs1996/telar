@@ -53,6 +53,8 @@ pub fn Handlers(comptime Context: type) type {
         report_agent: *const fn (*Context, schema.ReportAgent) anyerror!void,
         search_pane: *const fn (*Context, schema.SearchPane) anyerror!void,
         import_history: *const fn (*Context, schema.ImportHistoryView) anyerror!void,
+        delete_history: *const fn (*Context, schema.DeleteHistory) anyerror!void,
+        prune_history: *const fn (*Context, schema.PruneHistory) anyerror!void,
     };
 }
 
@@ -118,6 +120,8 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .report_agent => |request| handlers.report_agent(router.context, request),
                 .search_pane => |request| handlers.search_pane(router.context, request),
                 .import_history => |request| handlers.import_history(router.context, request),
+                .delete_history => |request| handlers.delete_history(router.context, request),
+                .prune_history => |request| handlers.prune_history(router.context, request),
             };
         }
     };
@@ -134,6 +138,8 @@ pub fn classify(tag: Tag) RequestClass {
         .runtime_stop,
         .query_history,
         .import_history,
+        .delete_history,
+        .prune_history,
         .show_notification,
         .query_agents,
         .read_pane,
@@ -217,6 +223,8 @@ const testing_handlers: Handlers(Capture) = .{
     .report_agent = captureHandler(.report_agent, schema.ReportAgent),
     .search_pane = captureHandler(.search_pane, schema.SearchPane),
     .import_history = captureHandler(.import_history, schema.ImportHistoryView),
+    .delete_history = captureHandler(.delete_history, schema.DeleteHistory),
+    .prune_history = captureHandler(.prune_history, schema.PruneHistory),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -287,6 +295,8 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
             .entry_count = 1,
             .encoded_entries = "\xe8\x03\x00\x00\x00\x00\x00\x00\x02\x00ls",
         } },
+        .{ .delete_history = .{ .request_id = request_id, .id = 7 } },
+        .{ .prune_history = .{ .request_id = request_id, .before_ms = 5 } },
     };
 }
 
@@ -310,6 +320,8 @@ test "Router delegates every client tag exactly once and preserves classificatio
             .runtime_stop,
             .query_history,
             .import_history,
+            .delete_history,
+            .prune_history,
             .show_notification,
             .query_agents,
             .read_pane,

@@ -519,6 +519,8 @@ fn parseWorkerBool(value: [*:0]const u8) !bool {
 
 pub const HistoryAction = enum {
     import,
+    delete,
+    prune,
     list,
     search,
 };
@@ -529,6 +531,10 @@ pub const HistoryOptions = struct {
     action: HistoryAction,
     import_kind: HistoryImportKind = .auto,
     import_file: ?[*:0]const u8 = null,
+    delete_id: u64 = 0,
+    before_ms: i64 = 0,
+    dry_run: bool = false,
+    assume_yes: bool = false,
     query: ?[*:0]const u8 = null,
     scope: core.schema.HistoryScope = .global,
     scope_value: ?[*:0]const u8 = null,
@@ -552,6 +558,19 @@ pub const HistoryOptions = struct {
             }
 
             break :search .{ .action = .search, .query = args[1] };
+        } else if (std.mem.eql(u8, action_text, "delete")) delete: {
+            if (args.len < 2) {
+                return error.MissingHistoryId;
+            }
+
+            const raw = try std.fmt.parseInt(u64, std.mem.span(args[1]), 10);
+            if (raw == 0) {
+                return error.InvalidHistoryId;
+            }
+
+            break :delete .{ .action = .delete, .delete_id = raw };
+        } else if (std.mem.eql(u8, action_text, "prune")) .{
+            .action = .prune,
         } else if (std.mem.eql(u8, action_text, "import")) import: {
             var imported: HistoryOptions = .{ .action = .import };
             if (args.len > 1 and args[1][0] != '-') {
@@ -572,7 +591,7 @@ pub const HistoryOptions = struct {
         } else return error.UnknownHistoryAction;
 
         var index: usize = switch (options.action) {
-            .search => 2,
+            .search, .delete => 2,
             .import => if (args.len > 1 and args[1][0] != '-') 2 else 1,
             else => 1,
         };
@@ -610,6 +629,40 @@ pub const HistoryOptions = struct {
             } else if (std.mem.eql(u8, arg, "--failed")) {
                 options.failed_only = true;
                 index += 1;
+            } else if (std.mem.eql(u8, arg, "--before")) {
+                if (options.action != .prune) {
+                    return error.UnknownHistoryOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingHistoryBefore;
+                }
+
+                options.before_ms = try parseBeforeDate(std.mem.span(args[index + 1]));
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--dry-run")) {
+                if (options.action != .prune) {
+                    return error.UnknownHistoryOption;
+                }
+
+                options.dry_run = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--yes")) {
+                if (options.action != .prune) {
+                    return error.UnknownHistoryOption;
+                }
+
+                options.assume_yes = true;
+                index += 1;
+            } else if (std.mem.eql(u8, arg, "--match")) {
+                if (options.action != .prune) {
+                    return error.UnknownHistoryOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingHistoryQuery;
+                }
+
+                options.query = args[index + 1];
+                index += 2;
             } else if (std.mem.eql(u8, arg, "--author")) {
                 if (index + 1 >= args.len) {
                     return error.MissingHistoryAuthor;
@@ -651,6 +704,40 @@ pub const HistoryOptions = struct {
             }
         }
         return options;
+    }
+
+    /// Parses `--before` as `YYYY-MM-DD` (UTC midnight) or unix seconds.
+    fn parseBeforeDate(text: []const u8) !i64 {
+        if (std.mem.indexOfScalar(u8, text, '-')) |_| {
+            var parts = std.mem.splitScalar(u8, text, '-');
+            const year = try std.fmt.parseInt(i64, parts.next() orelse return error.InvalidHistoryBefore, 10);
+            const month = try std.fmt.parseInt(i64, parts.next() orelse return error.InvalidHistoryBefore, 10);
+            const day = try std.fmt.parseInt(i64, parts.next() orelse return error.InvalidHistoryBefore, 10);
+            if (parts.next() != null or year < 1970 or month < 1 or month > 12 or day < 1 or day > 31) {
+                return error.InvalidHistoryBefore;
+            }
+
+            const epoch_days = daysFromCivil(year, month, day);
+            return epoch_days * 86_400_000;
+        }
+
+        const seconds = try std.fmt.parseInt(i64, text, 10);
+        if (seconds <= 0) {
+            return error.InvalidHistoryBefore;
+        }
+
+        return seconds * 1_000;
+    }
+
+    /// Howard Hinnant's days-from-civil algorithm.
+    fn daysFromCivil(year: i64, month: i64, day: i64) i64 {
+        const y = if (month <= 2) year - 1 else year;
+        const era = @divFloor(y, 400);
+        const yoe = y - era * 400;
+        const mp = @mod(month + 9, 12);
+        const doy = @divFloor(153 * mp + 2, 5) + day - 1;
+        const doe = yoe * 365 + @divFloor(yoe, 4) - @divFloor(yoe, 100) + doy;
+        return era * 146_097 + doe - 719_468;
     }
 
     fn setScope(options: *HistoryOptions, scope: core.schema.HistoryScope, value: ?[*:0]const u8) !void {

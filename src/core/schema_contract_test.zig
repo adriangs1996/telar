@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 72;
+const corpus_len = 75;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -217,6 +217,22 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .source = "zsh:/home/u/.zsh_history",
             .base_sequence = 100,
             .entries = &import_entries,
+        }),
+    ));
+    helper.add("delete_history", .client, false, golden.delete_history, helper.commit(
+        try schema.encodeDeleteHistory(helper.space(), .{
+            .request_id = @enumFromInt(35),
+            .id = 11,
+        }),
+    ));
+    helper.add("prune_history", .client, false, golden.prune_history, helper.commit(
+        try schema.encodePruneHistory(helper.space(), .{
+            .request_id = @enumFromInt(36),
+            .scope = .workspace,
+            .scope_value = "/work/telar",
+            .before_ms = 1700000000000,
+            .failed_only = true,
+            .match = "zig",
         }),
     ));
     helper.add("query_history_pane", .client, false, golden.query_history_pane, helper.commit(
@@ -474,6 +490,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .workspace_path = "/work/telar",
         },
     };
+    helper.add("history_pruned", .server, false, golden.history_pruned, helper.commit(
+        try schema.encodeHistoryPruned(helper.space(), .{
+            .request_id = @enumFromInt(36),
+            .removed = 3,
+        }),
+    ));
     helper.add("history_results", .server, false, golden.history_results, helper.commit(
         try schema.encodeHistoryResults(helper.space(), .{
             .request_id = @enumFromInt(33),
@@ -770,6 +792,9 @@ const golden = struct {
     pub const create_pane = "09150000000000000000070000000000000003000000000000003c0014000000000005002f776f726b0600000000000000010007002f62696e2f7368000000";
     pub const close_pane = "0a16000000000000000800000000000000";
     pub const query_history_cwd = "0b1f0000000000000009007a6967206275696c64010b002f776f726b2f74656c617201000c00";
+    pub const delete_history = "2323000000000000000b00000000000000";
+    pub const prune_history = "242400000000000000020b002f776f726b2f74656c61720068e5cf8b0100000103007a6967";
+    pub const history_pruned = "a424000000000000000300000000000000";
     pub const import_history = "22220000000000000018007a73683a2f686f6d652f752f2e7a73685f686973746f727964000000000000000200d06fe5cf8b0100000a0067697420737461747573b873e5cf8b01000008006d616b65202d6a34";
     pub const query_history_pane = "0b2000000000000000000003090000000000000000001400";
     pub const request_workspace_snapshot = "0c2800000000000000000700000000000000";

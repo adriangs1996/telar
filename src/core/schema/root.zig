@@ -161,6 +161,8 @@ pub const ClientTag = enum(u8) {
     report_agent = 0x20,
     search_pane = 0x21,
     import_history = 0x22,
+    delete_history = 0x23,
+    prune_history = 0x24,
 };
 
 pub const ServerTag = enum(u8) {
@@ -199,6 +201,7 @@ pub const ServerTag = enum(u8) {
     request_completed = 0xa1,
     pane_title = 0xa2,
     pane_matches = 0xa3,
+    history_pruned = 0xa4,
 };
 
 pub const LaunchView = struct {
@@ -597,6 +600,30 @@ pub const max_import_entries = 64;
 pub const max_import_source_bytes = 256;
 pub const max_import_command_bytes = 4096;
 
+/// Deletes one exact history entry.
+pub const DeleteHistory = struct {
+    request_id: RequestId,
+    id: u64,
+};
+
+/// Deletes every history entry matching the bounded filters. `before_ms = 0`
+/// means no time bound and an empty `match` means no text filter.
+pub const PruneHistory = struct {
+    request_id: RequestId,
+    scope: HistoryScope = .global,
+    scope_value: []const u8 = "",
+    pane_id: PaneId = .invalid,
+    before_ms: i64 = 0,
+    failed_only: bool = false,
+    match: []const u8 = "",
+};
+
+/// How many entries a delete or prune removed.
+pub const HistoryPruned = struct {
+    request_id: RequestId,
+    removed: u64,
+};
+
 pub const QueryHistory = struct {
     request_id: RequestId,
     query: []const u8 = "",
@@ -766,6 +793,8 @@ pub const ClientMessage = union(enum) {
     report_agent: ReportAgent,
     search_pane: SearchPane,
     import_history: ImportHistoryView,
+    delete_history: DeleteHistory,
+    prune_history: PruneHistory,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -1115,6 +1144,7 @@ pub const ServerMessage = union(enum) {
     request_completed: RequestCompleted,
     pane_title: PaneTitle,
     pane_matches: PaneMatchesView,
+    history_pruned: HistoryPruned,
 };
 
 pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
@@ -1315,6 +1345,74 @@ pub fn encodeCloseTab(buffer: []u8, message: CloseTab) ![]const u8 {
 
 pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {
     return encodeDerived(@intFromEnum(ClientTag.move_tab), MoveTab, buffer, message);
+}
+
+pub fn encodeDeleteHistory(buffer: []u8, message: DeleteHistory) ![]const u8 {
+    try validateRequestId(message.request_id);
+    if (message.id == 0) return error.InvalidHistoryId;
+    return encodeDerived(@intFromEnum(ClientTag.delete_history), DeleteHistory, buffer, message);
+}
+
+pub fn encodePruneHistory(buffer: []u8, message: PruneHistory) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateBytes(message.match, max_history_query_bytes, true);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.prune_history));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeByte(@intFromEnum(message.scope));
+    switch (message.scope) {
+        .global => {
+            if (message.scope_value.len != 0 or message.pane_id != .invalid)
+                return error.InvalidHistoryScope;
+        },
+        .cwd, .workspace => {
+            try validateBytes(message.scope_value, max_cwd_bytes, false);
+            if (message.pane_id != .invalid) return error.InvalidHistoryScope;
+            try encoder.writeSized16(message.scope_value);
+        },
+        .pane => {
+            try validatePaneId(message.pane_id);
+            if (message.scope_value.len != 0) return error.InvalidHistoryScope;
+            try encoder.writeInt(u64, id.raw(message.pane_id));
+        },
+    }
+    try encoder.writeInt(i64, message.before_ms);
+    try encoder.writeByte(@intFromBool(message.failed_only));
+    try encoder.writeSized16(message.match);
+    return encoder.finish();
+}
+
+fn decodePruneHistory(decoder: *wire.Decoder) !PruneHistory {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const scope = try decodeHistoryScope(try decoder.readByte());
+    var scope_value: []const u8 = "";
+    var pane_id: PaneId = .invalid;
+    switch (scope) {
+        .global => {},
+        .cwd, .workspace => {
+            scope_value = try decoder.readSized16();
+            try validateBytes(scope_value, max_cwd_bytes, false);
+        },
+        .pane => pane_id = try id.pane(try decoder.readInt(u64)),
+    }
+    const before_ms = try decoder.readInt(i64);
+    const failed_only = try decoder.readBool();
+    const match = try decoder.readSized16();
+    try validateBytes(match, max_history_query_bytes, true);
+    return .{
+        .request_id = request_id,
+        .scope = scope,
+        .scope_value = scope_value,
+        .pane_id = pane_id,
+        .before_ms = before_ms,
+        .failed_only = failed_only,
+        .match = match,
+    };
+}
+
+pub fn encodeHistoryPruned(buffer: []u8, message: HistoryPruned) ![]const u8 {
+    try validateRequestId(message.request_id);
+    return encodeDerived(@intFromEnum(ServerTag.history_pruned), HistoryPruned, buffer, message);
 }
 
 pub fn encodeImportHistory(buffer: []u8, message: ImportHistory) ![]const u8 {
@@ -1731,6 +1829,8 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .report_agent => .{ .report_agent = try decodeReportAgent(&decoder) },
         .search_pane => .{ .search_pane = try decodeSearchPane(&decoder) },
         .import_history => .{ .import_history = try decodeImportHistory(&decoder) },
+        .delete_history => .{ .delete_history = try Derived(DeleteHistory).decode(&decoder) },
+        .prune_history => .{ .prune_history = try decodePruneHistory(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -2095,6 +2195,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .request_completed => .{ .request_completed = try Derived(RequestCompleted).decode(&decoder) },
         .pane_title => .{ .pane_title = try decodePaneTitle(&decoder) },
         .pane_matches => .{ .pane_matches = try decodePaneMatches(&decoder) },
+        .history_pruned => .{ .history_pruned = try Derived(HistoryPruned).decode(&decoder) },
     };
     if (message == .agent_sound and message.agent_sound.pane_generation == 0)
         return error.InvalidPaneGeneration;

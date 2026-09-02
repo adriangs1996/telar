@@ -117,6 +117,7 @@ pub const PendingResponse = union(enum) {
     request_completed: schema.RequestCompleted,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,
+    history_pruned: schema.HistoryPruned,
 };
 
 pub const ResponseQueue = struct {
