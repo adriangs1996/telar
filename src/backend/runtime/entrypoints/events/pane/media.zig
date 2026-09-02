@@ -123,6 +123,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
             coordinator.resources.metrics.media_forwarded_frames +|= stats.forwarded_frames;
             coordinator.resources.metrics.graphics_transfers_prepared +|= stats.prepared_frames;
             coordinator.resources.metrics.media_direct_frames +|= stats.direct_frames;
+            coordinator.resources.metrics.media_file_frames +|= stats.file_frames;
             coordinator.resources.metrics.media_ingest.observe(stats.elapsed_ns);
 
             if (stats.failed) {

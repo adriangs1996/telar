@@ -127,6 +127,65 @@ pub fn mapChildObject(encoded_name: []const u8, byte_len: usize) ?ChildObject {
     return .{ .pixels = pixels };
 }
 
+fn decodeChildPath(encoded_path: []const u8, buffer: *[std.fs.max_path_bytes + 1]u8) ?[:0]const u8 {
+    const Decoder = std.base64.standard.Decoder;
+    const path_len = Decoder.calcSizeForSlice(encoded_path) catch return null;
+    if (path_len == 0 or path_len > std.fs.max_path_bytes) return null;
+    Decoder.decode(buffer[0..path_len], encoded_path) catch return null;
+    if (std.mem.indexOfScalar(u8, buffer[0..path_len], 0) != null) return null;
+    if (buffer[0] != '/') return null;
+    buffer[path_len] = 0;
+    return buffer[0..path_len :0];
+}
+
+/// Opens a child-named file the runtime is willing to read pixels from: an
+/// absolute path, no symlink at the leaf, a regular file owned by this user,
+/// at least `byte_len` long. Returns the descriptor or null.
+fn openChildFile(encoded_path: []const u8, byte_len: usize) ?std.c.fd_t {
+    var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    const path = decodeChildPath(encoded_path, &buffer) orelse return null;
+    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY, .NOFOLLOW = true, .CLOEXEC = true });
+    if (fd < 0) return null;
+    var stat: std.c.Stat = undefined;
+    const acceptable = std.c.fstat(fd, &stat) == 0 and
+        std.c.S.ISREG(@intCast(stat.mode)) and
+        stat.uid == std.c.getuid() and
+        stat.size >= 0 and @as(u64, @intCast(stat.size)) >= byte_len;
+    if (!acceptable) {
+        _ = std.c.close(fd);
+        return null;
+    }
+    return fd;
+}
+
+/// Whether a child's file passes every check `mapChildFile` applies.
+///
+/// ```zig
+/// const accepted = validateChildFile(encoded_path, 4);
+/// ```
+pub fn validateChildFile(encoded_path: []const u8, byte_len: usize) bool {
+    if (comptime !shm_supported) return false;
+    const fd = openChildFile(encoded_path, byte_len) orelse return false;
+    _ = std.c.close(fd);
+    return true;
+}
+
+/// Maps a validated child file read-only for one copy out of it. The file
+/// is never written, deleted or kept open.
+///
+/// ```zig
+/// const child = mapChildFile(encoded_path, byte_len) orelse return false;
+/// defer child.close();
+/// ```
+pub fn mapChildFile(encoded_path: []const u8, byte_len: usize) ?ChildObject {
+    if (comptime !shm_supported) return null;
+    const fd = openChildFile(encoded_path, byte_len) orelse return null;
+    defer _ = std.c.close(fd);
+    const pixels = std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch
+        return null;
+    return .{ .pixels = pixels };
+}
+
 /// Maps a runtime-owned object read-only for the life of an emulator image.
 ///
 /// ```zig

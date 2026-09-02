@@ -1300,6 +1300,10 @@ const SharedFrameContext = struct {
         pub fn observeSharedFrame(_: *Sink, _: backend.media.SharedFrameView) bool {
             return false;
         }
+
+        pub fn observeFileQuery(_: *Sink, _: backend.media.FileQueryView) bool {
+            return false;
+        }
     };
 
     fn init(io: Io, gpa: std.mem.Allocator) !SharedFrameContext {

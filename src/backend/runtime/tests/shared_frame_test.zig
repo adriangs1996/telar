@@ -51,9 +51,9 @@ fn readObject(name: [:0]const u8, buffer: []u8) !void {
 }
 
 const Frame = struct {
-    name_buffer: [64]u8 = undefined,
+    name_buffer: [std.fs.max_path_bytes]u8 = undefined,
     name_len: usize = 0,
-    envelope: [256]u8 = undefined,
+    envelope: [512]u8 = undefined,
     envelope_len: usize = 0,
 
     fn name(frame: *const Frame) [:0]const u8 {
@@ -81,7 +81,33 @@ const Frame = struct {
         );
         frame.envelope_len = envelope.len;
     }
+
+    /// Publishes `pixels` through a regular file, terminal-browser's
+    /// preferred transport, and builds the matching `t=f` envelope.
+    fn publishFile(frame: *Frame, directory: []const u8, pixels: []const u8) !void {
+        const file_path = try std.fmt.bufPrint(&frame.name_buffer, "{s}/frame.rgba", .{directory});
+        frame.name_len = file_path.len;
+        try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = file_path, .data = pixels });
+        const Encoder = std.base64.standard.Encoder;
+        var encoded: [512]u8 = undefined;
+        const payload = Encoder.encode(encoded[0..Encoder.calcSize(file_path.len)], file_path);
+        const envelope = try std.fmt.bufPrint(
+            &frame.envelope,
+            "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;{s}\x1b\\\x1b[?2026l",
+            .{payload},
+        );
+        frame.envelope_len = envelope.len;
+    }
+
+    fn path(frame: *const Frame) []const u8 {
+        return frame.name_buffer[0..frame.name_len];
+    }
 };
+
+fn encodedPath(buffer: []u8, path: []const u8) []const u8 {
+    const Encoder = std.base64.standard.Encoder;
+    return Encoder.encode(buffer[0..Encoder.calcSize(path.len)], path);
+}
 
 fn ingest(fixture: *support.PaneFixture, bytes: []const u8) !backend_media.Stats {
     fixture.pane.media.queueOutput(bytes);
@@ -171,6 +197,131 @@ test "replacing a direct frame unmaps the previous object and keeps quota flat" 
     var mapped: usize = 0;
     for (fixture.pane.media_allocator.mappings) |slot| mapped += @intFromBool(slot != null);
     try std.testing.expectEqual(@as(usize, 1), mapped);
+}
+
+test "a frame published through a validated file loads with one copy and leaves the file alone" {
+    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    var fixture: support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    _ = fixture.attachments.configureGraphics(true);
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(std.testing.io, &directory_buffer)];
+    const pixels = [_]u8{ 1, 2, 3, 255, 4, 5, 6, 255 };
+    var frame: Frame = .{};
+    try frame.publishFile(directory, &pixels);
+
+    const stats = try ingest(&fixture, frame.bytes());
+
+    try std.testing.expectEqual(@as(u64, 1), stats.forwarded_frames);
+    try std.testing.expectEqual(@as(u64, 1), stats.direct_frames);
+    try std.testing.expectEqual(@as(u64, 1), stats.file_frames);
+    const image = fixture.pane.media.terminal.screens.active.kitty_images.imageById(7) orelse
+        return error.ImageMissing;
+    try std.testing.expectEqualSlices(u8, &pixels, fixture.pane.media_allocator.imagePixels(image.data.bytes()).?);
+    // The child's file is neither deleted nor rewritten.
+    var contents: [pixels.len]u8 = undefined;
+    const read = try std.Io.Dir.cwd().readFile(std.testing.io, frame.path(), &contents);
+    try std.testing.expectEqualSlices(u8, &pixels, read);
+}
+
+test "file frames that fail validation keep the current image and count as unavailable" {
+    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    var fixture: support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(std.testing.io, &directory_buffer)];
+    const pixels = [_]u8{ 1, 2, 3, 255, 4, 5, 6, 255 };
+    var frame: Frame = .{};
+    try frame.publishFile(directory, &pixels);
+
+    // A symlink at the leaf, even to an acceptable file.
+    var link_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const link = try std.fmt.bufPrint(&link_buffer, "{s}/link.rgba", .{directory});
+    try std.Io.Dir.cwd().symLink(std.testing.io, frame.path(), link, .{});
+    var link_envelope: [512]u8 = undefined;
+    var encoded: [512]u8 = undefined;
+    const via_link = try std.fmt.bufPrint(
+        &link_envelope,
+        "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;{s}\x1b\\\x1b[?2026l",
+        .{encodedPath(&encoded, link)},
+    );
+    const link_stats = try ingest(&fixture, via_link);
+    try std.testing.expectEqual(@as(u64, 0), link_stats.forwarded_frames);
+    try std.testing.expectEqual(@as(u64, 1), link_stats.unavailable_frames);
+
+    // A directory.
+    var dir_envelope: [512]u8 = undefined;
+    const via_directory = try std.fmt.bufPrint(
+        &dir_envelope,
+        "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;{s}\x1b\\\x1b[?2026l",
+        .{encodedPath(&encoded, directory)},
+    );
+    const directory_stats = try ingest(&fixture, via_directory);
+    try std.testing.expectEqual(@as(u64, 1), directory_stats.unavailable_frames);
+
+    // A file shorter than the declared frame.
+    var short_envelope: [512]u8 = undefined;
+    const too_short = try std.fmt.bufPrint(
+        &short_envelope,
+        "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=4,v=1,t=f,i=7,p=1,C=1,q=2;{s}\x1b\\\x1b[?2026l",
+        .{encodedPath(&encoded, frame.path())},
+    );
+    const short_stats = try ingest(&fixture, too_short);
+    try std.testing.expectEqual(@as(u64, 1), short_stats.unavailable_frames);
+
+    // A relative path.
+    var relative_envelope: [512]u8 = undefined;
+    const relative = try std.fmt.bufPrint(
+        &relative_envelope,
+        "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;{s}\x1b\\\x1b[?2026l",
+        .{encodedPath(&encoded, "frame.rgba")},
+    );
+    const relative_stats = try ingest(&fixture, relative);
+    try std.testing.expectEqual(@as(u64, 1), relative_stats.unavailable_frames);
+    try std.testing.expect(fixture.pane.media.terminal.screens.active.kitty_images.imageById(7) == null);
+}
+
+test "the pane answers file capability queries the emulator would refuse" {
+    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    var fixture: support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(std.testing.io, &directory_buffer)];
+    var frame: Frame = .{};
+    try frame.publishFile(directory, &.{ 0, 0, 0, 255 });
+    var encoded: [512]u8 = undefined;
+
+    var accepted_query: [512]u8 = undefined;
+    const accepted = try std.fmt.bufPrint(
+        &accepted_query,
+        "\x1b_Gi=300,a=q,t=f,f=32,s=1,v=1;{s}\x1b\\",
+        .{encodedPath(&encoded, frame.path())},
+    );
+    _ = try ingest(&fixture, accepted);
+    try std.testing.expectEqualStrings("\x1b_Gi=300;OK\x1b\\", fixture.pane.pty_responses.peek().?);
+    fixture.pane.pty_responses.pop();
+
+    var missing_query: [512]u8 = undefined;
+    var missing_path: [std.fs.max_path_bytes]u8 = undefined;
+    const missing = try std.fmt.bufPrint(&missing_path, "{s}/missing.rgba", .{directory});
+    const refused = try std.fmt.bufPrint(
+        &missing_query,
+        "\x1b_Gi=301,a=q,t=f,f=32,s=1,v=1;{s}\x1b\\",
+        .{encodedPath(&encoded, missing)},
+    );
+    _ = try ingest(&fixture, refused);
+    const reply = fixture.pane.pty_responses.peek().?;
+    try std.testing.expect(std.mem.startsWith(u8, reply, "\x1b_Gi=301;EBADF"));
+    fixture.pane.pty_responses.pop();
 }
 
 test "without a shared-transport client the frame still loads with one copy and parks nothing" {

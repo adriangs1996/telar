@@ -1187,6 +1187,10 @@ pub const Pane = struct {
             pub fn observeSharedFrame(sink: *@This(), frame: media_mod.SharedFrameView) bool {
                 return sink.pane.ingestSharedFrame(frame);
             }
+
+            pub fn observeFileQuery(sink: *@This(), query: media_mod.FileQueryView) bool {
+                return sink.pane.answerFileQuery(query);
+            }
         };
         var sink: Sink = .{ .pane = pane };
         pane.media.processSealed(.{ .current_size = current_size, .stats = stats }, &sink);
@@ -1296,7 +1300,10 @@ pub const Pane = struct {
         };
         _ = metadata.validate(pane.graphics_storage_limit) catch return false;
 
-        const child = shared_transfer.mapChildObject(frame.encoded_name, frame.byte_len) orelse return false;
+        const child = switch (frame.medium) {
+            .shared => shared_transfer.mapChildObject(frame.encoded_name, frame.byte_len),
+            .file => shared_transfer.mapChildFile(frame.encoded_name, frame.byte_len),
+        } orelse return false;
         defer child.close();
         const media = pane.media_allocator.allocator();
         const placeholder = media.alloc(u8, 1) catch return false;
@@ -1366,6 +1373,25 @@ pub const Pane = struct {
         {
             _ = std.c.shm_unlink(name.sliceZ());
         }
+        return true;
+    }
+
+    /// Answers a child's `a=q,t=f` capability query on the emulator's behalf:
+    /// `OK` when the named file passes the same validation a frame would,
+    /// `EBADF` otherwise. The reply joins the bounded PTY response queue.
+    ///
+    /// ```zig
+    /// _ = pane.answerFileQuery(query);
+    /// ```
+    fn answerFileQuery(pane: *Pane, query: media_mod.FileQueryView) bool {
+        var reply: [64]u8 = undefined;
+        const accepted = query.byte_len <= pane.graphics_storage_limit and
+            shared_transfer.validateChildFile(query.encoded_path, query.byte_len);
+        const bytes = std.fmt.bufPrint(&reply, "\x1b_Gi={d};{s}\x1b\\", .{
+            query.image_id,
+            if (accepted) "OK" else "EBADF:file not accepted",
+        }) catch unreachable;
+        _ = pane.pty_responses.push(bytes);
         return true;
     }
 

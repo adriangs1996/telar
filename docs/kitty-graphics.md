@@ -62,8 +62,13 @@ and `kitty-full` return `KittyGraphicsUnsupported` when the probe fails.
   Telar preserves its exact pixel coordinates relative to the pane. Otherwise
   it falls back to the measured center of the reported cell.
 
-Regular and temporary file media (`t=f`, `t=t`) are rejected as unsupported;
-the runtime never opens a child-selected path. PNG is not decoded. Unicode
+Regular file media (`t=f`) is accepted for complete frames and for the
+`a=q` capability query, on the pane's validation rather than the emulator's:
+an absolute path with no symlink at the leaf, a regular file owned by the
+runtime's user, at least as long as the declared pixels, and within the screen
+cap. The file is mapped read-only for one copy and never written, kept open or
+deleted; anything else is answered `EBADF` or dropped as unavailable.
+Temporary file media (`t=t`) stays rejected. PNG is not decoded. Unicode
 virtual placements are not emitted because the pinned Ghostty VT does not
 expose them with enough information to preserve pane clipping and lifecycle.
 

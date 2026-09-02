@@ -11,6 +11,8 @@ const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 
+const shared_transfer = @import("../pane/shared_transfer.zig");
+
 const Io = std.Io;
 const schema = core.schema;
 
@@ -18,13 +20,17 @@ pub const batch_bytes = 4 * 16 * 1024;
 pub const batch_events = 64;
 
 /// Raw pixels may cross the local child/runtime boundary through POSIX shared
-/// memory. Path-based media stays disabled so a pane cannot ask the long-lived
-/// runtime to open an arbitrary file.
+/// memory. The emulator's own path-based media stays disabled so it can never
+/// open an arbitrary file; complete file frames and file capability queries
+/// are answered by the pane, which validates the file first.
 pub const image_loading_limits: vt.kitty.graphics.LoadingImage.Limits = .{
     .file = false,
     .temporary_file = .disabled,
     .shared_memory = true,
 };
+
+/// Where a complete frame's pixels live before the runtime copies them.
+pub const Medium = enum { shared, file };
 
 pub const Stats = struct {
     output_bytes: u64 = 0,
@@ -49,6 +55,8 @@ pub const Stats = struct {
     /// Shared frames copied once, from the child's object straight into the
     /// runtime-owned object that then serves as emulator storage.
     direct_frames: u64 = 0,
+    /// The subset of `direct_frames` whose pixels came from a child file.
+    file_frames: u64 = 0,
     reset: bool = false,
     failed: bool = false,
 };
@@ -94,6 +102,7 @@ const SharedFrame = struct {
     format: core.graphics.Format,
     width: u32,
     height: u32,
+    medium: Medium,
 };
 
 /// One complete shared-memory frame the filter selected, handed to a sink
@@ -113,6 +122,20 @@ pub const SharedFrameView = struct {
     format: core.graphics.Format,
     width: u32,
     height: u32,
+    byte_len: usize,
+    medium: Medium,
+};
+
+/// A `a=q,t=f` capability query the pane answers itself, since the emulator
+/// never opens child paths. `bytes` is the whole APC command.
+///
+/// ```zig
+/// pub fn observeFileQuery(sink: *Sink, query: FileQueryView) bool
+/// ```
+pub const FileQueryView = struct {
+    bytes: []const u8,
+    encoded_path: []const u8,
+    image_id: u32,
     byte_len: usize,
 };
 
@@ -187,6 +210,8 @@ pub const Pipeline = struct {
     payload_limit: usize,
     storage_limit: usize,
     batches: [2]Batch = .{ .{}, .{} },
+    /// Batch bytes with answered file queries removed, when any were.
+    scratch: [batch_bytes]u8 = undefined,
     active: u1 = 0,
     worker: ?u1 = null,
     enabled: bool,
@@ -311,14 +336,16 @@ pub const Pipeline = struct {
             .output => |output| {
                 const start: usize = output.offset;
                 const bytes = batch.bytes[start..][0..output.len];
+                const remaining = stripFileQueries(bytes, &pipeline.scratch, sink);
                 const filtered = filterAtomicSharedFrames(.{
-                    .bytes = bytes,
+                    .bytes = remaining,
                     .storage_limit = pipeline.storage_limit,
                 }, sink, SharedMemoryAvailability{});
                 stats.discarded_frames +|= filtered.discarded;
                 stats.unavailable_frames +|= filtered.unavailable;
                 stats.forwarded_frames +|= filtered.forwarded;
                 stats.direct_frames +|= filtered.direct;
+                stats.file_frames +|= filtered.file;
                 stats.output_bytes +|= bytes.len;
             },
             .resize => |size| pipeline.stream.handler.resize(vtResize(size)) catch {
@@ -377,6 +404,8 @@ pub const FilterStats = struct {
     forwarded: u64 = 0,
     /// The subset of `forwarded` the sink loaded without the parser.
     direct: u64 = 0,
+    /// The subset of `direct` whose pixels came from a child file.
+    file: u64 = 0,
 };
 
 const FilterInput = struct {
@@ -388,13 +417,109 @@ const FrameResource = struct {
     encoded_name: []const u8,
     byte_len: usize,
     limit: usize,
+    medium: Medium,
 };
 
 const SharedMemoryAvailability = struct {
     pub fn available(_: SharedMemoryAvailability, resource: FrameResource) bool {
-        return sharedFrameAvailable(resource);
+        return switch (resource.medium) {
+            .shared => sharedFrameAvailable(resource),
+            .file => resource.byte_len <= resource.limit and
+                shared_transfer.validateChildFile(resource.encoded_name, resource.byte_len),
+        };
     }
 };
+
+/// Removes `a=q,t=f` queries the sink answered from `bytes`, so the emulator
+/// never sees a file query it would refuse. Returns `bytes` untouched when
+/// nothing was answered, otherwise the remaining bytes in `scratch`.
+///
+/// ```zig
+/// const remaining = stripFileQueries(bytes, &pipeline.scratch, sink);
+/// ```
+fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 {
+    var kept: usize = 0;
+    var copied_until: usize = 0;
+    var search_from: usize = 0;
+    var stripped = false;
+    while (std.mem.indexOfPos(u8, bytes, search_from, "\x1b_G")) |start| {
+        const terminator = std.mem.indexOfPos(u8, bytes, start + 3, "\x1b\\") orelse break;
+        const end = terminator + 2;
+        search_from = end;
+        const command = bytes[start + 3 .. terminator];
+        const separator = std.mem.indexOfScalar(u8, command, ';') orelse continue;
+        const query = parseFileQueryControl(command[0..separator]) orelse continue;
+        if (separator + 1 == command.len) continue;
+        const handled = sink.observeFileQuery(.{
+            .bytes = bytes[start..end],
+            .encoded_path = command[separator + 1 ..],
+            .image_id = query.image_id,
+            .byte_len = query.byte_len,
+        });
+        if (!handled) continue;
+        const run = bytes[copied_until..start];
+        @memcpy(scratch[kept..][0..run.len], run);
+        kept += run.len;
+        copied_until = end;
+        stripped = true;
+    }
+    if (!stripped) return bytes;
+    const tail = bytes[copied_until..];
+    @memcpy(scratch[kept..][0..tail.len], tail);
+    return scratch[0 .. kept + tail.len];
+}
+
+const FileQueryControl = struct {
+    image_id: u32,
+    byte_len: usize,
+};
+
+fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
+    var image_id: ?u32 = null;
+    var format: ?u8 = null;
+    var width: ?u32 = null;
+    var height: ?u32 = null;
+    var query = false;
+    var file = false;
+    var fields = std.mem.splitScalar(u8, control, ',');
+    while (fields.next()) |field| {
+        const equals = std.mem.indexOfScalar(u8, field, '=') orelse return null;
+        if (equals != 1 or equals + 1 == field.len) return null;
+        const value = field[equals + 1 ..];
+        switch (field[0]) {
+            'a' => {
+                if (query or !std.mem.eql(u8, value, "q")) return null;
+                query = true;
+            },
+            't' => {
+                if (file or !std.mem.eql(u8, value, "f")) return null;
+                file = true;
+            },
+            'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
+            'f' => {
+                if (format != null) return null;
+                const parsed = std.fmt.parseUnsigned(u8, value, 10) catch return null;
+                if (parsed != 24 and parsed != 32) return null;
+                format = parsed;
+            },
+            's' => width = parseUniqueU32(width, value) orelse return null,
+            'v' => height = parseUniqueU32(height, value) orelse return null,
+            'q' => {},
+            else => return null,
+        }
+    }
+    if (!query or !file) return null;
+    const bpp: usize = if ((format orelse 32) == 24) 3 else 4;
+    const pixels = std.math.mul(
+        usize,
+        @as(usize, width orelse return null),
+        @as(usize, height orelse return null),
+    ) catch return null;
+    return .{
+        .image_id = image_id orelse return null,
+        .byte_len = std.math.mul(usize, pixels, bpp) catch return null,
+    };
+}
 
 fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: anytype) FilterStats {
     const bytes = input.bytes;
@@ -425,6 +550,7 @@ fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: any
                         .encoded_name = bytes[frame.payload_start..frame.payload_end],
                         .byte_len = frame.byte_len,
                         .limit = storage_limit,
+                        .medium = frame.medium,
                     })) continue;
                     entry.start = frame.start;
                     break;
@@ -450,13 +576,20 @@ fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: any
                         .width = frame.width,
                         .height = frame.height,
                         .byte_len = frame.byte_len,
+                        .medium = frame.medium,
                     });
                     if (direct) {
                         filtered.direct +|= 1;
+                        filtered.file +|= @intFromBool(frame.medium == .file);
+                        filtered.forwarded +|= 1;
+                    } else if (frame.medium == .file) {
+                        // The emulator refuses file media; the pane keeps its
+                        // current image for this batch.
+                        filtered.unavailable +|= 1;
                     } else {
                         sink.observe(bytes[frame.start..frame.end]);
+                        filtered.forwarded +|= 1;
                     }
-                    filtered.forwarded +|= 1;
                 } else if (chosen == null) {
                     // No frame of this placement survived the availability
                     // probe; the pane keeps its stale image this batch.
@@ -567,6 +700,7 @@ fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
         .format = parsed.format,
         .width = parsed.width,
         .height = parsed.height,
+        .medium = parsed.medium,
     };
 }
 
@@ -576,6 +710,7 @@ const SharedFrameControl = struct {
     format: core.graphics.Format,
     width: u32,
     height: u32,
+    medium: Medium,
 };
 
 fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
@@ -585,7 +720,7 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
     var width: ?u32 = null;
     var height: ?u32 = null;
     var transmit = false;
-    var shared = false;
+    var medium: ?Medium = null;
     var cursor_static = false;
     var quiet = false;
     var fields = std.mem.splitScalar(u8, control, ',');
@@ -599,8 +734,8 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
                 transmit = true;
             },
             't' => {
-                if (shared or !std.mem.eql(u8, value, "s")) return null;
-                shared = true;
+                if (medium != null) return null;
+                medium = if (std.mem.eql(u8, value, "s")) .shared else if (std.mem.eql(u8, value, "f")) .file else return null;
             },
             'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
             'p' => placement_id = parseUniqueU32(placement_id, value) orelse return null,
@@ -626,7 +761,7 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
             else => return null,
         }
     }
-    if (!transmit or !shared or !cursor_static or !quiet) return null;
+    if (!transmit or !cursor_static or !quiet) return null;
     const image = image_id orelse return null;
     const placement = placement_id orelse return null;
     const depth = format orelse return null;
@@ -643,6 +778,7 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
         .format = if (depth == 24) .rgb else .rgba,
         .width = width.?,
         .height = height.?,
+        .medium = medium orelse return null,
     };
 }
 
@@ -726,6 +862,9 @@ const TestOutput = struct {
     direct: bool = false,
     direct_frames: usize = 0,
     last_direct: ?SharedFrameView = null,
+    queries: usize = 0,
+    last_query_id: u32 = 0,
+    last_query_len: usize = 0,
 
     pub fn observe(output: *TestOutput, bytes: []const u8) void {
         @memcpy(output.bytes[output.len..][0..bytes.len], bytes);
@@ -739,10 +878,54 @@ const TestOutput = struct {
         return true;
     }
 
+    pub fn observeFileQuery(output: *TestOutput, query: FileQueryView) bool {
+        if (!output.direct) return false;
+        output.queries += 1;
+        output.last_query_id = query.image_id;
+        output.last_query_len = query.byte_len;
+        return true;
+    }
+
     fn slice(output: *const TestOutput) []const u8 {
         return output.bytes[0..output.len];
     }
 };
+
+test "file frames parse like shared ones and are never handed to the emulator" {
+    const frame = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;L3RtcC9m\x1b\\\x1b[?2026l";
+    var direct: TestOutput = .{ .direct = true };
+    try std.testing.expectEqual(
+        FilterStats{ .forwarded = 1, .direct = 1, .file = 1 },
+        filterAtomicSharedFrames(.{ .bytes = frame, .storage_limit = 8 }, &direct, TestAvailability.all),
+    );
+    try std.testing.expectEqual(Medium.file, direct.last_direct.?.medium);
+
+    var parser_only: TestOutput = .{};
+    try std.testing.expectEqual(
+        FilterStats{ .unavailable = 1 },
+        filterAtomicSharedFrames(.{ .bytes = frame, .storage_limit = 8 }, &parser_only, TestAvailability.all),
+    );
+    try std.testing.expectEqualStrings("", parser_only.slice());
+}
+
+test "answered file queries are removed from what the emulator parses" {
+    const query = "\x1b_Gi=300,a=q,t=f,f=32,s=1,v=1;L3RtcC9w\x1b\\";
+    const input = "head" ++ query ++ "tail";
+    var scratch: [256]u8 = undefined;
+
+    var answering: TestOutput = .{ .direct = true };
+    try std.testing.expectEqualStrings("headtail", stripFileQueries(input, &scratch, &answering));
+    try std.testing.expectEqual(@as(usize, 1), answering.queries);
+    try std.testing.expectEqual(@as(u32, 300), answering.last_query_id);
+    try std.testing.expectEqual(@as(usize, 4), answering.last_query_len);
+
+    var silent: TestOutput = .{};
+    try std.testing.expectEqualStrings(input, stripFileQueries(input, &scratch, &silent));
+    // Shared-memory queries stay with the emulator, which answers them.
+    const shm_query = "\x1b_Gi=299,a=q,t=s,f=32,s=1,v=1;L3B4LXE=\x1b\\";
+    try std.testing.expectEqualStrings(shm_query, stripFileQueries(shm_query, &scratch, &answering));
+    try std.testing.expectEqual(@as(usize, 1), answering.queries);
+}
 
 test "a sink that loads shared frames itself receives the parsed frame instead of bytes" {
     const frame = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=s,i=7,p=3,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";
@@ -864,6 +1047,10 @@ test "media terminal preserves cursor-relative KGP placement" {
         }
 
         pub fn observeSharedFrame(_: *@This(), _: SharedFrameView) bool {
+            return false;
+        }
+
+        pub fn observeFileQuery(_: *@This(), _: FileQueryView) bool {
             return false;
         }
     };

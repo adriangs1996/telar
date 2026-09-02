@@ -202,22 +202,40 @@ terminal-browser prefers `t=f` and, inside Telar, would keep its persistent
 file ring, saving the per-frame object creation on its side. The direct path
 maps the file read-only, so Telar's side never dirties file pages.
 
-- `media/root.zig` loading limits enable `.file`. `filterAtomicSharedFrames`
-  learns the `t=f` envelope so coalescing keeps working (one newest frame per
-  placement per batch).
+- The emulator's `.file` limit stays off: it never opens a child path. The
+  pane handles `t=f` itself, on both the complete-frame envelope
+  (`filterAtomicSharedFrames` accepts `t=s` and `t=f`, so coalescing is the
+  same) and the `a=q,t=f` capability query, which is answered `OK` or
+  `EBADF` from the same validation and removed from what the emulator
+  parses.
 - Validation before mapping: absolute path, `O_NOFOLLOW`, regular file,
   owner is the runtime uid, size at least the declared
   `width * height * bpp`, and byte length under the screen cap. Anything
-  else counts `media_unavailable_frames`. The child can only point at files
-  it could already read, so the remaining open-after-validate window changes
-  nothing about what the pane can show.
-- `t=t` stays disabled; the runtime never deletes child files.
-- Tests: rejections (symlink, directory, wrong owner, size mismatch,
-  oversize), coalescing across rewritten slots, and `verify-terminal-browser`
-  asserting the "frames go through a file" log line.
+  else counts `media_unavailable_frames` and the pane keeps its current
+  image. The child can only point at files it could already read, so the
+  remaining open-after-validate window changes nothing about what the pane
+  can show. The file is mapped read-only for one copy and never written,
+  kept open or deleted.
+- `t=t` stays disabled.
+- Tests: a file frame loads with one copy and leaves the file untouched;
+  symlink, directory, short file and relative path are refused with the
+  image unchanged; queries answer `OK` for an acceptable file and `EBADF`
+  for a missing one. `telar-frame-source --transport file` and
+  `--measure --transport file` cover the pipeline end to end, and the
+  browser run reports `media_file_frames`.
 
 Exit: the browser run reports the file transport and the same frames/s as
 shared memory.
+
+Result (2026-09-02): terminal-browser now passes its file probe inside
+Telar and every frame arrives as a file frame (132 of 132 direct and
+adopted in a 15 s run; the browser itself managed 7.6 frames/s on this
+memory-starved machine, so its rate says nothing about Telar). Synthetic
+4K at 120 frames/s for 15 s, file transport: forwarded 104.5/s, presented
+60.2/s, ingest 6.7 ms avg; shared memory in the same session: 104.2/s and
+61.3/s, ingest 7.6 ms avg. One difference worth watching: the file run's
+worst present interval was 184 ms against 22 ms for shared memory, most
+likely the kernel writing the child's dirty file pages back.
 
 ## P6. Explicit host acknowledgement instead of unlink polling
 

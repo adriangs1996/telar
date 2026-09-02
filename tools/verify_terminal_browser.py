@@ -87,6 +87,7 @@ def frame_report(
         "graphics_stage_blocked": latest(runtime_samples, "graphics_stage_blocked"),
         "graphics_stage_deferred": latest(runtime_samples, "graphics_stage_deferred"),
         "media_direct_frames": latest(runtime_samples, "media_direct_frames"),
+        "media_file_frames": latest(runtime_samples, "media_file_frames"),
         "graphics_transfers_prepared": latest(runtime_samples, "graphics_transfers_prepared"),
         "graphics_transfers_adopted": latest(runtime_samples, "graphics_transfers_adopted"),
         "media_deferrals": latest(client_samples, "media_deferrals"),
@@ -170,6 +171,13 @@ def main() -> int:
         help="what draws in the pane: the pinned terminal-browser (default) or "
         "telar-frame-source publishing WxH RGBA frames at FPS, which needs "
         "--measure and skips the browser checks",
+    )
+    parser.add_argument(
+        "--transport",
+        default="shm",
+        choices=("shm", "file"),
+        help="how the synthetic source hands frames over: POSIX shared memory "
+        "objects or regular files rewritten in place (terminal-browser's choice)",
     )
     args = parser.parse_args()
     synthetic: tuple[int, int, int] | None = None
@@ -262,6 +270,8 @@ def main() -> int:
             str(rate),
             "--seconds",
             str(int(args.measure) + 2),
+            "--transport",
+            args.transport,
         ]
     wrapper = run_directory / "launch.sh"
     wrapper.write_text(
@@ -358,6 +368,7 @@ def main() -> int:
     }
     result: dict[str, object] = {
         "source": args.source,
+        "transport": args.transport if synthetic is not None else "browser-chosen",
         "terminal_browser_revision": revision,
         "ghostty_version": subprocess.check_output(
             ["ghostty", "+version"], text=True
