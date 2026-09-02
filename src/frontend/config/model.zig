@@ -23,9 +23,14 @@ pub const max_plugins = 32;
 pub const max_plugin_path_bytes = 512;
 pub const max_history_path_bytes = 1024;
 pub const max_proxy_path_bytes = 1024;
-pub const max_proxy_passthrough_hosts = core.proxy.max_passthrough_hosts;
-pub const max_proxy_passthrough_host_bytes = core.proxy.max_hostname_bytes;
-pub const max_proxy_passthrough_bytes = core.proxy.max_passthrough_bytes;
+pub const max_proxy_intercept_hosts = core.proxy.max_intercept_hosts;
+pub const max_proxy_intercept_host_bytes = core.proxy.max_hostname_bytes;
+pub const max_proxy_intercept_bytes = core.proxy.max_intercept_bytes;
+pub const default_proxy_intercept_hosts = [_][]const u8{
+    "api.anthropic.com",
+    "api.openai.com",
+    "chatgpt.com",
+};
 pub const max_agent_description_command_args = 32;
 pub const max_agent_description_command_bytes = 4096;
 pub const max_bar_callbacks = 64;
@@ -90,30 +95,45 @@ pub const AgentDescriptionCommand = struct {
 pub const SoundConfig = sound.Config;
 pub const NotificationDelivery = notifications.Delivery;
 
-pub const ProxyPassthroughHosts = struct {
+pub const ProxyInterceptHosts = struct {
     const Reference = struct {
         offset: u16,
         len: u8,
     };
 
-    bytes: [max_proxy_passthrough_bytes]u8 = undefined,
+    bytes: [max_proxy_intercept_bytes]u8 = undefined,
     byte_len: u16 = 0,
-    references: [max_proxy_passthrough_hosts]Reference = undefined,
+    references: [max_proxy_intercept_hosts]Reference = undefined,
     count: u16 = 0,
 
     comptime {
-        std.debug.assert(max_proxy_passthrough_bytes <= std.math.maxInt(u16));
+        std.debug.assert(max_proxy_intercept_bytes <= std.math.maxInt(u16));
     }
 
-    pub fn append(hosts: *ProxyPassthroughHosts, host: []const u8) !void {
-        if (hosts.count == max_proxy_passthrough_hosts) return error.TooManyProxyPassthroughHosts;
-        if (host.len == 0 or host.len > max_proxy_passthrough_host_bytes)
-            return error.InvalidProxyPassthroughHost;
+    /// Appends one canonical hostname within the fixed count and byte budgets.
+    ///
+    /// ```zig
+    /// try hosts.append("api.openai.com");
+    /// ```
+    pub fn append(hosts: *ProxyInterceptHosts, host: []const u8) !void {
+        if (hosts.count == max_proxy_intercept_hosts) {
+            return error.TooManyProxyInterceptHosts;
+        }
+
+        if (host.len == 0 or host.len > max_proxy_intercept_host_bytes) {
+            return error.InvalidProxyInterceptHost;
+        }
+
         const end = @as(usize, hosts.byte_len) + host.len;
-        if (end > hosts.bytes.len) return error.ProxyPassthroughHostsTooLarge;
+        if (end > hosts.bytes.len) {
+            return error.ProxyInterceptHostsTooLarge;
+        }
+
         const offset = hosts.byte_len;
-        for (host, hosts.bytes[offset..end]) |byte, *destination|
+        for (host, hosts.bytes[offset..end]) |byte, *destination| {
             destination.* = std.ascii.toLower(byte);
+        }
+
         hosts.references[hosts.count] = .{
             .offset = offset,
             .len = @intCast(host.len),
@@ -122,13 +142,19 @@ pub const ProxyPassthroughHosts = struct {
         hosts.count += 1;
     }
 
-    pub fn sortAndDeduplicate(hosts: *ProxyPassthroughHosts) void {
+    /// Sorts the hostnames for binary search and removes case-insensitive
+    /// duplicates.
+    ///
+    /// ```zig
+    /// hosts.sortAndDeduplicate();
+    /// ```
+    pub fn sortAndDeduplicate(hosts: *ProxyInterceptHosts) void {
         std.mem.sort(
             Reference,
             hosts.references[0..hosts.count],
             hosts,
             struct {
-                fn lessThan(context: *const ProxyPassthroughHosts, left: Reference, right: Reference) bool {
+                fn lessThan(context: *const ProxyInterceptHosts, left: Reference, right: Reference) bool {
                     return core.proxy.orderHostname(
                         context.value(left),
                         context.value(right),
@@ -136,66 +162,74 @@ pub const ProxyPassthroughHosts = struct {
                 }
             }.lessThan,
         );
+
         var unique_count: usize = 0;
         for (hosts.references[0..hosts.count]) |reference| {
             if (unique_count != 0 and core.proxy.orderHostname(
                 hosts.value(hosts.references[unique_count - 1]),
                 hosts.value(reference),
-            ) == .eq) continue;
+            ) == .eq) {
+                continue;
+            }
+
             hosts.references[unique_count] = reference;
             unique_count += 1;
         }
+
         hosts.count = @intCast(unique_count);
     }
 
-    pub fn contains(hosts: *const ProxyPassthroughHosts, host: []const u8) bool {
-        const Context = struct {
-            hosts: *const ProxyPassthroughHosts,
-            target: []const u8,
-        };
-        return std.sort.binarySearch(
-            Reference,
-            hosts.references[0..hosts.count],
-            Context{ .hosts = hosts, .target = host },
-            struct {
-                fn compare(context: Context, reference: Reference) std.math.Order {
-                    return core.proxy.orderHostname(
-                        context.target,
-                        context.hosts.value(reference),
-                    );
-                }
-            }.compare,
-        ) != null;
-    }
-
-    pub fn slices(
-        hosts: *const ProxyPassthroughHosts,
-        storage: *[max_proxy_passthrough_hosts][]const u8,
-    ) []const []const u8 {
-        for (hosts.references[0..hosts.count], 0..) |reference, index|
+    /// Materializes borrowed slices for the runtime bootstrap. The returned
+    /// strings remain owned by this configuration snapshot.
+    ///
+    /// ```zig
+    /// const configured = hosts.slices(&storage);
+    /// ```
+    pub fn slices(hosts: *const ProxyInterceptHosts, storage: *[max_proxy_intercept_hosts][]const u8) []const []const u8 {
+        for (hosts.references[0..hosts.count], 0..) |reference, index| {
             storage[index] = hosts.value(reference);
+        }
+
         return storage[0..hosts.count];
     }
 
-    fn value(hosts: *const ProxyPassthroughHosts, reference: Reference) []const u8 {
+    fn value(hosts: *const ProxyInterceptHosts, reference: Reference) []const u8 {
         return hosts.bytes[reference.offset..][0..reference.len];
     }
 };
 
-test "proxy passthrough hosts are compact, canonical, sorted, and unique" {
-    var hosts: ProxyPassthroughHosts = .{};
+fn defaultProxyInterceptHosts() ProxyInterceptHosts {
+    var hosts: ProxyInterceptHosts = .{};
+    for (default_proxy_intercept_hosts) |host| {
+        hosts.append(host) catch unreachable;
+    }
+
+    return hosts;
+}
+
+test "proxy intercept hosts are compact, canonical, sorted, and unique" {
+    var hosts: ProxyInterceptHosts = .{};
     try hosts.append("Updates.Example.com");
     try hosts.append("api.example.com");
     try hosts.append("API.EXAMPLE.COM");
     hosts.sortAndDeduplicate();
 
-    var storage: [max_proxy_passthrough_hosts][]const u8 = undefined;
+    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
     const sorted = hosts.slices(&storage);
     try std.testing.expectEqual(@as(usize, 2), sorted.len);
     try std.testing.expectEqualStrings("api.example.com", sorted[0]);
     try std.testing.expectEqualStrings("updates.example.com", sorted[1]);
-    try std.testing.expect(hosts.contains("API.EXAMPLE.COM"));
-    try std.testing.expect(!hosts.contains("other.example.com"));
+}
+
+test "default proxy intercept hosts cover Claude Code and Codex APIs" {
+    const hosts = defaultProxyInterceptHosts();
+    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    const configured = hosts.slices(&storage);
+
+    try std.testing.expectEqual(default_proxy_intercept_hosts.len, configured.len);
+    for (default_proxy_intercept_hosts, configured) |expected, actual| {
+        try std.testing.expectEqualStrings(expected, actual);
+    }
 }
 
 pub const RuntimeSnapshot = struct {
@@ -206,7 +240,7 @@ pub const RuntimeSnapshot = struct {
     proxy_enabled: bool = false,
     proxy_ca_dir_bytes: [max_proxy_path_bytes]u8 = undefined,
     proxy_ca_dir_len: u16 = 0,
-    proxy_passthrough_hosts: ProxyPassthroughHosts = .{},
+    proxy_intercept_hosts: ProxyInterceptHosts = defaultProxyInterceptHosts(),
     agent_descriptions: AgentDescriptionCommand = .{},
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
     history_filters: core.history_filter.Filters = .{},
@@ -236,11 +270,13 @@ pub const RuntimeSnapshot = struct {
         return snapshot.proxy_ca_dir_bytes[0..snapshot.proxy_ca_dir_len];
     }
 
-    pub fn proxyPassthroughHosts(
-        snapshot: *const RuntimeSnapshot,
-        storage: *[max_proxy_passthrough_hosts][]const u8,
-    ) []const []const u8 {
-        return snapshot.proxy_passthrough_hosts.slices(storage);
+    /// Returns the exact hostnames that the runtime may TLS-intercept.
+    ///
+    /// ```zig
+    /// const hosts = snapshot.proxyInterceptHosts(&storage);
+    /// ```
+    pub fn proxyInterceptHosts(snapshot: *const RuntimeSnapshot, storage: *[max_proxy_intercept_hosts][]const u8) []const []const u8 {
+        return snapshot.proxy_intercept_hosts.slices(storage);
     }
 };
 

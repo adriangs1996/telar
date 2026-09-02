@@ -612,21 +612,22 @@ pub const State = struct {
             &attachment_snapshot,
         );
         const picker_prompt = pickerPrompt(input.prompt);
+        const application_area = context.buffer.area();
         const current_modal_area = if (attachment_snapshot.modal != null)
-            widgets.attachment_preview.modalArea(state.regions.workbench)
+            widgets.attachment_preview.modalArea(application_area)
         else if (picker_prompt != null)
-            widgets.goto_picker.modalArea(state.regions.workbench)
+            widgets.goto_picker.modalArea(application_area)
         else
             ui.Rect{};
         const graphical_modal = state.graphicalModalCovers(current_modal_area);
         if (input.compositor) |compositor| {
             if (!state.modal_overlay_area.isEmpty()) {
-                compositor.copyArea(&state.scratch, state.modal_overlay_area);
+                compositor.copyArea(&state.scratch, state.modal_overlay_area.intersect(state.regions.workbench));
             }
             if (!current_modal_area.isEmpty() and
                 !std.meta.eql(current_modal_area, state.modal_overlay_area))
             {
-                compositor.copyArea(&state.scratch, current_modal_area);
+                compositor.copyArea(&state.scratch, current_modal_area.intersect(state.regions.workbench));
             }
         }
         const toast_area = widgets.toast.overlayArea(state.regions.workbench);
@@ -643,17 +644,16 @@ pub const State = struct {
                     widgets.toast.render(&context, toast_area, input.notifications);
             }
         }
-        var drawn_modal_area = widgets.attachment_preview.renderModal(
-            &context,
-            state.regions.workbench,
-            &attachment_snapshot,
-            &attachment_plan,
-            graphical_modal,
-        );
+        var drawn_modal_area = widgets.attachment_preview.renderModal(&context, .{
+            .application = application_area,
+            .snapshot = &attachment_snapshot,
+            .plan = &attachment_plan,
+            .graphical_frame = graphical_modal,
+        });
         var picker_cursor: ?widgets.Cursor = null;
         if (picker_prompt) |prompt| {
             if (drawn_modal_area.isEmpty()) {
-                const picker_output = renderGotoPicker(&context, state.regions.workbench, .{
+                const picker_output = renderGotoPicker(&context, application_area, .{
                     .prompt = prompt,
                     .agents = input.agents,
                     .workspaces = input.workspaces,
@@ -797,7 +797,7 @@ const PickerSources = struct {
 
 /// Computes the deterministic result set and renders the visible window with
 /// the clamped selection highlighted, scrolled so the selection stays visible.
-fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
+fn renderGotoPicker(context: *widgets.Context, application: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
     var results: goto_picker_model.Results = .{};
     const match_sources: goto_picker_model.Sources = .{
         .agents = sources.agents,
@@ -805,7 +805,7 @@ fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: Pick
         .tabs = sources.tabs,
     };
     if (sources.prompt.target != .goto) {
-        return renderHistoryPalette(context, workbench, sources);
+        return renderHistoryPalette(context, application, sources);
     }
 
     goto_picker_model.collect(match_sources, sources.prompt.field.text(), &results);
@@ -827,7 +827,7 @@ fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: Pick
         rows[offset] = row;
     }
 
-    return widgets.goto_picker.render(context, workbench, .{
+    return widgets.goto_picker.render(context, application, .{
         .title = "goto",
         .field = &sources.prompt.field,
         .rows = rows[0..window],
@@ -838,7 +838,7 @@ fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: Pick
 
 /// Renders the history palette through the same list modal, with rows taken
 /// from the palette model instead of the fuzzy matcher.
-fn renderHistoryPalette(context: *widgets.Context, workbench: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
+fn renderHistoryPalette(context: *widgets.Context, application: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
     const entries = sources.history.slice();
     const total: u16 = @intCast(entries.len);
     const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection, total - 1);
@@ -863,7 +863,7 @@ fn renderHistoryPalette(context: *widgets.Context, workbench: ui.Rect, sources: 
 
     var hint_storage: [24]u8 = undefined;
     const hint = std.fmt.bufPrint(&hint_storage, "scope: {s}", .{sources.prompt.scope.label()}) catch "";
-    return widgets.goto_picker.render(context, workbench, .{
+    return widgets.goto_picker.render(context, application, .{
         .title = "history",
         .field = &sources.prompt.field,
         .rows = rows[0..window],
@@ -926,10 +926,10 @@ fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingCompo
 
 test "visible regions reserve top bottom sidebar and workbench" {
     const regions = Regions.calculate(120, 40, .{ .visible = true, .preferred_width = sidebar_width });
-    try std.testing.expectEqual(ui.Rect{ .x = 62, .w = 58, .h = 1 }, regions.top);
-    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 62, .h = 40 }, regions.sidebar);
-    try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 1, .w = 58, .h = 38 }, regions.workbench);
-    try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 39, .w = 58, .h = 1 }, regions.bottom);
+    try std.testing.expectEqual(ui.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
+    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
+    try std.testing.expectEqual(ui.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
+    try std.testing.expectEqual(ui.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
 }
 
 test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
@@ -962,8 +962,8 @@ test "sidebar toggle changes only the disposable client layout" {
     var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     try std.testing.expectEqual(@as(u16, sidebar_width), state.regions.sidebar.w);
-    try std.testing.expectEqual(ui.Rect{ .x = 62, .w = 38, .h = 1 }, state.regions.top);
-    try std.testing.expectEqual(ui.Rect{ .x = 62, .y = 29, .w = 38, .h = 1 }, state.regions.bottom);
+    try std.testing.expectEqual(ui.Rect{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(ui.Rect{ .x = 42, .y = 29, .w = 58, .h = 1 }, state.regions.bottom);
 
     state.toggleSidebar();
 
@@ -1025,7 +1025,7 @@ test "empty production sidebar has no task controls" {
     _ = try state.render(&screen, .{ .model = &model, .force = true });
 
     try std.testing.expect(state.hits.at(3, 2) == null);
-    try std.testing.expect(state.hits.at(58, 2) == null);
+    try std.testing.expect(state.hits.at(state.regions.sidebar.w - 4, 2) == null);
 }
 
 test "workbench clicks return focus intent without mutating pane layout" {
@@ -1188,6 +1188,8 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .agents = &snapshot,
         .force = true,
     });
+    const sidebar_before_modal = screen.back.at(20, 4).?.*;
+
     var open_point: ?struct { x: u16, y: u16 } = null;
     for (state.hits.registered()) |entry| switch (entry.action) {
         .attachment_open => {
@@ -1210,12 +1212,23 @@ test "focused agent image preview reserves a shelf and opens a modal layer" {
         .compositor = &compositor,
         .agents = &snapshot,
     });
+    try std.testing.expectEqual(ui.Rect{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
+    try std.testing.expect(!sidebar_before_modal.eqlPublic(screen.back.at(20, 4).?));
+
     const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,
         .y = state.regions.workbench.y,
         .kind = .scroll_down,
     });
     try std.testing.expect(modal_scroll.consumed);
+    try std.testing.expect(state.closeAttachmentModal());
+
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .agents = &snapshot,
+    });
+    try std.testing.expect(sidebar_before_modal.eqlPublic(screen.back.at(20, 4).?));
 }
 
 test "sidebar highlight follows pane focus and the rendered workspace" {
@@ -1425,7 +1438,10 @@ test "cell rendering leaves toast rasterization to the media pass" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 28 });
+    try model.addRoot(@enumFromInt(1), location, .{
+        .cols = state.workbench().w,
+        .rows = state.workbench().h,
+    });
     var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     var screen = try term.Screen.init(gpa, 120, 30);
@@ -1569,7 +1585,10 @@ test "clickable toast restores pane cells after its exit animation" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(7),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 28 });
+    try model.addRoot(@enumFromInt(1), location, .{
+        .cols = state.workbench().w,
+        .rows = state.workbench().h,
+    });
     const overlay = widgets.toast.overlayArea(state.workbench());
     var center: notifications.Center = .{};
     const notification_id = center.push(100, .{

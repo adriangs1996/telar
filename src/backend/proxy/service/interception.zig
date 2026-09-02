@@ -3,7 +3,7 @@
 const std = @import("std");
 const ca = @import("../ca.zig");
 const metrics = @import("../metrics.zig");
-const passthrough_policy = @import("../passthrough_policy.zig");
+const interception_policy = @import("../interception_policy.zig");
 const tls = @import("../tls.zig");
 const tunnel_tls = @import("../tunnel/tls.zig");
 
@@ -13,7 +13,7 @@ pub const Paths = struct {
     key: []const u8,
     certificate: []const u8,
     bundle: []const u8,
-    passthrough_hosts: []const []const u8 = &.{},
+    intercept_hosts: []const []const u8 = &.{},
 };
 
 pub const Trust = struct {
@@ -27,10 +27,10 @@ pub const Interception = struct {
     authority: ca.Authority,
     roots: tls.Roots,
     trust: Trust,
-    passthrough: passthrough_policy.Policy,
+    hosts: interception_policy.Policy,
 
     /// Loads or creates Telar's private authority, writes the combined trust
-    /// bundle, loads platform roots, and validates the passthrough policy as
+    /// bundle, loads platform roots, and validates the interception policy as
     /// one transaction.
     ///
     /// ```zig
@@ -58,7 +58,7 @@ pub const Interception = struct {
                 .certificate_path = paths.certificate,
                 .bundle_path = paths.bundle,
             },
-            .passthrough = try .init(paths.passthrough_hosts),
+            .hosts = try .init(paths.intercept_hosts),
         };
     }
 
@@ -93,7 +93,7 @@ pub const Interception = struct {
             .gpa = interception.gpa,
             .authority = &interception.authority,
             .roots = &interception.roots,
-            .passthrough = &interception.passthrough,
+            .intercept_hosts = &interception.hosts,
             .telemetry = telemetry,
         };
     }
@@ -118,7 +118,7 @@ test "interception owns trust paths and exposes bounded tunnel resources" {
         .key = key_path,
         .certificate = certificate_path,
         .bundle = bundle_path,
-        .passthrough_hosts = &.{"localhost"},
+        .intercept_hosts = &.{"localhost"},
     });
     defer interception.deinit();
     const trust = interception.clientTrust();
@@ -130,6 +130,6 @@ test "interception owns trust paths and exposes bounded tunnel resources" {
     try std.testing.expect(resources.authority == &interception.authority);
     try std.testing.expect(resources.roots == &interception.roots);
     try std.testing.expect(resources.telemetry == &telemetry);
-    try std.testing.expect(resources.passthrough.contains("localhost"));
-    try std.testing.expect(!resources.passthrough.contains("api.openai.com"));
+    try std.testing.expect(resources.intercept_hosts.contains("localhost"));
+    try std.testing.expect(!resources.intercept_hosts.contains("api.openai.com"));
 }

@@ -142,7 +142,7 @@ fn listenTestOrigin(io: Io) !TestOrigin {
     return error.TestOriginPortUnavailable;
 }
 
-test "passthrough CONNECT relays bytes with a saturated observation queue" {
+test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const payload = "not-a-tls-client-hello";
@@ -163,7 +163,7 @@ test "passthrough CONNECT relays bytes with a saturated observation queue" {
         .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
         .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
         .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-        .passthrough_hosts = &.{"localhost"},
+        .intercept_hosts = &.{"api.openai.com"},
     });
     defer service.destroy();
     var credential = try service.registerPane(.{ .id = try schema.id.pane(7), .generation = 12 });
@@ -252,6 +252,7 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
         .key = try std.fmt.bufPrint(&key_buffer, "{s}/ca-key.pem", .{directory}),
         .certificate = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory}),
         .bundle = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+        .intercept_hosts = &.{"localhost"},
     });
     defer service.destroy();
 

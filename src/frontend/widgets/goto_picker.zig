@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const edit = @import("../input/root.zig").edit;
+const modal = @import("modal.zig");
 const widget = @import("context.zig");
 const ui = @import("../ui/root.zig");
 
@@ -11,7 +12,6 @@ const schema = core.schema;
 pub const Field = edit.Field(schema.max_tab_label_bytes);
 pub const max_rows = 12;
 pub const max_row_bytes = 160;
-const modal_max_width: u16 = 64;
 
 pub const Row = struct {
     text: [max_row_bytes]u8 = undefined,
@@ -40,35 +40,28 @@ pub const Output = struct {
     cursor: ?widget.Cursor,
 };
 
-/// Centered rectangle sized for the query line plus the visible result rows.
+/// Application-level rectangle shared by picker and attachment modals.
 ///
 /// ```zig
-/// const area = modalArea(regions.workbench);
+/// const area = modalArea(context.buffer.area());
 /// ```
-pub fn modalArea(workbench: ui.Rect) ui.Rect {
-    if (workbench.w < 20 or workbench.h < 6) {
+pub fn modalArea(application: ui.Rect) ui.Rect {
+    if (application.w < 20 or application.h < 6) {
         return .{};
     }
 
-    const width = @min(modal_max_width, workbench.w -| 4);
-    const height = @min(@as(u16, max_rows + 3), workbench.h -| 2);
-    return .{
-        .x = workbench.x + (workbench.w - width) / 2,
-        .y = workbench.y + (workbench.h - height) / 2,
-        .w = width,
-        .h = height,
-    };
+    return modal.area(application);
 }
 
-/// Draws the picker into the workbench and returns its area with the query
+/// Draws the picker across the application and returns its area with the query
 /// cursor position, so the caller can synchronize the modal overlay and the
 /// terminal cursor.
 ///
 /// ```zig
-/// const output = render(context, regions.workbench, picker_input);
+/// const output = render(context, context.buffer.area(), picker_input);
 /// ```
-pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output {
-    const area = modalArea(workbench);
+pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Output {
+    const area = modalArea(application);
     if (area.isEmpty()) {
         return .{ .area = area, .cursor = null };
     }

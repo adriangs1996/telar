@@ -79,8 +79,8 @@ const Launch = struct {
     configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined,
     configured_history_path: ?[:0]const u8 = null,
     configured_proxy_directory: ?[]u8 = null,
-    proxy_passthrough_host_storage: [frontend.config.max_proxy_passthrough_hosts][]const u8 = undefined,
-    proxy_passthrough_hosts: []const []const u8 = &.{},
+    proxy_intercept_host_storage: [frontend.config.max_proxy_intercept_hosts][]const u8 = undefined,
+    proxy_intercept_hosts: []const []const u8 = &.{},
     description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
     agent_description_options: ?backend.runtime.AgentDescriptionOptions = null,
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
@@ -148,7 +148,7 @@ const Launch = struct {
             launch.configured_history_path = try std.fmt.bufPrintZ(&launch.configured_history_buffer, "{s}", .{resolved});
         }
 
-        launch.proxy_passthrough_hosts = runtime_config.proxyPassthroughHosts(&launch.proxy_passthrough_host_storage);
+        launch.proxy_intercept_hosts = runtime_config.proxyInterceptHosts(&launch.proxy_intercept_host_storage);
         if (runtime_config.proxy_enabled) {
             if (runtime_config.proxyCaDir()) |ca_directory| {
                 launch.configured_proxy_directory = try resolveConfigPath(
@@ -199,7 +199,7 @@ const Launch = struct {
                 .key_path = try std.fmt.bufPrint(&launch.proxy_key_buffer, "{s}/ca-key.pem", .{directory}),
                 .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/ca-cert.pem", .{directory}),
                 .bundle_path = try std.fmt.bufPrint(&launch.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
-                .passthrough_hosts = launch.proxy_passthrough_hosts,
+                .intercept_hosts = launch.proxy_intercept_hosts,
             };
         }
     }

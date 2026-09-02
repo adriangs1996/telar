@@ -35,9 +35,9 @@ pub const max_plugin_path_bytes = config_model.max_plugin_path_bytes;
 pub const max_profile_name_bytes = 64;
 pub const max_history_path_bytes = config_model.max_history_path_bytes;
 pub const max_proxy_path_bytes = config_model.max_proxy_path_bytes;
-pub const max_proxy_passthrough_hosts = config_model.max_proxy_passthrough_hosts;
-pub const max_proxy_passthrough_host_bytes = config_model.max_proxy_passthrough_host_bytes;
-pub const max_proxy_passthrough_bytes = config_model.max_proxy_passthrough_bytes;
+pub const max_proxy_intercept_hosts = config_model.max_proxy_intercept_hosts;
+pub const max_proxy_intercept_host_bytes = config_model.max_proxy_intercept_host_bytes;
+pub const max_proxy_intercept_bytes = config_model.max_proxy_intercept_bytes;
 pub const max_agent_description_command_args = config_model.max_agent_description_command_args;
 pub const max_agent_description_command_bytes = config_model.max_agent_description_command_bytes;
 pub const max_bar_callbacks = config_model.max_bar_callbacks;
@@ -935,7 +935,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "enabled", "ca_dir", "passthrough_hosts" },
+            &.{ "enabled", "ca_dir", "intercept_hosts" },
             "config.runtime.proxy",
             diagnostic,
         );
@@ -969,19 +969,19 @@ pub const Generation = struct {
         }
         pop(state, 1);
 
-        _ = lua.lua_getfield(state, absolute, "passthrough_hosts");
+        _ = lua.lua_getfield(state, absolute, "intercept_hosts");
         defer pop(state, 1);
         if (lua.lua_type(state, -1) == lua.LUA_TNIL) return;
         if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
-            diagnostic.set("config.runtime.proxy.passthrough_hosts must be an array", .{});
+            diagnostic.set("config.runtime.proxy.intercept_hosts must be an array", .{});
             return error.InvalidConfig;
         }
         const hosts = lua.lua_absindex(state, -1);
         const count = lua.lua_rawlen(state, hosts);
-        if (count > max_proxy_passthrough_hosts) {
+        if (count > max_proxy_intercept_hosts) {
             diagnostic.set(
-                "config.runtime.proxy.passthrough_hosts exceeds {d} entries",
-                .{max_proxy_passthrough_hosts},
+                "config.runtime.proxy.intercept_hosts exceeds {d} entries",
+                .{max_proxy_intercept_hosts},
             );
             return error.InvalidConfig;
         }
@@ -989,35 +989,37 @@ pub const Generation = struct {
             state,
             hosts,
             count,
-            "config.runtime.proxy.passthrough_hosts",
+            "config.runtime.proxy.intercept_hosts",
             diagnostic,
         );
+
+        generation.snapshot.runtime.proxy_intercept_hosts = .{};
         for (0..count) |host_index| {
             _ = lua.lua_geti(state, hosts, @intCast(host_index + 1));
             defer pop(state, 1);
             const host = string(state, -1) orelse {
                 diagnostic.set(
-                    "config.runtime.proxy.passthrough_hosts[{d}] must be a hostname",
+                    "config.runtime.proxy.intercept_hosts[{d}] must be a hostname",
                     .{host_index + 1},
                 );
                 return error.InvalidConfig;
             };
             if (!validProxyHostname(host)) {
                 diagnostic.set(
-                    "config.runtime.proxy.passthrough_hosts[{d}] is not a valid hostname",
+                    "config.runtime.proxy.intercept_hosts[{d}] is not a valid hostname",
                     .{host_index + 1},
                 );
                 return error.InvalidConfig;
             }
-            generation.snapshot.runtime.proxy_passthrough_hosts.append(host) catch {
+            generation.snapshot.runtime.proxy_intercept_hosts.append(host) catch {
                 diagnostic.set(
-                    "config.runtime.proxy.passthrough_hosts exceeds its {d}-byte budget",
-                    .{max_proxy_passthrough_bytes},
+                    "config.runtime.proxy.intercept_hosts exceeds its {d}-byte budget",
+                    .{max_proxy_intercept_bytes},
                 );
                 return error.InvalidConfig;
             };
         }
-        generation.snapshot.runtime.proxy_passthrough_hosts.sortAndDeduplicate();
+        generation.snapshot.runtime.proxy_intercept_hosts.sortAndDeduplicate();
     }
 
     fn parseSession(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -2454,25 +2456,46 @@ fn validProfileName(name: []const u8) bool {
 }
 
 fn validProxyHostname(host: []const u8) bool {
-    if (host.len == 0 or host.len > max_proxy_passthrough_host_bytes) return false;
+    if (host.len == 0 or host.len > max_proxy_intercept_host_bytes) {
+        return false;
+    }
+
     var label_len: usize = 0;
     for (host) |byte| switch (byte) {
         '.' => {
-            if (label_len == 0 or label_len > 63) return false;
+            if (label_len == 0 or label_len > 63) {
+                return false;
+            }
+
             label_len = 0;
         },
         '-' => {
-            if (label_len == 0) return false;
+            if (label_len == 0) {
+                return false;
+            }
+
             label_len += 1;
         },
         else => {
-            if (!std.ascii.isAlphanumeric(byte)) return false;
+            if (!std.ascii.isAlphanumeric(byte)) {
+                return false;
+            }
+
             label_len += 1;
         },
     };
-    if (label_len == 0 or label_len > 63 or host[host.len - 1] == '-') return false;
+
+    if (label_len == 0 or label_len > 63 or host[host.len - 1] == '-') {
+        return false;
+    }
+
     var labels = std.mem.splitScalar(u8, host, '.');
-    while (labels.next()) |label| if (label[label.len - 1] == '-') return false;
+    while (labels.next()) |label| {
+        if (label[label.len - 1] == '-') {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -3914,6 +3937,45 @@ test "client bars reject invalid positions timing and tab ownership" {
     }
 }
 
+test "runtime proxy defaults to the Claude Code and Codex API hosts" {
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2 }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
+
+    try std.testing.expectEqual(@as(usize, 3), hosts.len);
+    try std.testing.expectEqualStrings("api.anthropic.com", hosts[0]);
+    try std.testing.expectEqualStrings("api.openai.com", hosts[1]);
+    try std.testing.expectEqualStrings("chatgpt.com", hosts[2]);
+}
+
+test "an explicit empty intercept host list disables interception" {
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { proxy = { intercept_hosts = {} } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
+
+    try std.testing.expectEqual(@as(usize, 0), hosts.len);
+}
+
 test "runtime config compiles bounded graphics, proxy, and description values" {
     var diagnostic: Diagnostic = .{};
     const source =
@@ -3925,7 +3987,7 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         \\    proxy = {
         \\      enabled = true,
         \\      ca_dir = "state/proxy",
-        \\      passthrough_hosts = { "updates.example.com", "API.EXAMPLE.COM" },
+        \\      intercept_hosts = { "updates.example.com", "API.EXAMPLE.COM" },
         \\    },
         \\    agent_descriptions = {
         \\      command = { "claude", "--print", "--tools", "" },
@@ -3960,13 +4022,11 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         "state/proxy",
         generation.snapshot.runtime.proxyCaDir().?,
     );
-    var passthrough_host_storage: [max_proxy_passthrough_hosts][]const u8 = undefined;
-    const passthrough_hosts = generation.snapshot.runtime.proxyPassthroughHosts(
-        &passthrough_host_storage,
-    );
-    try std.testing.expectEqual(@as(usize, 2), passthrough_hosts.len);
-    try std.testing.expectEqualStrings("api.example.com", passthrough_hosts[0]);
-    try std.testing.expectEqualStrings("updates.example.com", passthrough_hosts[1]);
+    var intercept_host_storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    const intercept_hosts = generation.snapshot.runtime.proxyInterceptHosts(&intercept_host_storage);
+    try std.testing.expectEqual(@as(usize, 2), intercept_hosts.len);
+    try std.testing.expectEqualStrings("api.example.com", intercept_hosts[0]);
+    try std.testing.expectEqualStrings("updates.example.com", intercept_hosts[1]);
     var arguments: [max_agent_description_command_args][]const u8 = undefined;
     const description_command = &generation.snapshot.runtime.agent_descriptions;
     try std.testing.expect(description_command.enabled());
@@ -3977,14 +4037,14 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
     try std.testing.expectEqualStrings("", argv[3]);
 }
 
-test "runtime proxy rejects unsafe passthrough host patterns" {
+test "runtime proxy rejects unsafe intercept host patterns" {
     const cases = [_]struct { source: []const u8, message: []const u8 }{
         .{
-            .source = "return { api_version = 2, runtime = { proxy = { passthrough_hosts = { '*.example.com' } } } }",
+            .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.example.com' } } } }",
             .message = "is not a valid hostname",
         },
         .{
-            .source = "local h = {}; for i = 1, 257 do h[i] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { passthrough_hosts = h } } }",
+            .source = "local h = {}; for i = 1, 257 do h[i] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }",
             .message = "exceeds 256 entries",
         },
     };
@@ -4005,25 +4065,25 @@ test "runtime proxy rejects unsafe passthrough host patterns" {
     }
 }
 
-test "runtime proxy accepts and sorts 256 passthrough hosts" {
+test "runtime proxy accepts and sorts 256 intercept hosts" {
     var diagnostic: Diagnostic = .{};
     const generation = try Generation.loadSource(
         std.testing.allocator,
         std.testing.io,
-        "local h = {}; for i = 256, 1, -1 do h[#h + 1] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { passthrough_hosts = h } } }",
+        "local h = {}; for i = 256, 1, -1 do h[#h + 1] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }",
         "@config.lua",
         1,
         &diagnostic,
     );
     defer generation.deinit();
-    var storage: [max_proxy_passthrough_hosts][]const u8 = undefined;
-    const hosts = generation.snapshot.runtime.proxyPassthroughHosts(&storage);
+    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
     try std.testing.expectEqual(@as(usize, 256), hosts.len);
     for (hosts[1..], hosts[0 .. hosts.len - 1]) |current, previous|
         try std.testing.expect(core.proxy.orderHostname(previous, current) == .lt);
 }
 
-test "proxy passthrough host validation requires exact DNS labels" {
+test "proxy intercept host validation requires exact DNS labels" {
     try std.testing.expect(validProxyHostname("api.github.com"));
     try std.testing.expect(validProxyHostname("API-2.example"));
     try std.testing.expect(!validProxyHostname(""));

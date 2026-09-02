@@ -15,7 +15,11 @@ return {
     proxy = {
       enabled = true,
       ca_dir = "state/proxy",
-      passthrough_hosts = { "updates.example.com" },
+      intercept_hosts = {
+        "api.anthropic.com",
+        "api.openai.com",
+        "chatgpt.com",
+      },
     },
   },
 }
@@ -43,18 +47,20 @@ certificate, and combined system root bundle are written atomically with mode
 0600. Existing corrupt or partial authority files are not overwritten. Telar
 never installs this CA in the system trust store.
 
-Some clients validate through a platform trust API and cannot consume a
-process-local CA. Telar therefore has an exact-host passthrough policy.
-`api.github.com`, used by lazygit's internal GitHub requests, and
-`ab.chatgpt.com`, used by Codex on macOS, are built in. Entries in
-`passthrough_hosts` extend that list; wildcards and suffix matches are rejected.
-The runtime accepts 256 configured entries, canonicalizes and deduplicates them
-at startup, then uses binary search for every CONNECT hostname.
-The CONNECT request still requires a live pane capability, but after the `200`
-response Telar forwards the TCP stream byte for byte. TLS remains end to end
-between the child and origin, and Telar produces no HTTP lifecycle observation
-for that connection. The child validates the origin with its normal trust
-store.
+Telar passes TLS through by default and intercepts only an exact-host allowlist.
+The defaults cover the model APIs used by Claude Code and Codex:
+`api.anthropic.com`, `api.openai.com`, and `chatgpt.com`. Setting
+`intercept_hosts` replaces those defaults, so an empty array disables all TLS
+interception while retaining the authenticated proxy tunnel. Wildcards and
+suffix matches are rejected. The runtime accepts 256 entries, canonicalizes
+and deduplicates them at startup, then uses binary search for every CONNECT
+hostname.
+
+Every CONNECT request still requires a live pane capability. For a host outside
+the allowlist, Telar responds with `200` and forwards the TCP stream byte for
+byte. TLS remains end to end between the child and origin, Telar produces no
+HTTP lifecycle observation, and the child validates the origin with its normal
+trust store.
 
 The proxy connects to and validates the real origin first, carrying the
 child's ALPN offer upstream, then mirrors only the selected protocol

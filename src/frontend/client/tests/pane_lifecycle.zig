@@ -549,10 +549,10 @@ test "sidebar resize keybinding commits width before pane geometry" {
     const client = harness.client;
     const version = client.model.version();
 
-    _ = try client_actions.apply(client, .{ .resize_sidebar = .left });
+    _ = try client_actions.apply(client, .{ .resize_sidebar = .right });
 
-    try std.testing.expectEqual(@as(u16, 58), client.model.sidebarWidth());
-    try std.testing.expectEqual(@as(u16, 58), client.view.regions.sidebar.w);
+    try std.testing.expectEqual(@as(u16, 44), client.model.sidebarWidth());
+    try std.testing.expectEqual(@as(u16, 44), client.view.regions.sidebar.w);
     try std.testing.expectEqual(version.chrome + 1, client.model.version().chrome);
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -560,7 +560,7 @@ test "sidebar resize keybinding commits width before pane geometry" {
     try std.testing.expect(resized == .pane_resize);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, resized.pane_resize.pane_id);
     try std.testing.expectEqual(
-        schema.TerminalSize{ .cols = 22, .rows = 22 },
+        schema.TerminalSize{ .cols = 36, .rows = 22 },
         resized.pane_resize.size,
     );
 }
@@ -1060,7 +1060,7 @@ test "detach action captures layout changes from the same input batch" {
     active.snapshot_loaded = true;
     try client.client_layouts.markSnapshotReceived();
 
-    _ = try client_actions.apply(client, .{ .resize_sidebar = .left });
+    _ = try client_actions.apply(client, .{ .resize_sidebar = .right });
     try std.testing.expectEqual(keybind.Control.stop, try client_actions.apply(client, .detach));
     try harness.settle();
 
@@ -1069,7 +1069,7 @@ test "detach action captures layout changes from the same input batch" {
     try std.testing.expect(resized == .pane_resize);
     const retained = try harness.nextClientMessage(&buffer);
     try std.testing.expect(retained == .update_client_layout);
-    try std.testing.expectEqual(@as(u16, 58), retained.update_client_layout.sidebar_width);
+    try std.testing.expectEqual(@as(u16, 44), retained.update_client_layout.sidebar_width);
     const detached = try harness.nextClientMessage(&buffer);
     try std.testing.expect(detached == .detach_pane);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);

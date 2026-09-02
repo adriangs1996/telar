@@ -2,13 +2,12 @@
 
 const std = @import("std");
 const attachments = @import("../attachments/root.zig");
+const modal = @import("modal.zig");
 const widget = @import("context.zig");
 const ui = @import("../ui/root.zig");
 
 const card_width: u16 = 18;
 const card_gap: u16 = 1;
-const modal_max_width: u16 = 80;
-const modal_max_height: u16 = 28;
 
 pub fn renderShelf(
     context: *widget.Context,
@@ -70,28 +69,39 @@ pub fn renderShelf(
     return plan;
 }
 
-pub fn modalArea(workbench: ui.Rect) ui.Rect {
-    if (workbench.w < 12 or workbench.h < 6) return .{};
-    const width = @min(modal_max_width, workbench.w -| 4);
-    const height = @min(modal_max_height, workbench.h -| 2);
-    return .{
-        .x = workbench.x + (workbench.w - width) / 2,
-        .y = workbench.y + (workbench.h - height) / 2,
-        .w = width,
-        .h = height,
-    };
+/// Uses the shared application-level modal geometry when the terminal can fit
+/// the preview controls.
+///
+/// ```zig
+/// const area = modalArea(context.buffer.area());
+/// ```
+pub fn modalArea(application: ui.Rect) ui.Rect {
+    if (application.w < 12 or application.h < 6) {
+        return .{};
+    }
+
+    return modal.area(application);
 }
 
-pub fn renderModal(
-    context: *widget.Context,
-    workbench: ui.Rect,
+pub const ModalInput = struct {
+    application: ui.Rect,
     snapshot: *const attachments.Snapshot,
     plan: *attachments.Plan,
     graphical_frame: bool,
-) ui.Rect {
-    const id = snapshot.modal orelse return .{};
-    const area = modalArea(workbench);
-    if (area.isEmpty()) return .{};
+};
+
+/// Draws the image preview and publishes its graphics placement.
+///
+/// ```zig
+/// const area = renderModal(context, input);
+/// ```
+pub fn renderModal(context: *widget.Context, input: ModalInput) ui.Rect {
+    const id = input.snapshot.modal orelse return .{};
+    const area = modalArea(input.application);
+    if (area.isEmpty()) {
+        return .{};
+    }
+
     context.hits.beginLayer(context.buffer.area());
     defer context.hits.endLayer();
     context.hits.add(context.buffer.area(), .attachment_modal_close);
@@ -103,7 +113,7 @@ pub fn renderModal(
         .fg = context.palette.accent,
         .bg = background,
     };
-    if (graphical_frame) {
+    if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, style);
     } else {
         context.buffer.fill(area, " ", style);
@@ -137,7 +147,7 @@ pub fn renderModal(
             image_area.w,
             .{ .fg = context.palette.subtext0, .bg = background },
         );
-        plan.modal = .{ .id = id, .area = image_area };
+        input.plan.modal = .{ .id = id, .area = image_area };
     }
     return area;
 }
@@ -174,7 +184,12 @@ test "cell modal draws a connected border" {
     const snapshot: attachments.Snapshot = .{ .modal = id };
     var plan: attachments.Plan = .{};
 
-    const area = renderModal(&context, buffer.area(), &snapshot, &plan, false);
+    const area = renderModal(&context, .{
+        .application = buffer.area(),
+        .snapshot = &snapshot,
+        .plan = &plan,
+        .graphical_frame = false,
+    });
 
     try std.testing.expect(!area.isEmpty());
     try std.testing.expectEqualStrings("╭", buffer.at(area.x, area.y).?.text());
@@ -204,7 +219,12 @@ test "graphical modal leaves corner cells to its rounded frame" {
     const snapshot: attachments.Snapshot = .{ .modal = @enumFromInt(1) };
     var plan: attachments.Plan = .{};
 
-    const area = renderModal(&context, buffer.area(), &snapshot, &plan, true);
+    const area = renderModal(&context, .{
+        .application = buffer.area(),
+        .snapshot = &snapshot,
+        .plan = &plan,
+        .graphical_frame = true,
+    });
 
     try std.testing.expectEqualStrings(".", buffer.at(area.x, area.y).?.text());
     try std.testing.expectEqualStrings(".", buffer.at(area.x + area.w - 1, area.y).?.text());

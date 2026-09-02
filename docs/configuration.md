@@ -46,7 +46,11 @@ return telar.config({
     proxy = {
       enabled = false,
       ca_dir = "state/proxy",
-      passthrough_hosts = { "updates.example.com" },
+      intercept_hosts = {
+        "api.anthropic.com",
+        "api.openai.com",
+        "chatgpt.com",
+      },
     },
     agent_descriptions = {
       command = {
@@ -396,15 +400,17 @@ The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
 `config.lua`; its parent directory must already exist. `runtime.proxy` accepts
-`enabled`, `ca_dir`, and `passthrough_hosts`. ProxyTLS is disabled by default. A
+`enabled`, `ca_dir`, and `intercept_hosts`. ProxyTLS is disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
-owner-only file permissions. `passthrough_hosts` accepts at most 256 exact DNS
-hostnames within a 64,768-byte budget; it extends the built-in exclusions for
-`api.github.com` and `ab.chatgpt.com`. Telar canonicalizes case, sorts the set,
-and removes duplicates when the runtime starts. Wildcards are rejected.
-Excluded connections still pass through Telar's authenticated CONNECT
-listener, but their TCP payload is forwarded opaquely and is not observed.
+owner-only file permissions. `intercept_hosts` accepts at most 256 exact DNS
+hostnames within a 64,768-byte budget. It defaults to `api.anthropic.com`,
+`api.openai.com`, and `chatgpt.com`; an explicitly configured array replaces
+the defaults, including with an empty array. Telar canonicalizes case, sorts
+the set, and removes duplicates when the runtime starts. Wildcards are
+rejected. Every other connection still passes through Telar's authenticated
+CONNECT listener, but its TCP payload is forwarded opaquely and is not
+observed.
 Explicit server CLI
 graphics limits still override the Lua values. Runtime-owned settings take
 effect when the long-lived runtime starts; restart that runtime to apply a

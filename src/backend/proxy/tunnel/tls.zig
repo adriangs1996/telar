@@ -3,7 +3,7 @@
 const std = @import("std");
 const ca = @import("../ca.zig");
 const metrics = @import("../metrics.zig");
-const passthrough_policy = @import("../passthrough_policy.zig");
+const interception_policy = @import("../interception_policy.zig");
 const tls_transport = @import("../tls.zig");
 const tls_tunnel = @import("../tls_tunnel.zig");
 const exchange_mod = @import("exchange.zig");
@@ -16,7 +16,7 @@ pub const Resources = struct {
     gpa: std.mem.Allocator,
     authority: *ca.Authority,
     roots: *tls_transport.Roots,
-    passthrough: *const passthrough_policy.Policy,
+    intercept_hosts: *const interception_policy.Policy,
     telemetry: *metrics.Counters,
 };
 
@@ -24,8 +24,9 @@ pub const Establisher = struct {
     resources: Resources,
     exchange: *exchange_mod.Exchange,
 
-    /// Applies passthrough policy or establishes an intercepted TLS session.
-    /// Failure records its exact stage and publishes one failed exchange.
+    /// Applies the interception allowlist or establishes an opaque tunnel.
+    /// Interception failures record their exact stage and publish one failed
+    /// exchange.
     ///
     /// ```zig
     /// const route = establisher.establish(.{
@@ -40,7 +41,7 @@ pub const Establisher = struct {
 };
 
 const port: tls_tunnel.Port(Establisher, net.Stream, *tls_transport.Session) = .{
-    .passthrough = shouldPassthrough,
+    .should_intercept = shouldIntercept,
     .record_passthrough = recordPassthrough,
     .intercept = intercept,
     .record_failure = recordFailure,
@@ -49,8 +50,8 @@ const port: tls_tunnel.Port(Establisher, net.Stream, *tls_transport.Session) = .
 
 const Establish = tls_tunnel.Command(Establisher, port);
 
-fn shouldPassthrough(establisher: *Establisher, host: []const u8) bool {
-    return establisher.resources.passthrough.contains(host);
+fn shouldIntercept(establisher: *Establisher, host: []const u8) bool {
+    return establisher.resources.intercept_hosts.contains(host);
 }
 
 fn recordPassthrough(establisher: *Establisher) void {

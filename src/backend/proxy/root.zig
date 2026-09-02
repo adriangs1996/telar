@@ -22,7 +22,7 @@ pub const Config = struct {
     key_path: []const u8,
     certificate_path: []const u8,
     bundle_path: []const u8,
-    passthrough_hosts: []const []const u8 = &.{},
+    intercept_hosts: []const []const u8 = &.{},
 };
 
 pub const Observation = struct {
@@ -89,7 +89,7 @@ pub const Proxy = struct {
             .key = config.key_path,
             .certificate = config.certificate_path,
             .bundle = config.bundle_path,
-            .passthrough_hosts = config.passthrough_hosts,
+            .intercept_hosts = config.intercept_hosts,
         });
 
         proxy.* = .{

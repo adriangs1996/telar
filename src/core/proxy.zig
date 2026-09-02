@@ -2,9 +2,9 @@
 
 const std = @import("std");
 
-pub const max_passthrough_hosts = 256;
+pub const max_intercept_hosts = 256;
 pub const max_hostname_bytes = 253;
-pub const max_passthrough_bytes = max_passthrough_hosts * max_hostname_bytes;
+pub const max_intercept_bytes = max_intercept_hosts * max_hostname_bytes;
 
 pub fn orderHostname(left: []const u8, right: []const u8) std.math.Order {
     const common_len = @min(left.len, right.len);

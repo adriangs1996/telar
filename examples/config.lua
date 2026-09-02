@@ -11,7 +11,11 @@ return telar.config({
     proxy = {
       enabled = false,
       ca_dir = "state/proxy",
-      passthrough_hosts = { "updates.example.com" },
+      intercept_hosts = {
+        "api.anthropic.com",
+        "api.openai.com",
+        "chatgpt.com",
+      },
     },
     -- Explicit opt-in: the first user request is sent through stdin to this
     -- command so it never appears in the process arguments.

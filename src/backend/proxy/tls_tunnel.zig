@@ -26,7 +26,7 @@ pub fn Route(comptime Session: type) type {
     };
 }
 
-/// Defines passthrough policy, TLS establishment, metrics, and failure
+/// Defines interception policy, TLS establishment, metrics, and failure
 /// publication supplied by the proxy service.
 ///
 /// ```zig
@@ -37,7 +37,7 @@ pub fn Port(comptime Context: type, comptime Stream: type, comptime Session: typ
         pub const StreamType = Stream;
         pub const SessionType = Session;
 
-        passthrough: *const fn (*Context, []const u8) bool,
+        should_intercept: *const fn (*Context, []const u8) bool,
         record_passthrough: *const fn (*Context) void,
         intercept: *const fn (*Context, Attempt(Stream)) tls.Error!Established(Session),
         record_failure: *const fn (*Context, tls.Error) void,
@@ -57,16 +57,17 @@ pub fn Command(comptime Context: type, comptime port: anytype) type {
     const Session = PortType.SessionType;
 
     return struct {
-        /// Short-circuits configured passthrough hosts before TLS work. A
-        /// successful interception transfers session ownership through an
-        /// explicit HTTP/1.1 or HTTP/2 route. Every TLS failure records its
-        /// exact stage, publishes one failed request, and returns `null`.
+        /// Passes every host through unless policy explicitly authorizes its
+        /// interception. A successful interception transfers session ownership
+        /// through an explicit HTTP/1.1 or HTTP/2 route. Every TLS failure
+        /// records its exact stage, publishes one failed request, and returns
+        /// `null`.
         ///
         /// ```zig
         /// const route = EstablishTunnel.execute(&context, attempt);
         /// ```
         pub fn execute(context: *Context, attempt: Attempt(Stream)) ?Route(Session) {
-            if (port.passthrough(context, attempt.host)) {
+            if (!port.should_intercept(context, attempt.host)) {
                 port.record_passthrough(context);
                 return .passthrough;
             }
@@ -86,7 +87,7 @@ pub fn Command(comptime Context: type, comptime port: anytype) type {
 }
 
 const Step = enum {
-    passthrough,
+    check_interception,
     record_passthrough,
     intercept,
     record_failure,
@@ -96,7 +97,7 @@ const Step = enum {
 const Capture = struct {
     steps: [5]Step = undefined,
     len: usize = 0,
-    use_passthrough: bool = false,
+    allow_interception: bool = false,
     failure: ?tls.Error = null,
     protocol: tls.Session.Protocol = .http11,
     expected_host: []const u8 = "api.openai.com",
@@ -110,10 +111,10 @@ const Capture = struct {
         capture.len += 1;
     }
 
-    fn passthrough(capture: *Capture, host: []const u8) bool {
-        capture.record(.passthrough);
+    fn shouldIntercept(capture: *Capture, host: []const u8) bool {
+        capture.record(.check_interception);
         std.debug.assert(std.mem.eql(u8, capture.expected_host, host));
-        return capture.use_passthrough;
+        return capture.allow_interception;
     }
 
     fn recordPassthrough(capture: *Capture) void {
@@ -144,7 +145,7 @@ const Capture = struct {
 };
 
 const test_port: Port(Capture, u8, u16) = .{
-    .passthrough = Capture.passthrough,
+    .should_intercept = Capture.shouldIntercept,
     .record_passthrough = Capture.recordPassthrough,
     .intercept = Capture.intercept,
     .record_failure = Capture.recordFailure,
@@ -161,17 +162,17 @@ fn expectSteps(capture: *const Capture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
-test "configured passthrough avoids every TLS operation" {
-    var capture: Capture = .{ .use_passthrough = true };
+test "a host outside the allowlist avoids every TLS operation" {
+    var capture: Capture = .{};
 
     const route = TestCommand.execute(&capture, testAttempt()).?;
 
     try std.testing.expect(route == .passthrough);
-    try expectSteps(&capture, &.{ .passthrough, .record_passthrough });
+    try expectSteps(&capture, &.{ .check_interception, .record_passthrough });
 }
 
 test "HTTP11 negotiation transfers the established session" {
-    var capture: Capture = .{ .protocol = .http11 };
+    var capture: Capture = .{ .allow_interception = true, .protocol = .http11 };
 
     const route = TestCommand.execute(&capture, testAttempt()).?;
 
@@ -180,11 +181,11 @@ test "HTTP11 negotiation transfers the established session" {
         else => return error.ExpectedHttp11Route,
     };
     try std.testing.expectEqual(@as(u16, 17), session);
-    try expectSteps(&capture, &.{ .passthrough, .intercept });
+    try expectSteps(&capture, &.{ .check_interception, .intercept });
 }
 
 test "HTTP2 negotiation transfers the established session" {
-    var capture: Capture = .{ .protocol = .h2 };
+    var capture: Capture = .{ .allow_interception = true, .protocol = .h2 };
 
     const route = TestCommand.execute(&capture, testAttempt()).?;
 
@@ -193,7 +194,7 @@ test "HTTP2 negotiation transfers the established session" {
         else => return error.ExpectedH2Route,
     };
     try std.testing.expectEqual(@as(u16, 17), session);
-    try expectSteps(&capture, &.{ .passthrough, .intercept });
+    try expectSteps(&capture, &.{ .check_interception, .intercept });
 }
 
 test "every TLS establishment failure records and publishes exactly once" {
@@ -205,11 +206,11 @@ test "every TLS establishment failure records and publishes exactly once" {
     };
 
     for (failures) |failure| {
-        var capture: Capture = .{ .failure = failure };
+        var capture: Capture = .{ .allow_interception = true, .failure = failure };
 
         try std.testing.expect(TestCommand.execute(&capture, testAttempt()) == null);
 
-        try expectSteps(&capture, &.{ .passthrough, .intercept, .record_failure, .publish_failure });
+        try expectSteps(&capture, &.{ .check_interception, .intercept, .record_failure, .publish_failure });
         try std.testing.expectEqual(failure, capture.recorded_failure.?);
     }
 }

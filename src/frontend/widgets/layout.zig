@@ -58,10 +58,10 @@ pub const Regions = struct {
 
 test "regions expose the complete chrome layout" {
     const regions = Regions.calculate(120, 40, .{ .visible = true, .preferred_width = sidebar_width });
-    try @import("std").testing.expectEqual(ui.Rect{ .x = 62, .w = 58, .h = 1 }, regions.top);
-    try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 62, .h = 40 }, regions.sidebar);
-    try @import("std").testing.expectEqual(ui.Rect{ .x = 62, .y = 1, .w = 58, .h = 38 }, regions.workbench);
-    try @import("std").testing.expectEqual(ui.Rect{ .x = 62, .y = 39, .w = 58, .h = 1 }, regions.bottom);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
+    try @import("std").testing.expectEqual(ui.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
 }
 
 test "hiding the sidebar expands both bars to the full client width" {
@@ -77,10 +77,10 @@ test "layouts below the minimum useful sidebar width suppress it" {
     try @import("std").testing.expectEqual(@as(u16, 61), regions.workbench.w);
 }
 
-test "sidebar grows from forty two to sixty two columns" {
+test "sidebar starts at its minimum width on every viable host" {
     try @import("std").testing.expectEqual(@as(u16, 42), Regions.calculate(62, 20, .{ .visible = true, .preferred_width = sidebar_width }).sidebar.w);
-    try @import("std").testing.expectEqual(@as(u16, 52), Regions.calculate(72, 20, .{ .visible = true, .preferred_width = sidebar_width }).sidebar.w);
-    try @import("std").testing.expectEqual(@as(u16, 62), Regions.calculate(120, 20, .{ .visible = true, .preferred_width = sidebar_width }).sidebar.w);
+    try @import("std").testing.expectEqual(@as(u16, 42), Regions.calculate(72, 20, .{ .visible = true, .preferred_width = sidebar_width }).sidebar.w);
+    try @import("std").testing.expectEqual(@as(u16, 42), Regions.calculate(120, 20, .{ .visible = true, .preferred_width = sidebar_width }).sidebar.w);
 }
 
 test "sidebar honors an arbitrary preferred width" {
@@ -95,9 +95,9 @@ test "attachment shelf reserves pane rows without crossing chrome" {
     regions.reserveAttachments(true);
     try @import("std").testing.expectEqual(@as(u16, 32), regions.workbench.h);
     try @import("std").testing.expectEqual(ui.Rect{
-        .x = 62,
+        .x = 42,
         .y = 33,
-        .w = 58,
+        .w = 78,
         .h = 6,
     }, regions.attachments);
     try @import("std").testing.expectEqual(regions.bottom.y, regions.attachments.y + regions.attachments.h);

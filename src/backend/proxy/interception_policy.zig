@@ -1,39 +1,29 @@
-//! Exact-host policy for TLS tunnels that must bypass interception.
+//! Exact-host allowlist for TLS interception.
 
 const std = @import("std");
 const core = @import("telar-core");
 
-pub const max_configured_hosts = core.proxy.max_passthrough_hosts;
-
-const default_hosts = [_][]const u8{
-    "api.github.com",
-    "ab.chatgpt.com",
-};
-const capacity = max_configured_hosts + default_hosts.len;
+pub const max_configured_hosts = core.proxy.max_intercept_hosts;
 
 pub const Policy = struct {
-    storage: [capacity][]const u8 = undefined,
+    storage: [max_configured_hosts][]const u8 = undefined,
     count: u16 = 0,
 
-    /// Builds an immutable, case-insensitive exact-host policy. Configured
-    /// strings are borrowed and must outlive the policy.
+    /// Builds an immutable, case-insensitive exact-host allowlist. Strings are
+    /// borrowed and must outlive the policy. An empty policy intercepts no host.
     ///
     /// ```zig
-    /// const policy = try Policy.init(&.{"updates.example.com"});
+    /// const policy = try Policy.init(&.{"api.openai.com"});
     /// ```
     pub fn init(configured: []const []const u8) !Policy {
         if (configured.len > max_configured_hosts) {
-            return error.TooManyProxyPassthroughHosts;
+            return error.TooManyProxyInterceptHosts;
         }
 
         var policy: Policy = .{};
-        for (default_hosts) |host| {
-            policy.append(host);
-        }
-
         for (configured) |host| {
             if (host.len == 0 or host.len > core.proxy.max_hostname_bytes) {
-                return error.InvalidProxyPassthroughHost;
+                return error.InvalidProxyInterceptHost;
             }
 
             policy.append(host);
@@ -44,12 +34,12 @@ pub const Policy = struct {
         return policy;
     }
 
-    /// Reports whether the complete hostname belongs to the bypass policy.
-    /// Matching is ASCII case-insensitive and never matches suffixes.
+    /// Reports whether the complete hostname may be intercepted. Matching is
+    /// ASCII case-insensitive and never matches suffixes.
     ///
     /// ```zig
-    /// if (policy.contains("api.github.com")) {
-    ///     relayWithoutInterception();
+    /// if (policy.contains("api.openai.com")) {
+    ///     interceptTls();
     /// }
     /// ```
     pub fn contains(policy: *const Policy, host: []const u8) bool {
@@ -85,31 +75,34 @@ fn compare(target: []const u8, candidate: []const u8) std.math.Order {
     return core.proxy.orderHostname(target, candidate);
 }
 
-test "defaults and configured hosts form one deduplicated policy" {
+test "configured hosts form one canonical interception allowlist" {
     const policy = try Policy.init(&.{
-        "updates.example.com",
-        "API.GITHUB.COM",
+        "api.openai.com",
+        "API.OPENAI.COM",
+        "api.anthropic.com",
     });
 
-    try std.testing.expectEqual(@as(u16, 3), policy.count);
-    try std.testing.expect(policy.contains("api.github.com"));
-    try std.testing.expect(policy.contains("AB.CHATGPT.COM"));
-    try std.testing.expect(policy.contains("UPDATES.EXAMPLE.COM"));
+    try std.testing.expectEqual(@as(u16, 2), policy.count);
+    try std.testing.expect(policy.contains("API.ANTHROPIC.COM"));
+    try std.testing.expect(policy.contains("api.openai.com"));
 }
 
-test "matching requires the complete hostname" {
-    const policy = try Policy.init(&.{});
+test "empty policy and partial host matches never authorize interception" {
+    const empty = try Policy.init(&.{});
+    const configured = try Policy.init(&.{"api.openai.com"});
 
-    try std.testing.expect(!policy.contains("github.com"));
-    try std.testing.expect(!policy.contains("evil-api.github.com"));
-    try std.testing.expect(!policy.contains("api.github.com.evil.example"));
+    try std.testing.expect(!empty.contains("api.openai.com"));
+    try std.testing.expect(!configured.contains("openai.com"));
+    try std.testing.expect(!configured.contains("evil-api.openai.com"));
+    try std.testing.expect(!configured.contains("api.openai.com.evil.example"));
 }
 
 test "configured hosts respect count and hostname bounds" {
     var too_many: [max_configured_hosts + 1][]const u8 = @splat("example.com");
-    try std.testing.expectError(error.TooManyProxyPassthroughHosts, Policy.init(&too_many));
-    try std.testing.expectError(error.InvalidProxyPassthroughHost, Policy.init(&.{""}));
+
+    try std.testing.expectError(error.TooManyProxyInterceptHosts, Policy.init(&too_many));
+    try std.testing.expectError(error.InvalidProxyInterceptHost, Policy.init(&.{""}));
 
     const oversized = "x" ** (core.proxy.max_hostname_bytes + 1);
-    try std.testing.expectError(error.InvalidProxyPassthroughHost, Policy.init(&.{oversized}));
+    try std.testing.expectError(error.InvalidProxyInterceptHost, Policy.init(&.{oversized}));
 }

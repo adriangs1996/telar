@@ -3,7 +3,7 @@
 const std = @import("std");
 
 pub const minimum_width: u16 = 42;
-pub const default_width: u16 = 62;
+pub const default_width: u16 = minimum_width;
 pub const minimum_workbench_width: u16 = 20;
 pub const resize_step: u16 = 2;
 
@@ -58,9 +58,10 @@ fn maximumWidth(host_width: u16) u16 {
 }
 
 test "sidebar sizing retains useful bounds" {
+    try std.testing.expectEqual(minimum_width, default_width);
     try std.testing.expectEqual(@as(u16, 0), actualWidth(61, true, default_width));
     try std.testing.expectEqual(@as(u16, minimum_width), actualWidth(62, true, default_width));
-    try std.testing.expectEqual(@as(u16, 62), actualWidth(120, true, default_width));
+    try std.testing.expectEqual(@as(u16, minimum_width), actualWidth(120, true, default_width));
     try std.testing.expectEqual(@as(u16, 64), step(120, 62, .wider));
     try std.testing.expectEqual(@as(u16, 42), clampInteractive(120, 1));
 }

@@ -4,6 +4,7 @@ const std = @import("std");
 const context = @import("context.zig");
 
 pub const layout = @import("layout.zig");
+pub const modal = @import("modal.zig");
 pub const bar_content = @import("bar_content.zig");
 pub const bar_layout = @import("bar_layout.zig");
 pub const toast = @import("toast.zig");
