@@ -97,10 +97,11 @@ pub fn renderModal(
     context.hits.add(context.buffer.area(), .attachment_modal_close);
     context.hits.add(area, .attachment_modal_hold);
 
-    const style: ui.Style = .{ .fg = context.palette.text, .bg = context.palette.surface0 };
+    const background = context.palette.panel_bg;
+    const style: ui.Style = .{ .fg = context.palette.text, .bg = background };
     const border_style: ui.Style = .{
         .fg = context.palette.accent,
-        .bg = context.palette.surface0,
+        .bg = background,
     };
     if (graphical_frame) {
         context.buffer.fillWithoutCorners(area, style);
@@ -118,7 +119,7 @@ pub fn renderModal(
         title.w,
         .{
             .fg = context.palette.accent,
-            .bg = context.palette.surface0,
+            .bg = background,
             .flags = top_flags,
         },
     );
@@ -126,7 +127,7 @@ pub fn renderModal(
     context.hits.add(close, .attachment_modal_close);
     _ = context.buffer.writeText(close, close.x, close.y, "× ", .{
         .fg = context.palette.subtext0,
-        .bg = context.palette.surface0,
+        .bg = background,
         .flags = top_flags,
     });
     const image_area = area.inner(2);
@@ -137,7 +138,7 @@ pub fn renderModal(
             image_area.y + image_area.h / 2,
             "Kitty graphics unavailable — press Esc to close",
             image_area.w,
-            .{ .fg = context.palette.subtext0, .bg = context.palette.surface0 },
+            .{ .fg = context.palette.subtext0, .bg = background },
         );
         plan.modal = .{ .id = id, .area = image_area };
     }
@@ -182,7 +183,7 @@ test "modal surface ends at its edge-aligned border" {
     try std.testing.expect(buffer.at(area.x, area.y).?.style.flags.overline);
     try std.testing.expectEqualStrings("▏", buffer.at(area.x, area.y + 1).?.text());
     try std.testing.expectEqualStrings("▕", buffer.at(area.x + area.w - 1, area.y + 1).?.text());
-    try std.testing.expect(std.meta.eql(buffer.at(area.x, area.y + 1).?.style.bg, palette.surface0));
+    try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(area.x, area.y + 1).?.style.bg);
     try std.testing.expect(std.meta.eql(buffer.at(area.x - 1, area.y + 1).?.style.bg, ui.Color.default));
 }
 
@@ -205,6 +206,6 @@ test "graphical modal leaves corner cells to its rounded frame" {
 
     try std.testing.expectEqualStrings(".", buffer.at(area.x, area.y).?.text());
     try std.testing.expectEqualStrings(".", buffer.at(area.x + area.w - 1, area.y).?.text());
-    try std.testing.expect(std.meta.eql(buffer.at(area.x + 1, area.y).?.style.bg, palette.surface0));
+    try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(area.x + 1, area.y).?.style.bg);
     try std.testing.expect(!buffer.at(area.x + 2, area.y).?.style.flags.overline);
 }

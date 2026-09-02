@@ -104,7 +104,7 @@ pub const Renderer = struct {
     ) void {
         renderer.frame_usable = renderer.supported and renderer.cell_width != 0 and
             renderer.cell_height != 0 and !area.isEmpty();
-        const background = rgb(palette.surface0) orelse {
+        const background = rgb(palette.panel_bg) orelse {
             renderer.hide();
             return;
         };
@@ -554,6 +554,19 @@ test "rounded modal assets are exact-size bounded and transparent outside corner
     try std.testing.expectEqual(@as(u8, 255), corners.pixels[((19 * corners.width) * 4) + 3]);
     try std.testing.expectEqual(@as(u8, 255), renderer.assetFor(.horizontal).pixels[3]);
     try std.testing.expectEqual(@as(u8, 255), renderer.assetFor(.vertical).pixels[3]);
+}
+
+test "modal assets use the same background as the client chrome" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    _ = renderer.configure(.supported, 10, 20);
+    var palette = theme.default_theme.palette;
+    palette.panel_bg = .{ .rgb = .{ 1, 2, 3 } };
+    palette.surface0 = .{ .rgb = .{ 4, 5, 6 } };
+
+    renderer.prepare(.{ .x = 2, .y = 1, .w = 40, .h = 12 }, &palette);
+
+    try std.testing.expectEqual([3]u8{ 1, 2, 3 }, renderer.key.?.background);
 }
 
 test "modal frame transmission ends in eight natural-size placements" {

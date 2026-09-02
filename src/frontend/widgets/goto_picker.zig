@@ -73,21 +73,22 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
         return .{ .area = area, .cursor = null };
     }
 
-    const style: ui.Style = .{ .fg = context.palette.text, .bg = context.palette.surface0 };
+    const background = context.palette.panel_bg;
+    const style: ui.Style = .{ .fg = context.palette.text, .bg = background };
     if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, style);
     } else {
         context.buffer.fill(area, " ", style);
         context.buffer.edgeBox(area, .{
             .fg = context.palette.accent,
-            .bg = context.palette.surface0,
+            .bg = background,
         }, null);
     }
 
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
     _ = context.buffer.writeTruncated(title, title.x, title.y, input.title, title.w, .{
         .fg = context.palette.accent,
-        .bg = context.palette.surface0,
+        .bg = background,
         .flags = .{ .bold = true, .overline = !input.graphical_frame },
     });
 
@@ -95,7 +96,7 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
     const query: ui.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
     const prefix_width = context.buffer.writeText(query, query.x, query.y, "> ", .{
         .fg = context.palette.accent,
-        .bg = context.palette.surface0,
+        .bg = background,
         .flags = .{ .bold = true },
     });
     const field_width = query.w -| prefix_width;
@@ -109,11 +110,11 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
         }
 
         const line: ui.Rect = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
-        const background = if (row.selected) context.palette.surface1 else context.palette.surface0;
-        context.buffer.fill(line, " ", .{ .fg = context.palette.text, .bg = background });
+        const row_background = if (row.selected) context.palette.surface1 else background;
+        context.buffer.fill(line, " ", .{ .fg = context.palette.text, .bg = row_background });
         _ = context.buffer.writeTruncated(line, line.x + 1, line.y, row.slice(), line.w -| 2, .{
             .fg = if (row.selected) context.palette.accent else context.palette.text,
-            .bg = background,
+            .bg = row_background,
             .flags = .{ .bold = row.selected },
         });
         row_y += 1;
@@ -133,7 +134,7 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
         const footer: ui.Rect = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
         _ = context.buffer.writeTruncated(footer, footer.x, footer.y, footer_text, footer.w, .{
             .fg = context.palette.subtext0,
-            .bg = context.palette.surface0,
+            .bg = background,
             .underline_color = context.palette.accent,
             .flags = .{ .underline = if (input.graphical_frame) .none else .single },
         });
@@ -173,6 +174,7 @@ test "a graphical frame replaces the cell border and keeps the corners untouched
     cell_frame.graphical_frame = false;
     const cell_area = render(&context, buffer.area(), cell_frame).area;
     try std.testing.expect(buffer.at(cell_area.x + 1, cell_area.y).?.style.flags.overline);
+    try std.testing.expectEqualDeep(context.palette.panel_bg, buffer.at(cell_area.x + 1, cell_area.y).?.style.bg);
     try std.testing.expectEqual(ui.Style.Underline.single, buffer.at(cell_area.x + 2, cell_area.y + cell_area.h - 1).?.style.flags.underline);
 
     buffer.fill(buffer.area(), "#", outside);
@@ -185,4 +187,5 @@ test "a graphical frame replaces the cell border and keeps the corners untouched
     try std.testing.expectEqualStrings("#", buffer.at(area.x, area.y).?.text());
     try std.testing.expectEqualStrings("#", buffer.at(area.x + area.w - 1, area.y + area.h - 1).?.text());
     try std.testing.expectEqualStrings(" ", buffer.at(area.x, area.y + 1).?.text());
+    try std.testing.expectEqualDeep(context.palette.panel_bg, buffer.at(area.x, area.y + 1).?.style.bg);
 }
