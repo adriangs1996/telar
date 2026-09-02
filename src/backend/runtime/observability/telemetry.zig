@@ -153,6 +153,14 @@ pub const RuntimeMetrics = struct {
     /// Transfers frozen eagerly at a media-idle boundary rather than by the
     /// send loop catching one.
     graphics_transfers_staged: u64 = 0,
+    /// Freezes refused by the client or runtime byte credit. Every such
+    /// refusal skipped a generation the client never saw.
+    graphics_stage_blocked: u64 = 0,
+    /// Send-loop graphics lanes skipped because the pane's media actor was
+    /// running and no transfer was frozen: work waited on the actor.
+    graphics_stage_deferred: u64 = 0,
+    /// Copy of one generation out of live media storage into the transfer.
+    graphics_freeze: diagnostics.Timing = .{},
     media_bytes: u64 = 0,
     media_discarded_frames: u64 = 0,
     /// Shared frames dropped with no replacement ingested: the pane kept a
@@ -163,6 +171,8 @@ pub const RuntimeMetrics = struct {
     media_forwarded_frames: u64 = 0,
     media_resets: u64 = 0,
     media_failures: u64 = 0,
+    /// One media actor batch: shared frame folding, mapping and decoding.
+    media_ingest: diagnostics.Timing = .{},
     decode: diagnostics.Timing = .{},
     ingest: diagnostics.Timing = .{},
     encode: diagnostics.Timing = .{},
@@ -423,6 +433,19 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             clients.response_queue_dropped,
         },
     );
+    try output.print(
+        "\"graphics_stage_blocked\":{d},\"graphics_stage_deferred\":{d}," ++
+            "\"graphics_freeze_avg_us\":{d},\"graphics_freeze_max_us\":{d}," ++
+            "\"media_ingest_avg_us\":{d},\"media_ingest_max_us\":{d},",
+        .{
+            metrics.graphics_stage_blocked,
+            metrics.graphics_stage_deferred,
+            metrics.graphics_freeze.average() / std.time.ns_per_us,
+            metrics.graphics_freeze.max_ns / std.time.ns_per_us,
+            metrics.media_ingest.average() / std.time.ns_per_us,
+            metrics.media_ingest.max_ns / std.time.ns_per_us,
+        },
+    );
     try output.print("\"history_captured\":{d},\"history_dropped\":{d}," ++
         "\"history_candidate_input_bytes\":{d},\"history_input_dropped\":{d}," ++
         "\"history_prompt_markers\":{d},\"history_input_markers\":{d}," ++
@@ -628,7 +651,10 @@ test "runtime telemetry reports retained memory domains" {
         var panes: PaneStore = .{};
         panes.graphics_budget.used = 99;
         var buffer: [max_line_bytes]u8 = undefined;
-        const metrics: RuntimeMetrics = .{ .started_ns = 0 };
+        var metrics: RuntimeMetrics = .{ .started_ns = 0 };
+        metrics.graphics_stage_blocked = 4;
+        metrics.graphics_freeze.observe(3 * std.time.ns_per_us);
+        metrics.media_ingest.observe(7 * std.time.ns_per_us);
         const line = try formatRuntimeTelemetry(&buffer, .{
             .io = io,
             .metrics = &metrics,
@@ -669,6 +695,10 @@ test "runtime telemetry reports retained memory domains" {
         });
         try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_budget_used\":99") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"pane_media_used\":0") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_stage_blocked\":4") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_stage_deferred\":0") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"graphics_freeze_avg_us\":3") != null);
+        try std.testing.expect(std.mem.indexOf(u8, line, "\"media_ingest_max_us\":7") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"vt_scrollback_bytes\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"history_sqlite_bytes\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);

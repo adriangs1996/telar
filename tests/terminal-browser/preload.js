@@ -13,7 +13,10 @@ window.addEventListener("pointerdown", (event) => report("pointer", {
   button: event.button,
 }));
 
+// The verifier keeps the animated page alive this long; the measurement mode
+// stretches it to cover its frames-per-second window.
+const runMs = Number(process.env.TELAR_TERMINAL_BROWSER_RUN_MS) || 8000;
 setTimeout(() => {
   report("completed");
   globalThis.terminalBrowser.quit();
-}, 8000);
+}, runMs);

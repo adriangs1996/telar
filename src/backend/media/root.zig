@@ -40,6 +40,9 @@ pub const Stats = struct {
     /// while the graphics revision stays still isolates a silent load
     /// failure inside the emulator.
     forwarded_frames: u64 = 0,
+    /// Wall time the media actor spent on this batch, including every shared
+    /// frame it mapped, copied into pane storage and unlinked.
+    elapsed_ns: u64 = 0,
     reset: bool = false,
     failed: bool = false,
 };

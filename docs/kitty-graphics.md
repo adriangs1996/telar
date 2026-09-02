@@ -81,9 +81,10 @@ client has retired enough image storage and returned that credit.
 The default decoded-memory limits are:
 
 - 64 images and 256 placements per pane.
-- 64 MiB per pane and 256 MiB per runtime.
-- 32 MiB per VT screen with the default pane quota
-  (`min(32 MiB, pane quota / 2)`).
+- 256 MiB per pane and 512 MiB per runtime.
+- 128 MiB per VT screen with the default pane quota
+  (`min(128 MiB, pane quota / 2)`), so one 6016x3384 RGBA frame fits and
+  three fit the pane.
 - 64 KiB per child APC payload and 4096 chunks per image.
 - 64 queued PTY replies, each at most 1024 bytes.
 
@@ -191,6 +192,12 @@ zig build verify-terminal-browser
 zig build verify-terminal-browser -- \
   --terminal-browser-repo /path/to/terminal-browser --skip-build
 ```
+
+`--measure SECONDS` keeps the animated fixture running that long, builds
+Telar as `-Doptimize=ReleaseFast -Ddiagnostics=true` so the counters exist
+without Debug overhead, and adds a `frames` block: frames per second forwarded
+by the media actor, published by the runtime and presented by the client, with
+the ingest, freeze, deferral and retire-latency figures behind them.
 
 It writes its machine-readable result to
 `zig-out/terminal-browser-verification.json`. On 2026-08-23 it passed against:

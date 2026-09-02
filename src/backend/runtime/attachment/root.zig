@@ -29,7 +29,15 @@ pub fn initSharedFreezeNonce(io: Io) void {
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 pub const Attachment = struct {
-    pub const GraphicsCounts = struct { images: u32, placements: u32 };
+    pub const GraphicsCounts = struct {
+        images: u32,
+        placements: u32,
+        /// Freezes refused because the next image exceeded the client's or
+        /// the runtime's memory credit.
+        stage_blocked: u32,
+        /// Time spent copying frozen generations out of live media storage.
+        freeze: core.diagnostics.Timing,
+    };
     pub const CellPreparation = struct {
         io: Io,
         buffer: []u8,
@@ -57,7 +65,7 @@ pub const Attachment = struct {
     pub const CommitEffect = struct {
         detach_after_send: ?schema.PaneId = null,
         graphics_message: bool = false,
-        graphics: GraphicsCounts = .{ .images = 0, .placements = 0 },
+        graphics: GraphicsCounts = .{ .images = 0, .placements = 0, .stage_blocked = 0, .freeze = .{} },
     };
     pane: *Pane,
     cells: cell.Sync,
@@ -265,9 +273,13 @@ pub const Attachment = struct {
         const result: GraphicsCounts = .{
             .images = attachment.graphics.sent_images,
             .placements = attachment.graphics.sent_placements,
+            .stage_blocked = attachment.graphics.stage_blocked,
+            .freeze = attachment.graphics.freeze,
         };
         attachment.graphics.sent_images = 0;
         attachment.graphics.sent_placements = 0;
+        attachment.graphics.stage_blocked = 0;
+        attachment.graphics.freeze = .{};
         return result;
     }
 
@@ -870,11 +882,19 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
             .byte_len = pixels.len,
         };
         _ = try metadata.validate(pane.graphics_storage_limit);
-        if (pixels.len > attachment.graphics.credit or pixels.len > global_credit)
+        if (pixels.len > attachment.graphics.credit or pixels.len > global_credit) {
+            attachment.graphics.stage_blocked +|= 1;
             return .blocked;
+        }
         if (!pane.media_allocator.reserveManual(pixels.len))
             return error.GraphicsQuotaExceeded;
         errdefer pane.media_allocator.releaseManual(pixels.len);
+        const freeze_started = core.diagnostics.now(pane.io);
+        defer if (comptime core.diagnostics.enabled) {
+            attachment.graphics.freeze.observe(
+                core.diagnostics.elapsed(freeze_started, core.diagnostics.now(pane.io)),
+            );
+        };
         var transfer: graphics.Sync.Transfer = .{
             .metadata = metadata,
             .pixels = &.{},

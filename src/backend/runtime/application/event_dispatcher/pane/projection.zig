@@ -154,7 +154,9 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             defer path.restore();
 
             var stats: media_mod.Stats = .{};
+            const started = diagnostics.now(work.pane.io);
             work.pane.processMedia(work.current_size, &stats);
+            stats.elapsed_ns = diagnostics.elapsed(started, diagnostics.now(work.pane.io));
             return .{ .pane = work.pane.key(), .stats = stats };
         }
 

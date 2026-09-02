@@ -110,6 +110,14 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("telar-frontend", frontend);
     exe.root_module.addImport("telar-core", core);
     exe.root_module.addImport("ghostty-vt", ghostty_vt);
+    const diagnostics_enabled = b.option(
+        bool,
+        "diagnostics",
+        "Collect development telemetry in optimized builds",
+    ) orelse false;
+    const exe_options = b.addOptions();
+    exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
+    exe.root_module.addOptions("build_options", exe_options);
     b.installArtifact(exe);
 
     const run_exe = b.addRunArtifact(exe);

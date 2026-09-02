@@ -121,6 +121,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
             coordinator.resources.metrics.media_discarded_frames +|= stats.discarded_frames;
             coordinator.resources.metrics.media_unavailable_frames +|= stats.unavailable_frames;
             coordinator.resources.metrics.media_forwarded_frames +|= stats.forwarded_frames;
+            coordinator.resources.metrics.media_ingest.observe(stats.elapsed_ns);
 
             if (stats.failed) {
                 coordinator.resources.metrics.media_failures +|= 1;

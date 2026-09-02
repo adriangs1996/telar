@@ -9,6 +9,7 @@ const multiplexer = workspace.multiplexer;
 const capability_mod = @import("capabilities.zig");
 
 const Io = std.Io;
+const diagnostics = core.diagnostics;
 const schema = core.schema;
 const graphics = core.graphics;
 
@@ -101,6 +102,8 @@ const ImageEntry = struct {
     emitted_shared: bool = false,
     /// Writer pass that emitted the shared name, for the consume deadline.
     transmitted_pass: u64 = 0,
+    /// Writer clock when the shared name was emitted; zero outside Debug.
+    transmitted_ns: u64 = 0,
 };
 
 /// Writer passes a host may sit on a shared name before the client reclaims
@@ -174,6 +177,12 @@ pub const Store = struct {
     /// the consume deadline needs no clock.
     pass_counter: u64 = 0,
     shared_expiries: u8 = 0,
+    /// Monotonic clock stamped by the writer at each pass. Retirement is
+    /// observed on writer passes, so this is the clock retire latency uses.
+    clock_ns: u64 = 0,
+    /// Emission of a shared name to the host until the host's unlink was
+    /// observed. Measured at writer-pass granularity.
+    retire_latency: diagnostics.Timing = .{},
     damage: bool = false,
     ingress_revision: u64 = 0,
     partial: ?PartialTransmission = null,
@@ -973,6 +982,13 @@ pub const Store = struct {
                 if (!entry.value_ptr.retire_pending or
                     store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id) or
                     !store.sharedPixelsConsumed(entry.value_ptr)) continue;
+                if (comptime diagnostics.enabled) {
+                    if (entry.value_ptr.emitted_shared and entry.value_ptr.transmitted_ns != 0 and
+                        store.clock_ns != 0)
+                    {
+                        store.retire_latency.observe(store.clock_ns -| entry.value_ptr.transmitted_ns);
+                    }
+                }
                 retired[count] = entry.key_ptr.*;
                 count += 1;
                 if (count == retired.len) break;
@@ -1091,6 +1107,8 @@ pub const KittyGraphicsWriter = struct {
     /// Emission counts accumulated across this writer's passes; the client
     /// folds them into its telemetry after each flush.
     stats: Stats = .{},
+    /// Monotonic time of this pass, for retire latency. Zero disables it.
+    now_ns: u64 = 0,
 
     pub const Stats = struct {
         /// Images handed to the host as a shared-memory name.
@@ -1113,6 +1131,7 @@ pub const KittyGraphicsWriter = struct {
 
     pub fn write(self: *KittyGraphicsWriter, writer: *Io.Writer) Io.Writer.Error!usize {
         self.store.pass_counter +%= 1;
+        self.store.clock_ns = self.now_ns;
         self.store.expireSharedTransmissions();
         if (!self.store.damage or self.cell_width == 0 or self.cell_height == 0) return 0;
         self.store.collectRetired(null, null);
@@ -1215,6 +1234,7 @@ pub const KittyGraphicsWriter = struct {
                 image.transmitted = true;
                 image.emitted_shared = true;
                 image.transmitted_pass = self.store.pass_counter;
+                image.transmitted_ns = self.now_ns;
                 self.stats.shared_images += 1;
                 budget -= @min(budget, emitted);
                 continue;

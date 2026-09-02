@@ -40,6 +40,61 @@ def latest_matching(directory: Path, pattern: str) -> Path | None:
     return matches[-1] if matches else None
 
 
+def counter_rates(samples: list[dict[str, object]], fields: list[str]) -> list[float]:
+    """Per-sample rates of the summed cumulative counters, in units per second."""
+    rates: list[float] = []
+    for previous, current in zip(samples, samples[1:]):
+        elapsed_ms = int(current.get("ts_ms", 0)) - int(previous.get("ts_ms", 0))
+        if elapsed_ms <= 0:
+            continue
+        delta = sum(int(current.get(field, 0)) for field in fields) - sum(
+            int(previous.get(field, 0)) for field in fields
+        )
+        rates.append(max(delta, 0) * 1000.0 / elapsed_ms)
+    return rates
+
+
+def steady_average(rates: list[float]) -> float:
+    """Mean over the window without the two warm-up seconds and the final one."""
+    window = rates[2:-1] if len(rates) > 3 else rates
+    return sum(window) / len(window) if window else 0.0
+
+
+def latest(samples: list[dict[str, object]], field: str) -> int:
+    return int(samples[-1].get(field, 0)) if samples else 0
+
+
+def frame_report(
+    runtime_samples: list[dict[str, object]], client_samples: list[dict[str, object]]
+) -> dict[str, object]:
+    forwarded = counter_rates(runtime_samples, ["media_forwarded_frames"])
+    published = counter_rates(runtime_samples, ["graphics_images_sent"])
+    presented = counter_rates(client_samples, ["pane_shared_images", "pane_inline_images"])
+    return {
+        "forwarded_per_second": round(steady_average(forwarded), 2),
+        "published_per_second": round(steady_average(published), 2),
+        "presented_per_second": round(steady_average(presented), 2),
+        "forwarded_series": [round(rate, 1) for rate in forwarded],
+        "published_series": [round(rate, 1) for rate in published],
+        "presented_series": [round(rate, 1) for rate in presented],
+        "frame_bytes": max((int(s.get("graphics_transfer_bytes", 0)) for s in runtime_samples), default=0),
+        "media_discarded_frames": latest(runtime_samples, "media_discarded_frames"),
+        "media_unavailable_frames": latest(runtime_samples, "media_unavailable_frames"),
+        "media_ingest_avg_us": latest(runtime_samples, "media_ingest_avg_us"),
+        "media_ingest_max_us": latest(runtime_samples, "media_ingest_max_us"),
+        "graphics_freeze_avg_us": latest(runtime_samples, "graphics_freeze_avg_us"),
+        "graphics_freeze_max_us": latest(runtime_samples, "graphics_freeze_max_us"),
+        "graphics_stage_blocked": latest(runtime_samples, "graphics_stage_blocked"),
+        "graphics_stage_deferred": latest(runtime_samples, "graphics_stage_deferred"),
+        "media_deferrals": latest(client_samples, "media_deferrals"),
+        "pane_present_interval_avg_us": latest(client_samples, "pane_present_interval_avg_us"),
+        "pane_present_interval_max_us": latest(client_samples, "pane_present_interval_max_us"),
+        "shared_retire_latency_avg_us": latest(client_samples, "shared_retire_latency_avg_us"),
+        "shared_retire_latency_max_us": latest(client_samples, "shared_retire_latency_max_us"),
+        "shared_expiries": latest(client_samples, "shared_expiries"),
+    }
+
+
 def launch_ghostty(run_directory: Path, wrapper: Path) -> str:
     script = r'''
 on run argv
@@ -97,6 +152,14 @@ def main() -> int:
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--keep", action="store_true")
+    parser.add_argument(
+        "--measure",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="keep the animated fixture running this long after it loads and "
+        "report frames per second at each pipeline stage",
+    )
     args = parser.parse_args()
 
     telar_root = Path(__file__).resolve().parents[1]
@@ -118,7 +181,12 @@ def main() -> int:
     if not args.skip_build:
         run(["pnpm", "install", "--frozen-lockfile"], cwd=browser_root)
         run(["pnpm", "build"], cwd=browser_root)
-        run(["zig", "build"], cwd=telar_root)
+        # Measurement wants the shipped optimization level with the telemetry
+        # counters still compiled in; the plain check keeps the Debug build.
+        zig_build = ["zig", "build"]
+        if args.measure > 0:
+            zig_build += ["-Doptimize=ReleaseFast", "-Ddiagnostics=true"]
+        run(zig_build, cwd=telar_root)
 
     telar = telar_root / "zig-out/bin/telar"
     cli = browser_root / "cli/dist/main.js"
@@ -141,6 +209,7 @@ def main() -> int:
             "TELAR_SOCKET": str(socket),
             "TELAR_HISTORY": str(history),
             "TELAR_TERMINAL_BROWSER_EVIDENCE": str(evidence),
+            "TELAR_TERMINAL_BROWSER_RUN_MS": str(int(max(8.0, args.measure) * 1000)),
             "XDG_DATA_HOME": str(run_directory / "terminal-browser-data"),
         }
     )
@@ -164,6 +233,7 @@ def main() -> int:
                 "TELAR_SOCKET",
                 "TELAR_HISTORY",
                 "TELAR_TERMINAL_BROWSER_EVIDENCE",
+                "TELAR_TERMINAL_BROWSER_RUN_MS",
                 "XDG_DATA_HOME",
             )
         )
@@ -174,7 +244,9 @@ def main() -> int:
 
     terminal_id = launch_ghostty(run_directory, wrapper)
 
-    deadline = time.monotonic() + args.timeout
+    # The fixture animates on requestAnimationFrame until its preload quits
+    # the browser, so a longer measurement window only stretches that timer.
+    deadline = time.monotonic() + args.timeout + args.measure
     completed = False
     input_injected = False
     while time.monotonic() < deadline:
@@ -237,7 +309,7 @@ def main() -> int:
         ),
         "history_isolated": history_commands == 0,
     }
-    result = {
+    result: dict[str, object] = {
         "terminal_browser_revision": revision,
         "ghostty_version": subprocess.check_output(
             ["ghostty", "+version"], text=True
@@ -246,6 +318,8 @@ def main() -> int:
         "browser_events": events,
         "run_directory": str(run_directory),
     }
+    if args.measure > 0:
+        result["frames"] = frame_report(runtime_samples, client_samples)
     result_path = telar_root / "zig-out/terminal-browser-verification.json"
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

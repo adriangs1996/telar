@@ -88,6 +88,8 @@ pub const Sync = struct {
     shared_transport: bool = false,
     sent_images: u32 = 0,
     sent_placements: u32 = 0,
+    stage_blocked: u32 = 0,
+    freeze: core.diagnostics.Timing = .{},
     transfer: ?Transfer = null,
     known_images: [core.graphics.max_images_per_pane]?KnownImage =
         [_]?KnownImage{null} ** core.graphics.max_images_per_pane,

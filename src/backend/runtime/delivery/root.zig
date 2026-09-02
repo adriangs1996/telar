@@ -484,6 +484,8 @@ pub const Delivery = struct {
                         metrics.graphics_bytes += prepared.payload.len;
                         metrics.graphics_images_sent +|= effect.graphics.images;
                         metrics.graphics_placements_sent +|= effect.graphics.placements;
+                        metrics.graphics_stage_blocked +|= effect.graphics.stage_blocked;
+                        metrics.graphics_freeze.merge(effect.graphics.freeze);
                     }
                 }
                 delivery.next_attachment = (work.index + 1) % AttachmentStore.capacity;
@@ -536,8 +538,13 @@ pub const Delivery = struct {
                 .graphics => graphics: {
                     const frozen = attachment.hasFrozenGraphics();
                     if (attachment.pane.ingest_pending and !frozen) break :graphics null;
-                    if (attachment.pane.media.worker != null and !frozen) break :graphics null;
                     if (!attachment.hasGraphicsWork()) break :graphics null;
+                    if (attachment.pane.media.worker != null and !frozen) {
+                        if (comptime diagnostics.enabled) {
+                            preparation.metrics.graphics_stage_deferred +|= 1;
+                        }
+                        break :graphics null;
+                    }
                     break :graphics attachment.prepareNextGraphics(.{
                         .buffer = buffer,
                         .global_credit = attachments.availableGraphicsCredit(),

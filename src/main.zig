@@ -9,6 +9,9 @@ const version = "0.0.0";
 // route them to its log; the bootstrap keeps stderr out of the drawing path.
 pub const std_options: std.Options = .{ .log_level = .err };
 
+/// Opt-in for development telemetry in optimized builds (`-Ddiagnostics`).
+pub const telar_diagnostics = @import("build_options").diagnostics;
+
 const Cli = cli_mod.Cli;
 
 fn collectArgs(init: std.process.Init, storage: *[cli_mod.max_args][*:0]const u8) ![]const [*:0]const u8 {

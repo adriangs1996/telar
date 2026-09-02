@@ -17,6 +17,9 @@ pub const ClientKey = client_session.Key;
 pub const IngestTestGate = config.IngestTestGate;
 pub const LaunchTestFault = config.LaunchTestFault;
 pub const system_metrics = observability.system_metrics;
+/// Freezing of one generation into a runtime-owned shared object, exposed so
+/// the benchmarks measure the same copy the send loop performs.
+pub const freezeSharedPixels = @import("attachment/graphics.zig").freezeSharedPixels;
 pub const serve = instance.serve;
 
 test "Runtime owns its endpoint until the injected stop dependency fires" {

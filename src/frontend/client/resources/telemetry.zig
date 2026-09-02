@@ -56,6 +56,9 @@ pub const Metrics = struct {
     modal_graphics_flushed_bytes: u64 = 0,
     attachment_graphics_flushed_bytes: u64 = 0,
     media_flushes: u64 = 0,
+    /// Media passes that yielded to a pending cell frame and re-armed a
+    /// whole pacer interval later.
+    media_deferrals: u64 = 0,
     max_pending_updates: u64 = 0,
     mouse_events: u64 = 0,
     chrome_scanned_cells: u64 = 0,
@@ -69,6 +72,8 @@ pub const Metrics = struct {
     media_flush: diagnostics.Timing = .{},
     draw_lateness: diagnostics.Timing = .{},
     paced_interval: diagnostics.Timing = .{},
+    /// Time between consecutive pane images handed to the host.
+    pane_present_interval: diagnostics.Timing = .{},
 };
 
 pub const State = struct {
@@ -159,6 +164,8 @@ pub const Snapshot = struct {
     modal_cache_bytes: usize,
     attachment_cache_bytes: usize,
     screen_bytes: usize,
+    shared_expiries: u8,
+    shared_retire_latency: diagnostics.Timing,
     heap: diagnostics.Heap.Snapshot,
 };
 
@@ -280,20 +287,27 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         "\"flush_avg_us\":{d},\"flush_max_us\":{d}," ++
         "\"media_flush_avg_us\":{d},\"media_flush_max_us\":{d}," ++
         "\"draw_late_avg_us\":{d},\"draw_late_max_us\":{d}," ++
-        "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}", .{
-        metrics.pane_graphics_flushed_bytes,                metrics.toast_graphics_flushed_bytes,
-        metrics.sidebar_graphics_flushed_bytes,             metrics.icon_graphics_flushed_bytes,
-        metrics.modal_graphics_flushed_bytes,               metrics.attachment_graphics_flushed_bytes,
-        metrics.media_flushes,                              metrics.decode.average() / std.time.ns_per_us,
-        metrics.decode.max_ns / std.time.ns_per_us,         metrics.apply.average() / std.time.ns_per_us,
-        metrics.apply.max_ns / std.time.ns_per_us,          metrics.compose.average() / std.time.ns_per_us,
-        metrics.compose.max_ns / std.time.ns_per_us,        metrics.ack_enqueue.average() / std.time.ns_per_us,
-        metrics.ack_enqueue.max_ns / std.time.ns_per_us,    metrics.input_enqueue.average() / std.time.ns_per_us,
-        metrics.input_enqueue.max_ns / std.time.ns_per_us,  metrics.flush.average() / std.time.ns_per_us,
-        metrics.flush.max_ns / std.time.ns_per_us,          metrics.media_flush.average() / std.time.ns_per_us,
-        metrics.media_flush.max_ns / std.time.ns_per_us,    metrics.draw_lateness.average() / std.time.ns_per_us,
-        metrics.draw_lateness.max_ns / std.time.ns_per_us,  metrics.paced_interval.average() / std.time.ns_per_us,
-        metrics.paced_interval.max_ns / std.time.ns_per_us,
+        "\"paced_interval_avg_us\":{d},\"paced_interval_max_us\":{d}," ++
+        "\"media_deferrals\":{d}," ++
+        "\"pane_present_interval_avg_us\":{d},\"pane_present_interval_max_us\":{d}," ++
+        "\"shared_expiries\":{d}," ++
+        "\"shared_retire_latency_avg_us\":{d},\"shared_retire_latency_max_us\":{d}", .{
+        metrics.pane_graphics_flushed_bytes,                          metrics.toast_graphics_flushed_bytes,
+        metrics.sidebar_graphics_flushed_bytes,                       metrics.icon_graphics_flushed_bytes,
+        metrics.modal_graphics_flushed_bytes,                         metrics.attachment_graphics_flushed_bytes,
+        metrics.media_flushes,                                        metrics.decode.average() / std.time.ns_per_us,
+        metrics.decode.max_ns / std.time.ns_per_us,                   metrics.apply.average() / std.time.ns_per_us,
+        metrics.apply.max_ns / std.time.ns_per_us,                    metrics.compose.average() / std.time.ns_per_us,
+        metrics.compose.max_ns / std.time.ns_per_us,                  metrics.ack_enqueue.average() / std.time.ns_per_us,
+        metrics.ack_enqueue.max_ns / std.time.ns_per_us,              metrics.input_enqueue.average() / std.time.ns_per_us,
+        metrics.input_enqueue.max_ns / std.time.ns_per_us,            metrics.flush.average() / std.time.ns_per_us,
+        metrics.flush.max_ns / std.time.ns_per_us,                    metrics.media_flush.average() / std.time.ns_per_us,
+        metrics.media_flush.max_ns / std.time.ns_per_us,              metrics.draw_lateness.average() / std.time.ns_per_us,
+        metrics.draw_lateness.max_ns / std.time.ns_per_us,            metrics.paced_interval.average() / std.time.ns_per_us,
+        metrics.paced_interval.max_ns / std.time.ns_per_us,           metrics.media_deferrals,
+        metrics.pane_present_interval.average() / std.time.ns_per_us, metrics.pane_present_interval.max_ns / std.time.ns_per_us,
+        state.shared_expiries,                                        state.shared_retire_latency.average() / std.time.ns_per_us,
+        state.shared_retire_latency.max_ns / std.time.ns_per_us,
     });
     try writer.print(",\"rss_bytes\":{d},\"lua_used\":{d},\"lua_limit\":{d}," ++
         "\"kitty_store_bytes\":{d},\"toast_cache_bytes\":{d}," ++
@@ -429,6 +443,8 @@ fn capture(client: *Client, heap: diagnostics.Heap.Snapshot) ?Snapshot {
         .screen_bytes = (client.presenter.screen.front.cells.len +
             client.presenter.screen.back.cells.len) *
             @sizeOf(core.ui.Cell),
+        .shared_expiries = client.graphics_store.shared_expiries,
+        .shared_retire_latency = client.graphics_store.retire_latency,
         .heap = heap,
     };
 }
@@ -484,6 +500,8 @@ test "client telemetry reports lua kitty and heap retained bytes" {
             .modal_cache_bytes = 18,
             .attachment_cache_bytes = 20,
             .screen_bytes = 80 * 24 * 32,
+            .shared_expiries = 1,
+            .shared_retire_latency = .{},
             .heap = .{
                 .live_bytes = 48,
                 .allocs = 3,
@@ -495,6 +513,10 @@ test "client telemetry reports lua kitty and heap retained bytes" {
     try std.testing.expect(std.mem.indexOf(u8, line, "\"lua_used\":123") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"lua_limit\":1024") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"kitty_store_bytes\":4") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"shared_expiries\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"media_deferrals\":0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"pane_present_interval_avg_us\":0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, line, "\"shared_retire_latency_max_us\":0") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"toast_cache_bytes\":8") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"sidebar_cache_bytes\":12") != null);
     try std.testing.expect(std.mem.indexOf(u8, line, "\"icon_cache_bytes\":16") != null);

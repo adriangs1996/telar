@@ -10,7 +10,14 @@ const Io = std.Io;
 const File = Io.File;
 const Allocator = std.mem.Allocator;
 
-pub const enabled = builtin.mode == .Debug;
+const root = @import("root");
+
+/// Debug builds always collect diagnostics. An optimized build opts in by
+/// declaring `pub const telar_diagnostics = true` at its root, which the
+/// `-Ddiagnostics` build option does for the shipped binary, so exterior
+/// measurements can read the counters without measuring safety checks.
+pub const enabled = builtin.mode == .Debug or
+    (@hasDecl(root, "telar_diagnostics") and root.telar_diagnostics);
 pub const interval_ns: u64 = std.time.ns_per_s;
 
 pub const Timing = struct {
@@ -26,6 +33,18 @@ pub const Timing = struct {
 
     pub fn average(timing: Timing) u64 {
         return if (timing.count == 0) 0 else timing.total_ns / timing.count;
+    }
+
+    /// Folds samples collected elsewhere into this timing, so a per-object
+    /// timing drained on a boundary can feed one process-wide aggregate.
+    ///
+    /// ```zig
+    /// metrics.graphics_freeze.merge(counts.freeze);
+    /// ```
+    pub fn merge(timing: *Timing, other: Timing) void {
+        timing.count +|= other.count;
+        timing.total_ns +|= other.total_ns;
+        timing.max_ns = @max(timing.max_ns, other.max_ns);
     }
 };
 
@@ -341,6 +360,18 @@ test "timings retain count, average, and worst sample" {
     timing.observe(10);
     timing.observe(30);
     try std.testing.expectEqual(@as(u64, 2), timing.count);
+    try std.testing.expectEqual(@as(u64, 20), timing.average());
+    try std.testing.expectEqual(@as(u64, 30), timing.max_ns);
+}
+
+test "merged timings add counts and keep the worst sample" {
+    var timing: Timing = .{};
+    timing.observe(10);
+    var other: Timing = .{};
+    other.observe(30);
+    other.observe(20);
+    timing.merge(other);
+    try std.testing.expectEqual(@as(u64, 3), timing.count);
     try std.testing.expectEqual(@as(u64, 20), timing.average());
     try std.testing.expectEqual(@as(u64, 30), timing.max_ns);
 }

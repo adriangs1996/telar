@@ -114,6 +114,8 @@ draw_due_ns: u64 = 0,
 media_tick_pending: bool = false,
 pending_updates: usize = 0,
 last_presented_ns: ?u64 = null,
+/// When the last pane image reached the host, for the present interval.
+last_pane_present_ns: ?u64 = null,
 /// When the host terminal last delivered input bytes. Zero until the
 /// first read, so a fresh session starts on the boosted media budget.
 last_input_ns: u64 = 0,
@@ -373,6 +375,9 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
 /// ```
 pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Resources) !void {
     if (presenter.pending_updates != 0 or presenter.draw_pending) {
+        if (comptime diagnostics.enabled) {
+            presenter.metrics.media_deferrals += 1;
+        }
         try presenter.requestMedia();
         return;
     }
@@ -403,6 +408,7 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
             .cell_width = projection.host_size.cell_width_px,
             .cell_height = projection.host_size.cell_height_px,
             .budget = kitty.transmission_budget_per_frame,
+            .now_ns = if (comptime diagnostics.enabled) monotonic(presenter.io) else 0,
         },
         .sidebar = resources.view.kittySidebar(),
         .icons = resources.view.kittyIcons(),
@@ -424,6 +430,13 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
         presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
         presenter.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
         presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
+        if (graphics_stats.shared_images + graphics_stats.inline_images != 0) {
+            const presented_ns = monotonic(presenter.io);
+            if (presenter.last_pane_present_ns) |previous| {
+                presenter.metrics.pane_present_interval.observe(presented_ns -| previous);
+            }
+            presenter.last_pane_present_ns = presented_ns;
+        }
     }
 
     if (covered_before != resources.view.graphicalToastsCover(projection.notifications) or

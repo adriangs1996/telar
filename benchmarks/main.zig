@@ -131,6 +131,24 @@ const cases = [_]Case{
         .work_unit = "pixels",
         .p99_budget_ns = 100 * std.time.ns_per_ms,
     },
+    .{
+        .name = "backend.kitty.shared_frame_3840x2160.publish",
+        .work_per_op = 3840 * 2160,
+        .work_unit = "pixels",
+        .p99_budget_ns = 100 * std.time.ns_per_ms,
+    },
+    .{
+        .name = "backend.kitty.shared_frame_3840x2160.ingest",
+        .work_per_op = 3840 * 2160,
+        .work_unit = "pixels",
+        .p99_budget_ns = 100 * std.time.ns_per_ms,
+    },
+    .{
+        .name = "backend.kitty.shared_frame_3840x2160.freeze",
+        .work_per_op = 3840 * 2160,
+        .work_unit = "pixels",
+        .p99_budget_ns = 100 * std.time.ns_per_ms,
+    },
     .{ .name = "frontend.kitty.transmit_rgba_64x64", .work_per_op = 64 * 64, .work_unit = "pixels" },
     .{ .name = "frontend.kitty.idle", .work_per_op = 1, .work_unit = "frames" },
     .{
@@ -756,7 +774,6 @@ const ClientUiContext = struct {
             var label_buffer: [schema.max_tab_label_bytes]u8 = undefined;
             const label = try std.fmt.bufPrint(&label_buffer, "tab-{d}", .{index + 1});
             _ = try tabs.addCreated(.{
-                .request_id = @enumFromInt(index + 1),
                 .location = .{
                     .workspace = workspace,
                     .tab_id = @enumFromInt(index + 1),
@@ -771,8 +788,14 @@ const ClientUiContext = struct {
         var view = try frontend.client.View.init(gpa, cols, rows);
         errdefer view.deinit();
         const model = &tabs.active().?.model;
-        _ = try model.render(&screen, view.workbench());
-        _ = try view.render(&screen, &tabs, model, true, null);
+        var compositor = frontend.multiplexer.Compositor.init(gpa);
+        defer compositor.deinit();
+        _ = try compositor.render(.{
+            .model = model,
+            .screen = &screen,
+            .input = .{ .area = view.workbench(), .palette = view.palette() },
+        });
+        _ = try view.render(&screen, .{ .tabs = &tabs, .model = model, .force = true });
         return .{ .tabs = tabs, .screen = screen, .view = view };
     }
 
@@ -788,13 +811,10 @@ fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
     for (0..iterations) |iteration| {
         context.view.hovered = if (iteration & 1 == 0) .active_workspace else .toggle_workspace_list;
         context.view.invalidate();
-        const stats = try context.view.render(
-            &context.screen,
-            &context.tabs,
-            &context.tabs.active().?.model,
-            false,
-            null,
-        );
+        const stats = try context.view.render(&context.screen, .{
+            .tabs = &context.tabs,
+            .model = &context.tabs.active().?.model,
+        });
         checksum +%= stats.scanned + stats.damaged;
     }
     return checksum;
@@ -854,9 +874,24 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
     return checksum;
 }
 
+/// Composes one model over the whole host screen with the default palette,
+/// the way the presenter does for a client without chrome.
+fn composeFullScreen(
+    compositor: *frontend.multiplexer.Compositor,
+    model: *const frontend.multiplexer.Model,
+    screen: *frontend.term.Screen,
+) !frontend.multiplexer.CompositionResult {
+    return compositor.render(.{
+        .model = model,
+        .screen = screen,
+        .input = .{ .area = screen.back.area(), .palette = &frontend.theme.default_theme.palette },
+    });
+}
+
 const MultiplexerContext = struct {
     model: frontend.multiplexer.Model,
     screen: frontend.term.Screen,
+    compositor: frontend.multiplexer.Compositor,
 
     fn init(gpa: std.mem.Allocator) !MultiplexerContext {
         var model = frontend.multiplexer.Model.init(gpa);
@@ -875,10 +910,11 @@ const MultiplexerContext = struct {
             pane.buffer.setCell(0, 0, "x", 1, .{});
         }
         const screen = try frontend.term.Screen.init(gpa, cols, rows);
-        return .{ .model = model, .screen = screen };
+        return .{ .model = model, .screen = screen, .compositor = .init(gpa) };
     }
 
     fn deinit(context: *MultiplexerContext) void {
+        context.compositor.deinit();
         context.screen.deinit();
         context.model.deinit();
     }
@@ -888,8 +924,8 @@ fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         _ = context.model.focusPane(@enumFromInt(iteration % 4 + 1));
-        const stats = try context.model.render(&context.screen, context.screen.back.area());
-        checksum +%= stats.cells + stats.panes;
+        const composed = try composeFullScreen(&context.compositor, &context.model, &context.screen);
+        checksum +%= composed.stats.cells + composed.stats.panes;
     }
     return checksum;
 }
@@ -897,6 +933,7 @@ fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
 const IncrementalComposeContext = struct {
     model: frontend.multiplexer.Model,
     screen: frontend.term.Screen,
+    compositor: frontend.multiplexer.Compositor,
     payloads: [2][]const u8,
 
     fn init(
@@ -912,16 +949,20 @@ const IncrementalComposeContext = struct {
         try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
         var screen = try frontend.term.Screen.init(gpa, cols, rows);
         errdefer screen.deinit();
-        _ = try model.render(&screen, screen.back.area());
+        var compositor = frontend.multiplexer.Compositor.init(gpa);
+        errdefer compositor.deinit();
+        _ = try composeFullScreen(&compositor, &model, &screen);
         model.find(@enumFromInt(1)).?.applied_frame_id = 1;
         return .{
             .model = model,
             .screen = screen,
+            .compositor = compositor,
             .payloads = fixture.sparse_payloads,
         };
     }
 
     fn deinit(context: *IncrementalComposeContext) void {
+        context.compositor.deinit();
         context.screen.deinit();
         context.model.deinit();
     }
@@ -935,8 +976,8 @@ fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize)
             context.payloads[iteration & 1],
         )).pane_frame;
         _ = try context.model.applyFrame(frame_view);
-        const stats = try context.model.render(&context.screen, context.screen.back.area());
-        checksum +%= stats.cells + stats.damaged_cells;
+        const composed = try composeFullScreen(&context.compositor, &context.model, &context.screen);
+        checksum +%= composed.stats.cells + composed.stats.damaged_cells;
     }
     return checksum;
 }
@@ -1222,6 +1263,165 @@ fn runKgpIngest(context: *KgpIngestContext, iterations: usize) !u64 {
     return checksum;
 }
 
+/// One terminal-browser style frame at 4K crossing the runtime: the child
+/// publishes a shared object, the media pipeline folds the envelope and lets
+/// Ghostty VT copy and unlink it, and the attachment freezes the resident
+/// generation for a local client. Each stage is timed on its own so the
+/// child's publish cost can be subtracted from the ingest figure.
+const SharedFrameContext = struct {
+    const width = 3840;
+    const height = 2160;
+    const raw_len = width * height * 4;
+    const control = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=3840,v=2160,t=s,i=7,p=1,C=1,q=2;";
+    const trailer = "\x1b\\\x1b[?2026l";
+
+    io: Io,
+    gpa: std.mem.Allocator,
+    pixels: []u8,
+    size: core.schema.TerminalSize,
+    /// Heap-allocated: the emulator stream keeps pointers into its terminal,
+    /// so the pipeline must never move after `init`.
+    pipeline: *backend.media.Pipeline,
+    sequence: u64 = 0,
+    name: [64]u8 = undefined,
+    name_len: usize = 0,
+    envelope: [256]u8 = undefined,
+    envelope_len: usize = 0,
+
+    const Sink = struct {
+        pipeline: *backend.media.Pipeline,
+
+        pub fn observe(sink: *Sink, bytes: []const u8) void {
+            sink.pipeline.stream.nextSlice(bytes);
+        }
+    };
+
+    fn init(io: Io, gpa: std.mem.Allocator) !SharedFrameContext {
+        if (comptime builtin.os.tag == .windows or !builtin.link_libc) return error.SharedMemoryUnavailable;
+        const pixels = try gpa.alloc(u8, raw_len);
+        errdefer gpa.free(pixels);
+        for (pixels, 0..) |*byte, index| byte.* = @truncate(index % 251);
+
+        const size: core.schema.TerminalSize = .{
+            .cols = cols,
+            .rows = rows,
+            .cell_width_px = width / cols,
+            .cell_height_px = height / rows,
+        };
+        const pipeline = try gpa.create(backend.media.Pipeline);
+        errdefer gpa.destroy(pipeline);
+        const context: SharedFrameContext = .{
+            .io = io,
+            .gpa = gpa,
+            .pixels = pixels,
+            .size = size,
+            .pipeline = pipeline,
+        };
+        try pipeline.init(.{
+            .io = io,
+            .allocator = gpa,
+            .size = size,
+            .storage_limit = core.graphics.max_image_bytes_per_screen,
+            .payload_limit = core.graphics.max_encoded_chunk_bytes,
+            .write_pty = null,
+        });
+        return context;
+    }
+
+    fn deinit(context: *SharedFrameContext) void {
+        context.pipeline.deinit();
+        context.gpa.destroy(context.pipeline);
+        context.gpa.free(context.pixels);
+    }
+
+    /// The child's side of one frame: a fresh object, its size, one memcpy.
+    fn publish(context: *SharedFrameContext) !void {
+        context.sequence += 1;
+        const name = try std.fmt.bufPrintZ(
+            &context.name,
+            "/tlrbench{x}-{x}",
+            .{ @as(u32, @bitCast(std.c.getpid())), context.sequence },
+        );
+        context.name_len = name.len;
+        const fd = std.c.shm_open(
+            name,
+            @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
+            @as(u16, 0o600),
+        );
+        if (std.posix.errno(fd) != .SUCCESS) return error.SharedMemoryUnavailable;
+        defer _ = std.c.close(fd);
+        if (std.c.ftruncate(fd, @intCast(raw_len)) != 0) return error.SharedMemoryUnavailable;
+        const map = try std.posix.mmap(
+            null,
+            raw_len,
+            .{ .READ = true, .WRITE = true },
+            std.c.MAP{ .TYPE = .SHARED },
+            fd,
+            0,
+        );
+        defer std.posix.munmap(map);
+        @memcpy(map[0..raw_len], context.pixels);
+
+        const Encoder = std.base64.standard.Encoder;
+        var encoded: [128]u8 = undefined;
+        const payload = Encoder.encode(encoded[0..Encoder.calcSize(name.len)], name);
+        const envelope = try std.fmt.bufPrint(&context.envelope, "{s}{s}{s}", .{ control, payload, trailer });
+        context.envelope_len = envelope.len;
+    }
+
+    fn unpublish(context: *SharedFrameContext) void {
+        _ = std.c.shm_unlink(context.name[0..context.name_len :0]);
+    }
+
+    /// The runtime's media actor for one batch holding the published frame.
+    fn ingest(context: *SharedFrameContext) !u64 {
+        context.pipeline.queueOutput(context.envelope[0..context.envelope_len]);
+        if (!context.pipeline.seal()) return error.MediaBatchEmpty;
+        var stats: backend.media.Stats = .{};
+        var sink: Sink = .{ .pipeline = context.pipeline };
+        context.pipeline.processSealed(.{ .current_size = context.size, .stats = &stats }, &sink);
+        context.pipeline.finishSealed();
+        if (stats.forwarded_frames != 1 or stats.failed) return error.SharedFrameNotForwarded;
+        const image = context.pipeline.terminal.screens.active.kitty_images.imageById(7) orelse
+            return error.KgpImageMissing;
+        return image.generation + image.data.len();
+    }
+
+    /// The freeze the send loop performs for a local client, then the unlink
+    /// Ghostty would do after consuming it.
+    fn freeze(context: *SharedFrameContext) !u64 {
+        const name = backend.runtime.freezeSharedPixels(context.pixels) orelse
+            return error.SharedMemoryUnavailable;
+        _ = std.c.shm_unlink(name.sliceZ());
+        return name.slice().len;
+    }
+};
+
+fn runSharedFramePublish(context: *SharedFrameContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        try context.publish();
+        context.unpublish();
+        checksum +%= context.envelope_len;
+    }
+    return checksum;
+}
+
+fn runSharedFrameIngest(context: *SharedFrameContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        try context.publish();
+        checksum +%= try context.ingest();
+    }
+    return checksum;
+}
+
+fn runSharedFrameFreeze(context: *SharedFrameContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| checksum +%= try context.freeze();
+    return checksum;
+}
+
 const TextRasterContext = struct {
     const width = 480;
     const height = 80;
@@ -1443,6 +1643,35 @@ fn execute(
             config,
             kgp_case,
             try measure(io, config, &context, runKgpIngest),
+        );
+    }
+
+    const shared_publish_case = cases[case_index];
+    const shared_ingest_case = cases[case_index + 1];
+    const shared_freeze_case = cases[case_index + 2];
+    case_index += 3;
+    if (config.includes(shared_publish_case.name) or config.includes(shared_ingest_case.name) or
+        config.includes(shared_freeze_case.name))
+    {
+        var context = try SharedFrameContext.init(io, gpa);
+        defer context.deinit();
+        if (config.includes(shared_publish_case.name)) try writeResult(
+            writer,
+            config,
+            shared_publish_case,
+            try measure(io, config, &context, runSharedFramePublish),
+        );
+        if (config.includes(shared_ingest_case.name)) try writeResult(
+            writer,
+            config,
+            shared_ingest_case,
+            try measure(io, config, &context, runSharedFrameIngest),
+        );
+        if (config.includes(shared_freeze_case.name)) try writeResult(
+            writer,
+            config,
+            shared_freeze_case,
+            try measure(io, config, &context, runSharedFrameFreeze),
         );
     }
 

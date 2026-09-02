@@ -33,8 +33,7 @@ each phase):
   object per frame.
 - Quotas are not a problem: 256 MiB per pane, 128 MiB per screen
   (`src/core/graphics.zig:16-18`). `docs/kitty-graphics.md` still documents the
-  old 64/32 MiB values and 64 KiB PTY reads (they are 16 KiB,
-  `pane/root.zig:24`).
+  old 64/32 MiB values.
 
 Base: `main`. Every wire change follows the golden-corpus discipline in
 `src/core/schema/handshake.zig`: corpus entries + version bump. Every phase
@@ -71,7 +70,7 @@ counter and no benchmark of the `t=s` → freeze → client path
   each stage: forwarded by the media actor, published by the runtime,
   presented by the client. Keeps the existing zero-drop assertions. The
   result JSON gains a `frames` block.
-- Correct `docs/kitty-graphics.md` quotas and batch sizes.
+- Correct `docs/kitty-graphics.md` quotas.
 
 Exit: baseline numbers for 1080p and the largest local display recorded at the
 bottom of this file. No wire change.
@@ -200,8 +199,25 @@ reusable buffer and add them to `ImageStorage` directly, bypassing
 
 ---
 
-## Baseline (fill in P1)
+## Baseline (P1, 2026-09-02)
 
-| Display | Frame bytes | Forwarded/s | Published/s | Presented/s |
-| ------- | ----------- | ----------- | ----------- | ----------- |
-| TBD     | TBD         | TBD         | TBD         | TBD         |
+Apple M3, Ghostty 1.3.1, terminal-browser `cce10b6`, full-size pane on the
+local display (cells 24x66 px), 20 s window, steady-state means:
+
+| Build                      | Frame bytes | Forwarded/s | Published/s | Presented/s |
+| -------------------------- | ----------- | ----------- | ----------- | ----------- |
+| Debug                      | 37,667,520  | 17.9        | 17.5        | 17.5        |
+| ReleaseFast `-Ddiagnostics` | 42,863,040  | 49.6        | 49.6        | 20.0        |
+
+ReleaseFast detail: media ingest 10.9 ms avg (21.7 max), freeze 7.7 ms avg
+(24.9 max) on the main loop, 1934 send-loop graphics lanes deferred behind
+the media actor, 0 credit blocks, 549 client media deferrals, present
+interval 50.6 ms avg (243 max), retire latency 49.4 ms avg. The runtime
+publishes two and a half frames for every one the client presents; the rest
+are retired unseen when the next generation lands. In Debug the media actor
+itself (47.9 ms per batch) is the ceiling, which is why measurement needs
+the optimized build.
+
+Benchmark (`zig build bench -- --filter 3840x2160`, ReleaseFast, medians):
+child publish 2.3 ms, publish + media ingest 6.4 ms, freeze 2.3 ms per 4K
+frame.
