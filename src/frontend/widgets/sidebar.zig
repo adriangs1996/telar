@@ -228,7 +228,7 @@ fn drawAgentTitle(
 ) void {
     if (area.w == 0) return;
     const mark_area: ui.Rect = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
-    if (input.transparent and (agent.provider == .claude or agent.provider == .codex)) {
+    if (input.transparent and (agent.provider == .claude or agent.provider == .codex or agent.provider == .pi)) {
         semantic.addProviderMark(.{ .area = mark_area, .provider = agent.provider });
     } else {
         _ = context.drawIcon(area, area.x, area.y, providerIcon(agent.provider), .{
@@ -391,6 +391,7 @@ fn providerIcon(provider: schema.AgentProvider) ui.icons.Icon {
     return switch (provider) {
         .claude => .provider_claude,
         .codex => .provider_codex,
+        .pi => .provider_pi,
         else => .provider_unknown,
     };
 }

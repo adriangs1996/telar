@@ -748,6 +748,7 @@ pub const State = struct {
                 const provider: kitty.SidebarProvider = switch (mark.provider) {
                     .claude => .claude,
                     .codex => .codex,
+                    .pi => .pi,
                     else => continue,
                 };
                 provider_marks[provider_mark_count] = .{ .area = mark.area, .provider = provider };

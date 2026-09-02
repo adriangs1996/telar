@@ -43,6 +43,7 @@ pub const Icon = enum {
     provider_unknown,
     provider_claude,
     provider_codex,
+    provider_pi,
     agent_unknown,
     agent_working_0,
     agent_working_1,
@@ -71,6 +72,7 @@ pub const Icon = enum {
             .provider_unknown, .agent_unknown => "?",
             .provider_claude => "\u{2733}",
             .provider_codex => "\u{25c6}",
+            .provider_pi => "\u{03c0}",
             .agent_working_0 => "\u{25d0}",
             .agent_working_1 => "\u{25d3}",
             .agent_working_2 => "\u{25d1}",
@@ -99,6 +101,7 @@ pub const Icon = enum {
             .provider_unknown, .agent_unknown => "\u{eb32}", // cod-question
             .provider_claude => "\u{ec20}", // cod-robot
             .provider_codex => "\u{ea85}", // cod-terminal
+            .provider_pi => "\u{f03ff}", // md-pi
             .agent_working_0 => "\u{ee06}", // extra-progress-spinner-1
             .agent_working_1 => "\u{ee07}", // extra-progress-spinner-2
             .agent_working_2 => "\u{ee08}", // extra-progress-spinner-3
@@ -130,6 +133,7 @@ pub const Icon = enum {
             .provider_unknown, .agent_unknown => "?",
             .provider_claude => "A",
             .provider_codex => "X",
+            .provider_pi => "P",
             .agent_working_0,
             .agent_working_1,
             .agent_working_2,
