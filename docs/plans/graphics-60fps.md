@@ -6,6 +6,11 @@ resets, drops or client resyncs. terminal-browser directly on Ghostty reports
 70-80 frames/s written to the tty; the last recorded telar number is
 ~17.5 images/s at 22.9 MB per frame (commit `0dcbaeb`, 2026-08-24).
 
+Status (2026-09-02): every phase done. A synthetic 4K stream at 120 frames/s
+is forwarded at over 100 frames/s by the runtime and presented at 60 by the
+client, the pacer cap, over both shared memory and files, with zero drops.
+The gate is in `docs/performance-gates.md`; the decisions are in ADR 0008.
+
 Findings that shape the order (verified 2026-09-02, see the session notes in
 each phase):
 
@@ -265,12 +270,18 @@ remain as the safety net.
 
 ## P7. Gate and documentation
 
-- `docs/performance-gates.md`: the `--measure` run becomes part of the
-  exterior behavioral gate with an explicit frames/s floor per display class.
+- `docs/performance-gates.md`: the synthetic `--measure` run with `--floor 58`
+  is the graphics throughput gate, once per transport; the browser run
+  carries no floor because Chromium's paint rate is the host's business.
 - `docs/kitty-graphics.md` and `docs/flows/pane-graphics.md` describe the
-  control/bulk split, actor-side freeze, file ring and ack.
-- ADR recording why the client presents graphics inside the cell frame and
-  why the runtime hands out files rather than shm objects.
+  control/bulk split, the single-copy path, file validation and the host
+  reply.
+- ADR 0008 records why control escapes ride the cell frame, why the runtime
+  hands out shared objects rather than files, and why the emulator holds a
+  placeholder.
+
+Result (2026-09-02): done; the gate passes on the reference machine for both
+transports.
 
 ---
 

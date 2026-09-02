@@ -46,9 +46,14 @@ and `kitty-full` return `KittyGraphicsUnsupported` when the probe fails.
 
 - RGB (`f=24`) and RGBA (`f=32`).
 - Direct transmission (`t=d`) with independently base64-encoded chunks.
-- POSIX shared-memory transmission (`t=s`) for local RGB and RGBA frames. The
-  media actor copies the mapped bytes into quota-accounted runtime storage and
-  unlinks the segment after reading it.
+- POSIX shared-memory transmission (`t=s`) for local RGB and RGBA frames. A
+  complete frame is copied once by the media actor into the runtime-owned
+  object that serves as both emulator storage and the local client's transfer;
+  any other shared command goes through the emulator, which copies the mapped
+  bytes into quota-accounted storage. Either way the child's segment is
+  unlinked after reading.
+- Regular file transmission (`t=f`) for complete frames and capability
+  queries, validated by the pane as described below.
 - Zlib compression (`o=z`) with exact decompressed-length validation.
 - Transmit, transmit-and-display, put, query, and delete.
 - Child image IDs, placement IDs, runtime generations, and anonymous virtual
@@ -258,7 +263,9 @@ inside the browser image, confirming that the visible frame had not frozen.
 
 ## Remaining limitations
 
-- No PNG, file, temporary-file, or Unicode-placeholder transport.
+- No PNG, temporary-file, or Unicode-placeholder transport. File transport
+  covers complete frames and queries only; chunked or cropped file commands
+  are refused.
 - Pixel mouse precision is limited to cell centers when the exterior terminal
   does not report pixel mouse coordinates.
 - Only the local socket transport has been exercised with graphical load.
@@ -266,6 +273,9 @@ inside the browser image, confirming that the visible frame had not frozen.
 - The reproducible terminal-browser check covers one real graphical pane. ID
   isolation across panes, tab visibility, delete, resize, and layout rebuilds
   are deterministic Store/writer tests rather than an automated GUI pass.
-- Runtime-to-client IPC still copies decoded pixels in 1 MiB chunks. Local
-  Ghostty output avoids the second bulk copy and base64 expansion; other hosts
-  use the direct-data fallback.
+- Remote clients still receive decoded pixels in 1 MiB chunks through the
+  socket. A local client receives a complete terminal-browser frame with one
+  copy on the runtime side; images the emulator decoded itself cost one more
+  copy when frozen.
+- The graphics throughput gate (`docs/performance-gates.md`) has been run on
+  one M3 with Ghostty 1.3.1; other hosts and displays are unverified.

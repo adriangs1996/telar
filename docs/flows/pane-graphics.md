@@ -70,6 +70,15 @@ answers whether `kitty.Store` contains graphics for one pane. Supported hosts
 clear every fallback without querying the physical store; unknown or
 unsupported hosts query once per pane. The adapter never mutates `AppState`.
 
+## Host replies
+
+The shared transmission asks the host for a reply. `InputHandler.terminalResponse`
+hands every Kitty reply first to the capability controller, which consumes
+the probe identities, then to `kitty.Store.noteHostReply` for exterior pane
+image ids: `OK` marks the object consumed, an error reclaims the name and
+retransmits inline, and either bumps the graphics ingress so the next paced
+frame retires or resends. Unknown ids change nothing.
+
 ## Ordering and recovery
 
 A graphics revision break does not mutate the fallback. The handler asks for

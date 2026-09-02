@@ -173,6 +173,14 @@ def main() -> int:
         "--measure and skips the browser checks",
     )
     parser.add_argument(
+        "--floor",
+        type=float,
+        default=0.0,
+        metavar="FPS",
+        help="with --measure, fail unless the client presented at least this "
+        "many frames per second in steady state",
+    )
+    parser.add_argument(
         "--transport",
         default="shm",
         choices=("shm", "file"),
@@ -378,7 +386,11 @@ def main() -> int:
         "run_directory": str(run_directory),
     }
     if args.measure > 0:
-        result["frames"] = frame_report(runtime_samples, client_samples)
+        frames = frame_report(runtime_samples, client_samples)
+        result["frames"] = frames
+        if args.floor > 0:
+            checks["presented_floor_met"] = float(frames["presented_per_second"]) >= args.floor
+            result["checks"] = checks
     result_path = telar_root / "zig-out/terminal-browser-verification.json"
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

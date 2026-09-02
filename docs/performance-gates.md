@@ -21,3 +21,21 @@ The terminal-browser check is the exterior behavioral gate. It must report no
 PTY response drops, delivery response drops, media queue drops, client resyncs,
 or history isolation failures. Steady-state interactive allocation counters
 must remain zero unless an engineering invariant explicitly permits growth.
+
+The graphics throughput gate runs the same verifier with a deterministic
+source instead of the browser:
+
+```sh
+python3 tools/verify_terminal_browser.py --measure 15 \
+  --source synthetic:3840x2160@120 --floor 58
+```
+
+It builds Telar as `-Doptimize=ReleaseFast -Ddiagnostics=true`, drives one
+full-pane 4K RGBA stream at 120 frames/s through Telar into Ghostty, and fails
+unless the client presented at least 58 frames per second in steady state (the
+pacer caps presentation at 60) with zero media resets, drops or resyncs. Run it
+once per transport (`--transport shm` and `--transport file`). The browser run
+(`--source browser --measure 20`) reports the same `frames` block but carries
+no floor: Chromium's paint rate depends on the host's memory and GPU state,
+which the gate must not measure. A run on a host under memory pressure is
+`no verdict`, like any other unquiet host.
