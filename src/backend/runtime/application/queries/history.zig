@@ -15,6 +15,7 @@ pub const Request = struct {
     scope_value: []const u8,
     pane_id: schema.PaneId,
     failed_only: bool,
+    author: schema.HistoryAuthorFilter,
     limit: u16,
 };
 
@@ -66,6 +67,7 @@ pub const Handler = struct {
             .scope_value = request.scope_value,
             .pane_id = request.pane_id,
             .failed_only = request.failed_only,
+            .author = request.author,
             .limit = request.limit,
         }) catch {
             return error.InvalidHistoryQuery;
@@ -120,6 +122,7 @@ fn testingRequest() Request {
         .scope_value = "/work",
         .pane_id = .invalid,
         .failed_only = true,
+        .author = .all,
         .limit = 12,
     };
 }

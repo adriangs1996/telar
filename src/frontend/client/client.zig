@@ -150,6 +150,8 @@ reload: config_reload.State,
 sidebar_rendering: kitty.SidebarRendering,
 sound_playback: sound_capability.Playback,
 notification_delivery: notification_capability.Delivery = .telar,
+/// Whether the history palette lists automation-submitted commands too.
+history_show_agent_commands: bool = false,
 appearance_themes: AppearanceThemes = .{},
 clipboard_capture_resources: attachments.CaptureResources = .{},
 

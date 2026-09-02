@@ -43,7 +43,7 @@ pub const SendPaneTextHandler = struct {
     /// const result = try handler.execute(.{ .pane = key, .mode = .prompt, .text = "run the tests" });
     /// ```
     pub fn execute(handler: *SendPaneTextHandler, command: SendPaneText) !SendPaneTextResult {
-        const pane = handler.panes.resolve(command.pane) orelse return .pane_not_found;
+        const pane = handler.panes.resolveControl(command.pane) orelse return .pane_not_found;
 
         if (pane.exit != null) {
             return .pane_exited;
@@ -62,6 +62,10 @@ pub const SendPaneTextHandler = struct {
         };
 
         try handler.input.forward(pane, bytes);
+        if (command.mode == .prompt or std.mem.indexOfScalar(u8, bytes, '\r') != null) {
+            pane.noteInjectedSubmission();
+        }
+
         return .handled;
     }
 };

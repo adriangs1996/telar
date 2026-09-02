@@ -529,6 +529,7 @@ pub const HistoryOptions = struct {
     scope_value: ?[*:0]const u8 = null,
     pane_id: core.schema.PaneId = .invalid,
     failed_only: bool = false,
+    author: core.schema.HistoryAuthorFilter = .all,
     limit: u16 = 20,
     socket: ?[*:0]const u8 = null,
 
@@ -573,6 +574,21 @@ pub const HistoryOptions = struct {
             } else if (std.mem.eql(u8, arg, "--failed")) {
                 options.failed_only = true;
                 index += 1;
+            } else if (std.mem.eql(u8, arg, "--author")) {
+                if (index + 1 >= args.len) {
+                    return error.MissingHistoryAuthor;
+                }
+
+                const author = std.mem.span(args[index + 1]);
+                options.author = if (std.mem.eql(u8, author, "all"))
+                    .all
+                else if (std.mem.eql(u8, author, "human"))
+                    .human
+                else if (std.mem.eql(u8, author, "agent"))
+                    .agent
+                else
+                    return error.InvalidHistoryAuthor;
+                index += 2;
             } else if (std.mem.eql(u8, arg, "--limit")) {
                 if (index + 1 >= args.len) {
                     return error.MissingHistoryLimit;
@@ -1620,4 +1636,13 @@ test "workspace create parses worktree flags and rejects unsafe branches" {
 
     const unknown = [_][*:0]const u8{ "telar", "workspace", "remove" };
     try std.testing.expectError(error.UnknownWorkspaceAction, Cli.parse(&unknown, .empty));
+}
+
+test "history author filter parses and rejects unknown values" {
+    const agent_only = [_][*:0]const u8{ "telar", "history", "list", "--author", "agent" };
+    const cli = try Cli.parse(&agent_only, .empty);
+    try std.testing.expectEqual(core.schema.HistoryAuthorFilter.agent, cli.history.author);
+
+    const invalid = [_][*:0]const u8{ "telar", "history", "list", "--author", "robot" };
+    try std.testing.expectError(error.InvalidHistoryAuthor, Cli.parse(&invalid, .empty));
 }

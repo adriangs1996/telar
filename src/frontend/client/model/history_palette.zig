@@ -14,6 +14,7 @@ pub const max_entry_cwd_bytes = 64;
 pub const Entry = struct {
     id: u64 = 0,
     status: schema.HistoryStatus = .completed,
+    author: schema.HistoryAuthor = .human,
     exit_code: ?i32 = null,
     command: [max_command_bytes]u8 = undefined,
     command_len: u16 = 0,
@@ -76,6 +77,7 @@ pub const State = struct {
             var stored: Entry = .{
                 .id = entry.id,
                 .status = entry.status,
+                .author = entry.author,
                 .exit_code = entry.exit_code,
             };
             stored.command_len = copyBounded(&stored.command, entry.command);

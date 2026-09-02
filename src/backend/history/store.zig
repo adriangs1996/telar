@@ -17,7 +17,7 @@ const database_schema =
     \\);
     \\INSERT INTO history_schema(version)
     \\SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM history_schema);
-    \\UPDATE history_schema SET version = 3 WHERE version < 3;
+    \\UPDATE history_schema SET version = 4 WHERE version < 4;
     \\CREATE TABLE IF NOT EXISTS launch_attempt (
     \\  id              INTEGER PRIMARY KEY,
     \\  pane_id         INTEGER NOT NULL,
@@ -107,8 +107,8 @@ const insert_command_sql =
     \\INSERT INTO command
     \\  (session_id, pane_id, location_kind, location_id, tab_id, sequence, command,
     \\   command_truncated, cwd, workspace_path, started_at_ms, duration_ns,
-    \\   exit_code, status)
-    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);
+    \\   exit_code, status, author)
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15);
 ;
 
 pub const Store = struct {
@@ -140,6 +140,7 @@ pub const Store = struct {
         try ensureColumn(opened, .{ .table = "session", .column = "title", .alter_sql = "ALTER TABLE session ADD COLUMN title TEXT;" });
         try ensureColumn(opened, .{ .table = "session", .column = "title_source", .alter_sql = "ALTER TABLE session ADD COLUMN title_source INTEGER;" });
         try ensureColumn(opened, .{ .table = "session", .column = "title_state", .alter_sql = "ALTER TABLE session ADD COLUMN title_state INTEGER;" });
+        try ensureColumn(opened, .{ .table = "command", .column = "author", .alter_sql = "ALTER TABLE command ADD COLUMN author INTEGER NOT NULL DEFAULT 0;" });
         const fts_available = enableCommandSearchIndex(opened);
 
         const insert_launch_attempt = try prepare(opened, insert_launch_attempt_sql);
@@ -246,6 +247,7 @@ pub const Store = struct {
             _ = c.sqlite3_bind_null(stmt, 13);
         }
         _ = c.sqlite3_bind_int(stmt, 14, @intFromEnum(value.status));
+        _ = c.sqlite3_bind_int(stmt, 15, @intFromEnum(value.author));
         try stepDone(stmt);
     }
 
@@ -260,7 +262,7 @@ pub const Store = struct {
         var sql = std.Io.Writer.fixed(&sql_buffer);
         try sql.writeAll(
             "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
-                "command, cwd, workspace_path FROM command WHERE 1=1",
+                "command, cwd, workspace_path, author FROM command WHERE 1=1",
         );
         // The trigram index probes instead of scanning the whole table, and
         // is case-insensitive like the fallback. Trigram matching needs at
@@ -277,6 +279,8 @@ pub const Store = struct {
         }
         if (request.failed_only)
             try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
+        if (request.author != .all)
+            try sql.writeAll(" AND author = ?");
         switch (request.scope) {
             .global => {},
             .cwd => try sql.writeAll(" AND cwd = ?"),
@@ -293,6 +297,11 @@ pub const Store = struct {
                 ftsQuote(request.textSlice(), &match_buffer)
             else
                 request.textSlice());
+            parameter += 1;
+        }
+        if (request.author != .all) {
+            const author: model.schema.HistoryAuthor = if (request.author == .human) .human else .agent;
+            _ = c.sqlite3_bind_int(stmt, parameter, @intFromEnum(author));
             parameter += 1;
         }
         switch (request.scope) {
@@ -507,6 +516,11 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
             1 => .interrupted,
             else => return error.InvalidHistoryStatus,
         },
+        .author = switch (c.sqlite3_column_int(stmt, 9)) {
+            0 => .human,
+            1 => .agent,
+            else => return error.InvalidHistoryAuthor,
+        },
         .command = command,
         .cwd = cwd,
         .workspace_path = workspace_path,
@@ -623,6 +637,7 @@ test "persists sessions and filters command history" {
         .duration_ns = 12_000,
         .exit_code = 0,
         .status = .completed,
+        .author = .human,
         .cols = 80,
         .rows = 24,
         .command = @constCast("git status"),
@@ -692,4 +707,75 @@ test "persists sessions and filters command history" {
     const short_result = try store.query(gpa, &short);
     defer short_result.deinit();
     try std.testing.expectEqual(@as(usize, 2), short_result.entries.len);
+}
+
+test "author filters partition query results" {
+    var store = try Store.open(":memory:");
+    defer store.close();
+    const location: model.schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const session: model.SessionStarted = .{
+        .id = @splat(9),
+        .pane_id = @enumFromInt(1),
+        .location = location,
+        .started_at_ms = 1_000,
+        .workspace_path = @constCast("/work"),
+        .shell = @constCast("/bin/zsh"),
+    };
+    try store.startSession(&session);
+
+    var base: model.CommandFinished = .{
+        .session_id = session.id,
+        .pane_id = session.pane_id,
+        .location = location,
+        .sequence = 1,
+        .started_at_ms = 2_000,
+        .duration_ns = 5,
+        .exit_code = 0,
+        .status = .completed,
+        .author = .human,
+        .cols = 80,
+        .rows = 24,
+        .command = @constCast("git status"),
+        .cwd = @constCast("/work"),
+        .workspace_path = @constCast("/work"),
+        .command_truncated = false,
+    };
+    try store.insertCommand(&base);
+    base.sequence = 2;
+    base.author = .agent;
+    base.command = @constCast("zig build test");
+    try store.insertCommand(&base);
+
+    const origin: model.QueryOrigin = .{
+        .client = .{ .id = 1, .generation = 1 },
+        .close_after_reply = false,
+    };
+    const humans = try store.query(std.testing.allocator, &(try model.Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = origin,
+        .author = .human,
+    })));
+    defer humans.deinit();
+    try std.testing.expectEqual(@as(usize, 1), humans.entries.len);
+    try std.testing.expectEqualStrings("git status", humans.entries[0].command);
+    try std.testing.expectEqual(model.schema.HistoryAuthor.human, humans.entries[0].author);
+
+    const agents = try store.query(std.testing.allocator, &(try model.Query.init(.{
+        .request_id = @enumFromInt(2),
+        .origin = origin,
+        .author = .agent,
+    })));
+    defer agents.deinit();
+    try std.testing.expectEqual(@as(usize, 1), agents.entries.len);
+    try std.testing.expectEqualStrings("zig build test", agents.entries[0].command);
+
+    const all = try store.query(std.testing.allocator, &(try model.Query.init(.{
+        .request_id = @enumFromInt(3),
+        .origin = origin,
+    })));
+    defer all.deinit();
+    try std.testing.expectEqual(@as(usize, 2), all.entries.len);
 }

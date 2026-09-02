@@ -105,7 +105,7 @@ pub fn encodeResponse(context: EncodeContext, response: *PendingResponse) ![]con
             .matches = found.matches.slice(),
         }),
         .pane_text => |*read| payload: {
-            const target = panes.resolveConst(read.pane) orelse
+            const target = panes.resolveControlConst(read.pane) orelse
                 break :payload try schema.encodeRequestFailed(buffer, .{
                     .request_id = read.request_id,
                     .code = .pane_not_found,
@@ -135,6 +135,7 @@ fn encodeHistoryResult(buffer: []u8, result: *const history.model.QueryResult, s
                 .completed => .completed,
                 .interrupted => .interrupted,
             },
+            .author = entry.author,
             .command = entry.command,
             .cwd = entry.cwd,
             .workspace_path = entry.workspace_path,

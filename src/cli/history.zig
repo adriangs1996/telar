@@ -41,6 +41,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
         .scope_value = scope_value,
         .pane_id = options.pane_id,
         .failed_only = options.failed_only,
+        .author = options.author,
         .limit = options.limit,
     }));
 

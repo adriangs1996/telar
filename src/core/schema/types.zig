@@ -221,6 +221,19 @@ pub const HistoryStatus = enum(u8) {
     interrupted = 1,
 };
 
+/// Who submitted a recorded command: a person typing, or automation writing
+/// into the pane through the control API or a session restore.
+pub const HistoryAuthor = enum(u8) {
+    human = 0,
+    agent = 1,
+};
+
+pub const HistoryAuthorFilter = enum(u8) {
+    all = 0,
+    human = 1,
+    agent = 2,
+};
+
 pub const NotificationLevel = enum(u8) {
     info = 0,
     success = 1,
@@ -244,6 +257,7 @@ pub const HistoryEntry = struct {
     duration_ns: i64,
     exit_code: ?i32,
     status: HistoryStatus,
+    author: HistoryAuthor = .human,
     command: []const u8,
     cwd: []const u8,
     workspace_path: []const u8,

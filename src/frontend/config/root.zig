@@ -1195,6 +1195,28 @@ pub const Generation = struct {
         }
     }
 
+    fn parseClientHistory(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        const absolute = lua.lua_absindex(state, index);
+        if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+            diagnostic.set("config.client.history must be a table", .{});
+            return error.InvalidConfig;
+        }
+
+        try ensureOnlyFields(state, absolute, &.{"show_agent_commands"}, "config.client.history", diagnostic);
+        _ = lua.lua_getfield(state, absolute, "show_agent_commands");
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+            return;
+        }
+        if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+            diagnostic.set("config.client.history.show_agent_commands must be a boolean", .{});
+            return error.InvalidConfig;
+        }
+
+        generation.snapshot.history_show_agent_commands = lua.lua_toboolean(state, -1) != 0;
+    }
+
     fn parseClient(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
         const state = generation.vm.state;
         const absolute = lua.lua_absindex(state, index);
@@ -1205,7 +1227,7 @@ pub const Generation = struct {
         try ensureOnlyFields(
             state,
             absolute,
-            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars" },
+            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "history" },
             "config.client",
             diagnostic,
         );
@@ -1213,6 +1235,11 @@ pub const Generation = struct {
         _ = lua.lua_getfield(state, absolute, "prefix");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL)
             try generation.parsePrefix(-1, diagnostic);
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "history");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL)
+            try generation.parseClientHistory(-1, diagnostic);
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "theme");
@@ -4351,5 +4378,29 @@ test "runtime history filters parse and reject invalid patterns" {
         "@config.lua",
         1,
         &bad_flag,
+    ));
+}
+
+test "client history config toggles agent command visibility" {
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { history = { show_agent_commands = true } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+    try std.testing.expect(generation.snapshot.history_show_agent_commands);
+
+    var invalid: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, client = { history = { show_agent_commands = \"yes\" } } }",
+        "@config.lua",
+        1,
+        &invalid,
     ));
 }

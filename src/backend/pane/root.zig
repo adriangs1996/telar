@@ -618,6 +618,10 @@ pub const Pane = struct {
     history_session_id: history.SessionId,
     started_at_ms: i64,
     history_sequence: u64 = 0,
+    /// Command submissions injected through the control API or a session
+    /// restore that have not completed yet. Written by the runtime thread,
+    /// consumed by the observation actor when the next command finishes.
+    injected_submissions: std.atomic.Value(u32) = .init(0),
     history_session_started: bool = false,
     history_session_finished: bool = false,
     history_exit_queued: bool = false,
@@ -1498,8 +1502,15 @@ pub const Pane = struct {
             const pane = context.pane;
             if (!pane.history_session_started) return;
             pane.history_sequence += 1;
+            var author: core.schema.HistoryAuthor = .human;
+            if (pane.injected_submissions.load(.monotonic) > 0) {
+                _ = pane.injected_submissions.fetchSub(1, .monotonic);
+                author = .agent;
+            }
+
             const submitted = pane.history_service.recordCommand(pane.io, .{
                 .context = .{
+                    .author = author,
                     .session_id = pane.history_session_id,
                     .pane_id = pane.id,
                     .location = pane.location,
@@ -1515,6 +1526,16 @@ pub const Pane = struct {
             }
         }
     };
+
+    /// Marks the next completed command as submitted by automation. Called
+    /// when control-API text or a restored resume command carries Enter.
+    ///
+    /// ```zig
+    /// pane.noteInjectedSubmission();
+    /// ```
+    pub fn noteInjectedSubmission(pane: *Pane) void {
+        _ = pane.injected_submissions.fetchAdd(1, .monotonic);
+    }
 
     pub fn finishHistory(pane: *Pane) void {
         if (pane.history_session_finished) return;
@@ -1738,11 +1759,40 @@ pub const PaneStore = struct {
         return pane;
     }
 
+    /// Resolves a control-API pane reference. Generation 0 addresses the
+    /// pane's current generation, so control clients can target panes that
+    /// never appeared in the agent snapshot.
+    ///
+    /// ```zig
+    /// const pane = store.resolveControl(key) orelse return .pane_not_found;
+    /// ```
+    pub fn resolveControl(store: *PaneStore, key: PaneKey) ?*Pane {
+        if (key.generation == 0) {
+            return store.find(key.id);
+        }
+
+        return store.resolve(key);
+    }
+
     pub fn resolveConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
         const slot = store.index.get(schema.id.raw(key.id)) orelse return null;
         const pane = store.items[slot].?;
         std.debug.assert(pane.id == key.id);
         if (pane.generation != key.generation) return null;
+        return pane;
+    }
+
+    /// Read-only counterpart of `resolveControl`: generation 0 addresses the
+    /// pane's current generation.
+    ///
+    /// ```zig
+    /// const pane = store.resolveControlConst(key) orelse return null;
+    /// ```
+    pub fn resolveControlConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
+        const slot = store.index.get(schema.id.raw(key.id)) orelse return null;
+        const pane = store.items[slot].?;
+        std.debug.assert(pane.id == key.id);
+        if (key.generation != 0 and pane.generation != key.generation) return null;
         return pane;
     }
 

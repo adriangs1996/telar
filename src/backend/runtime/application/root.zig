@@ -255,6 +255,10 @@ pub const Application = struct {
     /// try application.queueRestoredInput(pane, "claude --resume <id>\r");
     /// ```
     pub fn queueRestoredInput(application: *Application, pane: *Pane, bytes: []const u8) !void {
+        if (std.mem.indexOfScalar(u8, bytes, '\r') != null) {
+            pane.noteInjectedSubmission();
+        }
+
         _ = pane.queuePtyInput(bytes);
         try RuntimeEvents.schedulePaneInput(application, pane);
     }

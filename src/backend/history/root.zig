@@ -231,6 +231,7 @@ pub const Service = struct {
     }
 
     pub const CommandContext = struct {
+        author: model_mod.schema.HistoryAuthor = .human,
         session_id: SessionId,
         pane_id: model_mod.schema.PaneId,
         location: model_mod.schema.TabLocation,
@@ -287,6 +288,7 @@ pub const Service = struct {
                 .completed => .completed,
                 .interrupted => .interrupted,
             },
+            .author = context.author,
             .cols = context.cols,
             .rows = context.rows,
             .command = command_copy,

@@ -100,3 +100,13 @@ endpoint. The CLI resolves `--socket`, then `TELAR_SOCKET`, then
   registration.
 - `src/cli/parser.zig` and `src/cli/control.zig` prove the grammar, target
   resolution and JSON escaping.
+
+## Pane references and authorship
+
+Control pane references accept `pane_generation = 0` as "the pane's current
+generation", so panes that never appeared in the agent snapshot stay
+addressable (`PaneStore.resolveControl`). Text injected through
+`send_pane_text` that submits a command (prompt mode, or raw text carrying
+Enter) marks the pane's next completed history capture as agent-authored;
+`telar history --author agent|human|all` and the history palette filter on
+it.

@@ -49,6 +49,7 @@ pub const Controller = struct {
             .scope_value = request.scope_value,
             .pane_id = request.pane_id,
             .failed_only = request.failed_only,
+            .author = request.author,
             .limit = request.limit,
         }) catch |err| switch (err) {
             error.InvalidHistoryQuery => {

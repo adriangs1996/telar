@@ -19,7 +19,9 @@ outbox query_history (global scope, bounded query, limit 16)
 runtime routeQueryHistory (observation path)
 ```
 
-Opening clears previous results and sends the unfiltered newest history.
+Opening clears previous results and sends the newest history filtered to
+human-authored commands; `client.history.show_agent_commands = true` lists
+automation-submitted commands too, suffixed `[agent]`.
 Every visible query edit sends one more `query_history`; selection moves and
 pastes are local and send nothing. The palette records the newest request id
 and ignores every other reply, so out-of-order replies cannot show stale

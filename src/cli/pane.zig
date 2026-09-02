@@ -71,9 +71,9 @@ fn execute(session: *control.Session, options: PaneOptions, writer: *Io.Writer, 
     return agent.exit_ok;
 }
 
-/// Panes without an agent are still addressable, so the generation comes from
-/// the agent snapshot when one exists and otherwise from the runtime's
-/// current pane generation as reported by a bare read.
+/// Panes without an agent are still addressable: the generation comes from
+/// the agent snapshot when one exists, and otherwise generation 0 asks the
+/// runtime for the pane's current generation.
 fn resolvePane(session: *control.Session, target: parser.Target, environ: std.process.Environ) !control.Session.PaneRef {
     const pane_id: u64 = switch (target) {
         .current => try control.currentPaneId(environ),
@@ -87,5 +87,5 @@ fn resolvePane(session: *control.Session, target: parser.Target, environ: std.pr
         return .{ .pane_id = known.pane_id, .pane_generation = known.pane_generation };
     }
 
-    return error.PaneNotFound;
+    return .{ .pane_id = pane_id, .pane_generation = 0 };
 }

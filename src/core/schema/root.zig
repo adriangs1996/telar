@@ -83,6 +83,8 @@ pub const PaneTextSource = types.PaneTextSource;
 pub const PaneTextMode = types.PaneTextMode;
 pub const HistoryStatus = types.HistoryStatus;
 pub const HistoryEntry = types.HistoryEntry;
+pub const HistoryAuthor = types.HistoryAuthor;
+pub const HistoryAuthorFilter = types.HistoryAuthorFilter;
 pub const AgentProvider = types.AgentProvider;
 pub const AgentStatus = types.AgentStatus;
 pub const AgentReportState = types.AgentReportState;
@@ -551,6 +553,7 @@ pub const QueryHistory = struct {
     scope_value: []const u8 = "",
     pane_id: PaneId = .invalid,
     failed_only: bool = false,
+    author: HistoryAuthorFilter = .all,
     limit: u16 = 20,
 };
 
@@ -1290,6 +1293,7 @@ pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
         .pane => try encoder.writeInt(u64, id.raw(message.pane_id)),
     }
     try encoder.writeByte(@intFromBool(message.failed_only));
+    try encoder.writeByte(@intFromEnum(message.author));
     try encoder.writeInt(u16, message.limit);
     return encoder.finish();
 }
@@ -2608,6 +2612,8 @@ fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
         .pane => pane_id = try id.pane(try decoder.readInt(u64)),
     }
     const failed_only = try decoder.readBool();
+    const author = std.enums.fromInt(HistoryAuthorFilter, try decoder.readByte()) orelse
+        return error.InvalidHistoryAuthor;
     const limit = try decoder.readInt(u16);
     if (limit == 0 or limit > max_history_results) return error.InvalidHistoryLimit;
     return .{
@@ -2617,6 +2623,7 @@ fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
         .scope_value = scope_value,
         .pane_id = pane_id,
         .failed_only = failed_only,
+        .author = author,
         .limit = limit,
     };
 }
@@ -2724,6 +2731,7 @@ fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
         try encoder.writeByte(0);
     }
     try encoder.writeByte(@intFromEnum(entry.status));
+    try encoder.writeByte(@intFromEnum(entry.author));
     try encoder.writeSized32(entry.command);
     try encoder.writeSized16(entry.cwd);
     try encoder.writeSized16(entry.workspace_path);
@@ -2740,6 +2748,8 @@ fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
     else
         null;
     const status = try decodeHistoryStatus(try decoder.readByte());
+    const author = std.enums.fromInt(HistoryAuthor, try decoder.readByte()) orelse
+        return error.InvalidHistoryAuthor;
     const command = try decoder.readSized32();
     const cwd = try decoder.readSized16();
     const workspace_path = try decoder.readSized16();
@@ -2753,6 +2763,7 @@ fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
         .duration_ns = duration_ns,
         .exit_code = exit_code,
         .status = status,
+        .author = author,
         .command = command,
         .cwd = cwd,
         .workspace_path = workspace_path,
@@ -2950,6 +2961,7 @@ fn skipHistoryEntry(decoder: *wire.Decoder) !void {
     _ = try decoder.readInt(i64); // duration_ns
     if (try decoder.readBool()) _ = try decoder.readInt(i32);
     _ = try decoder.readByte(); // status
+    _ = try decoder.readByte(); // author
     if ((try decoder.readSized32()).len > max_history_command_bytes)
         return error.InvalidByteString;
     if ((try decoder.readSized16()).len > max_cwd_bytes) return error.InvalidByteString;

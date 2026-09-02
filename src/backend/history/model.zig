@@ -147,6 +147,7 @@ pub const CommandFinished = struct {
     duration_ns: i64,
     exit_code: ?i32,
     status: CommandStatus,
+    author: schema.HistoryAuthor,
     cols: u16,
     rows: u16,
     command: []u8,
@@ -178,6 +179,7 @@ pub const Query = struct {
         scope_value: []const u8 = "",
         pane_id: schema.PaneId = .invalid,
         failed_only: bool = false,
+        author: schema.HistoryAuthorFilter = .all,
         limit: u16 = 20,
     };
 
@@ -190,6 +192,7 @@ pub const Query = struct {
     scope_text_len: u16 = 0,
     pane_id: schema.PaneId = .invalid,
     failed_only: bool = false,
+    author: schema.HistoryAuthorFilter = .all,
     limit: u16 = 20,
 
     /// Copies a validated query into fixed storage so it can cross the
@@ -229,6 +232,7 @@ pub const Query = struct {
             .scope = input.scope,
             .pane_id = input.pane_id,
             .failed_only = input.failed_only,
+            .author = input.author,
             .limit = input.limit,
         };
         @memcpy(query.text[0..input.text.len], input.text);
@@ -343,6 +347,7 @@ pub const Entry = struct {
     duration_ns: i64,
     exit_code: ?i32,
     status: CommandStatus,
+    author: schema.HistoryAuthor,
     command: []u8,
     cwd: []u8,
     workspace_path: []u8,

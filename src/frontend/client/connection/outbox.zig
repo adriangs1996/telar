@@ -125,6 +125,7 @@ pub const OwnedHistoryQuery = struct {
     request_id: schema.RequestId,
     query: [max_query_bytes]u8 = undefined,
     query_len: u8 = 0,
+    author: schema.HistoryAuthorFilter = .all,
     limit: u16,
 
     fn view(value: *const OwnedHistoryQuery) schema.QueryHistory {
@@ -135,6 +136,7 @@ pub const OwnedHistoryQuery = struct {
             .scope_value = "",
             .pane_id = .invalid,
             .failed_only = false,
+            .author = value.author,
             .limit = value.limit,
         };
     }

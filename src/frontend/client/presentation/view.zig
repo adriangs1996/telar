@@ -847,8 +847,13 @@ fn renderHistoryPalette(context: *widgets.Context, workbench: ui.Rect, sources: 
         const index = start + offset;
         const entry = &entries[index];
         var row: widgets.goto_picker.Row = .{ .selected = index == selected };
-        const len = @min(entry.command_len, widgets.goto_picker.max_row_bytes);
+        var len: usize = @min(entry.command_len, widgets.goto_picker.max_row_bytes);
         @memcpy(row.text[0..len], entry.commandSlice()[0..len]);
+        const suffix = "  [agent]";
+        if (entry.author == .agent and len + suffix.len <= widgets.goto_picker.max_row_bytes) {
+            @memcpy(row.text[len .. len + suffix.len], suffix);
+            len += suffix.len;
+        }
         row.len = @intCast(len);
         rows[offset] = row;
     }

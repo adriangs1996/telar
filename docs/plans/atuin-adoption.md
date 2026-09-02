@@ -41,7 +41,7 @@ never redact after the fact.
 - Tests: pattern unit tests per builtin, config parse/reject, worker-level
   "filtered command leaves no row". No wire change.
 
-## P2. Author attribution: human vs agent commands
+## P2. Author attribution: human vs agent commands — done
 
 telar knows which pane runs an agent without hooks — atuin has to install
 itself inside each agent to learn this. Cheapest thesis-level win.
@@ -49,10 +49,17 @@ itself inside each agent to learn this. Cheapest thesis-level win.
 - Schema v4 migration in `store.zig`: `command.author INTEGER NOT NULL
   DEFAULT 0` (0 human, 1 agent) + `command.provider TEXT` (manifest name,
   empty for humans). `history_schema.version` 3 → 4 with `ALTER TABLE`.
-- The runtime resolves authorship when the command completes: the agent
-  tracker already projects per-pane agent status; the history worker asks it
-  through a narrow port (pane_id + generation → `?provider_name`), so
-  history never imports agent internals.
+- Deviation: authorship comes from what the runtime actually owns, not the
+  tracker. Agents' internal tool commands never emit OSC 133 in the pane, so
+  tracker status would attribute nothing; instead, text injected through the
+  control API (`send_pane_text`) or a session-restore resume command bumps a
+  per-pane atomic counter (`Pane.noteInjectedSubmission`) and the next
+  completed capture is recorded as `.agent`. The `provider` column was
+  dropped with it — there is no trustworthy provider identity at injection
+  time (schema carries `author` only).
+- Bonus fix: control pane references accept generation 0 as "current", so
+  `telar pane send-keys`/`read` finally work on panes without agents
+  (`PaneStore.resolveControl`); the CLI falls back to that sentinel.
 - Wire: `HistoryEntry` += `author`/`provider`; `QueryHistory` += `author`
   filter (`all`, `human`, `agent`). Corpus + fingerprint bump.
 - Surfaces: palette hides agent commands by default (config
